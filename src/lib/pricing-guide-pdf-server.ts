@@ -153,6 +153,33 @@ function wrapText(doc: JsPDF, text: string, maxWidth: number, fontSize: number):
 // design ask was for.
 const PAGE_BORDER = 0.8; // mm
 
+/**
+ * Draw n filled 5-pointed stars at position (x, y), where y is the star centre.
+ * Uses raw PDF operators so any fill color set with doc.setFillColor() applies.
+ */
+function drawStars(doc: JsPDF, x: number, y: number, count: number, r = 2.2) {
+  const innerR = r * 0.382;
+  const gap    = r * 0.7;                       // gap between stars
+  const k   = (doc as unknown as { internal: { scaleFactor: number } }).internal.scaleFactor;
+  const pgH = PAGE_H * k;
+  const out = (doc as unknown as { internal: { out: (s: string) => void } }).internal.out;
+
+  for (let s = 0; s < count; s++) {
+    const cx = x + s * (r * 2 + gap) + r;
+    out('q');
+    let first = true;
+    for (let i = 0; i < 10; i++) {
+      const angle  = (i * Math.PI / 5) - Math.PI / 2;
+      const radius = i % 2 === 0 ? r : innerR;
+      const px = (cx + radius * Math.cos(angle)) * k;
+      const py = pgH - (y + radius * Math.sin(angle)) * k;
+      out(first ? `${px.toFixed(3)} ${py.toFixed(3)} m` : `${px.toFixed(3)} ${py.toFixed(3)} l`);
+      first = false;
+    }
+    out('h f Q');
+  }
+}
+
 function drawPageBorder(doc: JsPDF) {
   doc.setFillColor(255, 255, 255);
   // Top, bottom, left, right strips drawn over whatever is on the page.
@@ -710,9 +737,11 @@ export async function generatePricingGuidePdfServer(
   }
 
   // ── Stories (Reviews) — max 6, single page, Playfair heading ────────
+  let storiesPageNum = -1;
   const storiesReviews = guide.reviews.slice(0, 6);
   if (storiesReviews.length > 0) {
     doc.addPage(); drawPageBorder(doc);
+    storiesPageNum = doc.getNumberOfPages();
     let y = MARGIN;
 
     // "Stories" heading — Playfair Display
@@ -722,12 +751,12 @@ export async function generatePricingGuidePdfServer(
     doc.text('Stories', MARGIN, y + 9); y += 20;
 
     for (const review of storiesReviews) {
-      // Stars — use exact backend rating (0–5)
+      // Stars — drawn as real 5-pointed star shapes; exact count from backend
       const stars = Math.max(0, Math.min(5, review.rating ?? 0));
       if (stars > 0) {
-        doc.setFontSize(10);
-        doc.setTextColor(217, 169, 26);
-        doc.text('\u2605'.repeat(stars), MARGIN, y); y += 7;
+        doc.setFillColor(217, 169, 26);
+        drawStars(doc, MARGIN, y - 1, stars);
+        y += 8;
       }
 
       if (review.body) {
@@ -825,7 +854,8 @@ export async function generatePricingGuidePdfServer(
   // ── Footer on every page except cover and gallery ────────────────────
   const totalPages = doc.getNumberOfPages();
   for (let i = 2; i <= totalPages; i++) {
-    if (i === galleryPageNum) continue; // gallery page: images only, no footer
+    if (i === galleryPageNum) continue;  // gallery: images only, no footer
+    if (i === storiesPageNum) continue;  // stories: clean layout, no footer
     doc.setPage(i);
     doc.setTextColor(180, 180, 180);
     doc.setFont('helvetica', 'normal');

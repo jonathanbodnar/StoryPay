@@ -807,7 +807,7 @@ export default function PricingGuidePage() {
       {/* ── Spaces (CRUD) ──────────────────────────────────────────── */}
       <Section
         title="Spaces"
-        hint="Each space gets its own dedicated page in the PDF — full-bleed photo, name, and description. Keep descriptions to 500 characters so everything fits perfectly."
+        hint="Each space gets its own dedicated page in the PDF — full-bleed photo, name, and description. Up to 900 characters fills the page beautifully."
         icon={<GripVertical size={18} />}
       >
         <div className="space-y-4">
@@ -850,19 +850,19 @@ export default function PricingGuidePage() {
                     render={({ value, onChange }) => (
                       <div className="relative">
                         <textarea
-                          rows={3}
-                          maxLength={500}
+                          rows={5}
+                          maxLength={900}
                           className={`${TEXTAREA} pr-28`}
                           placeholder="A short description of this space and how it's used."
                           value={value}
                           onChange={onChange}
                         />
                         <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
-                          (value?.length ?? 0) >= 500 ? 'text-red-500'
-                          : (value?.length ?? 0) >= 400 ? 'text-amber-500'
+                          (value?.length ?? 0) >= 900 ? 'text-red-500'
+                          : (value?.length ?? 0) >= 750 ? 'text-amber-500'
                           : 'text-gray-400'
                         }`}>
-                          {value?.length ?? 0}/500
+                          {value?.length ?? 0}/900
                         </div>
                       </div>
                     )}
@@ -894,7 +894,7 @@ export default function PricingGuidePage() {
       {/* ── Accommodations (CRUD — one page per entry like Spaces) ─── */}
       <Section
         title="Accommodations"
-        hint="Each accommodation gets its own dedicated page — full-bleed photo, name, and description. Keep descriptions to 500 characters. Add as many entries as you need."
+        hint="Each accommodation gets its own dedicated page — full-bleed photo, name, and description. Up to 900 characters fills the page beautifully."
         icon={<ImageIcon size={18} />}
       >
         <div className="space-y-4">
@@ -921,23 +921,31 @@ export default function PricingGuidePage() {
                     value={acc.name ?? ''}
                     onChange={(e) => patchAccommodation(acc.id, { name: e.target.value })}
                   />
-                  <div className="relative">
-                    <textarea
-                      rows={3}
-                      maxLength={500}
-                      className={`${TEXTAREA} pr-20`}
-                      placeholder="A short description of this accommodation."
-                      value={acc.description ?? ''}
-                      onChange={(e) => patchAccommodation(acc.id, { description: e.target.value })}
-                    />
-                    <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
-                      (acc.description?.length ?? 0) >= 500 ? 'text-red-500'
-                      : (acc.description?.length ?? 0) >= 400 ? 'text-amber-500'
-                      : 'text-gray-400'
-                    }`}>
-                      {acc.description?.length ?? 0}/500
-                    </div>
-                  </div>
+                  <AIField
+                    section="accommodation_description"
+                    value={acc.description ?? ''}
+                    onChange={(v) => patchAccommodation(acc.id, { description: v })}
+                    extras={{ accommodation_name: acc.name ?? '' }}
+                    render={({ value, onChange }) => (
+                      <div className="relative">
+                        <textarea
+                          rows={5}
+                          maxLength={900}
+                          className={`${TEXTAREA} pr-28`}
+                          placeholder="A description of this accommodation option."
+                          value={value}
+                          onChange={onChange}
+                        />
+                        <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
+                          (value?.length ?? 0) >= 900 ? 'text-red-500'
+                          : (value?.length ?? 0) >= 750 ? 'text-amber-500'
+                          : 'text-gray-400'
+                        }`}>
+                          {value?.length ?? 0}/900
+                        </div>
+                      </div>
+                    )}
+                  />
                 </div>
 
                 <button
