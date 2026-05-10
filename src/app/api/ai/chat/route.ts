@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import { stripEmDashes } from '@/lib/ai-text-cleanup';
+import { checkAiRateLimit } from '@/lib/ai-rate-limit';
 
 const PLATFORM_DOCS = `
 # StoryVenue Platform Documentation
@@ -889,19 +890,42 @@ Where to find variable pickers:
 - The UUID error that sometimes appeared for GHL contacts ("invalid input syntax for type uuid") is fixed — the endpoint now resolves the GHL contact ID to the internal venue_customers UUID before attempting the delete.
 `;
 
+// Each message in the conversation history is capped at 2 000 chars
+// (~500 tokens) to prevent a crafted history from inflating the prompt.
+const MAX_MSG_CHARS = 2_000;
+// Accept at most 20 history turns (already enforced by .slice(-20) below,
+// but also validated on input so we don't parse a huge array).
+const MAX_HISTORY_TURNS = 20;
+
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const limited = checkAiRateLimit(request, venueId, 'chat');
+  if (limited) return limited;
+
   if (!process.env.DEEPSEEK_API_KEY) {
     return NextResponse.json({ error: 'AI not configured.' }, { status: 503 });
   }
 
-  const { messages, pathname } = await request.json();
-  if (!messages || !Array.isArray(messages)) {
+  const { messages: rawMessages, pathname } = await request.json();
+  if (!rawMessages || !Array.isArray(rawMessages)) {
     return NextResponse.json({ error: 'messages array required' }, { status: 400 });
   }
+
+  // Sanitise each message: enforce role allowlist, cap content length.
+  const messages: Array<{ role: 'user' | 'assistant'; content: string }> =
+    (rawMessages as unknown[])
+      .slice(-MAX_HISTORY_TURNS)
+      .filter((m): m is { role: string; content: string } =>
+        typeof m === 'object' && m !== null &&
+        typeof (m as Record<string, unknown>).content === 'string',
+      )
+      .map((m) => ({
+        role:    (['user', 'assistant'].includes(m.role) ? m.role : 'user') as 'user' | 'assistant',
+        content: m.content.slice(0, MAX_MSG_CHARS),
+      }));
 
   const onLeadsPage = typeof pathname === 'string' && pathname.startsWith('/dashboard/leads');
 
@@ -1130,7 +1154,7 @@ NEVER use em dashes (—) or en dashes (–). Use commas, periods, parentheses, 
       model: DEEPSEEK_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
-        ...messages.slice(-20),
+        ...messages,
       ],
       max_tokens: 600,
       temperature: 0.5,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
+import { checkAiRateLimit } from '@/lib/ai-rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -64,14 +65,22 @@ function buildEventsContext(events: CalEventResult[], tz: string): string {
   }).join('\n\n');
 }
 
+// Calendar AI search is lightweight (≤500 tok output) but context-heavy
+// (up to 80 events in the prompt). Cap the user query to stop injection.
+const MAX_QUERY_CHARS = 500;
+
 export async function POST(request: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const limited = checkAiRateLimit(request, venueId, 'calendar-search');
+  if (limited) return limited;
+
   let body: { query?: string };
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-  const query = body.query?.trim() ?? '';
+  const rawQuery = body.query?.trim() ?? '';
+  const query    = rawQuery.slice(0, MAX_QUERY_CHARS);
   if (!query) return NextResponse.json({ error: 'query is required' }, { status: 400 });
 
   // ── Load events (past 30 days + next 90 days) ─────────────────────────────

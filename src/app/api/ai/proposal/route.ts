@@ -3,11 +3,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVenueFromSession } from '@/lib/session';
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import { stripEmDashes } from '@/lib/ai-text-cleanup';
+import { checkAiRateLimit, capInputLength } from '@/lib/ai-rate-limit';
+
+// Field-level char caps — generous for real data, stops prompt stuffing.
+const CAP = { short: 200, medium: 500, notes: 1_000 };
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const limited = checkAiRateLimit(request, venueId, 'proposal');
+  if (limited) return limited;
 
   if (!process.env.DEEPSEEK_API_KEY) {
     return NextResponse.json({ error: 'AI not configured. Add DEEPSEEK_API_KEY to your environment variables.' }, { status: 503 });
@@ -18,20 +25,31 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const {
-    clientName,
-    eventDate,
-    guestCount,
-    packageName,
-    packagePrice,
-    venueSpaces,
-    includedServices,
-    paymentType,
-    depositAmount,
-    specialNotes,
+    clientName:       rawClientName,
+    eventDate:        rawEventDate,
+    guestCount:       rawGuestCount,
+    packageName:      rawPackageName,
+    packagePrice:     rawPackagePrice,
+    venueSpaces:      rawVenueSpaces,
+    includedServices: rawIncludedServices,
+    paymentType:      rawPaymentType,
+    depositAmount:    rawDepositAmount,
+    specialNotes:     rawSpecialNotes,
     tone = 'professional',
   } = body;
 
-  if (!clientName) {
+  const clientName       = capInputLength(rawClientName,       CAP.short);
+  const eventDate        = capInputLength(rawEventDate,        CAP.short);
+  const guestCount       = capInputLength(String(rawGuestCount ?? ''), CAP.short);
+  const packageName      = capInputLength(rawPackageName,      CAP.medium);
+  const packagePrice     = capInputLength(String(rawPackagePrice ?? ''), CAP.short);
+  const venueSpaces      = capInputLength(rawVenueSpaces,      CAP.medium);
+  const includedServices = capInputLength(rawIncludedServices, CAP.medium);
+  const paymentType      = capInputLength(rawPaymentType,      CAP.short);
+  const depositAmount    = capInputLength(String(rawDepositAmount ?? ''), CAP.short);
+  const specialNotes     = capInputLength(rawSpecialNotes,     CAP.notes);
+
+  if (!clientName.trim()) {
     return NextResponse.json({ error: 'Client name is required' }, { status: 400 });
   }
 

@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import { supabaseAdmin } from '@/lib/supabase';
+import { checkAiRateLimit, capInputLength } from '@/lib/ai-rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -177,9 +178,13 @@ async function getVenueContext(): Promise<string> {
 
 export async function POST(req: NextRequest) {
   const c = await cookies();
-  if (!c.get('venue_id')?.value) {
+  const venueId = c.get('venue_id')?.value;
+  if (!venueId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const limited = checkAiRateLimit(req, venueId, 'pricing-guide');
+  if (limited) return limited;
 
   let body: Body;
   try {
@@ -188,7 +193,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { section, mode, draft = '', variation = 0, extras = {} } = body;
+  const {
+    section,
+    mode,
+    draft:      rawDraft    = '',
+    variation:  rawVariation = 0,
+    extras:     rawExtras   = {},
+  } = body;
+  const variation = Math.max(0, Math.min(10, Number(rawVariation) || 0));
+
+  // Cap inputs to prevent prompt stuffing.
+  const draft  = typeof rawDraft === 'string' ? rawDraft.slice(0, 2_000) : '';
+  const extras = Object.fromEntries(
+    Object.entries(rawExtras).map(([k, v]) => [
+      capInputLength(k, 60),
+      capInputLength(String(v ?? ''), 200),
+    ]),
+  ) as Record<string, unknown>;
   const promptDef = SECTION_PROMPTS[section];
   if (!promptDef) {
     return NextResponse.json({ error: `Unknown section: ${section}` }, { status: 400 });

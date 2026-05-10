@@ -42,7 +42,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
 
   const maxLeadsParam = request.nextUrl.searchParams.get('max');
   const maxLeads = maxLeadsParam
-    ? Math.max(1, Math.min(2000, parseInt(maxLeadsParam, 10) || 0))
+    ? Math.max(1, Math.min(200, parseInt(maxLeadsParam, 10) || 0))
     : undefined;
 
   const reservParam = request.nextUrl.searchParams.get('reserve');
