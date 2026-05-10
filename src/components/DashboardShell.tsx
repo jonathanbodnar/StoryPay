@@ -6,6 +6,9 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AnnouncementTicker from '@/components/AnnouncementTicker';
+import MobileTabBar from '@/components/MobileTabBar';
+import MobileFab from '@/components/MobileFab';
+import MobileDashboardRedirect from '@/components/MobileDashboardRedirect';
 // ImpersonationBanner rendered server-side in layout.tsx (black bar)
 import { DirectoryRouteGuard } from '@/components/DirectoryRouteGuard';
 
@@ -142,7 +145,8 @@ export default function DashboardShell({
       >
         <div className="h-14 lg:hidden" />
         <AnnouncementTicker />
-        <main className={`mx-auto flex min-h-screen w-full flex-col px-6 pb-10 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
+        <MobileDashboardRedirect />
+        <main className={`mx-auto flex min-h-screen w-full flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
           {directoryBillingPending ? (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               <span className="font-semibold">Directory plan payment due.</span>{' '}
@@ -204,6 +208,10 @@ export default function DashboardShell({
           <DirectoryRouteGuard allowedNavIds={allowedNavIds}>{children}</DirectoryRouteGuard>
         </main>
       </div>
+
+      {/* Mobile-only chrome (hidden ≥ lg) */}
+      <MobileFab />
+      <MobileTabBar />
     </div>
   );
 }

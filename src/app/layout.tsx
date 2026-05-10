@@ -128,6 +128,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" href="/storyvenue-sidebar-mark.png" type="image/png" sizes="any" />
         <link rel="shortcut icon" href="/storyvenue-sidebar-mark.png" type="image/png" />
         <link rel="apple-touch-icon" href="/storyvenue-sidebar-mark.png" />
+        {/* PWA — "Add to Home Screen" support */}
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#1b1b1b" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="StoryVenue" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }} />

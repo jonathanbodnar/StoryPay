@@ -106,6 +106,44 @@ const listingItems: NavItem[] = [
 
 type FlyoutGroup = 'payments' | 'marketing' | 'settings' | 'listing' | null;
 
+// Routes visible in the mobile slide-out menu. Anything not listed here
+// is hidden when the menu is opened on phones / tablets (< lg breakpoint).
+// Owners can still navigate to hidden pages directly via URL on desktop.
+const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
+  // Main
+  'nav_main_home',
+  'nav_main_contacts',
+  'nav_main_conversations',
+  'nav_main_calendar',
+  'nav_main_leads',
+  'nav_main_help',
+  // Listing
+  'nav_listing_dashboard',
+  'nav_listing_pricing_guide',
+  'nav_listing_booking_system',
+  'nav_listing_analytics',
+  'nav_listing_reviews',
+  'nav_listing_directory',
+  'nav_listing_directory_billing',
+  // Payments — all
+  'nav_payments_new',
+  'nav_offerings',
+  'nav_payments_coupons',
+  'nav_payments_proposals',
+  'nav_proposals_hub',
+  'nav_payments_installments',
+  'nav_payments_subscriptions',
+  'nav_transactions',
+  'nav_settings_notifications',
+  'nav_payments_settings',
+  // Marketing — analytics only
+  'nav_marketing_analytics',
+  // Settings
+  'nav_settings_general',
+  'nav_settings_branding',
+  'nav_settings_team',
+]);
+
 export default function Sidebar({
   venue: _venue,
   role = 'owner',
@@ -396,6 +434,12 @@ export default function Sidebar({
   const paymentsFiltered = paymentsItems;
   const marketingFiltered = marketingItems;
 
+  // Mobile-only filtered copies (used when rendering the slide-out menu)
+  const mobileListing   = listingFiltered.filter((s)   => MOBILE_ALLOWED_NAV_IDS.has(s.navId));
+  const mobilePayments  = paymentsFiltered.filter((s)  => MOBILE_ALLOWED_NAV_IDS.has(s.navId));
+  const mobileMarketing = marketingFiltered.filter((s) => MOBILE_ALLOWED_NAV_IDS.has(s.navId));
+  const mobileSettings  = settingsFiltered.filter((s)  => MOBILE_ALLOWED_NAV_IDS.has(s.navId));
+
   /**
    * Renders a sub-menu item (Listing → Pricing Guide, Payments → Coupons,
    * etc) with a normal Link when accessible, or a greyed-out lock-styled
@@ -463,7 +507,7 @@ export default function Sidebar({
     );
   }
 
-  const NavContent = ({ rail, onCloseMobile }: { rail: boolean; onCloseMobile?: () => void }) => (
+  const NavContent = ({ rail, onCloseMobile, isMobile = false }: { rail: boolean; onCloseMobile?: () => void; isMobile?: boolean }) => (
     <div className="flex flex-col h-full">
       <div className={`px-3 pt-5 pb-2 ${rail ? 'flex flex-col items-center gap-2' : ''}`}>
         <div className={`flex items-center w-full ${rail ? 'flex-col gap-2' : 'justify-between gap-2'}`}>
@@ -520,6 +564,9 @@ export default function Sidebar({
           // pages are not "locked", they simply don't apply to members.
           if (!isAdmin && item.label === 'Reports') return false;
           if (!isAdmin && item.label === "What's New") return false;
+          // On mobile, restrict to the curated phone-friendly route list.
+          // "Ask AI" is a button, not a route, so always allowed.
+          if (isMobile && item.label !== 'Ask AI' && !MOBILE_ALLOWED_NAV_IDS.has(item.navId)) return false;
           return true;
         }).map((item) => {
           const Icon = item.icon;
@@ -600,7 +647,7 @@ export default function Sidebar({
           );
         })}
 
-        {listingFiltered.length > 0 ? (
+        {(isMobile ? mobileListing : listingFiltered).length > 0 ? (
         <div>
           {rail ? (
             <button
@@ -633,7 +680,7 @@ export default function Sidebar({
               </button>
               {listingOpen && (
                 <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                  {listingFiltered.map((sub) => (
+                  {(isMobile ? mobileListing : listingFiltered).map((sub) => (
                     <SubNavLink key={sub.label} sub={sub} active={listingSubActive(sub.href)} />
                   ))}
                 </div>
@@ -643,7 +690,7 @@ export default function Sidebar({
         </div>
         ) : null}
 
-        {paymentsFiltered.length > 0 ? (
+        {(isMobile ? mobilePayments : paymentsFiltered).length > 0 ? (
         <div>
           {rail ? (
             <button
@@ -687,7 +734,7 @@ export default function Sidebar({
                       <span className="truncate">Apply for StoryPay™</span>
                     </button>
                   )}
-                  {paymentsFiltered.map((sub) => (
+                  {(isMobile ? mobilePayments : paymentsFiltered).map((sub) => (
                     <SubNavLink key={sub.label} sub={sub} active={isSubActive(sub.href)} />
                   ))}
                 </div>
@@ -697,7 +744,7 @@ export default function Sidebar({
         </div>
         ) : null}
 
-        {isAdmin && marketingFiltered.length > 0 ? (
+        {isAdmin && (isMobile ? mobileMarketing : marketingFiltered).length > 0 ? (
           <div>
             {rail ? (
               <button
@@ -730,7 +777,7 @@ export default function Sidebar({
                 </button>
                 {marketingOpen && (
                   <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                    {marketingFiltered.map((sub) => (
+                    {(isMobile ? mobileMarketing : marketingFiltered).map((sub) => (
                       <SubNavLink key={sub.label} sub={sub} active={isSubActive(sub.href)} />
                     ))}
                   </div>
@@ -740,7 +787,7 @@ export default function Sidebar({
           </div>
         ) : null}
 
-        {isAdmin && settingsFiltered.length > 0 ? (
+        {isAdmin && (isMobile ? mobileSettings : settingsFiltered).length > 0 ? (
           <div>
             {rail ? (
               <button
@@ -773,7 +820,7 @@ export default function Sidebar({
                 </button>
                 {settingsOpen && (
                   <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                    {settingsFiltered.map((sub) => (
+                    {(isMobile ? mobileSettings : settingsFiltered).map((sub) => (
                       <SubNavLink key={sub.label} sub={sub} active={pathname === sub.href} />
                     ))}
                   </div>
@@ -917,7 +964,7 @@ export default function Sidebar({
         }`}
         style={{ backgroundColor: '#fafaf9', boxShadow: '6px 0 24px -4px rgba(0,0,0,0.07)' }}
       >
-        <NavContent rail={false} onCloseMobile={() => setMobileOpen(false)} />
+        <NavContent rail={false} onCloseMobile={() => setMobileOpen(false)} isMobile />
       </aside>
 
       <aside

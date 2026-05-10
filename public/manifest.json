@@ -1,0 +1,25 @@
+{
+  "name": "StoryVenue",
+  "short_name": "StoryVenue",
+  "description": "Wedding venue payment & proposal platform",
+  "start_url": "/dashboard/home",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1b1b1b",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/storyvenue-sidebar-mark.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/storyvenue-sidebar-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
