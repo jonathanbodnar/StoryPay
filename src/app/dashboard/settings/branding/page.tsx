@@ -313,6 +313,9 @@ export default function BrandingPage() {
  const data = await res.json();
  if (!res.ok) { setLogoError(data.error || 'Upload failed'); return; }
  setBrand(b => ({ ...b, logo_url: data.url }));
+ // Immediately persist so the logo survives a page refresh without
+ // requiring the user to also click "Save Branding Settings".
+ await saveNow({ brand_logo_url: data.url });
  } catch { setLogoError('Upload failed. Please try again.'); }
  finally { setLogoUploading(false); if (e.target) e.target.value = ''; }
  }
