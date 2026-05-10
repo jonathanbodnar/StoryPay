@@ -486,29 +486,67 @@ export async function generatePricingGuidePdfServer(
   }
 
   // ── Page 4: About ─────────────────────────────────────────────────────
+  // Layout budget (A4, mm):
+  //   heading block  ≈ 38mm
+  //   gap            ≈  8mm
+  //   2×2 photo grid ≈ 136mm  (two 66mm-tall rows + 4mm gutter)
+  //   footer area    ≈ 15mm
+  //   ──────────────────────
+  //   available for text ≈ 100mm  →  ~700 chars max for a perfect single page
+  const ABOUT_PHOTO_GAP = 4;  // mm between photo cells
+  const ABOUT_PHOTO_W   = (CONTENT_W - ABOUT_PHOTO_GAP) / 2;
+  const ABOUT_PHOTO_H   = ABOUT_PHOTO_W * 0.75;  // 4:3
+
   if (guide.about_venue?.trim()) {
     doc.addPage(); drawPageBorder(doc);
     let y = MARGIN + 10;
 
+    // "ABOUT" label — unchanged
     doc.setTextColor(160, 160, 160);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.text('ABOUT', MARGIN, y); y += 10;
 
+    // Venue name — Playfair Display (thin look)
     doc.setTextColor(DARK);
-    doc.setFont('times', 'bold');
+    doc.setFont(playfairFamily, 'normal');
     doc.setFontSize(26);
     doc.text(venueName, MARGIN, y); y += 8;
 
+    // Thin rule
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.3);
     doc.line(MARGIN, y, MARGIN + 16, y); y += 12;
 
+    // Body text — Open Sans
     doc.setTextColor(55, 65, 81);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(openSansFamily, 'normal');
     doc.setFontSize(11);
     const aboutLines = wrapText(doc, guide.about_venue, CONTENT_W, 11);
     doc.text(aboutLines, MARGIN, y);
+
+    // Approximate how many mm the text block occupies (≈4.7mm per line at 11pt)
+    const textBlockH = aboutLines.length * 4.7;
+    const photoGridH = 2 * ABOUT_PHOTO_H + ABOUT_PHOTO_GAP;
+    const gridStartY = y + textBlockH + 10; // 10mm breathing gap after text
+
+    // Only render the 2×2 photo grid if it fits on this page
+    const gridEndY = gridStartY + photoGridH;
+    const pageBottom = PAGE_H - MARGIN - 10; // leave room for footer
+
+    if (gridEndY <= pageBottom && galleryItems.length >= 4) {
+      const photos = galleryItems.slice(0, 4);
+      const positions: Array<[number, number]> = [
+        [MARGIN,                        gridStartY],
+        [MARGIN + ABOUT_PHOTO_W + ABOUT_PHOTO_GAP, gridStartY],
+        [MARGIN,                        gridStartY + ABOUT_PHOTO_H + ABOUT_PHOTO_GAP],
+        [MARGIN + ABOUT_PHOTO_W + ABOUT_PHOTO_GAP, gridStartY + ABOUT_PHOTO_H + ABOUT_PHOTO_GAP],
+      ];
+      photos.forEach((item, i) => {
+        const [px, py] = positions[i];
+        drawClippedImage(doc, item.dataUrl, px, py, ABOUT_PHOTO_W, ABOUT_PHOTO_H, item.w, item.h);
+      });
+    }
   }
 
   // ── Page 5: Spaces ────────────────────────────────────────────────────

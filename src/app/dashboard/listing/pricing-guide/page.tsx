@@ -673,9 +673,10 @@ export default function PricingGuidePage() {
       </Section>
 
       {/* ── About the venue ────────────────────────────────────────── */}
+      {/* Max 700 chars → text + 2×2 photo grid fit on one perfect page */}
       <Section
         title="About the venue"
-        hint="The story of your space — history, vibe, what makes it feel different from anywhere else."
+        hint="Keep to 700 characters or less. The PDF about page pairs your description with a 2×2 photo grid — staying within the limit ensures everything lands perfectly on one page."
         icon={<ImageIcon size={18} />}
       >
         <AIField
@@ -683,15 +684,33 @@ export default function PricingGuidePage() {
           value={guide.about_venue ?? ''}
           onChange={(v) => updateParent('about_venue', v)}
           render={({ value, onChange }) => (
-            <textarea
-              rows={8}
-              className={`${TEXTAREA} pr-28`}
-              placeholder="Tucked into the rolling hills of Napa, our barn-and-vineyard estate has hosted couples for over a decade…"
-              value={value}
-              onChange={onChange}
-            />
+            <div className="relative">
+              <textarea
+                rows={8}
+                maxLength={700}
+                className={`${TEXTAREA} pr-28`}
+                placeholder="Tucked into the rolling hills of Napa, our barn-and-vineyard estate has hosted couples for over a decade…"
+                value={value}
+                onChange={onChange}
+              />
+              {/* Live character counter */}
+              <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
+                (value?.length ?? 0) >= 700
+                  ? 'text-red-500'
+                  : (value?.length ?? 0) >= 600
+                  ? 'text-amber-500'
+                  : 'text-gray-400'
+              }`}>
+                {value?.length ?? 0}/700
+              </div>
+            </div>
           )}
         />
+        {(guide.about_venue?.length ?? 0) > 0 && guide.gallery.length < 4 && (
+          <p className="mt-2 text-xs text-amber-600">
+            Add at least 4 photos to the gallery above to unlock the 2×2 photo grid on the about page.
+          </p>
+        )}
       </Section>
 
       {/* ── Spaces (CRUD) ──────────────────────────────────────────── */}
