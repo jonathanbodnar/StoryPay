@@ -838,7 +838,7 @@ export default function PricingGuidePage() {
       {/* ── Spaces (CRUD) ──────────────────────────────────────────── */}
       <Section
         title="Spaces"
-        hint="Each space gets its own dedicated page in the PDF — full-bleed photo, name, and description. Up to 1,400 characters fills the page while keeping equal white space at the top and bottom."
+        hint="Each space gets its own dedicated page — 1,200 characters max. This guarantees the description always fits at the same font size with consistent spacing."
         icon={<GripVertical size={18} />}
       >
         <div className="space-y-4">
@@ -882,18 +882,18 @@ export default function PricingGuidePage() {
                       <div className="relative">
                         <textarea
                           rows={7}
-                          maxLength={1400}
+                          maxLength={1200}
                           className={`${TEXTAREA} pr-28`}
                           placeholder="A description of this space and how it's used."
                           value={value}
                           onChange={onChange}
                         />
                         <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
-                          (value?.length ?? 0) >= 1400 ? 'text-red-500'
-                          : (value?.length ?? 0) >= 1200 ? 'text-amber-500'
+                          (value?.length ?? 0) >= 1200 ? 'text-red-500'
+                          : (value?.length ?? 0) >= 1000 ? 'text-amber-500'
                           : 'text-gray-400'
                         }`}>
-                          {value?.length ?? 0}/1400
+                          {value?.length ?? 0}/1200
                         </div>
                       </div>
                     )}
@@ -925,7 +925,7 @@ export default function PricingGuidePage() {
       {/* ── Accommodations (CRUD — one page per entry like Spaces) ─── */}
       <Section
         title="Accommodations"
-        hint="Each accommodation gets its own dedicated page — full-bleed photo, name, and description. Up to 1,400 characters fills the page while keeping equal white space at the top and bottom."
+        hint="Each accommodation gets its own dedicated page — 1,200 characters max. This guarantees the description always fits at the same font size with consistent spacing."
         icon={<ImageIcon size={18} />}
       >
         <div className="space-y-4">
@@ -961,18 +961,18 @@ export default function PricingGuidePage() {
                       <div className="relative">
                         <textarea
                           rows={7}
-                          maxLength={1400}
+                          maxLength={1200}
                           className={`${TEXTAREA} pr-28`}
                           placeholder="A description of this accommodation option."
                           value={value}
                           onChange={onChange}
                         />
                         <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
-                          (value?.length ?? 0) >= 1400 ? 'text-red-500'
-                          : (value?.length ?? 0) >= 1200 ? 'text-amber-500'
+                          (value?.length ?? 0) >= 1200 ? 'text-red-500'
+                          : (value?.length ?? 0) >= 1000 ? 'text-amber-500'
                           : 'text-gray-400'
                         }`}>
-                          {value?.length ?? 0}/1400
+                          {value?.length ?? 0}/1200
                         </div>
                       </div>
                     )}
