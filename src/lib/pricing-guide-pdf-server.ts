@@ -292,31 +292,25 @@ export async function generatePricingGuidePdfServer(
   // Refined thin border (same weight as inner pages) drawn on top.
   drawPageBorder(doc);
 
-  // ── Measure text for vertical centering ──────────────────────────────
+  // ── Cover text block: logo → heading (nothing else) ──────────────────
   doc.setFont(playfairFamily, 'normal');
   doc.setFontSize(26);
   const titleLines = wrapText(doc, 'Pricing & Availability Guide', PAGE_W - 50, 26);
-  const titleLineH = 10; // mm per line at 26 pt
+  const titleLineH = 10;
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  const subLines = wrapText(doc, venueName.toUpperCase(), PAGE_W - 60, 8);
-
-  // Logo height ≈ half the heading's visual size.
-  const LOGO_H = 13; // mm
-  const LOGO_GAP = 6; // mm between logo and title
+  const LOGO_H = 13; // mm — ≈ half the visual height of the 26pt heading
+  const LOGO_GAP = 6; // mm gap between logo bottom and title baseline
 
   const logoResult = logoDataUrl ? await getImage(venue.logo_url) : null;
   const hasLogo = !!(logoDataUrl && logoResult);
 
-  const logoBlock  = hasLogo ? LOGO_H + LOGO_GAP : 0;
-  const blockH     = logoBlock + titleLines.length * titleLineH + 14 + subLines.length * 5;
-  let ty           = PAGE_H / 2 - blockH / 2 + (hasLogo ? LOGO_H : titleLineH);
+  // Vertical centre the entire block (logo + gap + title).
+  const blockH = (hasLogo ? LOGO_H + LOGO_GAP : 0) + titleLines.length * titleLineH;
+  let ty = PAGE_H / 2 - blockH / 2 + (hasLogo ? LOGO_H : titleLineH);
 
   // ── Logo ──────────────────────────────────────────────────────────────
   if (hasLogo && logoDataUrl && logoResult) {
     const logoW = (logoResult.w / logoResult.h) * LOGO_H;
-    // Detect format from the data-URL prefix so PNG/JPG/JPEG logos all load.
     const formatMatch = logoDataUrl.match(/^data:image\/(png|jpeg|jpg|webp)/i);
     const formats = formatMatch ? [formatMatch[1].toUpperCase()] : ['PNG', 'JPEG'];
     let drawn = false;
@@ -329,33 +323,14 @@ export async function generatePricingGuidePdfServer(
         console.warn('[pricing-guide-pdf] logo addImage failed', fmt, err);
       }
     }
-    if (drawn) {
-      ty += LOGO_GAP;
-    } else {
-      // Logo failed to render — collapse the reserved space so nothing else shifts.
-      ty -= LOGO_H;
-      ty += LOGO_GAP;
-    }
+    ty += drawn ? LOGO_GAP : -LOGO_H + LOGO_GAP; // collapse if logo failed
   }
 
-  // ── Title (Playfair Display) ──────────────────────────────────────────
+  // ── Title ─────────────────────────────────────────────────────────────
   doc.setFont(playfairFamily, 'normal');
   doc.setFontSize(26);
   doc.setTextColor(255, 255, 255);
   doc.text(titleLines, centerX, ty, { align: 'center' });
-  ty += (titleLines.length - 1) * titleLineH + 10;
-
-  // ── Thin rule ─────────────────────────────────────────────────────────
-  doc.setDrawColor(255, 255, 255);
-  doc.setLineWidth(0.25);
-  doc.line(centerX - 10, ty, centerX + 10, ty);
-  ty += 8;
-
-  // ── Venue name subheadline ────────────────────────────────────────────
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(240, 240, 240);
-  doc.text(subLines, centerX, ty, { align: 'center' });
 
   // ── Page 2: Welcome ───────────────────────────────────────────────────
   if (guide.congratulatory_message?.trim()) {

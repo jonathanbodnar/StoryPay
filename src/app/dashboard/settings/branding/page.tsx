@@ -484,20 +484,16 @@ className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 te
  </div>
  )}
  </div>
- {/* Upload controls — no URL input */}
+ {/* Upload controls */}
  <div className="flex-1 space-y-2">
+ {/* Hidden file input kept for the media library modal's "upload new" flow */}
  <input ref={fileRef} type="file"accept="image/*"className="hidden"onChange={handleLogoUpload} />
  <button type="button"onClick={() => setMediaLibraryOpen(true)} disabled={logoUploading}
- className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50 w-full justify-center">
- <FolderOpen size={14} />
- Choose from media library
- </button>
- <button type="button"onClick={() => fileRef.current?.click()} disabled={logoUploading}
  className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50 w-full justify-center">
  {logoUploading ? <Loader2 size={14} className="animate-spin"/> : <Upload size={14} />}
  {logoUploading ? 'Uploading...' : brand.logo_url ? 'Replace Logo' : 'Upload Logo'}
  </button>
- <p className="text-[10px] text-gray-400">PNG, JPG, SVG — max 5MB for file upload. Media library accepts shared images (JPEG, PNG, WebP, AVIF, GIF). This logo will appear on all emails and invoices.</p>
+ <p className="text-[10px] text-gray-400">Choose from your media library or upload a new image. This logo appears on all emails, invoices, and your pricing guide.</p>
  {logoError && <p className="text-xs text-red-500">{logoError}</p>}
  </div>
  </div>
