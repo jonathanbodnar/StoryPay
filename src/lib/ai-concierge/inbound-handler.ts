@@ -52,6 +52,7 @@ import {
 import { recordAiStateTransition } from './state-transitions';
 import { fetchLeadConversationHistory } from './conversation-helpers';
 import { notifyAiOwner, type AiOwnerScenario, type AiNotifyRole } from './notifications';
+import { notifyOwnerAiHandoff } from '@/lib/owner-notifications';
 import {
   type AiState,
   type AiStageKey,
@@ -281,6 +282,21 @@ export async function handleInboundAiMessage(
       }).catch((e) => {
         console.error('[ai-concierge] notifyAiOwner failed:', e);
       });
+
+      // Owner push — only fire on actual handoffs (urgent / pricing), not
+      // on every reply_received / not_interested / opt-out, so the
+      // lock-screen alert means "you actually need to step in".
+      // notifyAiOwner handles email-to-team; this adds push-to-owner.
+      if (outcome.scenario === 'ai_handoff_urgent' || outcome.scenario === 'ai_handoff_pricing') {
+        notifyOwnerAiHandoff({
+          venueId:   input.venueId,
+          leadId:    lead.id,
+          brideName,
+          reason:    outcome.scenario === 'ai_handoff_urgent'
+            ? 'needs urgent human attention'
+            : 'asked about pricing',
+        });
+      }
     }
 
     // Audit row in ai_runs (kind=inbound). Reuses the same table the send
