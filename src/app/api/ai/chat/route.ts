@@ -32,7 +32,7 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 - Marketing (sidebar flyout): Analytics, Emails (campaigns), Audiences, Forms, Workflows, Trigger links & tags. All three email surfaces (Templates / Campaigns / Automations) use the Flodesk-style drag-and-drop builder — see "Marketing email builder" section below.
 - Help Center: Searchable categories and articles (including Venue listing, Reviews, Conversations, Ask AI, Leads); contextual suggestions by page; voice search; article ratings.
 - What's New: Changelog and Feature Requests board. The sidebar menu item shows a **red dot with unread count** whenever there are entries a user hasn't reviewed; visiting the page marks everything read for that user (per-user read state). Feature Requests submitted by venues can be **approved, edited, or removed** by super admins. When a super admin approves a request it's automatically converted into a **What's New** changelog entry with an outcome-based auto-generated headline + description, and the request is removed from the venue's own feature-request list.
-- Settings (sidebar flyout): General (venue info, service fee), Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team (roles, invites, **Hide $** for team members — owners only), Notifications. Venues may also store **listing marketing monthly spend** on the account for Leads ROI — when that value exists, insights use it.
+- Settings (sidebar flyout): General (venue info, service fee), Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team (roles, invites, **Hide $** for team members — owners only), Notifications, **Push Notifications** (toggle browser push alerts per event type), **Calendar** (5 tabs: General, Connections, Availability, Booking Rules, Notifications). Venues may also store **listing marketing monthly spend** on the account for Leads ROI — when that value exists, insights use it.
 - Sidebar collapse (desktop): Chevron next to the logo narrows the sidebar to an icon rail and shows a compact mark; preference is saved in the browser.
 - Announcement ticker (top of every page, dark "News" bar): broadcasts platform-wide messages from the StoryVenue team (downtime, new features, billing/compliance updates). It is **intentionally NOT dismissible** from the venue side — there is no X / close button. Visibility is controlled exclusively from the **super admin Announcements tab**: each row has Activate / Deactivate; deactivating an announcement removes it from every venue's ticker on the next page load. Hovering pauses the scroll so users can read or click an embedded link. If a venue user asks how to "remove" or "close" the news bar, the answer is they cannot — only StoryVenue support can deactivate the message, and they will when it's no longer relevant. Implementation: src/components/AnnouncementTicker.tsx pulls /api/announcements, which calls the get_active_announcements RPC (filters is_active = true). Super admin UI lives at /admin → Announcements.
 
@@ -209,7 +209,7 @@ Five tabs covering every aspect of how your calendar works:
 - Proposals require a template and include an e-signature step. Invoices do not.
 - Payment types: Full Payment, Installment Plan, Subscription.
 - Clients receive an email/SMS with a link to review, sign (if proposal), and pay.
-- Proposal statuses: Draft, Sent, Opened, Signed, Paid, Refunded, Cancelled.
+- Proposal statuses: Draft, Sent, Opened, Signed, Paid, Refunded, Partial Refund, Expired, Cancelled, Declined.
 - Resend a proposal from the Proposals list or contact profile using the refresh icon.
 
 ## Proposal Templates
@@ -516,6 +516,50 @@ Setup checklist for a venue building their first speed-to-lead funnel:
 - SMS is sent automatically when proposals and invoices are created (if customer has a phone number).
 - Phone numbers must be in US format — auto-formatted to E.164.
 - SMS routes through your GHL sub-account's A2P approved phone number.
+
+## Push Notifications (Browser Alerts)
+- StoryVenue sends instant browser push notifications for important events — even when the dashboard is closed.
+- **Setup**: your browser will prompt for notification permission on first visit. Accept it to receive pushes. Then go to Settings → Push Notifications to toggle each event type on/off.
+- **Events**: new message, payment received, payment failed, proposal signed, new lead, AI Concierge handoff, invoice paid, subscription created/cancelled, refund issued, new customer.
+- **Test**: click "Send test notification" on the Push Notifications settings page to verify delivery.
+- **Troubleshooting**: check browser notification permission (lock icon in address bar), make sure the event toggle is ON at Settings → Push Notifications, and try the test button. Push subscriptions are per-device and per-browser.
+- Push notifications are sent alongside existing email alerts — they don't replace them. Each event type can be independently enabled or disabled.
+- Push uses the Web Push API with VAPID keys. Dead subscriptions (browser uninstalled, permission revoked) are auto-pruned.
+- Path: /dashboard/settings/push.
+
+## Installing StoryVenue as an App (PWA)
+- StoryVenue is a Progressive Web App (PWA) — install it on phone, tablet, or desktop for a native-app experience.
+- **iPhone/iPad**: Safari → Share button → "Add to Home Screen".
+- **Android**: Chrome → three-dot menu → "Add to Home screen" or "Install app".
+- **Desktop**: Chrome/Edge → install icon in the address bar → Install.
+- Installed apps get: home screen icon, full-screen mode, push notifications when browser is closed, faster load times.
+- The install prompt appears automatically after your first few visits. If dismissed, use the manual steps above.
+- Offline: shows a friendly offline page with retry button when internet is lost.
+- Path: /offline (the offline fallback page).
+
+## Owner Notifications (Multi-Channel Alerts)
+- StoryVenue can notify venue owners through three channels: **Email** (via Resend), **SMS** (via GHL/StoryVenue Legacy), and **Push** (browser push notifications).
+- Each notification scenario can be independently enabled/disabled per channel at Settings → Notifications and Settings → Push Notifications.
+- **Notification scenarios**: payment_received, payment_failed, high_value_payment, proposal_signed, document_viewed, subscription_created, subscription_cancelled, invoice_paid, refund_issued, new_customer, new_lead, new_message, ai_handoff.
+- Email notifications use your branded email templates (Settings → Notifications). SMS uses your connected GHL A2P number. Push uses the Web Push API.
+- All three channels fire simultaneously — disabling one doesn't affect the others.
+
+## Two-Factor Authentication (2FA)
+- 2FA adds a second verification step (a 6-digit code from an authenticator app) to your login.
+- **Setup**: click your name in the sidebar → My Profile → Two-Factor Authentication → Enable 2FA → scan the QR code with Google Authenticator, Authy, or 1Password → enter the 6-digit code to confirm. Save your backup codes.
+- **Login**: after entering email + password, you'll be prompted for the 6-digit code from your app.
+- **Disable**: Profile → Two-Factor Authentication → Disable (requires code from your app).
+- **Lost authenticator**: use a backup code. If lost, contact StoryVenue support for manual recovery.
+- 2FA is per-user — each team member can enable it independently. Does not affect other users or couples.
+- Feature flag: TWOFA_ENABLED=true must be set in the environment for 2FA to be available.
+
+## Support
+- Path: /dashboard/support — submit support tickets directly from the dashboard.
+- Fill in subject, category, and describe your issue. Your Ask AI conversation history is included automatically for context.
+- Alternatively, email clients@storyvenuemarketing.com directly.
+- The floating sparkle button (Ask AI, bottom-right) can answer most how-to questions instantly.
+- Check the Help Center (sidebar → Help Center) for searchable documentation.
+- Check What's New (sidebar) for recent changes that may affect the feature you're asking about.
 
 ## Calendar Notification System
 StoryVenue sends automatic email and SMS notifications for every stage of a calendar appointment lifecycle. All templates are fully editable and each channel can be independently enabled or disabled.
@@ -888,6 +932,36 @@ Where to find variable pickers:
 - To delete a contact manually: Contacts page → find the contact → delete action.
 - The delete endpoint (POST /api/contacts/delete) handles all three sources: native StoryVenue contacts, GHL-synced contacts (non-UUID IDs are resolved), and LunarPay contacts. It removes the record from venue_customers (cascading to related rows) and from leads, and if the contact originated from GHL it also calls the GHL API to delete it there.
 - The UUID error that sometimes appeared for GHL contacts ("invalid input syntax for type uuid") is fixed — the endpoint now resolves the GHL contact ID to the internal venue_customers UUID before attempting the delete.
+
+## Owner Notifications — multi-channel alerting
+- StoryVenue sends alerts to venue owners through three independent channels: **email** (Resend), **SMS** (GHL/StoryVenue Legacy), and **push** (browser push notifications).
+- Scenarios: payment_received, payment_failed, high_value_payment, proposal_signed, document_viewed, subscription_created, subscription_cancelled, invoice_paid, refund_issued, new_customer, new_lead, new_message, ai_handoff.
+- Each channel is toggled independently at Settings → Notifications (email/SMS) and Settings → Push Notifications (push).
+- Push and email fire simultaneously — disabling one does not affect the others.
+
+## Two-Factor Authentication (2FA)
+- 2FA adds a second verification step (6-digit code from an authenticator app) to your login.
+- Setup: Profile → Two-Factor Authentication → Enable 2FA → scan QR code with Google Authenticator / Authy / 1Password → enter code to confirm → save backup codes.
+- Login: email + password → then enter 6-digit code from authenticator app.
+- Per-user: each team member can enable independently.
+- Feature flag: TWOFA_ENABLED must be set in environment.
+- Lost authenticator: use backup code. Lost backup codes: contact support.
+
+## Push Notifications
+- Instant browser alerts for important events — works even when the dashboard is closed.
+- Setup: accept browser notification permission → go to Settings → Push Notifications → toggle each event type.
+- Events: new message, payment received/failed, proposal signed, new lead, AI handoff, invoice paid, subscription created/cancelled, refund issued, new customer.
+- Test: click "Send test notification" on the Push Notifications settings page.
+- Per-device: each device/browser needs its own permission grant. Dead subscriptions auto-pruned.
+- Push + email are independent channels — you can have both, either, or neither.
+- Path: /dashboard/settings/push.
+
+## PWA / Install as App
+- StoryVenue is a Progressive Web App — installable on phone, tablet, or desktop.
+- iPhone: Safari → Share → "Add to Home Screen". Android: Chrome → menu → "Add to Home screen". Desktop: install icon in address bar.
+- Installed apps get: home screen icon, full-screen mode, push notifications when browser is closed, faster load.
+- Install prompt appears automatically after first visits; manual install always available.
+- Offline page at /offline with retry button.
 `;
 
 // Each message in the conversation history is capped at 2 000 chars

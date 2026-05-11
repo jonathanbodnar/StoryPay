@@ -1760,19 +1760,23 @@ To edit an existing template: Payments → Proposal Templates → click Edit on 
       {
         id: 'pay-status',
         title: 'Proposal statuses explained',
-        tags: ['status', 'draft', 'sent', 'signed', 'paid', 'cancelled'],
+        tags: ['status', 'draft', 'sent', 'signed', 'paid', 'cancelled', 'refunded', 'partial_refund', 'expired', 'declined', 'opened'],
         body: `Each proposal moves through these statuses:
 
 - Draft — saved but not yet sent to the customer
 - Sent — emailed to the customer
-- Viewed — the customer has opened the link
+- Opened — the customer has opened the proposal link
 - Signed — the customer completed the e-signature
-- Paid — at least one payment has been received
-- Fully Paid — all scheduled payments collected
-- Refunded — a refund has been processed
-- Cancelled — manually cancelled
+- Paid — the full payment has been received
+- Refunded — a full refund has been processed
+- Partial Refund — a partial refund has been issued (some payment retained)
+- Expired — the proposal passed its due date without being signed
+- Cancelled — manually cancelled by the venue
+- Declined — the customer declined the proposal
 
-You can resend the proposal email at any status by clicking Resend on the proposals list or on the customer profile.`,
+You can resend the proposal email at any status by clicking Resend on the proposals list or on the customer profile.
+
+Refund tracking: when a proposal is refunded (full or partial), the refund date is recorded and appears in your Reports so you can sort and filter by refund date.`,
       },
       {
         id: 'pay-installments',
@@ -2674,23 +2678,35 @@ Tip: Send a test email to yourself before sending a real proposal to ensure the 
       {
         id: 'email-variables',
         title: 'Using merge variables in email templates',
-        tags: ['variables', 'merge', 'dynamic', 'placeholders', 'template'],
+        tags: ['variables', 'merge', 'dynamic', 'placeholders', 'template', 'first name', 'contact name', 'canonical', 'dot notation'],
         body: `Each email template supports merge variables — placeholders that get replaced with real data when the email sends.
 
-Common variables:
-- {{organization}} — your venue name
-- {{customer_name}} — the recipient's name
-- {{amount}} — the payment or invoice amount
-- {{invoice_number}} — the invoice ID
-- {{due_date}} — the payment due date
-- {{payment_method}} — how the customer paid
+StoryVenue uses canonical dot-notation variables ({{category.field}}) that work across all email templates, calendar notifications, marketing emails, and workflows. Legacy flat-style variables still work as aliases.
+
+Common variables (transactional email templates):
+- {{contact.first_name}} — the recipient's first name
+- {{contact.full_name}} — the recipient's full name
+- {{venue.name}} — your venue name
+- {{payment.amount}} — the payment or invoice amount
+- {{invoice.number}} — the invoice ID
+- {{invoice.due_date}} — the payment due date
+- {{payment.method}} — how the customer paid (card / ACH)
+- {{payment.net_amount}} — amount after processing fees
+- {{proposal.title}} — the proposal title
+- {{proposal.amount}} — the proposal total amount
+- {{subscription.amount}} — the subscription charge amount
+- {{subscription.frequency}} — billing cycle (weekly / monthly)
+- {{system.date}} — today's date at send time
+- {{system.year}} — current year
+
+Legacy aliases still work: {{customer_name}}, {{organization}}, {{amount}}, {{invoice_number}}, {{due_date}}, {{payment_method}}.
 
 The variable list is shown on the right side of each template editor. Click a variable pill to copy it, then paste it anywhere in the subject, heading, or body.
 
 Preview your template using the Preview button — it shows a sample email with dummy data filled in.
 
-Canonical system variables
-StoryVenue uses a unified, dot-notation variable system sitewide. The same variables work across calendar notifications, marketing emails, email templates, and workflows. See Marketing → Trigger Links, Tags & Variables → Merge Variables accordion for the full list of all 60+ canonical variables.`,
+Full variable reference
+See Marketing → Trigger Links, Tags & Variables → Merge Variables accordion for the full list of all 60+ canonical variables, or visit the Merge Variables help category.`,
       },
     ],
   },
@@ -2918,6 +2934,34 @@ Couples can update their first name, last name, and phone by clicking their name
 
 Admin management
 Super admins can view, search, and manage all couple accounts from the admin Couples tab.`,
+      },
+      {
+        id: 'account-2fa',
+        title: 'Two-factor authentication (2FA)',
+        tags: ['2fa', 'two-factor', 'totp', 'security', 'authenticator', 'login security', 'mfa'],
+        body: `StoryVenue supports TOTP-based two-factor authentication for an extra layer of login security.
+
+What is 2FA?
+Two-factor authentication requires a second verification step (a 6-digit code from an authenticator app) in addition to your password when logging in.
+
+Setting up 2FA
+1. Go to your Profile (click your name in the sidebar → My Profile)
+2. Look for the Two-Factor Authentication section
+3. Click Enable 2FA
+4. Scan the QR code with your authenticator app (Google Authenticator, Authy, 1Password, etc.)
+5. Enter the 6-digit code from your app to confirm
+6. Save your backup codes somewhere safe — you'll need these if you lose access to your authenticator app
+
+Logging in with 2FA
+After entering your email and password, you'll be prompted for the 6-digit code from your authenticator app. Open your app, read the current code, and enter it.
+
+Disabling 2FA
+Go to your Profile → Two-Factor Authentication → Disable. You'll need to confirm with a code from your authenticator app.
+
+Lost your authenticator app?
+Use one of the backup codes you saved during setup. If you've lost those too, contact StoryVenue support for manual recovery.
+
+Note: 2FA is per-user — each team member can enable it independently on their own profile. It does not affect other team members or couples.`,
       },
     ],
   },
@@ -3456,6 +3500,133 @@ Where to find variable pickers:
     ],
   },
   {
+    id: 'push-notifications',
+    label: 'Push Notifications',
+    iconName: 'BellRing',
+    color: '#8b5cf6',
+    articles: [
+      {
+        id: 'push-overview',
+        title: 'Push notifications overview',
+        tags: ['push notifications', 'push alerts', 'browser notifications', 'real-time alerts', 'pwa'],
+        body: `Push notifications send instant browser alerts to your phone, tablet, or desktop when important events happen in your venue — even when StoryVenue is closed.
+
+What triggers push notifications:
+- New message from a contact
+- Payment received (includes high-value payments)
+- Payment failed
+- Proposal signed
+- New lead created
+- AI Concierge handoff (when a lead needs human attention)
+- Invoice paid
+- Subscription created or cancelled
+- Refund issued
+- New customer added
+
+Push notifications are sent alongside existing email alerts — they don't replace them. You control each event type independently.
+
+To receive push notifications:
+1. Your browser must ask for permission — StoryVenue will prompt you on first visit
+2. Accept the notification permission when asked
+3. Go to Settings → Push Notifications to toggle each event on or off
+
+Push notifications work on:
+- Chrome, Edge, Firefox, Safari (desktop)
+- Chrome and Safari on Android and iOS (when installed as a PWA — see the Install as App article)
+
+If you're not receiving push notifications:
+1. Check your browser's notification permission — click the lock/site icon in the address bar
+2. Make sure the specific event type is enabled at Settings → Push Notifications
+3. Try clicking "Send test notification" on the Push Notifications settings page`,
+      },
+      {
+        id: 'push-settings',
+        title: 'Configuring push notification preferences',
+        tags: ['push settings', 'notification settings', 'toggle', 'enable push', 'disable push', 'test push'],
+        body: `Go to Settings → Push Notifications to manage which events send you browser push alerts.
+
+The page shows:
+- Connection status — whether your browser is subscribed to receive push notifications
+- A toggle for each notification scenario (new message, payment received, proposal signed, etc.)
+- A "Send test notification" button to verify delivery
+
+To turn a specific notification on or off:
+1. Find the event type in the list (e.g. "Payment received", "New message")
+2. Toggle the switch — changes take effect immediately
+
+To test push notifications:
+Click "Send test notification" — you should receive a browser alert within a few seconds.
+
+Troubleshooting:
+- Not receiving pushes? Check that your browser has notification permissions enabled for app.storyvenue.com
+- Getting duplicate alerts? Push notifications are sent in addition to email alerts — you can disable the email version at Settings → Notifications, or disable the push version at Settings → Push Notifications
+- Working on one device but not another? Push subscriptions are per-device and per-browser — you need to accept the permission on each device you want to receive alerts on`,
+      },
+      {
+        id: 'push-install-app',
+        title: 'Installing StoryVenue as an app (PWA)',
+        tags: ['install app', 'pwa', 'progressive web app', 'add to home screen', 'mobile app', 'desktop app', 'app install'],
+        body: `StoryVenue is a Progressive Web App (PWA) — you can install it on your phone, tablet, or desktop for a native-app experience.
+
+What you get when you install:
+- A home screen / desktop icon for one-tap access
+- Full-screen mode without browser address bar
+- Push notifications that work even when the browser is closed
+- Faster load times after the first visit
+
+How to install on iPhone / iPad (Safari):
+1. Open app.storyvenue.com in Safari
+2. Tap the Share button (square with arrow)
+3. Scroll down and tap "Add to Home Screen"
+4. Tap Add — the StoryVenue icon appears on your home screen
+
+How to install on Android (Chrome):
+1. Open app.storyvenue.com in Chrome
+2. Tap the three-dot menu (top-right)
+3. Tap "Add to Home screen" or "Install app"
+4. Tap Install — the app appears in your app drawer
+
+How to install on Desktop (Chrome, Edge):
+1. Open app.storyvenue.com in your browser
+2. Click the install icon in the address bar (a plus or monitor icon)
+3. Click Install — the app opens in its own window and appears in your taskbar / dock
+
+The install prompt appears automatically after your first few visits. If you dismissed it, you can always install manually using the steps above.
+
+Offline: if you lose internet connection, StoryVenue shows a friendly offline page with a retry button. Your data is safe — just reconnect and try again.`,
+      },
+    ],
+  },
+  {
+    id: 'support',
+    label: 'Support',
+    iconName: 'LifeBuoy',
+    color: '#0ea5e9',
+    articles: [
+      {
+        id: 'support-contact',
+        title: 'Contacting StoryVenue support',
+        tags: ['support', 'help', 'contact', 'ticket', 'email support', 'issue', 'bug', 'problem'],
+        body: `Need help that goes beyond the Help Center and Ask AI? Contact the StoryVenue support team directly.
+
+From the dashboard:
+1. Go to Support in the sidebar (or click Ask AI → Contact Support)
+2. Fill in the subject, category, and describe your issue
+3. Click Send — your message goes directly to the support team
+
+You'll get a follow-up by email. Support tickets include your full Ask AI conversation history so the team has full context.
+
+Direct email:
+You can also email clients@storyvenuemarketing.com at any time.
+
+Before contacting support:
+- Ask the floating sparkle button (bottom-right) — Ask AI can answer most how-to questions instantly
+- Check the Help Center (sidebar → Help Center) for searchable documentation
+- Search the What's New page (sidebar) to see if a recent update changed the feature you're asking about`,
+      },
+    ],
+  },
+  {
     id: 'ai',
     label: 'Ask AI',
     iconName: 'Sparkles',
@@ -3600,10 +3771,17 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/settings/integrations':    ['int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
   '/dashboard/settings/notifications':   ['notif-settings', 'email-types', 'email-variables', 'sms-notifications', 'merge-vars-overview'],
+  '/dashboard/settings/push':            ['push-settings', 'push-overview', 'push-install-app'],
   '/dashboard/directory-billing':        ['billing-plans-overview', 'billing-verified-sponsored', 'gs-overview'],
   '/dashboard/listing/directory':        ['billing-verified-sponsored', 'billing-plans-overview', 'listing-overview'],
   '/dashboard/listing/pricing-guide':    ['billing-pricing-guide', 'listing-overview', 'listing-photos'],
   '/dashboard/settings':                 ['gs-overview', 'gs-onboarding'],
+
+  // Support
+  '/dashboard/support': ['support-contact', 'ai-overview', 'ai-escalate'],
+
+  // Profile / 2FA
+  '/dashboard/profile': ['account-update-profile', 'account-2fa', 'account-login'],
 
   // What's New / Updates
   '/dashboard/updates': ['updates-overview', 'updates-feature-requests', 'ai-overview', 'gs-overview'],
