@@ -532,7 +532,7 @@ export default function EventEditorModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
       <div
         ref={modalBodyRef}
-        className="relative w-full max-w-lg rounded-2xl bg-white p-4 sm:p-6 max-h-[90vh] overflow-y-auto"
+        className="relative w-full max-w-lg rounded-2xl bg-white p-4 sm:p-6 max-h-[90vh] overflow-y-auto scrollbar-autohide"
         onScroll={() => {
           const el = modalBodyRef.current;
           if (!el) return;
