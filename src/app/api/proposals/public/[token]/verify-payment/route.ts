@@ -192,7 +192,7 @@ export async function POST(
         const subList = Array.isArray(allSubs) ? allSubs : (allSubs as Record<string, unknown>).data ?? [];
         // Find the most recently created sub for this customer
         const match = (subList as Record<string, unknown>[]).find(
-          (s) => String(s.customer_id ?? s.customerId) === String(customerId) && s.status !== 'cancelled'
+          (s) => String(s.customer_id ?? s.customerId ?? s.donorId ?? s.donor_id) === String(customerId) && s.status !== 'cancelled'
         );
         if (match?.id) {
           lpSubId = match.id as number;
