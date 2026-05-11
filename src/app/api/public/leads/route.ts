@@ -9,6 +9,7 @@ import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -254,6 +255,17 @@ export async function POST(request: NextRequest) {
     ]))
     .catch(() => {});
 
+  // Push to the owner's enabled devices — no-op when push is disabled or
+  // the venue has no subscriptions yet. Phone-first venues see this on
+  // the lock screen seconds after a directory inquiry hits the webhook.
+  notifyOwnerNewLead({
+    venueId:  venue.id,
+    leadId:   lr.id,
+    fullName: [firstName, lastName].filter(Boolean).join(' ').trim() || lr.email,
+    email:    lr.email,
+    source:   payload.source || 'directory',
+  });
+
   // Fan out to Zapier / external integrations subscribed to lead.created
   void dispatchIntegrationEvent(venue.id, 'lead.created', {
     lead: {
@@ -347,7 +359,7 @@ export async function POST(request: NextRequest) {
 
       // Rescue earlier leads with the same email that ended up orphaned or
       // contact-only — they should also live on the Kanban for this venue.
-      let stuck = await supabaseAdmin
+      const stuck = await supabaseAdmin
         .from('leads')
         .update({
           pipeline_id:            defaultPipelineId,

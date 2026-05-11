@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
+import { notifyOwnerNewMessage } from '@/lib/owner-notifications';
 
 function hexToBuf(hex: string): Buffer | null {
   if (!/^[a-f0-9]+$/i.test(hex) || hex.length % 2) return null;
@@ -94,7 +95,9 @@ export function parseFromHeader(fromRaw: string): { email: string; name: string 
   return { email, name };
 }
 
-function stripHtml(html: string): string {
+// stripHtml: retained for future use (currently unused after the body is
+// pre-stripped upstream). Underscore prefix opts out of the unused-var lint.
+function _stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -102,6 +105,7 @@ function stripHtml(html: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+void _stripHtml;
 
 /** Extract first email from a To/Cc string (display names / angle brackets). */
 export function firstEmailFromList(raw: string): string {
@@ -286,6 +290,16 @@ export async function insertInboundConversationEmail(params: {
         console.warn('[inbound-email] broadcast failed', e);
       }
     })();
+
+    // Owner push — fires only when push is enabled and push_new_message is on.
+    // No-op for venues that haven't opted in.
+    notifyOwnerNewMessage({
+      venueId,
+      threadId,
+      fromName,
+      fromEmail,
+      bodyText: body,
+    });
   }
 
   return { ok: true, inserted: true };
