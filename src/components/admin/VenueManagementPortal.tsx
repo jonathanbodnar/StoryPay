@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   CalendarClock,
   Send,
+  Lock,
 } from 'lucide-react';
 import { DIRECTORY_BADGE_STATUSES, directoryBadgeLabel } from '@/lib/directory-badges';
 import {
@@ -43,6 +44,8 @@ export type AdminVenueRow = Record<string, unknown> & {
   directory_trial_ends_at?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
   lunarpay_admin?: LunarPayAdminSummary;
+  /** Protected demo venue — cannot be deleted by anyone. */
+  is_demo?: boolean | null;
 };
 
 function lunarPaySummaryForRow(v: AdminVenueRow): LunarPayAdminSummary {
@@ -793,7 +796,7 @@ export function VenueManagementPortal({
               onSendInvite={() => void sendInviteToVenue(venue.id)}
               onViewAs={() => void viewAsVenue(venue.id)}
               onCopyBillingLink={() => void copyDirectoryBillingLink(venue.id)}
-              onDelete={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
+              onDelete={venue.is_demo ? undefined : () => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
               onExtendTrial={() => {
                 const current = venue.directory_trial_ends_at as string | null | undefined;
                 const def = current
@@ -985,13 +988,15 @@ export function VenueManagementPortal({
                           >
                             <CalendarClock size={12} /> Extend trial
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
-                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
-                          >
-                            <Trash2 size={12} /> Delete
-                          </button>
+                          {!venue.is_demo && (
+                            <button
+                              type="button"
+                              onClick={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
+                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1245,7 +1250,7 @@ function VenueMobileCard({
   onSendInvite: () => void;
   onViewAs: () => void;
   onCopyBillingLink: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   onExtendTrial: () => void;
 }) {
   const vs = (venue.directory_verified_status as string) || 'none';
@@ -1351,13 +1356,20 @@ function VenueMobileCard({
         >
           <CalendarClock size={12} /> Trial
         </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-semibold text-red-700"
-        >
-          <Trash2 size={12} /> Delete
-        </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-semibold text-red-700"
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        )}
+        {!onDelete && (
+          <span className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-gray-200 bg-gray-50 py-2 text-xs font-semibold text-gray-400 cursor-not-allowed select-none" title="Demo venue — protected from deletion">
+            <Lock size={12} /> Protected
+          </span>
+        )}
       </div>
       {inviteToastId === venue.id && inviteToastMsg && (
         <p className="text-[11px] text-emerald-700 mt-1">{inviteToastMsg}</p>

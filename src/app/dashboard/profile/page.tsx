@@ -7,7 +7,7 @@ import {
   Loader2, Save, CheckCircle2, User, CreditCard,
   ShieldCheck, Mail, Phone, ArrowRight,
   BadgeCheck, AlertCircle, Download, Trash2, AlertTriangle,
-  KeyRound, Eye, EyeOff, AtSign,
+  KeyRound, Eye, EyeOff, AtSign, Lock,
 } from 'lucide-react';
 import TwoFactorSection from '@/components/profile/TwoFactorSection';
 
@@ -29,6 +29,7 @@ type OwnerProfile = {
   phone: string;
   venue_name: string;
   owner_id: string | null;
+  is_demo?: boolean;
   role: 'owner';
 };
 
@@ -575,7 +576,14 @@ export default function ProfilePage() {
         {/* ── Two-Factor Authentication ─────────────────────────────────── */}
         <TwoFactorSection />
 
-        {/* ── Danger Zone ───────────────────────────────────────────────── */}
+        {/* ── Danger Zone — hidden for the protected demo account ───────── */}
+        {profile.type === 'owner' && profile.is_demo && (
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden mb-5 px-6 py-4 flex items-center gap-3">
+            <Lock size={15} className="text-gray-400 shrink-0" />
+            <p className="text-sm text-gray-500">This is a protected demo account. Account deletion is disabled.</p>
+          </div>
+        )}
+        {!(profile.type === 'owner' && profile.is_demo) && (
         <div className="rounded-2xl border border-red-200 bg-white overflow-hidden mb-5">
           <div className="px-6 py-4 border-b border-red-100 flex items-center gap-2.5">
             <AlertTriangle size={16} className="text-red-500" />
@@ -616,6 +624,7 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Delete confirmation modal */}
         {showDeleteModal && (

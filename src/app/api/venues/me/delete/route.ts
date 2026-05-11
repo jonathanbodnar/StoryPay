@@ -41,11 +41,19 @@ export async function POST(request: NextRequest) {
   // Fetch venue + password hash to validate both confirmations
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, owner_id, password_hash, directory_subscription_status, lunarpay_merchant_id')
+    .select('id, name, owner_id, password_hash, directory_subscription_status, lunarpay_merchant_id, is_demo')
     .eq('id', venueId)
     .maybeSingle();
 
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  // Demo venues cannot be self-deleted under any circumstances.
+  if ((venue as { is_demo?: boolean | null }).is_demo === true) {
+    return NextResponse.json(
+      { error: 'This is a protected demo account and cannot be deleted.' },
+      { status: 403 },
+    );
+  }
 
   // 1. Venue name must match exactly
   if (!body.confirmName || body.confirmName.trim() !== (venue.name as string).trim()) {

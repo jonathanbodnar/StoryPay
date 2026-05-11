@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { verifyAdminCookie } from '@/lib/admin-auth';
+import { verifyAdminCookie, verifyMasterAdminOnly } from '@/lib/admin-auth';
 import { isDirectoryBadgeStatus } from '@/lib/directory-badges';
 import { cancelVenueSubscription, changeVenuePlan } from '@/lib/venue-billing';
 import bcrypt from 'bcryptjs';
@@ -148,19 +148,32 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await verifyAdminCookie())) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Venue deletion is restricted to the master super-admin only.
+  // Support team members (verifyAdminCookie but not master) cannot delete venues.
+  if (!(await verifyMasterAdminOnly())) {
+    return NextResponse.json(
+      { error: 'Only the master super-admin can delete venues.' },
+      { status: 403 },
+    );
   }
   const { id: venueId } = await params;
   if (!venueId) return NextResponse.json({ error: 'Missing venue id' }, { status: 400 });
 
-  // Confirm the venue exists and grab owner_id for auth cleanup
+  // Confirm the venue exists and grab owner_id + demo flag
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, owner_id')
+    .select('id, name, owner_id, is_demo')
     .eq('id', venueId)
     .maybeSingle();
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  // Demo venue is permanently protected — cannot be deleted by anyone via API.
+  if ((venue as { is_demo?: boolean | null }).is_demo === true) {
+    return NextResponse.json(
+      { error: 'This is a protected demo venue and cannot be deleted.' },
+      { status: 403 },
+    );
+  }
 
   // Clean up Supabase Storage files for this venue (best-effort — don't block on failure)
   try {

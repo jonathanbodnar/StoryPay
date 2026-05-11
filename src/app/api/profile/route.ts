@@ -41,14 +41,14 @@ export async function GET() {
   // (owner_first_name / owner_last_name) hasn't been applied yet.
   let venueResult = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, phone, owner_id, owner_first_name, owner_last_name')
+    .select('id, name, email, phone, owner_id, owner_first_name, owner_last_name, is_demo')
     .eq('id', venueId)
     .single();
 
   if (venueResult.error && /column.*owner_(first|last)_name.*does not exist/i.test(venueResult.error.message)) {
     venueResult = await supabaseAdmin
       .from('venues')
-      .select('id, name, email, phone, owner_id')
+      .select('id, name, email, phone, owner_id, is_demo')
       .eq('id', venueId)
       .single();
   }
@@ -85,6 +85,7 @@ export async function GET() {
     phone:      venue.phone   ?? '',
     venue_name: venue.name    ?? '',
     owner_id:   venue.owner_id ?? null,
+    is_demo:    (venue as Record<string, unknown>).is_demo === true,
     role:       'owner',
   });
 }
