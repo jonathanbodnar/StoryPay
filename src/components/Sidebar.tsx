@@ -75,20 +75,21 @@ const paymentsItems: NavItem[] = [
 ];
 
 const marketingItems: NavItem[] = [
-  { label: 'Analytics',          href: '/dashboard/marketing/analytics',          icon: BarChart3,      navId: 'nav_marketing_analytics' },
-  { label: 'Emails',             href: '/dashboard/marketing/email/campaigns',    icon: Mail,           navId: 'nav_marketing_email_campaigns' },
-  { label: 'Audiences',          href: '/dashboard/marketing/email/audiences',    icon: Users,          navId: 'nav_marketing_email_segments' },
-  { label: 'Forms',              href: '/dashboard/marketing/form-builder',       icon: LayoutTemplate, navId: 'nav_marketing_form_builder' },
-  { label: 'Workflows',          href: '/dashboard/marketing/workflows',           icon: Workflow,       navId: 'nav_marketing_email_automations' },
-  { label: 'Trigger links & tags', href: '/dashboard/marketing/trigger-links',   icon: Link2,          navId: 'nav_marketing_trigger_links' },
-  { label: 'AI Concierge',       href: '/dashboard/marketing/ai-concierge',       icon: Sparkles,       navId: 'nav_marketing_ai_concierge' },
-  { label: 'Email settings',     href: '/dashboard/marketing/email/settings',     icon: Settings,       navId: 'nav_marketing_email_settings' },
+  { label: 'Analytics',            href: '/dashboard/marketing/analytics',          icon: BarChart3,      navId: 'nav_marketing_analytics' },
+  { label: 'Emails',               href: '/dashboard/marketing/email/campaigns',    icon: Mail,           navId: 'nav_marketing_email_campaigns' },
+  { label: 'Audiences',            href: '/dashboard/marketing/email/audiences',    icon: Users,          navId: 'nav_marketing_email_segments' },
+  { label: 'Email Notifications',  href: '/dashboard/settings/notifications',       icon: Bell,           navId: 'nav_settings_notifications' },
+  { label: 'Forms',                href: '/dashboard/marketing/form-builder',       icon: LayoutTemplate, navId: 'nav_marketing_form_builder' },
+  { label: 'Workflows',            href: '/dashboard/marketing/workflows',          icon: Workflow,       navId: 'nav_marketing_email_automations' },
+  { label: 'Trigger links & tags', href: '/dashboard/marketing/trigger-links',     icon: Link2,          navId: 'nav_marketing_trigger_links' },
+  { label: 'AI Concierge',         href: '/dashboard/marketing/ai-concierge',      icon: Sparkles,       navId: 'nav_marketing_ai_concierge' },
+  { label: 'Email settings',       href: '/dashboard/marketing/email/settings',    icon: Settings,       navId: 'nav_marketing_email_settings' },
 ];
 
 const settingsItems: NavItem[] = [
   { label: 'General', href: '/dashboard/settings', icon: Settings, navId: 'nav_settings_general' },
+  { label: 'Push Notifications', href: '/dashboard/settings/push', icon: Bell, navId: 'nav_settings_push' },
   { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette, navId: 'nav_settings_branding' },
-  { label: 'Notifications', href: '/dashboard/settings/notifications', icon: Bell, navId: 'nav_settings_notifications' },
   { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Link2, navId: 'nav_settings_integrations' },
   { label: 'Team', href: '/dashboard/settings/team', icon: UsersRound, navId: 'nav_settings_team' },
   { label: 'Billing', href: '/dashboard/directory-billing', icon: CreditCard, navId: 'nav_settings_billing' },
