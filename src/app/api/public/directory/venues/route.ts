@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       'id, slug, name, location_city, location_state, directory_verified_status, directory_sponsored_status',
     )
     .eq('is_published', true)
+    .neq('is_demo', true)   // demo venues never appear in public search
     .not('slug', 'is', null)
     .neq('slug', '');
 

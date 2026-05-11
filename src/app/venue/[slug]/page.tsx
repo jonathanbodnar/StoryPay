@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { MapPin } from 'lucide-react';
 import { getPublicVenueBySlug } from '@/lib/public-venue-directory';
 import { ListingReviewsBlock } from '@/components/directory/ListingReviewsBlock';
@@ -16,13 +17,29 @@ const APP_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenu
 const DIRECTORY_SITE =
   process.env.NEXT_PUBLIC_DIRECTORY_URL || process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL || 'https://storyvenue.com';
 
+/** Build viewer-auth opts from cookies + search params (server-side). */
+async function viewerOpts(searchParams: Record<string, string | string[] | undefined>) {
+  const cookieStore = await cookies();
+  const adminToken  = cookieStore.get('admin_token')?.value ?? null;
+  const viewerIsAdmin = Boolean(
+    adminToken && process.env.ADMIN_SECRET && adminToken === process.env.ADMIN_SECRET,
+  );
+  const viewerVenueId = cookieStore.get('venue_id')?.value ?? null;
+  const previewToken  = (typeof searchParams.preview === 'string' ? searchParams.preview : null);
+  return { viewerIsAdmin, viewerVenueId, previewToken };
+}
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const data = await getPublicVenueBySlug(slug);
+  const sp   = await searchParams;
+  const opts = await viewerOpts(sp);
+  const data = await getPublicVenueBySlug(slug, opts);
   if (!data) return { title: 'Venue' };
   const { venue, reviews } = data;
   const loc = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
@@ -39,9 +56,17 @@ export async function generateMetadata({
   };
 }
 
-export default async function PublicVenuePage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function PublicVenuePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { slug } = await params;
-  const data = await getPublicVenueBySlug(slug);
+  const sp   = await searchParams;
+  const opts = await viewerOpts(sp);
+  const data = await getPublicVenueBySlug(slug, opts);
   if (!data) notFound();
 
   const { venue } = data;

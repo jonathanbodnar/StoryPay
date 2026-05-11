@@ -117,10 +117,28 @@ export type PublicVenuePayload = {
 };
 
 /**
- * Published venue + published listing reviews for directory / embed / public API.
- * Returns null if slug invalid, venue missing, or not published.
+ * Options for bypassing the demo-venue gate.
+ * At least one must be truthy for a demo venue to be served.
+ *
+ * - viewerIsAdmin:  caller has a valid super-admin session cookie
+ * - viewerVenueId: the `venue_id` cookie value (must equal this venue's id)
+ * - previewToken:  the `?preview=` query param (must equal demo_preview_token)
  */
-export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenuePayload | null> {
+export interface GetPublicVenueOpts {
+  viewerIsAdmin?:  boolean;
+  viewerVenueId?:  string | null;
+  previewToken?:   string | null;
+}
+
+/**
+ * Published venue + published listing reviews for directory / embed / public API.
+ * Returns null if slug invalid, venue missing, not published, or demo venue
+ * without valid viewer credentials.
+ */
+export async function getPublicVenueBySlug(
+  rawSlug: string,
+  opts?: GetPublicVenueOpts,
+): Promise<PublicVenuePayload | null> {
   const slug = decodeURIComponent(rawSlug || '').trim().toLowerCase();
   if (!slug || slug.length > 120) return null;
 
@@ -148,6 +166,8 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
         'gallery_images',
         'availability_notes',
         'is_published',
+        'is_demo',
+        'demo_preview_token',
         'show_map',
         'social_links',
         'faq',
@@ -171,6 +191,20 @@ export async function getPublicVenueBySlug(rawSlug: string): Promise<PublicVenue
 
   const row = venue as Record<string, unknown> | null;
   if (!row || row.is_published !== true) return null;
+
+  // ── Demo venue gate ─────────────────────────────────────────────────────
+  // A demo venue is never publicly accessible. It resolves only when the
+  // caller is a super-admin, a logged-in team member for this venue, or
+  // holds the stable preview token (for screenshare/demo URLs).
+  if (row.is_demo === true) {
+    const { viewerIsAdmin, viewerVenueId, previewToken } = opts ?? {};
+    const venueId = String(row.id ?? '');
+    const tokenOk    = previewToken != null
+      && row.demo_preview_token != null
+      && previewToken === String(row.demo_preview_token);
+    const teamMemberOk = viewerVenueId != null && viewerVenueId === venueId;
+    if (!viewerIsAdmin && !teamMemberOk && !tokenOk) return null;
+  }
 
   const venueId = String(row.id ?? '');
   if (!venueId) return null;

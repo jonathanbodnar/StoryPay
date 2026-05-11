@@ -24,13 +24,19 @@ export async function OPTIONS() {
 /**
  * Public directory payload: published venue profile + published listing reviews.
  * Consumed by storyvenue.com (or any origin allowed by PUBLIC_DIRECTORY_ORIGIN).
+ *
+ * Demo venues require a `?preview=<token>` query parameter that matches the
+ * venue's stored demo_preview_token. Without it the endpoint returns 404,
+ * making the listing invisible to unauthenticated visitors and crawlers.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug: rawSlug } = await params;
-  const data = await getPublicVenueBySlug(rawSlug || '');
+  const previewToken = request.nextUrl.searchParams.get('preview') ?? null;
+
+  const data = await getPublicVenueBySlug(rawSlug || '', { previewToken });
   if (!data) {
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: corsHeaders() });
   }

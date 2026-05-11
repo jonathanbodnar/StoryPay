@@ -80,9 +80,12 @@ type PublicVenuePayload = {
   } | null;
 };
 
-const fetchVenue = cache(async (slug: string): Promise<PublicVenuePayload | null> => {
-  const res = await fetch(`${API_BASE}/api/public/venues/${encodeURIComponent(slug)}`, {
-    next: { revalidate: 120 },
+const fetchVenue = cache(async (slug: string, previewToken?: string | null): Promise<PublicVenuePayload | null> => {
+  const url = new URL(`${API_BASE}/api/public/venues/${encodeURIComponent(slug)}`);
+  if (previewToken) url.searchParams.set('preview', previewToken);
+  const res = await fetch(url.toString(), {
+    // Demo venues must not be CDN-cached — the token is the auth mechanism.
+    next: previewToken ? { revalidate: 0 } : { revalidate: 120 },
     headers: { Accept: 'application/json' },
   });
   if (res.status === 404) return null;
@@ -92,11 +95,15 @@ const fetchVenue = cache(async (slug: string): Promise<PublicVenuePayload | null
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const data = await fetchVenue(slug);
+  const sp = await searchParams;
+  const previewToken = typeof sp.preview === 'string' ? sp.preview : null;
+  const data = await fetchVenue(slug, previewToken);
   if (!data) {
     return { title: 'Venue', robots: { index: false } };
   }
@@ -113,6 +120,8 @@ export async function generateMetadata({
     metadataBase: new URL(DIRECTORY_SITE),
     title,
     description: desc,
+    // Demo venues must never be indexed — the preview token is auth, not content
+    ...(previewToken ? { robots: { index: false, follow: false } } : {}),
     alternates: { canonical },
     openGraph: {
       title,
@@ -144,9 +153,17 @@ function Stars({ value, size = 18 }: { value: number; size?: number }) {
   );
 }
 
-export default async function PublicVenuePage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function PublicVenuePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { slug } = await params;
-  const data = await fetchVenue(slug);
+  const sp = await searchParams;
+  const previewToken = typeof sp.preview === 'string' ? sp.preview : null;
+  const data = await fetchVenue(slug, previewToken);
   if (!data) notFound();
 
   const { venue, reviews, google_reviews } = data;
