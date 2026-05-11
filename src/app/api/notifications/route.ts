@@ -8,7 +8,7 @@ async function getVenueId() {
 }
 
 export const DEFAULT_NOTIFICATIONS = {
-  // Email notifications
+  // ── Email notifications ───────────────────────────────────────────────────
   email_payment_received:       true,
   email_payment_failed:         true,
   email_invoice_paid:           true,
@@ -18,12 +18,32 @@ export const DEFAULT_NOTIFICATIONS = {
   email_subscription_cancelled: true,
   email_refund_issued:          true,
   email_weekly_digest:          false,
-  // SMS notifications
+  // ── SMS notifications ─────────────────────────────────────────────────────
   sms_payment_received:         false,
   sms_payment_failed:           true,
   sms_high_value_payment:       true,
   sms_proposal_signed:          false,
   sms_subscription_created:     false,
+  // ── Push notifications ────────────────────────────────────────────────────
+  // Master gate — defaults to OFF so we never push to a venue before they
+  // explicitly enable it from Settings → Notifications. The
+  // PushNotificationManager flips this on as part of the enable flow.
+  push_enabled:                 false,
+  // Per-scenario toggles (only used when push_enabled is true).
+  // Defaults mirror SCENARIO_TOGGLES in PushNotificationManager.tsx.
+  push_new_lead:                true,
+  push_new_message:             true,
+  push_ai_handoff:              true,
+  push_proposal_signed:         true,
+  push_document_viewed:         false,
+  push_payment_received:        true,
+  push_payment_failed:          true,
+  push_high_value_payment:      true,
+  push_invoice_paid:            true,
+  push_refund_issued:           true,
+  push_subscription_created:    false,
+  push_subscription_cancelled:  false,
+  push_new_customer:            false,
 };
 
 export async function GET() {

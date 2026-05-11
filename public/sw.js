@@ -7,6 +7,8 @@
  *      on the home screen never opens to a Chrome error page.
  *   3. Speed up repeat visits by cache-first-ing hashed static assets that
  *      we already serve with a 1-year immutable Cache-Control.
+ *   4. Render web-push notifications and focus / open the relevant tab when
+ *      the user taps one (push handlers at the bottom of this file).
  *
  * Intentionally avoided:
  *   - Caching anything under /api/* — these are private, often POST, and
@@ -15,12 +17,9 @@
  *     network.
  *   - Intercepting non-GET requests — caches.match() can only serve GET, and
  *     re-issuing POST/PUT from a SW breaks request body streams.
- *
- * Push notification handlers will be appended in a follow-up PR once the
- * `push_subscriptions` table and VAPID keys exist.
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const STATIC_CACHE = `storyvenue-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `storyvenue-runtime-${CACHE_VERSION}`;
 const OFFLINE_URL = '/offline';
@@ -204,3 +203,89 @@ async function networkFirstWithOffline(request) {
     return new Response('Offline', { status: 503, statusText: 'Offline' });
   }
 }
+
+// ── push ────────────────────────────────────────────────────────────────────
+// Payload shape (set by src/lib/push.ts):
+//   { title: string, body: string, url?: string, tag?: string, icon?: string }
+//
+// Web push without `event.waitUntil()` may race with the SW shutting down
+// and silently drop the notification — wrap the entire chain.
+self.addEventListener('push', (event) => {
+  let payload = {};
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch {
+      // Some push services deliver an empty payload to wake the SW. Fall
+      // back to a generic title so we still surface *something* to the user.
+      payload = { title: 'StoryVenue', body: 'You have a new notification.' };
+    }
+  }
+
+  const title = payload.title || 'StoryVenue';
+  const options = {
+    body: payload.body || '',
+    icon: payload.icon || '/storyvenue-sidebar-mark.png',
+    badge: '/storyvenue-sidebar-mark.png',
+    // Tagging consolidates rapid-fire notifications (e.g. three payments in
+    // a minute) into a single replaceable toast so we don't flood the
+    // lockscreen.
+    tag: payload.tag || 'storyvenue',
+    renotify: false,
+    // Pass the click target through to the notificationclick handler. We
+    // can't rely on closure state because the SW may be torn down between
+    // the push event and the click.
+    data: { url: payload.url || '/dashboard' },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// ── notificationclick ───────────────────────────────────────────────────────
+// On tap: focus an existing StoryVenue tab if one is open, otherwise open a
+// new window at the URL provided in the push payload.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/dashboard';
+
+  event.waitUntil((async () => {
+    const allClients = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true,
+    });
+
+    // Prefer a tab already on the target URL — just focus it.
+    const targetPath = new URL(targetUrl, self.location.origin).pathname;
+    for (const client of allClients) {
+      try {
+        const url = new URL(client.url);
+        if (url.origin === self.location.origin && url.pathname === targetPath) {
+          await client.focus();
+          return;
+        }
+      } catch {
+        /* malformed client URL — skip */
+      }
+    }
+
+    // Otherwise navigate the first same-origin client there...
+    for (const client of allClients) {
+      try {
+        const url = new URL(client.url);
+        if (url.origin === self.location.origin && 'navigate' in client) {
+          await client.navigate(targetUrl);
+          await client.focus();
+          return;
+        }
+      } catch {
+        /* skip */
+      }
+    }
+
+    // ...or open a fresh window.
+    if (self.clients.openWindow) {
+      await self.clients.openWindow(targetUrl);
+    }
+  })());
+});
