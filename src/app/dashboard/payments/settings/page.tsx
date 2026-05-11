@@ -25,8 +25,8 @@ function PaymentSettingsInner() {
   const [achSaving, setAchSaving] = useState(false);
   const [achSaved, setAchSaved] = useState(false);
 
-  async function loadVenue() {
-    setLoading(true);
+  async function loadVenue(showSpinner = false) {
+    if (showSpinner) setLoading(true);
     try {
       const res = await fetch('/api/venues/me');
       if (res.ok) setVenue(await res.json());
@@ -36,7 +36,7 @@ function PaymentSettingsInner() {
   }
 
   useEffect(() => {
-    void loadVenue();
+    void loadVenue(true);
   }, []);
 
   const toggleAcceptAch = async (next: boolean) => {

@@ -145,8 +145,14 @@ export async function GET(request: NextRequest) {
           const displayPaymentsTotal = linked ? lpPaymentsTotal + 1 : lpPaymentsTotal;
           const displayPaidAmount = linked ? (s.paidAmount as number ?? 0) + linked.firstPaymentCents : (s.paidAmount as number ?? 0);
           const displayTotalAmount = linked ? (s.totalAmount as number ?? 0) + linked.firstPaymentCents : (s.totalAmount as number ?? 0);
+          // Override LP's description (which only covers the schedule portion)
+          const displayDescription = linked
+            ? `Installment plan — ${displayPaymentsCompleted} of ${displayPaymentsTotal} payments`
+            : (s.description as string) ?? 'Installment plan';
+
           return {
             ...s,
+            description: displayDescription,
             customerId: linked?.customerId ?? null,
             customerName: linked?.customerName ?? null,
             proposalId: linked?.proposalId ?? null,
@@ -156,6 +162,10 @@ export async function GET(request: NextRequest) {
             paymentsTotal: displayPaymentsTotal,
             paidAmount: displayPaidAmount,
             totalAmount: displayTotalAmount,
+            // If the proposal is refunded/cancelled, reflect that as the effective status
+            effectiveStatus: linked?.proposalStatus === 'refunded' || linked?.proposalStatus === 'partial_refund'
+              ? linked.proposalStatus
+              : s.status as string,
           };
         }
       );
