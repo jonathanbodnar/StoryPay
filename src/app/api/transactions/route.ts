@@ -5,6 +5,20 @@ import { listPaymentSchedules, listSubscriptions, listCustomers } from '@/lib/lu
 
 export const dynamic = 'force-dynamic';
 
+/** Compute the actual paid amount for a proposal. For installments/subscriptions,
+ *  this is the first payment amount from payment_config, not the full invoice total. */
+function actualPaidAmountCents(p: { price: number; payment_type: string | null; payment_config: unknown }): number {
+  const cfg = (p.payment_config ?? {}) as Record<string, unknown>;
+  if (p.payment_type === 'installment' && Array.isArray(cfg.installments)) {
+    const installments = cfg.installments as Array<{ amount: number }>;
+    if (installments.length > 0) return installments[0].amount;
+  }
+  if (p.payment_type === 'subscription' && typeof cfg.amount === 'number') {
+    return cfg.amount;
+  }
+  return p.price;
+}
+
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
@@ -29,10 +43,9 @@ export async function GET(request: NextRequest) {
 
   try {
     if (type === 'charges') {
-      // Include all paid proposals (including refunded ones so the history is complete)
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, customer_email, customer_lunarpay_id, price, status, charge_id, checkout_session_id, transaction_id, paid_at, refunded_at, created_at')
+        .select('id, customer_name, customer_email, customer_lunarpay_id, price, status, charge_id, checkout_session_id, transaction_id, paid_at, refunded_at, created_at, payment_type, payment_config')
         .eq('venue_id', venueId)
         .in('status', ['paid', 'refunded', 'partial_refund'])
         .order('paid_at', { ascending: false });
@@ -57,10 +70,14 @@ export async function GET(request: NextRequest) {
             }
           }
 
+          const paidAmount = actualPaidAmountCents(p);
+
           return {
             id: p.id,
             description: `Proposal - ${p.customer_name}`,
-            amount: p.price,
+            amount: paidAmount,
+            fullInvoiceAmount: p.price,
+            paymentType: p.payment_type,
             status: p.status,
             date: p.paid_at || p.created_at,
             refundedAt: p.refunded_at || null,
@@ -84,7 +101,7 @@ export async function GET(request: NextRequest) {
         .eq('venue_id', venueId)
         .not('payment_schedule_id', 'is', null);
 
-      const customerMap: Record<string, { customerId: string | null; customerName: string | null }> = {};
+      const proposalMap: Record<string, { proposalId: string; customerName: string | null; customerId: string | null }> = {};
       for (const p of proposals ?? []) {
         if (!p.payment_schedule_id) continue;
         let customerId = p.customer_lunarpay_id ?? null;
@@ -98,9 +115,10 @@ export async function GET(request: NextRequest) {
             }
           } catch { /* best-effort */ }
         }
-        customerMap[String(p.payment_schedule_id)] = {
-          customerId,
+        proposalMap[String(p.payment_schedule_id)] = {
+          proposalId: p.id,
           customerName: p.customer_name ?? null,
+          customerId,
         };
       }
 
@@ -109,8 +127,9 @@ export async function GET(request: NextRequest) {
       const items = (Array.isArray(schedules) ? schedules : schedules.data ?? []).map(
         (s: Record<string, unknown>) => ({
           ...s,
-          customerId: customerMap[String(s.id)]?.customerId ?? null,
-          customerName: customerMap[String(s.id)]?.customerName ?? null,
+          customerId: proposalMap[String(s.id)]?.customerId ?? null,
+          customerName: proposalMap[String(s.id)]?.customerName ?? null,
+          proposalId: proposalMap[String(s.id)]?.proposalId ?? null,
         })
       );
       return NextResponse.json(items);

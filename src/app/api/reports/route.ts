@@ -27,22 +27,43 @@ export async function GET(request: NextRequest) {
     case 'revenue': {
       let q = supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, customer_email, price, payment_type, paid_at, created_at, public_token')
+        .select('id, customer_name, customer_email, price, payment_type, payment_config, paid_at, created_at, public_token')
         .eq('venue_id', venueId)
         .eq('status', 'paid')
         .order('paid_at', { ascending: false });
       if (from)   q = q.gte('paid_at', from);
       if (toEnd)  q = q.lte('paid_at', toEnd);
       const { data } = await q;
-      const rows = (data ?? []).map((r) => ({
-        'Date Paid':      r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-US') : '',
-        'Customer Name':  r.customer_name ?? '',
-        'Customer Email': r.customer_email ?? '',
-        'Amount ($)':     ((r.price ?? 0) / 100).toFixed(2),
-        'Payment Type':   r.payment_type ?? '',
-        'Proposal ID':    r.id,
-      }));
-      const total = (data ?? []).reduce((s, r) => s + (r.price ?? 0), 0);
+      const rows = (data ?? []).map((r) => {
+        const cfg = (r.payment_config ?? {}) as Record<string, unknown>;
+        let paidAmount = r.price ?? 0;
+        if (r.payment_type === 'installment' && Array.isArray(cfg.installments)) {
+          const installments = cfg.installments as Array<{ amount: number }>;
+          if (installments.length > 0) paidAmount = installments[0].amount;
+        } else if (r.payment_type === 'subscription' && typeof cfg.amount === 'number') {
+          paidAmount = cfg.amount;
+        }
+        return {
+          'Date Paid':      r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-US') : '',
+          'Customer Name':  r.customer_name ?? '',
+          'Customer Email': r.customer_email ?? '',
+          'Amount Paid ($)':  (paidAmount / 100).toFixed(2),
+          'Full Invoice ($)': r.payment_type !== 'full' ? ((r.price ?? 0) / 100).toFixed(2) : '',
+          'Payment Type':   r.payment_type ?? '',
+          'Proposal ID':    r.id,
+        };
+      });
+      const total = (data ?? []).reduce((s, r) => {
+        const cfg = (r.payment_config ?? {}) as Record<string, unknown>;
+        let paidAmount = r.price ?? 0;
+        if (r.payment_type === 'installment' && Array.isArray(cfg.installments)) {
+          const installments = cfg.installments as Array<{ amount: number }>;
+          if (installments.length > 0) paidAmount = installments[0].amount;
+        } else if (r.payment_type === 'subscription' && typeof cfg.amount === 'number') {
+          paidAmount = cfg.amount;
+        }
+        return s + paidAmount;
+      }, 0);
       return NextResponse.json({ rows, summary: { 'Total Revenue': `$${(total / 100).toFixed(2)}`, 'Transactions': rows.length } });
     }
 

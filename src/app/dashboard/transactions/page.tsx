@@ -11,6 +11,8 @@ interface Charge {
  id: string;
  description: string;
  amount: number;
+ fullInvoiceAmount?: number;
+ paymentType?: string;
  status: string;
  date: string;
  refundedAt?: string | null;
@@ -86,15 +88,15 @@ function TransactionsPageInner() {
  <button onClick={() => setSelectedCharge(c)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <Eye size={12} /> View
  </button>
- {c.status !== 'refunded' && (
- <button onClick={() => setRefundTarget(c)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
- <RotateCcw size={12} /> Refund
- </button>
- )}
- </div>
- </div>
- </div>
- {/* Desktop row */}
+{c.status !== 'refunded' && c.status !== 'partial_refund' && (
+<button onClick={() => setRefundTarget(c)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+<RotateCcw size={12} /> Refund
+</button>
+)}
+</div>
+</div>
+</div>
+{/* Desktop row */}
  <div className="hidden sm:grid grid-cols-[1fr_90px_90px_100px_auto] gap-2 px-5 py-3.5 items-center">
  <p className="text-sm font-medium text-gray-900 truncate">{c.description}</p>
  <p className="text-sm text-gray-700">{formatCents(c.amount)}</p>
@@ -109,20 +111,20 @@ function TransactionsPageInner() {
  <button onClick={() => setSelectedCharge(c)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <Eye size={13} /> View Transaction
  </button>
- {c.status !== 'refunded' && (
- <button onClick={() => setRefundTarget(c)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
- <RotateCcw size={13} /> Refund
- </button>
- )}
- </div>
- </div>
- </div>
- );
- })}
- </div>
- )}
- </div>
- )}
+{c.status !== 'refunded' && c.status !== 'partial_refund' && (
+<button onClick={() => setRefundTarget(c)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+<RotateCcw size={13} /> Refund
+</button>
+)}
+</div>
+</div>
+</div>
+);
+})}
+</div>
+)}
+</div>
+)}
 
  {/* Refund Modal */}
  {refundTarget && (
@@ -131,12 +133,10 @@ function TransactionsPageInner() {
  chargeId={refundTarget.chargeId}
  customerName={refundTarget.customerName || refundTarget.description}
  originalAmount={refundTarget.amount}
- onSuccess={(fullRefund) => {
- if (fullRefund) {
- setCharges(prev => prev.map(c => c.id === refundTarget.id ? { ...c, status: 'refunded' } : c));
- }
- setRefundTarget(null);
- }}
+onSuccess={(fullRefund) => {
+setCharges(prev => prev.map(c => c.id === refundTarget.id ? { ...c, status: fullRefund ? 'refunded' : 'partial_refund' } : c));
+setRefundTarget(null);
+}}
  onClose={() => setRefundTarget(null)}
  />
  )}
@@ -160,9 +160,15 @@ function TransactionsPageInner() {
  <dd className="text-sm font-semibold text-gray-900">{selectedCharge.description}</dd>
  </div>
  <div className="flex justify-between border-b border-gray-200 pb-3">
- <dt className="text-sm font-medium text-gray-500">Amount</dt>
- <dd className="text-sm font-semibold text-gray-900">{formatCents(selectedCharge.amount)}</dd>
- </div>
+<dt className="text-sm font-medium text-gray-500">Amount Paid</dt>
+<dd className="text-sm font-semibold text-gray-900">{formatCents(selectedCharge.amount)}</dd>
+</div>
+{selectedCharge.fullInvoiceAmount && selectedCharge.fullInvoiceAmount !== selectedCharge.amount && (
+<div className="flex justify-between border-b border-gray-200 pb-3">
+<dt className="text-sm font-medium text-gray-500">Full Invoice</dt>
+<dd className="text-sm text-gray-700">{formatCents(selectedCharge.fullInvoiceAmount)} {selectedCharge.paymentType === 'installment' ? '(installment plan)' : '(subscription)'}</dd>
+</div>
+)}
  <div className="flex justify-between border-b border-gray-200 pb-3">
  <dt className="text-sm font-medium text-gray-500">Status</dt>
  <dd>

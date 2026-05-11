@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getCheckoutSession, createPaymentSchedule, createSubscription } from '@/lib/lunarpay';
+import {
+  getCheckoutSession, createPaymentSchedule, createSubscription,
+  listPaymentSchedules, listSubscriptions, listCustomers,
+} from '@/lib/lunarpay';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
@@ -52,7 +55,9 @@ export async function POST(
     return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
   }
 
-  if (proposal.status === 'paid') {
+  // Bail early if the proposal is already in a terminal state.
+  // Paid, refunded, or partial_refund — don't re-process side effects.
+  if (proposal.status === 'paid' || proposal.status === 'refunded' || proposal.status === 'partial_refund') {
     return NextResponse.json({ success: true, already_paid: true });
   }
 
@@ -163,11 +168,57 @@ export async function POST(
     };
 
     // When mode="subscription" or mode="installments", LP creates the
-    // subscription/payment schedule automatically and returns the IDs in
-    // session.resources. Read them so we don't create duplicates.
+    // subscription/payment schedule automatically. The IDs may appear in:
+    //   1. session.resources (webhook payload shape)
+    //   2. session.subscription_id / session.payment_schedule_id (GET response)
+    //   3. Not at all — fall back to querying LP's list APIs
     const resources = (session.resources as Record<string, unknown> | null) ?? null;
-    const lpSubId = (resources?.subscription_id as string | number | null) ?? null;
-    const lpScheduleId = (resources?.payment_schedule_id as string | number | null) ?? null;
+    let lpSubId =
+      (resources?.subscription_id as string | number | null) ??
+      (session.subscription_id as string | number | null) ??
+      (session.subscriptionId as string | number | null) ??
+      null;
+    let lpScheduleId =
+      (resources?.payment_schedule_id as string | number | null) ??
+      (session.payment_schedule_id as string | number | null) ??
+      (session.paymentScheduleId as string | number | null) ??
+      null;
+
+    // If the session response didn't include the resource IDs directly,
+    // query LP's list APIs to find what was auto-created for this customer.
+    if (!lpSubId && proposal.payment_type === 'subscription' && customerId) {
+      try {
+        const allSubs = await listSubscriptions(venue.lunarpay_secret_key);
+        const subList = Array.isArray(allSubs) ? allSubs : (allSubs as Record<string, unknown>).data ?? [];
+        // Find the most recently created sub for this customer
+        const match = (subList as Record<string, unknown>[]).find(
+          (s) => String(s.customerId) === String(customerId) && s.status !== 'cancelled'
+        );
+        if (match?.id) {
+          lpSubId = match.id as number;
+          console.log('[verify-payment] Found subscription via list API:', lpSubId);
+        }
+      } catch (listErr) {
+        console.error('[verify-payment] Failed to list subscriptions:', listErr);
+      }
+    }
+
+    if (!lpScheduleId && proposal.payment_type === 'installment' && customerId) {
+      try {
+        const allSchedules = await listPaymentSchedules(venue.lunarpay_secret_key);
+        const schedList = Array.isArray(allSchedules) ? allSchedules : (allSchedules as Record<string, unknown>).data ?? [];
+        // Find the most recently created schedule for this customer
+        const match = (schedList as Record<string, unknown>[]).find(
+          (s) => String(s.customerId) === String(customerId) && s.status === 'active'
+        );
+        if (match?.id) {
+          lpScheduleId = match.id as number;
+          console.log('[verify-payment] Found payment schedule via list API:', lpScheduleId);
+        }
+      } catch (listErr) {
+        console.error('[verify-payment] Failed to list payment schedules:', listErr);
+      }
+    }
 
     if (lpSubId) {
       updateData.subscription_id = String(lpSubId);
@@ -178,8 +229,7 @@ export async function POST(
       console.log('[verify-payment] LP auto-created payment schedule:', lpScheduleId);
     }
 
-    // Fallback: if LP didn't return a subscription/schedule in resources
-    // (older LP version or no mode was set), create them manually.
+    // Fallback: if we still couldn't find the LP resource, create it manually.
     if (!lpSubId && proposal.payment_type === 'subscription' && proposal.payment_config) {
       const config = proposal.payment_config as SubscriptionConfig;
 

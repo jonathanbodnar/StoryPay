@@ -55,10 +55,15 @@ export async function POST(request: NextRequest) {
 
     // Update proposal status: 'refunded' for full, 'partial_refund' for partial
     const isFullRefund = !amountCents || amountCents >= (proposal.price ?? 0);
-    await supabaseAdmin
+    const newStatus = isFullRefund ? 'refunded' : 'partial_refund';
+    const { error: updateError } = await supabaseAdmin
       .from('proposals')
-      .update({ status: isFullRefund ? 'refunded' : 'partial_refund', refunded_at: new Date().toISOString() })
+      .update({ status: newStatus, refunded_at: new Date().toISOString() })
       .eq('id', proposalId);
+    if (updateError) {
+      console.error('Refund DB update failed:', updateError);
+      return NextResponse.json({ error: 'Failed to update proposal status' }, { status: 500 });
+    }
 
     // Apply refunded system tag (fire-and-forget)
     const refundEmail = (proposal.customer_email as string | null)?.trim();
