@@ -37,7 +37,7 @@ export default function MobileFab() {
   return (
     <div
       className="lg:hidden fixed right-4 z-40"
-      style={{ bottom: 'calc(env(safe-area-inset-bottom) + 72px)' }}
+      style={{ bottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}
     >
       {/* Action menu */}
       {open && (

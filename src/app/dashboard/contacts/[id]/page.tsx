@@ -1135,7 +1135,7 @@ export default function CustomerDetailPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             {/* AI Concierge quick-control — ALWAYS shown.
                 Server gates the actual actions on plan/addon eligibility. */}
             <div className="relative" ref={aiHeaderMenuRef}>
@@ -1175,10 +1175,17 @@ export default function CustomerDetailPage() {
                 ) : (
                   <BotOff size={14} />
                 )}
-                {isPaused
-                  ? (resumeLabel ? `Paused until ${resumeLabel}` : 'AI Paused')
-                  : headerLead?.ai_state === 'ai_active' ? 'AI Active'
-                  : headerLead ? 'AI Off' : 'Start AI'}
+                <span className="hidden sm:inline">
+                  {isPaused
+                    ? (resumeLabel ? `Paused until ${resumeLabel}` : 'AI Paused')
+                    : headerLead?.ai_state === 'ai_active' ? 'AI Active'
+                    : headerLead ? 'AI Off' : 'Start AI'}
+                </span>
+                <span className="sm:hidden">
+                  {isPaused ? 'AI Paused'
+                    : headerLead?.ai_state === 'ai_active' ? 'AI On'
+                    : headerLead ? 'AI Off' : 'Start AI'}
+                </span>
                 <ChevronDown size={12} />
               </button>
 

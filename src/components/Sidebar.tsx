@@ -117,12 +117,10 @@ const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
   'nav_main_calendar',
   'nav_main_leads',
   'nav_main_help',
-  // Listing
+  // Listing — desktop-only subpages (pricing guide, booking system, reviews)
+  // are intentionally NOT in this list so they're hidden on mobile/tablet.
   'nav_listing_dashboard',
-  'nav_listing_pricing_guide',
-  'nav_listing_booking_system',
   'nav_listing_analytics',
-  'nav_listing_reviews',
   'nav_listing_directory',
   'nav_listing_directory_billing',
   // Payments — all
@@ -138,8 +136,7 @@ const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
   'nav_payments_settings',
   // Marketing — analytics only
   'nav_marketing_analytics',
-  // Settings
-  'nav_settings_general',
+  // Settings — "General" hidden on mobile (uses the desktop layout heavily)
   'nav_settings_branding',
   'nav_settings_team',
 ]);

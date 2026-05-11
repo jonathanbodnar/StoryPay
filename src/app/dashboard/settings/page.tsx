@@ -255,16 +255,16 @@ export default function SettingsPage() {
  <div className="space-y-6">
 
  {/* Payment settings moved notice */}
- <div className="rounded-2xl border border-gray-100 bg-gray-50 px-5 py-4 flex items-center justify-between gap-4">
- <div className="flex items-center gap-3">
- <CreditCard size={18} className="text-gray-400 shrink-0" />
- <div>
+ <div className="rounded-2xl border border-gray-100 bg-gray-50 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+ <div className="flex items-start sm:items-center gap-3 min-w-0">
+ <CreditCard size={18} className="text-gray-400 shrink-0 mt-0.5 sm:mt-0" />
+ <div className="min-w-0">
  <p className="text-sm font-medium text-gray-900">Payment Processing &amp; Customer Payment Methods</p>
  <p className="mt-0.5 text-xs text-gray-500">Configure your merchant account and ACH/card options under Payments → Settings.</p>
  </div>
  </div>
  <a href="/dashboard/payments/settings"
- className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap">
+ className="shrink-0 self-start sm:self-auto inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap">
  Go to Payment Settings <ExternalLink size={12} />
  </a>
  </div>
