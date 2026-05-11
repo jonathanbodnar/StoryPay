@@ -21,6 +21,7 @@ interface Schedule {
  customerName?: string | null;
  proposalId?: string | null;
  proposalStatus?: string | null;
+ effectiveStatus?: string | null;
 }
 
 function InstallmentsPageInner() {
@@ -93,7 +94,7 @@ function InstallmentsPageInner() {
  ) : (
  <div className="divide-y divide-gray-50">
  {filtered.map(s => {
- const color = getStatusColor(s.proposalStatus || s.status);
+ const color = getStatusColor(s.effectiveStatus || s.proposalStatus || s.status);
  const total = s.totalAmount ?? s.amount ?? 0;
  const count = s.paymentsTotal ?? s.paymentsCount ?? s.numberOfPayments ?? 0;
  const completed = s.paymentsCompleted ?? 0;
@@ -113,7 +114,7 @@ function InstallmentsPageInner() {
  <p className="text-sm text-gray-600 self-center">{completed} of {count} paid</p>
  <p className="text-sm text-gray-600 self-center">{perPayment > 0 ? formatCents(perPayment) : '—'}</p>
  <div className="self-center">
- <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize', color.bg, color.text)}>{s.status}</span>
+ <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize', color.bg, color.text)}>{s.effectiveStatus || s.status}</span>
  </div>
  {s.customerId && (
  <Link href={`/dashboard/contacts/${s.customerId}`} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors self-center">
