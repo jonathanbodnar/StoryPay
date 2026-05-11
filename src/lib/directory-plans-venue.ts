@@ -62,9 +62,31 @@ export function computeAllowedNavIdsFromPlan(plan: {
   let set: Set<string>;
 
   if (explicit) {
+    const saved = plan.nav_permissions as Record<string, boolean>;
     set = new Set<string>();
-    for (const [k, v] of Object.entries(plan.nav_permissions as Record<string, boolean>)) {
+    for (const [k, v] of Object.entries(saved)) {
       if (v === true) set.add(k);
+    }
+
+    // Group-inheritance: when a nav ID exists in the registry but is absent
+    // from the stored permissions (because it was added after the plan was
+    // last saved in the admin editor), auto-grant it if at least one other
+    // nav ID in the same group is already enabled. This prevents newly-added
+    // pages from appearing locked on plans that clearly have access to the
+    // group (e.g. a plan with Settings enabled should automatically get any
+    // new Settings subpage without requiring an admin to re-save every plan).
+    const groupHasAccess = new Map<string, boolean>();
+    for (const entry of DIRECTORY_NAV_REGISTRY) {
+      if (set.has(entry.id)) {
+        groupHasAccess.set(entry.group, true);
+      }
+    }
+    for (const entry of DIRECTORY_NAV_REGISTRY) {
+      if (!set.has(entry.id) && !(entry.id in saved)) {
+        if (groupHasAccess.get(entry.group)) {
+          set.add(entry.id);
+        }
+      }
     }
   } else {
     set = navIdsFromLegacyFeatureFlags(plan.feature_flags);
