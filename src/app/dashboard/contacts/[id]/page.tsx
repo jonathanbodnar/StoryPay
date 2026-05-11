@@ -1101,8 +1101,8 @@ export default function CustomerDetailPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-3 mt-0.5">
-                {customer.email && <span className="flex items-center gap-1 text-sm text-gray-500"><Mail size={13} />{customer.email}</span>}
-                {customer.phone && <span className="flex items-center gap-1 text-sm text-gray-500"><Phone size={13} />{customer.phone}</span>}
+                {customer.email && <a href={`mailto:${customer.email}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"><Mail size={13} />{customer.email}</a>}
+                {customer.phone && <a href={`tel:${customer.phone.replace(/[^\d+]/g, '')}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"><Phone size={13} />{customer.phone}</a>}
                 {venueCustomer?.referral_source && <span className="text-xs text-gray-400 border border-gray-200 rounded-full px-2 py-0.5">via {venueCustomer.referral_source}</span>}
               </div>
               {conversationsOutreach && (
@@ -1406,8 +1406,8 @@ export default function CustomerDetailPage() {
               <button onClick={startEditContact} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> Edit</button>
             </div>
             <div className="space-y-2 text-sm">
-              {customer.email && <div className="flex items-center gap-2 text-gray-700"><Mail size={13} className="text-gray-400 flex-shrink-0" />{customer.email}</div>}
-              {customer.phone && <div className="flex items-center gap-2 text-gray-700"><Phone size={13} className="text-gray-400 flex-shrink-0" />{customer.phone}</div>}
+              {customer.email && <a href={`mailto:${customer.email}`} className="flex items-center gap-2 text-gray-700 hover:text-gray-900"><Mail size={13} className="text-gray-400 flex-shrink-0" />{customer.email}</a>}
+              {customer.phone && <a href={`tel:${customer.phone.replace(/[^\d+]/g, '')}`} className="flex items-center gap-2 text-gray-700 hover:text-gray-900"><Phone size={13} className="text-gray-400 flex-shrink-0" />{customer.phone}</a>}
               {(customer.address || customer.city) && <div className="flex items-center gap-2 text-gray-700"><MapPin size={13} className="text-gray-400 flex-shrink-0" />{[customer.address, customer.city, customer.state, customer.zip].filter(Boolean).join(', ')}</div>}
               {!customer.email && !customer.phone && <p className="text-gray-400 text-xs">No contact info</p>}
             </div>
@@ -1479,8 +1479,8 @@ export default function CustomerDetailPage() {
             ) : venueCustomer?.partner_first_name ? (
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2 text-gray-700"><User size={13} className="text-gray-400" />{toTitleCase([venueCustomer.partner_first_name, venueCustomer.partner_last_name].filter(Boolean).join(' '))}</div>
-                {venueCustomer.partner_email && <div className="flex items-center gap-2 text-gray-700"><Mail size={13} className="text-gray-400" />{venueCustomer.partner_email}</div>}
-                {venueCustomer.partner_phone && <div className="flex items-center gap-2 text-gray-700"><Phone size={13} className="text-gray-400" />{venueCustomer.partner_phone}</div>}
+                {venueCustomer.partner_email && <a href={`mailto:${venueCustomer.partner_email}`} className="flex items-center gap-2 text-gray-700 hover:text-gray-900"><Mail size={13} className="text-gray-400" />{venueCustomer.partner_email}</a>}
+                {venueCustomer.partner_phone && <a href={`tel:${venueCustomer.partner_phone.replace(/[^\d+]/g, '')}`} className="flex items-center gap-2 text-gray-700 hover:text-gray-900"><Phone size={13} className="text-gray-400" />{venueCustomer.partner_phone}</a>}
               </div>
             ) : (
               <p className="text-xs text-gray-400">No partner info yet.{' '}
@@ -1594,7 +1594,7 @@ export default function CustomerDetailPage() {
                 {venueCustomer.guest_count && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Guests</p><p className="text-gray-900 font-medium">{venueCustomer.guest_count}</p></div>}
                 {venueCustomer.venue_spaces && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Space</p><p className="text-gray-900 font-medium flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{backgroundColor:venueCustomer.venue_spaces.color}} />{venueCustomer.venue_spaces.name}</p></div>}
                 {venueCustomer.rehearsal_date && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Rehearsal</p><p className="text-gray-900 font-medium">{formatDate(venueCustomer.rehearsal_date)}</p></div>}
-                {venueCustomer.coordinator_name && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Coordinator</p><p className="text-gray-900 font-medium">{venueCustomer.coordinator_name}{venueCustomer.coordinator_phone && <span className="text-gray-500 font-normal"> · {venueCustomer.coordinator_phone}</span>}</p></div>}
+                {venueCustomer.coordinator_name && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Coordinator</p><p className="text-gray-900 font-medium">{venueCustomer.coordinator_name}{venueCustomer.coordinator_phone && <a href={`tel:${venueCustomer.coordinator_phone.replace(/[^\d+]/g, '')}`} className="text-gray-500 font-normal hover:text-gray-900"> · {venueCustomer.coordinator_phone}</a>}</p></div>}
                 {venueCustomer.catering_notes && <div className="sm:col-span-2 lg:col-span-4"><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Notes</p><p className="text-gray-700">{venueCustomer.catering_notes}</p></div>}
               </div>
             ) : (

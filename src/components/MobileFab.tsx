@@ -2,17 +2,25 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Plus, X, MessageCircle, UserPlus, CreditCard, FileText } from 'lucide-react';
+import { Plus, X, MessageCircle, UserPlus, CreditCard, FileText, Sparkles } from 'lucide-react';
+
+type ActionDef = {
+  label: string;
+  icon: typeof Plus;
+  href?: string;
+  onClick?: () => void;
+};
 
 /**
  * Floating action button — bottom-right above the tab bar.
- * Tapping reveals the most common "create" actions.
+ * Tapping reveals the most common "create" actions plus Ask AI.
  */
-const ACTIONS = [
-  { label: 'New message',  href: '/dashboard/conversations', icon: MessageCircle },
-  { label: 'Add contact',  href: '/dashboard/contacts',      icon: UserPlus },
-  { label: 'New payment',  href: '/dashboard/payments/new',  icon: CreditCard },
-  { label: 'New proposal', href: '/dashboard/proposals',     icon: FileText },
+const ACTIONS: ActionDef[] = [
+  { label: 'Ask AI',       icon: Sparkles,      onClick: () => window.dispatchEvent(new Event('open-ask-ai')) },
+  { label: 'New message',  icon: MessageCircle, href:    '/dashboard/conversations' },
+  { label: 'Add contact',  icon: UserPlus,      href:    '/dashboard/contacts' },
+  { label: 'New payment',  icon: CreditCard,    href:    '/dashboard/payments/new' },
+  { label: 'New proposal', icon: FileText,      href:    '/dashboard/proposals' },
 ];
 
 export default function MobileFab() {
@@ -40,18 +48,32 @@ export default function MobileFab() {
             aria-hidden
           />
           <ul className="mb-3 flex flex-col items-end gap-2">
-            {ACTIONS.map(({ label, href, icon: Icon }) => (
-              <li key={label}>
-                <Link
-                  href={href}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-2 rounded-full bg-white pl-4 pr-4 py-2.5 text-sm font-medium text-gray-900 shadow-lg ring-1 ring-gray-200"
-                >
+            {ACTIONS.map(({ label, href, icon: Icon, onClick }) => {
+              const className = 'flex items-center gap-2 rounded-full bg-white pl-4 pr-4 py-2.5 text-sm font-medium text-gray-900 shadow-lg ring-1 ring-gray-200';
+              const content = (
+                <>
                   <Icon size={16} className="text-gray-600" />
                   <span>{label}</span>
-                </Link>
-              </li>
-            ))}
+                </>
+              );
+              return (
+                <li key={label}>
+                  {href ? (
+                    <Link href={href} onClick={() => setOpen(false)} className={className}>
+                      {content}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { onClick?.(); setOpen(false); }}
+                      className={className}
+                    >
+                      {content}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </>
       )}

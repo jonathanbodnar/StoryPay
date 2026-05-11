@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   UserPlus, Phone, MessageCircle, CreditCard, FileText,
-  Calendar, Star, Store, BarChart3, MailOpen, Inbox, ChevronRight,
+  Calendar, Sparkles, Store, BarChart3, MailOpen, Inbox, ChevronRight,
 } from 'lucide-react';
 
 /**
@@ -96,14 +96,18 @@ export default function MobileHomePage() {
       <div className="rounded-t-3xl bg-gray-50 px-6 pb-32 pt-6">
         <h2 className="mb-4 text-sm font-semibold text-gray-700">Quick Actions</h2>
         <div className="grid grid-cols-4 gap-x-3 gap-y-5">
-          <Tile icon={<UserPlus    size={22} />} label="Add Contact"     href="/dashboard/contacts" />
-          <Tile icon={<Phone       size={22} />} label="Make a Call"     href="/dashboard/contacts" />
+          <Tile icon={<UserPlus      size={22} />} label="Add Contact"   href="/dashboard/contacts" />
+          <Tile icon={<Phone         size={22} />} label="Make a Call"   href="/dashboard/contacts" />
           <Tile icon={<MessageCircle size={22} />} label="New Message"   href="/dashboard/conversations" />
-          <Tile icon={<CreditCard  size={22} />} label="New Payment"     href="/dashboard/payments/new" />
-          <Tile icon={<FileText    size={22} />} label="New Proposal"    href="/dashboard/proposals" />
-          <Tile icon={<Calendar    size={22} />} label="Book Event"      href="/dashboard/calendar" />
-          <Tile icon={<Star        size={22} />} label="Request Review"  href="/dashboard/listing/reviews" />
-          <Tile icon={<Store       size={22} />} label="Venue Listing"   href="/dashboard/listing" />
+          <Tile icon={<CreditCard    size={22} />} label="New Payment"   href="/dashboard/payments/new" />
+          <Tile icon={<FileText      size={22} />} label="New Proposal"  href="/dashboard/proposals" />
+          <Tile icon={<Calendar      size={22} />} label="Book Event"    href="/dashboard/calendar" />
+          <Tile icon={<Store         size={22} />} label="Venue Listing" href="/dashboard/listing" />
+          <Tile
+            icon={<Sparkles size={22} />}
+            label="Ask AI"
+            onClick={() => window.dispatchEvent(new Event('open-ask-ai'))}
+          />
         </div>
 
         {/* Secondary navigation list */}
@@ -143,13 +147,34 @@ function MetricCard({
   );
 }
 
-function Tile({ icon, label, href }: { icon: React.ReactNode; label: string; href: string }) {
-  return (
-    <Link href={href} className="flex flex-col items-center gap-2 text-center">
+function Tile({
+  icon, label, href, onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  href?: string;
+  onClick?: () => void;
+}) {
+  const inner = (
+    <>
       <span className="flex h-14 w-14 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-800 shadow-sm transition-colors active:bg-gray-100">
         {icon}
       </span>
       <span className="text-[11px] font-medium leading-tight text-gray-700">{label}</span>
+    </>
+  );
+  const className = 'flex flex-col items-center gap-2 text-center';
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <Link href={href ?? '#'} className={className}>
+      {inner}
     </Link>
   );
 }

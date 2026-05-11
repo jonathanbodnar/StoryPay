@@ -326,7 +326,11 @@ export default function ContactsPage() {
                     </Link>
                   </td>
                   <td className="hidden sm:table-cell px-5 py-3.5 text-gray-700">{c.email || '---'}</td>
-                  <td className="hidden md:table-cell px-5 py-3.5 text-gray-700">{c.phone || '---'}</td>
+                  <td className="hidden md:table-cell px-5 py-3.5 text-gray-700">
+                    {c.phone
+                      ? <a href={`tel:${c.phone.replace(/[^\d+]/g, '')}`} onClick={(e) => e.stopPropagation()} className="hover:text-gray-900">{c.phone}</a>
+                      : '---'}
+                  </td>
                   <td className="hidden md:table-cell px-5 py-3.5">
                     {c.funnelStage ? (
                       <span

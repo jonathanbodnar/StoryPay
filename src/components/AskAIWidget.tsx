@@ -494,7 +494,7 @@ setPendingImage(null); setShowEmoji(false);
  {/* ── Floating bubble ── */}
  <button
  onClick={() => setOpen(v => !v)}
- className="fixed bottom-6 right-4 sm:right-6 z-[100] flex h-14 w-14 items-center justify-center rounded-full text-white transition-all hover:scale-105 active:scale-95"
+ className="fixed bottom-6 right-4 sm:right-6 z-[100] hidden h-14 w-14 items-center justify-center rounded-full text-white transition-all hover:scale-105 active:scale-95 lg:flex"
  style={{ backgroundColor: BRAND }}
  aria-label="Open Ask AI"
  >
