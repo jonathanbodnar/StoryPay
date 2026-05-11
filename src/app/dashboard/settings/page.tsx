@@ -15,6 +15,7 @@ import {
  Download,
  AlertCircle,
 } from 'lucide-react';
+import InstallAppCard from '@/components/InstallAppCard';
 
 interface VenueInfo {
  id: string;
@@ -250,6 +251,12 @@ export default function SettingsPage() {
  <div className="mb-8">
  <h1 className="font-heading text-2xl font-semibold text-gray-900">Settings</h1>
  <p className="mt-1 text-sm text-gray-500">Manage your venue configuration and integrations</p>
+ </div>
+
+ {/* Install app — always shown so owners always know it's an option */}
+ <div className="mb-6">
+   <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">App</p>
+   <InstallAppCard variant="card" />
  </div>
 
  <div className="space-y-6">

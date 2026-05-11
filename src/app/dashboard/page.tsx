@@ -9,6 +9,7 @@ import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils
 import Link from 'next/link';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 import OnboardingChecklist from '@/components/OnboardingChecklist';
+import InstallAppCard from '@/components/InstallAppCard';
 import {
  AreaChart,
  Area,
@@ -225,6 +226,14 @@ export default function DashboardOverview() {
  const [loading, setLoading] = useState(true);
  const [txLoading, setTxLoading] = useState(true);
  const [dateRange, setDateRange] = useState<DateRange>(getDefaultRange);
+ const [installBannerDismissed, setInstallBannerDismissed] = useState(() => {
+   if (typeof window === 'undefined') return false;
+   return window.localStorage.getItem('storyvenue.install.banner.dismissed') === '1';
+ });
+ function dismissInstallBanner() {
+   try { window.localStorage.setItem('storyvenue.install.banner.dismissed', '1'); } catch { /* ok */ }
+   setInstallBannerDismissed(true);
+ }
  const [bookingTrends, setBookingTrends] = useState<BookingTrendsPayload | null>(null);
  const [trendsLoading, setTrendsLoading] = useState(true);
 
@@ -286,6 +295,11 @@ export default function DashboardOverview() {
       <div className="hidden md:block">
         <OnboardingChecklist />
       </div>
+
+      {/* ── Install app banner — shown until dismissed or installed ── */}
+      {!installBannerDismissed && (
+        <InstallAppCard variant="banner" onDismiss={dismissInstallBanner} />
+      )}
 
  {/* ── Header ── */}
  <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
