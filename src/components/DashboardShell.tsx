@@ -139,14 +139,14 @@ export default function DashboardShell({
       />
 
       <div
-        className={`transition-[margin] duration-200 ease-out ${
+        className={`flex min-h-screen flex-col transition-[margin] duration-200 ease-out ${
           rail ? 'lg:ml-[60px]' : 'lg:ml-[216px]'
         }`}
       >
-        <div className="h-14 lg:hidden" />
+        <div className="h-14 shrink-0 lg:hidden" />
         <AnnouncementTicker />
         <MobileDashboardRedirect />
-        <main className={`mx-auto flex min-h-screen w-full flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
+        <main className={`mx-auto flex w-full flex-1 flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
           {directoryBillingPending ? (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               <span className="font-semibold">Directory plan payment due.</span>{' '}

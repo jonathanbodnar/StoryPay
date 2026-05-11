@@ -856,7 +856,7 @@ export default function EventEditorModal({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Start Date *</label>
               <input
@@ -968,7 +968,7 @@ export default function EventEditorModal({
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Start Time</label>
                     <input
