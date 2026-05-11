@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Open_Sans, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { getPageSeo } from '@/lib/page-seo';
+import PWAInstaller from '@/components/PWAInstaller';
 
 // Self-hosted via next/font — eliminates the render-blocking Google Fonts request.
 const openSans = Open_Sans({
@@ -140,7 +141,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }} />
       </head>
-      <body className="antialiased bg-white text-gray-900">{children}</body>
+      <body className="antialiased bg-white text-gray-900">
+        {children}
+        <PWAInstaller />
+      </body>
     </html>
   );
 }
