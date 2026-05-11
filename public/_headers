@@ -7,6 +7,14 @@
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
 
+# ── PWA service worker — NEVER long-cache or new deploys get stuck ──────────
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+  Service-Worker-Allowed: /
+
+/manifest.json
+  Cache-Control: public, max-age=0, must-revalidate
+
 # ── Public assets in /public (logos, icons, etc.) ──────────────────────────
 /*.png
   Cache-Control: public, max-age=604800, stale-while-revalidate=86400
