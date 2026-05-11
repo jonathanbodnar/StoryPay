@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Check,
   DollarSign,
@@ -131,6 +131,9 @@ export default function AddLeadModal({
     return { ...d, stageId: first?.id ?? '' };
   });
   const [saving, setSaving] = useState(false);
+
+  const scrollBodyRef = useRef<HTMLDivElement>(null);
+  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [manageSpaces, setManageSpaces] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
@@ -267,7 +270,17 @@ export default function AddLeadModal({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-6 overflow-y-auto space-y-3">
+          <div
+            ref={scrollBodyRef}
+            className="p-6 overflow-y-auto space-y-3 scrollbar-autohide"
+            onScroll={() => {
+              const el = scrollBodyRef.current;
+              if (!el) return;
+              el.classList.add('is-scrolling');
+              if (scrollTimer.current) clearTimeout(scrollTimer.current);
+              scrollTimer.current = setTimeout(() => el.classList.remove('is-scrolling'), 800);
+            }}
+          >
             {pipelines.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
