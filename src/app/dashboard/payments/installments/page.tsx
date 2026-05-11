@@ -11,11 +11,16 @@ interface Schedule {
  description?: string;
  totalAmount?: number;
  amount?: number;
+ paymentsTotal?: number;
+ paymentsCompleted?: number;
+ paidAmount?: number;
  paymentsCount?: number;
  numberOfPayments?: number;
  status: string;
  customerId?: string | number | null;
  customerName?: string | null;
+ proposalId?: string | null;
+ proposalStatus?: string | null;
 }
 
 function InstallmentsPageInner() {
@@ -38,7 +43,7 @@ function InstallmentsPageInner() {
  s.description?.toLowerCase().includes(q) ||
  s.status?.toLowerCase().includes(q) ||
  String((s.totalAmount ?? s.amount ?? 0) / 100).includes(q) ||
- String(s.paymentsCount ?? s.numberOfPayments ?? '').includes(q)
+ String(s.paymentsTotal ?? s.paymentsCount ?? s.numberOfPayments ?? '').includes(q)
  );
  }, [schedules, search]);
 
@@ -88,9 +93,10 @@ function InstallmentsPageInner() {
  ) : (
  <div className="divide-y divide-gray-50">
  {filtered.map(s => {
- const color = getStatusColor(s.status);
+ const color = getStatusColor(s.proposalStatus || s.status);
  const total = s.totalAmount ?? s.amount ?? 0;
- const count = s.paymentsCount ?? s.numberOfPayments ?? 0;
+ const count = s.paymentsTotal ?? s.paymentsCount ?? s.numberOfPayments ?? 0;
+ const completed = s.paymentsCompleted ?? 0;
  const perPayment = count > 0 ? Math.round(total / count) : 0;
  return (
  <div key={s.id} className="flex flex-col sm:grid sm:grid-cols-[1fr_120px_100px_100px_100px_80px] gap-2 sm:gap-4 px-6 py-4 hover:bg-gray-50/50 transition-colors">
@@ -104,7 +110,7 @@ function InstallmentsPageInner() {
  </div>
  </div>
  <p className="text-sm font-semibold text-gray-900 self-center">{formatCents(total)}</p>
- <p className="text-sm text-gray-600 self-center">{count} payments</p>
+ <p className="text-sm text-gray-600 self-center">{completed} of {count} paid</p>
  <p className="text-sm text-gray-600 self-center">{perPayment > 0 ? formatCents(perPayment) : '—'}</p>
  <div className="self-center">
  <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize', color.bg, color.text)}>{s.status}</span>

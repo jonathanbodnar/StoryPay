@@ -94,14 +94,17 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === 'schedules') {
-      // Build a proposal lookup by payment_schedule_id for customer names
+      // Build a proposal lookup by payment_schedule_id for customer names + first payment info
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, customer_email, customer_lunarpay_id, payment_schedule_id')
+        .select('id, customer_name, customer_email, customer_lunarpay_id, payment_schedule_id, price, payment_config, status')
         .eq('venue_id', venueId)
         .not('payment_schedule_id', 'is', null);
 
-      const proposalMap: Record<string, { proposalId: string; customerName: string | null; customerId: string | null }> = {};
+      const proposalMap: Record<string, {
+        proposalId: string; customerName: string | null; customerId: string | null;
+        firstPaymentCents: number; totalPayments: number; totalAmount: number; proposalStatus: string;
+      }> = {};
       for (const p of proposals ?? []) {
         if (!p.payment_schedule_id) continue;
         let customerId = p.customer_lunarpay_id ?? null;
@@ -115,22 +118,46 @@ export async function GET(request: NextRequest) {
             }
           } catch { /* best-effort */ }
         }
+        const cfg = (p.payment_config ?? {}) as { installments?: Array<{ amount: number; date: string }> };
+        const installments = cfg.installments ?? [];
+        const firstPaymentCents = installments.length > 0 ? installments[0].amount : 0;
         proposalMap[String(p.payment_schedule_id)] = {
           proposalId: p.id,
           customerName: p.customer_name ?? null,
           customerId,
+          firstPaymentCents,
+          totalPayments: installments.length,
+          totalAmount: p.price ?? 0,
+          proposalStatus: p.status ?? 'unknown',
         };
       }
 
       // Fetch ALL schedules from LP (active, completed, and cancelled)
       const schedules = await listPaymentSchedules(secret);
       const items = (Array.isArray(schedules) ? schedules : schedules.data ?? []).map(
-        (s: Record<string, unknown>) => ({
-          ...s,
-          customerId: proposalMap[String(s.id)]?.customerId ?? null,
-          customerName: proposalMap[String(s.id)]?.customerName ?? null,
-          proposalId: proposalMap[String(s.id)]?.proposalId ?? null,
-        })
+        (s: Record<string, unknown>) => {
+          const linked = proposalMap[String(s.id)];
+          const lpPaymentsCompleted = (s.paymentsCompleted as number) ?? 0;
+          const lpPaymentsTotal = (s.paymentsTotal as number) ?? 0;
+          // The first payment was made at checkout (not through the LP schedule),
+          // so add 1 to both completed and total counts for display.
+          const displayPaymentsCompleted = linked ? lpPaymentsCompleted + 1 : lpPaymentsCompleted;
+          const displayPaymentsTotal = linked ? lpPaymentsTotal + 1 : lpPaymentsTotal;
+          const displayPaidAmount = linked ? (s.paidAmount as number ?? 0) + linked.firstPaymentCents : (s.paidAmount as number ?? 0);
+          const displayTotalAmount = linked ? (s.totalAmount as number ?? 0) + linked.firstPaymentCents : (s.totalAmount as number ?? 0);
+          return {
+            ...s,
+            customerId: linked?.customerId ?? null,
+            customerName: linked?.customerName ?? null,
+            proposalId: linked?.proposalId ?? null,
+            proposalStatus: linked?.proposalStatus ?? null,
+            // Override with first-payment-inclusive counts
+            paymentsCompleted: displayPaymentsCompleted,
+            paymentsTotal: displayPaymentsTotal,
+            paidAmount: displayPaidAmount,
+            totalAmount: displayTotalAmount,
+          };
+        }
       );
       return NextResponse.json(items);
     }
