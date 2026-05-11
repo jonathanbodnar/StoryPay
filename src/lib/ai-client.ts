@@ -22,6 +22,7 @@ export function getDeepSeekClient(): OpenAI {
   return new OpenAI({
     apiKey,
     baseURL: 'https://api.deepseek.com/v1',
+    timeout: 30_000,
   });
 }
 
@@ -32,5 +33,5 @@ export function getDeepSeekClient(): OpenAI {
 export function getOpenAIEmbeddingsClient(): OpenAI {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set.');
-  return new OpenAI({ apiKey });
+  return new OpenAI({ apiKey, timeout: 30_000 });
 }

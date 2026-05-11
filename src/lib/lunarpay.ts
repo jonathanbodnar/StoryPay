@@ -17,6 +17,7 @@ export async function lpFetch(path: string, { method = 'GET', body, key }: LPReq
       'Content-Type': 'application/json',
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {
@@ -268,6 +269,7 @@ export async function tryCreateLunarPayProduct(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { id?: number | string; product_id?: number | string };

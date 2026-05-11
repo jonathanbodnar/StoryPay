@@ -57,6 +57,7 @@ export async function ghlRequest(
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {
@@ -81,6 +82,7 @@ async function getLocationToken(agencyToken: string, locationId: string): Promis
       'Version': '2021-07-28',
     },
     body: new URLSearchParams({ companyId: locationId, locationId }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {
@@ -280,6 +282,7 @@ export async function deleteGhlContact(
           Version: '2021-07-28',
           'X-Location-Id': locationId,
         },
+        signal: AbortSignal.timeout(30_000),
       },
     );
     return res.ok || res.status === 404;
@@ -347,6 +350,7 @@ export async function findOrCreateContact(
       ...(locationId ? { 'X-Location-Id': locationId } : {}),
     },
     body: JSON.stringify({ locationId, ...cleanPayload }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (createRaw.ok) {
@@ -372,6 +376,7 @@ export async function findOrCreateContact(
           ...(locationId ? { 'X-Location-Id': locationId } : {}),
         },
         body: JSON.stringify({ locationId, ...payloadWithoutPhone }),
+        signal: AbortSignal.timeout(30_000),
       });
       if (retryRaw.ok) {
         const retryRes = await retryRaw.json();
@@ -486,6 +491,7 @@ export async function refreshAccessToken(refreshToken: string) {
       client_id: process.env.GHL_CLIENT_ID!,
       client_secret: process.env.GHL_CLIENT_SECRET!,
     }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {
@@ -507,6 +513,7 @@ export async function exchangeCode(code: string, clientId: string, clientSecret:
       client_secret: clientSecret,
       redirect_uri: redirectUri,
     }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {

@@ -247,6 +247,7 @@ export async function sendEmail({
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     });
 
     const data = (await res.json()) as { id?: string; message?: string; name?: string };
