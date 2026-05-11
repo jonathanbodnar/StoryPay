@@ -59,6 +59,11 @@ function isSafari(): boolean {
   return /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|Chrome|Android/.test(ua);
 }
 
+function isIOSChrome(): boolean {
+  if (typeof window === 'undefined') return false;
+  return /CriOS/.test(window.navigator.userAgent);
+}
+
 function dismissedRecently(key: string): boolean {
   try {
     const raw = window.localStorage.getItem(key);
@@ -129,15 +134,16 @@ export default function PWAInstaller() {
     };
   }, []);
 
-  // iOS coach decision. iOS never fires `beforeinstallprompt`, so we drive
-  // visibility from UA detection alone.
+  // iOS coach decision. iOS never fires `beforeinstallprompt` regardless of
+  // which browser is used (all iOS browsers run on WebKit). Show the coach
+  // for Safari AND Chrome iOS (CriOS) — the instructions differ slightly but
+  // both need guidance since there's no automated install prompt.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (isStandalone()) return;
-    if (!isIOS() || !isSafari()) return;
+    if (!isIOS()) return;
     if (dismissedRecently(IOS_COACH_KEY)) return;
 
-    // Tiny delay so the coach doesn't compete with first paint or modals.
     const t = window.setTimeout(() => setShowIosCoach(true), 2500);
     return () => window.clearTimeout(t);
   }, []);
@@ -273,12 +279,18 @@ export default function PWAInstaller() {
               height={32}
               style={{ borderRadius: 8, flexShrink: 0, marginTop: 2 }}
             />
-            <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>Add to Home Screen</div>
+          <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>Add to Home Screen</div>
+            {isIOSChrome() ? (
+              <div style={{ color: '#6b7280' }}>
+                Tap the <ShareGlyph /> Share icon in the address bar (or <strong>⋮ → Add to Home Screen</strong>) to install StoryVenue.
+              </div>
+            ) : (
               <div style={{ color: '#6b7280' }}>
                 Tap the <ShareGlyph /> Share icon, then <strong>&ldquo;Add to Home Screen&rdquo;</strong> to install StoryVenue.
               </div>
-            </div>
+            )}
+          </div>
             <button
               type="button"
               onClick={handleDismissIos}

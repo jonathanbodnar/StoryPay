@@ -47,7 +47,22 @@ function isSafari() {
   return /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|Chrome|Android/.test(ua);
 }
 
-type Platform = 'loading' | 'installed' | 'ios' | 'prompt-ready' | 'prompt-unavailable';
+function isIOSChrome() {
+  if (typeof window === 'undefined') return false;
+  return /CriOS/.test(window.navigator.userAgent);
+}
+
+function isIOSOtherBrowser() {
+  // Firefox iOS (FxiOS), Edge iOS (EdgiOS), etc. — all WebKit underneath,
+  // none support beforeinstallprompt. Share → Add to Home Screen is the
+  // universal fallback but the UI varies by browser.
+  if (typeof window === 'undefined') return false;
+  const ua = window.navigator.userAgent;
+  return isIOS() && !isSafari() && !isIOSChrome();
+}
+void isIOSOtherBrowser; // referenced in future variants
+
+type Platform = 'loading' | 'installed' | 'ios-safari' | 'ios-chrome' | 'prompt-ready' | 'prompt-unavailable';
 
 interface Props {
   variant?: 'card' | 'banner';
@@ -65,7 +80,8 @@ export default function InstallAppCard({ variant = 'card', onDismiss }: Props) {
 
     if (isStandalone()) { setPlatform('installed'); return; }
 
-    if (isIOS() && isSafari()) { setPlatform('ios'); return; }
+    if (isIOSChrome()) { setPlatform('ios-chrome'); return; }
+    if (isIOS() && !isIOSChrome()) { setPlatform('ios-safari'); return; }
 
     const onPrompt = (e: Event) => {
       e.preventDefault();
@@ -121,8 +137,34 @@ export default function InstallAppCard({ variant = 'card', onDismiss }: Props) {
     );
   }
 
+  // ── iOS Chrome ───────────────────────────────────────────────────────────
+  if (platform === 'ios-chrome') {
+    return (
+      <Card variant={variant} onDismiss={onDismiss}>
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 flex-shrink-0 mt-0.5">
+            <Smartphone size={17} className="text-gray-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900">Add StoryVenue to your home screen</p>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+              In Chrome, tap the{' '}
+              <span className="inline-flex items-center gap-0.5 font-medium text-gray-700">
+                <ShareGlyph /> Share
+              </span>{' '}
+              icon in the address bar (or tap <strong className="text-gray-700">⋮</strong> → <strong className="text-gray-700">Add to Home Screen</strong>). Once on your home screen, open it from the icon for push notifications and offline access.
+            </p>
+            <p className="text-xs text-gray-400 mt-1.5">
+              Tip: for the best experience, <strong className="text-gray-500">open in Safari</strong> instead — Safari on iPhone has deeper PWA support.
+            </p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   // ── iOS Safari ────────────────────────────────────────────────────────────
-  if (platform === 'ios') {
+  if (platform === 'ios-safari') {
     return (
       <Card variant={variant} onDismiss={onDismiss}>
         <div className="flex items-start gap-3">
