@@ -44,7 +44,13 @@ export default function MobileTabBar() {
   return (
     <nav
       className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{
+        paddingTop: '4px',
+        // max() ensures at least 10 px below icons on devices where
+        // safe-area-inset-bottom is 0 (older Androids, desktop preview).
+        // iPhones with a home indicator already get ~34 px from the env().
+        paddingBottom: 'max(env(safe-area-inset-bottom), 10px)',
+      }}
     >
       <ul className="grid grid-cols-5 px-2">
         {TABS.map(({ label, href, icon: Icon, match }) => {
@@ -56,7 +62,7 @@ export default function MobileTabBar() {
             <li key={label}>
               <Link
                 href={href}
-                className={`flex flex-col items-center justify-center gap-1.5 py-3 text-[11px] font-medium transition-colors ${
+                className={`flex flex-col items-center justify-center gap-1.5 py-3.5 text-[11px] font-medium transition-colors ${
                   active ? 'text-gray-900' : 'text-gray-400'
                 }`}
               >
