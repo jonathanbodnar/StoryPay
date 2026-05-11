@@ -10,6 +10,7 @@ import {
   DEFAULT_PAYMENT_REMINDER_OFFSETS,
   normalizePaymentReminderOffsets,
 } from '@/lib/payment-reminders';
+import PushNotificationManager from '@/components/PushNotificationManager';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -335,9 +336,12 @@ export default function NotificationsPage() {
       <div className="mb-8">
         <h1 className="font-heading text-2xl text-gray-900">Notifications</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Manage and customize every email notification sent from your account. Use the toggle on each row to enable or disable individual emails. Changes take effect immediately.
+          Manage push, email, and SMS notifications. Use the toggle on each row to enable or disable individual channels. Changes take effect immediately.
         </p>
       </div>
+
+      {/* Push notifications — opt-in + per-scenario toggles */}
+      <PushNotificationManager />
 
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
 

@@ -15,6 +15,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
+import { sendPushToVenue } from '@/lib/push';
 
 export type OwnerScenario =
   | 'payment_received'
@@ -26,7 +27,12 @@ export type OwnerScenario =
   | 'subscription_cancelled'
   | 'invoice_paid'
   | 'refund_issued'
-  | 'new_customer';
+  | 'new_customer'
+  // Scenarios used only for push (no email template by default). Phase 4
+  // will wire these from the lead / conversations / AI-handoff flows.
+  | 'new_lead'
+  | 'new_message'
+  | 'ai_handoff';
 
 interface VenueRow {
   id: string;
@@ -94,6 +100,9 @@ async function loadSettings(venueId: string): Promise<NotificationSettings> {
 const SCENARIO_META: Record<OwnerScenario, {
   emailKey: string;
   smsKey: string;
+  /** Per-scenario push toggle. When undefined, push is sent unconditionally
+   *  (gated only by the master `push_enabled` toggle). */
+  pushKey?: string;
   /** Email template slug to load. We reuse `payment_notification` for most owner alerts. */
   templateType: string;
   /** Used as the SMS body and as a fallback if the venue disabled the email template. */
@@ -101,96 +110,186 @@ const SCENARIO_META: Record<OwnerScenario, {
   defaultEmailSubject: string;
   defaultEmailHeading: string;
   defaultEmailBody: string;
+  /** Push title — bold first line on the lock screen. Supports `{{vars}}`. */
+  defaultPushTitle: string;
+  /** Push body — secondary line. Supports `{{vars}}`. */
+  defaultPushBody: string;
+  /** Path the SW opens on click. May be omitted for "open dashboard root". */
+  defaultPushUrl?: string;
 }> = {
   payment_received: {
     emailKey: 'email_payment_received',
     smsKey:   'sms_payment_received',
+    pushKey:  'push_payment_received',
     templateType: 'payment_notification',
     defaultSmsTemplate: '💰 Payment received: {{amount}} from {{customer_name}} — {{organization}}',
     defaultEmailSubject: 'Payment received: {{amount}} from {{customer_name}}',
     defaultEmailHeading: 'New Payment Received',
     defaultEmailBody:    'You\'ve received a new payment for {{organization}}.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}',
+    defaultPushTitle: 'Payment received',
+    defaultPushBody:  '{{amount}} from {{customer_name}}',
+    defaultPushUrl:   '/dashboard/transactions',
   },
   payment_failed: {
     emailKey: 'email_payment_failed',
     smsKey:   'sms_payment_failed',
+    pushKey:  'push_payment_failed',
     templateType: 'payment_failed',
     defaultSmsTemplate: '⚠️ Payment failed: {{amount}} from {{customer_name}} — {{organization}}. Reason: {{reason}}',
     defaultEmailSubject: 'Payment failed: {{customer_name}} — {{amount}}',
     defaultEmailHeading: 'Payment Failed',
     defaultEmailBody:    'A payment attempt for {{organization}} did not complete.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}\nReason: {{reason}}',
+    defaultPushTitle: 'Payment failed',
+    defaultPushBody:  '{{amount}} from {{customer_name}} — {{reason}}',
+    defaultPushUrl:   '/dashboard/transactions',
   },
   high_value_payment: {
     emailKey: 'email_payment_received',
     smsKey:   'sms_high_value_payment',
+    pushKey:  'push_high_value_payment',
     templateType: 'payment_notification',
     defaultSmsTemplate: '🎉 High-value payment: {{amount}} from {{customer_name}} — {{organization}}',
     defaultEmailSubject: 'High-value payment received: {{amount}} from {{customer_name}}',
     defaultEmailHeading: 'High-Value Payment Received',
     defaultEmailBody:    'A high-value payment was received for {{organization}}.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}',
+    defaultPushTitle: '🎉 High-value payment',
+    defaultPushBody:  '{{amount}} from {{customer_name}}',
+    defaultPushUrl:   '/dashboard/transactions',
   },
   proposal_signed: {
     emailKey: 'email_proposal_signed',
     smsKey:   'sms_proposal_signed',
+    pushKey:  'push_proposal_signed',
     templateType: 'proposal_signed',
     defaultSmsTemplate: '✍️ Proposal signed by {{customer_name}} — {{organization}}',
     defaultEmailSubject: '{{customer_name}} signed a proposal — {{organization}}',
     defaultEmailHeading: 'Proposal Signed',
     defaultEmailBody:    '{{customer_name}} just signed a proposal with {{organization}}.\n\nAmount: {{amount}}\n\nReview the signed proposal and reach out to confirm next steps.',
+    defaultPushTitle: 'Proposal signed',
+    defaultPushBody:  '{{customer_name}} signed for {{amount}}',
+    defaultPushUrl:   '/dashboard/payments/proposals',
   },
   document_viewed: {
     emailKey: 'email_document_viewed',
     smsKey:   'sms_payment_received', // reuse closest SMS toggle
+    pushKey:  'push_document_viewed',
     templateType: 'document_viewed',
     defaultSmsTemplate: '👀 {{customer_name}} just viewed their document — {{organization}}',
     defaultEmailSubject: '{{customer_name}} just viewed their document — {{organization}}',
     defaultEmailHeading: 'Document Viewed',
     defaultEmailBody:    'Good news — {{customer_name}} just opened their proposal or invoice from {{organization}}.\n\nNow is a great time to follow up if they have any questions.',
+    defaultPushTitle: 'Document opened',
+    defaultPushBody:  '{{customer_name}} is looking at your proposal',
+    defaultPushUrl:   '/dashboard/payments/proposals',
   },
   subscription_created: {
     emailKey: 'email_subscription_created',
     smsKey:   'sms_subscription_created',
+    pushKey:  'push_subscription_created',
     templateType: 'payment_notification',
     defaultSmsTemplate: '🔁 New subscription: {{customer_name}} — {{amount}} {{frequency}} — {{organization}}',
     defaultEmailSubject: 'New subscription: {{customer_name}}',
     defaultEmailHeading: 'New Subscription Created',
     defaultEmailBody:    'A new subscription started for {{organization}}.\n\nCustomer: {{customer_name}}\nAmount: {{amount}} {{frequency}}',
+    defaultPushTitle: 'New subscription',
+    defaultPushBody:  '{{customer_name}} — {{amount}} {{frequency}}',
+    defaultPushUrl:   '/dashboard/payments/subscriptions',
   },
   subscription_cancelled: {
     emailKey: 'email_subscription_cancelled',
     smsKey:   'sms_subscription_created', // share the SMS toggle (no separate one yet)
+    pushKey:  'push_subscription_cancelled',
     templateType: 'subscription_cancelled',
     defaultSmsTemplate: '🛑 Subscription cancelled: {{customer_name}} — {{organization}}',
     defaultEmailSubject: 'Subscription cancelled: {{customer_name}}',
     defaultEmailHeading: 'Subscription Cancelled',
     defaultEmailBody:    '{{customer_name}}\'s subscription with {{organization}} was cancelled.',
+    defaultPushTitle: 'Subscription cancelled',
+    defaultPushBody:  '{{customer_name}} cancelled their subscription',
+    defaultPushUrl:   '/dashboard/payments/subscriptions',
   },
   invoice_paid: {
     emailKey: 'email_invoice_paid',
     smsKey:   'sms_payment_received',
+    pushKey:  'push_invoice_paid',
     templateType: 'payment_notification',
     defaultSmsTemplate: '💸 Invoice paid: {{amount}} from {{customer_name}} — {{organization}}',
     defaultEmailSubject: 'Invoice paid: {{amount}} from {{customer_name}}',
     defaultEmailHeading: 'Invoice Paid',
     defaultEmailBody:    'An invoice was just paid for {{organization}}.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}',
+    defaultPushTitle: 'Invoice paid',
+    defaultPushBody:  '{{amount}} from {{customer_name}}',
+    defaultPushUrl:   '/dashboard/invoices',
   },
   refund_issued: {
     emailKey: 'email_refund_issued',
     smsKey:   'sms_payment_failed',
+    pushKey:  'push_refund_issued',
     templateType: 'payment_notification',
     defaultSmsTemplate: '↩️ Refund issued: {{amount}} to {{customer_name}} — {{organization}}',
     defaultEmailSubject: 'Refund issued to {{customer_name}}',
     defaultEmailHeading: 'Refund Issued',
     defaultEmailBody:    'A refund was issued for {{organization}}.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}',
+    defaultPushTitle: 'Refund issued',
+    defaultPushBody:  '{{amount}} refunded to {{customer_name}}',
+    defaultPushUrl:   '/dashboard/transactions',
   },
   new_customer: {
     emailKey: 'email_new_customer',
     smsKey:   'sms_payment_received',
+    pushKey:  'push_new_customer',
     templateType: 'payment_notification',
     defaultSmsTemplate: '👤 New customer: {{customer_name}} — {{organization}}',
     defaultEmailSubject: 'New customer: {{customer_name}}',
     defaultEmailHeading: 'New Customer',
     defaultEmailBody:    'A new customer was added to {{organization}}: {{customer_name}}.',
+    defaultPushTitle: 'New customer',
+    defaultPushBody:  '{{customer_name}}',
+    defaultPushUrl:   '/dashboard/contacts',
+  },
+  // ── Push-first scenarios (no email/SMS by default) ────────────────────────
+  // These reuse no email template — push is the only channel. Phase 4 will
+  // wire each from its origin (lead creation, inbound conversation, AI
+  // handoff). Until wired, calling notifyOwner({scenario:'new_lead'}) is a
+  // safe no-op (no recipient email, push toggle off by default).
+  new_lead: {
+    emailKey: 'email_new_lead',
+    smsKey:   'sms_new_lead',
+    pushKey:  'push_new_lead',
+    templateType: 'new_lead',
+    defaultSmsTemplate: '🔔 New lead: {{customer_name}} — {{organization}}',
+    defaultEmailSubject: 'New lead: {{customer_name}} — {{organization}}',
+    defaultEmailHeading: 'New Lead',
+    defaultEmailBody:    'A new lead came in for {{organization}}: {{customer_name}}.',
+    defaultPushTitle: 'New lead',
+    defaultPushBody:  '{{customer_name}} just enquired',
+    defaultPushUrl:   '/dashboard/leads',
+  },
+  new_message: {
+    emailKey: 'email_new_message',
+    smsKey:   'sms_new_message',
+    pushKey:  'push_new_message',
+    templateType: 'new_message',
+    defaultSmsTemplate: '💬 {{customer_name}} replied — {{organization}}',
+    defaultEmailSubject: '{{customer_name}} replied — {{organization}}',
+    defaultEmailHeading: 'New Message',
+    defaultEmailBody:    '{{customer_name}} replied to a conversation with {{organization}}.',
+    defaultPushTitle: '{{customer_name}}',
+    defaultPushBody:  '{{message_preview}}',
+    defaultPushUrl:   '/dashboard/conversations',
+  },
+  ai_handoff: {
+    emailKey: 'email_ai_handoff',
+    smsKey:   'sms_ai_handoff',
+    pushKey:  'push_ai_handoff',
+    templateType: 'ai_handoff',
+    defaultSmsTemplate: '🤖 AI Concierge handed off: {{customer_name}} needs you — {{organization}}',
+    defaultEmailSubject: 'AI Concierge handoff: {{customer_name}}',
+    defaultEmailHeading: 'AI Concierge Handoff',
+    defaultEmailBody:    'The AI Concierge handed off the conversation with {{customer_name}} to you. Reason: {{reason}}',
+    defaultPushTitle: 'AI handed off to you',
+    defaultPushBody:  '{{customer_name}} needs a human — {{reason}}',
+    defaultPushUrl:   '/dashboard/conversations',
   },
 };
 
@@ -312,6 +411,41 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
         }
       } catch (err) {
         console.error('[notifyOwner sms]', args.scenario, err instanceof Error ? err.message : err);
+      }
+    }
+
+    // ── Owner-side push (Web Push API) ────────────────────────────────────
+    // Two gates:
+    //   1. The master `push_enabled` toggle (default false). Users have to
+    //      actively opt in by enabling push in Settings → Notifications.
+    //      Without this gate, every install would receive push the moment a
+    //      subscription is saved, before the user has a chance to disable
+    //      categories they don't care about.
+    //   2. The per-scenario `push_<scenario>` toggle. We default these to
+    //      true for the loud signals (payment, signed proposal, new lead,
+    //      new message, AI handoff) and false for the quieter ones (new
+    //      customer, document_viewed). See DEFAULT_NOTIFICATIONS.
+    const masterPushOn = settings.push_enabled === true;
+    const scenarioPushOn =
+      !meta.pushKey                            // legacy entries without pushKey: always on
+        ? true
+        : settings[meta.pushKey] !== false;    // unset → true (use defaults)
+    if (masterPushOn && scenarioPushOn) {
+      try {
+        const title = interpolate(meta.defaultPushTitle, vars);
+        const body  = interpolate(meta.defaultPushBody,  vars);
+        const url   = args.actionUrl || meta.defaultPushUrl;
+        const result = await sendPushToVenue(args.venueId, {
+          title,
+          body,
+          url,
+          tag:  `${args.scenario}-${args.venueId}`,
+        });
+        if (result.sent > 0 || result.pruned > 0) {
+          console.log('[notifyOwner]', args.scenario, 'push', result);
+        }
+      } catch (err) {
+        console.error('[notifyOwner push]', args.scenario, err instanceof Error ? err.message : err);
       }
     }
   } catch (err) {
