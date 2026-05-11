@@ -72,6 +72,25 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // ── Service worker — must NEVER be long-cached ────────────────────────
+      // If a CDN or browser caches sw.js, users get stuck on the old worker
+      // after every deploy. Force a revalidation on every load. Browsers
+      // also have a built-in 24h cap on SW caching, but we belt-and-braces.
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control",    value: "public, max-age=0, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+      // Manifest changes infrequently but should never be served stale —
+      // start_url, icons, scope etc. need to update on deploy.
+      {
+        source: "/manifest.json",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        ],
+      },
       // ── Public brand assets (logos, icons) ────────────────────────────────
       // These don't change often; 7-day TTL with 1-day stale-while-revalidate
       // keeps Cloudflare edge copies warm without serving stale logos too long.
