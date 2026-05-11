@@ -13,6 +13,7 @@ interface Charge {
  amount: number;
  status: string;
  date: string;
+ refundedAt?: string | null;
  chargeId?: string;
  transactionId?: string;
  sessionId?: string;
@@ -192,13 +193,19 @@ function TransactionsPageInner() {
  <dd className="text-sm font-mono text-gray-700 break-all text-right max-w-[60%]">{selectedCharge.transactionId}</dd>
  </div>
  )}
- {selectedCharge.sessionId && (
- <div className="flex justify-between">
- <dt className="text-sm font-medium text-gray-500">Session ID</dt>
- <dd className="text-sm font-mono text-gray-700 break-all text-right max-w-[60%]">{selectedCharge.sessionId}</dd>
- </div>
- )}
- </dl>
+{selectedCharge.sessionId && (
+<div className="flex justify-between border-b border-gray-200 pb-3">
+<dt className="text-sm font-medium text-gray-500">Session ID</dt>
+<dd className="text-sm font-mono text-gray-700 break-all text-right max-w-[60%]">{selectedCharge.sessionId}</dd>
+</div>
+)}
+{selectedCharge.refundedAt && (
+<div className="flex justify-between">
+<dt className="text-sm font-medium text-gray-500">Refunded</dt>
+<dd className="text-sm text-gray-700">{formatDate(selectedCharge.refundedAt)}</dd>
+</div>
+)}
+</dl>
 
  <div className="mt-6 flex justify-end">
  <button

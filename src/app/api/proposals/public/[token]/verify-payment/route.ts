@@ -162,7 +162,53 @@ export async function POST(
       charge_id: chargeIdFromSession ?? transactionId,
     };
 
-    if (proposal.payment_type === 'installment' && proposal.payment_config) {
+    // When mode="subscription" or mode="installments", LP creates the
+    // subscription/payment schedule automatically and returns the IDs in
+    // session.resources. Read them so we don't create duplicates.
+    const resources = (session.resources as Record<string, unknown> | null) ?? null;
+    const lpSubId = (resources?.subscription_id as string | number | null) ?? null;
+    const lpScheduleId = (resources?.payment_schedule_id as string | number | null) ?? null;
+
+    if (lpSubId) {
+      updateData.subscription_id = String(lpSubId);
+      console.log('[verify-payment] LP auto-created subscription:', lpSubId);
+    }
+    if (lpScheduleId) {
+      updateData.payment_schedule_id = String(lpScheduleId);
+      console.log('[verify-payment] LP auto-created payment schedule:', lpScheduleId);
+    }
+
+    // Fallback: if LP didn't return a subscription/schedule in resources
+    // (older LP version or no mode was set), create them manually.
+    if (!lpSubId && proposal.payment_type === 'subscription' && proposal.payment_config) {
+      const config = proposal.payment_config as SubscriptionConfig;
+
+      if (!customerId || !paymentMethodId) {
+        console.error('[verify-payment] Cannot create subscription: customerId=', customerId, 'paymentMethodId=', paymentMethodId);
+      } else {
+        try {
+          const subPayload = {
+            customerId: Number(customerId),
+            paymentMethodId: Number(paymentMethodId),
+            amount: addFee ? applyFee(config.amount, feeRate) : config.amount,
+            frequency: config.frequency,
+            startOn: config.start_date,
+            description: `${proposal.customer_name} - ${config.frequency} subscription`,
+          };
+
+          console.log('[verify-payment] Creating subscription (fallback):', JSON.stringify(subPayload, null, 2));
+
+          const subResult = await createSubscription(venue.lunarpay_secret_key, subPayload);
+          const sub = subResult.data || subResult;
+          updateData.subscription_id = sub.id;
+          console.log('[verify-payment] Subscription created (fallback):', sub.id);
+        } catch (subErr) {
+          console.error('[verify-payment] Failed to create subscription:', subErr);
+        }
+      }
+    }
+
+    if (!lpScheduleId && proposal.payment_type === 'installment' && proposal.payment_config) {
       const config = proposal.payment_config as InstallmentConfig;
       const allInstallments = config.installments || [];
       const remaining = allInstallments.slice(1);
@@ -186,45 +232,17 @@ export async function POST(
               })),
             };
 
-            console.log('[verify-payment] Creating payment schedule:', JSON.stringify(schedulePayload, null, 2));
+            console.log('[verify-payment] Creating payment schedule (fallback):', JSON.stringify(schedulePayload, null, 2));
 
             const scheduleResult = await createPaymentSchedule(venue.lunarpay_secret_key, schedulePayload);
             const schedule = scheduleResult.data || scheduleResult;
 
-            console.log('[verify-payment] Payment schedule created:', JSON.stringify(schedule));
+            console.log('[verify-payment] Payment schedule created (fallback):', JSON.stringify(schedule));
             updateData.payment_schedule_id = schedule.id;
           } catch (scheduleErr) {
             console.error('[verify-payment] Failed to create payment schedule:', scheduleErr);
             console.error('[verify-payment] Error details:', scheduleErr instanceof Error ? scheduleErr.message : String(scheduleErr));
           }
-        }
-      }
-    }
-
-    if (proposal.payment_type === 'subscription' && proposal.payment_config) {
-      const config = proposal.payment_config as SubscriptionConfig;
-
-      if (!customerId || !paymentMethodId) {
-        console.error('[verify-payment] Cannot create subscription: customerId=', customerId, 'paymentMethodId=', paymentMethodId);
-      } else {
-        try {
-          const subPayload = {
-            customerId: Number(customerId),
-            paymentMethodId: Number(paymentMethodId),
-            amount: addFee ? applyFee(config.amount, feeRate) : config.amount,
-            frequency: config.frequency,
-            startOn: config.start_date,
-            description: `${proposal.customer_name} - ${config.frequency} subscription`,
-          };
-
-          console.log('[verify-payment] Creating subscription:', JSON.stringify(subPayload, null, 2));
-
-          const subResult = await createSubscription(venue.lunarpay_secret_key, subPayload);
-          const sub = subResult.data || subResult;
-          updateData.subscription_id = sub.id;
-          console.log('[verify-payment] Subscription created:', sub.id);
-        } catch (subErr) {
-          console.error('[verify-payment] Failed to create subscription:', subErr);
         }
       }
     }

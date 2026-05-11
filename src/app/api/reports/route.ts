@@ -163,10 +163,10 @@ export async function GET(request: NextRequest) {
     case 'refunds': {
       let q = supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, customer_email, price, payment_type, paid_at, created_at')
+        .select('id, customer_name, customer_email, price, payment_type, status, paid_at, refunded_at, created_at')
         .eq('venue_id', venueId)
-        .eq('status', 'refunded')
-        .order('paid_at', { ascending: false });
+        .in('status', ['refunded', 'partial_refund'])
+        .order('refunded_at', { ascending: false });
       if (from)  q = q.gte('created_at', from);
       if (toEnd) q = q.lte('created_at', toEnd);
       const { data } = await q;
@@ -174,8 +174,10 @@ export async function GET(request: NextRequest) {
         'Customer Name':  r.customer_name ?? '',
         'Customer Email': r.customer_email ?? '',
         'Amount ($)':     ((r.price ?? 0) / 100).toFixed(2),
+        'Type':           r.status === 'partial_refund' ? 'Partial Refund' : 'Full Refund',
         'Payment Type':   r.payment_type ?? '',
         'Original Date':  r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-US') : '',
+        'Refund Date':    r.refunded_at ? new Date(r.refunded_at).toLocaleDateString('en-US') : '',
         'Proposal ID':    r.id,
       }));
       const total = (data ?? []).reduce((s, r) => s + (r.price ?? 0), 0);
@@ -193,13 +195,13 @@ export async function GET(request: NextRequest) {
       if (from)  qPaid = qPaid.gte('paid_at', from);
       if (toEnd) qPaid = qPaid.lte('paid_at', toEnd);
 
-      // Fetch refunds in same range
+      // Fetch refunds in same range (full + partial)
       let qRef = supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, price, paid_at')
+        .select('id, customer_name, price, status, paid_at, refunded_at')
         .eq('venue_id', venueId)
-        .eq('status', 'refunded')
-        .order('paid_at', { ascending: false });
+        .in('status', ['refunded', 'partial_refund'])
+        .order('refunded_at', { ascending: false });
       if (from)  qRef = qRef.gte('paid_at', from);
       if (toEnd) qRef = qRef.lte('paid_at', toEnd);
 
@@ -233,10 +235,10 @@ export async function GET(request: NextRequest) {
       const refundRows = (refunded ?? []).map((r) => {
         const gross = (r.price ?? 0) / 100;
         return {
-          'Date':               r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-US') : '',
-          'Type':               'Refund Issued',
+          'Date':               r.refunded_at ? new Date(r.refunded_at).toLocaleDateString('en-US') : (r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-US') : ''),
+          'Type':               r.status === 'partial_refund' ? 'Partial Refund' : 'Refund Issued',
           'Customer':           r.customer_name ?? '',
-          'Description':        'Refund',
+          'Description':        r.status === 'partial_refund' ? 'Partial refund' : 'Full refund',
           'Gross Amount ($)':   `(${gross.toFixed(2)})`,
           'Processing Fee ($)': '—',
           'Net to Bank ($)':    `(${gross.toFixed(2)})`,

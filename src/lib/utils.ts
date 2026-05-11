@@ -37,6 +37,10 @@ export function getStatusColor(status: string): { bg: string; text: string } {
     case 'active': return { bg: 'bg-emerald-100', text: 'text-emerald-700' };
     case 'pending': return { bg: 'bg-yellow-100', text: 'text-yellow-700' };
     case 'failed': return { bg: 'bg-red-100', text: 'text-red-700' };
+    case 'cancelled': return { bg: 'bg-gray-100', text: 'text-gray-500' };
+    case 'refunded': return { bg: 'bg-red-100', text: 'text-red-700' };
+    case 'partial_refund': return { bg: 'bg-orange-100', text: 'text-orange-700' };
+    case 'completed': return { bg: 'bg-emerald-100', text: 'text-emerald-700' };
     default: return { bg: 'bg-gray-100', text: 'text-gray-700' };
   }
 }

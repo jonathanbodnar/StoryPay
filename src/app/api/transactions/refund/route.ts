@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const isFullRefund = !amountCents || amountCents >= (proposal.price ?? 0);
     await supabaseAdmin
       .from('proposals')
-      .update({ status: isFullRefund ? 'refunded' : 'partial_refund' })
+      .update({ status: isFullRefund ? 'refunded' : 'partial_refund', refunded_at: new Date().toISOString() })
       .eq('id', proposalId);
 
     // Apply refunded system tag (fire-and-forget)

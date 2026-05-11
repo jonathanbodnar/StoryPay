@@ -150,12 +150,16 @@ export function createPaymentSchedule(secretKey: string, data: Record<string, un
   return lpFetch('/api/v1/payment-schedules', { method: 'POST', body: data, key: secretKey });
 }
 
-export function getPaymentSchedule(secretKey: string, id: number) {
+export function getPaymentSchedule(secretKey: string, id: number | string) {
   return lpFetch(`/api/v1/payment-schedules/${id}`, { key: secretKey });
 }
 
-export function listPaymentSchedules(secretKey: string) {
-  return lpFetch('/api/v1/payment-schedules', { key: secretKey });
+export function listPaymentSchedules(secretKey: string, status?: string) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  params.set('limit', '100');
+  const qs = params.toString();
+  return lpFetch(`/api/v1/payment-schedules${qs ? `?${qs}` : ''}`, { key: secretKey });
 }
 
 export function createSubscription(secretKey: string, data: Record<string, unknown>) {
@@ -164,6 +168,14 @@ export function createSubscription(secretKey: string, data: Record<string, unkno
 
 export function getSubscription(secretKey: string, id: number | string) {
   return lpFetch(`/api/v1/subscriptions/${id}`, { key: secretKey });
+}
+
+export function listSubscriptions(secretKey: string, status?: string) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  params.set('limit', '100');
+  const qs = params.toString();
+  return lpFetch(`/api/v1/subscriptions${qs ? `?${qs}` : ''}`, { key: secretKey });
 }
 
 export function updateSubscription(
