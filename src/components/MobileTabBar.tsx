@@ -46,7 +46,7 @@ export default function MobileTabBar() {
       className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-5 px-2">
         {TABS.map(({ label, href, icon: Icon, match }) => {
           const active = match.some((m) =>
             m === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(m),
@@ -56,19 +56,19 @@ export default function MobileTabBar() {
             <li key={label}>
               <Link
                 href={href}
-                className={`flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-medium transition-colors ${
+                className={`flex flex-col items-center justify-center gap-1.5 py-3 text-[11px] font-medium transition-colors ${
                   active ? 'text-gray-900' : 'text-gray-400'
                 }`}
               >
                 <span className="relative inline-flex">
-                  <Icon size={22} strokeWidth={active ? 2.2 : 1.8} />
+                  <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
                   {showBadge && (
                     <span className="absolute -right-1.5 -top-1 min-w-[16px] rounded-full bg-red-600 px-1 text-center text-[9px] font-bold leading-4 text-white">
                       {unreadMessages > 99 ? '99+' : unreadMessages}
                     </span>
                   )}
                 </span>
-                <span>{label}</span>
+                <span className="truncate max-w-full px-0.5 leading-tight">{label}</span>
               </Link>
             </li>
           );
