@@ -7,6 +7,7 @@ import { fetchTagsForLeadIds, leadRowWithTags, setLeadTagIds } from '@/lib/lead-
 import { fetchOpenDuplicateMatchesForLeads, recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
+import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -650,6 +651,17 @@ export async function POST(request: NextRequest) {
   ensureSystemTagsForVenue(venueId)
     .then(() => applySystemTags(venueId, newId, ['new_lead', 'inquiry_received', 'form_submitted']))
     .catch(() => {});
+
+  // Owner push notification — fires only when push is enabled in Settings.
+  // Best-effort: notifyOwner swallows its own errors and never throws into
+  // this primary flow.
+  notifyOwnerNewLead({
+    venueId,
+    leadId: newId,
+    fullName: (data as LeadRow).name || fullName,
+    email: (data as LeadRow).email,
+    source: (data as LeadRow).source,
+  });
 
   // Fan out to Zapier / external integrations subscribed to lead.created
   void dispatchIntegrationEvent(venueId, 'lead.created', {

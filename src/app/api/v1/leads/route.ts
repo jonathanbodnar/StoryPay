@@ -5,6 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { authenticateApiV1, corsPreflight, CORS_HEADERS } from '@/lib/api-v1-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
+import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 
 export async function OPTIONS() { return corsPreflight(); }
 
@@ -116,6 +117,14 @@ export async function POST(request: NextRequest) {
     .then(() => {});
 
   const shaped = shape(data as LeadRow);
+  // Push to the owner's enabled devices (no-op unless they opted in).
+  notifyOwnerNewLead({
+    venueId:  auth.venueId,
+    leadId:   shaped.id,
+    fullName: shaped.full_name,
+    email:    shaped.email,
+    source:   shaped.source,
+  });
   void dispatchIntegrationEvent(auth.venueId, 'lead.created', { lead: shaped });
 
   return NextResponse.json({ lead: shaped }, { headers: CORS_HEADERS });

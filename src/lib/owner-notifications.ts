@@ -461,3 +461,70 @@ export function formatAmount(cents: number | null | undefined): string {
 
 /** US$1,000 threshold for the "high-value" SMS — match the toggle copy. */
 export const HIGH_VALUE_THRESHOLD_CENTS = 100_000;
+
+// ── Convenience wrappers for the push-first scenarios ───────────────────────
+// These exist so the lead-creation, inbound-message, and AI-handoff call
+// sites can stay one-liners without re-deriving the merge variables and
+// dashboard URLs every time.
+
+/** Fire a "new lead" push for the freshly-inserted lead. */
+export function notifyOwnerNewLead(input: {
+  venueId: string;
+  leadId: string;
+  fullName: string;
+  email: string;
+  source?: string | null;
+}): void {
+  const display = (input.fullName || '').trim() || input.email || 'New lead';
+  void notifyOwner({
+    venueId:   input.venueId,
+    scenario:  'new_lead',
+    vars: {
+      customer_name: display,
+      email:         input.email || '',
+      source:        input.source || 'directory',
+    },
+    actionUrl: `/dashboard/contacts/${input.leadId}`,
+  });
+}
+
+/** Fire a "new message" push for an inbound conversation message. */
+export function notifyOwnerNewMessage(input: {
+  venueId: string;
+  threadId: string;
+  fromName: string | null;
+  fromEmail: string;
+  bodyText: string;
+}): void {
+  const display = (input.fromName || '').trim() || input.fromEmail || 'New message';
+  // Trim aggressively — the SW caps the body to 240 chars but the lockscreen
+  // typically shows ~60 before truncation, so keep the preview punchy.
+  const preview = input.bodyText.replace(/\s+/g, ' ').slice(0, 140);
+  void notifyOwner({
+    venueId:   input.venueId,
+    scenario:  'new_message',
+    vars: {
+      customer_name:   display,
+      message_preview: preview,
+    },
+    actionUrl: `/dashboard/conversations?thread=${input.threadId}`,
+  });
+}
+
+/** Fire an "AI Concierge handed off to you" push. */
+export function notifyOwnerAiHandoff(input: {
+  venueId: string;
+  leadId: string;
+  brideName: string;
+  reason: string;
+}): void {
+  void notifyOwner({
+    venueId:   input.venueId,
+    scenario:  'ai_handoff',
+    vars: {
+      customer_name: input.brideName || 'Your contact',
+      reason:        input.reason || 'needs human follow-up',
+    },
+    actionUrl: `/dashboard/contacts/${input.leadId}`,
+  });
+}
