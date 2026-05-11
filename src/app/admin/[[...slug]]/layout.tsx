@@ -1332,8 +1332,11 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       body: JSON.stringify({ email: adminEmail.trim(), password: adminPass }),
     });
     if (!res.ok) { setLoginError('Invalid email or password.'); return; }
-    setAdminEmail(''); setAdminPass('');
-    await fetchMe();
+    // Full page reload after login so the browser starts a fresh request
+    // with the newly-set httpOnly session cookie. Calling fetchMe() inline
+    // can race with cookie propagation in some browsers and cause the admin
+    // to appear immediately logged-out.
+    window.location.href = window.location.pathname;
   }
 
   async function handleLogout() {

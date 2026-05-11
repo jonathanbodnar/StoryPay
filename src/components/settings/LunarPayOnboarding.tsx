@@ -140,6 +140,14 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
   const [mpaEmbedUrl, setMpaEmbedUrl] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Keep a stable ref to onActivated so fetchStatus never needs it as a
+  // dependency. Without this, an inline `() => loadVenue()` prop creates a
+  // new reference on every parent render, which recreates fetchStatus, which
+  // fires the useEffect below again, causing an infinite status-polling loop
+  // when the merchant account is already active.
+  const onActivatedRef = useRef(onActivated);
+  useEffect(() => { onActivatedRef.current = onActivated; }, [onActivated]);
+
   // ── Fetch live status ────────────────────────────────────────────────────────
   const fetchStatus = useCallback(async () => {
     try {
@@ -151,7 +159,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
       if (data.isActive) {
         setStep(5);
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-        onActivated?.();
+        onActivatedRef.current?.();
       } else if (data.status === 'not_registered') {
         setStep(0);
       } else if (data.status === 'registered') {
@@ -166,7 +174,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
     } finally {
       setLoadingStatus(false);
     }
-  }, [onActivated]);
+  }, []); // stable — reads onActivated via ref, no prop dependency
 
   useEffect(() => {
     void fetchStatus();
