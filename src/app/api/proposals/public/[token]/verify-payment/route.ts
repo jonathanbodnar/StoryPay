@@ -192,7 +192,7 @@ export async function POST(
         const subList = Array.isArray(allSubs) ? allSubs : (allSubs as Record<string, unknown>).data ?? [];
         // Find the most recently created sub for this customer
         const match = (subList as Record<string, unknown>[]).find(
-          (s) => String(s.customerId) === String(customerId) && s.status !== 'cancelled'
+          (s) => String(s.customer_id ?? s.customerId) === String(customerId) && s.status !== 'cancelled'
         );
         if (match?.id) {
           lpSubId = match.id as number;
@@ -209,7 +209,7 @@ export async function POST(
         const schedList = Array.isArray(allSchedules) ? allSchedules : (allSchedules as Record<string, unknown>).data ?? [];
         // Find the most recently created schedule for this customer
         const match = (schedList as Record<string, unknown>[]).find(
-          (s) => String(s.customerId) === String(customerId) && s.status === 'active'
+          (s) => String(s.customer_id ?? s.customerId) === String(customerId) && s.status === 'active'
         );
         if (match?.id) {
           lpScheduleId = match.id as number;

@@ -63,9 +63,10 @@ export async function POST(_request: NextRequest) {
     for (const p of proposals) {
       const customerId = String(p.customer_lunarpay_id ?? '');
 
+      // LP may return customer_id (snake_case) or customerId (camelCase)
       if (p.payment_type === 'installment' && !p.payment_schedule_id && customerId) {
         const match = schedules.find(
-          (s) => String(s.customerId) === customerId
+          (s) => String(s.customer_id ?? s.customerId) === customerId
         );
         if (match?.id) {
           await supabaseAdmin
@@ -78,7 +79,7 @@ export async function POST(_request: NextRequest) {
 
       if (p.payment_type === 'subscription' && !p.subscription_id && customerId) {
         const match = subscriptions.find(
-          (s) => String(s.customerId) === customerId
+          (s) => String(s.customer_id ?? s.customerId) === customerId
         );
         if (match?.id) {
           await supabaseAdmin
