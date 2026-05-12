@@ -294,10 +294,12 @@ export async function getPublicVenueBySlug(
 
   // ── Pricing-guide lead modal gate + plan flags ─────────────────────────
   //
-  // Resolves directly from the venue's directory plan. Mirrors the dashboard
-  // sidebar's "Pricing Guide" menu permission so the marketing-tier checkbox
-  // in super admin is the single source of truth. Legacy (planless) venues
-  // keep access — same as `canAccessDirectoryFeature` everywhere else.
+  // Two independent gates must BOTH be true for the guide to show:
+  //  1. Plan gate  — the venue's directory plan grants nav_listing_pricing_guide.
+  //                  Legacy (planless) venues default to true.
+  //  2. Owner gate — venue_pricing_guides.enabled = true (the toggle on the
+  //                  Pricing Guide dashboard page). Defaults to false if the
+  //                  row doesn't exist yet.
   let pricing_guide_enabled = true;
   let hide_header = false;
   const directoryPlanId = v.directory_plan_id != null ? String(v.directory_plan_id) : '';
@@ -318,10 +320,22 @@ export async function getPublicVenueBySlug(
       pricing_guide_enabled = allowed.has('nav_listing_pricing_guide');
       hide_header = Boolean((plan as Record<string, unknown>).hide_header);
     } else {
-      // Plan id is set but the plan row is missing — fail closed: don't
-      // promote a feature we can't verify access to.
+      // Plan id is set but the plan row is missing — fail closed.
       pricing_guide_enabled = false;
     }
+  }
+
+  // Owner-level toggle: even when the plan allows the guide, the venue owner
+  // can disable it from the Pricing Guide dashboard page.
+  if (pricing_guide_enabled) {
+    const { data: guideRow } = await supabaseAdmin
+      .from('venue_pricing_guides')
+      .select('enabled')
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    // If the row exists, respect the owner's toggle. If it doesn't exist yet
+    // (guide never set up), treat as disabled so nothing broken shows.
+    pricing_guide_enabled = guideRow?.enabled === true;
   }
 
   let google_reviews: PublicVenuePayload['google_reviews'] = null;
