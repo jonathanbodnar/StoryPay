@@ -194,7 +194,9 @@ export async function POST(request: Request) {
         break;
       }
 
-      const m = venueError.message.match(/column "?([a-zA-Z_]+)"? .*does not exist/i);
+      const m =
+        venueError.message.match(/column "?([a-zA-Z_]+)"? .*does not exist/i) ||
+        venueError.message.match(/Could not find the '([a-zA-Z_]+)' column/i);
       const missingCol = m?.[1];
       if (missingCol && OPTIONAL_COLUMNS.includes(missingCol) && missingCol in insertPayload) {
         console.warn(`[admin venue create] schema missing "${missingCol}" — dropping and retrying`);
