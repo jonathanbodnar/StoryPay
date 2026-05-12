@@ -136,8 +136,11 @@ export const DIRECTORY_LEGACY_FEATURE_TO_NAV_IDS: Record<string, string[]> = {
   reports: ['nav_main_reports'],
   payments: NAV_IDS.filter((id) => id.startsWith('nav_payments_') || id.startsWith('nav_proposals_') || id === 'nav_transactions' || id === 'nav_invoices_new'),
   marketing: NAV_IDS.filter((id) => id.startsWith('nav_marketing_')),
-  listing: NAV_IDS.filter((id) => id.startsWith('nav_listing_')),
-  settings: NAV_IDS.filter((id) => id.startsWith('nav_settings_')),
+  // Billing nav IDs are opt-in only — exclude them from the coarse group
+  // expansions so legacy plans with settings/listing = true don't accidentally
+  // grant billing access.
+  listing: NAV_IDS.filter((id) => id.startsWith('nav_listing_') && id !== 'nav_listing_directory_billing'),
+  settings: NAV_IDS.filter((id) => id.startsWith('nav_settings_') && id !== 'nav_settings_billing'),
   /** Extras often bundled with “full” product access */
   help_center: ['nav_main_help'],
   whats_new: ['nav_main_updates'],
