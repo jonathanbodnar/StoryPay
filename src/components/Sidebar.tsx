@@ -99,7 +99,6 @@ const listingItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard, navId: 'nav_listing_dashboard' },
   { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: Sparkles, navId: 'nav_listing_pricing_guide' },
   { label: 'Booking System', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
-  { label: 'Plans & billing', href: '/dashboard/directory-billing', icon: CreditCard, navId: 'nav_listing_directory_billing' },
   { label: 'Analytics', href: '/dashboard/listing/analytics', icon: BarChart3, navId: 'nav_listing_analytics' },
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
   { label: 'Verified & Sponsored', href: '/dashboard/listing/directory', icon: BadgeCheck, navId: 'nav_listing_directory' },
@@ -123,7 +122,6 @@ const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
   'nav_listing_dashboard',
   'nav_listing_analytics',
   'nav_listing_directory',
-  'nav_listing_directory_billing',
   // Payments — all
   'nav_payments_new',
   'nav_offerings',
@@ -419,10 +417,13 @@ export default function Sidebar({
 
   // Role-based visibility (these items are completely hidden from members,
   // not just locked — different concern from plan gating).
+  // Billing is also completely hidden (not just locked) when the plan doesn't
+  // include it — there's no reason to show a locked billing link.
   const settingsFiltered = visibleSettingsItems.filter((sub) => {
     if (!isOwner && sub.label === 'General') return false;
     if (!isOwner && sub.label === 'Team') return false;
     if (!isOwner && sub.label === 'Integrations') return false;
+    if (sub.navId === 'nav_settings_billing' && !navOk(sub.navId)) return false;
     return true;
   });
 

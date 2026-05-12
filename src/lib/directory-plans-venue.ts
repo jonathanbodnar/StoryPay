@@ -34,6 +34,16 @@ function planHasExplicitNavPermissions(navPermissions: unknown): boolean {
 }
 
 /**
+ * Nav IDs that must be explicitly enabled in a plan's nav_permissions — they
+ * are never auto-granted via group-inheritance. Billing pages fall here because
+ * they should only appear when an admin deliberately turns them on.
+ */
+const OPT_IN_ONLY_NAV_IDS = new Set([
+  'nav_settings_billing',
+  'nav_listing_directory_billing',
+]);
+
+/**
  * Implicit sibling pages: if the key on the left is enabled, the values on
  * the right are auto-enabled too. Use this for pages that conceptually
  * depend on each other so admins don't have to remember to flip both, and
@@ -82,7 +92,7 @@ export function computeAllowedNavIdsFromPlan(plan: {
       }
     }
     for (const entry of DIRECTORY_NAV_REGISTRY) {
-      if (!set.has(entry.id) && !(entry.id in saved)) {
+      if (!set.has(entry.id) && !(entry.id in saved) && !OPT_IN_ONLY_NAV_IDS.has(entry.id)) {
         if (groupHasAccess.get(entry.group)) {
           set.add(entry.id);
         }
@@ -199,8 +209,9 @@ export function mergeNavPermissionsForEditor(
     for (const id of allDirectoryNavIds()) {
       if (saved[id] === true) {
         base[id] = true;
-      } else if (!(id in saved)) {
-        // New nav ID not yet in this plan's saved permissions — inherit from group.
+      } else if (!(id in saved) && !OPT_IN_ONLY_NAV_IDS.has(id)) {
+        // New nav ID not yet in this plan's saved permissions — inherit from group,
+        // but skip opt-in-only IDs (billing) which must be explicitly enabled.
         const group = DIRECTORY_NAV_REGISTRY.find((e) => e.id === id)?.group;
         if (group && groupAccess[group]) base[id] = true;
       }
