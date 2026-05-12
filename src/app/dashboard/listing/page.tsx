@@ -174,13 +174,19 @@ export default function ListingPage() {
               // to 0", so normalize on read.
               capacity_min: data.listing.capacity_min != null ? Number(data.listing.capacity_min) : 0,
             };
-            setListing(next);
             // If slug is blank or already matches slugify(name), keep auto-mode on
             // so further name edits continue updating the URL. If the user (or a
             // previous session) hand-edited the slug, leave auto-mode off so we
             // don't clobber their choice.
             const expected = next.name ? slugify(next.name) : '';
-            setAutoSlug(!next.slug || next.slug === expected);
+            const shouldAutoSlug = !next.slug || next.slug === expected;
+            // If auto-mode is on and slug is blank, populate it immediately so
+            // the field doesn't show empty on load.
+            if (shouldAutoSlug && !next.slug && next.name) {
+              next.slug = slugify(next.name);
+            }
+            setListing(next);
+            setAutoSlug(shouldAutoSlug);
           }
         } else {
           const data = await res.json().catch(() => ({}));
