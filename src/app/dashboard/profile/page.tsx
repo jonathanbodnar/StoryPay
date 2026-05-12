@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Loader2, Save, CheckCircle2, User, CreditCard,
-  ShieldCheck, Mail, Phone, ArrowRight,
-  BadgeCheck, AlertCircle, Download, Trash2, AlertTriangle,
+  Loader2, Save, CheckCircle2, User,
+  ShieldCheck, Mail, Phone,
+  AlertCircle, Download, Trash2, AlertTriangle,
   KeyRound, Eye, EyeOff, AtSign, Lock,
 } from 'lucide-react';
 import TwoFactorSection from '@/components/profile/TwoFactorSection';
@@ -45,50 +45,10 @@ type MemberProfile = {
 
 type Profile = OwnerProfile | MemberProfile;
 
-type Plan = {
-  id: string;
-  name: string;
-  slug: string;
-  price_monthly_cents: number | null;
-  is_default: boolean;
-};
-
-type Subscription = {
-  id: string;
-  status: string;
-  amount_cents: number;
-  frequency: string;
-  next_payment_on: string | null;
-} | null;
-
-type BillingSummary = {
-  current_plan: Plan | null;
-  subscription: Subscription;
-  subscription_status: string;
-  billing_configured: boolean;
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function formatCents(cents: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function statusColor(status: string) {
-  if (status === 'active')   return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (status === 'past_due') return 'bg-amber-50 text-amber-700 border-amber-200';
-  if (status === 'cancelled' || status === 'canceled') return 'bg-red-50 text-red-700 border-red-200';
-  return 'bg-gray-100 text-gray-600 border-gray-200';
-}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [billing, setBilling] = useState<BillingSummary | null>(null);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
@@ -125,10 +85,7 @@ export default function ProfilePage() {
   useEffect(() => {
     async function load() {
       try {
-        const [profRes, billRes] = await Promise.all([
-          fetch('/api/profile', { cache: 'no-store' }),
-          fetch('/api/venue-billing', { cache: 'no-store' }),
-        ]);
+        const profRes = await fetch('/api/profile', { cache: 'no-store' });
 
         if (profRes.ok) {
           const data = await profRes.json() as Profile;
@@ -138,10 +95,6 @@ export default function ProfilePage() {
           } else {
             setMemberForm({ first_name: data.first_name, last_name: data.last_name, email: data.email });
           }
-        }
-
-        if (billRes.ok) {
-          setBilling(await billRes.json() as BillingSummary);
         }
       } finally {
         setLoading(false);
@@ -293,9 +246,6 @@ export default function ProfilePage() {
   // ── Owner UI ────────────────────────────────────────────────────────────────
   if (profile.type === 'owner') {
     const venueName = profile.venue_name; // capture for use in JSX closures
-    const sub = billing?.subscription;
-    const plan = billing?.current_plan;
-    const subStatus = billing?.subscription_status ?? 'none';
 
     return (
       <div>
@@ -392,71 +342,6 @@ export default function ProfilePage() {
               </button>
             </div>
           </form>
-        </div>
-
-        {/* ── Subscription & Billing ────────────────────────────────────────── */}
-        <div className={SECTION}>
-          <div className={SECTION_HEAD}>
-            <CreditCard size={16} className="text-gray-500" />
-            <h2 className="text-sm font-semibold text-gray-900">Subscription &amp; Billing</h2>
-          </div>
-          <div className="px-6 py-5">
-            {plan ? (
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-                      <BadgeCheck size={15} className="text-gray-600" />
-                      {plan.name}
-                    </span>
-                    {subStatus !== 'none' && (
-                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${statusColor(subStatus)}`}>
-                        {subStatus.replace('_', ' ')}
-                      </span>
-                    )}
-                  </div>
-                  {sub && (
-                    <div className="space-y-0.5 text-xs text-gray-500">
-                      {sub.amount_cents > 0 && (
-                        <p>{formatCents(sub.amount_cents)}/{sub.frequency}</p>
-                      )}
-                      {sub.next_payment_on && (
-                        <p>Next payment: {formatDate(sub.next_payment_on)}</p>
-                      )}
-                    </div>
-                  )}
-                  {subStatus === 'none' && plan.is_default && (
-                    <p className="text-xs text-gray-400">Free tier — no payment required</p>
-                  )}
-                </div>
-                <Link
-                  href="/dashboard/directory-billing"
-                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap flex-shrink-0"
-                >
-                  Manage Billing <ArrowRight size={12} />
-                </Link>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-sm text-gray-500">No active plan</p>
-                <Link
-                  href="/dashboard/directory-billing"
-                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  View Plans <ArrowRight size={12} />
-                </Link>
-              </div>
-            )}
-          </div>
-          <div className="px-6 pb-5">
-            <Link
-              href="/dashboard/directory-billing"
-              className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors group"
-            >
-              <span className="font-medium">Payment methods &amp; billing history</span>
-              <ArrowRight size={14} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
-            </Link>
-          </div>
         </div>
 
         {/* ── Account Security ──────────────────────────────────────────────── */}
