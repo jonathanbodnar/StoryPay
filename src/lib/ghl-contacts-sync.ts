@@ -12,7 +12,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
-import { getGhlToken, ghlRequest, normalizePhone, refreshAccessToken } from '@/lib/ghl';
+import { getGhlToken, ghlRequest, normalizePhone, refreshAccessToken, resolveLocationToken } from '@/lib/ghl';
 import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-import.storyvenue.placeholder';
@@ -326,6 +326,11 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
     throw new Error('no Legacy messaging token available (no per-venue OAuth and no agency key)');
   }
 
+  // Agency-level JWTs must be exchanged for a location-scoped token before
+  // hitting location-scoped endpoints like /contacts/. Per-venue OAuth tokens
+  // are already location-scoped and pass through unchanged.
+  token = await resolveLocationToken(token, venue.ghl_location_id);
+
   let startAfter: string | null   = null;
   let startAfterId: string | null = null;
 
@@ -339,7 +344,7 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
       if (/\b401\b/.test(msg) && venue.ghl_refresh_token) {
         const refreshed = await tryRefresh(venue);
         if (refreshed) {
-          token = refreshed;
+          token = await resolveLocationToken(refreshed, venue.ghl_location_id);
           pageData = await fetchContactPage(token, venue.ghl_location_id, startAfter, startAfterId);
         } else {
           throw err;
@@ -395,8 +400,9 @@ export async function syncSingleGhlContact(
   if (!venueRaw) return false;
   const venue = venueRaw as VenueRow;
 
-  const token = await getWorkingToken(venue);
-  if (!token) return false;
+  const rawToken = await getWorkingToken(venue);
+  if (!rawToken) return false;
+  const token = await resolveLocationToken(rawToken, locationId);
 
   try {
     const result = await ghlRequest(`/contacts/${contactId}`, token, { locationId }) as {

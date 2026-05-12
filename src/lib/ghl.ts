@@ -99,7 +99,7 @@ async function getLocationToken(agencyToken: string, locationId: string): Promis
  * (detected by the presence of GHL_AGENCY_API_KEY matching it), exchange it
  * for a location token first. Otherwise use it directly.
  */
-async function resolveLocationToken(token: string, locationId: string): Promise<string> {
+export async function resolveLocationToken(token: string, locationId: string): Promise<string> {
   const isAgencyToken = process.env.GHL_AGENCY_API_KEY && token === process.env.GHL_AGENCY_API_KEY;
   if (isAgencyToken) {
     try {
