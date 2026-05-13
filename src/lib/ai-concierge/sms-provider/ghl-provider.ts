@@ -19,6 +19,7 @@ import {
   sendSms as ghlSendSms,
   findOrCreateContact,
   getGhlToken,
+  getGhlAgencyKey,
   normalizePhone,
 } from '@/lib/ghl';
 import type {
@@ -73,7 +74,8 @@ export const ghlSmsProvider: SmsProvider = {
     if (!venue.ghl_location_id) {
       return errResult('auth_error', 'Venue has no GHL location_id — cannot send via GHL');
     }
-    const accessToken = getGhlToken({ ghl_access_token: venue.ghl_access_token });
+    const locationId = venue.ghl_location_id;
+    let accessToken = getGhlToken({ ghl_access_token: venue.ghl_access_token });
     if (!accessToken) {
       return errResult('auth_error', 'No GHL access token (per-venue OAuth or agency key)');
     }
@@ -94,22 +96,24 @@ export const ghlSmsProvider: SmsProvider = {
     if (!phone) return errResult('invalid_phone', 'Lead has no usable phone number');
 
     // 3. Resolve GHL contact id (prefer existing venue_customer row matched by email)
-    let ghlContactId: string | null = null;
-    if (lead.email) {
-      const { data: vcRow } = await supabaseAdmin
-        .from('venue_customers')
-        .select('id, ghl_contact_id, sms_dnd')
-        .eq('venue_id', venueId)
-        .ilike('customer_email', lead.email.trim())
-        .maybeSingle();
-      const vc = vcRow as VenueCustomerLookupRow | null;
-      if (vc?.sms_dnd) return errResult('dnd', 'Venue customer has SMS DND set');
-      if (vc?.ghl_contact_id) ghlContactId = vc.ghl_contact_id;
-    }
+    // 4. Send
+    // Both steps are wrapped with a 401 → agency key fallback for legacy clients.
+    const attempt = async (token: string): Promise<SmsSendResult> => {
+      let ghlContactId: string | null = null;
+      if (lead.email) {
+        const { data: vcRow } = await supabaseAdmin
+          .from('venue_customers')
+          .select('id, ghl_contact_id, sms_dnd')
+          .eq('venue_id', venueId)
+          .ilike('customer_email', lead.email.trim())
+          .maybeSingle();
+        const vc = vcRow as VenueCustomerLookupRow | null;
+        if (vc?.sms_dnd) return errResult('dnd', 'Venue customer has SMS DND set');
+        if (vc?.ghl_contact_id) ghlContactId = vc.ghl_contact_id;
+      }
 
-    if (!ghlContactId) {
-      try {
-        const created = await findOrCreateContact(accessToken, venue.ghl_location_id, {
+      if (!ghlContactId) {
+        const created = await findOrCreateContact(token, locationId, {
           email:     lead.email      ?? undefined,
           phone:     phone,
           firstName: lead.first_name ?? undefined,
@@ -119,22 +123,32 @@ export const ghlSmsProvider: SmsProvider = {
           return errResult('permanent_error', 'GHL findOrCreateContact returned null');
         }
         ghlContactId = created;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'unknown error';
-        return errResult(classifyGhlError(msg), `findOrCreateContact failed: ${msg}`);
       }
-    }
 
-    // 4. Send
-    try {
-      const res = await ghlSendSms(accessToken, venue.ghl_location_id, ghlContactId, message);
+      const res = await ghlSendSms(token, locationId, ghlContactId, message);
       return {
         ok:                true,
         outcome:           'sent',
         providerMessageId: extractMessageId(res),
       };
+    };
+
+    try {
+      return await attempt(accessToken);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'unknown GHL error';
+      // 401 → retry with agency key (legacy clients with stale per-venue token)
+      if (/\b401\b/.test(msg) || /unauthor/i.test(msg)) {
+        const agencyKey = getGhlAgencyKey();
+        if (agencyKey && agencyKey !== accessToken) {
+          try {
+            return await attempt(agencyKey);
+          } catch (e2) {
+            const msg2 = e2 instanceof Error ? e2.message : 'unknown GHL error';
+            return errResult(classifyGhlError(msg2), msg2);
+          }
+        }
+      }
       return errResult(classifyGhlError(msg), msg);
     }
   },

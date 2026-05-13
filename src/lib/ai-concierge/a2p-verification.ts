@@ -35,7 +35,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
-import { getGhlToken } from '@/lib/ghl';
+import { getGhlToken, getGhlAgencyKey, resolveLocationToken } from '@/lib/ghl';
 
 const GHL_API_BASE = process.env.GHL_API_BASE || 'https://services.leadconnectorhq.com';
 
@@ -341,7 +341,11 @@ export async function diagnoseVenueA2pStatus(venueId: string): Promise<A2pDiagno
       `${GHL_API_BASE}/phone-system/messaging-services/${encodeURIComponent(venue.ghl_location_id!)}`,
       `${GHL_API_BASE}/locations/${encodeURIComponent(venue.ghl_location_id!)}`,
     ];
-    const headers: Record<string, string> = {
+
+    // Try with the primary token first. If all probes 401, retry with the
+    // agency key (covers legacy clients with a stale per-venue token).
+    const agencyKey = getGhlAgencyKey();
+    let headers: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       Version: '2021-07-28',
@@ -350,6 +354,30 @@ export async function diagnoseVenueA2pStatus(venueId: string): Promise<A2pDiagno
 
     for (const url of probes) {
       attempts.push(await runProbe(url, headers));
+    }
+
+    // If every probe returned 401 and we have a different agency key, retry.
+    const allAuthFailed = attempts.length > 0 && attempts.every(
+      (a) => a.status === 401 || (a.error && /unauthor/i.test(a.error)),
+    );
+    if (allAuthFailed && agencyKey && agencyKey !== accessToken) {
+      attempts.push({
+        url: '(info)',
+        status: null,
+        ok: true,
+        bodyPreview: 'Primary token got 401 on all probes — retrying with agency key.',
+        error: null,
+        extracted: null,
+      });
+      headers = {
+        Authorization: `Bearer ${agencyKey}`,
+        'Content-Type': 'application/json',
+        Version: '2021-07-28',
+        'X-Location-Id': venue.ghl_location_id!,
+      };
+      for (const url of probes) {
+        attempts.push(await runProbe(url, headers));
+      }
     }
   }
 
@@ -469,8 +497,25 @@ export async function refreshVenueA2pStatus(venueId: string): Promise<A2pSnapsho
     raw = await fetchGhlA2pRaw({ accessToken, locationId: venue.ghl_location_id });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);
-    await persistError(venueId, errMsg);
-    return snapshotFromVenue(venue, { errorOverride: errMsg, decision: 'fetch_failed' });
+    // 401 → stale per-venue token. Try agency key fallback for legacy clients.
+    if (/\b401\b/.test(errMsg)) {
+      const agencyKey = getGhlAgencyKey();
+      if (agencyKey && agencyKey !== accessToken) {
+        try {
+          const agencyLocationToken = await resolveLocationToken(agencyKey, venue.ghl_location_id);
+          raw = await fetchGhlA2pRaw({ accessToken: agencyLocationToken, locationId: venue.ghl_location_id });
+        } catch {
+          await persistError(venueId, errMsg);
+          return snapshotFromVenue(venue, { errorOverride: errMsg, decision: 'fetch_failed' });
+        }
+      } else {
+        await persistError(venueId, errMsg);
+        return snapshotFromVenue(venue, { errorOverride: errMsg, decision: 'fetch_failed' });
+      }
+    } else {
+      await persistError(venueId, errMsg);
+      return snapshotFromVenue(venue, { errorOverride: errMsg, decision: 'fetch_failed' });
+    }
   }
 
   // Successful fetch. Determine if we should flip a2p_verified.

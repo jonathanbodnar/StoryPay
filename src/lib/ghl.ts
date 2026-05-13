@@ -26,6 +26,20 @@ export function getGhlToken(venue: {
 }
 
 /**
+ * Return the agency-level GHL key (or null if neither env var is set).
+ *
+ * Use this as a 401 fallback when the per-venue token is stale.  Callers
+ * that get a 401 from GHL should:
+ *   1. Check if the token they used was already the agency key → give up.
+ *   2. Otherwise retry with `getGhlAgencyKey()` + `resolveLocationToken()`.
+ */
+export function getGhlAgencyKey(): string | null {
+  if (process.env.GHL_AGENCY_API_KEY) return process.env.GHL_AGENCY_API_KEY;
+  if (process.env.GHL_PRIVATE_KEY) return process.env.GHL_PRIVATE_KEY;
+  return null;
+}
+
+/**
  * Normalize any US phone number to E.164 format (+1XXXXXXXXXX).
  * GHL rejects numbers that are not in E.164 — this is the primary
  * reason SMS fails when phone numbers are entered in display format.
