@@ -29,7 +29,6 @@ interface VenueInfo {
  onboarding_status: string | null;
  ghl_connected: boolean;
  ghl_location_id: string | null;
- ghl_access_token: string | null;
  ghl_contacts_synced_at: string | null;
  legacy_location_id?: string | null;
  lunarpay_merchant_id: number | null;
@@ -86,13 +85,6 @@ export default function SettingsPage() {
  const [locationIdSaved, setLocationIdSaved] = useState(false);
  const [locationIdError, setLocationIdError] = useState('');
 
- // Per-venue Private Integration Token (pit-…) — overrides agency env key
- const [pitInput, setPitInput] = useState('');
- const [savingPit, setSavingPit] = useState(false);
- const [pitSaved, setPitSaved] = useState(false);
- const [pitError, setPitError] = useState('');
- const [showPitHelp, setShowPitHelp] = useState(false);
-
  async function saveLocationId() {
    const val = locationIdInput.trim();
    if (!val) return;
@@ -113,27 +105,6 @@ export default function SettingsPage() {
      setTimeout(() => setLocationIdSaved(false), 3000);
    } catch { setLocationIdError('Failed to save. Please try again.'); }
    finally { setSavingLocationId(false); }
- }
-
- async function savePit() {
-   const val = pitInput.trim();
-   if (!val) return;
-   setSavingPit(true);
-   setPitError('');
-   setPitSaved(false);
-   try {
-     const res = await fetch('/api/venues/me', {
-       method: 'PATCH',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ ghl_access_token: val, ghl_connected: true }),
-     });
-     if (!res.ok) { setPitError('Failed to save. Please try again.'); return; }
-     setVenue(prev => prev ? { ...prev, ghl_access_token: val, ghl_connected: true } : prev);
-     setPitSaved(true);
-     setPitInput('');
-     setTimeout(() => setPitSaved(false), 3000);
-   } catch { setPitError('Failed to save. Please try again.'); }
-   finally { setSavingPit(false); }
  }
 
  async function syncGhlContacts() {
@@ -373,60 +344,6 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
 </div>
 {locationIdSaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
 {locationIdError && <p className="mt-2 text-xs text-red-600">{locationIdError}</p>}
-</div>
-
-{/* Private Integration Token (pit-…) — required for SMS + contact sync */}
-<div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-  <div className="flex items-center justify-between mb-2">
-    <p className="text-xs font-medium text-gray-700">Private Integration Token</p>
-    <button
-      type="button"
-      onClick={() => setShowPitHelp(s => !s)}
-      className="text-xs text-gray-500 hover:text-gray-900 underline decoration-dotted underline-offset-2"
-    >
-      {showPitHelp ? 'Hide instructions' : 'How do I get one?'}
-    </button>
-  </div>
-  {showPitHelp && (
-    <div className="mb-3 rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-xs text-gray-600 space-y-1.5">
-      <p className="font-medium text-gray-900">Create a Private Integration Token in StoryVenue Legacy:</p>
-      <ol className="list-decimal pl-4 space-y-0.5">
-        <li>Log in to your StoryVenue Legacy sub-account.</li>
-        <li>Go to <strong>Settings → Private Integrations → Create New Integration</strong>.</li>
-        <li>Give it a name (e.g. &quot;StoryVenue&quot;) and select these scopes:
-          <ul className="list-disc pl-4 mt-0.5">
-            <li><code className="text-[10px]">contacts.readonly</code>, <code className="text-[10px]">contacts.write</code></li>
-            <li><code className="text-[10px]">conversations.readonly</code>, <code className="text-[10px]">conversations.write</code></li>
-            <li><code className="text-[10px]">conversations/message.readonly</code>, <code className="text-[10px]">conversations/message.write</code></li>
-            <li><code className="text-[10px]">locations.readonly</code></li>
-          </ul>
-        </li>
-        <li>Copy the token (starts with <code className="text-[10px]">pit-</code>) and paste it below.</li>
-      </ol>
-    </div>
-  )}
-  <div className="flex gap-2">
-    <input
-      type="password"
-      value={pitInput}
-      onChange={e => setPitInput(e.target.value)}
-      placeholder={venue.ghl_access_token ? '••• token saved (paste to replace) •••' : 'pit-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'}
-      className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none font-mono"
-    />
-    <button
-      onClick={() => void savePit()}
-      disabled={savingPit || !pitInput.trim()}
-      className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
-    >
-      {savingPit ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-      {savingPit ? 'Saving…' : 'Save'}
-    </button>
-  </div>
-  {pitSaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
-  {pitError && <p className="mt-2 text-xs text-red-600">{pitError}</p>}
-  {!pitSaved && !pitError && venue.ghl_access_token && (
-    <p className="mt-2 text-[11px] text-gray-400">Token on file. Paste a new one to replace it.</p>
-  )}
 </div>
 
 {/* Contact sync — only show when connected */}

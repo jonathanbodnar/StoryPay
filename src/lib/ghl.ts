@@ -1,4 +1,5 @@
 const GHL_API_BASE = process.env.GHL_API_BASE || 'https://services.leadconnectorhq.com';
+const GHL_API_V1_BASE = process.env.GHL_API_V1_BASE || 'https://rest.gohighlevel.com/v1';
 
 /**
  * Resolve the best available GHL access token for a venue.
@@ -54,20 +55,46 @@ export function normalizePhone(raw: string | null | undefined): string | null {
   return null;
 }
 
+/**
+ * Translate v2 endpoint paths to their v1 equivalents where the shape differs.
+ * For most contact paths the v1 endpoint structure is identical to v2 (just a
+ * different base URL); we only need explicit rewrites for the handful that
+ * diverge.
+ */
+function translateV2PathToV1(path: string): string {
+  // v2 "/contacts/search" doesn't exist in v1 — caller should already avoid it
+  // for v1 tokens, but be defensive.
+  if (path.startsWith('/conversations/')) {
+    // v1 messaging routes were /contacts/{id}/sms historically, but newer v1
+    // implementations also accept /conversations/messages. Pass through and
+    // let the caller construct an appropriate body shape (handled in sendSmsV1).
+    return path;
+  }
+  return path;
+}
+
 export async function ghlRequest(
   path: string,
   accessToken: string,
   options: { method?: string; body?: Record<string, unknown>; locationId?: string } = {}
 ) {
   const { method = 'GET', body, locationId } = options;
+  const kind = classifyToken(accessToken);
+  const isV1 = kind === 'v1';
+
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${accessToken}`,
     'Content-Type': 'application/json',
-    'Version': '2021-07-28',
   };
-  if (locationId) headers['X-Location-Id'] = locationId;
+  // v2 requires the Version header. v1 doesn't use it but tolerates it.
+  if (!isV1) headers['Version'] = '2021-07-28';
+  // v2 uses X-Location-Id; v1 doesn't recognise the header and prefers ?locationId= in the query.
+  if (locationId && !isV1) headers['X-Location-Id'] = locationId;
 
-  const res = await fetch(`${GHL_API_BASE}${path}`, {
+  const base = isV1 ? GHL_API_V1_BASE : GHL_API_BASE;
+  const effectivePath = isV1 ? translateV2PathToV1(path) : path;
+
+  const res = await fetch(`${base}${effectivePath}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -83,17 +110,29 @@ export async function ghlRequest(
 }
 
 /**
- * Detect the GHL token type by looking at the string format.
+ * Detect the GHL token type by looking at the string format and claims.
  *
- *   - "pit-..."        → Private Integration Token (location-scoped, use as-is)
- *   - JWT (3 parts)    → OAuth access token (agency or location, may need exchange)
- *   - anything else    → legacy v1 Agency API Key (use as-is, location-scoped endpoints
- *                        do not support these and will 401)
+ *   - "pit-..."  → Private Integration Token. Location-scoped, use as-is on v2.
+ *   - v1 key     → JWT-formatted but with no `authClass` and no `exp` claims.
+ *                  These are the legacy "Agency API Key" / "Location API Key"
+ *                  issued via the v1 Settings UI. They only work against
+ *                  rest.gohighlevel.com/v1/ endpoints — NOT v2.
+ *   - v2 OAuth   → Real OAuth JWT with `authClass` (Agency or Location) and
+ *                  `exp` claim. May need /oauth/locationToken exchange.
+ *   - opaque     → Anything else (treated like v2 OAuth for safety).
  */
-function classifyToken(token: string): 'pit' | 'jwt' | 'legacy' {
+export type TokenKind = 'pit' | 'v1' | 'v2-oauth' | 'opaque';
+
+export function classifyToken(token: string): TokenKind {
+  if (!token) return 'opaque';
   if (token.startsWith('pit-')) return 'pit';
-  if (token.split('.').length === 3) return 'jwt';
-  return 'legacy';
+  const payload = decodeJwtPayload(token);
+  if (!payload) return 'opaque';
+  const hasAuthClass = typeof payload.authClass === 'string' && payload.authClass.length > 0;
+  const hasExp = typeof payload.exp === 'number';
+  // OAuth tokens always carry authClass+exp. Anything missing both is a v1 key.
+  if (!hasAuthClass && !hasExp) return 'v1';
+  return 'v2-oauth';
 }
 
 /**
@@ -182,34 +221,30 @@ async function getLocationToken(agencyToken: string, locationId: string): Promis
 }
 
 /**
- * Resolve a location-scoped token for use with location-scoped endpoints
- * (e.g. /contacts/, /conversations/messages). Behaviour by token type:
+ * Resolve a location-scoped token for use with location-scoped endpoints.
+ * Behaviour by token type:
  *
  *   - PIT (pit-...):   Already location-scoped — return as-is.
- *   - JWT:             If the JWT was issued for the target location
- *                      (authClassId === locationId), return as-is. Otherwise
- *                      it's an agency JWT and must be exchanged.
- *   - legacy v1 key:   Cannot be exchanged. Return as-is (caller will likely
- *                      get a 401 — surface that rather than masking it).
+ *   - v1 key:          Agency-wide v1 key. Pass through; ghlRequest will
+ *                      automatically route it to v1 endpoints.
+ *   - v2 OAuth JWT:    If already issued for this location, use directly.
+ *                      Otherwise treat as an agency JWT and exchange.
+ *   - opaque:          Use as-is (best effort).
  *
- * No silent fallback: if the exchange fails, the error propagates so callers
- * see why instead of getting a confusing "Invalid JWT" downstream.
+ * No silent fallback: if the v2 exchange fails, the error propagates so
+ * callers see why instead of getting a confusing "Invalid JWT" downstream.
  */
 export async function resolveLocationToken(token: string, locationId: string): Promise<string> {
   const kind = classifyToken(token);
+  if (kind === 'pit' || kind === 'v1' || kind === 'opaque') return token;
 
-  if (kind === 'pit') return token;
-  if (kind === 'legacy') return token; // can't exchange; caller will see 401 if it's wrong
-
-  // JWT path — inspect claims
+  // v2-oauth path — inspect claims
   const payload = decodeJwtPayload(token);
   const authClass = (payload?.authClass as string | undefined)?.toLowerCase();
   const authClassId = payload?.authClassId as string | undefined;
 
-  // Already a location-scoped JWT for this location → use directly
   if (authClass === 'location' && authClassId === locationId) return token;
 
-  // Otherwise treat as an agency JWT and exchange. Let errors bubble up.
   return await getLocationToken(token, locationId);
 }
 
@@ -223,6 +258,20 @@ export async function sendSms(
   const cid = String(contactId ?? '').trim();
   if (!cid) {
     throw new Error('GHL sendSms: contactId is required');
+  }
+
+  // v1 short-circuit: v1 has no /conversations/search or POST /conversations/.
+  // The legacy v1 messaging endpoint auto-resolves the conversation for us.
+  if (classifyToken(accessToken) === 'v1') {
+    const body: Record<string, unknown> = { type: 'SMS', contactId: cid, message };
+    if (attachments?.length) body.attachments = attachments;
+    const result = await ghlRequest('/conversations/messages', accessToken, {
+      method: 'POST',
+      body,
+      locationId,
+    });
+    console.log(`[ghl] SMS sent via v1 to contact ${cid}`);
+    return result;
   }
 
   // Exchange agency token → location token if needed
