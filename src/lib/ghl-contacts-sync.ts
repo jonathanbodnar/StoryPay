@@ -25,6 +25,13 @@ import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/ro
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-import.storyvenue.placeholder';
 const PAGE_SIZE = 100;
 const MAX_PAGES = 200; // safety cap = 20 000 contacts per run
+// Wall-clock budget for a single manual sync call. Cloudflare cuts requests at
+// ~100s with 524; leave a generous buffer so we return partial counts cleanly
+// instead of dying mid-write. The hourly cron picks up wherever this stops.
+const WALL_CLOCK_BUDGET_MS = 75_000;
+// Parallelism within a single page — upserts are I/O bound on supabase so
+// running them concurrently roughly halves per-page latency.
+const PAGE_CONCURRENCY = 8;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -346,9 +353,19 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
 
   let startAfter: string | null   = null;
   let startAfterId: string | null = null;
+  const startedAt = Date.now();
+  let timedOut = false;
 
   for (let page = 0; page < MAX_PAGES; page++) {
+    // Wall-clock check at the top of each page so we always exit cleanly.
+    if (Date.now() - startedAt > WALL_CLOCK_BUDGET_MS) {
+      timedOut = true;
+      console.warn(`[ghl-contacts-sync] wall-clock budget hit after page ${page}, returning partial counts:`, counts);
+      break;
+    }
+
     let pageData: { contacts: GhlContact[]; nextStartAfter: string | null; nextStartAfterId: string | null };
+    const pageStartedAt = Date.now();
     try {
       pageData = await fetchContactPage(token, venue.ghl_location_id, startAfter, startAfterId);
     } catch (err) {
@@ -389,22 +406,36 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
     if (pageData.contacts.length === 0) break;
     counts.fetched += pageData.contacts.length;
 
-    for (const c of pageData.contacts) {
-      try {
-        const r = await upsertContact(venueId, c);
+    // Upsert this page's contacts in parallel batches to keep total latency
+    // manageable. Each upsertContact runs 1-3 supabase round-trips, so this
+    // is I/O bound and benefits from concurrency.
+    for (let i = 0; i < pageData.contacts.length; i += PAGE_CONCURRENCY) {
+      const batch = pageData.contacts.slice(i, i + PAGE_CONCURRENCY);
+      const results = await Promise.all(
+        batch.map(async (c) => {
+          try {
+            return await upsertContact(venueId, c);
+          } catch (err) {
+            console.error('[ghl-contacts-sync] upsert error', c.id, err);
+            return { kind: 'error' } as UpsertResult;
+          }
+        }),
+      );
+      for (const r of results) {
         if (r.kind === 'created')      counts.created++;
         else if (r.kind === 'updated') counts.updated++;
         else if (r.kind === 'linked')  counts.linked++;
         else                           counts.errors++;
-      } catch (err) {
-        counts.errors++;
-        console.error('[ghl-contacts-sync] upsert error', c.id, err);
       }
     }
+    console.log(`[ghl-contacts-sync] page ${page + 1}: ${pageData.contacts.length} contacts in ${Date.now() - pageStartedAt}ms (total fetched=${counts.fetched})`);
 
     if (!pageData.nextStartAfter && !pageData.nextStartAfterId) break;
     startAfter   = pageData.nextStartAfter;
     startAfterId = pageData.nextStartAfterId;
+  }
+  if (timedOut) {
+    console.log(`[ghl-contacts-sync] partial sync for venue ${venueId} after ${Date.now() - startedAt}ms:`, counts);
   }
 
   // Mark the venue as having been synced.
