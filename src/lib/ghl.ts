@@ -426,6 +426,92 @@ async function ensureV1ContactHasPhone(
 }
 
 /**
+ * Safe phone-writer for v2 contacts. GETs the contact, then PUTs back every
+ * non-system field we received PLUS the new phone. This is necessary because
+ * some v2 sub-account configurations treat PUT /contacts/{id} as a full
+ * replacement that wipes any field not present in the body. By echoing back
+ * everything we read, we never accidentally clear the email/name/etc.
+ *
+ * Returns true if the PUT succeeded AND a subsequent GET confirms the phone
+ * is now stored. Returns false otherwise (caller decides how to handle).
+ */
+async function safeWriteV2ContactPhone(
+  accessToken: string,
+  contactId: string,
+  locationId: string,
+  phone: string,
+): Promise<boolean> {
+  // Step 1: GET the current contact so we have all fields to echo back.
+  let existing: Record<string, unknown> = {};
+  try {
+    const probe = (await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, { locationId })) as {
+      contact?: Record<string, unknown>;
+    } & Record<string, unknown>;
+    existing = (probe.contact ?? probe) as Record<string, unknown>;
+  } catch (getErr) {
+    const m = getErr instanceof Error ? getErr.message : String(getErr);
+    console.warn(`[ghl] safeWriteV2ContactPhone: GET failed:`, m);
+    // Continue — best effort PUT with phone only.
+  }
+
+  // Step 2: Build PUT body. Echo back every "data" field GHL gave us, then
+  // overlay the new phone. Drop GHL-managed fields (id, dateAdded, etc.)
+  // that shouldn't be in an update.
+  const SKIP = new Set([
+    'id',
+    'locationId',
+    'dateAdded',
+    'dateUpdated',
+    'createdBy',
+    'lastSessionActivityAt',
+    'attributionSource',
+    'lastAttributionSource',
+    'contactName',
+    'fullNameLowerCase',
+  ]);
+  const putBody: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(existing)) {
+    if (SKIP.has(k)) continue;
+    if (v === undefined || v === null) continue;
+    putBody[k] = v;
+  }
+  putBody.phone = phone;
+  putBody.locationId = locationId;
+
+  // Step 3: PUT and verify.
+  try {
+    await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, {
+      method: 'PUT',
+      body: putBody,
+      locationId,
+    });
+    console.log(`[ghl] safeWriteV2ContactPhone: PUT succeeded for ${contactId}`);
+  } catch (putErr) {
+    const m = putErr instanceof Error ? putErr.message : String(putErr);
+    console.warn(`[ghl] safeWriteV2ContactPhone: PUT failed:`, m);
+    return false;
+  }
+
+  // Step 4: Confirm via re-GET (GHL is eventually consistent on writes;
+  // wait briefly before re-reading).
+  await new Promise((r) => setTimeout(r, 250));
+  try {
+    const verify = (await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, { locationId })) as {
+      contact?: { phone?: string | null };
+      phone?: string | null;
+    };
+    const got = verify.contact?.phone ?? verify.phone ?? null;
+    const matches = phonesMatch(got, phone);
+    console.log(
+      `[ghl] safeWriteV2ContactPhone: post-PUT verification got=${got}, expected=${phone}, matches=${matches}`,
+    );
+    return matches;
+  } catch {
+    return true; // PUT succeeded; assume write took
+  }
+}
+
+/**
  * v2 sibling of ensureV1ContactHasPhone. v2's `/contacts/{id}` endpoint
  * accepts a partial-update PUT and is more permissive, but the same idea:
  * we make sure GHL's CRM has the phone we plan to text before we ask GHL to
@@ -673,29 +759,42 @@ export async function sendSms(
   // to omit toNumber entirely and let GHL use the contact's stored phone.
   //
   // If GHL's stored phone is missing, GHL returns 422 "Missing phone number"
-  // instead — but that's a clearer, addressable error (fix the contact in
-  // GHL), not a false-positive mismatch.
+  // instead — we handle that below by writing our local phone onto the GHL
+  // contact via a safe PUT (existing fields preserved) so the next send has
+  // a phone to read.
 
-  // Pre-flight check: if GHL has no phone on the contact AND we have one
-  // locally, attempt to write it via the proper v2 upsert endpoint so the
-  // subsequent send has something to read.
+  // Pre-flight: if GHL has no phone on the contact AND we have one locally,
+  // safely write it via a full-fields PUT (GET the contact first, send back
+  // every field plus our phone). This is the only reliable v2 update —
+  // partial PUTs sometimes wipe other fields on certain account configs.
   if (!ghlContactPhone && explicitPhone) {
+    const wrote = await safeWriteV2ContactPhone(token, cid, locationId, explicitPhone);
+    if (wrote) ghlContactPhone = explicitPhone;
+  }
+
+  // If, after all that, GHL *still* has no phone for this contact, bail out
+  // now with a clear, actionable error instead of letting GHL return its
+  // opaque 422. Reading the GHL contact freshly here (rather than reusing
+  // the earlier probe) tolerates eventually-consistent CRM writes.
+  if (!ghlContactPhone) {
+    let finalPhone: string | null = null;
     try {
-      // POST /contacts/upsert preserves other fields (it's true upsert, not
-      // full replacement), so writing just `{ phone, locationId, contactId }`
-      // adds the phone without wiping the email/name we already have.
-      const upsertRes = (await ghlRequest('/contacts/upsert', token, {
-        method: 'POST',
-        body: { locationId, contactId: cid, phone: explicitPhone },
-        locationId,
-      })) as { contact?: { phone?: string } };
-      console.log(
-        `[ghl] v2 contacts/upsert wrote phone=${explicitPhone} -> stored=${upsertRes.contact?.phone ?? 'unknown'}`,
-      );
-    } catch (upsertErr) {
-      const m = upsertErr instanceof Error ? upsertErr.message : String(upsertErr);
-      console.warn(`[ghl] v2 contacts/upsert phone-sync failed (non-fatal):`, m);
+      const finalProbe = (await ghlRequest(`/contacts/${encodeURIComponent(cid)}`, token, { locationId })) as {
+        contact?: { phone?: string | null };
+        phone?: string | null;
+      };
+      finalPhone = finalProbe.contact?.phone ?? finalProbe.phone ?? null;
+    } catch {
+      /* ignore */
     }
+    if (!finalPhone) {
+      throw new Error(
+        `Cannot send SMS — the contact in GoHighLevel has no phone number on file. ` +
+        `Open the contact in your GHL sub-account and add the phone, then retry. ` +
+        `(StoryVenue tried to push the phone automatically but the GHL API rejected the write.)`,
+      );
+    }
+    console.log(`[ghl] v2 contact ${cid} now has phone=${finalPhone} after fix-up`);
   }
 
   // Get or create a conversation, then send SMS through it
