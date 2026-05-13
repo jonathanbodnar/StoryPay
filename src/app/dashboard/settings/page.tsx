@@ -76,9 +76,50 @@ export default function SettingsPage() {
  const [resetting, setResetting] = useState(false);
 
  // GHL contact sync
- const [syncingContacts, setSyncingContacts] = useState(false);
- const [syncResult, setSyncResult] = useState<{ created: number; updated: number; linked: number; fetched: number } | null>(null);
+ interface SyncProgress {
+   status: 'running' | 'completed' | 'partial' | 'failed';
+   started_at?: string;
+   completed_at?: string;
+   fetched?: number;
+   total?: number | null;
+   created?: number;
+   updated?: number;
+   linked?: number;
+   errors?: number;
+   error?: string;
+   page?: number;
+ }
+ const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+ const [syncStarting, setSyncStarting] = useState(false);
  const [syncError, setSyncError] = useState('');
+ const syncPollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+ function stopSyncPolling() {
+   if (syncPollTimer.current) {
+     clearInterval(syncPollTimer.current);
+     syncPollTimer.current = null;
+   }
+ }
+
+ async function pollSyncStatus() {
+   try {
+     const res = await fetch('/api/integrations/ghl/sync-contacts', { cache: 'no-store' });
+     if (!res.ok) return;
+     const data = await res.json();
+     const p = data.progress as SyncProgress | null;
+     if (p) {
+       setSyncProgress(p);
+       if (p.status === 'completed' || p.status === 'partial' || p.status === 'failed') {
+         stopSyncPolling();
+         // Refresh venue so last_synced_at updates inline
+         try {
+           const vRes = await fetch('/api/venues/me', { cache: 'no-store' });
+           if (vRes.ok) setVenue(await vRes.json());
+         } catch { /* ignore */ }
+       }
+     }
+   } catch { /* ignore transient errors during poll */ }
+ }
 
  // StoryVenue Legacy (GHL) location ID — manual entry
  const [locationIdInput, setLocationIdInput] = useState('');
@@ -137,26 +178,32 @@ export default function SettingsPage() {
  }
 
  async function syncGhlContacts() {
-   setSyncingContacts(true);
+   stopSyncPolling();
+   setSyncStarting(true);
    setSyncError('');
-   setSyncResult(null);
+   setSyncProgress({ status: 'running', fetched: 0, total: null, page: 0 });
    try {
      const res = await fetch('/api/integrations/ghl/sync-contacts', { method: 'POST' });
      const data = await res.json();
      if (!res.ok || !data.ok) {
        setSyncError(data.error || 'Contact sync failed');
+       setSyncProgress(null);
        return;
      }
-     setSyncResult(data.counts);
-     // Refresh venue payload so the "last synced" timestamp updates inline.
-     const venueRes = await fetch('/api/venues/me', { cache: 'no-store' });
-     if (venueRes.ok) setVenue(await venueRes.json());
+     // Start polling for progress every 2s
+     syncPollTimer.current = setInterval(() => { void pollSyncStatus(); }, 2000);
+     void pollSyncStatus();
    } catch {
      setSyncError('Contact sync failed. Please try again.');
+     setSyncProgress(null);
    } finally {
-     setSyncingContacts(false);
+     setSyncStarting(false);
    }
  }
+
+ useEffect(() => {
+   return () => stopSyncPolling();
+ }, []);
 
  async function resetOnboarding() {
  setResetting(true);
@@ -176,6 +223,23 @@ export default function SettingsPage() {
  const data = await res.json();
  setVenue(data);
  if (data.ghl_location_id) setLocationIdInput(data.ghl_location_id);
+
+ // Restore sync state if a sync is in flight (e.g. user refreshed the
+ // page while a previous sync was still running on the server).
+ try {
+   const sRes = await fetch('/api/integrations/ghl/sync-contacts', { cache: 'no-store' });
+   if (sRes.ok) {
+     const sData = await sRes.json();
+     const p = sData.progress as SyncProgress | null;
+     if (p) {
+       setSyncProgress(p);
+       if (p.status === 'running') {
+         syncPollTimer.current = setInterval(() => { void pollSyncStatus(); }, 2000);
+       }
+     }
+   }
+ } catch { /* non-fatal */ }
+
  setBrand({
  brand_logo_url: data.brand_logo_url || '',
  brand_tagline: data.brand_tagline || '',
@@ -420,48 +484,94 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
 </div>
 
 {/* Contact sync — only show when connected */}
- {(venue.ghl_connected || venue.ghl_location_id) && (
- <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
- <div className="flex items-start justify-between gap-4 flex-wrap">
- <div className="flex items-start gap-3 min-w-0 flex-1">
- <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-gray-200">
- <Users size={16} className="text-gray-500" />
- </div>
- <div className="min-w-0">
- <p className="text-sm font-medium text-gray-900">Contact Sync</p>
- {venue.ghl_contacts_synced_at && (
- <p className="mt-1.5 text-[11px] text-gray-400">
- Last synced{' '}
- {new Date(venue.ghl_contacts_synced_at).toLocaleString(undefined, {
- dateStyle: 'medium', timeStyle: 'short',
- })}
- </p>
- )}
- </div>
- </div>
- <button
- onClick={() => void syncGhlContacts()}
- disabled={syncingContacts}
- className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
- >
- {syncingContacts ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
- {syncingContacts ? 'Syncing…' : 'Sync from StoryVenue Legacy'}
- </button>
- </div>
- {syncResult && (
- <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-800">
- <span className="font-semibold">Done.</span> Pulled {syncResult.fetched} contact{syncResult.fetched === 1 ? '' : 's'} —{' '}
- {syncResult.created} new, {syncResult.linked} matched by email, {syncResult.updated} updated.
- </div>
- )}
- {syncError && (
- <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700 flex items-start gap-2">
- <AlertCircle size={13} className="mt-0.5 shrink-0" />
- <span>{syncError}</span>
- </div>
- )}
- </div>
- )}
+{(venue.ghl_connected || venue.ghl_location_id) && (() => {
+  const isRunning = syncProgress?.status === 'running' || syncStarting;
+  const fetched = syncProgress?.fetched ?? 0;
+  const total = syncProgress?.total ?? null;
+  const pct = total && total > 0 ? Math.min(100, Math.round((fetched / total) * 100)) : null;
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-gray-200">
+            <Users size={16} className="text-gray-500" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900">Contact Sync</p>
+            {venue.ghl_contacts_synced_at && !isRunning && (
+              <p className="mt-1.5 text-[11px] text-gray-400">
+                Last synced{' '}
+                {new Date(venue.ghl_contacts_synced_at).toLocaleString(undefined, {
+                  dateStyle: 'medium', timeStyle: 'short',
+                })}
+              </p>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={() => void syncGhlContacts()}
+          disabled={isRunning}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          {isRunning ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+          {isRunning ? 'Syncing…' : 'Sync from StoryVenue Legacy'}
+        </button>
+      </div>
+
+      {/* Progress bar */}
+      {isRunning && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-1.5 text-[11px] text-gray-500">
+            <span>
+              {total !== null
+                ? <>Pulled <span className="font-semibold text-gray-700">{fetched.toLocaleString()}</span> of <span className="font-semibold text-gray-700">{total.toLocaleString()}</span> contacts</>
+                : fetched > 0
+                  ? <>Pulled <span className="font-semibold text-gray-700">{fetched.toLocaleString()}</span> contacts so far…</>
+                  : 'Connecting to StoryVenue Legacy…'}
+            </span>
+            {pct !== null && <span className="font-semibold text-gray-700">{pct}%</span>}
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+            <div
+              className="h-full bg-emerald-500 transition-all duration-500 ease-out"
+              style={{ width: pct !== null ? `${pct}%` : '40%' }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Completed banner */}
+      {syncProgress?.status === 'completed' && !isRunning && (
+        <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-800">
+          <span className="font-semibold">Done.</span> Pulled {(syncProgress.fetched ?? 0).toLocaleString()} contact{syncProgress.fetched === 1 ? '' : 's'} —{' '}
+          {syncProgress.created ?? 0} new, {syncProgress.linked ?? 0} matched by email, {syncProgress.updated ?? 0} updated{(syncProgress.errors ?? 0) > 0 ? `, ${syncProgress.errors} errors` : ''}.
+        </div>
+      )}
+
+      {/* Partial banner — wall-clock hit; cron will catch the rest */}
+      {syncProgress?.status === 'partial' && !isRunning && (
+        <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
+          <span className="font-semibold">Partial sync.</span> Pulled {(syncProgress.fetched ?? 0).toLocaleString()} of {total?.toLocaleString() ?? 'many'} contacts. The hourly sync will catch the rest — or click Sync again now.
+        </div>
+      )}
+
+      {/* Failed banner */}
+      {syncProgress?.status === 'failed' && (
+        <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700 flex items-start gap-2">
+          <AlertCircle size={13} className="mt-0.5 shrink-0" />
+          <span>{syncProgress.error || 'Contact sync failed.'}</span>
+        </div>
+      )}
+
+      {syncError && (
+        <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700 flex items-start gap-2">
+          <AlertCircle size={13} className="mt-0.5 shrink-0" />
+          <span>{syncError}</span>
+        </div>
+      )}
+    </div>
+  );
+})()}
  </div>
  </section>
  </div>

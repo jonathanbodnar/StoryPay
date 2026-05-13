@@ -78,6 +78,28 @@ interface SyncCounts {
   errors: number;
 }
 
+/**
+ * Best-effort write of progress to venues.ghl_sync_progress. Swallows errors
+ * so the sync keeps running even if the migration adding the column has not
+ * been applied yet (graceful degradation — UI just shows a spinner).
+ */
+async function writeProgress(
+  venueId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await supabaseAdmin
+      .from('venues')
+      .update({ ghl_sync_progress: { ...patch, updated_at: new Date().toISOString() } })
+      .eq('id', venueId);
+  } catch (err) {
+    // Column may not exist yet; non-fatal.
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[ghl-contacts-sync] writeProgress soft-failed:', err);
+    }
+  }
+}
+
 interface VenueRow {
   id: string;
   ghl_location_id: string | null;
@@ -122,7 +144,7 @@ async function fetchContactPage(
   locationId: string,
   startAfter: string | null,
   startAfterId: string | null,
-): Promise<{ contacts: GhlContact[]; nextStartAfter: string | null; nextStartAfterId: string | null }> {
+): Promise<{ contacts: GhlContact[]; nextStartAfter: string | null; nextStartAfterId: string | null; total: number | null }> {
   const qs = new URLSearchParams({
     locationId,
     limit: String(PAGE_SIZE),
@@ -136,6 +158,7 @@ async function fetchContactPage(
       startAfter?: string | number | null;
       startAfterId?: string | null;
       nextPageUrl?: string | null;
+      total?: number | null;
     };
   };
 
@@ -143,8 +166,9 @@ async function fetchContactPage(
   const meta     = result.meta ?? {};
   const nextStartAfter   = meta.startAfter ? String(meta.startAfter) : null;
   const nextStartAfterId = meta.startAfterId ?? null;
+  const total            = typeof meta.total === 'number' ? meta.total : null;
 
-  return { contacts, nextStartAfter, nextStartAfterId };
+  return { contacts, nextStartAfter, nextStartAfterId, total };
 }
 
 // ── Upsert ───────────────────────────────────────────────────────────────────
@@ -354,7 +378,15 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
   let startAfter: string | null   = null;
   let startAfterId: string | null = null;
   const startedAt = Date.now();
+  const startedAtIso = new Date(startedAt).toISOString();
   let timedOut = false;
+  let totalEstimate: number | null = null;
+
+  await writeProgress(venueId, {
+    status: 'running',
+    started_at: startedAtIso,
+    fetched: 0, total: null, created: 0, updated: 0, linked: 0, errors: 0, page: 0,
+  });
 
   for (let page = 0; page < MAX_PAGES; page++) {
     // Wall-clock check at the top of each page so we always exit cleanly.
@@ -364,7 +396,7 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
       break;
     }
 
-    let pageData: { contacts: GhlContact[]; nextStartAfter: string | null; nextStartAfterId: string | null };
+    let pageData: { contacts: GhlContact[]; nextStartAfter: string | null; nextStartAfterId: string | null; total: number | null };
     const pageStartedAt = Date.now();
     try {
       pageData = await fetchContactPage(token, venue.ghl_location_id, startAfter, startAfterId);
@@ -405,6 +437,9 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
 
     if (pageData.contacts.length === 0) break;
     counts.fetched += pageData.contacts.length;
+    if (pageData.total !== null && totalEstimate === null) {
+      totalEstimate = pageData.total;
+    }
 
     // Upsert this page's contacts in parallel batches to keep total latency
     // manageable. Each upsertContact runs 1-3 supabase round-trips, so this
@@ -428,7 +463,20 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
         else                           counts.errors++;
       }
     }
-    console.log(`[ghl-contacts-sync] page ${page + 1}: ${pageData.contacts.length} contacts in ${Date.now() - pageStartedAt}ms (total fetched=${counts.fetched})`);
+    console.log(`[ghl-contacts-sync] page ${page + 1}: ${pageData.contacts.length} contacts in ${Date.now() - pageStartedAt}ms (total fetched=${counts.fetched}/${totalEstimate ?? '?'})`);
+
+    // Persist progress after each page so the UI can render a real bar.
+    await writeProgress(venueId, {
+      status: 'running',
+      started_at: startedAtIso,
+      fetched: counts.fetched,
+      total: totalEstimate,
+      created: counts.created,
+      updated: counts.updated,
+      linked: counts.linked,
+      errors: counts.errors,
+      page: page + 1,
+    });
 
     if (!pageData.nextStartAfter && !pageData.nextStartAfterId) break;
     startAfter   = pageData.nextStartAfter;
@@ -437,6 +485,20 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
   if (timedOut) {
     console.log(`[ghl-contacts-sync] partial sync for venue ${venueId} after ${Date.now() - startedAt}ms:`, counts);
   }
+
+  // Final status — completed (or partial if we hit the wall clock).
+  await writeProgress(venueId, {
+    status: timedOut ? 'partial' : 'completed',
+    started_at: startedAtIso,
+    completed_at: new Date().toISOString(),
+    fetched: counts.fetched,
+    total: totalEstimate,
+    created: counts.created,
+    updated: counts.updated,
+    linked: counts.linked,
+    errors: counts.errors,
+    page: -1,
+  });
 
   // Mark the venue as having been synced.
   await supabaseAdmin
