@@ -213,9 +213,13 @@ export async function insertInboundConversationEmail(params: {
     .maybeSingle();
 
   if (tErr || !thread) return { ok: false, error: 'thread_not_found' };
-  if ((thread as { external_reply_channel?: string }).external_reply_channel !== 'email') {
-    return { ok: false, error: 'thread_not_email' };
-  }
+  // We intentionally do NOT require external_reply_channel === 'email' here.
+  // The reply landed at our `reply+{threadId}+{sig}@inbound-domain` address
+  // with a valid HMAC, which is proof enough that this email belongs to
+  // this thread. A thread can be used for both SMS and email — once the
+  // user sends an SMS in a previously-email thread, external_reply_channel
+  // flips to 'sms' as the default-compose hint, but inbound emails should
+  // still land in the same thread the bride is replying to.
 
   const customerId = (thread as { venue_customer_id: string }).venue_customer_id;
   const { data: contact } = await supabaseAdmin

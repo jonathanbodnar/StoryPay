@@ -347,13 +347,16 @@ export async function insertInboundGhlSms(params: {
 
   let threadId: string | null = null;
   if (preferredThreadId) {
+    // Don't gate on external_reply_channel — a thread can carry both SMS and
+    // email messages once the venue has sent both channels in the same
+    // conversation. The fact that the venue_customer match holds is proof
+    // enough that the inbound message belongs in this thread.
     const { data: trow } = await supabaseAdmin
       .from('conversation_threads')
       .select('id')
       .eq('id', preferredThreadId)
       .eq('venue_id', venueId)
       .eq('venue_customer_id', customerId)
-      .eq('external_reply_channel', 'sms')
       .maybeSingle();
     if (trow?.id) threadId = trow.id as string;
   }

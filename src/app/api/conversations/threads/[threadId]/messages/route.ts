@@ -130,6 +130,12 @@ export async function GET(
   // still land back in this same thread.
   const nosync = request.nextUrl.searchParams.get('nosync') === '1';
   if (!nosync) {
+    // Pull inbound SMS from GHL for any thread that has been used for SMS
+    // — either explicitly marked as SMS, or any thread that has at least
+    // one SMS message in it. We do NOT mutate external_reply_channel here:
+    // a thread can legitimately carry both SMS and email (we send SMS for
+    // a quick nudge, then continue by email) and the inbound handlers no
+    // longer gate on channel.
     let shouldSyncSms = thread.external_reply_channel === 'sms';
     if (!shouldSyncSms) {
       const { data: smsMsg } = await supabaseAdmin
@@ -142,16 +148,6 @@ export async function GET(
       if (smsMsg) shouldSyncSms = true;
     }
     if (shouldSyncSms) {
-      // Make sure the thread is marked as SMS so future GETs are fast (don't
-      // need the extra message-table lookup above) AND so other code paths
-      // that gate on external_reply_channel work as expected.
-      if (thread.external_reply_channel !== 'sms') {
-        await supabaseAdmin
-          .from('conversation_threads')
-          .update({ external_reply_channel: 'sms' })
-          .eq('id', threadId)
-          .eq('venue_id', venueId);
-      }
       await syncInboundSmsFromGhlForThread({
         venueId,
         threadId,
@@ -484,21 +480,6 @@ export async function POST(
           phoneE164,
         );
         external_email_sent = true;
-
-        // Mark this thread as the SMS thread so the GET handler pulls inbound
-        // replies from GHL on next load. Without this, an email-channel thread
-        // that received an outbound SMS would never get the bride's SMS reply
-        // synced back into it.
-        try {
-          await supabaseAdmin
-            .from('conversation_threads')
-            .update({ external_reply_channel: 'sms' })
-            .eq('id', threadId)
-            .eq('venue_id', venueId)
-            .neq('external_reply_channel', 'sms');
-        } catch (chErr) {
-          console.warn('[conversations] could not mark thread as SMS channel:', chErr);
-        }
 
         // iMessage-style: after we send an SMS, queue a couple of delayed
         // inbound polls so the user's reply lands automatically without
