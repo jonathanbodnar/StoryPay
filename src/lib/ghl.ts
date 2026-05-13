@@ -418,6 +418,54 @@ async function ensureV1ContactHasPhone(
 }
 
 /**
+ * v2 sibling of ensureV1ContactHasPhone. v2's `/contacts/{id}` endpoint
+ * accepts a partial-update PUT and is more permissive, but the same idea:
+ * we make sure GHL's CRM has the phone we plan to text before we ask GHL to
+ * send. Without this step v2 returns 400 "Contact phone number does not
+ * match with the toNumber" when we override, or 422 "Missing phone number"
+ * when we don't.
+ *
+ * Best-effort — errors are logged but not thrown.
+ */
+async function ensureV2ContactHasPhone(
+  accessToken: string,
+  contactId: string,
+  locationId: string,
+  phone: string,
+): Promise<void> {
+  // GET current contact to compare phones. v2 returns the contact at the
+  // root or wrapped in `{ contact: ... }` depending on the endpoint variant.
+  let currentPhone: string | null = null;
+  try {
+    const res = await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, { locationId }) as {
+      contact?: { phone?: string | null };
+      phone?: string | null;
+    };
+    currentPhone = res.contact?.phone ?? res.phone ?? null;
+  } catch (getErr) {
+    const m = getErr instanceof Error ? getErr.message : String(getErr);
+    console.warn(`[ghl] v2 GET /contacts/${contactId} failed (will still attempt PUT):`, m);
+  }
+
+  if (phonesMatch(currentPhone, phone)) {
+    console.log(`[ghl] v2 contact ${contactId} already has matching phone — skipping PUT`);
+    return;
+  }
+
+  try {
+    await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, {
+      method: 'PUT',
+      body: { phone, locationId },
+      locationId,
+    });
+    console.log(`[ghl] v2 PUT /contacts/${contactId} — wrote phone=${phone}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[ghl] v2 PUT /contacts/${contactId} failed (non-fatal):`, msg);
+  }
+}
+
+/**
  * Last-ditch attempt to force the phone onto a v1 GHL contact when the soft
  * `ensureV1ContactHasPhone` path didn't take. Returns true if the PUT
  * succeeded (or GHL already has the phone), false otherwise.
@@ -559,6 +607,16 @@ export async function sendSms(
   // Exchange agency token → location token if needed
   const token = await resolveLocationToken(accessToken, locationId);
 
+  // v2 path: GHL strictly enforces that the toNumber (if provided) matches
+  // the contact's stored phone. Passing one that differs by even formatting
+  // (e.g. `+16142262075` vs `6142262075`) returns 400 "Contact phone number
+  // does not match with the toNumber". Solution: PUT our phone onto the v2
+  // contact first (idempotent — no-op if it already matches), then send WITHOUT
+  // a toNumber override. GHL will use the contact's stored phone.
+  if (explicitPhone) {
+    await ensureV2ContactHasPhone(token, cid, locationId, explicitPhone);
+  }
+
   // Get or create a conversation, then send SMS through it
   try {
     let conversationId: string | null = await getGhlConversationIdForContact(accessToken, locationId, cid);
@@ -575,11 +633,6 @@ export async function sendSms(
     if (conversationId) {
       // GHL requires contactId on this route even when conversationId is set (otherwise 404 "Contact id not given").
       const msgBody: Record<string, unknown> = { type: 'SMS', conversationId, contactId: cid, message, locationId };
-      // v2 accepts an explicit `toNumber` override which bypasses GHL's
-      // contact-record phone lookup. When the caller knows the recipient phone
-      // we pass it through so the send works even if GHL's CRM copy of the
-      // contact is missing a phone.
-      if (explicitPhone) msgBody.toNumber = explicitPhone;
       if (attachments?.length) msgBody.attachments = attachments;
       const result = await ghlRequest('/conversations/messages', token, {
         method: 'POST',
@@ -595,7 +648,6 @@ export async function sendSms(
 
   // Direct fallback (contact only — still must include contactId)
   const fallbackBody: Record<string, unknown> = { type: 'SMS', contactId: cid, message, locationId };
-  if (explicitPhone) fallbackBody.toNumber = explicitPhone;
   if (attachments?.length) fallbackBody.attachments = attachments;
   return ghlRequest('/conversations/messages', token, {
     method: 'POST',
