@@ -206,6 +206,7 @@ export async function pushVenueCustomerToGhl(params: {
   if (phoneE164) putBody.phone = phoneE164;
   putBody.locationId = locationId;
 
+  let putErrorMessage: string | null = null;
   try {
     await ghlRequest(`/contacts/${encodeURIComponent(ghlContactId)}`, v2Token, {
       method: 'PUT',
@@ -222,12 +223,19 @@ export async function pushVenueCustomerToGhl(params: {
       isV1,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`${tag} PUT /contacts/${ghlContactId} failed: ${msg}`);
-    return { ok: false, reason: `put_failed: ${msg.slice(0, 200)}` };
+    putErrorMessage = e instanceof Error ? e.message : String(e);
+    console.warn(`${tag} PUT /contacts/${ghlContactId} failed: ${putErrorMessage}`);
+    // We don't return yet — we'll first try to verify whether the phone is
+    // already on a DIFFERENT contact (GHL's "duplicate phone" enforcement)
+    // and re-link if so. If that branch doesn't apply, we return failure
+    // at the bottom.
   }
 
-  // 3. Verify the write (eventual consistency — wait briefly).
+  // 3. Verify the write. If verification shows the phone DID make it onto
+  // this contact, we're done. If not (silent rejection due to duplicate
+  // phone, or explicit PUT error above), search GHL for a contact that
+  // already has this phone and re-link the SaaS contact to it.
+  let writeTook = false;
   if (phoneE164) {
     await new Promise((r) => setTimeout(r, 250));
     try {
@@ -238,14 +246,77 @@ export async function pushVenueCustomerToGhl(params: {
       )) as { contact?: { phone?: string | null }; phone?: string | null };
       const got = verify.contact?.phone ?? verify.phone ?? null;
       const normalizedGot = normalizePhone(got);
-      const match = normalizedGot === phoneE164;
-      console.log(`${tag} verify phone got=${got} expected=${phoneE164} match=${match}`);
-    } catch {
-      /* verification is best-effort */
+      writeTook = normalizedGot === phoneE164;
+      console.log(`${tag} verify phone got=${got} expected=${phoneE164} match=${writeTook}`);
+    } catch (verifyErr) {
+      const m = verifyErr instanceof Error ? verifyErr.message : String(verifyErr);
+      console.warn(`${tag} verify GET failed (treating as success if PUT was ok): ${m}`);
+      writeTook = !putErrorMessage;
     }
+
+    if (!writeTook) {
+      // GHL silently (or explicitly) refused to store the phone on this
+      // contact. The almost-certain reason is "another contact in this
+      // sub-account already owns this phone number" — GHL's
+      // allowDuplicatePhone defaults to false. Look up that contact and
+      // re-point our SaaS contact to it so the send succeeds.
+      const dupContactId = await findGhlContactIdByPhone(v2Token, locationId, phoneE164, tag);
+      if (dupContactId && dupContactId !== ghlContactId) {
+        console.log(
+          `${tag} found existing GHL contact ${dupContactId} owning phone ${phoneE164}. ` +
+          `Re-linking SaaS contact ${venueCustomerId} to it (was ${ghlContactId}). ` +
+          `This typically happens when two SaaS contacts share a phone — GHL collapses them to one.`,
+        );
+        await supabaseAdmin
+          .from('venue_customers')
+          .update({ ghl_contact_id: dupContactId })
+          .eq('id', venueCustomerId)
+          .eq('venue_id', venueId);
+        ghlContactId = dupContactId;
+        writeTook = true;
+      } else if (putErrorMessage) {
+        return { ok: false, reason: `put_failed: ${putErrorMessage.slice(0, 200)}` };
+      } else {
+        console.warn(
+          `${tag} phone ${phoneE164} did not stick on GHL contact ${ghlContactId} ` +
+          `and no duplicate-owner contact was found. The write was silently rejected by GHL.`,
+        );
+        return { ok: false, reason: 'put_silent_reject' };
+      }
+    }
+  } else if (putErrorMessage) {
+    return { ok: false, reason: `put_failed: ${putErrorMessage.slice(0, 200)}` };
   }
 
   return { ok: true, ghlContactId, updated: true };
+}
+
+/**
+ * Look up a GHL contact by phone number. Returns the contactId if exactly
+ * one (or the first one) matches, or null otherwise.
+ */
+async function findGhlContactIdByPhone(
+  v2Token: string,
+  locationId: string,
+  phoneE164: string,
+  tag: string,
+): Promise<string | null> {
+  try {
+    const res = (await ghlRequest(
+      `/contacts/search/duplicate?locationId=${encodeURIComponent(locationId)}&phone=${encodeURIComponent(phoneE164)}`,
+      v2Token,
+      { locationId },
+    )) as { contact?: { id?: string } };
+    const id = res?.contact?.id ?? null;
+    if (id) {
+      console.log(`${tag} search/duplicate by phone=${phoneE164} → contact ${id}`);
+      return id;
+    }
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e);
+    console.warn(`${tag} search/duplicate by phone=${phoneE164} failed: ${m}`);
+  }
+  return null;
 }
 
 /**
