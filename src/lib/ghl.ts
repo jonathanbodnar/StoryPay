@@ -83,29 +83,47 @@ export async function ghlRequest(
 }
 
 /**
- * Extract the companyId claim from a GHL agency JWT without verifying the
- * signature. GHL agency tokens are standard JWTs whose payload contains a
- * `companyId` field. This is distinct from a location's sub-account ID and
- * is required by the /oauth/locationToken exchange endpoint.
+ * Detect the GHL token type by looking at the string format.
  *
- * Falls back to GHL_COMPANY_ID env var if set, then to locationId (legacy
- * incorrect behaviour kept as last-resort so we never hard-crash).
+ *   - "pit-..."        → Private Integration Token (location-scoped, use as-is)
+ *   - JWT (3 parts)    → OAuth access token (agency or location, may need exchange)
+ *   - anything else    → legacy v1 Agency API Key (use as-is, location-scoped endpoints
+ *                        do not support these and will 401)
+ */
+function classifyToken(token: string): 'pit' | 'jwt' | 'legacy' {
+  if (token.startsWith('pit-')) return 'pit';
+  if (token.split('.').length === 3) return 'jwt';
+  return 'legacy';
+}
+
+/**
+ * Decode an unverified JWT payload. Returns null if the token is not a
+ * valid JWT (e.g. a PIT or a legacy v1 key).
+ */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    // base64url → base64
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    return JSON.parse(Buffer.from(padded, 'base64').toString('utf8')) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract the companyId claim from a GHL agency JWT. Distinct from the
+ * sub-account locationId and required by /oauth/locationToken.
  */
 function extractCompanyId(agencyToken: string, fallbackLocationId: string): string {
-  // Prefer explicit env var override
   if (process.env.GHL_COMPANY_ID) return process.env.GHL_COMPANY_ID;
-  try {
-    const parts = agencyToken.split('.');
-    if (parts.length >= 2) {
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8')) as Record<string, unknown>;
-      const cid = payload.companyId ?? payload.company_id ?? payload.sub;
-      if (typeof cid === 'string' && cid) return cid;
-    }
-  } catch {
-    // ignore — fall through to legacy fallback
+  const payload = decodeJwtPayload(agencyToken);
+  if (payload) {
+    const cid = payload.companyId ?? payload.company_id ?? payload.sub;
+    if (typeof cid === 'string' && cid) return cid;
   }
-  // Legacy fallback (was always wrong for most accounts, but keep so
-  // single-company setups where locationId === companyId still work)
   return fallbackLocationId;
 }
 
@@ -129,29 +147,45 @@ async function getLocationToken(agencyToken: string, locationId: string): Promis
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`GHL location token exchange failed ${res.status}: ${err}`);
+    throw new Error(`GHL location token exchange failed ${res.status}: ${err} (companyId=${companyId}, locationId=${locationId})`);
   }
 
   const data = await res.json();
-  return data.access_token || data.token;
+  const tok = data.access_token || data.token;
+  if (!tok) throw new Error(`GHL location token exchange returned no token: ${JSON.stringify(data)}`);
+  return tok;
 }
 
 /**
- * Resolve a location-scoped token. If the provided token is an agency JWT
- * (detected by the presence of GHL_AGENCY_API_KEY matching it), exchange it
- * for a location token first. Otherwise use it directly.
+ * Resolve a location-scoped token for use with location-scoped endpoints
+ * (e.g. /contacts/, /conversations/messages). Behaviour by token type:
+ *
+ *   - PIT (pit-...):   Already location-scoped — return as-is.
+ *   - JWT:             If the JWT was issued for the target location
+ *                      (authClassId === locationId), return as-is. Otherwise
+ *                      it's an agency JWT and must be exchanged.
+ *   - legacy v1 key:   Cannot be exchanged. Return as-is (caller will likely
+ *                      get a 401 — surface that rather than masking it).
+ *
+ * No silent fallback: if the exchange fails, the error propagates so callers
+ * see why instead of getting a confusing "Invalid JWT" downstream.
  */
 export async function resolveLocationToken(token: string, locationId: string): Promise<string> {
-  const isAgencyToken = token === process.env.GHL_AGENCY_API_KEY || token === process.env.GHL_PRIVATE_KEY;
-  if (isAgencyToken) {
-    try {
-      return await getLocationToken(token, locationId);
-    } catch (err) {
-      console.error('[ghl] location token exchange failed, falling back to agency token:', err);
-      return token; // fall back — may still work for some endpoints
-    }
-  }
-  return token;
+  const kind = classifyToken(token);
+
+  if (kind === 'pit') return token;
+  if (kind === 'legacy') return token; // can't exchange; caller will see 401 if it's wrong
+
+  // JWT path — inspect claims
+  const payload = decodeJwtPayload(token);
+  const authClass = (payload?.authClass as string | undefined)?.toLowerCase();
+  const authClassId = payload?.authClassId as string | undefined;
+
+  // Already a location-scoped JWT for this location → use directly
+  if (authClass === 'location' && authClassId === locationId) return token;
+
+  // Otherwise treat as an agency JWT and exchange. Let errors bubble up.
+  return await getLocationToken(token, locationId);
 }
 
 export async function sendSms(

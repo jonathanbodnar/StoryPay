@@ -321,15 +321,23 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
     throw new Error('venue is not connected to a Legacy messaging location');
   }
 
-  let token = await getWorkingToken(venue);
-  if (!token) {
+  const rawToken = await getWorkingToken(venue);
+  if (!rawToken) {
     throw new Error('no Legacy messaging token available (no per-venue OAuth and no agency key)');
   }
 
-  // Agency-level JWTs must be exchanged for a location-scoped token before
-  // hitting location-scoped endpoints like /contacts/. Per-venue OAuth tokens
-  // are already location-scoped and pass through unchanged.
-  token = await resolveLocationToken(token, venue.ghl_location_id);
+  // Resolve to a location-scoped token. resolveLocationToken can now throw
+  // (e.g. agency JWT exchange fails). If that happens with a stored per-venue
+  // token, fall back to the env agency key before giving up.
+  let token: string;
+  try {
+    token = await resolveLocationToken(rawToken, venue.ghl_location_id);
+  } catch (err) {
+    const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
+    if (!agencyKey || agencyKey === rawToken) throw err;
+    console.warn('[ghl-contacts-sync] initial token exchange failed, retrying with agency env key:', err);
+    token = await resolveLocationToken(agencyKey, venue.ghl_location_id);
+  }
 
   let startAfter: string | null   = null;
   let startAfterId: string | null = null;
@@ -358,7 +366,12 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
           }
         }
         if (refreshed) {
-          token = await resolveLocationToken(refreshed, venue.ghl_location_id);
+          try {
+            token = await resolveLocationToken(refreshed, venue.ghl_location_id);
+          } catch (resolveErr) {
+            const rmsg = resolveErr instanceof Error ? resolveErr.message : String(resolveErr);
+            throw new Error(`GHL auth failed (agency key cannot be exchanged for location ${venue.ghl_location_id}): ${rmsg}`);
+          }
           pageData = await fetchContactPage(token, venue.ghl_location_id, startAfter, startAfterId);
         } else {
           throw err;
