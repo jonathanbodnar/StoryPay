@@ -204,28 +204,67 @@ export function v1KeyMatchesLocation(token: string, locationId: string): boolean
  * key. v1 contact endpoints only accept location-scoped keys, so we need to
  * bootstrap from agency → location.
  *
+ * GHL v1 surfaces each location's apiKey in `GET /v1/locations/` (list), not
+ * always in `GET /v1/locations/{id}`. We try the single-location endpoint
+ * first (fewer bytes, doesn't depend on pagination) and fall back to the
+ * full list to scan for the matching location.
+ *
  * Cached at the venue level (venues.ghl_access_token gets the location key
  * stored after the first successful lookup).
  */
 export async function fetchV1LocationApiKey(agencyV1Key: string, locationId: string): Promise<string> {
-  const res = await fetch(`${GHL_API_V1_BASE}/locations/${encodeURIComponent(locationId)}`, {
+  // 1. Try single-location endpoint
+  {
+    const res = await fetch(`${GHL_API_V1_BASE}/locations/${encodeURIComponent(locationId)}`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${agencyV1Key}`, 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (res.ok) {
+      const data = await res.json() as Record<string, unknown>;
+      const k = pickApiKey(data);
+      if (k) return k;
+      // Fall through to list endpoint if the field isn't in this response shape.
+    } else if (res.status !== 401 && res.status !== 403 && res.status !== 404) {
+      const errText = await res.text();
+      throw new Error(`GHL v1 single-location lookup failed ${res.status}: ${errText} (locationId=${locationId}, agency key ${describeJwt(agencyV1Key)})`);
+    }
+  }
+
+  // 2. Fall back to listing all locations and finding ours
+  const res = await fetch(`${GHL_API_V1_BASE}/locations/`, {
     method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${agencyV1Key}`,
-      'Accept': 'application/json',
-    },
+    headers: { 'Authorization': `Bearer ${agencyV1Key}`, 'Accept': 'application/json' },
     signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`GHL v1 locations lookup failed ${res.status}: ${errText} (locationId=${locationId}, agency key ${describeJwt(agencyV1Key)})`);
+    throw new Error(`GHL v1 list-locations failed ${res.status}: ${errText} (agency key ${describeJwt(agencyV1Key)})`);
   }
-  const data = await res.json() as { apiKey?: string; location?: { apiKey?: string } };
-  const k = data.apiKey ?? data.location?.apiKey;
-  if (!k || typeof k !== 'string') {
-    throw new Error(`GHL v1 locations lookup returned no apiKey for ${locationId}. Your agency key may not have permission to access this sub-account.`);
+  const list = await res.json() as { locations?: Array<Record<string, unknown>> };
+  const locations = Array.isArray(list.locations) ? list.locations : [];
+  if (locations.length === 0) {
+    throw new Error(`GHL v1 list-locations returned no locations. Either your agency key has no sub-accounts assigned, or it's a location key (not an agency key). (agency key ${describeJwt(agencyV1Key)})`);
   }
-  return k;
+  const match = locations.find(l => (l.id ?? l._id) === locationId);
+  if (!match) {
+    const ids = locations.slice(0, 5).map(l => String(l.id ?? l._id)).join(', ');
+    throw new Error(`Sub-account ${locationId} not visible to your agency key. First few locations the key can see: [${ids}]${locations.length > 5 ? `, ... (${locations.length} total)` : ''}.`);
+  }
+  const k = pickApiKey(match);
+  if (k) return k;
+  // We found the location but it has no apiKey field — the location has never
+  // had a v1 key generated, or the agency tier doesn't expose it.
+  const keys = Object.keys(match).join(', ');
+  throw new Error(`Location ${locationId} found but no v1 apiKey on the record (fields returned: ${keys}). The sub-account may not have a v1 API key provisioned, or your agency plan tier (needs Agency Pro) does not include API key visibility.`);
+}
+
+function pickApiKey(obj: Record<string, unknown>): string | null {
+  const candidates = [obj.apiKey, obj.api_key, obj.locationApiKey, (obj.location as Record<string, unknown> | undefined)?.apiKey];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.length > 10) return c;
+  }
+  return null;
 }
 
 /**
