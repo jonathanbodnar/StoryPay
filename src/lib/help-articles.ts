@@ -857,22 +857,72 @@ When a new Venue Direct message arrives
       },
       {
         id: 'conversations-inbound',
-        title: 'Replies from contacts land back in the thread',
-        tags: ['inbound', 'reply', 'email reply', 'sms reply', 'resend', 'ghl', 'webhook', 'two way', 'threading'],
-        body: `Conversations is two-way. When a couple replies to an email you sent from the thread — or texts back the number you use for SMS — their reply appears in the same thread on the contact's Conversations page. No copy-paste, no checking two inboxes.
+        title: 'iMessage-style two-way replies — email & SMS land in the thread instantly',
+        tags: ['inbound', 'reply', 'email reply', 'sms reply', 'resend', 'ghl', 'webhook', 'two way', 'threading', 'realtime', 'imessage', 'instant', 'sent badge'],
+        body: `Conversations is two-way and iMessage-style fast. Replies — email or SMS — land back in the same thread within a second or two of arriving. No page refresh, no checking two inboxes.
+
+How fast is "instant"?
+- **Primary path (webhook)**: when the bride replies, the upstream provider (Resend for email, StoryVenue Legacy / GHL for SMS) fires a webhook into StoryVenue. The webhook handler inserts the message in the database and broadcasts it over Supabase Realtime. Your open thread is subscribed and renders the message immediately.
+- **Fallback path (polling)**: while a thread is open, the page polls for new messages every 3 seconds. The server-side GHL pull for SMS also runs each tick (deduped, so duplicates can't appear). So even if the webhook isn't configured yet, replies still arrive within 3 seconds.
+- **Catch-up polls (SMS)**: after a successful outbound SMS, three delayed inbound pulls fire at 5s, 15s, and 45s so the bride's first reply lands automatically even if you've navigated away.
+
+Send confirmation badges
+- Every outbound message shows a green "Sent" check next to the bubble once the upstream API confirms delivery, or a red "Failed" badge with the underlying error if the send was rejected.
+- The email card UI also shows "Sent to: …" using the actual address the message was delivered to (column conversation_messages.email_to). Robust to later email-address changes on the contact.
+
+Per-message channel — one thread can carry both
+- The composer's external mode has a Send via Email / Send via SMS toggle on each message. A thread can carry both at once — switching channels per message doesn't "convert" the thread. The inbound handlers also don't gate on thread channel, so an SMS reply lands in an email-started thread (and vice versa) without losing the conversation.
 
 Email replies (Resend inbound)
-- Every outbound email from Conversations uses a Reply-To address on your inbound subdomain (for example \`reply+<thread>+<token>@inbound.storyvenue.com\`). When the couple hits Reply, their mail client sends back to that address.
-- Resend receives the message through the \`email.received\` webhook wired at \`/api/webhooks/inbound-email\`, verifies the signed token, and appends the reply to the same thread. Quoted history is stripped so you only see what they typed.
-- What you need in your workspace: a Resend inbound domain (MX records added in DNS), the \`email.received\` webhook pointed at \`<your-host>/api/webhooks/inbound-email\`, and the environment variables \`RESEND_API_KEY\`, \`CONVERSATIONS_INBOUND_DOMAIN\`, \`CONVERSATIONS_INBOUND_SECRET\` set on the host. (Optional \`INBOUND_EMAIL_WEBHOOK_TOKEN\` lets you reject unknown callers.)
+- Every outbound email gets a Reply-To address on the inbound subdomain (e.g. \`reply+<threadId>+<sig>@<CONVERSATIONS_INBOUND_DOMAIN>\`). The HMAC sig is keyed by CONVERSATIONS_INBOUND_SECRET so we can verify a reply belongs to a real thread before ingesting.
+- When the couple hits Reply, their mail client sends to that signed address. Resend receives it via MX, parses, and POSTs \`email.received\` to \`/api/webhooks/inbound-email\`.
+- The handler verifies Svix signature → extracts threadId + HMAC sig → verifies → inserts the row → broadcasts → your thread updates in real time.
+- Quoted history is stripped so you only see what they typed in this reply.
 
-SMS replies (Legacy inbound)
-- Outbound SMS goes through your connected StoryVenue Legacy account's A2P-approved number. Inbound replies are forwarded to StoryVenue's inbound SMS webhook, and the message is attached to the matching thread by phone number.
-- Troubleshooting: if SMS replies aren't appearing, confirm the contact's phone is on file in E.164 format, that Legacy messaging still shows "Connected" in Settings → Integrations.
+SMS replies (StoryVenue Legacy / GHL inbound)
+- Outbound SMS goes through your connected Legacy sub-account's A2P-approved number. Inbound replies arrive via the GHL webhook (POST /api/webhooks/ghl, event \`InboundMessage\`) and are threaded by GHL contact id back into the same thread.
+- The 3-second poll also pulls the latest messages from GHL's /conversations/{id}/messages endpoint. The filter recognizes both \`SMS\`/\`TEXT\` strings AND GHL's numeric \`type: 2\` enum.
+
+Default sending domain — works out of the box
+- Every venue can send email immediately using StoryVenue's verified default domain — no DNS work required. Outbound goes From: StoryVenue's domain with the venue's brand email as Reply-To, so replies still route to the venue. To send From: your own domain, verify it in Resend and the system uses it automatically.
 
 If a reply doesn't show up
-- For email: check that DNS MX records are still valid, the Resend inbound webhook is \`Active\`, and your Railway (or other host) logs show the \`/api/webhooks/inbound-email\` route receiving the event. "Address not found" bounces usually mean the reply-to domain isn't set up on Resend yet.
-- For SMS: Legacy messaging must be connected and the sending number must match the contact. Messages to numbers not linked to any contact are dropped silently.`,
+- **Email replies missing**: open Settings → Inbound Email Replies. The status panel shows a green "Configured" or amber "Needs setup" badge with a per-item checklist for the four required env vars (RESEND_API_KEY, CONVERSATIONS_INBOUND_DOMAIN, CONVERSATIONS_INBOUND_SECRET, RESEND_WEBHOOK_SECRET / INBOUND_EMAIL_WEBHOOK_TOKEN). It also shows the webhook URL to paste into Resend's "email.received" subscription, plus the DNS MX records that need to point at Resend's inbound servers.
+- **SMS replies missing**: confirm the venue's Legacy messaging is connected (Settings → Integrations). Optional: paste the StoryVenue webhook URL into GHL → Settings → Integrations → Webhooks for true instant delivery (subscribe to \`InboundMessage\`, \`ContactCreate\`, \`ContactUpdate\`, \`ContactDndUpdate\`). Without this the 3-second poll still catches the reply within a few seconds.`,
+      },
+      {
+        id: 'conversations-sms-troubleshooting',
+        title: 'SMS won\'t send — diagnose and fix',
+        tags: ['sms', 'sms not sending', 'missing phone number', 'ghl', 'storyvenue legacy', 'troubleshooting', '422', 'phone number', 'diagnose'],
+        body: `If outbound SMS fails with "Missing phone number" or "GHL has no phone on file" — even when you JUST added the phone in the SaaS — read this. We've made it self-healing in most cases, plus there's a diagnostic endpoint that pinpoints the exact problem.
+
+The most common cause
+GHL has no phone stored on the contact record, even though StoryVenue does. The GHL CRM is the source of the phone for the SMS-send endpoint, so if their record is blank the send fails.
+
+The automatic fix
+Three things now happen automatically so this should usually heal itself:
+1. **On every contact save in StoryVenue** (phone, name, or email change), we PATCH back to GHL via a safe GET-then-merge-then-PUT. The push runs in the background so the save UI is instant.
+2. **Right before every outbound SMS send**, we ALSO run the push synchronously — so even if you saved the phone three seconds ago and the async push is still in flight, the pre-send push completes first and the SMS succeeds.
+3. **Duplicate phone numbers across contacts** are detected. If GHL refuses the push because another contact in that sub-account already owns the phone (GHL's allowDuplicatePhone=false constraint), we search GHL by phone, find the owning contact, and re-link your SaaS contact's ghl_contact_id to that owner. Both SaaS contacts effectively share one GHL twin. SMS still works.
+
+Manual fix — open the contact, hit Save
+If something gets out of sync, the fastest fix is: open the contact profile in StoryVenue → click Save. That re-triggers the push. Then try the SMS again.
+
+Run the diagnostic
+GET /api/integrations/ghl/diagnose-sms?contactId=<venue_customers.id> returns a JSON blob with these checks:
+- venue: GHL connected? location_id set?
+- token: which kind (PIT / v1 / v2 OAuth)?
+- sub_account_phone_numbers: does the sub-account actually have a provisioned FROM number? (No number = no send, regardless of any contact state.)
+- contact_local: phone (raw + E.164 normalized), email, DND flags
+- contact_ghl: GHL's stored phone, comparison with local, sync status
+
+If sub_account_phone_numbers shows zero numbers, open the sub-account in GHL → Settings → Phone Numbers and buy or assign a Twilio number. SMS cannot send from a sub-account that has no FROM number, regardless of any contact state.
+
+Railway logs to look for
+- \`[ghl-push:pre_sms_send] PUT /contacts/<id> ok\` — push succeeded
+- \`[ghl-push:pre_sms_send] verify phone got=… expected=… match=true\` — write took
+- \`[ghl-push:pre_sms_send] found existing GHL contact <id> owning phone <#>\` — duplicate detected and re-linked
+- \`[ghl] SMS sent via …\` — the actual SMS request succeeded`,
       },
     ],
   },
@@ -2831,6 +2881,82 @@ For two-way sync (Google Calendar only)
 If you want StoryVenue events written to Google Calendar AND Google events visible inside StoryVenue, go to Settings → Calendar → Connections and connect your Google account there. See the "Connecting Google Calendar for two-way sync" article for details.`,
       },
       {
+        id: 'int-legacy',
+        title: 'StoryVenue Legacy messaging (GHL) — connect, sync, and use the SaaS as your source of truth',
+        tags: ['legacy', 'ghl', 'gohighlevel', 'storyvenue legacy', 'connect', 'sub-account', 'location id', 'private integration token', 'pit', 'api key', 'sms', 'contact sync', 'webhook', 'inbound webhook', 'integrations', 'resync', 'duplicate', 'two-way sync'],
+        body: `StoryVenue Legacy messaging is the integration that powers two-way SMS and the bulk contact import from your GoHighLevel sub-account. Once connected, **StoryVenue becomes the system of record for your contacts** — you don't need to keep using GHL day-to-day.
+
+Connect your sub-account
+1. Open Settings → Integrations → StoryVenue Legacy.
+2. Paste your **Sub-account Location ID** (the GHL location ID for your venue's sub-account).
+3. Paste either a **Private Integration Token** (\`pit-…\`) or a **Location API Key**. The form auto-detects which kind it is.
+4. Save. A green "Connected" badge appears.
+
+Initial contact sync
+- Click "Sync from StoryVenue Legacy". A progress bar shows fetched vs total contacts.
+- The sync runs in the background — there's no Cloudflare 524 timeout even for big lists. If the 75-second wall-clock budget is hit on the first call, the hourly cron job finishes the rest.
+- The sync is **idempotent**: it matches by ghl_contact_id first, then by email, then inserts. **Re-running it can never create duplicates.** Hit it any time you've added contacts in GHL and want them in StoryVenue.
+
+After the initial sync — StoryVenue is the system of record
+- Edit a contact in StoryVenue → the change auto-pushes back to GHL in the background. You don't need to make the same edit twice.
+- Create a new contact in StoryVenue → it's created in GHL too.
+- Send an SMS from StoryVenue → right before the GHL API call, we do a synchronous pre-send push of the contact's current state to GHL. So even a phone number you added 2 seconds ago lands in GHL before the SMS request — no "Missing phone number" error.
+- All push attempts log \`[ghl-push:<reason>]\` lines in Railway with sent fields + verify-GET result, so you can audit exactly what made it to GHL.
+
+Duplicate phone numbers across SaaS contacts
+GHL refuses to store the same phone on two contacts in one sub-account (its allowDuplicatePhone defaults to false). If you have two SaaS contacts that share a phone number — e.g. test accounts, or one person with two profiles — StoryVenue detects the silent rejection, searches GHL by phone to find the owning contact, and re-links the SaaS contact's ghl_contact_id to that owner. Both SaaS contacts effectively share one GHL twin. SMS sending still works because we use the GHL contact that actually owns the phone.
+
+Inbound webhook URL — for instant (truly real-time) replies
+- Settings → Integrations → StoryVenue Legacy shows an **Inbound Webhook (optional)** card with the URL to paste into GHL.
+- In GHL: Settings → Integrations → Webhooks → paste \`https://app.storyvenue.com/api/webhooks/ghl\` → subscribe to **InboundMessage**, **ContactCreate**, **ContactUpdate**, **ContactDndUpdate**.
+- Without the webhook, replies still land in your thread via the 3-second polling fallback. The webhook just makes it instant and works even when no one has the thread open.
+
+DND mirroring
+- GHL's ContactDndUpdate webhooks mirror automatically into StoryVenue's sms_dnd / conversation_dnd_* flags. STOP / START SMS keywords also bidirectionally sync between StoryVenue and GHL. You don't need to manage DND in two places.
+
+Diagnose SMS issues
+- GET \`/api/integrations/ghl/diagnose-sms?contactId=<venue_customers.id>\` returns a JSON blob with per-step checks: venue connection, token kind (PIT / v1 / v2 OAuth), sub-account provisioned phone numbers (you need at least one FROM number), local vs GHL phone comparison, DND flags.
+- 99% of "SMS won't send" issues fall into one of two buckets: (1) the sub-account has no FROM number provisioned in GHL → buy/assign a Twilio number in GHL → Settings → Phone Numbers. (2) The contact's phone got out of sync → just hit Save on the contact in StoryVenue and the push will write it back to GHL.
+
+Disconnecting
+To disconnect, clear the Sub-account ID and access token fields and Save. The "Connected" badge turns gray. SMS sending stops; contacts already synced into StoryVenue remain — they're now living entirely in the SaaS database.`,
+      },
+      {
+        id: 'int-inbound-email-status',
+        title: 'Inbound Email Replies — Settings diagnostic for the email reply pipeline',
+        tags: ['inbound email', 'email reply', 'resend', 'inbound webhook', 'mx records', 'verified domain', 'resend webhook secret', 'conversations_inbound_domain', 'reply not appearing', 'troubleshoot email', 'settings panel'],
+        body: `Inbound email replies require a small infrastructure stack to work. StoryVenue surfaces a live status panel on Settings to tell you exactly which piece is missing if replies aren't landing in your chat thread.
+
+What it shows
+Settings → scroll past Integrations → "Inbound Email Replies" card.
+- Green "Configured" badge: every required piece is in place.
+- Amber "Needs setup" badge: at least one piece is missing.
+
+Per-item checklist (live status)
+1. **Resend API key** (\`RESEND_API_KEY\`) — needed to fetch the parsed body when a reply arrives.
+2. **Inbound domain** (\`CONVERSATIONS_INBOUND_DOMAIN\`) — the domain used in the Reply-To header (e.g. \`reply.storypay.io\`). Without this, outbound emails are sent without a tracked Reply-To, so replies route to your brand email and are never imported into the chat thread.
+3. **Inbound HMAC secret** (\`CONVERSATIONS_INBOUND_SECRET\`) — signs the per-thread reply token so replies are matched to the right thread.
+4. **Webhook signing secret** (\`RESEND_WEBHOOK_SECRET\` or \`INBOUND_EMAIL_WEBHOOK_TOKEN\`) — verifies the Resend webhook actually came from Resend. In production at least one MUST be set or the webhook rejects calls as Unauthorized.
+
+The webhook URL with a Copy button
+The panel also surfaces \`https://<your-app-host>/api/webhooks/inbound-email\` with a Copy button. Paste this into your Resend dashboard under Webhooks → email.received.
+
+Two pieces the panel can't verify automatically
+- **DNS MX records** on the inbound domain must point at Resend's MX servers. Add the MX records shown in Resend → Domains → Inbound. If you skip this, the email never reaches Resend.
+- **Resend webhook subscription** for the \`email.received\` event must be active and pointed at the webhook URL above.
+
+What "ready to receive" looks like
+- Outbound email from Conversations carries a \`Reply-To: reply+<threadId>+<sig>@<inbound-domain>\` header.
+- Bride's mail client sends her reply to that signed address.
+- Resend's MX receives it → fires \`email.received\` webhook → \`/api/webhooks/inbound-email\` verifies the Svix signature → fetches the parsed body → verifies the per-thread HMAC sig → inserts the row → broadcasts to Supabase Realtime.
+- Your open thread renders the reply within ~1 second of Resend receiving it. No refresh required.
+
+If replies still don't appear after the panel says Configured
+- The 3-second polling fallback always runs while a thread is open — so even if the webhook isn't firing, replies arrive within 3 seconds.
+- Check Railway logs for \`[inbound-email] webhook received\` — confirms Resend hit our endpoint.
+- Look for \`[inbound-email] skipped\` lines — they'll tell you if the signature verification, signed token verification, or the From-vs-contact-email match check is failing.`,
+      },
+      {
         id: 'int-quickbooks',
         title: 'Connecting QuickBooks Online',
         tags: ['quickbooks', 'accounting', 'integration', 'sync', 'qbo'],
@@ -3714,7 +3840,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/contacts': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents', 'cust-dnd'],
 
   // Conversations (unified inbox)
-  '/dashboard/conversations': ['conversations-overview', 'conversations-venue-direct', 'conversations-inbound', 'conversations-profile-drawer', 'cust-profile'],
+  '/dashboard/conversations': ['conversations-overview', 'conversations-venue-direct', 'conversations-inbound', 'conversations-sms-troubleshooting', 'conversations-profile-drawer', 'cust-profile'],
   '/dashboard/concierge':     ['conversations-concierge-inbox', 'conversations-venue-direct', 'conversations-overview'],
 
   // Calendar
@@ -3768,14 +3894,14 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/settings/branding':        ['brand-setup', 'brand-colors-saved', 'brand-social-networks', 'listing-media-library', 'me-block-social', 'me-block-address'],
   '/dashboard/settings/email-templates': ['notif-settings', 'email-types', 'email-variables', 'me-overview'],
   '/dashboard/settings/calendar':        ['cal-settings-overview', 'cal-multi-calendar', 'cal-per-calendar-rules', 'cal-notification-overview', 'cal-notification-reminders', 'cal-settings-booking-rules', 'cal-settings-google-sync'],
-  '/dashboard/settings/integrations':    ['int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
+  '/dashboard/settings/integrations':    ['int-legacy', 'int-inbound-email-status', 'int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
   '/dashboard/settings/notifications':   ['notif-settings', 'email-types', 'email-variables', 'sms-notifications', 'merge-vars-overview'],
   '/dashboard/settings/push':            ['push-settings', 'push-overview', 'push-install-app'],
   '/dashboard/directory-billing':        ['billing-plans-overview', 'billing-verified-sponsored', 'gs-overview'],
   '/dashboard/listing/directory':        ['billing-verified-sponsored', 'billing-plans-overview', 'listing-overview'],
   '/dashboard/listing/pricing-guide':    ['billing-pricing-guide', 'listing-overview', 'listing-photos'],
-  '/dashboard/settings':                 ['gs-overview', 'gs-onboarding'],
+  '/dashboard/settings':                 ['gs-overview', 'gs-onboarding', 'int-legacy', 'int-inbound-email-status'],
 
   // Support
   '/dashboard/support': ['support-contact', 'ai-overview', 'ai-escalate'],
