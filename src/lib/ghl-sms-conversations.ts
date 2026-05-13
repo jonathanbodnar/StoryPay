@@ -451,12 +451,23 @@ function isGhlApiInboundSmsMessage(msg: Record<string, unknown>): boolean {
   const dir = String(msg.direction ?? '').toLowerCase();
   if (dir === 'outbound') return false;
 
-  const type = String(msg.type ?? msg.messageType ?? msg.channel ?? '').toUpperCase();
-  if (type === 'SMS' || type === 'TEXT') return true;
+  // GHL's /conversations/{id}/messages endpoint returns SMS as
+  //   { type: 2, ... }
+  // where `type` is a numeric enum (1=email, 2=sms, 3=call, ...). The same
+  // value also appears under `messageType` / `messageTypeId` depending on
+  // the API surface, so check all of them and accept both numeric and
+  // string forms.
+  const numericCandidates = [msg.type, msg.messageType, msg.messageTypeId];
+  for (const c of numericCandidates) {
+    if (c === 2 || c === '2') return true;
+  }
+
+  const typeStr = String(msg.type ?? msg.messageType ?? msg.channel ?? '').toUpperCase();
+  if (typeStr === 'SMS' || typeStr === 'TEXT' || typeStr === 'TYPE_SMS') return true;
+
   const mts = String(msg.messageTypeString ?? '').toUpperCase();
   if (mts.includes('SMS')) return true;
-  const id = msg.messageTypeId;
-  if (id === 2 || id === '2') return true;
+
   return false;
 }
 
