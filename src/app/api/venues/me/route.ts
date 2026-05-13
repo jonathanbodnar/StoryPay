@@ -110,6 +110,8 @@ export async function PATCH(request: Request) {
     payment_reminders_enabled: true,
     payment_reminder_offsets: true,
     accept_ach: true,  // toggle for ACH (bank account / eCheck) on hosted checkout
+    ghl_location_id: true,
+    ghl_connected:   true,
   };
   const updates: Record<string, unknown> = {};
 
@@ -217,7 +219,8 @@ export async function PATCH(request: Request) {
       'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note', 'monthly_booking_goal',
       'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets',
       'accept_ach',
-      'payment_reminders_enabled', 'payment_reminder_offsets'];
+      'payment_reminders_enabled', 'payment_reminder_offsets',
+      'ghl_location_id', 'ghl_connected'];
     for (const k of knownCols) {
       if (k in updates) safeUpdates[k] = updates[k];
     }
