@@ -29,6 +29,7 @@ interface VenueInfo {
  onboarding_status: string | null;
  ghl_connected: boolean;
  ghl_location_id: string | null;
+ ghl_access_token: string | null; // masked '••••XXXX' or null on GET
  ghl_contacts_synced_at: string | null;
  legacy_location_id?: string | null;
  lunarpay_merchant_id: number | null;
@@ -84,6 +85,34 @@ export default function SettingsPage() {
  const [savingLocationId, setSavingLocationId] = useState(false);
  const [locationIdSaved, setLocationIdSaved] = useState(false);
  const [locationIdError, setLocationIdError] = useState('');
+
+ // StoryVenue Legacy API Key (v1 location key) — entered once per sub-account
+ const [apiKeyInput, setApiKeyInput] = useState('');
+ const [savingApiKey, setSavingApiKey] = useState(false);
+ const [apiKeySaved, setApiKeySaved] = useState(false);
+ const [apiKeyError, setApiKeyError] = useState('');
+ const [showApiKeyHelp, setShowApiKeyHelp] = useState(false);
+
+ async function saveApiKey() {
+   const val = apiKeyInput.trim();
+   if (!val) return;
+   setSavingApiKey(true);
+   setApiKeyError('');
+   setApiKeySaved(false);
+   try {
+     const res = await fetch('/api/venues/me', {
+       method: 'PATCH',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ ghl_access_token: val, ghl_connected: true }),
+     });
+     if (!res.ok) { setApiKeyError('Failed to save. Please try again.'); return; }
+     setVenue(prev => prev ? { ...prev, ghl_access_token: `••••${val.slice(-4)}`, ghl_connected: true } : prev);
+     setApiKeySaved(true);
+     setApiKeyInput('');
+     setTimeout(() => setApiKeySaved(false), 3000);
+   } catch { setApiKeyError('Failed to save. Please try again.'); }
+   finally { setSavingApiKey(false); }
+ }
 
  async function saveLocationId() {
    const val = locationIdInput.trim();
@@ -344,6 +373,50 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
 </div>
 {locationIdSaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
 {locationIdError && <p className="mt-2 text-xs text-red-600">{locationIdError}</p>}
+</div>
+
+{/* Legacy API Key — required for contact sync + SMS */}
+<div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+  <div className="flex items-center justify-between mb-2">
+    <p className="text-xs font-medium text-gray-700">API Key</p>
+    <button
+      type="button"
+      onClick={() => setShowApiKeyHelp(s => !s)}
+      className="text-xs text-gray-500 hover:text-gray-900 underline decoration-dotted underline-offset-2"
+    >
+      {showApiKeyHelp ? 'Hide' : 'Where do I find this?'}
+    </button>
+  </div>
+  {showApiKeyHelp && (
+    <div className="mb-3 rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-xs text-gray-600 space-y-1">
+      <p className="font-medium text-gray-900">Grab the API key from your StoryVenue Legacy sub-account:</p>
+      <ol className="list-decimal pl-4 space-y-0.5">
+        <li>Log into your StoryVenue Legacy sub-account.</li>
+        <li>Open <strong>Settings → Business Profile</strong> (scroll to the bottom) — or <strong>Settings → API Key</strong> in the newer UI.</li>
+        <li>Copy the <strong>API Key</strong> value and paste it below.</li>
+      </ol>
+      <p className="text-[11px] text-gray-400 pt-1">Stored encrypted. Only the last 4 characters are ever shown again.</p>
+    </div>
+  )}
+  <div className="flex gap-2">
+    <input
+      type="password"
+      value={apiKeyInput}
+      onChange={e => setApiKeyInput(e.target.value)}
+      placeholder={venue.ghl_access_token ? `${venue.ghl_access_token} (paste a new one to replace)` : 'Paste your Legacy API Key here'}
+      className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none font-mono"
+    />
+    <button
+      onClick={() => void saveApiKey()}
+      disabled={savingApiKey || !apiKeyInput.trim()}
+      className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
+    >
+      {savingApiKey ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+      {savingApiKey ? 'Saving…' : 'Save'}
+    </button>
+  </div>
+  {apiKeySaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
+  {apiKeyError && <p className="mt-2 text-xs text-red-600">{apiKeyError}</p>}
 </div>
 
 {/* Contact sync — only show when connected */}
