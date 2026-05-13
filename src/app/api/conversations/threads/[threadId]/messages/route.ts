@@ -4,7 +4,8 @@ import { getVenueId } from '@/lib/auth-helpers';
 import { getSessionUser } from '@/lib/session';
 import { sendEmail } from '@/lib/email';
 import { conversationReaderRef } from '@/lib/conversation-reader';
-import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
+import { findOrCreateContact, normalizePhone, sendSms } from '@/lib/ghl';
+import { ensureLocationToken } from '@/lib/ghl-auth';
 import { buildConversationsReplyToEmail } from '@/lib/conversations-inbound-email';
 import { syncInboundSmsFromGhlForThread } from '@/lib/ghl-sms-conversations';
 import { broadcastBrideMessage } from '@/lib/realtime/broadcast';
@@ -377,9 +378,16 @@ export async function POST(
         );
       }
 
-      const ghlToken = getGhlToken(vrow as { ghl_access_token?: string | null });
-      if (!ghlToken) {
-        return NextResponse.json({ error: 'Legacy messaging credentials are not configured for this venue.' }, { status: 400 });
+      let ghlToken: string;
+      try {
+        ghlToken = await ensureLocationToken({
+          id: venueId,
+          ghl_location_id: vrow.ghl_location_id as string,
+          ghl_access_token: (vrow as { ghl_access_token?: string | null }).ghl_access_token ?? null,
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Legacy messaging credentials are not configured for this venue.';
+        return NextResponse.json({ error: msg }, { status: 400 });
       }
 
       const phoneE164 = normalizePhone((contact as { phone?: string | null } | null)?.phone ?? null);

@@ -168,7 +168,8 @@ function extractCompanyId(agencyToken: string, fallbackLocationId: string): stri
 
 /**
  * Build a human-readable diagnostic about a JWT's claims (without leaking the
- * token itself). Used to surface "your token is expired" type errors clearly.
+ * token itself). Used to surface "your token is expired" / "wrong location"
+ * errors clearly.
  */
 function describeJwt(token: string): string {
   const p = decodeJwtPayload(token);
@@ -176,11 +177,55 @@ function describeJwt(token: string): string {
   const exp = typeof p.exp === 'number' ? p.exp : null;
   const iat = typeof p.iat === 'number' ? p.iat : null;
   const authClass = (p.authClass as string | undefined) ?? '<none>';
+  const companyId = (p.companyId as string | undefined) ?? (p.company_id as string | undefined) ?? '<none>';
+  const locationIdClaim = (p.locationId as string | undefined) ?? (p.location_id as string | undefined) ?? '<none>';
+  const version = (p.version as string | number | undefined) ?? '<none>';
   const nowSec = Math.floor(Date.now() / 1000);
   const expIso = exp ? new Date(exp * 1000).toISOString() : '<none>';
   const iatIso = iat ? new Date(iat * 1000).toISOString() : '<none>';
   const expired = exp ? exp < nowSec : false;
-  return `authClass=${authClass}, iat=${iatIso}, exp=${expIso}, expired=${expired}`;
+  return `authClass=${authClass}, version=${version}, company_id=${companyId}, location_id=${locationIdClaim}, iat=${iatIso}, exp=${expIso}, expired=${expired}`;
+}
+
+/**
+ * Returns true if the given v1 JWT carries a `location_id` claim matching the
+ * target locationId. Returns false for agency-scoped v1 keys (no location_id)
+ * and for keys scoped to a different location.
+ */
+export function v1KeyMatchesLocation(token: string, locationId: string): boolean {
+  const p = decodeJwtPayload(token);
+  if (!p) return false;
+  const claim = (p.locationId as string | undefined) ?? (p.location_id as string | undefined);
+  return typeof claim === 'string' && claim === locationId;
+}
+
+/**
+ * Get the location-scoped v1 API key for a sub-account using the agency v1
+ * key. v1 contact endpoints only accept location-scoped keys, so we need to
+ * bootstrap from agency → location.
+ *
+ * Cached at the venue level (venues.ghl_access_token gets the location key
+ * stored after the first successful lookup).
+ */
+export async function fetchV1LocationApiKey(agencyV1Key: string, locationId: string): Promise<string> {
+  const res = await fetch(`${GHL_API_V1_BASE}/locations/${encodeURIComponent(locationId)}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${agencyV1Key}`,
+      'Accept': 'application/json',
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`GHL v1 locations lookup failed ${res.status}: ${errText} (locationId=${locationId}, agency key ${describeJwt(agencyV1Key)})`);
+  }
+  const data = await res.json() as { apiKey?: string; location?: { apiKey?: string } };
+  const k = data.apiKey ?? data.location?.apiKey;
+  if (!k || typeof k !== 'string') {
+    throw new Error(`GHL v1 locations lookup returned no apiKey for ${locationId}. Your agency key may not have permission to access this sub-account.`);
+  }
+  return k;
 }
 
 /**

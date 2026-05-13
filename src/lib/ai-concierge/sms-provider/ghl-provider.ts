@@ -18,10 +18,10 @@ import { supabaseAdmin } from '@/lib/supabase';
 import {
   sendSms as ghlSendSms,
   findOrCreateContact,
-  getGhlToken,
   getGhlAgencyKey,
   normalizePhone,
 } from '@/lib/ghl';
+import { ensureLocationToken } from '@/lib/ghl-auth';
 import type {
   SmsProvider,
   SmsSendInput,
@@ -75,9 +75,16 @@ export const ghlSmsProvider: SmsProvider = {
       return errResult('auth_error', 'Venue has no GHL location_id — cannot send via GHL');
     }
     const locationId = venue.ghl_location_id;
-    let accessToken = getGhlToken({ ghl_access_token: venue.ghl_access_token });
-    if (!accessToken) {
-      return errResult('auth_error', 'No GHL access token (per-venue OAuth or agency key)');
+    let accessToken: string;
+    try {
+      accessToken = await ensureLocationToken({
+        id: venue.id,
+        ghl_location_id: locationId,
+        ghl_access_token: venue.ghl_access_token,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'No working GHL token';
+      return errResult('auth_error', msg);
     }
 
     // 2. Lead

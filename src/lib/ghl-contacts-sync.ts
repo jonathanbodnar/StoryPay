@@ -12,7 +12,14 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
-import { getGhlToken, ghlRequest, normalizePhone, refreshAccessToken, resolveLocationToken } from '@/lib/ghl';
+import {
+  ghlRequest,
+  normalizePhone,
+  refreshAccessToken,
+  resolveLocationToken,
+  classifyToken,
+} from '@/lib/ghl';
+import { ensureLocationToken } from '@/lib/ghl-auth';
 import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-import.storyvenue.placeholder';
@@ -78,9 +85,6 @@ interface VenueRow {
  * Get a working access token for the venue. If the venue has a refresh token
  * and the API rejects the access token, refresh and persist.
  */
-async function getWorkingToken(venue: VenueRow): Promise<string | null> {
-  return getGhlToken(venue);
-}
 
 async function tryRefresh(venue: VenueRow): Promise<string | null> {
   if (!venue.ghl_refresh_token) return null;
@@ -321,22 +325,23 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
     throw new Error('venue is not connected to a Legacy messaging location');
   }
 
-  const rawToken = await getWorkingToken(venue);
-  if (!rawToken) {
-    throw new Error('no Legacy messaging token available (no per-venue OAuth and no agency key)');
-  }
+  // Single helper handles all token types and caches v1 location keys.
+  let token = await ensureLocationToken({
+    id: venue.id,
+    ghl_location_id: venue.ghl_location_id,
+    ghl_access_token: venue.ghl_access_token,
+  });
 
-  // Resolve to a location-scoped token. resolveLocationToken can now throw
-  // (e.g. agency JWT exchange fails). If that happens with a stored per-venue
-  // token, fall back to the env agency key before giving up.
-  let token: string;
-  try {
-    token = await resolveLocationToken(rawToken, venue.ghl_location_id);
-  } catch (err) {
-    const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
-    if (!agencyKey || agencyKey === rawToken) throw err;
-    console.warn('[ghl-contacts-sync] initial token exchange failed, retrying with agency env key:', err);
-    token = await resolveLocationToken(agencyKey, venue.ghl_location_id);
+  // For v2 OAuth, also do the location-token exchange (no-op for v1 / PIT).
+  if (classifyToken(token) === 'v2-oauth') {
+    try {
+      token = await resolveLocationToken(token, venue.ghl_location_id);
+    } catch (err) {
+      const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
+      if (!agencyKey || agencyKey === token) throw err;
+      console.warn('[ghl-contacts-sync] OAuth token exchange failed, retrying with env agency key:', err);
+      token = await resolveLocationToken(agencyKey, venue.ghl_location_id);
+    }
   }
 
   let startAfter: string | null   = null;
@@ -427,9 +432,23 @@ export async function syncSingleGhlContact(
   if (!venueRaw) return false;
   const venue = venueRaw as VenueRow;
 
-  const rawToken = await getWorkingToken(venue);
-  if (!rawToken) return false;
-  let token = await resolveLocationToken(rawToken, locationId);
+  let token: string;
+  try {
+    token = await ensureLocationToken({
+      id: venue.id,
+      ghl_location_id: locationId,
+      ghl_access_token: venue.ghl_access_token,
+    });
+  } catch {
+    return false;
+  }
+  if (classifyToken(token) === 'v2-oauth') {
+    try {
+      token = await resolveLocationToken(token, locationId);
+    } catch {
+      // fall through and try the call anyway
+    }
+  }
 
   try {
     let result: { contact?: GhlContact };
