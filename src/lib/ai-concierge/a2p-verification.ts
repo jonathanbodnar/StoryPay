@@ -345,8 +345,10 @@ export async function diagnoseVenueA2pStatus(venueId: string): Promise<A2pDiagno
     // Try with the primary token first. If all probes 401, retry with the
     // agency key (covers legacy clients with a stale per-venue token).
     const agencyKey = getGhlAgencyKey();
+    // Pre-resolve agency keys to location-scoped tokens (needed for location-scoped endpoints).
+    const resolvedPrimary = await resolveLocationToken(accessToken, venue.ghl_location_id!);
     let headers: Record<string, string> = {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${resolvedPrimary}`,
       'Content-Type': 'application/json',
       Version: '2021-07-28',
       'X-Location-Id': venue.ghl_location_id!,
@@ -356,21 +358,23 @@ export async function diagnoseVenueA2pStatus(venueId: string): Promise<A2pDiagno
       attempts.push(await runProbe(url, headers));
     }
 
-    // If every probe returned 401 and we have a different agency key, retry.
+    // If every probe returned 401 and we have a different agency key, retry
+    // with a freshly-resolved location-scoped token.
     const allAuthFailed = attempts.length > 0 && attempts.every(
       (a) => a.status === 401 || (a.error && /unauthor/i.test(a.error)),
     );
     if (allAuthFailed && agencyKey && agencyKey !== accessToken) {
+      const resolvedAgency = await resolveLocationToken(agencyKey, venue.ghl_location_id!);
       attempts.push({
         url: '(info)',
         status: null,
         ok: true,
-        bodyPreview: 'Primary token got 401 on all probes — retrying with agency key.',
+        bodyPreview: 'Primary token got 401 on all probes — retrying with agency key (location-scoped).',
         error: null,
         extracted: null,
       });
       headers = {
-        Authorization: `Bearer ${agencyKey}`,
+        Authorization: `Bearer ${resolvedAgency}`,
         'Content-Type': 'application/json',
         Version: '2021-07-28',
         'X-Location-Id': venue.ghl_location_id!,
@@ -492,9 +496,13 @@ export async function refreshVenueA2pStatus(venueId: string): Promise<A2pSnapsho
     return snapshotFromVenue(venue, { errorOverride: err, decision: 'no_change' });
   }
 
+  // Agency-level JWTs must be exchanged for a location-scoped token before
+  // hitting location-scoped endpoints. Per-venue OAuth tokens pass through.
+  const resolvedToken = await resolveLocationToken(accessToken, venue.ghl_location_id);
+
   let raw: RawA2pResult;
   try {
-    raw = await fetchGhlA2pRaw({ accessToken, locationId: venue.ghl_location_id });
+    raw = await fetchGhlA2pRaw({ accessToken: resolvedToken, locationId: venue.ghl_location_id });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);
     // 401 → stale per-venue token. Try agency key fallback for legacy clients.

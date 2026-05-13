@@ -114,7 +114,7 @@ async function getLocationToken(agencyToken: string, locationId: string): Promis
  * for a location token first. Otherwise use it directly.
  */
 export async function resolveLocationToken(token: string, locationId: string): Promise<string> {
-  const isAgencyToken = process.env.GHL_AGENCY_API_KEY && token === process.env.GHL_AGENCY_API_KEY;
+  const isAgencyToken = token === process.env.GHL_AGENCY_API_KEY || token === process.env.GHL_PRIVATE_KEY;
   if (isAgencyToken) {
     try {
       return await getLocationToken(token, locationId);
