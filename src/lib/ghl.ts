@@ -83,11 +83,39 @@ export async function ghlRequest(
 }
 
 /**
+ * Extract the companyId claim from a GHL agency JWT without verifying the
+ * signature. GHL agency tokens are standard JWTs whose payload contains a
+ * `companyId` field. This is distinct from a location's sub-account ID and
+ * is required by the /oauth/locationToken exchange endpoint.
+ *
+ * Falls back to GHL_COMPANY_ID env var if set, then to locationId (legacy
+ * incorrect behaviour kept as last-resort so we never hard-crash).
+ */
+function extractCompanyId(agencyToken: string, fallbackLocationId: string): string {
+  // Prefer explicit env var override
+  if (process.env.GHL_COMPANY_ID) return process.env.GHL_COMPANY_ID;
+  try {
+    const parts = agencyToken.split('.');
+    if (parts.length >= 2) {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8')) as Record<string, unknown>;
+      const cid = payload.companyId ?? payload.company_id ?? payload.sub;
+      if (typeof cid === 'string' && cid) return cid;
+    }
+  } catch {
+    // ignore — fall through to legacy fallback
+  }
+  // Legacy fallback (was always wrong for most accounts, but keep so
+  // single-company setups where locationId === companyId still work)
+  return fallbackLocationId;
+}
+
+/**
  * Get a location-scoped access token from the agency JWT.
  * The GHL_AGENCY_API_KEY is agency-level and must be exchanged for a
  * location token before making location-scoped API calls (SMS, contacts, etc.)
  */
 async function getLocationToken(agencyToken: string, locationId: string): Promise<string> {
+  const companyId = extractCompanyId(agencyToken, locationId);
   const res = await fetch(`${GHL_API_BASE}/oauth/locationToken`, {
     method: 'POST',
     headers: {
@@ -95,7 +123,7 @@ async function getLocationToken(agencyToken: string, locationId: string): Promis
       'Content-Type': 'application/x-www-form-urlencoded',
       'Version': '2021-07-28',
     },
-    body: new URLSearchParams({ companyId: locationId, locationId }),
+    body: new URLSearchParams({ companyId, locationId }),
     signal: AbortSignal.timeout(30_000),
   });
 
