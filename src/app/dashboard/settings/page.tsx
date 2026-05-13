@@ -96,6 +96,17 @@ export default function SettingsPage() {
  const [syncError, setSyncError] = useState('');
  const syncPollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+ // Inbound email diagnostic
+ interface InboundEmailCheck { ok: boolean; label: string; detail: string }
+ interface InboundEmailStatus {
+   ready: boolean;
+   webhookUrl: string;
+   inboundDomain: string | null;
+   checks: Record<string, InboundEmailCheck>;
+   nextSteps: string[];
+ }
+ const [inboundEmail, setInboundEmail] = useState<InboundEmailStatus | null>(null);
+
  function stopSyncPolling() {
    if (syncPollTimer.current) {
      clearInterval(syncPollTimer.current);
@@ -226,21 +237,31 @@ export default function SettingsPage() {
  setVenue(data);
  if (data.ghl_location_id) setLocationIdInput(data.ghl_location_id);
 
- // Restore sync state if a sync is in flight (e.g. user refreshed the
- // page while a previous sync was still running on the server).
- try {
-   const sRes = await fetch('/api/integrations/ghl/sync-contacts', { cache: 'no-store' });
-   if (sRes.ok) {
-     const sData = await sRes.json();
-     const p = sData.progress as SyncProgress | null;
-     if (p) {
-       setSyncProgress(p);
-       if (p.status === 'running') {
-         syncPollTimer.current = setInterval(() => { void pollSyncStatus(); }, 2000);
-       }
-     }
-   }
- } catch { /* non-fatal */ }
+// Restore sync state if a sync is in flight (e.g. user refreshed the
+// page while a previous sync was still running on the server).
+try {
+  const sRes = await fetch('/api/integrations/ghl/sync-contacts', { cache: 'no-store' });
+  if (sRes.ok) {
+    const sData = await sRes.json();
+    const p = sData.progress as SyncProgress | null;
+    if (p) {
+      setSyncProgress(p);
+      if (p.status === 'running') {
+        syncPollTimer.current = setInterval(() => { void pollSyncStatus(); }, 2000);
+      }
+    }
+  }
+} catch { /* non-fatal */ }
+
+// Load inbound-email diagnostic status. This is best-effort — if the
+// route doesn't exist on this deployment yet, just leave the panel
+// hidden.
+try {
+  const ieRes = await fetch('/api/integrations/inbound-email/status', { cache: 'no-store' });
+  if (ieRes.ok) {
+    setInboundEmail(await ieRes.json());
+  }
+} catch { /* non-fatal */ }
 
  setBrand({
  brand_logo_url: data.brand_logo_url || '',
@@ -627,6 +648,72 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
     </div>
   );
 })()}
+
+{/* Inbound email diagnostic — pinpoints which piece of the email reply
+    pipeline is missing when bride replies aren't landing in the thread. */}
+{inboundEmail && (
+  <div className={`rounded-2xl border p-4 ${inboundEmail.ready ? 'border-emerald-100 bg-emerald-50/40' : 'border-amber-100 bg-amber-50/40'}`}>
+    <div className="flex items-start gap-3">
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${inboundEmail.ready ? 'bg-white border-emerald-200' : 'bg-white border-amber-200'}`}>
+        {inboundEmail.ready
+          ? <CheckCircle2 size={16} className="text-emerald-600" />
+          : <AlertCircle size={16} className="text-amber-600" />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-gray-900">Inbound Email Replies</p>
+          <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${inboundEmail.ready ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+            {inboundEmail.ready ? <><CheckCircle2 size={11} /> Configured</> : <><AlertCircle size={11} /> Needs setup</>}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-gray-500">
+          When a contact replies to an outbound email, it should land in this conversation thread automatically. This requires Resend inbound parse + a few env vars.
+        </p>
+
+        <ul className="mt-3 space-y-1.5">
+          {Object.entries(inboundEmail.checks).map(([key, c]) => (
+            <li key={key} className="flex items-start gap-2 text-xs">
+              {c.ok
+                ? <Check size={13} className="mt-0.5 shrink-0 text-emerald-600" />
+                : <AlertCircle size={13} className="mt-0.5 shrink-0 text-amber-600" />}
+              <span className="min-w-0 flex-1">
+                <span className="font-medium text-gray-800">{c.label}:</span>{' '}
+                <span className="text-gray-600">{c.detail}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-3 flex items-stretch gap-2">
+          <input
+            type="text"
+            readOnly
+            value={inboundEmail.webhookUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-mono text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-200"
+          />
+          <button
+            type="button"
+            onClick={() => { navigator.clipboard?.writeText(inboundEmail.webhookUrl).catch(() => {}); }}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            title="Copy webhook URL"
+          >
+            <Copy size={13} /> Copy
+          </button>
+        </div>
+
+        {inboundEmail.nextSteps?.length > 0 && (
+          <div className="mt-3 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 mb-1.5">Next steps</p>
+            <ol className="list-decimal pl-4 space-y-1 text-xs text-gray-700">
+              {inboundEmail.nextSteps.map((s, i) => <li key={i}>{s}</li>)}
+            </ol>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
  </div>
  </section>
  </div>
