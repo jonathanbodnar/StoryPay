@@ -103,6 +103,11 @@ export async function ghlRequest(
 
   if (!res.ok) {
     const errorText = await res.text();
+    // Log the exact endpoint that 4xx'd so debugging (especially when chained
+    // through sendSms / PUT / etc.) doesn't require guesswork.
+    console.warn(
+      `[ghl] ${method} ${base}${effectivePath} -> ${res.status} (tokenKind=${kind}): ${errorText.slice(0, 300)}`,
+    );
     throw new Error(`GHL API error ${res.status}: ${errorText}`);
   }
 
@@ -332,26 +337,173 @@ export async function resolveLocationToken(token: string, locationId: string): P
   return await getLocationToken(token, locationId);
 }
 
+/**
+ * Compare two phone strings ignoring formatting differences (spaces, dashes,
+ * parens, leading "+", leading "1").
+ */
+function phonesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  const norm = (s: string | null | undefined) => String(s ?? '').replace(/\D/g, '').replace(/^1/, '');
+  const na = norm(a);
+  const nb = norm(b);
+  return !!na && na === nb;
+}
+
+/**
+ * v1 contact GET response shape. GHL sometimes wraps the contact in `{ contact: { ... } }`,
+ * other times returns it at the root, so callers should check both.
+ */
+interface V1ContactSnapshot {
+  id?: string;
+  email?: string | null;
+  phone?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+}
+
+async function getV1Contact(
+  accessToken: string,
+  contactId: string,
+  locationId: string,
+): Promise<V1ContactSnapshot | null> {
+  try {
+    const res = await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, { locationId }) as {
+      contact?: V1ContactSnapshot;
+    } & V1ContactSnapshot;
+    return res.contact ?? (res.id ? res : null);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[ghl] v1 GET /contacts/${contactId} failed:`, msg);
+    return null;
+  }
+}
+
+/**
+ * Ensure the GHL v1 contact record has the given phone number. No-op if GHL
+ * already has the same phone. Best-effort — errors are logged but not thrown.
+ */
+async function ensureV1ContactHasPhone(
+  accessToken: string,
+  contactId: string,
+  locationId: string,
+  phone: string,
+): Promise<void> {
+  const snap = await getV1Contact(accessToken, contactId, locationId);
+  if (snap && phonesMatch(snap.phone, phone)) {
+    return; // already correct
+  }
+
+  // Build a PUT body with the existing fields preserved. Some GHL accounts
+  // reject phone-only PUTs as "email is required" — providing the current
+  // email avoids that 422.
+  const putBody: Record<string, unknown> = { phone };
+  if (snap?.email) putBody.email = snap.email;
+  const fn = snap?.firstName ?? snap?.first_name;
+  const ln = snap?.lastName ?? snap?.last_name;
+  if (fn) putBody.firstName = fn;
+  if (ln) putBody.lastName = ln;
+
+  try {
+    await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, {
+      method: 'PUT',
+      body: putBody,
+      locationId,
+    });
+    console.log(`[ghl] v1 PUT /contacts/${contactId} — wrote phone=${phone}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[ghl] v1 PUT /contacts/${contactId} failed (will retry with forceV1ContactPhone if SMS 422s):`, msg);
+  }
+}
+
+/**
+ * Last-ditch attempt to force the phone onto a v1 GHL contact when the soft
+ * `ensureV1ContactHasPhone` path didn't take. Returns true if the PUT
+ * succeeded (or GHL already has the phone), false otherwise.
+ *
+ * Strategy: GET the contact, then send a PUT body that includes every field
+ * GHL returned plus our phone. Maximally compatible with strict v1 validators.
+ */
+async function forceV1ContactPhone(
+  accessToken: string,
+  contactId: string,
+  locationId: string,
+  phone: string,
+): Promise<boolean> {
+  const snap = await getV1Contact(accessToken, contactId, locationId);
+  if (!snap) {
+    console.warn(`[ghl] forceV1ContactPhone: contact ${contactId} not found in GHL`);
+    return false;
+  }
+  if (phonesMatch(snap.phone, phone)) return true;
+
+  const putBody: Record<string, unknown> = {
+    phone,
+    email: snap.email ?? `ghl.${contactId}@${'ghl-import.storyvenue.placeholder'}`,
+  };
+  const fn = snap.firstName ?? snap.first_name;
+  const ln = snap.lastName ?? snap.last_name;
+  if (fn) putBody.firstName = fn;
+  if (ln) putBody.lastName = ln;
+
+  try {
+    await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, {
+      method: 'PUT',
+      body: putBody,
+      locationId,
+    });
+    console.log(`[ghl] forceV1ContactPhone: PUT succeeded for ${contactId}`);
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[ghl] forceV1ContactPhone: PUT failed for ${contactId}:`, msg);
+    return false;
+  }
+}
+
 export async function sendSms(
   accessToken: string,
   locationId: string,
   contactId: string,
   message: string,
   attachments?: string[],
+  /** Caller-provided E.164 phone. When supplied we proactively sync it onto
+   *  the GHL contact before sending, so v1's /contacts/{id}/sms endpoint
+   *  (which sources the recipient from the stored contact record) succeeds
+   *  even when GHL's copy of the contact is missing a phone. */
+  explicitPhone?: string | null,
 ) {
   const cid = String(contactId ?? '').trim();
   if (!cid) {
     throw new Error('GHL sendSms: contactId is required');
   }
+  // Diagnostic — surfaces in Railway logs so we can see exactly which path
+  // and token type was used for this send.
+  const tokenKind = classifyToken(accessToken);
+  console.log(
+    `[ghl] sendSms start: tokenKind=${tokenKind}, locationId=${locationId}, contactId=${cid}, ` +
+    `hasExplicitPhone=${!!explicitPhone}`,
+  );
 
-  // v1 short-circuit: v1's /conversations/messages requires phone in the body
-  // (it doesn't auto-resolve from contactId). The per-contact route is the
-  // simplest reliable path:
+  // v1 short-circuit. The reliable v1 SMS path is:
   //
   //   POST /v1/contacts/{contactId}/sms  body: { message }
   //
-  // GHL auto-uses the contact's stored primary phone.
+  // GHL sources the recipient phone from the contact's stored primary phone.
+  // If that phone is missing/blank we get back 422 "Missing phone number" even
+  // though our local DB has the phone. We work around this by:
+  //
+  //   1. GET the contact from GHL to see what they have.
+  //   2. If our explicit phone differs, PUT the contact with the existing
+  //      fields + phone (v1 PUT validators reject partial bodies missing
+  //      `email` on some accounts; passing the existing email back avoids that).
+  //   3. Retry the POST /sms call.
   if (classifyToken(accessToken) === 'v1') {
+    if (explicitPhone) {
+      await ensureV1ContactHasPhone(accessToken, cid, locationId, explicitPhone);
+    }
+
     try {
       const body: Record<string, unknown> = { message };
       if (attachments?.length) body.attachments = attachments;
@@ -363,34 +515,44 @@ export async function sendSms(
       console.log(`[ghl] SMS sent via v1 /contacts/${cid}/sms`);
       return result;
     } catch (perContactErr) {
-      // Fallback: try the /conversations/messages route with phone resolved
-      // from the contact record. Some v1 builds expose the SMS endpoint at
-      // different paths.
       const perContactMsg = perContactErr instanceof Error ? perContactErr.message : String(perContactErr);
-      console.warn(`[ghl] v1 /contacts/${cid}/sms failed, trying /conversations/messages with explicit phone:`, perContactMsg);
+      console.warn(`[ghl] v1 /contacts/${cid}/sms first attempt failed:`, perContactMsg);
 
-      let phone: string | null = null;
-      try {
-        const contact = await ghlRequest(`/contacts/${encodeURIComponent(cid)}`, accessToken, { locationId }) as {
-          contact?: { phone?: string | null };
-          phone?: string | null;
-        };
-        phone = contact.contact?.phone ?? contact.phone ?? null;
-      } catch (lookupErr) {
-        console.error('[ghl] v1 contact lookup for phone failed:', lookupErr);
+      // If it failed with "Missing phone number" AND we have an explicit phone,
+      // the PUT in step 1 didn't take. Try once more with a full-contact PUT
+      // (force-include email by reading the current value) before giving up.
+      if (
+        explicitPhone &&
+        /missing phone|phone number/i.test(perContactMsg)
+      ) {
+        const fixed = await forceV1ContactPhone(accessToken, cid, locationId, explicitPhone);
+        if (fixed) {
+          try {
+            const retryBody: Record<string, unknown> = { message };
+            if (attachments?.length) retryBody.attachments = attachments;
+            const retry = await ghlRequest(`/contacts/${encodeURIComponent(cid)}/sms`, accessToken, {
+              method: 'POST',
+              body: retryBody,
+              locationId,
+            });
+            console.log(`[ghl] SMS sent via v1 /contacts/${cid}/sms after phone-force`);
+            return retry;
+          } catch (retryErr) {
+            const m = retryErr instanceof Error ? retryErr.message : String(retryErr);
+            console.warn(`[ghl] v1 /contacts/${cid}/sms still failing after phone-force:`, m);
+            throw new Error(
+              `GHL rejected the SMS even after writing the phone (${explicitPhone}) to the contact in their CRM. ` +
+              `This usually means the sub-account doesn't have an SMS phone number provisioned in GoHighLevel ` +
+              `(Settings → Phone Numbers in the GHL sub-account). Raw error: ${m}`,
+            );
+          }
+        }
       }
-      if (!phone) {
-        throw new Error(`Unable to resolve phone number for contact ${cid}. Original error: ${perContactMsg}`);
-      }
-      const body: Record<string, unknown> = { type: 'SMS', contactId: cid, phone, message };
-      if (attachments?.length) body.attachments = attachments;
-      const result = await ghlRequest('/conversations/messages', accessToken, {
-        method: 'POST',
-        body,
-        locationId,
-      });
-      console.log(`[ghl] SMS sent via v1 /conversations/messages (explicit phone) to contact ${cid}`);
-      return result;
+
+      throw new Error(
+        `GHL SMS failed for contact ${cid}: ${perContactMsg}. ` +
+        `Verify the sub-account has an SMS phone number provisioned (GoHighLevel → Settings → Phone Numbers).`,
+      );
     }
   }
 
@@ -413,6 +575,11 @@ export async function sendSms(
     if (conversationId) {
       // GHL requires contactId on this route even when conversationId is set (otherwise 404 "Contact id not given").
       const msgBody: Record<string, unknown> = { type: 'SMS', conversationId, contactId: cid, message, locationId };
+      // v2 accepts an explicit `toNumber` override which bypasses GHL's
+      // contact-record phone lookup. When the caller knows the recipient phone
+      // we pass it through so the send works even if GHL's CRM copy of the
+      // contact is missing a phone.
+      if (explicitPhone) msgBody.toNumber = explicitPhone;
       if (attachments?.length) msgBody.attachments = attachments;
       const result = await ghlRequest('/conversations/messages', token, {
         method: 'POST',
@@ -428,6 +595,7 @@ export async function sendSms(
 
   // Direct fallback (contact only — still must include contactId)
   const fallbackBody: Record<string, unknown> = { type: 'SMS', contactId: cid, message, locationId };
+  if (explicitPhone) fallbackBody.toNumber = explicitPhone;
   if (attachments?.length) fallbackBody.attachments = attachments;
   return ghlRequest('/conversations/messages', token, {
     method: 'POST',

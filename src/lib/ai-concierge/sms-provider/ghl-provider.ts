@@ -132,7 +132,7 @@ export const ghlSmsProvider: SmsProvider = {
         ghlContactId = created;
       }
 
-      const res = await ghlSendSms(token, locationId, ghlContactId, message);
+      const res = await ghlSendSms(token, locationId, ghlContactId, message, undefined, phone);
       return {
         ok:                true,
         outcome:           'sent',

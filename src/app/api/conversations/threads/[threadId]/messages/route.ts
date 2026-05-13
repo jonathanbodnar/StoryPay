@@ -301,6 +301,8 @@ export async function POST(
 
   let external_email_sent = false;
   let send_error: string | null = null;
+  /** Actual address we attempted delivery to (email for email channel, E.164 phone for SMS). */
+  let recipient_address: string | null = null;
 
   const threadReplyChannel =
     (gate.thread as { external_reply_channel?: string }).external_reply_channel ?? 'email';
@@ -397,6 +399,7 @@ export async function POST(
           { status: 400 },
         );
       }
+      recipient_address = phoneE164;
 
       const email = ((contact as { customer_email?: string } | null)?.customer_email ?? '').trim();
       const firstName = (contact as { first_name?: string } | null)?.first_name ?? '';
@@ -428,7 +431,14 @@ export async function POST(
           const linkLine = `${t.displayText}\n${t.href}`;
           smsBody = rawBody.trim() ? `${rawBody.trim()}\n\n${linkLine}` : linkLine;
         }
-        await sendSms(ghlToken, vrow.ghl_location_id as string, contactId, smsBody);
+        await sendSms(
+          ghlToken,
+          vrow.ghl_location_id as string,
+          contactId,
+          smsBody,
+          undefined,
+          phoneE164,
+        );
         external_email_sent = true;
       } catch (e) {
         send_error = e instanceof Error ? e.message : 'SMS send failed';
@@ -446,6 +456,20 @@ export async function POST(
       if (!to) {
         return NextResponse.json({ error: 'Contact has no email — add one on their profile first.' }, { status: 400 });
       }
+      // The GHL sync generates `ghl.{id}@ghl-import.storyvenue.placeholder`
+      // addresses for contacts that had no email in GHL. They look real (Resend
+      // accepts them) but the domain doesn't resolve so the email goes nowhere.
+      // Refuse to send rather than silently dropping the message into the void.
+      if (/@ghl-import\.storyvenue\.placeholder$/i.test(to)) {
+        return NextResponse.json(
+          {
+            error:
+              'This contact only has a placeholder email from GoHighLevel sync (no real email on file). Open their profile and add a real email address before sending.',
+          },
+          { status: 400 },
+        );
+      }
+      recipient_address = to;
 
       const { data: venue } = await supabaseAdmin
         .from('venues')
@@ -537,15 +561,33 @@ ${triggerBlock}
     if (emailCcStored) insertRow.email_cc = emailCcStored;
     if (emailBccStored) insertRow.email_bcc = emailBccStored;
   }
+  // Persist the actual recipient address for both email and SMS so the UI can
+  // show "Sent to: ..." with confidence (independent of venue_customers state).
+  if (visibility === 'external' && recipient_address) {
+    insertRow.email_to = recipient_address;
+  }
   if (insertTriggerId) {
     insertRow.trigger_link_id = insertTriggerId;
   }
 
-  const { data: row, error: insErr } = await supabaseAdmin
+  let { data: row, error: insErr } = await supabaseAdmin
     .from('conversation_messages')
     .insert(insertRow)
     .select('*')
     .single();
+
+  // Backwards-compat: if migration 136 (email_to column) hasn't been applied,
+  // retry the insert without it so message sending still works.
+  if (insErr && /email_to/i.test(insErr.message ?? '') && 'email_to' in insertRow) {
+    delete insertRow.email_to;
+    const retry = await supabaseAdmin
+      .from('conversation_messages')
+      .insert(insertRow)
+      .select('*')
+      .single();
+    row = retry.data;
+    insErr = retry.error;
+  }
 
   if (insErr || !row) {
     console.error('[conversations/messages POST]', insErr);

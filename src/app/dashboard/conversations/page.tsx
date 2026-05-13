@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import Link from 'next/link';
 import {
   ArrowLeft,
+  Check,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Loader2,
@@ -112,6 +114,10 @@ interface Msg {
   is_pinned?: boolean;
   email_cc?: string | null;
   email_bcc?: string | null;
+  /** Address the message was actually delivered to (email or E.164 phone).
+   *  Persisted at send time so the UI stays correct even if the contact's
+   *  primary email/phone changes later. See migration 136. */
+  email_to?: string | null;
   contact_from_name?: string | null;
   contact_from_email?: string | null;
   trigger_link?: { short_code: string; name: string | null } | null;
@@ -2055,10 +2061,22 @@ export default function ConversationsPage() {
                                 }
                                 toEmail={
                                   fromUs
-                                    ? threadDetail?.venue_customers?.customer_email || null
+                                    ? m.email_to ||
+                                      threadDetail?.venue_customers?.customer_email ||
+                                      null
                                     : null
                                 }
                                 direction={fromUs ? 'outgoing' : 'incoming'}
+                                sendStatus={
+                                  fromUs && m.visibility === 'external'
+                                    ? m.external_email_sent === true
+                                      ? 'sent'
+                                      : m.external_email_sent === false
+                                        ? 'failed'
+                                        : 'unknown'
+                                    : undefined
+                                }
+                                sendError={m.send_error ?? null}
                                 expanded={emailExpanded}
                                 onToggle={toggleEmail}
                                 onReply={() => {
@@ -2143,6 +2161,19 @@ export default function ConversationsPage() {
                                       title="Sent by AI Concierge"
                                     >
                                       <Sparkles size={9} /> AI
+                                    </span>
+                                  )}
+                                  {m.visibility === 'external' && m.external_email_sent === true && !m.send_error && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700"
+                                      title={
+                                        m.channel === 'sms'
+                                          ? 'SMS handed off to GoHighLevel successfully'
+                                          : 'Email handed off to Resend successfully'
+                                      }
+                                    >
+                                      <Check size={9} strokeWidth={3} />
+                                      Sent
                                     </span>
                                   )}
                                   {m.visibility === 'external' && m.external_email_sent === false && m.send_error && (
@@ -2883,6 +2914,9 @@ function EmailCard({
   fromEmail,
   toName,
   toEmail,
+  direction,
+  sendStatus,
+  sendError,
   expanded,
   onToggle,
   onReply,
@@ -2903,6 +2937,9 @@ function EmailCard({
   toName: string | null;
   toEmail: string | null;
   direction: 'incoming' | 'outgoing';
+  /** Outbound send status from the SaaS — only meaningful for outgoing messages. */
+  sendStatus?: 'sent' | 'failed' | 'unknown';
+  sendError?: string | null;
   expanded: boolean;
   onToggle: () => void;
   onReply: () => void;
@@ -2940,6 +2977,10 @@ function EmailCard({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [detailsOpen, menuOpen]);
 
+  const isOutgoing = direction === 'outgoing';
+  const showSentBadge = isOutgoing && sendStatus === 'sent';
+  const showFailedBadge = isOutgoing && sendStatus === 'failed';
+
   const details = (
     <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px] text-gray-700 [overflow-wrap:anywhere]">
       <span className="text-gray-500">From:</span>
@@ -2969,6 +3010,25 @@ function EmailCard({
       <span className="min-w-0">{fullTimestamp}</span>
       <span className="text-gray-500">Subject:</span>
       <span className="min-w-0 break-words font-medium text-gray-900">{subject}</span>
+      {isOutgoing && sendStatus && sendStatus !== 'unknown' ? (
+        <>
+          <span className="text-gray-500">Status:</span>
+          {sendStatus === 'sent' ? (
+            <span className="inline-flex min-w-0 items-center gap-1.5 break-words font-medium text-emerald-700">
+              <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+              Sent from StoryVenue
+              {toEmail ? (
+                <span className="text-gray-500"> · delivered to inbox by your provider</span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="inline-flex min-w-0 items-center gap-1.5 break-words font-medium text-amber-700">
+              <AlertCircle size={13} className="shrink-0 text-amber-600" />
+              Not sent{sendError ? `: ${sendError}` : ''}
+            </span>
+          )}
+        </>
+      ) : null}
     </div>
   );
 
@@ -2991,7 +3051,24 @@ function EmailCard({
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-gray-900">
           {subject}
         </span>
-        <span className="flex shrink-0 items-center gap-1 text-[11px] text-gray-500">
+        <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-gray-500">
+          {showSentBadge ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700"
+              title="Email handed off to Resend successfully — check the contact's inbox to confirm delivery."
+            >
+              <Check size={9} strokeWidth={3} />
+              Sent
+            </span>
+          ) : showFailedBadge ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700"
+              title={sendError || 'Email failed to send'}
+            >
+              <AlertCircle size={9} />
+              Failed
+            </span>
+          ) : null}
           {expanded ? (
             <ChevronUp size={14} className="text-gray-500" />
           ) : (
