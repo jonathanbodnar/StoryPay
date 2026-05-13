@@ -499,6 +499,23 @@ export async function POST(
         } catch (chErr) {
           console.warn('[conversations] could not mark thread as SMS channel:', chErr);
         }
+
+        // iMessage-style: after we send an SMS, queue a couple of delayed
+        // inbound polls so the user's reply lands automatically without
+        // requiring the user to keep the thread tab open. The 3s frontend
+        // poll already covers active tabs; these schedules cover the case
+        // where the user fires-and-forgets a message.
+        for (const delayMs of [5_000, 15_000, 45_000]) {
+          setTimeout(() => {
+            void syncInboundSmsFromGhlForThread({
+              venueId,
+              threadId,
+              venueCustomerId,
+            }).catch((err) => {
+              console.warn(`[conversations] delayed inbound poll (${delayMs}ms) failed:`, err);
+            });
+          }, delayMs).unref?.();
+        }
       } catch (e) {
         send_error = e instanceof Error ? e.message : 'SMS send failed';
         console.warn('[conversations] external SMS failed:', send_error);

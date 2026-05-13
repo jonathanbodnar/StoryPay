@@ -731,20 +731,19 @@ export default function ConversationsPage() {
       .catch(() => {});
   }, [selectedId, messages]);
 
-  // Background poll — silently fetch new messages every 5 s. For SMS threads
-  // we hit the full endpoint (no nosync) so the GHL→DB sync runs server-side
-  // and pulls in any new replies that arrived since the last tick. The DB
-  // dedup index prevents duplicate inserts. For email threads we skip the
-  // sync since they're webhook-driven and don't need polling.
+  // Background poll — silently fetch new messages every 3 s for iMessage-style
+  // tightness. We ALWAYS hit the full endpoint (no nosync gating) so the
+  // server-side GHL → DB pull runs every tick; the DB dedup index prevents
+  // duplicate inserts so this is safe even when GHL is also delivering inbound
+  // via the webhook. This is the reliability backstop for when the venue's
+  // GHL sub-account isn't configured with our webhook URL.
   useEffect(() => {
     if (!selectedId) return;
-    const channel = threadDetail?.external_reply_channel ?? 'email';
-    const isSms = channel === 'sms';
 
     const tick = async () => {
       if (document.visibilityState === 'hidden') return;
       try {
-        const url = `/api/conversations/threads/${selectedId}/messages${isSms ? '' : '?nosync=1'}`;
+        const url = `/api/conversations/threads/${selectedId}/messages`;
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) return;
         const fresh = await res.json();
@@ -758,9 +757,9 @@ export default function ConversationsPage() {
       } catch { /* ignore — next tick retries */ }
     };
 
-    const interval = setInterval(tick, 5_000);
+    const interval = setInterval(tick, 3_000);
     return () => clearInterval(interval);
-  }, [selectedId, threadDetail?.external_reply_channel]);
+  }, [selectedId]);
 
   useEffect(() => {
     if (!composerExpanded) return;

@@ -14,6 +14,8 @@ import {
  Users,
  Download,
  AlertCircle,
+ Copy,
+ Webhook,
 } from 'lucide-react';
 import InstallAppCard from '@/components/InstallAppCard';
 
@@ -569,6 +571,59 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
           <span>{syncError}</span>
         </div>
       )}
+    </div>
+  );
+})()}
+
+{/* Inbound webhook URL — only show when connected. Without this, GHL
+    inbound SMS / contact-update replies appear in the SaaS via 3-second
+    polling. With this, they arrive instantly (iMessage-style). */}
+{(venue.ghl_connected || venue.ghl_location_id) && (() => {
+  const origin = typeof window !== 'undefined'
+    ? window.location.origin
+    : 'https://app.storypay.io';
+  const webhookUrl = `${origin}/api/webhooks/ghl`;
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-gray-200">
+          <Webhook size={16} className="text-gray-500" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-gray-900">Inbound Webhook (optional)</p>
+          <p className="mt-1 text-xs text-gray-500">
+            For instant iMessage-style delivery of replies into Conversations,
+            paste this URL into your StoryVenue Legacy sub-account under
+            Settings → Integrations → Webhooks. Without it, replies still
+            arrive — just on a 3-second poll instead of in real-time.
+          </p>
+          <div className="mt-3 flex items-stretch gap-2">
+            <input
+              type="text"
+              readOnly
+              value={webhookUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-mono text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-200"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard?.writeText(webhookUrl).catch(() => {});
+              }}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              title="Copy webhook URL"
+            >
+              <Copy size={13} /> Copy
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-gray-400">
+            Subscribe to <span className="font-mono">InboundMessage</span>,{' '}
+            <span className="font-mono">ContactCreate</span>,{' '}
+            <span className="font-mono">ContactUpdate</span>, and{' '}
+            <span className="font-mono">ContactDndUpdate</span> events.
+          </p>
+        </div>
+      </div>
     </div>
   );
 })()}

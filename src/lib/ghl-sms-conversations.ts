@@ -566,10 +566,25 @@ export async function syncInboundSmsFromGhlForThread(params: {
       8,
       Math.max(1, Number.parseInt(process.env.GHL_SMS_SYNC_MAX_CONVERSATIONS ?? '8', 10) || 8)
     );
+    // Always log enough to diagnose "imported: 0" without needing to set a
+    // separate env var. Sample-of-one structural dump is OFF by default — flip
+    // GHL_SMS_SYNC_DEBUG=1 in Railway when we need to see raw message shape.
     const debug = process.env.GHL_SMS_SYNC_DEBUG === '1';
+
+    console.log('[ghl-sms sync] starting', {
+      threadId,
+      contactId,
+      conversationsFound: convIds.length,
+      scanning: convIds.slice(0, maxConv),
+    });
 
     let imported = 0;
     let inboundCandidates = 0;
+    let totalMsgs = 0;
+    let inboundCount = 0;
+    let outboundCount = 0;
+    const seenTypes: Record<string, number> = {};
+    let firstNonInboundSample: Record<string, unknown> | null = null;
     for (const ghlConversationId of convIds.slice(0, maxConv)) {
       let rawList: unknown;
       try {
@@ -582,21 +597,34 @@ export async function syncInboundSmsFromGhlForThread(params: {
         continue;
       }
       const list = ghlApiMessagesFromResponse(rawList);
-      if (debug) {
-        console.log(
-          '[ghl-sms] sync scan',
-          JSON.stringify({
-            ghlConversationId,
-            messageCount: list.length,
-            sampleKeys: list[0] ? Object.keys(list[0]).slice(0, 18) : [],
-          })
-        );
+      console.log('[ghl-sms sync] conv scan', {
+        ghlConversationId,
+        messageCount: list.length,
+        sampleKeys: list[0] ? Object.keys(list[0]).slice(0, 20) : [],
+      });
+      if (debug && list[0]) {
+        console.log('[ghl-sms sync] sample message', JSON.stringify(list[0]).slice(0, 800));
       }
+      totalMsgs += list.length;
 
       for (const msg of list) {
         const dir = String(msg.direction ?? '').toLowerCase();
-        if (dir === 'outbound') continue;
-        if (!isGhlApiInboundSmsMessage(msg)) continue;
+        const t = String(msg.type ?? msg.messageType ?? msg.channel ?? '').toUpperCase();
+        seenTypes[t] = (seenTypes[t] ?? 0) + 1;
+        if (dir === 'outbound') {
+          outboundCount++;
+          continue;
+        }
+        if (dir === 'inbound') inboundCount++;
+        if (!isGhlApiInboundSmsMessage(msg)) {
+          // Capture a sample of "things that look inbound-ish but didn't pass
+          // the SMS filter" so we can adjust isGhlApiInboundSmsMessage if GHL
+          // has stuffed the reply into an unexpected field shape.
+          if (!firstNonInboundSample && dir === 'inbound') {
+            firstNonInboundSample = msg;
+          }
+          continue;
+        }
         const body = bodyFromGhlApiMessage(msg);
         if (!body) continue;
         inboundCandidates++;
@@ -638,9 +666,25 @@ export async function syncInboundSmsFromGhlForThread(params: {
       threadId,
       contactId,
       conversationsScanned: Math.min(convIds.length, maxConv),
+      totalMsgs,
+      inboundCount,
+      outboundCount,
+      seenTypes,
       inboundCandidates,
       imported,
     });
+    if (firstNonInboundSample) {
+      console.warn('[ghl-sms sync] inbound msg found but FAILED SMS filter:', {
+        keys: Object.keys(firstNonInboundSample).slice(0, 30),
+        direction: firstNonInboundSample.direction,
+        type: firstNonInboundSample.type,
+        messageType: firstNonInboundSample.messageType,
+        channel: firstNonInboundSample.channel,
+        messageTypeId: firstNonInboundSample.messageTypeId,
+        messageTypeString: firstNonInboundSample.messageTypeString,
+        sample: JSON.stringify(firstNonInboundSample).slice(0, 500),
+      });
+    }
     return { imported };
   } catch (e) {
     console.error('[ghl-sms] syncInboundSmsFromGhlForThread', e);
