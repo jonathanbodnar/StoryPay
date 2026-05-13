@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { getEffectiveVenueId } from '@/lib/effective-venue';
+import { schedulePushVenueCustomerToGhl } from '@/lib/ghl-push-contact';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -110,6 +111,15 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+
+  // Push the new (or upserted) contact to GoHighLevel so SaaS-originated
+  // contacts immediately exist in GHL with the right fields. Fire-and-forget
+  // so we don't slow the 201 response on a slow upstream API.
+  schedulePushVenueCustomerToGhl({
+    venueId,
+    venueCustomerId: (row as { id: string }).id,
+    reason: 'contact_create',
+  });
 
   return NextResponse.json(row, { status: 201 });
 }

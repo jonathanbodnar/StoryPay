@@ -13,6 +13,7 @@ import {
   VENUE_CUSTOMERS_PIPELINE_MIGRATION_HINT,
 } from '@/lib/venue-customer-db-error';
 import { applySmsDndForVenueCustomer, clearSmsDndForVenueCustomer } from '@/lib/sms-compliance';
+import { schedulePushVenueCustomerToGhl } from '@/lib/ghl-push-contact';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -191,6 +192,20 @@ export async function PATCH(
     } else {
       await clearSmsDndForVenueCustomer({ venueId, venueCustomerId: id });
     }
+  }
+
+  // SaaS is the system of record for contacts post-sync. Push any change to a
+  // GHL-relevant field back to GoHighLevel so the next outbound SMS / email
+  // finds the updated values there. Fire-and-forget — the local DB has
+  // already been updated, so we don't block the response on a slow GHL API.
+  const GHL_RELEVANT_FIELDS = ['first_name', 'last_name', 'phone', 'customer_email'] as const;
+  const ghlRelevantChanged = GHL_RELEVANT_FIELDS.some((f) => f in updates);
+  if (ghlRelevantChanged) {
+    schedulePushVenueCustomerToGhl({
+      venueId,
+      venueCustomerId: id,
+      reason: 'contact_patch',
+    });
   }
 
   try {

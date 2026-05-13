@@ -9,6 +9,7 @@ import { ensureLocationToken } from '@/lib/ghl-auth';
 import { buildConversationsReplyToEmail } from '@/lib/conversations-inbound-email';
 import { syncInboundSmsFromGhlForThread } from '@/lib/ghl-sms-conversations';
 import { broadcastBrideMessage } from '@/lib/realtime/broadcast';
+import { pushVenueCustomerToGhl } from '@/lib/ghl-push-contact';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -121,13 +122,42 @@ export async function GET(
   };
   // Skip the GHL poll-sync for lightweight background refreshes (?nosync=1).
   // The full sync runs on initial thread open and explicit user-triggered reloads.
+  //
+  // We sync inbound SMS not only when the thread is explicitly an SMS thread
+  // but ALSO when any outbound SMS message has been sent on it. This covers
+  // the case where a thread was originally created as 'email' but the user
+  // sent an SMS reply via the channel switcher — the bride's response should
+  // still land back in this same thread.
   const nosync = request.nextUrl.searchParams.get('nosync') === '1';
-  if (!nosync && thread.external_reply_channel === 'sms') {
-    await syncInboundSmsFromGhlForThread({
-      venueId,
-      threadId,
-      venueCustomerId: thread.venue_customer_id,
-    });
+  if (!nosync) {
+    let shouldSyncSms = thread.external_reply_channel === 'sms';
+    if (!shouldSyncSms) {
+      const { data: smsMsg } = await supabaseAdmin
+        .from('conversation_messages')
+        .select('id')
+        .eq('thread_id', threadId)
+        .eq('channel', 'sms')
+        .limit(1)
+        .maybeSingle();
+      if (smsMsg) shouldSyncSms = true;
+    }
+    if (shouldSyncSms) {
+      // Make sure the thread is marked as SMS so future GETs are fast (don't
+      // need the extra message-table lookup above) AND so other code paths
+      // that gate on external_reply_channel work as expected.
+      if (thread.external_reply_channel !== 'sms') {
+        await supabaseAdmin
+          .from('conversation_threads')
+          .update({ external_reply_channel: 'sms' })
+          .eq('id', threadId)
+          .eq('venue_id', venueId);
+      }
+      await syncInboundSmsFromGhlForThread({
+        venueId,
+        threadId,
+        venueCustomerId: thread.venue_customer_id,
+      });
+    }
   }
 
   // Hide ONLY support-team-only internal notes (concierge scratchpad).
@@ -407,6 +437,20 @@ export async function POST(
       let contactId = (contact as { ghl_contact_id?: string | null } | null)?.ghl_contact_id ?? null;
 
       try {
+        // Push the local SaaS contact state to GHL synchronously BEFORE the
+        // send so GHL has the latest phone/name on file. This is the fix for
+        // "I just added a phone in the SaaS but SMS still fails" — without
+        // it, GHL's stored contact lags the SaaS by however long it takes
+        // the async push from PATCH to finish.
+        const push = await pushVenueCustomerToGhl({
+          venueId,
+          venueCustomerId,
+          reason: 'pre_sms_send',
+        });
+        if (push.ok && push.ghlContactId) {
+          contactId = push.ghlContactId;
+        }
+
         if (!contactId) {
           contactId = await findOrCreateContact(ghlToken, vrow.ghl_location_id as string, {
             email: email || `ghl.${venueCustomerId}@${PLACEHOLDER_SMS_EMAIL_DOMAIN}`,
@@ -440,6 +484,21 @@ export async function POST(
           phoneE164,
         );
         external_email_sent = true;
+
+        // Mark this thread as the SMS thread so the GET handler pulls inbound
+        // replies from GHL on next load. Without this, an email-channel thread
+        // that received an outbound SMS would never get the bride's SMS reply
+        // synced back into it.
+        try {
+          await supabaseAdmin
+            .from('conversation_threads')
+            .update({ external_reply_channel: 'sms' })
+            .eq('id', threadId)
+            .eq('venue_id', venueId)
+            .neq('external_reply_channel', 'sms');
+        } catch (chErr) {
+          console.warn('[conversations] could not mark thread as SMS channel:', chErr);
+        }
       } catch (e) {
         send_error = e instanceof Error ? e.message : 'SMS send failed';
         console.warn('[conversations] external SMS failed:', send_error);
