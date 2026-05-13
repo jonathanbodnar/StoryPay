@@ -663,11 +663,40 @@ export async function sendSms(
     console.warn(`[ghl] v2 phone-numbers probe failed (will still attempt send):`, m);
   }
 
-  // Pre-flight: if GHL has a phone on the contact, use that as the toNumber so
-  // we always pass GHL's *exact* string back. This avoids the "phone doesn't
-  // match toNumber" 400 GHL throws when formatting differs (+16142262075 vs
-  // 6142262075). If GHL has no phone, fall back to our local phone.
-  const toNumberForSend = ghlContactPhone || explicitPhone || null;
+  // CRITICAL: do NOT pass a `toNumber` field to v2's /conversations/messages.
+  //
+  // v2 validates toNumber against the contact's stored phone using exact-
+  // string semantics (not normalized). If they differ by even formatting
+  // (`+16142262075` vs `6142262075` vs `(614) 226-2075`), v2 returns 400
+  // "Contact phone number does not match with the toNumber" even when both
+  // strings represent the same number. The only way to consistently win is
+  // to omit toNumber entirely and let GHL use the contact's stored phone.
+  //
+  // If GHL's stored phone is missing, GHL returns 422 "Missing phone number"
+  // instead — but that's a clearer, addressable error (fix the contact in
+  // GHL), not a false-positive mismatch.
+
+  // Pre-flight check: if GHL has no phone on the contact AND we have one
+  // locally, attempt to write it via the proper v2 upsert endpoint so the
+  // subsequent send has something to read.
+  if (!ghlContactPhone && explicitPhone) {
+    try {
+      // POST /contacts/upsert preserves other fields (it's true upsert, not
+      // full replacement), so writing just `{ phone, locationId, contactId }`
+      // adds the phone without wiping the email/name we already have.
+      const upsertRes = (await ghlRequest('/contacts/upsert', token, {
+        method: 'POST',
+        body: { locationId, contactId: cid, phone: explicitPhone },
+        locationId,
+      })) as { contact?: { phone?: string } };
+      console.log(
+        `[ghl] v2 contacts/upsert wrote phone=${explicitPhone} -> stored=${upsertRes.contact?.phone ?? 'unknown'}`,
+      );
+    } catch (upsertErr) {
+      const m = upsertErr instanceof Error ? upsertErr.message : String(upsertErr);
+      console.warn(`[ghl] v2 contacts/upsert phone-sync failed (non-fatal):`, m);
+    }
+  }
 
   // Get or create a conversation, then send SMS through it
   try {
@@ -687,7 +716,6 @@ export async function sendSms(
     if (conversationId) {
       // GHL requires contactId on this route even when conversationId is set (otherwise 404 "Contact id not given").
       const msgBody: Record<string, unknown> = { type: 'SMS', conversationId, contactId: cid, message, locationId };
-      if (toNumberForSend) msgBody.toNumber = toNumberForSend;
       if (attachments?.length) msgBody.attachments = attachments;
       const result = await ghlRequest('/conversations/messages', token, {
         method: 'POST',
@@ -701,9 +729,9 @@ export async function sendSms(
     console.error('[ghl] v2 sendSms conversation path failed, trying direct:', err);
   }
 
-  // Direct fallback (contact only — still must include contactId)
+  // Direct fallback (contact only — still must include contactId).
+  // No toNumber here either, same reason as above.
   const fallbackBody: Record<string, unknown> = { type: 'SMS', contactId: cid, message, locationId };
-  if (toNumberForSend) fallbackBody.toNumber = toNumberForSend;
   if (attachments?.length) fallbackBody.attachments = attachments;
   return ghlRequest('/conversations/messages', token, {
     method: 'POST',
