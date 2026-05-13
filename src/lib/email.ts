@@ -166,6 +166,56 @@ function getDefaultFrom(): { header: string; email: string } {
 }
 
 /**
+ * Domains we know are verified in Resend (i.e. sends from `*@<domain>` will
+ * pass DKIM/SPF checks and reach the recipient). Sourced from the
+ * `RESEND_VERIFIED_DOMAINS` env var (comma-separated). Always includes the
+ * domain of `RESEND_DEFAULT_FROM` and `RESEND_FROM_FALLBACK` so that base
+ * functionality keeps working out of the box.
+ *
+ * Future: per-venue custom sending domains will be added here once a venue
+ * verifies its domain via the Resend Domain API.
+ */
+function getVerifiedDomains(): Set<string> {
+  const out = new Set<string>();
+  const add = (raw: string | null | undefined) => {
+    if (!raw) return;
+    const atIdx = raw.lastIndexOf('@');
+    const domain = (atIdx >= 0 ? raw.slice(atIdx + 1) : raw).trim().toLowerCase();
+    if (domain) out.add(domain);
+  };
+
+  // Always include the configured default + the hard-coded fallback so that
+  // the base StoryVenue sender domain works even when the env var is unset.
+  add(getDefaultFrom().email);
+  add(parseFromString(RESEND_FROM_FALLBACK).email);
+
+  // Per-deployment extras (comma-separated list of either bare domains or
+  // full email addresses — only the domain portion matters).
+  const extras = process.env.RESEND_VERIFIED_DOMAINS?.trim();
+  if (extras) {
+    for (const piece of extras.split(',')) {
+      const p = piece.trim().toLowerCase();
+      if (!p) continue;
+      if (p.includes('@')) add(p);
+      else out.add(p);
+    }
+  }
+
+  return out;
+}
+
+/**
+ * True when `email`'s domain is on the verified list (and therefore safe to
+ * use as the `From:` address without Resend rejecting the send).
+ */
+export function isVerifiedSendingDomain(email: string | null | undefined): boolean {
+  const e = (email ?? '').trim().toLowerCase();
+  if (!e.includes('@')) return false;
+  const domain = e.slice(e.lastIndexOf('@') + 1);
+  return getVerifiedDomains().has(domain);
+}
+
+/**
  * Send HTML email via Resend.
  * For conversations Reply-To routing, pass `replyTo` (e.g. reply+thread+sig@your-inbound-domain).
  *
@@ -205,19 +255,36 @@ export async function sendEmail({
   }
 
   const def = getDefaultFrom();
-  const fromEmail = from?.email?.trim();
-  const fromName = from?.name?.trim();
+  const requestedFromEmail = from?.email?.trim() || '';
+  const fromName = from?.name?.trim() || '';
 
-  let fromHeader: string;
-  if (fromEmail && fromName) {
-    fromHeader = `${fromName} <${fromEmail}>`;
-  } else if (fromEmail) {
-    fromHeader = fromEmail;
-  } else if (fromName) {
-    fromHeader = `${fromName} <${def.email}>`;
-  } else {
-    fromHeader = def.header;
+  // Decide the actual From: address.
+  //
+  // - If the caller passed an email from a verified Resend domain, use it.
+  //   This is the "custom sending domain" case — venue has set up their own
+  //   domain in Resend and we have it whitelisted in RESEND_VERIFIED_DOMAINS.
+  //
+  // - Otherwise, fall back to RESEND_DEFAULT_FROM (always verified) so the
+  //   send actually goes through. Preserve the venue's email as the Reply-To
+  //   so replies still land in their inbox.
+  //
+  // This means: emails ALWAYS send (default verified domain), and venues can
+  // upgrade to their own custom sending domain by verifying it in Resend +
+  // adding it to RESEND_VERIFIED_DOMAINS.
+  let actualFromEmail = def.email;
+  let inheritedReplyTo: string | null = null;
+  if (requestedFromEmail && isVerifiedSendingDomain(requestedFromEmail)) {
+    actualFromEmail = requestedFromEmail;
+  } else if (requestedFromEmail) {
+    inheritedReplyTo = requestedFromEmail;
+    console.log(
+      `[email] from=${requestedFromEmail} is not on a verified Resend domain — ` +
+      `sending as ${def.email} with Reply-To=${requestedFromEmail}`,
+    );
   }
+
+  const fromHeader = fromName ? `${fromName} <${actualFromEmail}>` : actualFromEmail;
+  const effectiveReplyTo = (replyTo?.trim() || inheritedReplyTo) ?? undefined;
 
   const ccList = normalizeEmailList(cc);
   const bccList = normalizeEmailList(bcc);
@@ -227,41 +294,101 @@ export async function sendEmail({
   // and transactional senders virtually always include both parts.
   const textBody = (text && text.trim().length > 0) ? text : htmlToPlainText(html);
 
-  try {
-    const body: Record<string, unknown> = {
-      from: fromHeader,
-      to: [to.trim()],
-      subject,
-      html,
-      text: textBody,
-    };
-    if (ccList.length) body.cc = ccList;
-    if (bccList.length) body.bcc = bccList;
-    if (replyTo?.trim()) body.reply_to = replyTo.trim();
-    if (headers && Object.keys(headers).length > 0) body.headers = headers;
+  const sendOnce = async (fromHdr: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const body: Record<string, unknown> = {
+        from: fromHdr,
+        to: [to.trim()],
+        subject,
+        html,
+        text: textBody,
+      };
+      if (ccList.length) body.cc = ccList;
+      if (bccList.length) body.bcc = bccList;
+      if (effectiveReplyTo) body.reply_to = effectiveReplyTo;
+      if (headers && Object.keys(headers).length > 0) body.headers = headers;
 
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(30_000),
-    });
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000),
+      });
 
-    const data = (await res.json()) as { id?: string; message?: string; name?: string };
-    if (res.ok) {
-      console.log(`[email] Resend sent to ${to}, id:`, data.id);
-      return { success: true };
+      const data = (await res.json()) as { id?: string; message?: string; name?: string };
+      if (res.ok) {
+        console.log(`[email] Resend sent (from=${fromHdr}) to ${to}, id:`, data.id);
+        return { success: true };
+      }
+      const errMsg = typeof data.message === 'string' ? data.message : JSON.stringify(data);
+      console.error(`[email] Resend failed (from=${fromHdr}):`, res.status, errMsg);
+      return { success: false, error: errMsg };
+    } catch (err) {
+      console.error('[email] Resend exception:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Send failed' };
     }
-    const errMsg = typeof data.message === 'string' ? data.message : JSON.stringify(data);
-    console.error('[email] Resend failed:', res.status, errMsg);
-    return { success: false, error: errMsg };
-  } catch (err) {
-    console.error('[email] Resend exception:', err);
-    return { success: false, error: err instanceof Error ? err.message : 'Send failed' };
+  };
+
+  let result = await sendOnce(fromHeader);
+
+  // Belt-and-suspenders: if Resend still rejects because the From: domain
+  // isn't verified (e.g. RESEND_VERIFIED_DOMAINS was out of sync), retry
+  // automatically with the guaranteed-verified default From: so the message
+  // still goes out. The original requested From: is preserved as Reply-To.
+  if (
+    !result.success &&
+    result.error &&
+    actualFromEmail !== def.email &&
+    /not verified|verify a domain|verify .* in your account|domain.*not.*found|sender .* not allowed/i.test(result.error)
+  ) {
+    console.warn(
+      `[email] Domain ${actualFromEmail} appears unverified in Resend — auto-retrying with ${def.email}`,
+    );
+    const retryFromHeader = fromName ? `${fromName} <${def.email}>` : def.email;
+    // Make sure the retry preserves the venue's email as Reply-To.
+    const restoredReplyTo = effectiveReplyTo || requestedFromEmail || undefined;
+    result = await (async () => {
+      try {
+        const body: Record<string, unknown> = {
+          from: retryFromHeader,
+          to: [to.trim()],
+          subject,
+          html,
+          text: textBody,
+        };
+        if (ccList.length) body.cc = ccList;
+        if (bccList.length) body.bcc = bccList;
+        if (restoredReplyTo) body.reply_to = restoredReplyTo;
+        if (headers && Object.keys(headers).length > 0) body.headers = headers;
+
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(30_000),
+        });
+        const data = (await res.json()) as { id?: string; message?: string };
+        if (res.ok) {
+          console.log(`[email] Resend retry-with-default sent to ${to}, id:`, data.id);
+          return { success: true };
+        }
+        const errMsg = typeof data.message === 'string' ? data.message : JSON.stringify(data);
+        console.error('[email] Resend retry-with-default failed:', res.status, errMsg);
+        return { success: false, error: errMsg };
+      } catch (err) {
+        console.error('[email] Resend retry-with-default exception:', err);
+        return { success: false, error: err instanceof Error ? err.message : 'Send failed' };
+      }
+    })();
   }
+
+  return result;
 }
 
 // ─── Email templates ──────────────────────────────────────────────────────────
