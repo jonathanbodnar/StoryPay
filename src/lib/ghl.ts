@@ -94,6 +94,15 @@ export async function ghlRequest(
   const base = isV1 ? GHL_API_V1_BASE : GHL_API_BASE;
   const effectivePath = isV1 ? translateV2PathToV1(path) : path;
 
+  // Log every call so we can correlate request → response in Railway logs.
+  // Body is included for non-GETs (truncated for safety) since it's the most
+  // useful piece of context when GHL returns "missing X" / "X doesn't match".
+  const bodyPreview = body ? JSON.stringify(body).slice(0, 500) : '';
+  console.log(
+    `[ghl] -> ${method} ${base}${effectivePath} (tokenKind=${kind})` +
+    (bodyPreview ? ` body=${bodyPreview}` : ''),
+  );
+
   const res = await fetch(`${base}${effectivePath}`, {
     method,
     headers,
@@ -103,14 +112,13 @@ export async function ghlRequest(
 
   if (!res.ok) {
     const errorText = await res.text();
-    // Log the exact endpoint that 4xx'd so debugging (especially when chained
-    // through sendSms / PUT / etc.) doesn't require guesswork.
     console.warn(
-      `[ghl] ${method} ${base}${effectivePath} -> ${res.status} (tokenKind=${kind}): ${errorText.slice(0, 300)}`,
+      `[ghl] <- ${method} ${base}${effectivePath} :: ${res.status} ${errorText.slice(0, 500)}`,
     );
     throw new Error(`GHL API error ${res.status}: ${errorText}`);
   }
 
+  console.log(`[ghl] <- ${method} ${base}${effectivePath} :: ${res.status} OK`);
   return res.json();
 }
 
@@ -607,19 +615,64 @@ export async function sendSms(
   // Exchange agency token → location token if needed
   const token = await resolveLocationToken(accessToken, locationId);
 
-  // v2 path: GHL strictly enforces that the toNumber (if provided) matches
-  // the contact's stored phone. Passing one that differs by even formatting
-  // (e.g. `+16142262075` vs `6142262075`) returns 400 "Contact phone number
-  // does not match with the toNumber". Solution: PUT our phone onto the v2
-  // contact first (idempotent — no-op if it already matches), then send WITHOUT
-  // a toNumber override. GHL will use the contact's stored phone.
-  if (explicitPhone) {
-    await ensureV2ContactHasPhone(token, cid, locationId, explicitPhone);
+  // Inspect what GHL actually has stored on this contact + which numbers the
+  // sub-account has provisioned. This is logged regardless of whether the
+  // subsequent send succeeds, so even successful sends leave a paper trail
+  // we can use to debug future regressions.
+  let ghlContactPhone: string | null = null;
+  try {
+    const probe = (await ghlRequest(`/contacts/${encodeURIComponent(cid)}`, token, { locationId })) as {
+      contact?: { phone?: string | null };
+      phone?: string | null;
+    };
+    ghlContactPhone = probe.contact?.phone ?? probe.phone ?? null;
+    console.log(
+      `[ghl] v2 contact ${cid} probe: storedPhone=${ghlContactPhone ?? 'NULL'}, ourPhone=${explicitPhone ?? 'NONE'}, match=${phonesMatch(ghlContactPhone, explicitPhone ?? '')}`,
+    );
+  } catch (probeErr) {
+    const m = probeErr instanceof Error ? probeErr.message : String(probeErr);
+    console.warn(`[ghl] v2 contact ${cid} probe failed:`, m);
   }
+
+  // Check whether the sub-account has any SMS-capable phone numbers. GHL will
+  // return 422 "Missing phone number" for the FROM side when the location
+  // has none provisioned — same error message as "recipient has no phone", so
+  // we log this proactively to disambiguate.
+  try {
+    const numbersRes = (await ghlRequest(
+      `/phone-system/numbers/${encodeURIComponent(locationId)}`,
+      token,
+      { locationId },
+    )) as { numbers?: unknown[]; phoneNumbers?: unknown[] };
+    const numbers = numbersRes.numbers ?? numbersRes.phoneNumbers ?? [];
+    console.log(`[ghl] v2 location ${locationId} has ${numbers.length} provisioned phone number(s)`);
+    if (Array.isArray(numbers) && numbers.length === 0) {
+      throw new Error(
+        `This GoHighLevel sub-account (${locationId}) has no SMS phone number provisioned. ` +
+        `Open the sub-account in GHL → Settings → Phone Numbers and assign/buy a Twilio number, ` +
+        `then retry. (This is GHL's requirement — without a FROM number, no SMS can be sent from this account.)`,
+      );
+    }
+  } catch (numbersErr) {
+    // If this throws because we synthesized our own error above, propagate it.
+    if (numbersErr instanceof Error && numbersErr.message.includes('no SMS phone number provisioned')) {
+      throw numbersErr;
+    }
+    // Otherwise this is just a permissions/endpoint issue — log and continue.
+    const m = numbersErr instanceof Error ? numbersErr.message : String(numbersErr);
+    console.warn(`[ghl] v2 phone-numbers probe failed (will still attempt send):`, m);
+  }
+
+  // Pre-flight: if GHL has a phone on the contact, use that as the toNumber so
+  // we always pass GHL's *exact* string back. This avoids the "phone doesn't
+  // match toNumber" 400 GHL throws when formatting differs (+16142262075 vs
+  // 6142262075). If GHL has no phone, fall back to our local phone.
+  const toNumberForSend = ghlContactPhone || explicitPhone || null;
 
   // Get or create a conversation, then send SMS through it
   try {
     let conversationId: string | null = await getGhlConversationIdForContact(accessToken, locationId, cid);
+    console.log(`[ghl] v2 conversation lookup for contact ${cid}: ${conversationId ?? 'NONE'}`);
 
     if (!conversationId) {
       const newConv = await ghlRequest('/conversations/', token, {
@@ -628,26 +681,29 @@ export async function sendSms(
         locationId,
       });
       conversationId = newConv?.conversation?.id || newConv?.id;
+      console.log(`[ghl] v2 conversation created for contact ${cid}: ${conversationId ?? 'NONE'}`);
     }
 
     if (conversationId) {
       // GHL requires contactId on this route even when conversationId is set (otherwise 404 "Contact id not given").
       const msgBody: Record<string, unknown> = { type: 'SMS', conversationId, contactId: cid, message, locationId };
+      if (toNumberForSend) msgBody.toNumber = toNumberForSend;
       if (attachments?.length) msgBody.attachments = attachments;
       const result = await ghlRequest('/conversations/messages', token, {
         method: 'POST',
         body: msgBody,
         locationId,
       });
-      console.log(`[ghl] SMS sent via conversation ${conversationId}`);
+      console.log(`[ghl] v2 SMS sent via conversation ${conversationId}`);
       return result;
     }
   } catch (err) {
-    console.error('[ghl] sendSms conversation path failed, trying direct:', err);
+    console.error('[ghl] v2 sendSms conversation path failed, trying direct:', err);
   }
 
   // Direct fallback (contact only — still must include contactId)
   const fallbackBody: Record<string, unknown> = { type: 'SMS', contactId: cid, message, locationId };
+  if (toNumberForSend) fallbackBody.toNumber = toNumberForSend;
   if (attachments?.length) fallbackBody.attachments = attachments;
   return ghlRequest('/conversations/messages', token, {
     method: 'POST',
