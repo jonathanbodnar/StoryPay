@@ -70,9 +70,22 @@ export async function GET() {
     ? sanitizeBrandSocialsOnRead((venue as { brand_socials?: unknown }).brand_socials)
     : undefined;
 
+  // Mask the GHL access token: the client only needs to know whether one is
+  // stored (to render "token on file" UI). Returning the raw token would
+  // leak it to anyone with DevTools / a session cookie.
+  const rawToken = (venue as { ghl_access_token?: string | null }).ghl_access_token;
+  const ghl_access_token = rawToken && typeof rawToken === 'string'
+    ? `••••${rawToken.slice(-4)}`
+    : null;
+  // Same treatment for refresh token if present
+  const rawRefresh = (venue as { ghl_refresh_token?: string | null }).ghl_refresh_token;
+  const ghl_refresh_token = rawRefresh && typeof rawRefresh === 'string' ? '••••' : null;
+
   return NextResponse.json({
     ...venue,
     ...(brand_socials !== undefined ? { brand_socials } : {}),
+    ghl_access_token,
+    ghl_refresh_token,
     directory_plans,
   });
 }
@@ -112,6 +125,7 @@ export async function PATCH(request: Request) {
     accept_ach: true,  // toggle for ACH (bank account / eCheck) on hosted checkout
     ghl_location_id: true,
     ghl_connected:   true,
+    ghl_access_token: true, // per-venue Private Integration Token (pit-...)
   };
   const updates: Record<string, unknown> = {};
 
@@ -220,7 +234,7 @@ export async function PATCH(request: Request) {
       'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets',
       'accept_ach',
       'payment_reminders_enabled', 'payment_reminder_offsets',
-      'ghl_location_id', 'ghl_connected'];
+      'ghl_location_id', 'ghl_connected', 'ghl_access_token'];
     for (const k of knownCols) {
       if (k in updates) safeUpdates[k] = updates[k];
     }
