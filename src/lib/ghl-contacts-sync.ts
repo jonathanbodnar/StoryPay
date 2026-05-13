@@ -341,8 +341,22 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown';
       // 401 → try a one-shot refresh & retry the page once.
-      if (/\b401\b/.test(msg) && venue.ghl_refresh_token) {
-        const refreshed = await tryRefresh(venue);
+      if (/\b401\b/.test(msg)) {
+        let refreshed: string | null = null;
+        // Attempt OAuth refresh first (if the venue has a refresh token).
+        if (venue.ghl_refresh_token) {
+          refreshed = await tryRefresh(venue);
+        }
+        // If OAuth refresh wasn't available or failed, fall back to the
+        // agency key. This is the primary path for legacy clients that
+        // were connected via the agency flow and don't have per-venue
+        // OAuth tokens.
+        if (!refreshed) {
+          const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
+          if (agencyKey) {
+            refreshed = agencyKey;
+          }
+        }
         if (refreshed) {
           token = await resolveLocationToken(refreshed, venue.ghl_location_id);
           pageData = await fetchContactPage(token, venue.ghl_location_id, startAfter, startAfterId);
@@ -402,12 +416,31 @@ export async function syncSingleGhlContact(
 
   const rawToken = await getWorkingToken(venue);
   if (!rawToken) return false;
-  const token = await resolveLocationToken(rawToken, locationId);
+  let token = await resolveLocationToken(rawToken, locationId);
 
   try {
-    const result = await ghlRequest(`/contacts/${contactId}`, token, { locationId }) as {
-      contact?: GhlContact;
-    };
+    let result: { contact?: GhlContact };
+    try {
+      result = await ghlRequest(`/contacts/${contactId}`, token, { locationId }) as {
+        contact?: GhlContact;
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown';
+      // 401 → try agency key fallback for legacy clients
+      if (/\b401\b/.test(msg)) {
+        const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
+        if (agencyKey) {
+          token = await resolveLocationToken(agencyKey, locationId);
+          result = await ghlRequest(`/contacts/${contactId}`, token, { locationId }) as {
+            contact?: GhlContact;
+          };
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
     const c = result.contact;
     if (!c?.id) return false;
     const r = await upsertContact(venue.id, c);
