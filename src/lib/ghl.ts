@@ -128,12 +128,37 @@ function extractCompanyId(agencyToken: string, fallbackLocationId: string): stri
 }
 
 /**
+ * Build a human-readable diagnostic about a JWT's claims (without leaking the
+ * token itself). Used to surface "your token is expired" type errors clearly.
+ */
+function describeJwt(token: string): string {
+  const p = decodeJwtPayload(token);
+  if (!p) return 'token=<not a JWT>';
+  const exp = typeof p.exp === 'number' ? p.exp : null;
+  const iat = typeof p.iat === 'number' ? p.iat : null;
+  const authClass = (p.authClass as string | undefined) ?? '<none>';
+  const nowSec = Math.floor(Date.now() / 1000);
+  const expIso = exp ? new Date(exp * 1000).toISOString() : '<none>';
+  const iatIso = iat ? new Date(iat * 1000).toISOString() : '<none>';
+  const expired = exp ? exp < nowSec : false;
+  return `authClass=${authClass}, iat=${iatIso}, exp=${expIso}, expired=${expired}`;
+}
+
+/**
  * Get a location-scoped access token from the agency JWT.
  * The GHL_AGENCY_API_KEY is agency-level and must be exchanged for a
  * location token before making location-scoped API calls (SMS, contacts, etc.)
  */
 async function getLocationToken(agencyToken: string, locationId: string): Promise<string> {
   const companyId = extractCompanyId(agencyToken, locationId);
+
+  // Pre-flight: if the JWT exp claim says it's expired, fail fast with a
+  // clear message rather than waiting for GHL to say "Invalid JWT".
+  const payload = decodeJwtPayload(agencyToken);
+  if (payload?.exp && typeof payload.exp === 'number' && payload.exp < Math.floor(Date.now() / 1000)) {
+    throw new Error(`GHL agency token is expired (${describeJwt(agencyToken)}). Update GHL_AGENCY_API_KEY / GHL_PRIVATE_KEY in Railway with a fresh token, or switch to a Private Integration Token (pit-*).`);
+  }
+
   const res = await fetch(`${GHL_API_BASE}/oauth/locationToken`, {
     method: 'POST',
     headers: {
@@ -147,7 +172,7 @@ async function getLocationToken(agencyToken: string, locationId: string): Promis
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`GHL location token exchange failed ${res.status}: ${err} (companyId=${companyId}, locationId=${locationId})`);
+    throw new Error(`GHL location token exchange failed ${res.status}: ${err} (companyId=${companyId}, locationId=${locationId}, ${describeJwt(agencyToken)})`);
   }
 
   const data = await res.json();
