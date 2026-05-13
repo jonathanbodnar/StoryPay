@@ -344,18 +344,54 @@ export async function sendSms(
     throw new Error('GHL sendSms: contactId is required');
   }
 
-  // v1 short-circuit: v1 has no /conversations/search or POST /conversations/.
-  // The legacy v1 messaging endpoint auto-resolves the conversation for us.
+  // v1 short-circuit: v1's /conversations/messages requires phone in the body
+  // (it doesn't auto-resolve from contactId). The per-contact route is the
+  // simplest reliable path:
+  //
+  //   POST /v1/contacts/{contactId}/sms  body: { message }
+  //
+  // GHL auto-uses the contact's stored primary phone.
   if (classifyToken(accessToken) === 'v1') {
-    const body: Record<string, unknown> = { type: 'SMS', contactId: cid, message };
-    if (attachments?.length) body.attachments = attachments;
-    const result = await ghlRequest('/conversations/messages', accessToken, {
-      method: 'POST',
-      body,
-      locationId,
-    });
-    console.log(`[ghl] SMS sent via v1 to contact ${cid}`);
-    return result;
+    try {
+      const body: Record<string, unknown> = { message };
+      if (attachments?.length) body.attachments = attachments;
+      const result = await ghlRequest(`/contacts/${encodeURIComponent(cid)}/sms`, accessToken, {
+        method: 'POST',
+        body,
+        locationId,
+      });
+      console.log(`[ghl] SMS sent via v1 /contacts/${cid}/sms`);
+      return result;
+    } catch (perContactErr) {
+      // Fallback: try the /conversations/messages route with phone resolved
+      // from the contact record. Some v1 builds expose the SMS endpoint at
+      // different paths.
+      const perContactMsg = perContactErr instanceof Error ? perContactErr.message : String(perContactErr);
+      console.warn(`[ghl] v1 /contacts/${cid}/sms failed, trying /conversations/messages with explicit phone:`, perContactMsg);
+
+      let phone: string | null = null;
+      try {
+        const contact = await ghlRequest(`/contacts/${encodeURIComponent(cid)}`, accessToken, { locationId }) as {
+          contact?: { phone?: string | null };
+          phone?: string | null;
+        };
+        phone = contact.contact?.phone ?? contact.phone ?? null;
+      } catch (lookupErr) {
+        console.error('[ghl] v1 contact lookup for phone failed:', lookupErr);
+      }
+      if (!phone) {
+        throw new Error(`Unable to resolve phone number for contact ${cid}. Original error: ${perContactMsg}`);
+      }
+      const body: Record<string, unknown> = { type: 'SMS', contactId: cid, phone, message };
+      if (attachments?.length) body.attachments = attachments;
+      const result = await ghlRequest('/conversations/messages', accessToken, {
+        method: 'POST',
+        body,
+        locationId,
+      });
+      console.log(`[ghl] SMS sent via v1 /conversations/messages (explicit phone) to contact ${cid}`);
+      return result;
+    }
   }
 
   // Exchange agency token → location token if needed
