@@ -1559,12 +1559,21 @@ export default function ConversationsPage() {
           </div>
         </aside>
 
-        {/* Thread pane */}
+        {/* Thread pane
+            Desktop (md+): flex column in the normal flow.
+            Mobile with thread open: fixed full-screen overlay (z-[45] sits above
+            the tab bar at z-40 so the composer is always reachable, but below the
+            sidebar slide-out at z-50 so navigation still works).  The bottom
+            padding on the composer balances the tab bar height. */}
         <section
           className={classNames(
-            'flex min-h-0 min-w-0 flex-1 flex-col bg-white',
-            !mobileShowThread ? 'hidden md:flex' : 'flex',
+            'flex min-w-0 flex-col bg-white',
+            // md+: always in-flow, fills remaining width
+            'md:relative md:flex-1 md:min-h-0',
+            // mobile: hidden when list is shown; fixed overlay when thread is open
+            !mobileShowThread ? 'hidden md:flex' : 'flex fixed inset-x-0 z-[45]',
           )}
+          style={mobileShowThread ? { top: 0, bottom: 0 } : undefined}
         >
           {selectedId && threadDetail ? (
             <>
@@ -1628,10 +1637,12 @@ export default function ConversationsPage() {
                       ) : (
                         <BotOff size={13} />
                       )}
-                      {isPaused
-                        ? (resumeLabel ? `Paused until ${resumeLabel}` : 'AI Paused')
-                        : contactLead?.ai_state === 'ai_active' ? 'AI Active'
-                        : contactLead ? 'AI Off' : 'Start AI'}
+                      <span className="truncate max-w-[80px] sm:max-w-none">
+                        {isPaused
+                          ? (resumeLabel ? `Paused until ${resumeLabel}` : 'AI Paused')
+                          : contactLead?.ai_state === 'ai_active' ? 'AI Active'
+                          : contactLead ? 'AI Off' : 'Start AI'}
+                      </span>
                       <ChevronDown size={12} className="text-current opacity-60" />
                     </button>
 
@@ -1762,8 +1773,8 @@ export default function ConversationsPage() {
                 }
 
                 return (
-                  <div className="flex-shrink-0 border-b border-gray-100 px-3 py-2 sm:px-5">
-                    <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex-shrink-0 border-b border-gray-100 px-3 py-2 sm:px-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex flex-nowrap items-center gap-1.5 min-w-max sm:flex-wrap sm:min-w-0">
                       <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Stage</span>
                       {allStages.length > 0 ? allStages.map((st) => {
                         // ID match is authoritative; name match is fallback for legacy data.
@@ -2168,7 +2179,13 @@ export default function ConversationsPage() {
                 )}
               </div>
 
-              <div className="flex-shrink-0 border-t border-gray-100 bg-gray-50/90 px-3 py-3 sm:px-5">
+              <div
+                className="flex-shrink-0 border-t border-gray-100 bg-gray-50/90 px-3 pt-3 pb-3 sm:px-5"
+                style={mobileShowThread ? {
+                  // Push the composer above the fixed tab bar (≈56px) + home-indicator
+                  paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 60px)',
+                } : undefined}
+              >
                 <div className="mx-auto max-w-xl">
                   {!composerExpanded && !body.trim() && !emailSubject.trim() ? (
                     <CollapsedComposer
