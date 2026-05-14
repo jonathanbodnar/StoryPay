@@ -103,10 +103,30 @@ export async function POST(
     if (proposal.payment_type === 'subscription' && proposal.payment_config) {
       const config = proposal.payment_config as SubscriptionConfig;
       checkoutData.mode = 'subscription';
-      checkoutData.recurring = {
-        frequency: config.frequency || 'monthly',
-        ...(config.start_date ? { start_date: config.start_date } : {}),
-      };
+
+      // If the start date is in the future, use LP's trial mode so the
+      // customer is NOT charged today. LP tokenizes the card and schedules
+      // the first charge for the start date. Otherwise charge immediately.
+      const startDate = config.start_date;
+      const isFutureStart = startDate && new Date(startDate) > new Date();
+
+      if (isFutureStart) {
+        // LP expects start_on as full ISO datetime
+        const startOnIso = startDate.length === 10
+          ? `${startDate}T00:00:00Z`
+          : startDate;
+        checkoutData.recurring = {
+          frequency: config.frequency || 'monthly',
+          trial: true,
+          start_on: startOnIso,
+        };
+        // LP still needs amount to define the recurring amount, but trial
+        // mode won't charge it upfront — no money changes hands today.
+      } else {
+        checkoutData.recurring = {
+          frequency: config.frequency || 'monthly',
+        };
+      }
     } else if (proposal.payment_type === 'installment' && proposal.payment_config) {
       const config = proposal.payment_config as InstallmentConfig;
       const installments = config.installments || [];

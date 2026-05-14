@@ -101,7 +101,10 @@ export async function POST(
 
     console.log('[verify-payment] Checkout session response:', JSON.stringify(session, null, 2));
 
-    if (session.status !== 'completed') {
+    // LP trial sessions return status "trial_started" — card tokenized, no charge.
+    // Standard paid sessions return "completed".
+    const isTrialSession = session.status === 'trial_started';
+    if (session.status !== 'completed' && !isTrialSession) {
       // Notify the venue owner that a payment attempt failed (gated by toggles).
       // Awaited because serverless runtimes can cancel fire-and-forget promises
       // after the response is returned.
@@ -140,18 +143,20 @@ export async function POST(
     // a few different shapes depending on payload version, so try them all.
     // We need this on `proposals.charge_id` for /api/transactions/refund to
     // hit POST /api/v1/charges/{chargeId}/refund.
+    //
+    // For trial sessions there is no charge — amount = 0, transaction.id = "".
     const sessionCharge = (session.charge as Record<string, unknown> | null) || null;
     const sessionCharges = Array.isArray(session.charges) ? session.charges : null;
     const firstCharge = sessionCharges
       ? (sessionCharges[0] as Record<string, unknown> | undefined)
       : undefined;
-    const chargeIdFromSession =
+    const chargeIdFromSession = isTrialSession ? null :
       (session.charge_id as string | number | null) ??
       (session.chargeId as string | number | null) ??
       (sessionCharge?.id as string | number | null | undefined) ??
       (firstCharge?.id as string | number | null | undefined) ??
       null;
-    const transactionId =
+    const transactionId = isTrialSession ? null :
       (session.transaction_id as string | number | null) ??
       (session.transactionId as string | number | null) ??
       null;
@@ -326,7 +331,8 @@ export async function POST(
     }
 
     // Fan out to Zapier / external integrations subscribed to payment.received
-    if (proposal.venue_id) {
+    // Skip for trial sessions — no money changed hands yet.
+    if (proposal.venue_id && !isTrialSession) {
       void dispatchIntegrationEvent(proposal.venue_id as string, 'payment.received', {
         payment: {
           proposal_id: proposal.id,
@@ -467,29 +473,31 @@ export async function POST(
         });
       }
 
-      // 2. Payment received (always for full / installment first payment / subscription start)
-      await notifyOwner({
-        venueId: proposal.venue_id as string,
-        scenario: 'payment_received',
-        vars: {
-          customer_name: customerName,
-          amount:        formatAmount(amountCents),
-        },
-        actionUrl:    dashUrl,
-        alsoHighValue: amountCents >= HIGH_VALUE_THRESHOLD_CENTS,
-      });
-
-      // 3. Separate high-value SMS scenario (gated by sms_high_value_payment)
-      if (amountCents >= HIGH_VALUE_THRESHOLD_CENTS) {
+      // 2. Payment received — skip for trial sessions (no money changed hands).
+      if (!isTrialSession) {
         await notifyOwner({
           venueId: proposal.venue_id as string,
-          scenario: 'high_value_payment',
+          scenario: 'payment_received',
           vars: {
             customer_name: customerName,
             amount:        formatAmount(amountCents),
           },
-          actionUrl: dashUrl,
+          actionUrl:    dashUrl,
+          alsoHighValue: amountCents >= HIGH_VALUE_THRESHOLD_CENTS,
         });
+
+        // 3. Separate high-value SMS scenario (gated by sms_high_value_payment)
+        if (amountCents >= HIGH_VALUE_THRESHOLD_CENTS) {
+          await notifyOwner({
+            venueId: proposal.venue_id as string,
+            scenario: 'high_value_payment',
+            vars: {
+              customer_name: customerName,
+              amount:        formatAmount(amountCents),
+            },
+            actionUrl: dashUrl,
+          });
+        }
       }
     } catch (notifyErr) {
       console.error('[verify-payment] Failed to notify owner:', notifyErr);
