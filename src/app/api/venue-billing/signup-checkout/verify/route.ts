@@ -338,12 +338,17 @@ async function verifyHandler(req: NextRequest) {
   const trialEndYmd = trialEndsAt.slice(0, 10);
   let newSubId: string | number | null = null;
   try {
+    // LP createSubscription requires:
+    //   - amount: INTEGER cents (min 50). Dollars are NOT accepted here.
+    //   - startOn: full ISO datetime string (YYYY-MM-DD alone is rejected as
+    //     "Invalid ISO datetime"). Use noon UTC to avoid any TZ rollover.
+    const startOnIso = `${trialEndYmd}T12:00:00.000Z`;
     const subPayload: Record<string, unknown> = {
       customerId:      Number(customerId),
       paymentMethodId: Number(paymentMethodId),
-      amount:          charge.total_cents / 100,
+      amount:          Math.round(charge.total_cents),
       frequency:       'monthly',
-      startOn:         trialEndYmd,
+      startOn:         startOnIso,
       description:     `StoryVenue — ${targetPlan.name} (monthly, first charge ${trialEndYmd})`,
     };
     console.log('[signup-checkout/verify] createSubscription payload:', JSON.stringify(subPayload));
