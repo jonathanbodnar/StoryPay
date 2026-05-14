@@ -113,15 +113,15 @@ function SaasPaymentForm({
           hideTotal: true,
           hideAgreementCheckbox: true,
           appearance: {
-            colorButtonSelectedBackground: '#1b1b1b',
+            colorButtonSelectedBackground: '#1a1a1a',
             colorButtonSelectedText: '#ffffff',
-            colorButtonText: '#ffffff',
-            colorButtonBackground: '#1b1b1b',
+            colorButtonText: '#4a5568',
+            colorButtonBackground: '#f7fafc',
             colorBackground: '#ffffff',
             colorText: '#1a202c',
             fontFamily: 'SourceSans',
             fontSize: '16px',
-            borderRadius: '12px',
+            borderRadius: '8px',
           },
         });
 

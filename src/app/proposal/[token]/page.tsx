@@ -204,15 +204,15 @@ function InlinePaymentForm({
           hideTotal: true,
           hideAgreementCheckbox: true,
           appearance: {
-            colorButtonSelectedBackground: brandColor,
+            colorButtonSelectedBackground: '#1a1a1a',
             colorButtonSelectedText: '#ffffff',
-            colorButtonText: '#ffffff',
-            colorButtonBackground: brandColor,
+            colorButtonText: '#4a5568',
+            colorButtonBackground: '#f7fafc',
             colorBackground: '#ffffff',
             colorText: '#1a202c',
             fontFamily: 'SourceSans',
             fontSize: '16px',
-            borderRadius: '12px',
+            borderRadius: '8px',
           },
         });
 
