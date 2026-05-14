@@ -9,6 +9,7 @@ import {
   cancelSubscription,
   createSubscription,
   getCheckoutSession,
+  getSubscription,
   listSubscriptions,
   refundCharge,
 } from '@/lib/lunarpay';
@@ -109,7 +110,7 @@ async function verifyHandler(req: NextRequest) {
     console.error('[signup-checkout/verify] getCheckoutSession failed:', e);
     return NextResponse.json(
       { error: 'Could not look up your payment session. Please contact support.' },
-      { status: 502 },
+      { status: 422 },
     );
   }
 
@@ -163,51 +164,88 @@ async function verifyHandler(req: NextRequest) {
     'paymentMethodId:', paymentMethodId, 'validationSubId:', validationSubId,
     'chargeId:', chargeIdFromSession);
 
-  // ── Fallback: find the validation subscription via listSubscriptions ─────
+  // ── Fallback 1: find the validation subscription via listSubscriptions ───
   // LP sometimes does not surface subscription_id / customer_id in the
   // session GET response. Mirror the strategy used in proposals/verify-payment.
-  if (!validationSubId && customerId) {
+  if (!validationSubId || !paymentMethodId) {
     try {
       const allSubs = await listSubscriptions(secret);
       const subList: Record<string, unknown>[] = Array.isArray(allSubs)
         ? allSubs
         : ((allSubs as Record<string, unknown>).data as Record<string, unknown>[]) ?? [];
+      // Match on customer_id if we have it, otherwise take the most-recent active $1 sub.
       const match = subList.find(
         (s) =>
-          String(s.customer_id ?? s.customerId ?? s.donorId ?? s.donor_id) === String(customerId) &&
+          (customerId
+            ? String(s.customer_id ?? s.customerId ?? s.donorId ?? s.donor_id) === String(customerId)
+            : true) &&
           s.status !== 'cancelled' &&
           s.status !== 'canceled',
       );
       if (match?.id) {
-        validationSubId = match.id as string | number;
-        if (!paymentMethodId) {
+        if (!validationSubId) validationSubId = match.id as string | number;
+        if (!customerId)
+          customerId =
+            (match.customer_id as string | number | null) ??
+            (match.customerId as string | number | null) ??
+            null;
+        if (!paymentMethodId)
           paymentMethodId =
-            (match.paymentMethodId as string | number | null) ??
             (match.payment_method_id as string | number | null) ??
+            (match.paymentMethodId as string | number | null) ??
             (match.payment_method as string | number | null) ??
             null;
-        }
-        console.log('[signup-checkout/verify] found validation sub via list:', validationSubId);
+        console.log('[signup-checkout/verify] found validation sub via list:', validationSubId,
+          'customerId:', customerId, 'paymentMethodId:', paymentMethodId);
       }
     } catch (e) {
       console.warn('[signup-checkout/verify] listSubscriptions fallback failed:', e);
     }
   }
 
-  // If we still have no customer / payment method we truly cannot proceed.
-  if (!customerId || !paymentMethodId) {
+  // ── Fallback 2: fetch the individual subscription for full detail ─────────
+  // The list endpoint often omits payment_method_id; the GET endpoint includes it.
+  if (validationSubId && !paymentMethodId) {
+    try {
+      const subDetail = (await getSubscription(secret, validationSubId)) as Record<string, unknown>;
+      const sd = (subDetail.data as Record<string, unknown>) || subDetail;
+      paymentMethodId =
+        (sd.payment_method_id as string | number | null) ??
+        (sd.paymentMethodId as string | number | null) ??
+        (sd.payment_method as string | number | null) ??
+        null;
+      if (!customerId)
+        customerId =
+          (sd.customer_id as string | number | null) ??
+          (sd.customerId as string | number | null) ??
+          null;
+      console.log('[signup-checkout/verify] sub detail — paymentMethodId:', paymentMethodId, 'customerId:', customerId);
+    } catch (e) {
+      console.warn('[signup-checkout/verify] getSubscription fallback failed:', e);
+    }
+  }
+
+  // If we truly have no customer id we cannot proceed at all.
+  if (!customerId) {
     console.error(
-      '[signup-checkout/verify] cannot proceed — missing customer or payment method after all fallbacks',
+      '[signup-checkout/verify] cannot proceed — no customerId after all fallbacks',
       { customerId, paymentMethodId, validationSubId, sessionId },
     );
     return NextResponse.json(
       {
         error:
-          'Your card was processed but we could not retrieve the payment details needed to activate your trial. Please contact support — reference session ' +
+          'Your card was processed but we could not retrieve your customer record. Please contact support — reference session ' +
           sessionId,
       },
-      { status: 502 },
+      { status: 422 },
     );
+  }
+
+  // paymentMethodId is optional — if LP didn't expose it, createSubscription
+  // will use the customer's default saved payment method.
+  if (!paymentMethodId) {
+    console.warn('[signup-checkout/verify] paymentMethodId not found — LP will use customer default card',
+      { customerId, validationSubId, sessionId });
   }
 
   // ── Read plan + trial context from venue row ─────────────────────────────
@@ -282,14 +320,16 @@ async function verifyHandler(req: NextRequest) {
   const trialEndYmd = trialEndsAt.slice(0, 10);
   let newSubId: string | number | null = null;
   try {
-    const subResult = (await createSubscription(secret, {
-      customerId:      Number(customerId),
-      paymentMethodId: Number(paymentMethodId),
-      amount:          charge.total_cents,
-      frequency:       'monthly',
-      startOn:         trialEndYmd,
-      description:     `StoryVenue — ${targetPlan.name} (monthly, first charge ${trialEndYmd})`,
-    })) as Record<string, unknown>;
+    const subPayload: Record<string, unknown> = {
+      customerId: Number(customerId),
+      amount:     charge.total_cents,
+      frequency:  'monthly',
+      startOn:    trialEndYmd,
+      description: `StoryVenue — ${targetPlan.name} (monthly, first charge ${trialEndYmd})`,
+    };
+    if (paymentMethodId !== null) subPayload.paymentMethodId = Number(paymentMethodId);
+
+    const subResult = (await createSubscription(secret, subPayload)) as Record<string, unknown>;
     const sub = (subResult.data as Record<string, unknown>) || subResult;
     newSubId = (sub.id as string | number | undefined) ?? null;
     console.log('[signup-checkout/verify] created real sub', newSubId, 'startOn', trialEndYmd);
@@ -301,14 +341,14 @@ async function verifyHandler(req: NextRequest) {
           'Your card was verified and the $1 charge refunded, but we could not schedule your subscription. Please contact support — reference session ' +
           sessionId,
       },
-      { status: 502 },
+      { status: 422 },
     );
   }
 
   if (newSubId === null) {
     return NextResponse.json(
       { error: 'LunarPay did not return a subscription id.' },
-      { status: 502 },
+      { status: 422 },
     );
   }
 
