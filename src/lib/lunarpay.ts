@@ -130,6 +130,25 @@ export function updateCustomer(secretKey: string, id: number, data: Record<strin
   return lpFetch(`/api/v1/customers/${id}`, { method: 'PUT', body: data, key: secretKey });
 }
 
+/**
+ * Create a Fortis Elements payment intention. Per LP /developers docs:
+ *
+ *   • hasRecurring: true       → creates a "save card" ticket. ticket_success
+ *                                fires; the backend then saves the card via
+ *                                POST /customers/:id/payment-methods and
+ *                                charges the real amount via POST /charges.
+ *   • savePaymentMethod: true  → vault-only mode for trials. tokenize_success
+ *                                fires with a vaultId; no charge.
+ *
+ * Per the docs, when using either flag, NO `amount` should be sent — the
+ * real charge happens server-side later via /charges with the saved
+ * paymentMethodId. Passing amount here causes Fortis to attempt an immediate
+ * charge against the ticket, which conflicts with the documented save-then-
+ * charge flow and was the source of the wrong-amount (no-fee) bug.
+ *
+ * Field names are camelCase per LP's Elements API (`paymentMethods`, not
+ * `payment_methods` like the hosted /checkout/sessions endpoint).
+ */
 export function createIntention(
   publishableKey: string,
   amount?: number,
@@ -139,12 +158,11 @@ export function createIntention(
   if (options?.savePaymentMethod) {
     body.savePaymentMethod = true;
   } else if (options?.hasRecurring) {
-    // Only set hasRecurring when explicitly requested (installment / subscription).
-    // Full one-time payments pass neither flag — no card vaulting.
     body.hasRecurring = true;
+  } else if (amount) {
+    body.amount = amount;
   }
-  if (amount) body.amount = amount;
-  if (options?.paymentMethods?.length) body.payment_methods = options.paymentMethods;
+  if (options?.paymentMethods?.length) body.paymentMethods = options.paymentMethods;
   return lpFetch('/api/v1/intentions', {
     method: 'POST',
     body,

@@ -70,7 +70,8 @@ export async function POST() {
       trialEndsAt,
     });
   } catch (err) {
-    console.error('[venue-billing/payment-intent]', err);
-    return NextResponse.json({ error: 'Failed to initialize payment form' }, { status: 500 });
+    console.error('[venue-billing/payment-intent] LP intention failed:', err);
+    const msg = err instanceof Error ? err.message : 'Failed to initialize payment form';
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

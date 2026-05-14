@@ -65,17 +65,14 @@ export async function POST(
   const displayAmountCents = isTrial ? 0 : applyFee(amountCents);
 
   try {
-    // Per LP docs (May 2026): the ticket from `ticket_success` can ONLY be
-    // used to save the card via POST /customers/:id/payment-methods. Real
-    // charges go through POST /charges with the resulting paymentMethodId.
-    // So ALL paid flows use hasRecurring:true; only trials use savePaymentMethod.
-    //
-    // The intention `amount` is what Fortis Elements displays as the total
-    // and authorizes — it MUST match what we'll actually charge (incl. fee),
-    // otherwise the charge fails or is short.
+    // Per LP docs: when using hasRecurring or savePaymentMethod, omit `amount`.
+    // The ticket is consumed by /customers/:id/payment-methods (tokenization);
+    // the real charge fires from our backend via /charges with the resulting
+    // paymentMethodId for the with-fee total. Passing amount here makes Fortis
+    // attempt an immediate ticket-bound charge for the wrong amount.
     const intentionResult = await createIntention(
       venue.lunarpay_publishable_key,
-      isTrial ? undefined : displayAmountCents,
+      undefined,
       {
         paymentMethods:    acceptAch ? ['cc', 'ach'] : ['cc'],
         hasRecurring:      isTrial ? undefined : true,
@@ -93,7 +90,8 @@ export async function POST(
       paymentMethods:   acceptAch ? ['cc', 'ach'] : ['cc'],
     });
   } catch (err) {
-    console.error('Payment intent error:', err);
-    return NextResponse.json({ error: 'Failed to create payment intent' }, { status: 500 });
+    console.error('[proposal payment-intent] LP intention failed:', err);
+    const msg = err instanceof Error ? err.message : 'Failed to create payment intent';
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
