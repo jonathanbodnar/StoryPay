@@ -26,9 +26,24 @@ const SIGNUP_TRIAL_DAYS = 14;
  * 2. For free plans ($0 total): returns { redirect: '/dashboard?welcome=1' }
  *    immediately without requiring a card.
  * 3. For paid plans: creates a LunarPay checkout session so the user can
- *    enter their card. The subscription start date is set to 14 days from
- *    now so the first charge fires exactly after the trial period.
+ *    enter their card.
+ *
+ * IMPORTANT — why this is NOT a `mode:"subscription"` checkout
+ * ---------------------------------------------------------------
+ * We tried using `mode:"subscription" + recurring.start_date = trial_end`
+ * to let LunarPay defer the first charge until trial end. In practice LP
+ * still charges the `amount` immediately and only treats `start_date` as
+ * "when the next recurring charge fires" — i.e. there is no real trial.
+ *
+ * So we revert to the proven two-step pattern that the codebase used
+ * before commit 1524ebb:
+ *   1. One-off `$1.00` card-validation charge at checkout (vaults card +
+ *      yields a customer_id + payment_method_id).
+ *   2. /signup-checkout/verify refunds the $1, then calls
+ *      `createSubscription({ startOn: trial_end_date })` so the first
+ *      recurring charge fires only after the 14-day trial completes.
  */
+const VALIDATION_CHARGE_DOLLARS = 1;
 export async function POST(req: NextRequest) {
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
@@ -162,16 +177,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 14-day free trial with mode:"subscription" and a deferred start_date.
-  // LP vaults the card at checkout but the recurring subscription only
-  // starts billing on start_date (= trial end). This eliminates the old
-  // $1 verification + manual refund + manual createSubscription pattern.
+  // $1 card-validation charge. LP needs a non-zero amount to vault the
+  // card and return a customer_id + payment_method_id we can later attach
+  // to a deferred subscription. The /verify endpoint refunds this $1 the
+  // moment the user lands back on our success URL.
   const trialStartDate = trialEndsAt.toISOString().slice(0, 10);
+  const monthlyDollars = (charge.total_cents / 100).toFixed(2);
   const checkoutData: Record<string, unknown> = {
-    amount:          charge.total_cents / 100,
-    description:     `StoryVenue — ${targetPlan.name} (14-day free trial, first charge ${trialStartDate})`,
-    mode:            'subscription',
-    recurring:       { frequency: 'monthly', start_date: trialStartDate },
+    amount:          VALIDATION_CHARGE_DOLLARS,
+    description:     `StoryVenue — ${targetPlan.name}. 14-day free trial: $1 card check (refunded immediately). First $${monthlyDollars} charge on ${trialStartDate}.`,
     customer_email:  ctx.venue.email || undefined,
     customer_name:   ctx.venue.name,
     payment_methods: ['cc'],
@@ -180,6 +194,7 @@ export async function POST(req: NextRequest) {
       storypay_plan_id:  planId,
       flow:              'signup_trial',
       trial_ends_at:     trialEndsAtIso,
+      monthly_cents:     charge.total_cents,
     },
     success_url:     `${APP_URL}/signup/plan/complete?checkout=1`,
     cancel_url:      `${APP_URL}/signup/addons?plan_id=${planId}`,

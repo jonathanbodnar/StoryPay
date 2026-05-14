@@ -98,13 +98,17 @@ function CompleteInner() {
             <XCircle size={40} className="mx-auto mb-4 text-red-400" />
             <h2 className="text-lg font-semibold text-gray-900">Something went wrong</h2>
             <p className="mt-2 text-sm text-red-500">{errorMsg}</p>
+            <p className="mt-3 text-xs text-gray-500">
+              If your card was already charged, &ldquo;Try again&rdquo; will safely retry
+              without re-charging. You can also continue to your dashboard
+              and we&apos;ll finish setup there.
+            </p>
             <div className="mt-5 flex flex-col gap-2">
               <button
                 onClick={() => {
                   verified.current = false;
                   setStatus('verifying');
                   setErrorMsg('');
-                  // Re-trigger the effect
                   window.location.reload();
                 }}
                 className="w-full rounded-xl bg-gray-900 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-85"
@@ -112,11 +116,17 @@ function CompleteInner() {
                 Try again
               </button>
               <button
-                onClick={() => router.replace('/signup/plan')}
+                onClick={() => router.replace('/dashboard?welcome=1')}
                 className="w-full rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
               >
-                Go back to plan selection
+                Continue to dashboard
               </button>
+              <a
+                href="mailto:support@storyvenue.com"
+                className="mt-1 text-center text-xs text-gray-400 hover:text-gray-600"
+              >
+                Email support
+              </a>
             </div>
           </>
         )}
