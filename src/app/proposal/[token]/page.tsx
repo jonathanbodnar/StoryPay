@@ -5,6 +5,16 @@ import { useParams, useRouter } from 'next/navigation';
 import DOMPurify from 'isomorphic-dompurify';
 import { formatCents, formatDate } from '@/lib/utils';
 
+interface FortisForm { submit(): void; }
+interface FortisElements {
+  create(opts: Record<string, unknown>): FortisForm;
+  eventBus: { on(evt: string, cb: (d: Record<string, unknown>) => void): void };
+}
+// Access the Fortis SDK via a local cast (avoids conflicting with update-card page's global declaration)
+function getFortisSDK(): { elements: new (token: string) => FortisElements } | undefined {
+  return (window as unknown as { Commerce?: { elements: new (token: string) => FortisElements } }).Commerce;
+}
+
 const ESIGN_CONSENT_TEXT =
   'By signing electronically below, I consent to do business electronically with the venue, ' +
   'agree that this electronic signature is the legal equivalent of a handwritten signature, ' +
@@ -125,52 +135,210 @@ function SignatureCanvas({ onSignatureChange }: { onSignatureChange: (dataUrl: s
   );
 }
 
-function PaymentButton({ token }: { token: string }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+interface PaymentIntentData {
+  clientToken: string;
+  environment: string;
+  amountCents: number;
+  isTrial: boolean;
+  paymentType: string;
+  paymentMethods: string[];
+}
 
-  const handlePay = async () => {
-    setLoading(true);
-    setError(null);
+function InlinePaymentForm({
+  token,
+  brandColor,
+  onSuccess,
+}: {
+  token: string;
+  brandColor: string;
+  onSuccess: () => void;
+}) {
+  const [intent, setIntent] = useState<PaymentIntentData | null>(null);
+  const [intentLoading, setIntentLoading] = useState(true);
+  const [elementsLoading, setElementsLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const formRef = useRef<FortisForm | null>(null);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    fetch(`/api/proposals/public/${token}/payment-intent`, { method: 'POST' })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) throw new Error(data.error);
+        setIntent(data as PaymentIntentData);
+      })
+      .catch((err: unknown) => setPayError(err instanceof Error ? err.message : 'Failed to load payment form'))
+      .finally(() => setIntentLoading(false));
+  }, [token]);
+
+  useEffect(() => {
+    if (!intent || mountedRef.current) return;
+    mountedRef.current = true;
+
+    const sdkUrl =
+      intent.environment === 'production'
+        ? 'https://js.fortis.tech/commercejs-v1.0.0.min.js'
+        : 'https://js.sandbox.fortis.tech/commercejs-v1.0.0.min.js';
+
+    const existing = document.querySelector(`script[src="${sdkUrl}"]`);
+    const loadSdk: Promise<void> = existing
+      ? Promise.resolve()
+      : new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = sdkUrl;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('Failed to load payment SDK'));
+          document.head.appendChild(s);
+        });
+
+    loadSdk
+      .then(() => {
+        const SDK = getFortisSDK();
+        if (!SDK) throw new Error('Payment SDK unavailable');
+        const elements = new SDK.elements(intent.clientToken);
+        const form = elements.create({
+          container: '#fortis-payment-form',
+          environment: intent.environment,
+          theme: 'default',
+          floatingLabels: true,
+          showSubmitButton: false,
+          hideTotal: true,
+          hideAgreementCheckbox: true,
+          appearance: {
+            colorButtonSelectedBackground: brandColor,
+            colorButtonSelectedText: '#ffffff',
+            colorButtonText: '#4a5568',
+            colorButtonBackground: '#f7fafc',
+            colorBackground: '#ffffff',
+            colorText: '#1a202c',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: '16px',
+            borderRadius: '12px',
+          },
+        });
+        formRef.current = form;
+
+        // Fires for hasRecurring:true intentions (one-time, installment, subscription)
+        elements.eventBus.on('ticket_success', async (payload) => {
+          const p = payload as { id?: string; ticket?: { id?: string }; data?: { id?: string }; payment_method?: string };
+          const ticketId = (p.id ?? p.ticket?.id ?? p.data?.id) as string;
+          await submitToServer({ ticketId, paymentMethod: p.payment_method || 'cc' });
+        });
+
+        // Fires for savePaymentMethod:true intentions (trial subscriptions)
+        elements.eventBus.on('tokenize_success', async (payload) => {
+          const p = payload as { id?: string; data?: { id?: string }; payment_method?: string };
+          const vaultId = (p.id ?? p.data?.id) as string;
+          await submitToServer({ vaultId, paymentMethod: p.payment_method || 'cc' });
+        });
+
+        elements.eventBus.on('error', (errPayload) => {
+          const e = errPayload as { message?: string };
+          setPayError(e.message || 'Payment error. Please try again.');
+          setProcessing(false);
+        });
+
+        setElementsLoading(false);
+      })
+      .catch((err: unknown) => {
+        setPayError(err instanceof Error ? err.message : 'Failed to initialize payment form');
+        setElementsLoading(false);
+      });
+  }, [intent, brandColor]);
+
+  const submitToServer = async ({
+    ticketId,
+    vaultId,
+    paymentMethod,
+  }: {
+    ticketId?: string;
+    vaultId?: string;
+    paymentMethod: string;
+  }) => {
+    setPayError(null);
     try {
-      const res = await fetch(`/api/proposals/public/${token}/checkout`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to start payment');
-      window.location.href = data.url;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start payment');
-      setLoading(false);
+      const res = await fetch(`/api/proposals/public/${token}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId, vaultId, paymentMethod }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || 'Payment failed');
+      onSuccess();
+    } catch (err: unknown) {
+      setPayError(err instanceof Error ? err.message : 'Payment failed. Please try again.');
+      setProcessing(false);
     }
   };
 
+  const handlePayClick = () => {
+    if (!formRef.current) return;
+    setProcessing(true);
+    setPayError(null);
+    formRef.current.submit();
+  };
+
+  const isLoading = intentLoading || elementsLoading;
+  const buttonLabel = intent?.isTrial
+    ? 'Start Free Trial — No charge today'
+    : intent
+    ? `Pay ${formatCents(intent.amountCents)}`
+    : 'Pay Now';
+
   return (
     <div>
-      {error && <div className="mb-4 rounded-xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">{error}</div>}
-      <button
-        onClick={handlePay}
-        disabled={loading}
-        className="w-full rounded-xl bg-gradient-to-r from-brand-900 to-brand-700 px-6 py-4 text-sm font-semibold text-white hover:from-brand-700 hover:to-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-900 focus:ring-offset-2 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
-      >
-        {loading ? (
-          <>
-            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-            </svg>
-            Redirecting to payment…
-          </>
-        ) : (
-          <>
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-            </svg>
-            Pay Now
-          </>
-        )}
-      </button>
-      <p className="mt-3 text-center text-xs text-gray-400">
-        You&apos;ll be redirected to a secure payment page
-      </p>
+      {isLoading && (
+        <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+          <span className="text-sm">Loading secure payment form…</span>
+        </div>
+      )}
+
+      <div
+        id="fortis-payment-form"
+        className={isLoading ? 'hidden' : 'mb-5'}
+        style={{ minHeight: isLoading ? 0 : 220 }}
+      />
+
+      {payError && (
+        <div className="mb-4 rounded-xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">
+          {payError}
+        </div>
+      )}
+
+      {!isLoading && (
+        <>
+          <button
+            onClick={handlePayClick}
+            disabled={processing || Boolean(payError && !formRef.current)}
+            className="w-full rounded-xl bg-gradient-to-r from-brand-900 to-brand-700 px-6 py-4 text-sm font-semibold text-white hover:from-brand-700 hover:to-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-900 focus:ring-offset-2 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
+          >
+            {processing ? (
+              <>
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+                Processing…
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                </svg>
+                {buttonLabel}
+              </>
+            )}
+          </button>
+          <p className="mt-3 text-center text-xs text-gray-400">
+            Secured with 256-bit SSL encryption
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -616,7 +784,15 @@ export default function ProposalPage() {
                 </div>
               )}
 
-              <PaymentButton token={token} />
+              <InlinePaymentForm
+                token={token}
+                brandColor={proposal.venue_brand?.color || '#1b1b1b'}
+                onSuccess={() =>
+                  setProposal((prev) =>
+                    prev ? { ...prev, status: 'paid', paid_at: new Date().toISOString() } : prev
+                  )
+                }
+              />
             </div>
           )}
 

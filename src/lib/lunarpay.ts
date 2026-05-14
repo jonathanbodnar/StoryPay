@@ -130,8 +130,17 @@ export function updateCustomer(secretKey: string, id: number, data: Record<strin
   return lpFetch(`/api/v1/customers/${id}`, { method: 'PUT', body: data, key: secretKey });
 }
 
-export function createIntention(publishableKey: string, amount?: number, options?: { paymentMethods?: string[] }) {
-  const body: Record<string, unknown> = { hasRecurring: true };
+export function createIntention(
+  publishableKey: string,
+  amount?: number,
+  options?: { paymentMethods?: string[]; hasRecurring?: boolean; savePaymentMethod?: boolean },
+) {
+  const body: Record<string, unknown> = {};
+  if (options?.savePaymentMethod) {
+    body.savePaymentMethod = true;
+  } else {
+    body.hasRecurring = true;
+  }
   if (amount) body.amount = amount;
   if (options?.paymentMethods?.length) body.payment_methods = options.paymentMethods;
   return lpFetch('/api/v1/intentions', {
@@ -145,6 +154,20 @@ export function savePaymentMethod(secretKey: string, customerId: number, ticketI
   return lpFetch(`/api/v1/customers/${customerId}/payment-methods`, {
     method: 'POST',
     body: { ticketId, nameHolder, setDefault: true },
+    key: secretKey,
+  });
+}
+
+/** Save a payment method from a Fortis vault token (tokenize_success event, for trials). */
+export function savePaymentMethodFromVault(
+  secretKey: string,
+  customerId: number,
+  vaultId: string,
+  paymentMethod: string,
+) {
+  return lpFetch(`/api/v1/customers/${customerId}/payment-methods`, {
+    method: 'POST',
+    body: { vaultId, paymentMethod, setDefault: true },
     key: secretKey,
   });
 }
