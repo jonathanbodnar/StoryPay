@@ -33,9 +33,8 @@ function trialEndDate(): string {
 }
 
 // ── Fortis Elements types (local cast — avoids global declaration conflicts) ─
-interface FortisForm { submit(): void; }
 interface FortisElements {
-  create(opts: Record<string, unknown>): FortisForm;
+  create(opts: Record<string, unknown>): void;
   eventBus: { on(evt: string, cb: (d: Record<string, unknown>) => void): void };
 }
 function getFortisSDK(): { elements: new (token: string) => FortisElements } | undefined {
@@ -76,7 +75,6 @@ function SaasPaymentForm({
   onSuccess: () => void;
   onError: (msg: string) => void;
 }) {
-  const formRef    = useRef<FortisForm | null>(null);
   const mountedRef = useRef(false);
   const [ready, setReady]           = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -106,18 +104,19 @@ function SaasPaymentForm({
         const SDK = getFortisSDK();
         if (!SDK) throw new Error('Payment SDK unavailable. Please refresh and try again.');
         const elements = new SDK.elements(intent.clientToken);
-        const form = elements.create({
+        elements.create({
           container: '#saas-payment-form',
           environment: intent.environment,
           theme: 'default',
           floatingLabels: true,
-          showSubmitButton: false,
+          showSubmitButton: true,
+          hideTotal: true,
           hideAgreementCheckbox: true,
           appearance: {
             colorButtonSelectedBackground: '#1b1b1b',
             colorButtonSelectedText: '#ffffff',
-            colorButtonText: '#4a5568',
-            colorButtonBackground: '#f7fafc',
+            colorButtonText: '#ffffff',
+            colorButtonBackground: '#1b1b1b',
             colorBackground: '#ffffff',
             colorText: '#1a202c',
             fontFamily: 'SourceSans',
@@ -125,10 +124,10 @@ function SaasPaymentForm({
             borderRadius: '12px',
           },
         });
-        formRef.current = form;
 
         // savePaymentMethod:true intention fires tokenize_success (no charge)
         elements.eventBus.on('tokenize_success', async (payload) => {
+          setProcessing(true);
           const p = payload as { id?: string; data?: { id?: string }; payment_method?: string };
           const vaultId = p.id ?? p.data?.id;
           if (!vaultId) {
@@ -169,46 +168,28 @@ function SaasPaymentForm({
     }
   };
 
-  const handleSubmit = () => {
-    if (!formRef.current) return;
-    setProcessing(true);
-    formRef.current.submit();
-  };
-
   return (
-    <div>
+    <div className="relative">
       {!ready && (
         <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
           <Loader2 size={18} className="animate-spin" />
           <span className="text-sm">Loading secure payment form…</span>
         </div>
       )}
+      {/* Processing overlay while server activates the subscription */}
+      {processing && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
+          <div className="flex items-center gap-2 text-gray-600">
+            <Loader2 size={18} className="animate-spin" />
+            <span className="text-sm font-medium">Activating your trial…</span>
+          </div>
+        </div>
+      )}
       <div
         id="saas-payment-form"
-        className={ready ? 'mb-5' : 'hidden'}
-        style={{ minHeight: ready ? 220 : 0 }}
+        className={ready ? 'mb-2' : 'hidden'}
+        style={{ minHeight: ready ? 300 : 0 }}
       />
-      {ready && (
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={processing}
-          className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ backgroundColor: '#1b1b1b' }}
-        >
-          {processing ? (
-            <>
-              <Loader2 size={15} className="animate-spin" />
-              Activating your trial…
-            </>
-          ) : (
-            <>
-              <Lock size={14} />
-              Start free trial — {formatCentsExact(intent.amountCents)}/mo after {trialEnd}
-            </>
-          )}
-        </button>
-      )}
     </div>
   );
 }
