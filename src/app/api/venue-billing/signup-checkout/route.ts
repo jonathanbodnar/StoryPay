@@ -4,16 +4,12 @@ import { supabaseAdmin } from '@/lib/supabase';
 import {
   loadVenueDirectoryPlanContext,
   isPlatformDirectoryBillingConfigured,
-  requirePlatformLunarPaySecretKey,
 } from '@/lib/platform-directory-billing';
-import { createCheckoutSession } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
 
 const SIGNUP_TRIAL_DAYS = 14;
 
@@ -153,71 +149,11 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', venueId);
 
-  let secret: string;
-  try {
-    secret = requirePlatformLunarPaySecretKey();
-  } catch (e) {
-    console.error('[signup-checkout] missing LunarPay secret:', e);
-    return NextResponse.json(
-      { error: 'Payments are not yet configured. Please contact support.' },
-      { status: 503 },
-    );
-  }
-
-  // Diagnostic: log key prefix and LP_BASE_URL to trace "Missing Authentication Token"
-  console.log('[signup-checkout] LP_BASE_URL:', process.env.LP_BASE_URL || '(default: https://app.lunarpay.com)');
-  console.log('[signup-checkout] key prefix:', secret.slice(0, 10) + '...');
-  console.log('[signup-checkout] key starts with lp_sk_:', secret.startsWith('lp_sk_'));
-  console.log('[signup-checkout] key length:', secret.length);
-
-  // Use LP's native trial mode matching their docs example exactly.
-  // LP's hosted checkout page chokes on `start_on` + `trial: true` combo
-  // (returns "Missing Authentication Token" on the hosted page), so we
-  // omit start_on here and PATCH the subscription's nextPaymentOn in the
-  // verify step to match our exact 14-day trial end date.
-  const monthlyDollars = (charge.total_cents / 100).toFixed(2);
-  const checkoutData: Record<string, unknown> = {
-    amount:          charge.total_cents / 100,
-    description:     `StoryVenue — ${targetPlan.name}. 14-day free trial, then $${monthlyDollars}/mo.`,
-    mode:            'subscription',
-    recurring:       {
-      frequency: 'monthly',
-      trial:     true,
-    },
-    customer_email:  ctx.venue.email || undefined,
-    customer_name:   ctx.venue.name,
-    // Force cc-only — ACH + trial may not be supported on LP's hosted page.
-    payment_methods: ['cc'],
-    metadata: {
-      storypay_venue_id: venueId,
-      storypay_plan_id:  planId,
-      flow:              'signup_trial',
-      trial_ends_at:     trialEndsAtIso,
-      monthly_cents:     charge.total_cents,
-    },
-    success_url:     `${APP_URL}/signup/plan/complete?checkout=1`,
-    cancel_url:      `${APP_URL}/signup/addons?plan_id=${planId}`,
-  };
-
-  try {
-    const result = await createCheckoutSession(secret, checkoutData);
-    const session = (result as { data?: { url?: string }; url?: string }).data || result;
-    const url = (session as { url?: string }).url;
-    if (!url) {
-      console.error('[signup-checkout] checkout session missing url:', result);
-      return NextResponse.json(
-        { error: 'Could not create checkout session. Please try again.' },
-        { status: 502 },
-      );
-    }
-    console.log('[signup-checkout] hosted checkout URL:', url);
-    return NextResponse.json({ url });
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'Unknown error';
-    console.error('[signup-checkout] LunarPay error:', message, e);
-    return NextResponse.json(
-      { error: `Could not start checkout: ${message}` },
-      { status: 502 },
-    );
-  }
+  // Plan saved, trial dates persisted — tell the frontend to show the
+  // inline Fortis Elements payment form (no LP hosted page redirect).
+  return NextResponse.json({
+    nextStep:    'payment',
+    amountCents: charge.total_cents,
+    trialEndsAt: trialEndsAtIso,
+  });
 }

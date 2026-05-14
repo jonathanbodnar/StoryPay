@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   BadgeCheck,
@@ -22,13 +22,36 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
 }
 
+function formatCentsExact(cents: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+}
+
 function trialEndDate(): string {
   const d = new Date();
   d.setDate(d.getDate() + 14);
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+// ── Fortis Elements types (local cast — avoids global declaration conflicts) ─
+interface FortisForm { submit(): void; }
+interface FortisElements {
+  create(opts: Record<string, unknown>): FortisForm;
+  eventBus: { on(evt: string, cb: (d: Record<string, unknown>) => void): void };
+}
+function getFortisSDK(): { elements: new (token: string) => FortisElements } | undefined {
+  return (window as unknown as { Commerce?: { elements: new (token: string) => FortisElements } }).Commerce;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────--
+
+type Stage = 'addons' | 'payment' | 'success';
+
+interface IntentData {
+  clientToken: string;
+  environment: string;
+  amountCents: number;
+  trialEndsAt: string;
+}
 
 type Props = {
   planId: string;
@@ -40,7 +63,158 @@ type Props = {
   ownerFirstName: string;
 };
 
-// ── Component ─────────────────────────────────────────────────────────────--
+// ── SaasPaymentForm ─────────────────────────────────────────────────────────
+
+function SaasPaymentForm({
+  intent,
+  trialEnd,
+  onSuccess,
+  onError,
+}: {
+  intent: IntentData;
+  trialEnd: string;
+  onSuccess: () => void;
+  onError: (msg: string) => void;
+}) {
+  const formRef    = useRef<FortisForm | null>(null);
+  const mountedRef = useRef(false);
+  const [ready, setReady]           = useState(false);
+  const [processing, setProcessing] = useState(false);
+
+  useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+
+    const sdkUrl =
+      intent.environment === 'production'
+        ? 'https://js.fortis.tech/commercejs-v1.0.0.min.js'
+        : 'https://js.sandbox.fortis.tech/commercejs-v1.0.0.min.js';
+
+    const existing = document.querySelector(`script[src="${sdkUrl}"]`);
+    const loadSdk: Promise<void> = existing
+      ? Promise.resolve()
+      : new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = sdkUrl;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('Failed to load payment SDK'));
+          document.head.appendChild(s);
+        });
+
+    loadSdk
+      .then(() => {
+        const SDK = getFortisSDK();
+        if (!SDK) throw new Error('Payment SDK unavailable. Please refresh and try again.');
+        const elements = new SDK.elements(intent.clientToken);
+        const form = elements.create({
+          container: '#saas-payment-form',
+          environment: intent.environment,
+          theme: 'default',
+          floatingLabels: true,
+          showSubmitButton: false,
+          hideTotal: true,
+          hideAgreementCheckbox: true,
+          appearance: {
+            colorButtonSelectedBackground: '#1b1b1b',
+            colorButtonSelectedText: '#ffffff',
+            colorButtonText: '#4a5568',
+            colorButtonBackground: '#f7fafc',
+            colorBackground: '#ffffff',
+            colorText: '#1a202c',
+            fontFamily: 'SourceSans',
+            fontSize: '16px',
+            borderRadius: '12px',
+          },
+        });
+        formRef.current = form;
+
+        // savePaymentMethod:true intention fires tokenize_success (no charge)
+        elements.eventBus.on('tokenize_success', async (payload) => {
+          const p = payload as { id?: string; data?: { id?: string }; payment_method?: string };
+          const vaultId = p.id ?? p.data?.id;
+          if (!vaultId) {
+            onError('Payment tokenization failed. Please try again.');
+            setProcessing(false);
+            return;
+          }
+          await handleConfirm({ vaultId, paymentMethod: p.payment_method || 'cc' });
+        });
+
+        elements.eventBus.on('error', (errPayload) => {
+          const e = errPayload as { message?: string };
+          onError(e.message || 'Payment error. Please try again.');
+          setProcessing(false);
+        });
+
+        setReady(true);
+      })
+      .catch((err: unknown) => {
+        onError(err instanceof Error ? err.message : 'Failed to initialize payment form');
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConfirm = async ({ vaultId, paymentMethod }: { vaultId: string; paymentMethod: string }) => {
+    try {
+      const res = await fetch('/api/venue-billing/signup-checkout/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vaultId, paymentMethod }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || 'Failed to activate trial');
+      onSuccess();
+    } catch (err: unknown) {
+      onError(err instanceof Error ? err.message : 'Payment failed. Please try again.');
+      setProcessing(false);
+    }
+  };
+
+  const handleSubmit = () => {
+    if (!formRef.current) return;
+    setProcessing(true);
+    formRef.current.submit();
+  };
+
+  return (
+    <div>
+      {!ready && (
+        <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+          <Loader2 size={18} className="animate-spin" />
+          <span className="text-sm">Loading secure payment form…</span>
+        </div>
+      )}
+      <div
+        id="saas-payment-form"
+        className={ready ? 'mb-5' : 'hidden'}
+        style={{ minHeight: ready ? 220 : 0 }}
+      />
+      {ready && (
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={processing}
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+          style={{ backgroundColor: '#1b1b1b' }}
+        >
+          {processing ? (
+            <>
+              <Loader2 size={15} className="animate-spin" />
+              Activating your trial…
+            </>
+          ) : (
+            <>
+              <Lock size={14} />
+              Start free trial — {formatCentsExact(intent.amountCents)}/mo after {trialEnd}
+            </>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── AddonsClient ─────────────────────────────────────────────────────────────
 
 export function AddonsClient({
   planId,
@@ -57,7 +231,9 @@ export function AddonsClient({
   const [addonSponsored, setAddonSponsored] = useState(false);
   const [addonConcierge, setAddonConcierge] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]     = useState('');
+  const [stage, setStage]     = useState<Stage>('addons');
+  const [intent, setIntent]   = useState<IntentData | null>(null);
 
   const effectiveVerified  = inclusion.verified  || addonVerified;
   const effectiveSponsored = inclusion.sponsored || addonSponsored;
@@ -92,23 +268,122 @@ export function AddonsClient({
           addon_concierge: effectiveConcierge,
         }),
       });
-      const data = await res.json();
+      const data = await res.json() as { redirect?: string; url?: string; nextStep?: string; error?: string };
       if (!res.ok) {
         setError(data.error || 'Something went wrong. Please try again.');
         return;
       }
       if (data.redirect) {
         router.replace(data.redirect);
-      } else if (data.url) {
-        window.location.href = data.url;
+        return;
       }
-    } catch {
-      setError('Network error. Please try again.');
+      // Legacy LP hosted checkout (should not occur with new code)
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      // New inline flow — fetch payment intent then show Elements
+      if (data.nextStep === 'payment') {
+        const piRes = await fetch('/api/venue-billing/payment-intent', { method: 'POST' });
+        const pi = await piRes.json() as { clientToken?: string; environment?: string; amountCents?: number; trialEndsAt?: string; error?: string };
+        if (!piRes.ok) throw new Error(pi.error || 'Could not load payment form');
+        setIntent({
+          clientToken: pi.clientToken!,
+          environment: pi.environment!,
+          amountCents: pi.amountCents!,
+          trialEndsAt: pi.trialEndsAt!,
+        });
+        setStage('payment');
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Network error. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
+  // ── Success stage ──────────────────────────────────────────────────────────
+  if (stage === 'success') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <SignupStepHeader step={3} />
+        <div className="mx-auto max-w-xl px-4 py-20 sm:px-6 text-center">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50">
+            <Check size={32} className="text-emerald-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">You&apos;re all set!</h1>
+          <p className="mt-2 text-sm text-gray-500">
+            Your 14-day free trial is active. First charge on {trialEnd}.
+          </p>
+          <div className="mt-8">
+            <Loader2 size={18} className="mx-auto animate-spin text-gray-400" />
+            <p className="mt-2 text-xs text-gray-400">Redirecting to your dashboard…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Payment stage ──────────────────────────────────────────────────────────
+  if (stage === 'payment' && intent) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <SignupStepHeader step={3} />
+        <div className="mx-auto max-w-xl px-4 py-10 sm:px-6">
+          <div className="mb-6 text-center">
+            <p className="mb-1 text-sm font-medium text-emerald-600">No charge today!</p>
+            <h1 className="text-2xl font-bold text-gray-900">Set up your free trial</h1>
+            <p className="mt-2 text-sm text-gray-500">
+              Enter your card details. You won&apos;t be charged until <strong>{trialEnd}</strong>.
+            </p>
+          </div>
+
+          {/* Plan summary */}
+          <div className="mb-5 rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">{planName}</span>
+              <span className="font-semibold text-gray-900">{formatCentsExact(intent.amountCents)}/mo</span>
+            </div>
+            <p className="mt-1 text-xs text-emerald-600 flex items-center gap-1">
+              <Sparkles size={11} />
+              14-day free trial · First charge {trialEnd}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            {error && (
+              <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>
+            )}
+            <SaasPaymentForm
+              intent={intent}
+              trialEnd={trialEnd}
+              onSuccess={() => {
+                setStage('success');
+                setTimeout(() => router.replace('/dashboard?welcome=1'), 2000);
+              }}
+              onError={(msg) => setError(msg)}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { setStage('addons'); setError(''); setIntent(null); }}
+            className="mt-4 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <ChevronLeft size={14} />
+            Back to add-ons
+          </button>
+
+          <p className="mt-3 text-center text-[11px] text-gray-400">
+            <ShieldCheck size={11} className="mr-0.5 inline" />
+            Secured &amp; encrypted · Cancel anytime before {trialEnd}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Addons stage (default) ─────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50">
       <SignupStepHeader step={3} />
