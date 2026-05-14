@@ -322,7 +322,7 @@ async function verifyHandler(req: NextRequest) {
   try {
     const subPayload: Record<string, unknown> = {
       customerId: Number(customerId),
-      amount:     charge.total_cents,
+      amount:     charge.total_cents / 100,
       frequency:  'monthly',
       startOn:    trialEndYmd,
       description: `StoryVenue — ${targetPlan.name} (monthly, first charge ${trialEndYmd})`,
