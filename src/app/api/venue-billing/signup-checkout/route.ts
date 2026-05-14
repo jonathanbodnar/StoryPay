@@ -177,15 +177,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // $1 card-validation charge. LP needs a non-zero amount to vault the
-  // card and return a customer_id + payment_method_id we can later attach
-  // to a deferred subscription. The /verify endpoint refunds this $1 the
-  // moment the user lands back on our success URL.
+  // $1 card-validation with mode:"subscription" so LP vaults the card and
+  // surfaces customer_id + payment_method_id in the completed session.
+  // LP auto-creates a $1/month subscription — verify cancels that and
+  // creates the real subscription with startOn = trial_end_date instead.
   const trialStartDate = trialEndsAt.toISOString().slice(0, 10);
   const monthlyDollars = (charge.total_cents / 100).toFixed(2);
   const checkoutData: Record<string, unknown> = {
     amount:          VALIDATION_CHARGE_DOLLARS,
     description:     `StoryVenue — ${targetPlan.name}. 14-day free trial: $1 card check (refunded immediately). First $${monthlyDollars} charge on ${trialStartDate}.`,
+    mode:            'subscription',
+    recurring:       { frequency: 'monthly' },
     customer_email:  ctx.venue.email || undefined,
     customer_name:   ctx.venue.name,
     payment_methods: ['cc'],

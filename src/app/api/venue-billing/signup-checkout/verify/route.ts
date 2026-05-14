@@ -6,8 +6,10 @@ import {
   requirePlatformLunarPaySecretKey,
 } from '@/lib/platform-directory-billing';
 import {
+  cancelSubscription,
   createSubscription,
   getCheckoutSession,
+  listSubscriptions,
   refundCharge,
 } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
@@ -20,19 +22,19 @@ export const runtime = 'nodejs';
  * POST /api/venue-billing/signup-checkout/verify
  * Body: { session_id: string }
  *
- * Called from /signup/plan/complete after LunarPay redirects back from
- * the $1 card-validation checkout.
+ * Called from /signup/plan/complete after LunarPay redirects back.
  *
- * Steps:
- *   1. Idempotency guard — if the venue already has a directory
- *      subscription (i.e. this verify already ran), return ok.
- *   2. Fetch the LP checkout session; require status="completed".
- *   3. Pull customer_id, payment_method_id, and charge_id off the session.
- *   4. Best-effort refund of the $1 validation charge.
- *   5. Create a real recurring subscription with
- *      `startOn = directory_trial_ends_at` so the first real charge fires
- *      only after the 14-day trial.
- *   6. Mark the venue as `trialing` and stamp the new subscription id.
+ * Flow (mirrors proposals/public/[token]/verify-payment):
+ *  1. Idempotency — if venue already has a directory sub, return ok.
+ *  2. Fetch the LP checkout session; require status="completed".
+ *  3. Extract customer_id and payment_method_id from the session.
+ *     If LP didn't surface them directly (known LP API gap), fall back
+ *     to listSubscriptions to find the subscription LP auto-created.
+ *  4. Cancel the $1/month subscription LP created at checkout time.
+ *  5. Best-effort refund the $1 validation charge.
+ *  6. Create the real recurring subscription with
+ *     startOn = directory_trial_ends_at (first real charge after 14 days).
+ *  7. Mark the venue as trialing + stamp the new subscription id.
  */
 export async function POST(req: NextRequest) {
   const c = await cookies();
@@ -48,10 +50,6 @@ export async function POST(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
   // ── Idempotency ─────────────────────────────────────────────────────────
-  // If this verify already ran (page reload, double-fetch, retry button),
-  // the venue row will already have a directory subscription id stamped
-  // and status='trialing'. Short-circuit so we don't try to refund a
-  // refund or create a duplicate subscription.
   if (
     ctx.venue.directory_subscription_external_id &&
     ctx.venue.directory_subscription_status === 'trialing'
@@ -63,7 +61,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ── Fetch session ───────────────────────────────────────────────────────
+  // ── Fetch checkout session ───────────────────────────────────────────────
   let session: Record<string, unknown>;
   try {
     const result = (await getCheckoutSession(secret, sessionId)) as Record<string, unknown>;
@@ -71,10 +69,12 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error('[signup-checkout/verify] getCheckoutSession failed:', e);
     return NextResponse.json(
-      { error: 'Could not look up your payment. Please contact support.' },
+      { error: 'Could not look up your payment session. Please contact support.' },
       { status: 502 },
     );
   }
+
+  console.log('[signup-checkout/verify] session status:', session.status, 'session_id:', sessionId);
 
   if (session.status !== 'completed') {
     return NextResponse.json(
@@ -83,40 +83,35 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── Extract customer + payment method + charge id from session ──────────
-  const customerId =
+  // ── Extract customer + payment method from session ──────────────────────
+  // LP subscription-mode sessions expose these fields. Try all known shapes.
+  let customerId: string | number | null =
     (session.customer_id as string | number | null) ||
     (session.customerId as string | number | null) ||
-    ctx.venue.platform_lunarpay_customer_id;
-  const paymentMethodId =
+    ctx.venue.platform_lunarpay_customer_id ||
+    null;
+
+  let paymentMethodId: string | number | null =
     (session.payment_method_id as string | number | null) ||
     (session.paymentMethodId as string | number | null) ||
-    (session.payment_method as string | number | null);
+    (session.payment_method as string | number | null) ||
+    null;
 
-  if (!customerId || !paymentMethodId) {
-    console.error(
-      '[signup-checkout/verify] Missing customer or payment method on session',
-      sessionId,
-      { customerId, paymentMethodId },
-    );
-    return NextResponse.json(
-      {
-        error:
-          'Your card was processed but we could not find it on the session. Please contact support so we can finish setup.',
-      },
-      { status: 502 },
-    );
-  }
+  // LP subscription_id — may or may not be on the session GET response.
+  let validationSubId: string | number | null =
+    (session.subscription_id as string | number | null) ||
+    (session.subscriptionId as string | number | null) ||
+    ((session.subscription as Record<string, unknown> | null)?.id as string | number | null | undefined) ||
+    null;
 
-  // LP returns the validation charge id under one of a few shapes
-  // depending on payload version. Mirror proposal-side verify-payment.
+  // LP charge id for the $1 validation payment — used for the refund.
   const sessionCharge =
     (session.charge as Record<string, unknown> | null) || null;
   const sessionCharges = Array.isArray(session.charges) ? session.charges : null;
   const firstCharge = sessionCharges
     ? (sessionCharges[0] as Record<string, unknown> | undefined)
     : undefined;
-  const chargeIdFromSession =
+  const chargeIdFromSession: string | number | null =
     (session.charge_id as string | number | null) ??
     (session.chargeId as string | number | null) ??
     (sessionCharge?.id as string | number | null | undefined) ??
@@ -125,7 +120,58 @@ export async function POST(req: NextRequest) {
     (session.transactionId as string | number | null | undefined) ??
     null;
 
-  // ── Read trial + plan context from venue row ────────────────────────────
+  console.log('[signup-checkout/verify] from session — customerId:', customerId,
+    'paymentMethodId:', paymentMethodId, 'validationSubId:', validationSubId,
+    'chargeId:', chargeIdFromSession);
+
+  // ── Fallback: find the validation subscription via listSubscriptions ─────
+  // LP sometimes does not surface subscription_id / customer_id in the
+  // session GET response. Mirror the strategy used in proposals/verify-payment.
+  if (!validationSubId && customerId) {
+    try {
+      const allSubs = await listSubscriptions(secret);
+      const subList: Record<string, unknown>[] = Array.isArray(allSubs)
+        ? allSubs
+        : ((allSubs as Record<string, unknown>).data as Record<string, unknown>[]) ?? [];
+      const match = subList.find(
+        (s) =>
+          String(s.customer_id ?? s.customerId ?? s.donorId ?? s.donor_id) === String(customerId) &&
+          s.status !== 'cancelled' &&
+          s.status !== 'canceled',
+      );
+      if (match?.id) {
+        validationSubId = match.id as string | number;
+        if (!paymentMethodId) {
+          paymentMethodId =
+            (match.paymentMethodId as string | number | null) ??
+            (match.payment_method_id as string | number | null) ??
+            (match.payment_method as string | number | null) ??
+            null;
+        }
+        console.log('[signup-checkout/verify] found validation sub via list:', validationSubId);
+      }
+    } catch (e) {
+      console.warn('[signup-checkout/verify] listSubscriptions fallback failed:', e);
+    }
+  }
+
+  // If we still have no customer / payment method we truly cannot proceed.
+  if (!customerId || !paymentMethodId) {
+    console.error(
+      '[signup-checkout/verify] cannot proceed — missing customer or payment method after all fallbacks',
+      { customerId, paymentMethodId, validationSubId, sessionId },
+    );
+    return NextResponse.json(
+      {
+        error:
+          'Your card was processed but we could not retrieve the payment details needed to activate your trial. Please contact support — reference session ' +
+          sessionId,
+      },
+      { status: 502 },
+    );
+  }
+
+  // ── Read plan + trial context from venue row ─────────────────────────────
   const { data: venueRow } = await supabaseAdmin
     .from('venues')
     .select(
@@ -142,29 +188,20 @@ export async function POST(req: NextRequest) {
   const trialStartedAt = String(vr.directory_trial_started_at ?? new Date().toISOString());
 
   if (!planId) {
-    return NextResponse.json(
-      { error: 'Plan was not pre-assigned for this venue.' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'Plan was not pre-assigned for this venue.' }, { status: 400 });
   }
   if (!trialEndsAt) {
-    return NextResponse.json(
-      { error: 'Trial end date is missing on this venue.' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'Trial end date missing on this venue.' }, { status: 400 });
   }
 
-  // Recompute the real monthly amount the same way signup-checkout did,
-  // so the subscription bills the correct total — including any add-ons
-  // the user picked. (We don't trust session.metadata because LP has
-  // historically dropped/altered it.)
+  // Recompute the real monthly billing amount.
   const [allPlans, addonPrices] = await Promise.all([
     listDirectoryPlanCatalog(),
     loadAddonPrices(),
   ]);
   const targetPlan = allPlans.find((p) => p.id === planId);
   if (!targetPlan) {
-    return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Plan not found.' }, { status: 404 });
   }
   const charge = computeMonthlyTotalCents({
     plan: targetPlan,
@@ -175,40 +212,36 @@ export async function POST(req: NextRequest) {
     prices: addonPrices,
   });
   if (charge.total_cents <= 0) {
-    return NextResponse.json(
-      { error: 'Computed monthly total is $0; nothing to bill.' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'Computed monthly total is $0.' }, { status: 400 });
   }
 
-  // ── Refund the $1 validation charge (best-effort) ───────────────────────
-  // If LP didn't surface a charge id we still proceed — the venue may
-  // have been charged but a manual refund can be done from the LP
-  // dashboard. We never want a refund failure to block onboarding.
-  if (chargeIdFromSession != null) {
+  // ── Cancel the $1/month validation subscription LP created ───────────────
+  if (validationSubId !== null) {
     try {
-      await refundCharge(secret, chargeIdFromSession);
-      console.log(
-        '[signup-checkout/verify] refunded validation charge',
-        chargeIdFromSession,
-      );
+      await cancelSubscription(secret, validationSubId);
+      console.log('[signup-checkout/verify] canceled $1 validation sub', validationSubId);
     } catch (e) {
-      console.error(
-        '[signup-checkout/verify] refund of validation charge failed (non-fatal):',
-        chargeIdFromSession,
-        e,
-      );
+      console.warn('[signup-checkout/verify] cancel validation sub failed (non-fatal):', e);
     }
   } else {
-    console.warn(
-      '[signup-checkout/verify] no charge id on session — manual refund may be required',
-      sessionId,
-    );
+    console.warn('[signup-checkout/verify] no validation sub id — cannot cancel $1 sub; session:', sessionId);
   }
 
-  // ── Create the real recurring subscription with deferred startOn ────────
+  // ── Refund the $1 validation charge (best-effort) ────────────────────────
+  if (chargeIdFromSession !== null) {
+    try {
+      await refundCharge(secret, chargeIdFromSession);
+      console.log('[signup-checkout/verify] refunded $1 validation charge', chargeIdFromSession);
+    } catch (e) {
+      console.warn('[signup-checkout/verify] refund of $1 charge failed (non-fatal):', e);
+    }
+  } else {
+    console.warn('[signup-checkout/verify] no charge id on session — manual refund may be needed; session:', sessionId);
+  }
+
+  // ── Create the real deferred subscription ───────────────────────────────
   const trialEndYmd = trialEndsAt.slice(0, 10);
-  let subId: string | number | null = null;
+  let newSubId: string | number | null = null;
   try {
     const subResult = (await createSubscription(secret, {
       customerId:      Number(customerId),
@@ -216,35 +249,37 @@ export async function POST(req: NextRequest) {
       amount:          charge.total_cents,
       frequency:       'monthly',
       startOn:         trialEndYmd,
-      description:     `StoryVenue — ${targetPlan.name} (monthly subscription, first charge ${trialEndYmd})`,
+      description:     `StoryVenue — ${targetPlan.name} (monthly, first charge ${trialEndYmd})`,
     })) as Record<string, unknown>;
     const sub = (subResult.data as Record<string, unknown>) || subResult;
-    subId = (sub.id as string | number | undefined) ?? null;
+    newSubId = (sub.id as string | number | undefined) ?? null;
+    console.log('[signup-checkout/verify] created real sub', newSubId, 'startOn', trialEndYmd);
   } catch (e) {
     console.error('[signup-checkout/verify] createSubscription failed:', e);
     return NextResponse.json(
       {
         error:
-          'We saved your card but could not schedule your trial subscription. Please contact support — your card has been refunded.',
+          'Your card was verified and the $1 charge refunded, but we could not schedule your subscription. Please contact support — reference session ' +
+          sessionId,
       },
       { status: 502 },
     );
   }
 
-  if (subId === null) {
+  if (newSubId === null) {
     return NextResponse.json(
-      { error: 'LunarPay did not return a subscription id' },
+      { error: 'LunarPay did not return a subscription id.' },
       { status: 502 },
     );
   }
 
-  // ── Persist all state to venue row ──────────────────────────────────────
+  // ── Persist all state to the venue row ──────────────────────────────────
   await supabaseAdmin
     .from('venues')
     .update({
       directory_plan_id:                  planId,
       directory_subscription_status:      'trialing',
-      directory_subscription_external_id: String(subId),
+      directory_subscription_external_id: String(newSubId),
       platform_lunarpay_customer_id:      String(customerId),
       directory_trial_started_at:         trialStartedAt,
       directory_trial_ends_at:            trialEndsAt,
@@ -257,7 +292,7 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', venueId);
 
-  // ── Log the billing event ───────────────────────────────────────────────
+  // ── Audit log ────────────────────────────────────────────────────────────
   await supabaseAdmin.from('platform_billing_events').insert({
     venue_id:          venueId,
     directory_plan_id: planId,
@@ -267,11 +302,12 @@ export async function POST(req: NextRequest) {
     event_type:        'subscription_signup_trial_start',
     metadata: {
       session_id:               sessionId,
-      subscription_id:          String(subId),
-      validation_charge_id:     chargeIdFromSession != null ? String(chargeIdFromSession) : null,
+      validation_sub_id:        validationSubId !== null ? String(validationSubId) : null,
+      new_subscription_id:      String(newSubId),
+      validation_charge_id:     chargeIdFromSession !== null ? String(chargeIdFromSession) : null,
       trial_ends_at:            trialEndsAt,
       monthly_cents:            charge.total_cents,
-      flow:                     'signup_trial_v2',
+      flow:                     'signup_trial_v3',
       addon_verified:           addonVerified,
       addon_sponsored:          addonSponsored,
       addon_concierge:          addonConcierge,
@@ -280,7 +316,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    subscription_id: String(subId),
+    subscription_id: String(newSubId),
     trial_ends_at:   trialEndsAt,
   });
 }
