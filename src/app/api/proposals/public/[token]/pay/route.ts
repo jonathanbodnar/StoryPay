@@ -52,7 +52,7 @@ export async function POST(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, venue_id, status, price, customer_name, customer_email, customer_phone, customer_lunarpay_id, payment_type, payment_config, is_invoice, public_token')
+    .select('id, venue_id, status, price, customer_name, customer_email, customer_lunarpay_id, payment_type, payment_config, template_id, public_token')
     .eq('public_token', token)
     .single();
 
@@ -60,7 +60,8 @@ export async function POST(
     return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
   }
 
-  const isInvoice = Boolean((proposal as Record<string, unknown>).is_invoice);
+  // Invoices have no template_id (same logic as the public proposals GET route)
+  const isInvoice = !proposal.template_id;
   const allowedStatuses = isInvoice ? ['sent', 'opened', 'signed'] : ['signed'];
   if (!allowedStatuses.includes(proposal.status as string)) {
     if (proposal.status === 'paid') return NextResponse.json({ success: true, already_paid: true });
@@ -244,7 +245,7 @@ export async function POST(
             proposal_id: proposal.id,
             customer_name: customerName,
             customer_email: proposal.customer_email || '',
-            customer_phone: proposal.customer_phone || '',
+            customer_phone: '',
             amount_cents: finalChargeCents,
             amount_dollars: formatAmount(finalChargeCents),
             payment_type: paymentType,
