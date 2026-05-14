@@ -6,6 +6,7 @@ import {
   savePaymentMethod,
   savePaymentMethodFromVault,
   createCharge,
+  chargeWithTicket,
   createPaymentSchedule,
   createSubscription,
 } from '@/lib/lunarpay';
@@ -126,44 +127,59 @@ export async function POST(
     }
     const finalChargeCents = isTrial ? 0 : (addFee ? applyFee(firstChargeCents, feeRate) : firstChargeCents);
 
-    // ── Save payment method ────────────────────────────────────────────────
-    let paymentMethodId: number;
-
-    if (vaultId) {
-      // tokenize_success from trial mode (savePaymentMethod:true intention)
-      const pmr = await savePaymentMethodFromVault(sk, customerId, vaultId, paymentMethod);
-      const pm = (pmr as Record<string, unknown>).data || pmr;
-      paymentMethodId = Number((pm as Record<string, unknown>).id);
-    } else {
-      // ticket_success from hasRecurring:true intention
-      const pmr = await savePaymentMethod(sk, customerId, ticketId!, (proposal.customer_name as string) || '');
-      const pm = (pmr as Record<string, unknown>).data || pmr;
-      paymentMethodId = Number((pm as Record<string, unknown>).id);
-    }
-
     const updateData: Record<string, unknown> = {
-      status: 'paid',
-      paid_at: new Date().toISOString(),
+      status:               'paid',
+      paid_at:              new Date().toISOString(),
       customer_lunarpay_id: customerId,
-      payment_method_id: paymentMethodId,
     };
 
-    // ── Charge first payment (non-trial) ───────────────────────────────────
-    if (!isTrial && finalChargeCents > 0) {
-      const desc =
-        paymentType === 'installment' ? `${venue.name} - Payment 1 of ${(config as InstallmentConfig | null)?.installments?.length || 1}` :
-        paymentType === 'subscription' ? `${venue.name} - First ${(config as SubscriptionConfig | null)?.frequency || 'monthly'} payment` :
-        `${venue.name} - Proposal Payment`;
+    let paymentMethodId: number = 0;
 
-      const cr = await createCharge(sk, {
-        customerId,
-        paymentMethodId,
-        amount: finalChargeCents,
-        description: desc,
+    if (vaultId) {
+      // ── Trial: tokenize_success (savePaymentMethod:true intention, no charge) ──
+      const pmr = await savePaymentMethodFromVault(sk, customerId, vaultId, paymentMethod);
+      const pm  = (pmr as Record<string, unknown>).data || pmr;
+      paymentMethodId = Number((pm as Record<string, unknown>).id);
+      updateData.payment_method_id = paymentMethodId;
+
+    } else if (paymentType === 'full') {
+      // ── Full one-time: charge directly from ticketId, do NOT vault the card ──
+      const desc = `${venue.name} - Proposal Payment`;
+      const cr   = await chargeWithTicket(sk, customerId, {
+        ticketId:      ticketId!,
+        amount:        finalChargeCents,
+        paymentMethod,
+        description:   desc,
+        saveCard:      false,
       });
       const charge = (cr as Record<string, unknown>).data || cr;
-      updateData.charge_id = (charge as Record<string, unknown>).id;
-      updateData.transaction_id = (charge as Record<string, unknown>).id;
+      updateData.charge_id      = (charge as Record<string, unknown>).id ?? (charge as Record<string, unknown>).transaction_id;
+      updateData.transaction_id = updateData.charge_id;
+
+    } else {
+      // ── Installment / Subscription: vault card first, then charge ──────────
+      // Card must be saved so LP can execute future schedule / subscription payments.
+      const pmr = await savePaymentMethod(sk, customerId, ticketId!, (proposal.customer_name as string) || '');
+      const pm  = (pmr as Record<string, unknown>).data || pmr;
+      paymentMethodId = Number((pm as Record<string, unknown>).id);
+      updateData.payment_method_id = paymentMethodId;
+
+      if (finalChargeCents > 0) {
+        const desc =
+          paymentType === 'installment'
+            ? `${venue.name} - Payment 1 of ${(config as InstallmentConfig | null)?.installments?.length || 1}`
+            : `${venue.name} - First ${(config as SubscriptionConfig | null)?.frequency || 'monthly'} payment`;
+
+        const cr = await createCharge(sk, {
+          customerId,
+          paymentMethodId,
+          amount:      finalChargeCents,
+          description: desc,
+        });
+        const charge = (cr as Record<string, unknown>).data || cr;
+        updateData.charge_id      = (charge as Record<string, unknown>).id;
+        updateData.transaction_id = (charge as Record<string, unknown>).id;
+      }
     }
 
     // ── Create recurring resource ──────────────────────────────────────────

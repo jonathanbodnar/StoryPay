@@ -138,7 +138,9 @@ export function createIntention(
   const body: Record<string, unknown> = {};
   if (options?.savePaymentMethod) {
     body.savePaymentMethod = true;
-  } else {
+  } else if (options?.hasRecurring) {
+    // Only set hasRecurring when explicitly requested (installment / subscription).
+    // Full one-time payments pass neither flag — no card vaulting.
     body.hasRecurring = true;
   }
   if (amount) body.amount = amount;
@@ -147,6 +149,36 @@ export function createIntention(
     method: 'POST',
     body,
     key: publishableKey,
+  });
+}
+
+/**
+ * Charge a customer directly from a Fortis ticket (ticket_success).
+ * - saveCard: false  → one-time charge, card is NOT vaulted (use for pay-in-full)
+ * - saveCard: true   → charge AND vault the card; response includes payment_method_id
+ *                      (use for installments / subscriptions so future payments work)
+ */
+export function chargeWithTicket(
+  secretKey: string,
+  customerId: number,
+  data: {
+    ticketId: string;
+    amount: number;
+    paymentMethod?: string;
+    description?: string;
+    saveCard?: boolean;
+  },
+) {
+  return lpFetch(`/api/v1/customers/${customerId}/charges`, {
+    method: 'POST',
+    body: {
+      ticketId:      data.ticketId,
+      amount:        data.amount,
+      paymentMethod: data.paymentMethod ?? 'cc',
+      ...(data.description ? { description: data.description } : {}),
+      saveCard:      data.saveCard ?? false,
+    },
+    key: secretKey,
   });
 }
 

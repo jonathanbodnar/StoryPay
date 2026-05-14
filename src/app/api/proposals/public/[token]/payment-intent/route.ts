@@ -65,12 +65,15 @@ export async function POST(
   const displayAmountCents = isTrial ? 0 : applyFee(amountCents);
 
   try {
+    // full one-time: no hasRecurring (card is NOT vaulted; Fortis won't show "card saved" notice)
+    // installment / subscription: hasRecurring:true so the card gets vaulted for future charges
+    // trial subscription: savePaymentMethod:true — tokenize only, no charge
     const intentionResult = await createIntention(
       venue.lunarpay_publishable_key,
-      isTrial ? undefined : (proposal.price as number || undefined),
+      isTrial ? undefined : amountCents,
       {
-        paymentMethods: acceptAch ? ['cc', 'ach'] : ['cc'],
-        hasRecurring: isTrial ? undefined : true,
+        paymentMethods:    acceptAch ? ['cc', 'ach'] : ['cc'],
+        hasRecurring:      (!isTrial && paymentType !== 'full') ? true : undefined,
         savePaymentMethod: isTrial ? true : undefined,
       },
     );
