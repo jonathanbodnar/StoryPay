@@ -10,15 +10,23 @@ interface LPRequestOptions {
 export async function lpFetch(path: string, { method = 'GET', body, key }: LPRequestOptions) {
   const url = `${LP_BASE_URL}${path}`;
   const keyPrefix = key ? `${key.slice(0, 10)}...${key.slice(-4)}` : '<empty>';
-  const res = await fetch(url, {
-    method,
-    headers: {
-      'Authorization': `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(30_000),
-  });
+  console.log('[lpFetch] →', method, url, 'keyPrefix:', keyPrefix, 'hasBody:', !!body);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (fetchErr) {
+    console.error('[lpFetch] fetch() threw (network/timeout):', fetchErr);
+    throw fetchErr;
+  }
+  console.log('[lpFetch] ←', res.status, url);
 
   if (!res.ok) {
     const errorText = await res.text();
