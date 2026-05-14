@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
   getCheckoutSession, createPaymentSchedule, createSubscription,
-  listPaymentSchedules, listSubscriptions, listCustomers,
+  listPaymentSchedules, listSubscriptions, listCustomers, listPaymentMethods,
 } from '@/lib/lunarpay';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
@@ -130,10 +130,41 @@ export async function POST(
       );
     }
 
-    const customerId = session.customer_id || session.customerId || proposal.customer_lunarpay_id;
-    const paymentMethodId = session.payment_method_id || session.paymentMethodId || session.payment_method;
+    let customerId = session.customer_id || session.customerId || proposal.customer_lunarpay_id;
+    let paymentMethodId = session.payment_method_id || session.paymentMethodId || session.payment_method;
     const feeRate = Number(venue.service_fee_rate ?? 0);
     const addFee = feeRate > 0;
+
+    // For plain one-off checkouts LP may not surface customer_id in the
+    // session GET response. Look it up by email as a fallback.
+    if (!customerId && proposal.customer_email && proposal.payment_type === 'installment') {
+      try {
+        const customerSearch = await listCustomers(venue.lunarpay_secret_key, proposal.customer_email as string);
+        const customerList = Array.isArray(customerSearch) ? customerSearch : (customerSearch as Record<string, unknown>).data ?? [];
+        const match = (customerList as Record<string, unknown>[])[0];
+        if (match?.id) {
+          customerId = match.id;
+          console.log('[verify-payment] Found customer via email search:', customerId);
+        }
+      } catch (searchErr) {
+        console.warn('[verify-payment] customer email search failed:', searchErr);
+      }
+    }
+
+    // If still no payment method, find the most recent one for this customer.
+    if (customerId && !paymentMethodId) {
+      try {
+        const pmResult = await listPaymentMethods(venue.lunarpay_secret_key, Number(customerId));
+        const pmList: Record<string, unknown>[] = Array.isArray(pmResult) ? pmResult : ((pmResult as Record<string, unknown>).data as Record<string, unknown>[]) ?? [];
+        const defaultPm = pmList.find((p) => p.isDefault || p.is_default) ?? pmList[pmList.length - 1];
+        if (defaultPm?.id) {
+          paymentMethodId = defaultPm.id;
+          console.log('[verify-payment] Found paymentMethodId via listPaymentMethods:', paymentMethodId);
+        }
+      } catch (pmErr) {
+        console.warn('[verify-payment] listPaymentMethods fallback failed:', pmErr);
+      }
+    }
 
     console.log('[verify-payment] customerId:', customerId, 'paymentMethodId:', paymentMethodId);
     console.log('[verify-payment] payment_type:', proposal.payment_type, 'feeRate:', feeRate, '%');

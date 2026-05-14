@@ -127,17 +127,12 @@ export async function POST(
           frequency: config.frequency || 'monthly',
         };
       }
-    } else if (proposal.payment_type === 'installment' && proposal.payment_config) {
-      const config = proposal.payment_config as InstallmentConfig;
-      const installments = config.installments || [];
-      if (installments.length > 1) {
-        checkoutData.mode = 'installments';
-        checkoutData.installments = {
-          count: installments.length,
-          frequency: 'monthly',
-        };
-      }
     }
+    // Installment proposals: charge only the first installment as a plain
+    // one-off — LP's hosted checkout page breaks with mode:"installments"
+    // (returns "ticket_id is required"). The verify-payment route creates
+    // the remaining payment schedule via POST /api/v1/payment-schedules after
+    // LP vaults the customer and payment method during checkout.
 
     // Explicitly send payment_methods so LP shows the correct tabs.
     checkoutData.payment_methods = acceptAch ? ['cc', 'ach'] : ['cc'];
