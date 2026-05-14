@@ -25,25 +25,16 @@ const SIGNUP_TRIAL_DAYS = 14;
  * 1. Assigns the selected plan to the venue.
  * 2. For free plans ($0 total): returns { redirect: '/dashboard?welcome=1' }
  *    immediately without requiring a card.
- * 3. For paid plans: creates a LunarPay checkout session so the user can
- *    enter their card.
+ * 3. For paid plans: creates a LunarPay checkout session with mode:"subscription"
+ *    and recurring.trial:true so the card is vaulted but NOT charged. The first
+ *    recurring charge fires on recurring.start_on (trial end date).
  *
- * IMPORTANT — why this is NOT a `mode:"subscription"` checkout
- * ---------------------------------------------------------------
- * We tried using `mode:"subscription" + recurring.start_date = trial_end`
- * to let LunarPay defer the first charge until trial end. In practice LP
- * still charges the `amount` immediately and only treats `start_date` as
- * "when the next recurring charge fires" — i.e. there is no real trial.
- *
- * So we revert to the proven two-step pattern that the codebase used
- * before commit 1524ebb:
- *   1. One-off `$1.00` card-validation charge at checkout (vaults card +
- *      yields a customer_id + payment_method_id).
- *   2. /signup-checkout/verify refunds the $1, then calls
- *      `createSubscription({ startOn: trial_end_date })` so the first
- *      recurring charge fires only after the 14-day trial completes.
+ * LP trial behavior (per developer docs):
+ *   - Card is tokenized and saved (NO charge, NO $1 hold)
+ *   - Subscription is created with nextPaymentOn = start_on date
+ *   - Session status returns "trial_started" instead of "succeeded"
+ *   - Webhook fires checkout.session.completed with transaction.amount = 0
  */
-const VALIDATION_CHARGE_DOLLARS = 1;
 export async function POST(req: NextRequest) {
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
@@ -148,10 +139,6 @@ export async function POST(req: NextRequest) {
   }
 
   // Compute trial end date and persist it on the venue row BEFORE checkout.
-  // We used to round-trip this through LunarPay session.metadata, but LP's
-  // checkout/sessions endpoint currently 500s when metadata is present
-  // (May 2026 schema drift). Reading from the DB at verify time is more
-  // reliable anyway.
   const now = new Date();
   const trialEndsAt = new Date(now);
   trialEndsAt.setDate(trialEndsAt.getDate() + SIGNUP_TRIAL_DAYS);
@@ -177,20 +164,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // $1 card-validation with mode:"subscription" so LP vaults the card and
-  // surfaces customer_id + payment_method_id in the completed session.
-  // LP auto-creates a $1/month subscription — verify cancels that and
-  // creates the real subscription with startOn = trial_end_date instead.
-  const trialStartDate = trialEndsAt.toISOString().slice(0, 10);
+  // Use LP's native trial mode: mode:"subscription" + recurring.trial:true.
+  // Card is tokenized and saved but NO charge occurs. The subscription is
+  // created with nextPaymentOn = start_on (trial end date).
   const monthlyDollars = (charge.total_cents / 100).toFixed(2);
   const checkoutData: Record<string, unknown> = {
-    amount:          VALIDATION_CHARGE_DOLLARS,
-    description:     `StoryVenue — ${targetPlan.name}. 14-day free trial: $1 card check (refunded immediately). First $${monthlyDollars} charge on ${trialStartDate}.`,
+    amount:          charge.total_cents / 100,
+    description:     `StoryVenue — ${targetPlan.name}. 14-day free trial, then $${monthlyDollars}/mo.`,
     mode:            'subscription',
-    recurring:       { frequency: 'monthly' },
+    recurring:       {
+      frequency: 'monthly',
+      trial:     true,
+      start_on:  trialEndsAtIso,
+    },
     customer_email:  ctx.venue.email || undefined,
     customer_name:   ctx.venue.name,
-    payment_methods: ['cc'],
     metadata: {
       storypay_venue_id: venueId,
       storypay_plan_id:  planId,
@@ -202,9 +190,6 @@ export async function POST(req: NextRequest) {
     cancel_url:      `${APP_URL}/signup/addons?plan_id=${planId}`,
   };
 
-  // LunarPay can throw on network failures, invalid keys, validation errors,
-  // etc.  Surface a user-friendly message instead of letting Next.js return a
-  // generic 500 — which is what was breaking the signup flow before.
   try {
     const result = await createCheckoutSession(secret, checkoutData);
     const session = (result as { data?: { url?: string }; url?: string }).data || result;

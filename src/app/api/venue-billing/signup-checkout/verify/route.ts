@@ -6,13 +6,11 @@ import {
   requirePlatformLunarPaySecretKey,
 } from '@/lib/platform-directory-billing';
 import {
-  cancelSubscription,
   createSubscription,
   getCheckoutSession,
   getSubscription,
   listPaymentMethods,
   listSubscriptions,
-  refundCharge,
 } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
@@ -26,29 +24,17 @@ export const runtime = 'nodejs';
  *
  * Called from /signup/plan/complete after LunarPay redirects back.
  *
- * Flow (mirrors proposals/public/[token]/verify-payment):
- *  1. Idempotency — if venue already has a directory sub, return ok.
- *  2. Fetch the LP checkout session; require status="completed".
- *  3. Extract customer_id and payment_method_id from the session.
- *     If LP didn't surface them directly (known LP API gap), fall back
- *     to listSubscriptions to find the subscription LP auto-created.
- *  4. Cancel the $1/month subscription LP created at checkout time.
- *  5. Best-effort refund the $1 validation charge.
- *  6. Create the real recurring subscription with
- *     startOn = directory_trial_ends_at (first real charge after 14 days).
- *  7. Mark the venue as trialing + stamp the new subscription id.
+ * With native LP trial mode (mode:"subscription" + recurring.trial:true):
+ *  1. LP tokenizes and saves the card — NO charge, NO $1 hold.
+ *  2. LP auto-creates the subscription with nextPaymentOn = start_on.
+ *  3. Session status is "trial_started" (not "completed").
+ *  4. Session.resources.subscription_id contains the auto-created sub ID.
+ *
+ * This route reads the subscription ID from the session and persists it.
+ * If LP didn't return the ID in resources, we fall back to listSubscriptions.
+ * As a last resort, we create the subscription manually via the LP API.
  */
 export async function POST(req: NextRequest) {
-  // ── Diagnostic ping ──────────────────────────────────────────────────────
-  // Uncomment the two lines below to confirm the route loads and runs.
-  // console.log('[signup-checkout/verify] route reached');
-  // return NextResponse.json({ ok: true, ping: true });
-
-  // Top-level catch: guarantees this handler always returns JSON regardless
-  // of which line throws. Without this, Next.js returns an HTML error page
-  // which res.json() can't parse — client shows "Network error" and the
-  // real cause is hidden. This wrapper surfaces every failure to both the
-  // user and Railway logs.
   try {
     return await verifyHandler(req);
   } catch (err) {
@@ -61,7 +47,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ── GET: health check (lets us confirm the route module loads) ───────────────
 export async function GET() {
   return NextResponse.json({ ok: true, route: 'signup-checkout/verify', ts: Date.now() });
 }
@@ -117,15 +102,27 @@ async function verifyHandler(req: NextRequest) {
 
   console.log('[signup-checkout/verify] session status:', session.status, 'session_id:', sessionId);
 
-  if (session.status !== 'completed') {
+  // LP trial sessions return "trial_started" instead of "completed".
+  // Accept both so the route works regardless of LP version.
+  const sessionStatus = String(session.status ?? '');
+  if (sessionStatus !== 'completed' && sessionStatus !== 'trial_started') {
     return NextResponse.json(
-      { error: `Checkout not completed (status: ${String(session.status)})` },
+      { error: `Checkout not completed (status: ${sessionStatus})` },
       { status: 400 },
     );
   }
 
-  // ── Extract customer + payment method from session ──────────────────────
-  // LP subscription-mode sessions expose these fields. Try all known shapes.
+  // ── Extract subscription_id from session ─────────────────────────────────
+  // With mode:"subscription" + trial, LP auto-creates the subscription and
+  // returns the ID in session.resources.subscription_id.
+  const resources = (session.resources as Record<string, unknown> | null) ?? null;
+  let newSubId: string | number | null =
+    (resources?.subscription_id as string | number | null) ??
+    (session.subscription_id as string | number | null) ??
+    (session.subscriptionId as string | number | null) ??
+    null;
+
+  // Also extract customer_id for fallback lookups
   let customerId: string | number | null =
     (session.customer_id as string | number | null) ||
     (session.customerId as string | number | null) ||
@@ -138,43 +135,16 @@ async function verifyHandler(req: NextRequest) {
     (session.payment_method as string | number | null) ||
     null;
 
-  // LP subscription_id — may or may not be on the session GET response.
-  let validationSubId: string | number | null =
-    (session.subscription_id as string | number | null) ||
-    (session.subscriptionId as string | number | null) ||
-    ((session.subscription as Record<string, unknown> | null)?.id as string | number | null | undefined) ||
-    null;
+  console.log('[signup-checkout/verify] from session — subId:', newSubId,
+    'customerId:', customerId, 'paymentMethodId:', paymentMethodId);
 
-  // LP charge id for the $1 validation payment — used for the refund.
-  const sessionCharge =
-    (session.charge as Record<string, unknown> | null) || null;
-  const sessionCharges = Array.isArray(session.charges) ? session.charges : null;
-  const firstCharge = sessionCharges
-    ? (sessionCharges[0] as Record<string, unknown> | undefined)
-    : undefined;
-  const chargeIdFromSession: string | number | null =
-    (session.charge_id as string | number | null) ??
-    (session.chargeId as string | number | null) ??
-    (sessionCharge?.id as string | number | null | undefined) ??
-    (firstCharge?.id as string | number | null | undefined) ??
-    (session.transaction_id as string | number | null | undefined) ??
-    (session.transactionId as string | number | null | undefined) ??
-    null;
-
-  console.log('[signup-checkout/verify] from session — customerId:', customerId,
-    'paymentMethodId:', paymentMethodId, 'validationSubId:', validationSubId,
-    'chargeId:', chargeIdFromSession);
-
-  // ── Fallback 1: find the validation subscription via listSubscriptions ───
-  // LP sometimes does not surface subscription_id / customer_id in the
-  // session GET response. Mirror the strategy used in proposals/verify-payment.
-  if (!validationSubId || !paymentMethodId) {
+  // ── Fallback: find subscription via listSubscriptions ────────────────────
+  if (!newSubId) {
     try {
       const allSubs = await listSubscriptions(secret);
       const subList: Record<string, unknown>[] = Array.isArray(allSubs)
         ? allSubs
         : ((allSubs as Record<string, unknown>).data as Record<string, unknown>[]) ?? [];
-      // Match on customer_id if we have it, otherwise take the most-recent active $1 sub.
       const match = subList.find(
         (s) =>
           (customerId
@@ -184,7 +154,7 @@ async function verifyHandler(req: NextRequest) {
           s.status !== 'canceled',
       );
       if (match?.id) {
-        if (!validationSubId) validationSubId = match.id as string | number;
+        newSubId = match.id as string | number;
         if (!customerId)
           customerId =
             (match.customer_id as string | number | null) ??
@@ -196,19 +166,17 @@ async function verifyHandler(req: NextRequest) {
             (match.paymentMethodId as string | number | null) ??
             (match.payment_method as string | number | null) ??
             null;
-        console.log('[signup-checkout/verify] found validation sub via list:', validationSubId,
-          'customerId:', customerId, 'paymentMethodId:', paymentMethodId);
+        console.log('[signup-checkout/verify] found sub via listSubscriptions:', newSubId);
       }
     } catch (e) {
       console.warn('[signup-checkout/verify] listSubscriptions fallback failed:', e);
     }
   }
 
-  // ── Fallback 2: fetch the individual subscription for full detail ─────────
-  // The list endpoint often omits payment_method_id; the GET endpoint includes it.
-  if (validationSubId && !paymentMethodId) {
+  // ── Get payment method detail if missing ─────────────────────────────────
+  if (newSubId && !paymentMethodId) {
     try {
-      const subDetail = (await getSubscription(secret, validationSubId)) as Record<string, unknown>;
+      const subDetail = (await getSubscription(secret, newSubId)) as Record<string, unknown>;
       const sd = (subDetail.data as Record<string, unknown>) || subDetail;
       paymentMethodId =
         (sd.payment_method_id as string | number | null) ??
@@ -220,50 +188,25 @@ async function verifyHandler(req: NextRequest) {
           (sd.customer_id as string | number | null) ??
           (sd.customerId as string | number | null) ??
           null;
-      console.log('[signup-checkout/verify] sub detail — paymentMethodId:', paymentMethodId, 'customerId:', customerId);
     } catch (e) {
       console.warn('[signup-checkout/verify] getSubscription fallback failed:', e);
     }
   }
 
-  // ── Fallback 3: list the customer's payment methods directly ─────────────
-  // If LP's subscription endpoints don't expose payment_method_id (known gap),
-  // hit /customers/{id}/payment-methods and use the first/default one.
   if (customerId && !paymentMethodId) {
     try {
       const pmResult = (await listPaymentMethods(secret, Number(customerId))) as Record<string, unknown>;
       const pmList: Record<string, unknown>[] = Array.isArray(pmResult)
         ? pmResult
         : ((pmResult.data as Record<string, unknown>[]) ?? []);
-      // Prefer the default PM if flagged, else take the most recent one.
       const defaultPm = pmList.find((p) => p.isDefault || p.is_default || p.default);
-      const pickedPm = defaultPm ?? pmList[pmList.length - 1] ?? pmList[0];
+      const pickedPm = defaultPm ?? pmList[pmList.length - 1] ?? null;
       if (pickedPm?.id) {
         paymentMethodId = pickedPm.id as string | number;
-        console.log('[signup-checkout/verify] picked PM from listPaymentMethods:', paymentMethodId,
-          'isDefault:', Boolean(defaultPm));
-      } else {
-        console.warn('[signup-checkout/verify] listPaymentMethods returned no PMs', { customerId, count: pmList.length });
       }
     } catch (e) {
       console.warn('[signup-checkout/verify] listPaymentMethods fallback failed:', e);
     }
-  }
-
-  // LP createSubscription REQUIRES both customerId AND paymentMethodId.
-  if (!customerId || !paymentMethodId) {
-    console.error(
-      '[signup-checkout/verify] cannot proceed — missing customer or PM after all fallbacks',
-      { customerId, paymentMethodId, validationSubId, sessionId },
-    );
-    return NextResponse.json(
-      {
-        error:
-          'Your card was processed but we could not retrieve the payment details needed to activate your trial. Please contact support — reference session ' +
-          sessionId,
-      },
-      { status: 422 },
-    );
   }
 
   // ── Read plan + trial context from venue row ─────────────────────────────
@@ -310,63 +253,51 @@ async function verifyHandler(req: NextRequest) {
     return NextResponse.json({ error: 'Computed monthly total is $0.' }, { status: 400 });
   }
 
-  // ── Cancel the $1/month validation subscription LP created ───────────────
-  if (validationSubId !== null) {
-    try {
-      await cancelSubscription(secret, validationSubId);
-      console.log('[signup-checkout/verify] canceled $1 validation sub', validationSubId);
-    } catch (e) {
-      console.warn('[signup-checkout/verify] cancel validation sub failed (non-fatal):', e);
+  // ── If LP didn't auto-create a subscription, create one manually ─────────
+  if (!newSubId) {
+    console.warn('[signup-checkout/verify] no subscription from LP — creating manually');
+
+    if (!customerId || !paymentMethodId) {
+      console.error('[signup-checkout/verify] cannot create sub — missing customer or PM',
+        { customerId, paymentMethodId, sessionId });
+      return NextResponse.json(
+        {
+          error:
+            'Your card was saved but we could not retrieve the payment details needed to activate your trial. Please contact support — reference session ' +
+            sessionId,
+        },
+        { status: 422 },
+      );
     }
-  } else {
-    console.warn('[signup-checkout/verify] no validation sub id — cannot cancel $1 sub; session:', sessionId);
-  }
 
-  // ── Refund the $1 validation charge (best-effort) ────────────────────────
-  if (chargeIdFromSession !== null) {
+    const trialEndYmd = trialEndsAt.slice(0, 10);
     try {
-      await refundCharge(secret, chargeIdFromSession);
-      console.log('[signup-checkout/verify] refunded $1 validation charge', chargeIdFromSession);
+      const startOnIso = `${trialEndYmd}T12:00:00.000Z`;
+      const subPayload: Record<string, unknown> = {
+        customerId:      Number(customerId),
+        paymentMethodId: Number(paymentMethodId),
+        amount:          Math.round(charge.total_cents),
+        frequency:       'monthly',
+        startOn:         startOnIso,
+        description:     `StoryVenue — ${targetPlan.name} (monthly, first charge ${trialEndYmd})`,
+      };
+      console.log('[signup-checkout/verify] createSubscription payload:', JSON.stringify(subPayload));
+
+      const subResult = (await createSubscription(secret, subPayload)) as Record<string, unknown>;
+      const sub = (subResult.data as Record<string, unknown>) || subResult;
+      newSubId = (sub.id as string | number | undefined) ?? null;
+      console.log('[signup-checkout/verify] created sub manually:', newSubId);
     } catch (e) {
-      console.warn('[signup-checkout/verify] refund of $1 charge failed (non-fatal):', e);
+      console.error('[signup-checkout/verify] createSubscription failed:', e);
+      return NextResponse.json(
+        {
+          error:
+            'Your card was saved but we could not schedule your subscription. Please contact support — reference session ' +
+            sessionId,
+        },
+        { status: 422 },
+      );
     }
-  } else {
-    console.warn('[signup-checkout/verify] no charge id on session — manual refund may be needed; session:', sessionId);
-  }
-
-  // ── Create the real deferred subscription ───────────────────────────────
-  const trialEndYmd = trialEndsAt.slice(0, 10);
-  let newSubId: string | number | null = null;
-  try {
-    // LP createSubscription requires:
-    //   - amount: INTEGER cents (min 50). Dollars are NOT accepted here.
-    //   - startOn: full ISO datetime string (YYYY-MM-DD alone is rejected as
-    //     "Invalid ISO datetime"). Use noon UTC to avoid any TZ rollover.
-    const startOnIso = `${trialEndYmd}T12:00:00.000Z`;
-    const subPayload: Record<string, unknown> = {
-      customerId:      Number(customerId),
-      paymentMethodId: Number(paymentMethodId),
-      amount:          Math.round(charge.total_cents),
-      frequency:       'monthly',
-      startOn:         startOnIso,
-      description:     `StoryVenue — ${targetPlan.name} (monthly, first charge ${trialEndYmd})`,
-    };
-    console.log('[signup-checkout/verify] createSubscription payload:', JSON.stringify(subPayload));
-
-    const subResult = (await createSubscription(secret, subPayload)) as Record<string, unknown>;
-    const sub = (subResult.data as Record<string, unknown>) || subResult;
-    newSubId = (sub.id as string | number | undefined) ?? null;
-    console.log('[signup-checkout/verify] created real sub', newSubId, 'startOn', trialEndYmd);
-  } catch (e) {
-    console.error('[signup-checkout/verify] createSubscription failed:', e);
-    return NextResponse.json(
-      {
-        error:
-          'Your card was verified and the $1 charge refunded, but we could not schedule your subscription. Please contact support — reference session ' +
-          sessionId,
-      },
-      { status: 422 },
-    );
   }
 
   if (newSubId === null) {
@@ -383,7 +314,7 @@ async function verifyHandler(req: NextRequest) {
       directory_plan_id:                  planId,
       directory_subscription_status:      'trialing',
       directory_subscription_external_id: String(newSubId),
-      platform_lunarpay_customer_id:      String(customerId),
+      platform_lunarpay_customer_id:      customerId ? String(customerId) : undefined,
       directory_trial_started_at:         trialStartedAt,
       directory_trial_ends_at:            trialEndsAt,
       directory_trial_is_forever:         false,
@@ -405,12 +336,10 @@ async function verifyHandler(req: NextRequest) {
     event_type:        'subscription_signup_trial_start',
     metadata: {
       session_id:               sessionId,
-      validation_sub_id:        validationSubId !== null ? String(validationSubId) : null,
       new_subscription_id:      String(newSubId),
-      validation_charge_id:     chargeIdFromSession !== null ? String(chargeIdFromSession) : null,
       trial_ends_at:            trialEndsAt,
       monthly_cents:            charge.total_cents,
-      flow:                     'signup_trial_v3',
+      flow:                     'signup_trial_native',
       addon_verified:           addonVerified,
       addon_sponsored:          addonSponsored,
       addon_concierge:          addonConcierge,

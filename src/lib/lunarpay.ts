@@ -217,8 +217,10 @@ export function createCheckoutSession(
   // - mode: "subscription" | "installments" | omitted (one-off). When set,
   //   LP charges the card, vaults it, AND creates the recurring plan in one
   //   call — no separate createSubscription needed.
-  // - recurring: { frequency: "weekly"|"monthly"|... , start_date?: "YYYY-MM-DD" }
-  //   Required with mode:"subscription".
+  // - recurring: { frequency: "weekly"|"monthly"|... , start_on?: ISO datetime, trial?: boolean }
+  //   Required with mode:"subscription". When trial:true + start_on is set,
+  //   LP tokenizes the card without charging and creates the subscription
+  //   with nextPaymentOn = start_on. Session returns status:"trial_started".
   // - installments: { count: N, frequency: "monthly"|... }
   //   Required with mode:"installments".
   // - metadata: LP confirmed the checkout_sessions schema fix has shipped
