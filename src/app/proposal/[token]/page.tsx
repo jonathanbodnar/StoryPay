@@ -204,7 +204,6 @@ function InlinePaymentForm({
           hideTotal: true,
           hideAgreementCheckbox: true,
           appearance: {
-            colorPrimary: '#1a1a1a',
             colorButtonSelectedBackground: '#1a1a1a',
             colorButtonSelectedText: '#ffffff',
             colorButtonText: '#4a5568',
@@ -242,7 +241,12 @@ function InlinePaymentForm({
         setElementsLoading(false);
       })
       .catch((err: unknown) => {
-        setPayError(err instanceof Error ? err.message : 'Failed to initialize payment form');
+        console.error('[InlinePaymentForm] init failed:', err);
+        const msg =
+          err instanceof Error                              ? err.message :
+          typeof err === 'string'                           ? err :
+          (err as { message?: string } | null)?.message ?? null;
+        setPayError(msg ? `Failed to initialize payment form: ${msg}` : 'Failed to initialize payment form');
         setElementsLoading(false);
       });
   }, [intent, brandColor]);

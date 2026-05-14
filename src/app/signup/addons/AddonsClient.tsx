@@ -113,7 +113,6 @@ function SaasPaymentForm({
           hideTotal: true,
           hideAgreementCheckbox: true,
           appearance: {
-            colorPrimary: '#1a1a1a',
             colorButtonSelectedBackground: '#1a1a1a',
             colorButtonSelectedText: '#ffffff',
             colorButtonText: '#4a5568',
@@ -148,7 +147,12 @@ function SaasPaymentForm({
         setReady(true);
       })
       .catch((err: unknown) => {
-        onError(err instanceof Error ? err.message : 'Failed to initialize payment form');
+        console.error('[SaasPaymentForm] init failed:', err);
+        const msg =
+          err instanceof Error                              ? err.message :
+          typeof err === 'string'                           ? err :
+          (err as { message?: string } | null)?.message ?? null;
+        onError(msg ? `Failed to initialize payment form: ${msg}` : 'Failed to initialize payment form');
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
