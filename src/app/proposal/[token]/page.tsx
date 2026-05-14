@@ -212,7 +212,7 @@ function InlinePaymentForm({
             colorButtonBackground: '#f7fafc',
             colorBackground: '#ffffff',
             colorText: '#1a202c',
-            fontFamily: 'Inter, sans-serif',
+            fontFamily: 'Roboto',
             fontSize: '16px',
             borderRadius: '12px',
           },
