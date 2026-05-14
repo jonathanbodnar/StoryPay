@@ -57,9 +57,12 @@ export async function POST() {
   });
 
   try {
+    // SaaS trial = ticket intention. The customer's card is saved via /payment-methods,
+    // then we create a subscription with startOn computed so nextPaymentOn lands on the
+    // configured trial-end date (no charge today beyond LP's $0.01 tokenize+refund).
     const result = await createIntention(pk, undefined, {
-      savePaymentMethod: true,
-      paymentMethods:    ['cc'],
+      hasRecurring:   true,
+      paymentMethods: ['cc'],
     });
     const intention = (result as Record<string, unknown>).data || result;
 

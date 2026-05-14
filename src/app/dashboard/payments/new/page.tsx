@@ -1188,11 +1188,10 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
  </div>
  <div className="px-5 py-4 space-y-4">
  <div className="flex flex-wrap gap-2">
- {([
- {key:'full', label:'Pay in Full'},
- {key:'installment',label:'Installments'},
- {key:'subscription',label:'Subscription'},
- ] as {key:PaymentType;label:string}[]).map(pt=>(
+{([
+{key:'full', label:'Pay in Full'},
+{key:'installment',label:'Installments'},
+] as {key:PaymentType;label:string}[]).map(pt=>(
  <button key={pt.key} type="button"onClick={()=>setPaymentType(pt.key)}
  className={`rounded-2xl border-2 px-4 py-2 text-sm font-medium transition-all ${paymentType===pt.key?'border-gray-900 bg-gray-50 text-gray-900':'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
  {pt.label}

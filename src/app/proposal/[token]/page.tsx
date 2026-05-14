@@ -138,7 +138,6 @@ interface PaymentIntentData {
   clientToken: string;
   environment: string;
   amountCents: number;
-  isTrial: boolean;
   paymentType: string;
   paymentMethods: string[];
 }
@@ -216,22 +215,36 @@ function InlinePaymentForm({
           },
         });
 
-        // Fires for hasRecurring:true intentions (one-time, installment, subscription)
-        elements.eventBus.on('ticket_success', async (payload) => {
+        // Per Fortis SDK source, `done` is the primary completion event for
+        // BOTH transaction intentions (charge happened inline) and ticket
+        // intentions (card tokenized for backend save+charge). The payload
+        // shape differs; backend handles the routing based on payment_type.
+        const onDone = async (payload: Record<string, unknown>) => {
           setProcessing(true);
-          const p = payload as { id?: string; ticket?: { id?: string }; data?: { id?: string }; payment_method?: string };
-          const ticketId = (p.id ?? p.ticket?.id ?? p.data?.id) as string;
-          await submitToServer({ ticketId, paymentMethod: p.payment_method || 'cc' });
-        });
+          if (intent.paymentType === 'installment') {
+            // Ticket intention → extract ticket id, backend will save+charge.
+            const p = payload as { id?: string; ticket?: { id?: string }; data?: { id?: string }; payment_method?: string };
+            const ticketId = p.id ?? p.ticket?.id ?? p.data?.id;
+            if (!ticketId) {
+              setPayError('Payment tokenization failed. Please try again.');
+              setProcessing(false);
+              return;
+            }
+            await submitToServer({ ticketId: String(ticketId), paymentMethod: p.payment_method || 'cc' });
+          } else {
+            // Transaction intention → Fortis already charged; pass the full
+            // payload so the backend can record whatever id it returned.
+            await submitToServer({ done: payload, paymentMethod: 'cc' });
+          }
+        };
 
-        // Fires for savePaymentMethod:true intentions (trial subscriptions)
-        elements.eventBus.on('tokenize_success', async (payload) => {
-          setProcessing(true);
-          const p = payload as { id?: string; data?: { id?: string }; payment_method?: string };
-          const vaultId = (p.id ?? p.data?.id) as string;
-          await submitToServer({ vaultId, paymentMethod: p.payment_method || 'cc' });
-        });
+        elements.eventBus.on('done',             onDone);
+        elements.eventBus.on('payment_success',  onDone);
 
+        elements.eventBus.on('validationError', (errPayload) => {
+          const e = errPayload as { message?: string };
+          setPayError(e.message || 'Please check your card details and try again.');
+        });
         elements.eventBus.on('error', (errPayload) => {
           const e = errPayload as { message?: string };
           setPayError(e.message || 'Payment error. Please try again.');
@@ -253,11 +266,11 @@ function InlinePaymentForm({
 
   const submitToServer = async ({
     ticketId,
-    vaultId,
+    done,
     paymentMethod,
   }: {
     ticketId?: string;
-    vaultId?: string;
+    done?: Record<string, unknown>;
     paymentMethod: string;
   }) => {
     setPayError(null);
@@ -265,7 +278,7 @@ function InlinePaymentForm({
       const res = await fetch(`/api/proposals/public/${token}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticketId, vaultId, paymentMethod }),
+        body: JSON.stringify({ ticketId, done, paymentMethod }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || 'Payment failed');

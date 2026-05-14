@@ -131,36 +131,41 @@ export function updateCustomer(secretKey: string, id: number, data: Record<strin
 }
 
 /**
- * Create a Fortis Elements payment intention. Per LP /developers docs:
+ * Create a Fortis Elements payment intention. Per LP /developers docs there
+ * are exactly two intention shapes the Elements iframe supports:
  *
- *   • hasRecurring: true       → creates a "save card" ticket. ticket_success
- *                                fires; the backend then saves the card via
- *                                POST /customers/:id/payment-methods and
- *                                charges the real amount via POST /charges.
- *   • savePaymentMethod: true  → vault-only mode for trials. tokenize_success
- *                                fires with a vaultId; no charge.
+ *   1. TRANSACTION intention — { amount, paymentMethods }
+ *      • Fortis renders a normal payment form (no "save card" label).
+ *      • Customer pays inside the iframe; Fortis charges the card directly.
+ *      • The `done` event fires with transaction info (transaction_id etc).
+ *      • Backend does NOT need to call /charges — just mark the invoice paid.
+ *      Use for pay-in-full / one-time invoices.
  *
- * Per the docs, when using either flag, NO `amount` should be sent — the
- * real charge happens server-side later via /charges with the saved
- * paymentMethodId. Passing amount here causes Fortis to attempt an immediate
- * charge against the ticket, which conflicts with the documented save-then-
- * charge flow and was the source of the wrong-amount (no-fee) bug.
+ *   2. TICKET intention — { hasRecurring: true, paymentMethods }
+ *      • Fortis renders a "save card" form (no charge inside the iframe).
+ *      • The `done` event fires with a ticket id.
+ *      • Backend calls POST /customers/:id/payment-methods with the ticketId
+ *        ($0.01 tokenize + instant refund) to get a paymentMethodId, then
+ *        POST /charges for the first real payment, then POST /subscriptions
+ *        or POST /payment-schedules for any recurring portion.
+ *      Use for installments and saas/trial subscriptions.
  *
- * Field names are camelCase per LP's Elements API (`paymentMethods`, not
- * `payment_methods` like the hosted /checkout/sessions endpoint).
+ * Field names are camelCase (paymentMethods, hasRecurring) per LP's Elements
+ * API — different from the hosted /checkout/sessions endpoint which uses
+ * snake_case (payment_methods).
  */
 export function createIntention(
   publishableKey: string,
   amount?: number,
-  options?: { paymentMethods?: string[]; hasRecurring?: boolean; savePaymentMethod?: boolean },
+  options?: { paymentMethods?: string[]; hasRecurring?: boolean },
 ) {
   const body: Record<string, unknown> = {};
-  if (options?.savePaymentMethod) {
-    body.savePaymentMethod = true;
-  } else if (options?.hasRecurring) {
+  if (options?.hasRecurring) {
     body.hasRecurring = true;
   } else if (amount) {
     body.amount = amount;
+  } else {
+    throw new Error('createIntention requires either an amount (transaction) or hasRecurring=true (ticket).');
   }
   if (options?.paymentMethods?.length) body.paymentMethods = options.paymentMethods;
   return lpFetch('/api/v1/intentions', {
@@ -195,18 +200,26 @@ export function savePaymentMethod(
   });
 }
 
-/** Save a payment method from a Fortis vault token (tokenize_success event, for trials). */
-export function savePaymentMethodFromVault(
-  secretKey: string,
-  customerId: number,
-  vaultId: string,
-  paymentMethod: string,
-) {
-  return lpFetch(`/api/v1/customers/${customerId}/payment-methods`, {
-    method: 'POST',
-    body: { vaultId, paymentMethod, setDefault: true },
-    key: secretKey,
-  });
+/**
+ * Compute the `startOn` value for a delayed-start LP subscription.
+ *
+ * LP's semantics: `nextPaymentOn = startOn + 1 frequency`. So to get the
+ * FIRST recurring charge to fire on `firstChargeDate`, pass
+ * `startOn = firstChargeDate - 1 frequency` to /subscriptions.
+ *
+ * Example: 14-day trial ending 2026-05-28, monthly billing →
+ *   startOn = 2026-04-28 → nextPaymentOn = 2026-05-28 ✓
+ */
+export function computeSubscriptionStartOn(firstChargeDate: string | Date, frequency: string): string {
+  const d = new Date(firstChargeDate);
+  switch (frequency) {
+    case 'weekly':    d.setDate(d.getDate() - 7); break;
+    case 'monthly':   d.setMonth(d.getMonth() - 1); break;
+    case 'quarterly': d.setMonth(d.getMonth() - 3); break;
+    case 'yearly':    d.setFullYear(d.getFullYear() - 1); break;
+    default:          d.setMonth(d.getMonth() - 1);
+  }
+  return d.toISOString();
 }
 
 export function listPaymentMethods(secretKey: string, customerId: number) {

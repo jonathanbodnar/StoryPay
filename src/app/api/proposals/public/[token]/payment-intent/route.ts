@@ -3,7 +3,6 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { createIntention } from '@/lib/lunarpay';
 
 interface InstallmentConfig { installments: Array<{ amount: number; date: string }>; }
-interface SubscriptionConfig { amount: number; frequency: string; start_date: string; }
 
 export async function POST(
   _request: Request,
@@ -45,49 +44,51 @@ export async function POST(
   const feeRate = Number((venue as Record<string, unknown>).service_fee_rate ?? 0);
   const applyFee = (cents: number) => feeRate > 0 ? Math.round(cents * (1 + feeRate / 100)) : cents;
 
-  // Determine payment type details
+  // Only `full` and `installment` are supported for proposals / invoices.
+  // Legacy `subscription` rows are blocked here — they should be migrated.
   const paymentType = (proposal.payment_type as string) || 'full';
+  if (paymentType !== 'full' && paymentType !== 'installment') {
+    return NextResponse.json(
+      { error: `Payment type "${paymentType}" is no longer supported. Please recreate the proposal as full or installment.` },
+      { status: 400 },
+    );
+  }
+
   const config = proposal.payment_config as Record<string, unknown> | null;
 
-  const isTrial = paymentType === 'subscription' && (() => {
-    const sd = (config as SubscriptionConfig | null)?.start_date;
-    return Boolean(sd && new Date(sd) > new Date());
-  })();
-
-  let amountCents = proposal.price as number;
+  // Compute the amount that will actually be charged today.
+  let baseAmountCents: number = proposal.price as number;
   if (paymentType === 'installment') {
     const ic = config as InstallmentConfig | null;
-    amountCents = ic?.installments?.[0]?.amount ?? (proposal.price as number);
-  } else if (paymentType === 'subscription') {
-    const sc = config as SubscriptionConfig | null;
-    amountCents = sc?.amount ?? (proposal.price as number);
+    baseAmountCents = ic?.installments?.[0]?.amount ?? (proposal.price as number);
   }
-  const displayAmountCents = isTrial ? 0 : applyFee(amountCents);
+  const displayAmountCents = applyFee(baseAmountCents);
+
+  const paymentMethods = acceptAch ? ['cc', 'ach'] : ['cc'];
 
   try {
-    // Per LP docs: when using hasRecurring or savePaymentMethod, omit `amount`.
-    // The ticket is consumed by /customers/:id/payment-methods (tokenization);
-    // the real charge fires from our backend via /charges with the resulting
-    // paymentMethodId for the with-fee total. Passing amount here makes Fortis
-    // attempt an immediate ticket-bound charge for the wrong amount.
+    // Pick the intention shape that matches the flow per LP /developers docs:
+    //  • full        → TRANSACTION intention (amount only). Fortis charges
+    //                  inline; backend just records the result.
+    //  • installment → TICKET intention (hasRecurring, no amount). Fortis
+    //                  tokenizes; backend saves the card, charges the first
+    //                  installment, and schedules the rest.
     const intentionResult = await createIntention(
       venue.lunarpay_publishable_key,
-      undefined,
+      paymentType === 'full' ? displayAmountCents : undefined,
       {
-        paymentMethods:    acceptAch ? ['cc', 'ach'] : ['cc'],
-        hasRecurring:      isTrial ? undefined : true,
-        savePaymentMethod: isTrial ? true : undefined,
+        paymentMethods,
+        hasRecurring: paymentType === 'installment' ? true : undefined,
       },
     );
     const intention = (intentionResult as Record<string, unknown>).data || intentionResult;
 
     return NextResponse.json({
-      clientToken:      (intention as Record<string, unknown>).clientToken,
-      environment:      (intention as Record<string, unknown>).environment ?? 'production',
-      amountCents:      displayAmountCents,
-      isTrial,
+      clientToken:    (intention as Record<string, unknown>).clientToken,
+      environment:    (intention as Record<string, unknown>).environment ?? 'production',
+      amountCents:    displayAmountCents,
       paymentType,
-      paymentMethods:   acceptAch ? ['cc', 'ach'] : ['cc'],
+      paymentMethods,
     });
   } catch (err) {
     console.error('[proposal payment-intent] LP intention failed:', err);

@@ -403,7 +403,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  <div>
   <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment Type</label>
   <div className="flex gap-2">
-   {(['full', 'installment', 'subscription'] as const).map((type) => (
+   {(['full', 'installment'] as const).map((type) => (
     <button
      key={type}
      type="button"
@@ -415,7 +415,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
      } disabled:cursor-default`}
     >
-     {type === 'full' ? 'Full Payment' : type === 'installment' ? 'Installment Plan' : 'Subscription'}
+     {type === 'full' ? 'Full Payment' : 'Installment Plan'}
     </button>
    ))}
   </div>

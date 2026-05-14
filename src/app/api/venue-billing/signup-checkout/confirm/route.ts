@@ -8,8 +8,9 @@ import {
 import {
   createCustomer,
   listCustomers,
-  savePaymentMethodFromVault,
+  savePaymentMethod,
   createSubscription,
+  computeSubscriptionStartOn,
 } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
@@ -19,12 +20,14 @@ export const runtime = 'nodejs';
 
 /**
  * POST /api/venue-billing/signup-checkout/confirm
- * Body: { vaultId: string; paymentMethod: string }
+ * Body: { ticketId: string; paymentMethod?: string }
  *
- * Handles the tokenize_success event from Fortis Elements for SaaS trials.
+ * Handles the `done` event from Fortis Elements for SaaS trials (ticket intention).
  * 1. Finds or creates the LP customer for this venue.
- * 2. Saves the vaulted card as a payment method.
- * 3. Creates a LP subscription with startOn = trial end date (no charge today).
+ * 2. Saves the card via /customers/:id/payment-methods using the ticketId
+ *    (LP charges $0.01 and instantly refunds; returns paymentMethodId).
+ * 3. Creates a LP subscription with startOn = trial_end - 1 frequency period
+ *    so LP's nextPaymentOn lands on the configured trial-end date.
  * 4. Updates the venue row to trialing.
  * 5. Creates an audit log entry.
  */
@@ -34,9 +37,9 @@ export async function POST(req: NextRequest) {
     const venueId = c.get('venue_id')?.value;
     if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const body = (await req.json().catch(() => ({}))) as { vaultId?: string; paymentMethod?: string };
-    const { vaultId, paymentMethod = 'cc' } = body;
-    if (!vaultId) return NextResponse.json({ error: 'vaultId is required' }, { status: 400 });
+    const body = (await req.json().catch(() => ({}))) as { ticketId?: string; paymentMethod?: string };
+    const { ticketId, paymentMethod = 'cc' } = body;
+    if (!ticketId) return NextResponse.json({ error: 'ticketId is required' }, { status: 400 });
 
     const ctx = await loadVenueDirectoryPlanContext(venueId);
     if (!ctx) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
@@ -116,19 +119,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Could not create payment customer. Please contact support.' }, { status: 500 });
     }
 
-    // ── Save vaulted card as a payment method ────────────────────────────────
-    const pmResult = await savePaymentMethodFromVault(secret, customerId, vaultId, paymentMethod);
+    // ── Save card via ticketId → paymentMethodId ─────────────────────────────
+    // LP does $0.01 tokenize + instant refund per their docs.
+    const pmResult = await savePaymentMethod(
+      secret, customerId, ticketId, venueName,
+      { paymentMethod, setDefault: true },
+    );
     const pm = (pmResult as Record<string, unknown>).data || pmResult;
-    const paymentMethodId = Number((pm as Record<string, unknown>).id);
+    const paymentMethodId = Number(((pm as Record<string, unknown>).payment_method as Record<string, unknown> | undefined)?.id ?? (pm as Record<string, unknown>).id);
 
-    if (!paymentMethodId) {
+    if (!paymentMethodId || Number.isNaN(paymentMethodId)) {
       return NextResponse.json({ error: 'Could not save payment method. Please try again.' }, { status: 500 });
     }
 
-    // ── Create LP subscription starting on trial end date ────────────────────
-    const startOnIso = trialEndsAt.length === 10
+    // ── Create LP subscription ──────────────────────────────────────────────
+    // LP semantics: `nextPaymentOn = startOn + 1 frequency`. To get the first
+    // recurring charge to land on the trial-end date, pass
+    // `startOn = trial_end - 1 frequency` (1 month back for monthly billing).
+    const trialEndDate = trialEndsAt.length === 10
       ? `${trialEndsAt}T12:00:00.000Z`
       : trialEndsAt;
+    const startOnIso = computeSubscriptionStartOn(trialEndDate, 'monthly');
 
     const subPayload: Record<string, unknown> = {
       customerId:      customerId,
@@ -180,7 +191,9 @@ export async function POST(req: NextRequest) {
         new_subscription_id: newSubId,
         customer_id:         String(customerId),
         payment_method_id:   String(paymentMethodId),
+        ticket_id:           ticketId,
         trial_ends_at:       trialEndsAt,
+        start_on:            startOnIso,
         monthly_cents:       charge.total_cents,
         flow:                'inline_elements',
         payment_method:      paymentMethod,

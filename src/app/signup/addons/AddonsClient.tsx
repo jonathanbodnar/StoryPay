@@ -125,19 +125,28 @@ function SaasPaymentForm({
           },
         });
 
-        // savePaymentMethod:true intention fires tokenize_success (no charge)
-        elements.eventBus.on('tokenize_success', async (payload) => {
+        // Per Fortis SDK source, `done` is the only completion event that
+        // actually fires. For a ticket intention (hasRecurring:true) the
+        // payload carries the ticketId we need to save the card server-side.
+        const onDone = async (payload: Record<string, unknown>) => {
           setProcessing(true);
-          const p = payload as { id?: string; data?: { id?: string }; payment_method?: string };
-          const vaultId = p.id ?? p.data?.id;
-          if (!vaultId) {
+          const p = payload as { id?: string; ticket?: { id?: string }; data?: { id?: string }; payment_method?: string };
+          const ticketId = p.id ?? p.ticket?.id ?? p.data?.id;
+          if (!ticketId) {
             onError('Payment tokenization failed. Please try again.');
             setProcessing(false);
             return;
           }
-          await handleConfirm({ vaultId, paymentMethod: p.payment_method || 'cc' });
-        });
+          await handleConfirm({ ticketId: String(ticketId), paymentMethod: p.payment_method || 'cc' });
+        };
 
+        elements.eventBus.on('done',            onDone);
+        elements.eventBus.on('payment_success', onDone);
+
+        elements.eventBus.on('validationError', (errPayload) => {
+          const e = errPayload as { message?: string };
+          onError(e.message || 'Please check your card details and try again.');
+        });
         elements.eventBus.on('error', (errPayload) => {
           const e = errPayload as { message?: string };
           onError(e.message || 'Payment error. Please try again.');
@@ -157,12 +166,12 @@ function SaasPaymentForm({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleConfirm = async ({ vaultId, paymentMethod }: { vaultId: string; paymentMethod: string }) => {
+  const handleConfirm = async ({ ticketId, paymentMethod }: { ticketId: string; paymentMethod: string }) => {
     try {
       const res = await fetch('/api/venue-billing/signup-checkout/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vaultId, paymentMethod }),
+        body: JSON.stringify({ ticketId, paymentMethod }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || 'Failed to activate trial');

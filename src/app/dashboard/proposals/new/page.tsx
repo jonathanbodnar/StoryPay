@@ -97,16 +97,13 @@ export default function NewProposalPage() {
  const [priceDollars, setPriceDollars] = useState('');
  const [includeSurcharge, setIncludeSurcharge] = useState(true);
  const [surchargeOverride, setSurchargeOverride] = useState(''); // empty = auto
- const [paymentType, setPaymentType] = useState<'full' | 'installment' | 'subscription'>('full');
+  const [paymentType, setPaymentType] = useState<'full' | 'installment'>('full');
 
  const [installments, setInstallments] = useState<Installment[]>([
  { id: uid(), amount: '', date: '' },
  ]);
 
- const [subAmount, setSubAmount] = useState('');
- const [subFrequency, setSubFrequency] = useState<'monthly' | 'weekly'>('monthly');
- const [subStartDate, setSubStartDate] = useState('');
- const [acceptAch, setAcceptAch] = useState(true);
+const [acceptAch, setAcceptAch] = useState(true);
 
  useEffect(() => {
  fetch('/api/templates')
@@ -213,15 +210,8 @@ export default function NewProposalPage() {
  })),
  };
  }
- if (paymentType === 'subscription') {
- return {
- amount: Math.round(parseFloat(subAmount || '0') * 100),
- frequency: subFrequency,
- start_date: subStartDate,
- };
- }
- return {};
- }
+return {};
+}
 
  function buildBody(asDraft: boolean) {
   return {
@@ -595,7 +585,7 @@ export default function NewProposalPage() {
  <div>
   <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment Type</label>
   <div className="flex gap-2">
-   {(['full', 'installment', 'subscription'] as const).map((type) => (
+   {(['full', 'installment'] as const).map((type) => (
     <button
      key={type}
      type="button"
@@ -606,7 +596,7 @@ export default function NewProposalPage() {
        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
      }`}
     >
-     {type === 'full' ? 'Full Payment' : type === 'installment' ? 'Installment Plan' : 'Subscription'}
+     {type === 'full' ? 'Full Payment' : 'Installment Plan'}
     </button>
    ))}
   </div>
@@ -683,50 +673,6 @@ export default function NewProposalPage() {
  </div>
  )}
 
- {/* Subscription Details */}
- {paymentType === 'subscription' && (
- <div className="rounded-lg border border-gray-200 p-5">
- <h3 className="text-sm font-semibold text-gray-700 mb-3">Subscription Details</h3>
- <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Amount per Period</label>
- <div className="relative">
- <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
- <input
- type="number"
- min="0"
- step="0.01"
- value={subAmount}
- onChange={(e) => setSubAmount(e.target.value)}
- placeholder="0.00"
- className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
- />
- </div>
- </div>
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Frequency</label>
- <select
- value={subFrequency}
- onChange={(e) => setSubFrequency(e.target.value as 'monthly' | 'weekly')}
- className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
- >
- <option value="monthly">Monthly</option>
- <option value="weekly">Weekly</option>
- </select>
- </div>
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
- <input
- type="date"
- min={today()}
- value={toDateValue(subStartDate)}
- onChange={(e) => setSubStartDate(e.target.value)}
- className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
- />
- </div>
- </div>
- </div>
- )}
 
  {/* Error */}
  {error && (
