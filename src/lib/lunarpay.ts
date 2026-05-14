@@ -114,9 +114,10 @@ export function updateCustomer(secretKey: string, id: number, data: Record<strin
   return lpFetch(`/api/v1/customers/${id}`, { method: 'PUT', body: data, key: secretKey });
 }
 
-export function createIntention(publishableKey: string, amount?: number) {
+export function createIntention(publishableKey: string, amount?: number, options?: { paymentMethods?: string[] }) {
   const body: Record<string, unknown> = { hasRecurring: true };
   if (amount) body.amount = amount;
+  if (options?.paymentMethods?.length) body.payment_methods = options.paymentMethods;
   return lpFetch('/api/v1/intentions', {
     method: 'POST',
     body,

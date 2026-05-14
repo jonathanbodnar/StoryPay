@@ -10,7 +10,7 @@ export async function POST(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, venue_id, status, price')
+    .select('id, venue_id, status, price, accept_ach')
     .eq('public_token', token)
     .single();
 
@@ -24,7 +24,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_publishable_key')
+    .select('lunarpay_publishable_key, accept_ach')
     .eq('id', proposal.venue_id)
     .single();
 
@@ -32,8 +32,17 @@ export async function POST(
     return NextResponse.json({ error: 'Venue payment not configured' }, { status: 400 });
   }
 
+  // Proposal-level ACH toggle takes precedence, falls back to venue-level.
+  const proposalAch = (proposal as { accept_ach?: boolean | null }).accept_ach;
+  const venueAch = (venue as { accept_ach?: boolean | null }).accept_ach;
+  const acceptAch = proposalAch !== null && proposalAch !== undefined ? proposalAch !== false : venueAch !== false;
+
   try {
-    const intentionResult = await createIntention(venue.lunarpay_publishable_key, proposal.price || undefined);
+    const intentionResult = await createIntention(
+      venue.lunarpay_publishable_key,
+      proposal.price || undefined,
+      { paymentMethods: acceptAch ? ['cc', 'ach'] : ['cc'] },
+    );
     const intention = intentionResult.data || intentionResult;
 
     return NextResponse.json({
