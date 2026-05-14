@@ -1077,7 +1077,7 @@ export function VenueManagementPortal({
                           >
                             <CalendarClock size={12} /> Extend trial
                           </button>
-                          {Boolean(venue.directory_subscription_external_id) && (
+                          {Boolean(venue.directory_plan_id || venue.directory_subscription_external_id) && (
                             <button
                               type="button"
                               onClick={() => void openBillingModal(venue)}
