@@ -113,6 +113,7 @@ function SaasPaymentForm({
           hideTotal: true,
           hideAgreementCheckbox: true,
           appearance: {
+            colorPrimary: '#1a1a1a',
             colorButtonSelectedBackground: '#1a1a1a',
             colorButtonSelectedText: '#ffffff',
             colorButtonText: '#4a5568',

@@ -65,15 +65,20 @@ export async function POST(
   const displayAmountCents = isTrial ? 0 : applyFee(amountCents);
 
   try {
-    // full one-time: no hasRecurring (card is NOT vaulted; Fortis won't show "card saved" notice)
-    // installment / subscription: hasRecurring:true so the card gets vaulted for future charges
-    // trial subscription: savePaymentMethod:true — tokenize only, no charge
+    // Per LP docs (May 2026): the ticket from `ticket_success` can ONLY be
+    // used to save the card via POST /customers/:id/payment-methods. Real
+    // charges go through POST /charges with the resulting paymentMethodId.
+    // So ALL paid flows use hasRecurring:true; only trials use savePaymentMethod.
+    //
+    // The intention `amount` is what Fortis Elements displays as the total
+    // and authorizes — it MUST match what we'll actually charge (incl. fee),
+    // otherwise the charge fails or is short.
     const intentionResult = await createIntention(
       venue.lunarpay_publishable_key,
-      isTrial ? undefined : amountCents,
+      isTrial ? undefined : displayAmountCents,
       {
         paymentMethods:    acceptAch ? ['cc', 'ach'] : ['cc'],
-        hasRecurring:      (!isTrial && paymentType !== 'full') ? true : undefined,
+        hasRecurring:      isTrial ? undefined : true,
         savePaymentMethod: isTrial ? true : undefined,
       },
     );

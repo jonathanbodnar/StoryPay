@@ -6,10 +6,10 @@ import {
   savePaymentMethod,
   savePaymentMethodFromVault,
   createCharge,
-  chargeWithTicket,
   createPaymentSchedule,
   createSubscription,
 } from '@/lib/lunarpay';
+
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
@@ -17,6 +17,18 @@ import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { notifyOwner, formatAmount, HIGH_VALUE_THRESHOLD_CENTS } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
+
+/**
+ * Extract the `id` from a LunarPay API response, tolerating
+ * `{ id }`, `{ data: { id } }`, and `{ data: { payment_method: { id } } }`.
+ */
+function extractId(raw: unknown): number {
+  const r    = (raw ?? {}) as Record<string, unknown>;
+  const root = (r.data ?? r) as Record<string, unknown>;
+  const pm   = (root.payment_method ?? root) as Record<string, unknown>;
+  const id   = pm.id ?? root.id ?? r.id;
+  return Number(id);
+}
 
 function applyFee(cents: number, ratePercent: number): number {
   if (ratePercent <= 0) return cents;
@@ -103,9 +115,11 @@ export async function POST(
         lastName:  parts.slice(1).join(' ') || '',
         email:     proposal.customer_email || '',
       });
-      const created = (cr as Record<string, unknown>).data || cr;
-      customerId = Number((created as Record<string, unknown>).id);
+      customerId = extractId(cr);
       await supabaseAdmin.from('proposals').update({ customer_lunarpay_id: customerId }).eq('id', proposal.id);
+    }
+    if (!customerId || Number.isNaN(customerId)) {
+      throw new Error('Could not resolve LunarPay customer id.');
     }
 
     // ── Determine amounts and trial status ─────────────────────────────────
@@ -133,53 +147,57 @@ export async function POST(
       customer_lunarpay_id: customerId,
     };
 
-    let paymentMethodId: number = 0;
-
+    // ── Save the card / get paymentMethodId ─────────────────────────────────
+    // Per LP docs (May 2026): the ticket from ticket_success can ONLY be used
+    // to save the card via POST /customers/:id/payment-methods. Real charges
+    // always go through POST /charges with the resulting paymentMethodId.
+    // For pay-in-full we keep setDefault:false so the card isn't promoted to
+    // primary; for installment/subscription it must be default for LP's cron
+    // to charge it on future due dates.
+    let paymentMethodId: number;
     if (vaultId) {
-      // ── Trial: tokenize_success (savePaymentMethod:true intention, no charge) ──
-      const pmr = await savePaymentMethodFromVault(sk, customerId, vaultId, paymentMethod);
-      const pm  = (pmr as Record<string, unknown>).data || pmr;
-      paymentMethodId = Number((pm as Record<string, unknown>).id);
-      updateData.payment_method_id = paymentMethodId;
-
-    } else if (paymentType === 'full') {
-      // ── Full one-time: charge directly from ticketId, do NOT vault the card ──
-      const desc = `${venue.name} - Proposal Payment`;
-      const cr   = await chargeWithTicket(sk, customerId, {
-        ticketId:      ticketId!,
-        amount:        finalChargeCents,
-        paymentMethod,
-        description:   desc,
-        saveCard:      false,
-      });
-      const charge = (cr as Record<string, unknown>).data || cr;
-      updateData.charge_id      = (charge as Record<string, unknown>).id ?? (charge as Record<string, unknown>).transaction_id;
-      updateData.transaction_id = updateData.charge_id;
-
+      // Trial: tokenize_success path (savePaymentMethod:true intention, no charge)
+      const pmRes = await savePaymentMethodFromVault(sk, customerId, vaultId, paymentMethod);
+      paymentMethodId = extractId(pmRes);
     } else {
-      // ── Installment / Subscription: vault card first, then charge ──────────
-      // Card must be saved so LP can execute future schedule / subscription payments.
-      const pmr = await savePaymentMethod(sk, customerId, ticketId!, (proposal.customer_name as string) || '');
-      const pm  = (pmr as Record<string, unknown>).data || pmr;
-      paymentMethodId = Number((pm as Record<string, unknown>).id);
-      updateData.payment_method_id = paymentMethodId;
+      const pmRes = await savePaymentMethod(
+        sk,
+        customerId,
+        ticketId!,
+        (proposal.customer_name as string) || '',
+        {
+          paymentMethod,
+          setDefault: paymentType !== 'full',
+        },
+      );
+      paymentMethodId = extractId(pmRes);
+    }
+    console.log('[pay] paymentMethodId resolved to:', paymentMethodId);
+    if (!paymentMethodId || Number.isNaN(paymentMethodId)) {
+      throw new Error('Could not save payment method (no id returned from LunarPay).');
+    }
+    updateData.payment_method_id = paymentMethodId;
 
-      if (finalChargeCents > 0) {
-        const desc =
-          paymentType === 'installment'
-            ? `${venue.name} - Payment 1 of ${(config as InstallmentConfig | null)?.installments?.length || 1}`
-            : `${venue.name} - First ${(config as SubscriptionConfig | null)?.frequency || 'monthly'} payment`;
+    // ── Charge first payment (everything except trials) ─────────────────────
+    if (!isTrial && finalChargeCents > 0) {
+      const desc =
+        paymentType === 'installment'
+          ? `${venue.name} - Payment 1 of ${(config as InstallmentConfig | null)?.installments?.length || 1}`
+          : paymentType === 'subscription'
+          ? `${venue.name} - First ${(config as SubscriptionConfig | null)?.frequency || 'monthly'} payment`
+          : `${venue.name} - Proposal Payment`;
 
-        const cr = await createCharge(sk, {
-          customerId,
-          paymentMethodId,
-          amount:      finalChargeCents,
-          description: desc,
-        });
-        const charge = (cr as Record<string, unknown>).data || cr;
-        updateData.charge_id      = (charge as Record<string, unknown>).id;
-        updateData.transaction_id = (charge as Record<string, unknown>).id;
-      }
+      console.log('[pay] charging', { customerId, paymentMethodId, amount: finalChargeCents });
+      const chargeRes = await createCharge(sk, {
+        customerId,
+        paymentMethodId,
+        amount:      finalChargeCents,
+        description: desc,
+      });
+      const chargeId = extractId(chargeRes);
+      console.log('[pay] charge created:', chargeId);
+      updateData.charge_id      = chargeId;
+      updateData.transaction_id = chargeId;
     }
 
     // ── Create recurring resource ──────────────────────────────────────────
@@ -196,8 +214,7 @@ export async function POST(
             date:   p.date,
           })),
         });
-        const sched = (sr as Record<string, unknown>).data || sr;
-        updateData.payment_schedule_id = (sched as Record<string, unknown>).id;
+        updateData.payment_schedule_id = extractId(sr);
       }
     } else if (paymentType === 'subscription') {
       const sc = config as SubscriptionConfig | null;
@@ -213,8 +230,7 @@ export async function POST(
         startOn:    startOnIso,
         description: `${proposal.customer_name} - ${sc?.frequency ?? 'monthly'} subscription`,
       });
-      const sub = (subr as Record<string, unknown>).data || subr;
-      updateData.subscription_id = (sub as Record<string, unknown>).id;
+      updateData.subscription_id = extractId(subr);
     }
 
     await supabaseAdmin.from('proposals').update(updateData).eq('id', proposal.id);

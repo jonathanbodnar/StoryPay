@@ -153,39 +153,26 @@ export function createIntention(
 }
 
 /**
- * Charge a customer directly from a Fortis ticket (ticket_success).
- * - saveCard: false  → one-time charge, card is NOT vaulted (use for pay-in-full)
- * - saveCard: true   → charge AND vault the card; response includes payment_method_id
- *                      (use for installments / subscriptions so future payments work)
+ * Save a payment method from a Fortis ticket (ticket_success event).
+ * Per LP docs: $0.01 tokenization charge + instant refund, returns paymentMethodId.
+ * The ticket can ONLY be used once with this endpoint — to charge, use
+ * createCharge(customerId, paymentMethodId, ...) with the returned id.
  */
-export function chargeWithTicket(
+export function savePaymentMethod(
   secretKey: string,
   customerId: number,
-  data: {
-    ticketId: string;
-    amount: number;
-    paymentMethod?: string;
-    description?: string;
-    saveCard?: boolean;
-  },
+  ticketId: string,
+  nameHolder: string,
+  options?: { paymentMethod?: string; setDefault?: boolean },
 ) {
-  return lpFetch(`/api/v1/customers/${customerId}/charges`, {
-    method: 'POST',
-    body: {
-      ticketId:      data.ticketId,
-      amount:        data.amount,
-      paymentMethod: data.paymentMethod ?? 'cc',
-      ...(data.description ? { description: data.description } : {}),
-      saveCard:      data.saveCard ?? false,
-    },
-    key: secretKey,
-  });
-}
-
-export function savePaymentMethod(secretKey: string, customerId: number, ticketId: string, nameHolder: string) {
   return lpFetch(`/api/v1/customers/${customerId}/payment-methods`, {
     method: 'POST',
-    body: { ticketId, nameHolder, setDefault: true },
+    body: {
+      ticketId,
+      nameHolder,
+      paymentMethod: options?.paymentMethod ?? 'cc',
+      setDefault:    options?.setDefault    ?? true,
+    },
     key: secretKey,
   });
 }

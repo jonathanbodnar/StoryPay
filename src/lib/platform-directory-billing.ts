@@ -88,6 +88,14 @@ export type VenuePlanRow = {
     directory_subscription_status: string;
     directory_subscription_external_id: string | null;
     platform_lunarpay_customer_id: string | null;
+    directory_trial_started_at: string | null;
+    directory_trial_ends_at: string | null;
+    directory_trial_plan_id: string | null;
+    directory_trial_consumed: boolean | null;
+    directory_trial_is_forever: boolean | null;
+    directory_addon_verified: boolean | null;
+    directory_addon_sponsored: boolean | null;
+    directory_addon_concierge: boolean | null;
   };
   plan: {
     id: string;
@@ -101,7 +109,19 @@ export async function loadVenueDirectoryPlanContext(venueId: string): Promise<Ve
   const { data: venue, error: vErr } = await supabaseAdmin
     .from('venues')
     .select(
-      'id, name, email, directory_plan_id, directory_subscription_status, directory_subscription_external_id, platform_lunarpay_customer_id',
+      `id, name, email,
+       directory_plan_id,
+       directory_subscription_status,
+       directory_subscription_external_id,
+       platform_lunarpay_customer_id,
+       directory_trial_started_at,
+       directory_trial_ends_at,
+       directory_trial_plan_id,
+       directory_trial_consumed,
+       directory_trial_is_forever,
+       directory_addon_verified,
+       directory_addon_sponsored,
+       directory_addon_concierge`,
     )
     .eq('id', venueId)
     .maybeSingle();

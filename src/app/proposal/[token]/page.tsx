@@ -204,6 +204,7 @@ function InlinePaymentForm({
           hideTotal: true,
           hideAgreementCheckbox: true,
           appearance: {
+            colorPrimary: '#1a1a1a',
             colorButtonSelectedBackground: '#1a1a1a',
             colorButtonSelectedText: '#ffffff',
             colorButtonText: '#4a5568',
@@ -763,11 +764,23 @@ export default function ProposalPage() {
               <InlinePaymentForm
                 token={token}
                 brandColor={proposal.venue_brand?.color || '#1b1b1b'}
-                onSuccess={() =>
-                  setProposal((prev) =>
-                    prev ? { ...prev, status: 'paid', paid_at: new Date().toISOString() } : prev
-                  )
-                }
+                onSuccess={async () => {
+                  // Re-fetch from server so we display the real persisted state
+                  // (status, paid_at, etc.) rather than guessing.
+                  try {
+                    const res = await fetch(`/api/proposals/public/${token}`);
+                    if (res.ok) setProposal(await res.json());
+                    else {
+                      setProposal((prev) =>
+                        prev ? { ...prev, status: 'paid', paid_at: new Date().toISOString() } : prev,
+                      );
+                    }
+                  } catch {
+                    setProposal((prev) =>
+                      prev ? { ...prev, status: 'paid', paid_at: new Date().toISOString() } : prev,
+                    );
+                  }
+                }}
               />
             </div>
           )}
