@@ -170,9 +170,11 @@ export async function POST(req: NextRequest) {
   console.log('[signup-checkout] key starts with lp_sk_:', secret.startsWith('lp_sk_'));
   console.log('[signup-checkout] key length:', secret.length);
 
-  // Use LP's native trial mode: mode:"subscription" + recurring.trial:true.
-  // Card is tokenized and saved but NO charge occurs. The subscription is
-  // created with nextPaymentOn = start_on (trial end date).
+  // Use LP's native trial mode matching their docs example exactly.
+  // LP's hosted checkout page chokes on `start_on` + `trial: true` combo
+  // (returns "Missing Authentication Token" on the hosted page), so we
+  // omit start_on here and PATCH the subscription's nextPaymentOn in the
+  // verify step to match our exact 14-day trial end date.
   const monthlyDollars = (charge.total_cents / 100).toFixed(2);
   const checkoutData: Record<string, unknown> = {
     amount:          charge.total_cents / 100,
@@ -181,10 +183,11 @@ export async function POST(req: NextRequest) {
     recurring:       {
       frequency: 'monthly',
       trial:     true,
-      start_on:  trialEndsAtIso,
     },
     customer_email:  ctx.venue.email || undefined,
     customer_name:   ctx.venue.name,
+    // Force cc-only — ACH + trial may not be supported on LP's hosted page.
+    payment_methods: ['cc'],
     metadata: {
       storypay_venue_id: venueId,
       storypay_plan_id:  planId,
@@ -207,6 +210,7 @@ export async function POST(req: NextRequest) {
         { status: 502 },
       );
     }
+    console.log('[signup-checkout] hosted checkout URL:', url);
     return NextResponse.json({ url });
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Unknown error';

@@ -11,6 +11,7 @@ import {
   getSubscription,
   listPaymentMethods,
   listSubscriptions,
+  updateSubscription,
 } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
@@ -305,6 +306,22 @@ async function verifyHandler(req: NextRequest) {
       { error: 'LunarPay did not return a subscription id.' },
       { status: 422 },
     );
+  }
+
+  // ── Align LP's nextPaymentOn with our 14-day trial end date ──────────────
+  // We send the checkout without `start_on` (LP's hosted page chokes on it
+  // in trial mode), so LP defaults nextPaymentOn to ~1 frequency period.
+  // PATCH it to our actual trial end so the first real charge lands on day 14.
+  try {
+    const startOnIso = trialEndsAt.length === 10
+      ? `${trialEndsAt}T12:00:00.000Z`
+      : trialEndsAt;
+    await updateSubscription(secret, newSubId, { nextPaymentOn: startOnIso });
+    console.log('[signup-checkout/verify] PATCHed sub nextPaymentOn to', startOnIso);
+  } catch (e) {
+    console.warn('[signup-checkout/verify] failed to PATCH nextPaymentOn:', e);
+    // Non-fatal: customer's trial is still active, first charge just lands
+    // ~16 days later than our recorded end date.
   }
 
   // ── Persist all state to the venue row ──────────────────────────────────
