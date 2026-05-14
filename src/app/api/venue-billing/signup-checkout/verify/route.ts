@@ -37,6 +37,11 @@ export const runtime = 'nodejs';
  *  7. Mark the venue as trialing + stamp the new subscription id.
  */
 export async function POST(req: NextRequest) {
+  // ── Diagnostic ping ──────────────────────────────────────────────────────
+  // Uncomment the two lines below to confirm the route loads and runs.
+  // console.log('[signup-checkout/verify] route reached');
+  // return NextResponse.json({ ok: true, ping: true });
+
   // Top-level catch: guarantees this handler always returns JSON regardless
   // of which line throws. Without this, Next.js returns an HTML error page
   // which res.json() can't parse — client shows "Network error" and the
@@ -52,6 +57,11 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+// ── GET: health check (lets us confirm the route module loads) ───────────────
+export async function GET() {
+  return NextResponse.json({ ok: true, route: 'signup-checkout/verify', ts: Date.now() });
 }
 
 async function verifyHandler(req: NextRequest) {
