@@ -5,7 +5,7 @@ import {
   loadVenueDirectoryPlanContext,
   requirePlatformLunarPaySecretKey,
 } from '@/lib/platform-directory-billing';
-import { getCheckoutSession } from '@/lib/lunarpay';
+import { getCheckoutSession, listSubscriptions } from '@/lib/lunarpay';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -44,22 +44,47 @@ export async function POST(req: NextRequest) {
   }
 
   // LP subscription-mode sessions include the subscription ID in the
-  // completed response. Try several possible field names.
-  const subId =
+  // completed response. NOTE: LP's GET /checkout/sessions often omits
+  // subscription_id — fall back to listSubscriptions if needed.
+  let subId: string | number | null =
     (session.subscription_id as string | number | null) ??
     (session.subscriptionId as string | number | null) ??
     ((session.subscription as Record<string, unknown> | null)?.id as string | number | null | undefined) ??
     null;
 
-  const customerId =
+  let customerId: string | number | null =
     (session.customer_id as string | number | null) ||
     (session.customerId as string | number | null) ||
-    ctx.venue.platform_lunarpay_customer_id;
+    ctx.venue.platform_lunarpay_customer_id ||
+    null;
+
+  if (subId === null) {
+    try {
+      const allSubs = await listSubscriptions(secret);
+      const subList: Record<string, unknown>[] = Array.isArray(allSubs)
+        ? allSubs
+        : ((allSubs as Record<string, unknown>).data as Record<string, unknown>[]) ?? [];
+      const match = subList.find(
+        (s) => s.status !== 'cancelled' && s.status !== 'canceled',
+      );
+      if (match?.id) {
+        subId = match.id as string | number;
+        if (!customerId)
+          customerId =
+            (match.customer_id as string | number | null) ??
+            (match.customerId as string | number | null) ??
+            null;
+        console.log('[start-paid/verify] found sub via listSubscriptions:', subId);
+      }
+    } catch (e) {
+      console.warn('[start-paid/verify] listSubscriptions fallback failed:', e);
+    }
+  }
 
   if (subId === null) {
     return NextResponse.json(
-      { error: 'LunarPay session did not return a subscription_id — expected mode:subscription' },
-      { status: 502 },
+      { error: 'Could not find the subscription LP created — please contact support.' },
+      { status: 422 },
     );
   }
 

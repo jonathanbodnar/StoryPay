@@ -6,6 +6,7 @@ import {
   getCheckoutSession,
   getSubscription,
   listPaymentMethods,
+  listSubscriptions,
 } from './lunarpay';
 import {
   getPlatformFortisMerchantId,
@@ -1295,16 +1296,49 @@ export async function verifyUpdatePaymentMethod(
   }
 
   // LP subscription-mode sessions include the new subscription ID.
-  const newSubId =
+  // NOTE: LP's GET /checkout/sessions often omits subscription_id — fall back
+  // to listSubscriptions to find the sub LP auto-created during checkout.
+  let newSubId: string | number | null =
     (session.subscription_id as string | number | null) ??
     (session.subscriptionId as string | number | null) ??
     ((session.subscription as Record<string, unknown> | null)?.id as string | number | null | undefined) ??
     null;
 
-  const customerId =
+  let customerId: string | number | null =
     (session.customer_id as string | number | null) ||
     (session.customerId as string | number | null) ||
-    ctx.venue.platform_lunarpay_customer_id;
+    ctx.venue.platform_lunarpay_customer_id ||
+    null;
+
+  if (newSubId === null) {
+    // Fallback: scan LP's subscription list for an active sub that isn't the
+    // old one (which we're about to cancel). LP creates the new sub during
+    // checkout so it will be the most recently created active subscription.
+    const oldSubId = ctx.venue.directory_subscription_external_id;
+    try {
+      const allSubs = await listSubscriptions(secret);
+      const subList: Record<string, unknown>[] = Array.isArray(allSubs)
+        ? allSubs
+        : ((allSubs as Record<string, unknown>).data as Record<string, unknown>[]) ?? [];
+      const match = subList.find(
+        (s) =>
+          s.status !== 'cancelled' &&
+          s.status !== 'canceled' &&
+          (!oldSubId || String(s.id) !== String(oldSubId)),
+      );
+      if (match?.id) {
+        newSubId = match.id as string | number;
+        if (!customerId)
+          customerId =
+            (match.customer_id as string | number | null) ??
+            (match.customerId as string | number | null) ??
+            null;
+        console.log('[verifyUpdatePaymentMethod] found new sub via listSubscriptions:', newSubId);
+      }
+    } catch (e) {
+      console.warn('[verifyUpdatePaymentMethod] listSubscriptions fallback failed:', e);
+    }
+  }
 
   if (newSubId === null) {
     throw new Error('LunarPay session did not return a subscription_id — expected mode:subscription');
