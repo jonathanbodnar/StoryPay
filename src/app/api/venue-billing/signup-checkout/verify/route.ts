@@ -37,6 +37,24 @@ export const runtime = 'nodejs';
  *  7. Mark the venue as trialing + stamp the new subscription id.
  */
 export async function POST(req: NextRequest) {
+  // Top-level catch: guarantees this handler always returns JSON regardless
+  // of which line throws. Without this, Next.js returns an HTML error page
+  // which res.json() can't parse — client shows "Network error" and the
+  // real cause is hidden. This wrapper surfaces every failure to both the
+  // user and Railway logs.
+  try {
+    return await verifyHandler(req);
+  } catch (err) {
+    console.error('[signup-checkout/verify] UNCAUGHT EXCEPTION:', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      { error: `Unexpected server error: ${msg}` },
+      { status: 500 },
+    );
+  }
+}
+
+async function verifyHandler(req: NextRequest) {
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -45,7 +63,18 @@ export async function POST(req: NextRequest) {
   const sessionId = body.session_id;
   if (!sessionId) return NextResponse.json({ error: 'Missing session_id' }, { status: 400 });
 
-  const secret = requirePlatformLunarPaySecretKey();
+  let secret: string;
+  try {
+    secret = requirePlatformLunarPaySecretKey();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[signup-checkout/verify] HQ key not configured:', msg);
+    return NextResponse.json(
+      { error: 'Billing is not configured. Please contact support.' },
+      { status: 503 },
+    );
+  }
+
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 

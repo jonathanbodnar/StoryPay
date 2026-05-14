@@ -48,17 +48,24 @@ function CompleteInner() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: sessionId }),
         });
-        const data = await res.json();
+        let data: Record<string, unknown> = {};
+        try {
+          data = await res.json();
+        } catch {
+          // Server returned non-JSON (crashed before sending JSON response)
+          setErrorMsg(`Server error (HTTP ${res.status}). Please try again or contact support and reference session ID: ${sessionId}`);
+          setStatus('error');
+          return;
+        }
         if (!res.ok) {
-          setErrorMsg(data.error || 'Verification failed. Please contact support.');
+          setErrorMsg((data.error as string) || 'Verification failed. Please contact support.');
           setStatus('error');
           return;
         }
         setStatus('success');
-        // Brief pause so user sees the success state, then redirect
         setTimeout(() => router.replace('/dashboard?welcome=1'), 1800);
       } catch {
-        setErrorMsg('Network error. Please try again.');
+        setErrorMsg('Could not reach the server. Check your connection and try again.');
         setStatus('error');
       }
     }
