@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { createCustomer } from '@/lib/lunarpay';
+import { createCustomer, splitCustomerName } from '@/lib/lunarpay';
 import { sendSms, sendEmail, findOrCreateContact, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail } from '@/lib/email';
@@ -208,10 +208,10 @@ export async function POST(request: NextRequest) {
 
   if (venue?.lunarpay_secret_key && !customerLunarpayId) {
     try {
-      const nameParts = customerName.split(' ');
+      const { firstName, lastName } = splitCustomerName(customerName, customerEmail);
       const lpResult = await createCustomer(venue.lunarpay_secret_key, {
-        firstName: nameParts[0] || customerName,
-        lastName: nameParts.slice(1).join(' ') || '',
+        firstName,
+        lastName,
         email: customerEmail,
         phone: customerPhone || undefined,
       });

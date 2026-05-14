@@ -116,8 +116,39 @@ export function lunarpayPublishableRequest(
   return lpFetch(path, { method, body, key: publishableKey });
 }
 
+/**
+ * LunarPay's POST /v1/customers validator requires BOTH `firstName` and
+ * `lastName` to be ≥1 character. Single-name contacts (e.g. "Cher", or a
+ * venue called just "Acme") were tripping this — the request fails with
+ * 400 `lastName: Too small`. This helper splits any free-form name into a
+ * pair LP will accept, falling back to the email local-part / a dash when
+ * no real name is available.
+ */
+export function splitCustomerName(
+  fullName: string | null | undefined,
+  emailFallback?: string | null,
+): { firstName: string; lastName: string } {
+  const raw = (fullName ?? '').trim().replace(/\s+/g, ' ');
+  if (raw) {
+    const parts = raw.split(' ');
+    if (parts.length === 1) return { firstName: parts[0], lastName: '-' };
+    return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+  }
+  const local = (emailFallback ?? '').split('@')[0]?.trim() || 'Customer';
+  return { firstName: local, lastName: '-' };
+}
+
 export function createCustomer(secretKey: string, data: Record<string, unknown>) {
-  return lpFetch('/api/v1/customers', { method: 'POST', body: data, key: secretKey });
+  // Belt-and-suspenders: even if a caller forgot to use splitCustomerName,
+  // make sure we never POST an empty lastName (LP's validator rejects it).
+  const body: Record<string, unknown> = { ...data };
+  const first = typeof body.firstName === 'string' ? body.firstName.trim() : '';
+  const last  = typeof body.lastName  === 'string' ? body.lastName.trim()  : '';
+  if (first || last) {
+    if (!first) body.firstName = last || 'Customer';
+    if (!last)  body.lastName  = '-';
+  }
+  return lpFetch('/api/v1/customers', { method: 'POST', body, key: secretKey });
 }
 
 export function listCustomers(secretKey: string, search?: string, page = 1, limit = 20) {

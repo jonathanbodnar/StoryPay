@@ -6,6 +6,7 @@ import {
   savePaymentMethod,
   createCharge,
   createPaymentSchedule,
+  splitCustomerName,
 } from '@/lib/lunarpay';
 
 import { sendEmail as directSendEmail } from '@/lib/email';
@@ -134,11 +135,14 @@ export async function POST(
         } catch { /* will create below */ }
       }
       if (!customerId) {
-        const parts = ((proposal.customer_name as string) || '').trim().split(' ');
+        const { firstName, lastName } = splitCustomerName(
+          proposal.customer_name as string | null,
+          proposal.customer_email as string | null,
+        );
         const cr = await createCustomer(sk, {
-          firstName: parts[0] || '',
-          lastName:  parts.slice(1).join(' ') || '',
-          email:     proposal.customer_email || '',
+          firstName,
+          lastName,
+          email: proposal.customer_email || '',
         });
         customerId = extractId(cr);
         await supabaseAdmin.from('proposals').update({ customer_lunarpay_id: customerId }).eq('id', proposal.id);

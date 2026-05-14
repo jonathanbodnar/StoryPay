@@ -11,6 +11,7 @@ import {
   savePaymentMethod,
   createSubscription,
   computeSubscriptionStartOn,
+  splitCustomerName,
 } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
@@ -105,11 +106,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (!customerId) {
-      const parts = venueName.trim().split(' ');
+      const { firstName, lastName } = splitCustomerName(venueName, venueEmail);
       const cr = await createCustomer(secret, {
-        firstName: parts[0] || venueName,
-        lastName:  parts.slice(1).join(' ') || '',
-        email:     venueEmail,
+        firstName,
+        lastName,
+        email: venueEmail,
       });
       const created = (cr as Record<string, unknown>).data || cr;
       customerId = Number((created as Record<string, unknown>).id);

@@ -62,13 +62,15 @@ export async function POST(request: NextRequest) {
   if (venue?.lunarpay_secret_key) {
     try {
       const lp = await createCustomer(venue.lunarpay_secret_key, {
-        name: `${firstName} ${lastName}`,
-        email,
-        phone:   phone   || undefined,
-        address: address || undefined,
-        city:    city    || undefined,
-        state:   state   || undefined,
-        zip:     zip     || undefined,
+        // LP validates firstName & lastName separately and rejects `name`.
+        firstName: firstNameTrimmed,
+        lastName:  lastNameTrimmed,
+        email:     emailTrimmed,
+        phone:     phoneTrimmed || undefined,
+        address:   address || undefined,
+        city:      city    || undefined,
+        state:     state   || undefined,
+        zip:       zip     || undefined,
       });
       lunarpayCustomerId = String((lp as { id?: string | number })?.id ?? '') || null;
     } catch (err) {
