@@ -41,6 +41,18 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options",   value: "nosniff" },
           { key: "Referrer-Policy",          value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy",       value: "camera=(), microphone=(), geolocation=(self), payment=(self)" },
+          // Note: payment pages (/proposal, /invoice, /signup, /update-card)
+          // override this to payment=* below so Fortis Elements iframes can
+          // use the Payment Request API.
+        ],
+      },
+      // ── Payment pages — allow Fortis Elements iframes to use payment API ───
+      // Fortis Elements loads in a cross-origin iframe. The parent page must
+      // grant payment=* so the iframe can call the Payment Request API.
+      {
+        source: "/(proposal|invoice|signup|update-card)/:path*",
+        headers: [
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self), payment=*" },
         ],
       },
       // ── Authenticated areas — deny iframe embedding ───────────────────────

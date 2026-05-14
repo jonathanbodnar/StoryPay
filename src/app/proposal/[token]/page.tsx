@@ -203,7 +203,6 @@ function InlinePaymentForm({
           theme: 'default',
           floatingLabels: true,
           showSubmitButton: false,
-          hideTotal: true,
           hideAgreementCheckbox: true,
           appearance: {
             colorButtonSelectedBackground: brandColor,

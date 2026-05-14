@@ -112,7 +112,6 @@ function SaasPaymentForm({
           theme: 'default',
           floatingLabels: true,
           showSubmitButton: false,
-          hideTotal: true,
           hideAgreementCheckbox: true,
           appearance: {
             colorButtonSelectedBackground: '#1b1b1b',
