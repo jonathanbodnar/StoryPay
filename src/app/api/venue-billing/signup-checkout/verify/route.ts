@@ -10,6 +10,7 @@ import {
   createSubscription,
   getCheckoutSession,
   getSubscription,
+  listPaymentMethods,
   listSubscriptions,
   refundCharge,
 } from '@/lib/lunarpay';
@@ -225,27 +226,44 @@ async function verifyHandler(req: NextRequest) {
     }
   }
 
-  // If we truly have no customer id we cannot proceed at all.
-  if (!customerId) {
+  // ── Fallback 3: list the customer's payment methods directly ─────────────
+  // If LP's subscription endpoints don't expose payment_method_id (known gap),
+  // hit /customers/{id}/payment-methods and use the first/default one.
+  if (customerId && !paymentMethodId) {
+    try {
+      const pmResult = (await listPaymentMethods(secret, Number(customerId))) as Record<string, unknown>;
+      const pmList: Record<string, unknown>[] = Array.isArray(pmResult)
+        ? pmResult
+        : ((pmResult.data as Record<string, unknown>[]) ?? []);
+      // Prefer the default PM if flagged, else take the most recent one.
+      const defaultPm = pmList.find((p) => p.isDefault || p.is_default || p.default);
+      const pickedPm = defaultPm ?? pmList[pmList.length - 1] ?? pmList[0];
+      if (pickedPm?.id) {
+        paymentMethodId = pickedPm.id as string | number;
+        console.log('[signup-checkout/verify] picked PM from listPaymentMethods:', paymentMethodId,
+          'isDefault:', Boolean(defaultPm));
+      } else {
+        console.warn('[signup-checkout/verify] listPaymentMethods returned no PMs', { customerId, count: pmList.length });
+      }
+    } catch (e) {
+      console.warn('[signup-checkout/verify] listPaymentMethods fallback failed:', e);
+    }
+  }
+
+  // LP createSubscription REQUIRES both customerId AND paymentMethodId.
+  if (!customerId || !paymentMethodId) {
     console.error(
-      '[signup-checkout/verify] cannot proceed — no customerId after all fallbacks',
+      '[signup-checkout/verify] cannot proceed — missing customer or PM after all fallbacks',
       { customerId, paymentMethodId, validationSubId, sessionId },
     );
     return NextResponse.json(
       {
         error:
-          'Your card was processed but we could not retrieve your customer record. Please contact support — reference session ' +
+          'Your card was processed but we could not retrieve the payment details needed to activate your trial. Please contact support — reference session ' +
           sessionId,
       },
       { status: 422 },
     );
-  }
-
-  // paymentMethodId is optional — if LP didn't expose it, createSubscription
-  // will use the customer's default saved payment method.
-  if (!paymentMethodId) {
-    console.warn('[signup-checkout/verify] paymentMethodId not found — LP will use customer default card',
-      { customerId, validationSubId, sessionId });
   }
 
   // ── Read plan + trial context from venue row ─────────────────────────────
@@ -321,13 +339,14 @@ async function verifyHandler(req: NextRequest) {
   let newSubId: string | number | null = null;
   try {
     const subPayload: Record<string, unknown> = {
-      customerId: Number(customerId),
-      amount:     charge.total_cents / 100,
-      frequency:  'monthly',
-      startOn:    trialEndYmd,
-      description: `StoryVenue — ${targetPlan.name} (monthly, first charge ${trialEndYmd})`,
+      customerId:      Number(customerId),
+      paymentMethodId: Number(paymentMethodId),
+      amount:          charge.total_cents / 100,
+      frequency:       'monthly',
+      startOn:         trialEndYmd,
+      description:     `StoryVenue — ${targetPlan.name} (monthly, first charge ${trialEndYmd})`,
     };
-    if (paymentMethodId !== null) subPayload.paymentMethodId = Number(paymentMethodId);
+    console.log('[signup-checkout/verify] createSubscription payload:', JSON.stringify(subPayload));
 
     const subResult = (await createSubscription(secret, subPayload)) as Record<string, unknown>;
     const sub = (subResult.data as Record<string, unknown>) || subResult;
