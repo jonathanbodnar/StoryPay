@@ -164,6 +164,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Diagnostic: log key prefix and LP_BASE_URL to trace "Missing Authentication Token"
+  console.log('[signup-checkout] LP_BASE_URL:', process.env.LP_BASE_URL || '(default: https://app.lunarpay.com)');
+  console.log('[signup-checkout] key prefix:', secret.slice(0, 10) + '...');
+  console.log('[signup-checkout] key starts with lp_sk_:', secret.startsWith('lp_sk_'));
+  console.log('[signup-checkout] key length:', secret.length);
+
   // Use LP's native trial mode: mode:"subscription" + recurring.trial:true.
   // Card is tokenized and saved but NO charge occurs. The subscription is
   // created with nextPaymentOn = start_on (trial end date).

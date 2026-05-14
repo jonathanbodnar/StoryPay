@@ -39,13 +39,21 @@ export async function lpFetch(path: string, { method = 'GET', body, key }: LPReq
         safeBody[k] = PII_FIELDS.has(k) ? '<redacted>' : v;
       }
     }
+    // Capture response headers to distinguish gateway errors from LP errors.
+    // "Missing Authentication Token" = AWS API Gateway (request never reached LP).
+    const resHeaders: Record<string, string> = {};
+    res.headers.forEach((v, k) => { resHeaders[k] = v; });
     console.error('[lpFetch] LunarPay error', {
       url,
       method,
       status: res.status,
       keyPrefix,
+      keyStartsWithLpSk: key.startsWith('lp_sk_'),
+      keyLength: key.length,
       requestBody: safeBody,
       responseText: errorText.slice(0, 500),
+      responseHeaders: resHeaders,
+      isGatewayError: errorText.includes('Missing Authentication Token'),
     });
     throw new Error(`LunarPay API error ${res.status}: ${errorText}`);
   }
