@@ -34,11 +34,6 @@ function extractTransactionId(done: Record<string, unknown> | null | undefined):
   return id != null ? String(id) : null;
 }
 
-function applyFee(cents: number, ratePercent: number): number {
-  if (ratePercent <= 0) return cents;
-  return Math.round(cents * (1 + ratePercent / 100));
-}
-
 interface InstallmentConfig { installments: Array<{ amount: number; date: string }>; }
 
 export async function POST(
@@ -85,7 +80,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, lunarpay_secret_key, service_fee_rate, brand_color, brand_logo_url')
+    .select('id, name, lunarpay_secret_key, brand_color, brand_logo_url')
     .eq('id', proposal.venue_id)
     .single();
 
@@ -93,18 +88,17 @@ export async function POST(
     return NextResponse.json({ error: 'Venue payment not configured' }, { status: 400 });
   }
 
-  const feeRate = Number((venue as Record<string, unknown>).service_fee_rate ?? 0);
-  const addFee  = feeRate > 0;
-  const sk      = venue.lunarpay_secret_key as string;
-  const config  = proposal.payment_config as Record<string, unknown> | null;
+  const sk     = venue.lunarpay_secret_key as string;
+  const config = proposal.payment_config as Record<string, unknown> | null;
 
-  // Compute what we expect to have been charged today.
-  let firstChargeBaseCents: number = proposal.price as number;
+  // The price (or per-installment amount) is the final figure to charge —
+  // processing fee was rolled into the proposal at creation time. No more
+  // fee math here; charge it as-is.
+  let finalChargeCents: number = proposal.price as number;
   if (paymentType === 'installment') {
     const ic = config as InstallmentConfig | null;
-    firstChargeBaseCents = ic?.installments?.[0]?.amount ?? (proposal.price as number);
+    finalChargeCents = ic?.installments?.[0]?.amount ?? (proposal.price as number);
   }
-  const finalChargeCents = addFee ? applyFee(firstChargeBaseCents, feeRate) : firstChargeBaseCents;
 
   const updateData: Record<string, unknown> = {
     status:  'paid',
@@ -181,17 +175,14 @@ export async function POST(
       updateData.charge_id      = chargeId;
       updateData.transaction_id = chargeId;
 
-      // Schedule remaining installments.
+      // Schedule remaining installments at their as-stored amounts (no fee math).
       const remaining = (ic?.installments ?? []).slice(1);
       if (remaining.length > 0) {
         const sr = await createPaymentSchedule(sk, {
           customerId,
           paymentMethodId,
           description: `${proposal.customer_name} - Installment plan`,
-          payments: remaining.map((p) => ({
-            amount: addFee ? applyFee(p.amount, feeRate) : p.amount,
-            date:   p.date,
-          })),
+          payments: remaining.map((p) => ({ amount: p.amount, date: p.date })),
         });
         updateData.payment_schedule_id = extractId(sr);
       }
@@ -246,34 +237,38 @@ export async function POST(
       });
     }
 
-    // Customer receipt email
-    try {
-      if (proposal.customer_email && venue?.id) {
-        const brandColor = ((venue as Record<string, unknown>).brand_color as string) || '#1b1b1b';
-        const logoUrl    = ((venue as Record<string, unknown>).brand_logo_url as string | null) ?? undefined;
-        const invoiceUrl = `${appUrl}/proposal/${proposal.public_token}`;
-        const venueName  = (venue.name as string) || 'Your Venue';
+    // Customer receipt email — fire and forget so the client isn't blocked
+    // waiting on SMTP (this could otherwise hang the "Processing payment…"
+    // overlay on the inline payment form for tens of seconds).
+    void (async () => {
+      try {
+        if (proposal.customer_email && venue?.id) {
+          const brandColor = ((venue as Record<string, unknown>).brand_color as string) || '#1b1b1b';
+          const logoUrl    = ((venue as Record<string, unknown>).brand_logo_url as string | null) ?? undefined;
+          const invoiceUrl = `${appUrl}/proposal/${proposal.public_token}`;
+          const venueName  = (venue.name as string) || 'Your Venue';
 
-        const tmpl = await getVenueEmailTemplate(venue.id as string, 'payment_confirmation');
-        if (tmpl) {
-          const amtFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(finalChargeCents / 100);
-          const vars = {
-            organization:   venueName,
-            customer_name:  customerName,
-            amount:         amtFmt,
-            date:           new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-            payment_method: paymentMethod,
-          };
-          await directSendEmail({
-            to:      proposal.customer_email as string,
-            subject: fillTemplate(tmpl.subject, vars),
-            html:    buildEmailHtml({ template: tmpl, vars, actionUrl: invoiceUrl, brandColor, logoUrl, venueName }),
-          });
+          const tmpl = await getVenueEmailTemplate(venue.id as string, 'payment_confirmation');
+          if (tmpl) {
+            const amtFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(finalChargeCents / 100);
+            const vars = {
+              organization:   venueName,
+              customer_name:  customerName,
+              amount:         amtFmt,
+              date:           new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+              payment_method: paymentMethod,
+            };
+            await directSendEmail({
+              to:      proposal.customer_email as string,
+              subject: fillTemplate(tmpl.subject, vars),
+              html:    buildEmailHtml({ template: tmpl, vars, actionUrl: invoiceUrl, brandColor, logoUrl, venueName }),
+            });
+          }
         }
+      } catch (emailErr) {
+        console.error('[pay] receipt email failed:', emailErr);
       }
-    } catch (emailErr) {
-      console.error('[pay] receipt email failed:', emailErr);
-    }
+    })();
 
     return NextResponse.json({ success: true, invoiceUrl: `/invoice/${proposal.id}` });
   } catch (err) {

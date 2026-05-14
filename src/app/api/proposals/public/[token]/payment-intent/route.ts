@@ -29,7 +29,7 @@ export async function POST(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_publishable_key, accept_ach, service_fee_rate')
+    .select('lunarpay_publishable_key, accept_ach')
     .eq('id', proposal.venue_id)
     .single();
 
@@ -40,9 +40,6 @@ export async function POST(
   const proposalAch = (proposal as { accept_ach?: boolean | null }).accept_ach;
   const venueAch    = (venue as { accept_ach?: boolean | null }).accept_ach;
   const acceptAch   = proposalAch !== null && proposalAch !== undefined ? proposalAch !== false : venueAch !== false;
-
-  const feeRate = Number((venue as Record<string, unknown>).service_fee_rate ?? 0);
-  const applyFee = (cents: number) => feeRate > 0 ? Math.round(cents * (1 + feeRate / 100)) : cents;
 
   // Only `full` and `installment` are supported for proposals / invoices.
   // Legacy `subscription` rows are blocked here — they should be migrated.
@@ -56,13 +53,14 @@ export async function POST(
 
   const config = proposal.payment_config as Record<string, unknown> | null;
 
-  // Compute the amount that will actually be charged today.
-  let baseAmountCents: number = proposal.price as number;
+  // The proposal price (or installment amount) is the final figure the venue
+  // wants to charge — any markup/processing fee was already rolled in when the
+  // proposal was created. Charge it as-is. No more fee math here.
+  let displayAmountCents: number = proposal.price as number;
   if (paymentType === 'installment') {
     const ic = config as InstallmentConfig | null;
-    baseAmountCents = ic?.installments?.[0]?.amount ?? (proposal.price as number);
+    displayAmountCents = ic?.installments?.[0]?.amount ?? (proposal.price as number);
   }
-  const displayAmountCents = applyFee(baseAmountCents);
 
   const paymentMethods = acceptAch ? ['cc', 'ach'] : ['cc'];
 

@@ -57,7 +57,6 @@ interface ProposalData {
   venue_logo_url: string | null;
   venue_brand: VenueBrand | null;
   proposal_id: string;
-  service_fee_rate: number;
 }
 
 function SignatureCanvas({ onSignatureChange }: { onSignatureChange: (dataUrl: string | null) => void }) {
@@ -282,6 +281,10 @@ function InlinePaymentForm({
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || 'Payment failed');
+      // Clear the processing overlay BEFORE notifying the parent so the
+      // form unmounts immediately and we never get stuck on "Processing
+      // payment…" while waiting on the re-fetch.
+      setProcessing(false);
       onSuccess();
     } catch (err: unknown) {
       setPayError(err instanceof Error ? err.message : 'Payment failed. Please try again.');
@@ -503,10 +506,6 @@ export default function ProposalPage() {
   const installments = proposal.payment_config
     ? (proposal.payment_config as { installments?: Array<{ amount: number; date: string }> }).installments
     : undefined;
-  const feeRate = Number(proposal.service_fee_rate ?? 0);
-  const hasFee = feeRate > 0;
-  const feeCents = hasFee ? Math.round(proposal.price * feeRate / 100) : 0;
-  const totalWithFee = proposal.price + feeCents;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -740,41 +739,28 @@ export default function ProposalPage() {
                 </div>
               )}
 
-              {proposal.payment_type === 'installment' && installments && installments.length > 1 ? (() => {
-                const firstAmt = installments[0].amount;
-                const firstFee = hasFee ? Math.round(firstAmt * feeRate / 100) : 0;
-                return (
-                  <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm text-gray-500">Due today (Payment 1 of {installments.length})</span>
-                      <span className="text-2xl font-bold text-gray-900">{formatCents(firstAmt + firstFee)}</span>
-                    </div>
-                    {hasFee && (
-                      <p className="text-xs text-gray-400 text-right mb-3">incl. {formatCents(firstFee)} processing fee ({feeRate}%)</p>
-                    )}
-                    <div className="border-t border-gray-200 pt-3 space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Remaining payments</p>
-                      {installments.slice(1).map((p, i) => {
-                        const pFee = hasFee ? Math.round(p.amount * feeRate / 100) : 0;
-                        return (
-                          <div key={i} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-500">{formatDate(p.date)}</span>
-                            <span className="font-medium text-gray-700">{formatCents(p.amount + pFee)}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })() : (
+              {proposal.payment_type === 'installment' && installments && installments.length > 1 ? (
                 <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-gray-500">Amount due</span>
-                    <span className="text-2xl font-bold text-gray-900">{formatCents(hasFee ? totalWithFee : proposal.price)}</span>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-gray-500">Due today (Payment 1 of {installments.length})</span>
+                    <span className="text-2xl font-bold text-gray-900">{formatCents(installments[0].amount)}</span>
                   </div>
-                  {hasFee && (
-                    <p className="text-xs text-gray-400 text-right">incl. {formatCents(feeCents)} processing fee ({feeRate}%)</p>
-                  )}
+                  <div className="border-t border-gray-200 pt-3 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Remaining payments</p>
+                    {installments.slice(1).map((p, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">{formatDate(p.date)}</span>
+                        <span className="font-medium text-gray-700">{formatCents(p.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Amount due</span>
+                    <span className="text-2xl font-bold text-gray-900">{formatCents(proposal.price)}</span>
+                  </div>
                 </div>
               )}
 
@@ -782,21 +768,18 @@ export default function ProposalPage() {
                 token={token}
                 brandColor={proposal.venue_brand?.color || '#1b1b1b'}
                 onSuccess={async () => {
-                  // Re-fetch from server so we display the real persisted state
-                  // (status, paid_at, etc.) rather than guessing.
+                  // Optimistic: mark paid immediately so the form unmounts and
+                  // the user sees the "Payment Complete!" panel without any
+                  // dependency on a follow-up fetch.
+                  setProposal((prev) =>
+                    prev ? { ...prev, status: 'paid', paid_at: new Date().toISOString() } : prev,
+                  );
+                  // Then refresh from the server in the background for accurate
+                  // persisted state (charge_id, etc.).
                   try {
                     const res = await fetch(`/api/proposals/public/${token}`);
                     if (res.ok) setProposal(await res.json());
-                    else {
-                      setProposal((prev) =>
-                        prev ? { ...prev, status: 'paid', paid_at: new Date().toISOString() } : prev,
-                      );
-                    }
-                  } catch {
-                    setProposal((prev) =>
-                      prev ? { ...prev, status: 'paid', paid_at: new Date().toISOString() } : prev,
-                    );
-                  }
+                  } catch { /* keep optimistic state */ }
                 }}
               />
             </div>
