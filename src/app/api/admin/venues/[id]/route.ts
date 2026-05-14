@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie, verifyMasterAdminOnly } from '@/lib/admin-auth';
 import { isDirectoryBadgeStatus } from '@/lib/directory-badges';
 import { cancelVenueSubscription, changeVenuePlan } from '@/lib/venue-billing';
+import { cancelSubscription } from '@/lib/lunarpay';
+import { requirePlatformLunarPaySecretKey } from '@/lib/platform-directory-billing';
 import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
@@ -159,10 +161,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const { id: venueId } = await params;
   if (!venueId) return NextResponse.json({ error: 'Missing venue id' }, { status: 400 });
 
-  // Confirm the venue exists and grab owner_id + demo flag
+  // Confirm the venue exists and grab owner_id + demo flag + subscription info
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, owner_id, is_demo')
+    .select('id, name, owner_id, is_demo, directory_subscription_external_id, directory_subscription_status')
     .eq('id', venueId)
     .maybeSingle();
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
@@ -173,6 +175,20 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       { error: 'This is a protected demo venue and cannot be deleted.' },
       { status: 403 },
     );
+  }
+
+  // Cancel any active LunarPay SaaS subscription before wiping the DB row,
+  // so the card is not charged again after deletion (best-effort).
+  const subId = (venue as { directory_subscription_external_id?: string | null }).directory_subscription_external_id;
+  const subStatus = (venue as { directory_subscription_status?: string | null }).directory_subscription_status;
+  if (subId && subStatus !== 'canceled' && subStatus !== 'none') {
+    try {
+      const hqSecret = requirePlatformLunarPaySecretKey();
+      await cancelSubscription(hqSecret, subId);
+      console.log('[admin/venues/delete] canceled LP subscription', subId, 'for venue', venueId);
+    } catch (e) {
+      console.warn('[admin/venues/delete] LP subscription cancel failed (non-fatal):', e);
+    }
   }
 
   // Clean up Supabase Storage files for this venue (best-effort — don't block on failure)

@@ -16,6 +16,10 @@ import {
   CalendarClock,
   Send,
   Lock,
+  CreditCard,
+  Ban,
+  RotateCcw,
+  RefreshCw,
 } from 'lucide-react';
 import { DIRECTORY_BADGE_STATUSES, directoryBadgeLabel } from '@/lib/directory-badges';
 import {
@@ -164,6 +168,15 @@ export function VenueManagementPortal({
   const [trialSaving, setTrialSaving] = useState(false);
   const [trialError, setTrialError] = useState('');
   const [trialSuccess, setTrialSuccess] = useState(false);
+
+  // Billing-action modal
+  const [billingTarget, setBillingTarget] = useState<AdminVenueRow | null>(null);
+  const [billingLiveSub, setBillingLiveSub] = useState<Record<string, unknown> | null>(null);
+  const [billingSubLoading, setBillingSubLoading] = useState(false);
+  const [billingChargeId, setBillingChargeId] = useState('');
+  const [billingRefundCents, setBillingRefundCents] = useState('');
+  const [billingWorking, setBillingWorking] = useState(false);
+  const [billingMsg, setBillingMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   const loadPlans = useCallback(async () => {
     setPlansLoading(true);
@@ -339,6 +352,82 @@ export function VenueManagementPortal({
       setTrialError('Network error');
     } finally {
       setTrialSaving(false);
+    }
+  }
+
+  async function openBillingModal(venue: AdminVenueRow) {
+    setBillingTarget(venue);
+    setBillingLiveSub(null);
+    setBillingChargeId('');
+    setBillingRefundCents('');
+    setBillingMsg(null);
+    setBillingSubLoading(true);
+    try {
+      const res = await fetch(`/api/admin/venues/${venue.id}/billing-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'fetch_subscription' }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { subscription?: Record<string, unknown> | null; error?: string };
+      if (res.ok) setBillingLiveSub(d.subscription ?? null);
+      else setBillingMsg({ text: d.error ?? 'Could not fetch subscription', ok: false });
+    } catch {
+      setBillingMsg({ text: 'Network error', ok: false });
+    } finally {
+      setBillingSubLoading(false);
+    }
+  }
+
+  async function billingCancelSub() {
+    if (!billingTarget) return;
+    if (!confirm(`Cancel the LunarPay subscription for "${billingTarget.name}"? This stops future charges immediately.`)) return;
+    setBillingWorking(true);
+    setBillingMsg(null);
+    try {
+      const res = await fetch(`/api/admin/venues/${billingTarget.id}/billing-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel_subscription' }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (res.ok && d.ok) {
+        setBillingMsg({ text: 'Subscription canceled successfully.', ok: true });
+        setBillingLiveSub(null);
+        await onRefresh();
+      } else {
+        setBillingMsg({ text: d.error ?? 'Cancel failed', ok: false });
+      }
+    } catch {
+      setBillingMsg({ text: 'Network error', ok: false });
+    } finally {
+      setBillingWorking(false);
+    }
+  }
+
+  async function billingRefund() {
+    if (!billingTarget || !billingChargeId.trim()) return;
+    setBillingWorking(true);
+    setBillingMsg(null);
+    const dollars = parseFloat(billingRefundCents);
+    const cents = !isNaN(dollars) && dollars > 0 ? Math.round(dollars * 100) : undefined;
+    try {
+      const res = await fetch(`/api/admin/venues/${billingTarget.id}/billing-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'refund_charge', charge_id: billingChargeId.trim(), amount_cents: cents }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (res.ok && d.ok) {
+        setBillingMsg({ text: `Refund issued${cents ? ` ($${(cents / 100).toFixed(2)})` : ' (full)'} for charge ${billingChargeId.trim()}.`, ok: true });
+        setBillingChargeId('');
+        setBillingRefundCents('');
+      } else {
+        setBillingMsg({ text: d.error ?? 'Refund failed', ok: false });
+      }
+    } catch {
+      setBillingMsg({ text: 'Network error', ok: false });
+    } finally {
+      setBillingWorking(false);
     }
   }
 
@@ -988,6 +1077,15 @@ export function VenueManagementPortal({
                           >
                             <CalendarClock size={12} /> Extend trial
                           </button>
+                          {Boolean(venue.directory_subscription_external_id) && (
+                            <button
+                              type="button"
+                              onClick={() => void openBillingModal(venue)}
+                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700 hover:bg-orange-100"
+                            >
+                              <CreditCard size={12} /> Billing
+                            </button>
+                          )}
                           {!venue.is_demo && (
                             <button
                               type="button"
@@ -1159,6 +1257,119 @@ export function VenueManagementPortal({
                   Extend trial
                 </button>
               </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+
+    {/* Billing-action modal */}
+    {billingTarget && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4" onClick={() => !billingWorking && setBillingTarget(null)}>
+        <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          {/* Header */}
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h3 className="font-bold text-gray-900 flex items-center gap-2"><CreditCard size={16} /> Subscription &amp; Billing</h3>
+              <p className="text-xs text-gray-500 mt-0.5">{billingTarget.name}</p>
+            </div>
+            <button onClick={() => !billingWorking && setBillingTarget(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+          </div>
+
+          {/* Live subscription info */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Live subscription</span>
+              <button
+                type="button"
+                disabled={billingSubLoading}
+                onClick={() => void openBillingModal(billingTarget)}
+                className="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-800 disabled:opacity-40"
+              >
+                <RefreshCw size={11} className={billingSubLoading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+            </div>
+            {billingSubLoading ? (
+              <div className="flex items-center gap-2 text-xs text-gray-400"><Loader2 size={13} className="animate-spin" /> Loading from LunarPay…</div>
+            ) : billingLiveSub ? (
+              <div className="space-y-1 text-xs font-mono text-gray-700">
+                {(['id', 'status', 'amount', 'frequency', 'startOn', 'nextPaymentOn', 'nextPaymentDate', 'customerId'] as string[]).map((k) =>
+                  billingLiveSub[k] != null ? (
+                    <div key={k} className="flex gap-2">
+                      <span className="text-gray-400 w-32 shrink-0">{k}</span>
+                      <span className="text-gray-800 break-all">{String(billingLiveSub[k])}</span>
+                    </div>
+                  ) : null
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">No active subscription found on LunarPay.</p>
+            )}
+            <div className="mt-2 text-[11px] text-gray-400">
+              DB status: <strong>{String(billingTarget.directory_subscription_status || '—')}</strong>
+              {billingTarget.directory_subscription_external_id
+                ? <> · Sub ID: <span className="font-mono">{String(billingTarget.directory_subscription_external_id)}</span></>
+                : null}
+            </div>
+          </div>
+
+          {/* Cancel subscription */}
+          <div className="rounded-xl border border-red-100 bg-red-50 p-4 mb-4">
+            <h4 className="text-xs font-semibold text-red-800 mb-1 flex items-center gap-1.5"><Ban size={13} /> Cancel subscription</h4>
+            <p className="text-xs text-red-700 mb-3">
+              Cancels on LunarPay immediately — no further charges. Updates the venue&apos;s status to &ldquo;canceled&rdquo; in the DB.
+            </p>
+            <button
+              type="button"
+              disabled={billingWorking || !billingTarget.directory_subscription_external_id}
+              onClick={() => void billingCancelSub()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {billingWorking ? <Loader2 size={12} className="animate-spin" /> : <Ban size={12} />}
+              Cancel subscription
+            </button>
+          </div>
+
+          {/* Refund charge */}
+          <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 mb-4">
+            <h4 className="text-xs font-semibold text-amber-800 mb-1 flex items-center gap-1.5"><RotateCcw size={13} /> Refund a charge</h4>
+            <p className="text-xs text-amber-700 mb-3">
+              Enter the LunarPay charge ID. Leave amount blank for a full refund.
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                type="text"
+                value={billingChargeId}
+                onChange={(e) => setBillingChargeId(e.target.value)}
+                placeholder="Charge ID (e.g. 1234)"
+                className="flex-1 min-w-0 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-amber-400"
+              />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={billingRefundCents}
+                onChange={(e) => setBillingRefundCents(e.target.value)}
+                placeholder="Amount $ (blank = full)"
+                className="w-36 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-amber-400"
+              />
+              <button
+                type="button"
+                disabled={billingWorking || !billingChargeId.trim()}
+                onClick={() => void billingRefund()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {billingWorking ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                Refund
+              </button>
+            </div>
+          </div>
+
+          {/* Result message */}
+          {billingMsg && (
+            <div className={`rounded-lg px-3 py-2 text-xs font-medium ${billingMsg.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>
+              {billingMsg.ok ? '✓ ' : '✗ '}{billingMsg.text}
             </div>
           )}
         </div>
