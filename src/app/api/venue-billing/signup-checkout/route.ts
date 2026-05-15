@@ -62,15 +62,23 @@ export async function POST(req: NextRequest) {
   const targetPlan = allPlans.find((p) => p.id === planId);
   if (!targetPlan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
 
-  // Assign plan + addons to venue
+  // Assign plan + addons to venue.
+  // Also set the directory badge status fields so the admin portal reflects
+  // the purchased addons immediately (admin reads *_status, not *_addon_*).
   try {
     await supabaseAdmin
       .from('venues')
       .update({
-        directory_plan_id:         planId,
-        directory_addon_verified:  addonVerified,
-        directory_addon_sponsored: addonSponsored,
-        directory_addon_concierge: addonConcierge,
+        directory_plan_id:          planId,
+        directory_addon_verified:   addonVerified,
+        directory_addon_sponsored:  addonSponsored,
+        directory_addon_concierge:  addonConcierge,
+        // When a venue pays for verified/sponsored, activate the badge status
+        // so it shows as live in the admin and on the directory listing.
+        // Only set to 'approved' if the addon is being selected; preserve the
+        // existing value otherwise by omitting the field when not selected.
+        ...(addonVerified  ? { directory_verified_status:  'approved' } : {}),
+        ...(addonSponsored ? { directory_sponsored_status: 'approved' } : {}),
       })
       .eq('id', venueId);
   } catch (e) {

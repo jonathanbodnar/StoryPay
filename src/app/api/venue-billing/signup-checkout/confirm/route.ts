@@ -177,6 +177,10 @@ export async function POST(req: NextRequest) {
         directory_addon_verified:           addonVerified,
         directory_addon_sponsored:          addonSponsored,
         directory_addon_concierge:          addonConcierge,
+        // Mirror the addon selections into the directory badge status fields so
+        // the admin portal shows them correctly (it reads *_status, not *_addon_*).
+        ...(addonVerified  ? { directory_verified_status:  'approved' } : {}),
+        ...(addonSponsored ? { directory_sponsored_status: 'approved' } : {}),
       })
       .eq('id', venueId);
 
