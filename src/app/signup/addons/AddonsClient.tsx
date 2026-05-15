@@ -424,14 +424,15 @@ export function AddonsClient({
             onChange={setAddonSponsored}
           />
 
-          {/* Only show Concierge as an add-on when the plan doesn't already include it */}
-          {!inclusion.concierge && conciergeAvailable && (
+          {/* Show as "Included in plan" when bundled (All-Inclusive), or as a
+              toggleable add-on when available but not included (Booking System) */}
+          {(inclusion.concierge || conciergeAvailable) && (
             <AddonCard
               icon={<BotMessageSquare size={20} className="text-violet-500" />}
               label="Venue Concierge"
               description="A personal concierge + AI forever-follow-up so no lead is ever forgotten. Helps you book more tours automatically without lifting a finger."
               price={formatCents(addonPrices.concierge_cents) + '/mo'}
-              included={false}
+              included={inclusion.concierge}
               checked={addonConcierge}
               onChange={setAddonConcierge}
             />
