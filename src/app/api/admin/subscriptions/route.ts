@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
+import { loadAddonPrices } from '@/lib/venue-billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -35,6 +36,9 @@ type VenueRow = {
   directory_subscription_status: string | null;
   directory_subscription_external_id: string | null;
   platform_lunarpay_customer_id: string | null;
+  directory_addon_verified: boolean | null;
+  directory_addon_sponsored: boolean | null;
+  directory_addon_concierge: boolean | null;
 };
 
 type EventRow = {
@@ -48,8 +52,8 @@ export async function GET() {
   const ok = await verifyAdminCookie();
   if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Fetch in parallel — three small queries
-  const [plansRes, venuesRes, eventsRes] = await Promise.all([
+  // Fetch in parallel
+  const [plansRes, venuesRes, eventsRes, addonPrices] = await Promise.all([
     supabaseAdmin
       .from('directory_plans')
       .select('id, name, slug, price_monthly_cents, is_default')
@@ -58,7 +62,7 @@ export async function GET() {
     supabaseAdmin
       .from('venues')
       .select(
-        'id, name, email, created_at, directory_plan_id, directory_subscription_status, directory_subscription_external_id, platform_lunarpay_customer_id',
+        'id, name, email, created_at, directory_plan_id, directory_subscription_status, directory_subscription_external_id, platform_lunarpay_customer_id, directory_addon_verified, directory_addon_sponsored, directory_addon_concierge',
       )
       .order('created_at', { ascending: false }),
     supabaseAdmin
@@ -66,6 +70,7 @@ export async function GET() {
       .select('venue_id, amount_cents, event_type, occurred_at')
       .order('occurred_at', { ascending: false })
       .limit(2000),
+    loadAddonPrices(),
   ]);
 
   const plans = (plansRes.data || []) as PlanRow[];
@@ -127,7 +132,17 @@ export async function GET() {
     const plan = v.directory_plan_id ? planById.get(v.directory_plan_id) || null : null;
     const planCents = plan?.price_monthly_cents ?? 0;
     const isActive = status === 'active' || status === 'trialing';
-    const mrrCents = isActive ? planCents : 0;
+
+    // Compute real MRR = plan base + any active addon prices
+    const hasVerified  = Boolean(v.directory_addon_verified);
+    const hasSponsored = Boolean(v.directory_addon_sponsored);
+    const hasConcierge = Boolean(v.directory_addon_concierge);
+    const addonCents =
+      (hasVerified  ? (addonPrices.verified_cents  ?? 0) : 0) +
+      (hasSponsored ? (addonPrices.sponsored_cents ?? 0) : 0) +
+      (hasConcierge ? (addonPrices.concierge_cents ?? 0) : 0);
+    const totalCents = planCents + addonCents;
+    const mrrCents = isActive ? totalCents : 0;
 
     if (plan) {
       const stat = planStats.get(plan.id);
@@ -135,7 +150,7 @@ export async function GET() {
         stat.venueCount += 1;
         if (isActive) {
           stat.activeCount += 1;
-          stat.mrrCents += planCents;
+          stat.mrrCents += totalCents;
         }
         if (status === 'past_due') stat.pastDueCount += 1;
         if (status === 'canceled') stat.canceledCount += 1;
@@ -160,6 +175,11 @@ export async function GET() {
       status,
       external_subscription_id: v.directory_subscription_external_id,
       lunarpay_customer_id: v.platform_lunarpay_customer_id,
+      addons: {
+        verified:  hasVerified,
+        sponsored: hasSponsored,
+        concierge: hasConcierge,
+      },
       mrr_cents: mrrCents,
       lifetime_cents: venueLifetimeCents.get(v.id) || 0,
       last_payment: lastEv

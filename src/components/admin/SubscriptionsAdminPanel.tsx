@@ -36,6 +36,7 @@ type VenueRow = {
   status: string;
   external_subscription_id: string | null;
   lunarpay_customer_id: string | null;
+  addons: { verified: boolean; sponsored: boolean; concierge: boolean };
   mrr_cents: number;
   lifetime_cents: number;
   last_payment: { amount_cents: number; occurred_at: string | null; event_type: string | null } | null;
@@ -353,8 +354,9 @@ export function SubscriptionsAdminPanel() {
                 <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 border-b border-gray-100">
                   <th className="px-6 py-3">Venue</th>
                   <th className="px-6 py-3">Plan</th>
+                  <th className="px-6 py-3">Add-ons</th>
                   <th className="px-6 py-3">Status</th>
-                  <th className="px-6 py-3 text-right">MRR</th>
+                  <th className="px-6 py-3 text-right">Active amount</th>
                   <th className="px-6 py-3 text-right">Lifetime</th>
                   <th className="px-6 py-3">Last payment</th>
                   <th className="px-6 py-3">Joined</th>
@@ -362,7 +364,9 @@ export function SubscriptionsAdminPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredVenues.map((v) => (
+                {filteredVenues.map((v) => {
+                  const addons = v.addons ?? { verified: false, sponsored: false, concierge: false };
+                  return (
                   <tr key={v.id} className="hover:bg-gray-50/60">
                     <td className="px-6 py-3">
                       <div className="font-medium text-gray-900">{v.name}</div>
@@ -374,13 +378,35 @@ export function SubscriptionsAdminPanel() {
                           <div className="text-gray-900">{v.plan.name}</div>
                           <div className="text-[11px] text-gray-500">
                             {v.plan.price_monthly_cents != null
-                              ? `${formatCentsExact(v.plan.price_monthly_cents)}/mo`
+                              ? `${formatCentsExact(v.plan.price_monthly_cents)}/mo base`
                               : 'Free'}
                           </div>
                         </div>
                       ) : (
                         <span className="text-xs text-gray-400">—</span>
                       )}
+                    </td>
+                    <td className="px-6 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {addons.verified && (
+                          <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                            ✓ Verified
+                          </span>
+                        )}
+                        {addons.sponsored && (
+                          <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                            ✓ Sponsored
+                          </span>
+                        )}
+                        {addons.concierge && (
+                          <span className="inline-flex items-center rounded-full bg-violet-50 border border-violet-200 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                            ✓ Concierge
+                          </span>
+                        )}
+                        {!addons.verified && !addons.sponsored && !addons.concierge && (
+                          <span className="text-xs text-gray-400">None</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-3">
                       <span
@@ -392,7 +418,11 @@ export function SubscriptionsAdminPanel() {
                       </span>
                     </td>
                     <td className="px-6 py-3 text-right font-mono text-gray-900">
-                      {v.mrr_cents > 0 ? formatCentsExact(v.mrr_cents) : '—'}
+                      {v.mrr_cents > 0 ? (
+                        <div>
+                          <div className="font-semibold">{formatCentsExact(v.mrr_cents)}<span className="text-[11px] font-normal text-gray-500">/mo</span></div>
+                        </div>
+                      ) : '—'}
                     </td>
                     <td className="px-6 py-3 text-right font-mono text-gray-700">
                       {v.lifetime_cents > 0 ? formatCents(v.lifetime_cents) : '—'}
@@ -419,7 +449,8 @@ export function SubscriptionsAdminPanel() {
                       </a>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -6,11 +6,13 @@ import { loadAddonPrices } from '@/lib/venue-billing';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-/** GET /api/admin/addon-prices — returns current admin-configured prices */
+/**
+ * GET /api/admin/addon-prices — returns current admin-configured prices.
+ * Intentionally public (no auth required) — prices are shown to all venue
+ * users on their dashboard so they must be readable without admin cookies.
+ * Writing (PATCH) still requires admin auth.
+ */
 export async function GET() {
-  const authed = await verifyAdminCookie();
-  if (!authed) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   try {
     const prices = await loadAddonPrices();
     return NextResponse.json(prices);
