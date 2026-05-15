@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     parseInt(request.nextUrl.searchParams.get('limit') || String(MAX_EXPORT), 10) || MAX_EXPORT,
   );
 
-  const rows = await mergeVenueContacts(venueId, { search, page: 1, limit });
+  const { data: rows } = await mergeVenueContacts(venueId, { search, page: 1, limit });
 
   const header = csvRow(['email', 'first_name', 'last_name', 'phone', 'source', 'external_id']);
   const lines = [header];

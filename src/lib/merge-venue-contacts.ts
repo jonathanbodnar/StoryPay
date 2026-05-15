@@ -92,14 +92,20 @@ function attachVenueCustomerIds(contacts: MergedContact[], vcIdLookup: Map<strin
   }
 }
 
+export interface MergedContactsResult {
+  data: MergedContact[];
+  total: number;
+}
+
 /**
  * Merged list for the dashboard: GHL + LunarPay + StoryVenue `venue_customers`,
  * deduplicated by email (GHL wins, then LP, then native rows without dup email).
+ * Returns paginated `data` plus the un-sliced `total` for page count display.
  */
 export async function mergeVenueContacts(
   venueId: string,
   opts: { search: string; page: number; limit: number },
-): Promise<MergedContact[]> {
+): Promise<MergedContactsResult> {
   const { search, page, limit } = opts;
 
   const { data: venue } = await supabaseAdmin
@@ -108,7 +114,7 @@ export async function mergeVenueContacts(
     .eq('id', venueId)
     .single();
 
-  if (!venue) return [];
+  if (!venue) return { data: [], total: 0 };
 
   const [{ data: stageRows }, { data: vcFunnelRows }] = await Promise.all([
     supabaseAdmin
@@ -338,7 +344,11 @@ export async function mergeVenueContacts(
       })
     : merged;
 
-  return filtered;
+  const total = filtered.length;
+  const offset = (page - 1) * limit;
+  const data = filtered.slice(offset, offset + limit);
+
+  return { data, total };
 }
 
 /**

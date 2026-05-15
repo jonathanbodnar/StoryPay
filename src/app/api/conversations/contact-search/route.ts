@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get('search')?.trim() ?? '';
   if (!search) return NextResponse.json([]);
 
-  const merged = await mergeVenueContacts(venueId, { search, page: 1, limit: 40 });
+  const { data: merged } = await mergeVenueContacts(venueId, { search, page: 1, limit: 40 });
   const out: { id: string; first_name: string; last_name: string; customer_email: string }[] = [];
   const seen = new Set<string>();
 

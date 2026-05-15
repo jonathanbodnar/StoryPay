@@ -19,7 +19,7 @@ async function resolveVenueCustomerIdForEmail(venueId: string, email: string): P
   const e = email.trim().toLowerCase();
   if (!e || !e.includes('@') || isPlaceholderEmail(e)) return null;
 
-  const merged = await mergeVenueContacts(venueId, { search: e, page: 1, limit: 40 });
+  const { data: merged } = await mergeVenueContacts(venueId, { search: e, page: 1, limit: 40 });
   const match = merged.find((c) => (c.email || '').trim().toLowerCase() === e);
   if (match) {
     return ensureVenueCustomerIdForMergedContact(venueId, match);

@@ -46,7 +46,7 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
   const [importBusy, setImportBusy] = useState(false);
   const [importMessage, setImportMessage] = useState('');
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -90,13 +90,14 @@ export default function ContactsPage() {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/customers?search=${encodeURIComponent(q)}&limit=${PAGE_SIZE + 1}&page=${p}`,
+        `/api/customers?search=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&page=${p}`,
       );
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json() as { data?: ContactRow[]; total?: number };
         const items = (Array.isArray(data) ? data : data.data ?? []) as ContactRow[];
-        setHasMore(items.length > PAGE_SIZE);
-        setContacts(items.slice(0, PAGE_SIZE));
+        setContacts(items);
+        const total = typeof data.total === 'number' ? data.total : items.length;
+        setTotalPages(Math.max(1, Math.ceil(total / PAGE_SIZE)));
       }
     } catch {
       // silently fail
@@ -400,12 +401,13 @@ export default function ContactsPage() {
       </div>
 
       {/* Pagination */}
-      {(page > 1 || hasMore) && (
-        <div className="mt-4 flex items-center justify-between">
-          <p className="text-xs text-gray-400">
-            Page {page} {hasMore && '...'}
+      {totalPages > 1 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-gray-500">
+            Page <span className="font-medium text-gray-700">{page}</span> of{' '}
+            <span className="font-medium text-gray-700">{totalPages}</span>
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => handlePageChange(page - 1)}
@@ -413,12 +415,49 @@ export default function ContactsPage() {
               className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft size={14} />
-              Previous
+              Prev
             </button>
+
+            {/* Page number buttons — show up to 7 with ellipsis */}
+            {(() => {
+              const pages: (number | '…')[] = [];
+              if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                pages.push(1);
+                if (page > 3) pages.push('…');
+                for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
+                  pages.push(i);
+                }
+                if (page < totalPages - 2) pages.push('…');
+                pages.push(totalPages);
+              }
+              return pages.map((p, i) =>
+                p === '…' ? (
+                  <span key={`ellipsis-${i}`} className="px-1 text-xs text-gray-400 select-none">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => handlePageChange(p)}
+                    className={`min-w-[30px] rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      p === page
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ),
+              );
+            })()}
+
             <button
               type="button"
               onClick={() => handlePageChange(page + 1)}
-              disabled={!hasMore}
+              disabled={page >= totalPages}
               className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Next
