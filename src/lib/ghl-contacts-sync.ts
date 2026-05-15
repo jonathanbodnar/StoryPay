@@ -24,14 +24,10 @@ import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/ro
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-import.storyvenue.placeholder';
 const PAGE_SIZE = 100;
-const MAX_PAGES = 200; // safety cap = 20 000 contacts per run
-// Wall-clock budget for a single manual sync call. Cloudflare cuts requests at
-// ~100s with 524; leave a generous buffer so we return partial counts cleanly
-// instead of dying mid-write. The hourly cron picks up wherever this stops.
-const WALL_CLOCK_BUDGET_MS = 75_000;
-// Parallelism within a single page — upserts are I/O bound on supabase so
-// running them concurrently roughly halves per-page latency.
-const PAGE_CONCURRENCY = 8;
+const MAX_PAGES = 500; // safety cap = 50 000 contacts per run
+// Parallelism within a single page — upserts are I/O bound on Supabase so
+// running them concurrently cuts per-page latency significantly.
+const PAGE_CONCURRENCY = 16;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -379,7 +375,6 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
   let startAfterId: string | null = null;
   const startedAt = Date.now();
   const startedAtIso = new Date(startedAt).toISOString();
-  let timedOut = false;
   let totalEstimate: number | null = null;
 
   await writeProgress(venueId, {
@@ -389,13 +384,6 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
   });
 
   for (let page = 0; page < MAX_PAGES; page++) {
-    // Wall-clock check at the top of each page so we always exit cleanly.
-    if (Date.now() - startedAt > WALL_CLOCK_BUDGET_MS) {
-      timedOut = true;
-      console.warn(`[ghl-contacts-sync] wall-clock budget hit after page ${page}, returning partial counts:`, counts);
-      break;
-    }
-
     let pageData: { contacts: GhlContact[]; nextStartAfter: string | null; nextStartAfterId: string | null; total: number | null };
     const pageStartedAt = Date.now();
     try {
@@ -482,13 +470,12 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
     startAfter   = pageData.nextStartAfter;
     startAfterId = pageData.nextStartAfterId;
   }
-  if (timedOut) {
-    console.log(`[ghl-contacts-sync] partial sync for venue ${venueId} after ${Date.now() - startedAt}ms:`, counts);
-  }
 
-  // Final status — completed (or partial if we hit the wall clock).
+  console.log(`[ghl-contacts-sync] completed venue ${venueId} in ${Date.now() - startedAt}ms:`, counts);
+
+  // Final status — fully completed.
   await writeProgress(venueId, {
-    status: timedOut ? 'partial' : 'completed',
+    status: 'completed',
     started_at: startedAtIso,
     completed_at: new Date().toISOString(),
     fetched: counts.fetched,

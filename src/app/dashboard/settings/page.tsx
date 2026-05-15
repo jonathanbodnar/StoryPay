@@ -521,8 +521,9 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium text-gray-900">Contact Sync</p>
+            <p className="mt-0.5 text-[11px] text-gray-500">Pulls all contacts from your StoryVenue Legacy sub-account in one go.</p>
             {venue.ghl_contacts_synced_at && !isRunning && (
-              <p className="mt-1.5 text-[11px] text-gray-400">
+              <p className="mt-1 text-[11px] text-gray-400">
                 Last synced{' '}
                 {new Date(venue.ghl_contacts_synced_at).toLocaleString(undefined, {
                   dateStyle: 'medium', timeStyle: 'short',
@@ -537,7 +538,7 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
           className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
         >
           {isRunning ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-          {isRunning ? 'Syncing…' : 'Sync from StoryVenue Legacy'}
+          {isRunning ? 'Syncing…' : 'Sync All Contacts'}
         </button>
       </div>
 
@@ -571,10 +572,10 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
         </div>
       )}
 
-      {/* Partial banner — wall-clock hit; cron will catch the rest */}
+      {/* Partial banner */}
       {syncProgress?.status === 'partial' && !isRunning && (
         <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
-          <span className="font-semibold">Partial sync.</span> Pulled {(syncProgress.fetched ?? 0).toLocaleString()} of {total?.toLocaleString() ?? 'many'} contacts. The hourly sync will catch the rest — or click Sync again now.
+          <span className="font-semibold">Partially synced.</span> Pulled {(syncProgress.fetched ?? 0).toLocaleString()} of {total?.toLocaleString() ?? 'many'} contacts. Click <strong>Sync All Contacts</strong> again to continue.
         </div>
       )}
 
