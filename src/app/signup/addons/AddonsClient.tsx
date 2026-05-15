@@ -43,7 +43,7 @@ function getFortisSDK(): { elements: new (token: string) => FortisElements } | u
 
 // ── Types ─────────────────────────────────────────────────────────────────--
 
-type Stage = 'addons' | 'payment' | 'success';
+type Stage = 'addons' | 'payment';
 
 interface IntentData {
   clientToken: string;
@@ -66,7 +66,6 @@ type Props = {
 
 function SaasPaymentForm({
   intent,
-  trialEnd,
   onSuccess,
   onError,
 }: {
@@ -75,9 +74,17 @@ function SaasPaymentForm({
   onSuccess: () => void;
   onError: (msg: string) => void;
 }) {
-  const mountedRef = useRef(false);
-  const [ready, setReady]           = useState(false);
-  const [processing, setProcessing] = useState(false);
+  const mountedRef   = useRef(false);
+  // Keep refs to callbacks so the event-listener closure is never stale.
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef   = useRef(onError);
+  useEffect(() => { onSuccessRef.current = onSuccess; }, [onSuccess]);
+  useEffect(() => { onErrorRef.current  = onError;    }, [onError]);
+
+  const [ready,     setReady]     = useState(false);
+  // Once ticket_success fires we replace the Fortis iframe with our own
+  // spinner so the button can never flash back to Fortis's default teal.
+  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     if (mountedRef.current) return;
@@ -128,35 +135,55 @@ function SaasPaymentForm({
         });
 
         // SaaS is always a ticket intention (hasRecurring:true).
-        // LP docs: Fortis fires `ticket_success`; payload IS the raw ticketId
-        // string (may be an object in some SDK versions — handle both).
+        // ticket_success fires once the card is tokenised; payload is either
+        // the raw ticketId string or an object depending on SDK version.
         elements.eventBus.on('ticket_success', async (ticketPayload) => {
-          setProcessing(true);
+          // Immediately swap out the Fortis form for our own spinner so the
+          // Fortis button can't flash back to its default teal colour.
+          setSubmitted(true);
+
           let ticketId: string | undefined;
           let pmMethod = 'cc';
           if (typeof ticketPayload === 'string') {
             ticketId = ticketPayload;
           } else if (ticketPayload && typeof ticketPayload === 'object') {
-            const p = ticketPayload as { id?: string; payment_method?: string };
-            ticketId = p.id ? String(p.id) : undefined;
+            const p = ticketPayload as { id?: string; ticketId?: string; payment_method?: string };
+            ticketId = p.id        ? String(p.id)
+                     : p.ticketId  ? String(p.ticketId)
+                     : undefined;
             pmMethod = p.payment_method || 'cc';
           }
+
           if (!ticketId) {
-            onError('Payment tokenization failed. Please try again.');
-            setProcessing(false);
+            setSubmitted(false);
+            onErrorRef.current('Payment tokenization failed. Please try again.');
             return;
           }
-          await handleConfirm({ ticketId, paymentMethod: pmMethod });
+
+          try {
+            const res = await fetch('/api/venue-billing/signup-checkout/confirm', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ticketId, paymentMethod: pmMethod }),
+            });
+            const data = (await res.json()) as { error?: string };
+            if (!res.ok) throw new Error(data.error || 'Failed to activate trial');
+            // Success — let the parent navigate; keep spinner showing until
+            // the page actually unloads so the user never sees the Fortis form again.
+            onSuccessRef.current();
+          } catch (err: unknown) {
+            setSubmitted(false);
+            onErrorRef.current(err instanceof Error ? err.message : 'Payment failed. Please try again.');
+          }
         });
 
         elements.eventBus.on('validationError', (errPayload) => {
           const e = (errPayload ?? {}) as { message?: string };
-          onError(e.message || 'Please check your card details and try again.');
+          onErrorRef.current(e.message || 'Please check your card details and try again.');
         });
         elements.eventBus.on('error', (errPayload) => {
           const e = (errPayload ?? {}) as { message?: string };
-          onError(e.message || 'Payment error. Please try again.');
-          setProcessing(false);
+          onErrorRef.current(e.message || 'Payment error. Please try again.');
         });
 
         setReady(true);
@@ -167,42 +194,28 @@ function SaasPaymentForm({
           err instanceof Error                              ? err.message :
           typeof err === 'string'                           ? err :
           (err as { message?: string } | null)?.message ?? null;
-        onError(msg ? `Failed to initialize payment form: ${msg}` : 'Failed to initialize payment form');
+        onErrorRef.current(msg ? `Failed to initialize payment form: ${msg}` : 'Failed to initialize payment form');
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleConfirm = async ({ ticketId, paymentMethod }: { ticketId: string; paymentMethod: string }) => {
-    try {
-      const res = await fetch('/api/venue-billing/signup-checkout/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticketId, paymentMethod }),
-      });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error || 'Failed to activate trial');
-      onSuccess();
-    } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Payment failed. Please try again.');
-      setProcessing(false);
-    }
-  };
+  // After ticket_success hide the Fortis iframe entirely and show a spinner.
+  // This prevents the Fortis button from ever reverting to its idle (teal) state.
+  if (submitted) {
+    return (
+      <div className="flex items-center justify-center py-16 gap-2 text-gray-600">
+        <Loader2 size={18} className="animate-spin" />
+        <span className="text-sm font-medium">Activating your trial…</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative">
+    <div>
       {!ready && (
         <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
           <Loader2 size={18} className="animate-spin" />
           <span className="text-sm">Loading secure payment form…</span>
-        </div>
-      )}
-      {/* Processing overlay while server activates the subscription */}
-      {processing && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-          <div className="flex items-center gap-2 text-gray-600">
-            <Loader2 size={18} className="animate-spin" />
-            <span className="text-sm font-medium">Activating your trial…</span>
-          </div>
         </div>
       )}
       <div
@@ -302,34 +315,6 @@ export function AddonsClient({
     }
   }
 
-  // ── Success stage ──────────────────────────────────────────────────────────
-  if (stage === 'success') {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <SignupStepHeader step={3} />
-        <div className="mx-auto max-w-xl px-4 py-20 sm:px-6 text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50">
-            <Check size={32} className="text-emerald-500" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">You&apos;re all set!</h1>
-          <p className="mt-2 text-sm text-gray-500">
-            Your 14-day free trial is active. First charge on {trialEnd}.
-          </p>
-          <div className="mt-8 flex flex-col items-center gap-4">
-            <a
-              href="/dashboard?welcome=1"
-              className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85"
-              style={{ backgroundColor: '#1b1b1b' }}
-            >
-              Go to your dashboard →
-            </a>
-            <p className="text-xs text-gray-400">You&apos;ll be redirected automatically in a moment.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // ── Payment stage ──────────────────────────────────────────────────────────
   if (stage === 'payment' && intent) {
     return (
@@ -364,10 +349,9 @@ export function AddonsClient({
               intent={intent}
               trialEnd={trialEnd}
               onSuccess={() => {
-                setStage('success');
-                // Hard navigation so the new session/subscription state is
-                // picked up fresh rather than a stale soft-nav cache.
-                setTimeout(() => { window.location.href = '/dashboard?welcome=1'; }, 1500);
+                // Hard navigation — picks up fresh session state and triggers
+                // the welcome/onboarding popup via the ?welcome=1 param.
+                window.location.href = '/dashboard?welcome=1';
               }}
               onError={(msg) => setError(msg)}
             />
