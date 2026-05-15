@@ -774,11 +774,16 @@ export default function ProposalPage() {
                   setProposal((prev) =>
                     prev ? { ...prev, status: 'paid', paid_at: new Date().toISOString() } : prev,
                   );
-                  // Then refresh from the server in the background for accurate
-                  // persisted state (charge_id, etc.).
+                  // Refresh from the server in the background for accurate
+                  // persisted state (charge_id, etc.). Only apply if the server
+                  // confirms `paid` — never downgrade an optimistic update back
+                  // to a pre-payment status (that would re-show the form).
                   try {
                     const res = await fetch(`/api/proposals/public/${token}`);
-                    if (res.ok) setProposal(await res.json());
+                    if (res.ok) {
+                      const fresh = await res.json();
+                      if (fresh.status === 'paid') setProposal(fresh);
+                    }
                   } catch { /* keep optimistic state */ }
                 }}
               />

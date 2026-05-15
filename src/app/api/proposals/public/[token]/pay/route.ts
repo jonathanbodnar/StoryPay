@@ -110,11 +110,13 @@ export async function POST(
     if (paymentType === 'full') {
       // ── FULL: Fortis already charged inside the iframe via a transaction
       //    intention. We just record the result and mark the invoice paid.
+      //    Note: charge_id is an integer column (LP charge IDs); Fortis
+      //    transaction IDs are text strings and can exceed int4 range, so
+      //    we only write to transaction_id (text) here.
       const txnId = extractTransactionId(body.done);
       if (!txnId) {
         console.warn('[pay] full flow: no transaction id in done payload', body.done);
       }
-      updateData.charge_id      = txnId;
       updateData.transaction_id = txnId;
       console.log('[pay] full: recorded transaction', txnId);
 
@@ -192,7 +194,14 @@ export async function POST(
       }
     }
 
-    await supabaseAdmin.from('proposals').update(updateData).eq('id', proposal.id);
+    const { error: dbErr } = await supabaseAdmin
+      .from('proposals')
+      .update(updateData)
+      .eq('id', proposal.id);
+    if (dbErr) {
+      console.error('[pay] Supabase update failed:', dbErr);
+      throw new Error(`Failed to record payment: ${dbErr.message}`);
+    }
 
     // ── Side effects ───────────────────────────────────────────────────────
     void syncPaymentRemindersForProposal(proposal.id);
