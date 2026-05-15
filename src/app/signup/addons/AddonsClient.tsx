@@ -41,6 +41,51 @@ function getFortisSDK(): { elements: new (token: string) => FortisElements } | u
   return (window as unknown as { Commerce?: { elements: new (token: string) => FortisElements } }).Commerce;
 }
 
+// Every event Fortis Commerce.js might emit on a successful tokenize/save.
+// We listen to ALL of them and dedupe via a ref because the exact event name
+// varies between SDK versions and intention types. Better to catch every
+// possible signal than miss one and leave the user stranded on the iframe's
+// "Payment Information Received" success screen.
+const FORTIS_SUCCESS_EVENTS = [
+  'ticket_success',
+  'tokenization_form_submit_success',
+  'tokenization_success',
+  'token_success',
+  'transaction_success',
+  'payment_success',
+  'done',
+  'success',
+];
+
+// Try to extract a ticketId / tokenId from any of the payload shapes the
+// Fortis SDK has shipped over the years.
+function extractTicketId(payload: unknown): { ticketId?: string; paymentMethod?: string } {
+  if (!payload) return {};
+  if (typeof payload === 'string') return { ticketId: payload };
+  if (typeof payload !== 'object') return {};
+  const p = payload as Record<string, unknown>;
+  const nested = (p.data ?? p.result ?? p.payload ?? p.ticket ?? p.token ?? p.transaction) as Record<string, unknown> | undefined;
+  const candidate =
+    (p.ticketId      as string | undefined) ??
+    (p.ticket_id     as string | undefined) ??
+    (p.token         as string | undefined) ??
+    (p.tokenId       as string | undefined) ??
+    (p.id            as string | undefined) ??
+    (nested?.ticketId  as string | undefined) ??
+    (nested?.ticket_id as string | undefined) ??
+    (nested?.token     as string | undefined) ??
+    (nested?.id        as string | undefined);
+  const paymentMethod =
+    (p.payment_method as string | undefined) ??
+    (p.paymentMethod  as string | undefined) ??
+    (nested?.payment_method as string | undefined) ??
+    (nested?.paymentMethod  as string | undefined);
+  return {
+    ticketId: candidate ? String(candidate) : undefined,
+    paymentMethod,
+  };
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────--
 
 type Stage = 'addons' | 'payment';
@@ -75,6 +120,9 @@ function SaasPaymentForm({
   onError: (msg: string) => void;
 }) {
   const mountedRef   = useRef(false);
+  // Guards against double-processing when multiple Fortis events fire in a row
+  // (we listen to a wide net of success events to cover SDK-version drift).
+  const handledRef   = useRef(false);
   // Keep refs to callbacks so the event-listener closure is never stale.
   const onSuccessRef = useRef(onSuccess);
   const onErrorRef   = useRef(onError);
@@ -82,7 +130,7 @@ function SaasPaymentForm({
   useEffect(() => { onErrorRef.current  = onError;    }, [onError]);
 
   const [ready,     setReady]     = useState(false);
-  // Once ticket_success fires we replace the Fortis iframe with our own
+  // Once any success event fires we replace the Fortis iframe with our own
   // spinner so the button can never flash back to Fortis's default teal.
   const [submitted, setSubmitted] = useState(false);
 
@@ -105,6 +153,41 @@ function SaasPaymentForm({
           s.onerror = () => reject(new Error('Failed to load payment SDK'));
           document.head.appendChild(s);
         });
+
+    // The shared success path. Called by every Fortis "success-ish" event we
+    // know about. Dedupes via handledRef so confirm only runs once.
+    async function handleSuccess(payload: unknown, eventName: string) {
+      if (handledRef.current) return;
+      const { ticketId, paymentMethod } = extractTicketId(payload);
+      if (!ticketId) {
+        console.warn('[SaasPaymentForm] success event without ticketId', eventName, payload);
+        // Don't lock the form yet — wait for an event that includes the id.
+        return;
+      }
+      handledRef.current = true;
+
+      // Immediately swap out the Fortis form for our own spinner so the
+      // Fortis button can't flash back to its default teal colour and the
+      // "Payment Information Received" iframe state is hidden instantly.
+      setSubmitted(true);
+
+      try {
+        const res = await fetch('/api/venue-billing/signup-checkout/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticketId, paymentMethod: paymentMethod || 'cc' }),
+        });
+        const data = (await res.json()) as { error?: string };
+        if (!res.ok) throw new Error(data.error || 'Failed to activate trial');
+        // Success — let the parent navigate; keep spinner showing until
+        // the page actually unloads so the user never sees the Fortis form again.
+        onSuccessRef.current();
+      } catch (err: unknown) {
+        handledRef.current = false;
+        setSubmitted(false);
+        onErrorRef.current(err instanceof Error ? err.message : 'Payment failed. Please try again.');
+      }
+    }
 
     loadSdk
       .then(() => {
@@ -134,48 +217,14 @@ function SaasPaymentForm({
           },
         });
 
-        // SaaS is always a ticket intention (hasRecurring:true).
-        // ticket_success fires once the card is tokenised; payload is either
-        // the raw ticketId string or an object depending on SDK version.
-        elements.eventBus.on('ticket_success', async (ticketPayload) => {
-          // Immediately swap out the Fortis form for our own spinner so the
-          // Fortis button can't flash back to its default teal colour.
-          setSubmitted(true);
-
-          let ticketId: string | undefined;
-          let pmMethod = 'cc';
-          if (typeof ticketPayload === 'string') {
-            ticketId = ticketPayload;
-          } else if (ticketPayload && typeof ticketPayload === 'object') {
-            const p = ticketPayload as { id?: string; ticketId?: string; payment_method?: string };
-            ticketId = p.id        ? String(p.id)
-                     : p.ticketId  ? String(p.ticketId)
-                     : undefined;
-            pmMethod = p.payment_method || 'cc';
-          }
-
-          if (!ticketId) {
-            setSubmitted(false);
-            onErrorRef.current('Payment tokenization failed. Please try again.');
-            return;
-          }
-
-          try {
-            const res = await fetch('/api/venue-billing/signup-checkout/confirm', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ticketId, paymentMethod: pmMethod }),
-            });
-            const data = (await res.json()) as { error?: string };
-            if (!res.ok) throw new Error(data.error || 'Failed to activate trial');
-            // Success — let the parent navigate; keep spinner showing until
-            // the page actually unloads so the user never sees the Fortis form again.
-            onSuccessRef.current();
-          } catch (err: unknown) {
-            setSubmitted(false);
-            onErrorRef.current(err instanceof Error ? err.message : 'Payment failed. Please try again.');
-          }
-        });
+        // Wide net of success events — exact event name varies between SDK
+        // versions and intention types. handleSuccess() dedupes for us.
+        for (const evt of FORTIS_SUCCESS_EVENTS) {
+          elements.eventBus.on(evt, (payload) => {
+            console.log('[Fortis event]', evt, payload);
+            void handleSuccess(payload, evt);
+          });
+        }
 
         elements.eventBus.on('validationError', (errPayload) => {
           const e = (errPayload ?? {}) as { message?: string };
@@ -196,6 +245,53 @@ function SaasPaymentForm({
           (err as { message?: string } | null)?.message ?? null;
         onErrorRef.current(msg ? `Failed to initialize payment form: ${msg}` : 'Failed to initialize payment form');
       });
+
+    // ── Safety net: window.postMessage from the Fortis iframe ─────────────
+    // The Fortis Elements iframe posts messages directly to the parent
+    // window in addition to firing eventBus events. If eventBus fails for
+    // any reason (SDK drift, race condition, etc.), this listener will
+    // catch the tokenization and complete the flow anyway.
+    function onPostMessage(ev: MessageEvent) {
+      if (handledRef.current) return;
+      // Only trust messages from Fortis-hosted iframes (defensive check).
+      let originHostname = '';
+      try {
+        originHostname = ev.origin ? new URL(ev.origin).hostname : '';
+      } catch { return; }
+      if (
+        !/(^|\.)fortis\.(tech|com)$/i.test(originHostname) &&
+        !/(^|\.)lunarpay\.com$/i.test(originHostname)
+      ) {
+        return;
+      }
+      const data = ev.data;
+      // Try common shapes:
+      //   { type: 'ticket_success', payload: {...} }
+      //   { event: 'ticket_success', data: {...} }
+      //   raw payload object with id / ticketId / token
+      const typeStr =
+        (data as { type?: string; event?: string; name?: string } | null)?.type ??
+        (data as { type?: string; event?: string; name?: string } | null)?.event ??
+        (data as { type?: string; event?: string; name?: string } | null)?.name ??
+        '';
+      const payload =
+        (data as { payload?: unknown; data?: unknown } | null)?.payload ??
+        (data as { payload?: unknown; data?: unknown } | null)?.data ??
+        data;
+      const looksLikeSuccess =
+        FORTIS_SUCCESS_EVENTS.some((e) => typeStr === e) ||
+        /token|ticket|success|paymentMethod|payment_method/i.test(JSON.stringify(data || ''));
+      if (!looksLikeSuccess) return;
+      const { ticketId } = extractTicketId(payload);
+      if (!ticketId) return;
+      console.log('[Fortis postMessage] caught', typeStr, payload);
+      void handleSuccess(payload, `postMessage:${typeStr}`);
+    }
+    window.addEventListener('message', onPostMessage);
+
+    return () => {
+      window.removeEventListener('message', onPostMessage);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
