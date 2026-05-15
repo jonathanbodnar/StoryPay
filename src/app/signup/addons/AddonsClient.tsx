@@ -315,9 +315,15 @@ export function AddonsClient({
           <p className="mt-2 text-sm text-gray-500">
             Your 14-day free trial is active. First charge on {trialEnd}.
           </p>
-          <div className="mt-8">
-            <Loader2 size={18} className="mx-auto animate-spin text-gray-400" />
-            <p className="mt-2 text-xs text-gray-400">Redirecting to your dashboard…</p>
+          <div className="mt-8 flex flex-col items-center gap-4">
+            <a
+              href="/dashboard?welcome=1"
+              className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85"
+              style={{ backgroundColor: '#1b1b1b' }}
+            >
+              Go to your dashboard →
+            </a>
+            <p className="text-xs text-gray-400">You&apos;ll be redirected automatically in a moment.</p>
           </div>
         </div>
       </div>
@@ -359,7 +365,9 @@ export function AddonsClient({
               trialEnd={trialEnd}
               onSuccess={() => {
                 setStage('success');
-                setTimeout(() => router.replace('/dashboard?welcome=1'), 2000);
+                // Hard navigation so the new session/subscription state is
+                // picked up fresh rather than a stale soft-nav cache.
+                setTimeout(() => { window.location.href = '/dashboard?welcome=1'; }, 1500);
               }}
               onError={(msg) => setError(msg)}
             />
