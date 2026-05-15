@@ -213,10 +213,10 @@ export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
               <div
                 key={plan.id}
                 className={[
-                  'relative flex flex-col rounded-2xl bg-white px-7 pb-7 pt-8 transition-shadow',
+                  'relative flex flex-col rounded-2xl bg-white px-7 pb-7 pt-8',
                   isFeatured
-                    ? 'border-2 border-gray-900 shadow-lg'
-                    : 'border border-gray-200 shadow-sm',
+                    ? 'border-2 border-gray-900'
+                    : 'border border-gray-200',
                 ].join(' ')}
               >
                 {/* "Most Popular" badge — sits on top border edge */}
@@ -231,9 +231,9 @@ export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
                 {/* Plan name */}
                 <h2 className="text-[1.35rem] font-bold leading-tight text-gray-900">{plan.name}</h2>
 
-                {/* Tagline */}
-                {content.tagline && (
-                  <p className="mt-1 text-[13px] italic text-gray-500">{content.tagline}</p>
+                {/* Tagline — pulled from plan.description so it's editable in the admin */}
+                {plan.description && (
+                  <p className="mt-1 text-[13px] italic text-gray-500">{plan.description}</p>
                 )}
 
                 {/* Price */}
