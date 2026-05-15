@@ -215,7 +215,7 @@ export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
                 className={[
                   'relative flex flex-col rounded-2xl bg-white px-7 pb-7 pt-8',
                   isFeatured
-                    ? 'border-2 border-gray-900'
+                    ? 'border-2 border-gray-900 shadow-[0_8px_32px_rgba(0,0,0,0.18)]'
                     : 'border border-gray-200',
                 ].join(' ')}
               >
