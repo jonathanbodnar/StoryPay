@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Lock, Loader2 } from 'lucide-react';
+import { Lock, Loader2, Check } from 'lucide-react';
 import type { DirectoryPlanCatalogEntry } from '@/lib/venue-billing';
 
 // ── Per-plan static content ─────────────────────────────────────────────────
@@ -256,7 +256,7 @@ export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
                           isInherits ? 'text-[12px] text-gray-500 font-semibold' : 'text-[13px] text-gray-700',
                         ].join(' ')}
                       >
-                        <span className="mt-[3px] shrink-0 text-gray-400 select-none">·</span>
+                        <Check size={13} className={['mt-[2px] shrink-0', isInherits ? 'text-gray-400' : 'text-emerald-500'].join(' ')} />
                         {bullet}
                       </li>
                     );
