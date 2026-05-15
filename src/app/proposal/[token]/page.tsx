@@ -7,7 +7,7 @@ import { formatCents, formatDate } from '@/lib/utils';
 
 interface FortisElements {
   create(opts: Record<string, unknown>): void;
-  eventBus: { on(evt: string, cb: (d: Record<string, unknown>) => void): void };
+  eventBus: { on(evt: string, cb: (d: unknown) => void): void };
 }
 // Access the Fortis SDK via a local cast (avoids conflicting with update-card page's global declaration)
 function getFortisSDK(): { elements: new (token: string) => FortisElements } | undefined {
@@ -214,38 +214,61 @@ function InlinePaymentForm({
           },
         });
 
-        // Per Fortis SDK source, `done` is the primary completion event for
-        // BOTH transaction intentions (charge happened inline) and ticket
-        // intentions (card tokenized for backend save+charge). The payload
-        // shape differs; backend handles the routing based on payment_type.
-        const onDone = async (payload: Record<string, unknown>) => {
+        // ── Event wiring ──────────────────────────────────────────────
+        // LP docs (https://app.lunarpay.com/developers):
+        //
+        //  • TICKET intention (hasRecurring:true → installments / SaaS):
+        //      Fortis fires `ticket_success`; payload IS the raw ticketId
+        //      string. Our backend saves the card + charges the first
+        //      installment.
+        //
+        //  • TRANSACTION intention (amount-only → pay-in-full):
+        //      Fortis fires `done` / `payment_success` with transaction
+        //      info. The charge already happened inside the iframe; our
+        //      backend just records the result.
+        //
+        // We guard each handler with a paymentType check so a rogue cross-
+        // fire never processes a payment through the wrong path.
+
+        // Ticket → installment save+charge
+        elements.eventBus.on('ticket_success', async (ticketPayload) => {
+          if (intent.paymentType !== 'installment') return;
           setProcessing(true);
-          if (intent.paymentType === 'installment') {
-            // Ticket intention → extract ticket id, backend will save+charge.
-            const p = payload as { id?: string; ticket?: { id?: string }; data?: { id?: string }; payment_method?: string };
-            const ticketId = p.id ?? p.ticket?.id ?? p.data?.id;
-            if (!ticketId) {
-              setPayError('Payment tokenization failed. Please try again.');
-              setProcessing(false);
-              return;
-            }
-            await submitToServer({ ticketId: String(ticketId), paymentMethod: p.payment_method || 'cc' });
-          } else {
-            // Transaction intention → Fortis already charged; pass the full
-            // payload so the backend can record whatever id it returned.
-            await submitToServer({ done: payload, paymentMethod: 'cc' });
+          // LP docs: payload is the raw ticketId string. In some SDK
+          // versions it may be an object — handle both.
+          let ticketId: string | undefined;
+          let pmMethod = 'cc';
+          if (typeof ticketPayload === 'string') {
+            ticketId = ticketPayload;
+          } else if (ticketPayload && typeof ticketPayload === 'object') {
+            const p = ticketPayload as { id?: string; payment_method?: string };
+            ticketId = p.id ? String(p.id) : undefined;
+            pmMethod = p.payment_method || 'cc';
           }
+          if (!ticketId) {
+            setPayError('Payment tokenization failed. Please try again.');
+            setProcessing(false);
+            return;
+          }
+          await submitToServer({ ticketId, paymentMethod: pmMethod });
+        });
+
+        // Transaction → record full payment (charge happened in iframe)
+        const onDone = async (payload: unknown) => {
+          if (intent.paymentType !== 'full') return;
+          setProcessing(true);
+          await submitToServer({ done: payload as Record<string, unknown>, paymentMethod: 'cc' });
         };
 
-        elements.eventBus.on('done',             onDone);
-        elements.eventBus.on('payment_success',  onDone);
+        elements.eventBus.on('done',            onDone);
+        elements.eventBus.on('payment_success', onDone);
 
         elements.eventBus.on('validationError', (errPayload) => {
-          const e = errPayload as { message?: string };
+          const e = (errPayload ?? {}) as { message?: string };
           setPayError(e.message || 'Please check your card details and try again.');
         });
         elements.eventBus.on('error', (errPayload) => {
-          const e = errPayload as { message?: string };
+          const e = (errPayload ?? {}) as { message?: string };
           setPayError(e.message || 'Payment error. Please try again.');
           setProcessing(false);
         });

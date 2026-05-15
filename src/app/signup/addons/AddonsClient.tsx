@@ -35,7 +35,7 @@ function trialEndDate(): string {
 // ── Fortis Elements types (local cast — avoids global declaration conflicts) ─
 interface FortisElements {
   create(opts: Record<string, unknown>): void;
-  eventBus: { on(evt: string, cb: (d: Record<string, unknown>) => void): void };
+  eventBus: { on(evt: string, cb: (d: unknown) => void): void };
 }
 function getFortisSDK(): { elements: new (token: string) => FortisElements } | undefined {
   return (window as unknown as { Commerce?: { elements: new (token: string) => FortisElements } }).Commerce;
@@ -125,30 +125,34 @@ function SaasPaymentForm({
           },
         });
 
-        // Per Fortis SDK source, `done` is the only completion event that
-        // actually fires. For a ticket intention (hasRecurring:true) the
-        // payload carries the ticketId we need to save the card server-side.
-        const onDone = async (payload: Record<string, unknown>) => {
+        // SaaS is always a ticket intention (hasRecurring:true).
+        // LP docs: Fortis fires `ticket_success`; payload IS the raw ticketId
+        // string (may be an object in some SDK versions — handle both).
+        elements.eventBus.on('ticket_success', async (ticketPayload) => {
           setProcessing(true);
-          const p = payload as { id?: string; ticket?: { id?: string }; data?: { id?: string }; payment_method?: string };
-          const ticketId = p.id ?? p.ticket?.id ?? p.data?.id;
+          let ticketId: string | undefined;
+          let pmMethod = 'cc';
+          if (typeof ticketPayload === 'string') {
+            ticketId = ticketPayload;
+          } else if (ticketPayload && typeof ticketPayload === 'object') {
+            const p = ticketPayload as { id?: string; payment_method?: string };
+            ticketId = p.id ? String(p.id) : undefined;
+            pmMethod = p.payment_method || 'cc';
+          }
           if (!ticketId) {
             onError('Payment tokenization failed. Please try again.');
             setProcessing(false);
             return;
           }
-          await handleConfirm({ ticketId: String(ticketId), paymentMethod: p.payment_method || 'cc' });
-        };
-
-        elements.eventBus.on('done',            onDone);
-        elements.eventBus.on('payment_success', onDone);
+          await handleConfirm({ ticketId, paymentMethod: pmMethod });
+        });
 
         elements.eventBus.on('validationError', (errPayload) => {
-          const e = errPayload as { message?: string };
+          const e = (errPayload ?? {}) as { message?: string };
           onError(e.message || 'Please check your card details and try again.');
         });
         elements.eventBus.on('error', (errPayload) => {
-          const e = errPayload as { message?: string };
+          const e = (errPayload ?? {}) as { message?: string };
           onError(e.message || 'Payment error. Please try again.');
           setProcessing(false);
         });
