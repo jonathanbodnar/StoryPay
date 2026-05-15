@@ -213,6 +213,11 @@ export async function GET() {
   const totalUnsubscribed = (statusTotals.none || 0) + (statusTotals.pending || 0);
 
   return NextResponse.json({
+    addon_prices: {
+      verified_cents:  addonPrices.verified_cents  ?? 0,
+      sponsored_cents: addonPrices.sponsored_cents ?? 0,
+      concierge_cents: addonPrices.concierge_cents ?? 0,
+    },
     summary: {
       total_mrr_cents: totalMrrCents,
       total_arr_cents: totalMrrCents * 12,

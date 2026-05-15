@@ -54,7 +54,14 @@ type Summary = {
   paying_count: number;
 };
 
+type AddonPrices = {
+  verified_cents: number;
+  sponsored_cents: number;
+  concierge_cents: number;
+};
+
 type ApiResponse = {
+  addon_prices: AddonPrices;
   summary: Summary;
   plans: Plan[];
   venues: VenueRow[];
@@ -161,6 +168,8 @@ export function SubscriptionsAdminPanel() {
   if (!data) return null;
 
   const { summary, plans } = data;
+  const ap = data.addon_prices ?? { verified_cents: 0, sponsored_cents: 0, concierge_cents: 0 };
+  function fmtAddon(cents: number) { return cents > 0 ? `$${Math.round(cents / 100)}/mo` : ''; }
 
   return (
     <div className="space-y-8">
@@ -389,18 +398,21 @@ export function SubscriptionsAdminPanel() {
                     <td className="px-6 py-3">
                       <div className="flex flex-wrap gap-1">
                         {addons.verified && (
-                          <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
                             ✓ Verified
+                            {ap.verified_cents > 0 && <span className="font-normal opacity-75">{fmtAddon(ap.verified_cents)}</span>}
                           </span>
                         )}
                         {addons.sponsored && (
-                          <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                             ✓ Sponsored
+                            {ap.sponsored_cents > 0 && <span className="font-normal opacity-75">{fmtAddon(ap.sponsored_cents)}</span>}
                           </span>
                         )}
                         {addons.concierge && (
-                          <span className="inline-flex items-center rounded-full bg-violet-50 border border-violet-200 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-200 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
                             ✓ Concierge
+                            {ap.concierge_cents > 0 && <span className="font-normal opacity-75">{fmtAddon(ap.concierge_cents)}</span>}
                           </span>
                         )}
                         {!addons.verified && !addons.sponsored && !addons.concierge && (
