@@ -47,7 +47,14 @@ export default async function SignupAddonsPage({
     sponsored: Boolean(ff.addon_sponsored_included ?? ff.directory_addon_sponsored_included),
     concierge: Boolean(ff.addon_concierge_included),
   };
-  const conciergeAvailable = Boolean(ff.addon_concierge_available);
+  // All-Inclusive bundles concierge — hide the add-on card whether or not the
+  // feature flag is set correctly in the DB.
+  const planIsAllInclusive = selectedPlan.name.toLowerCase().replace(/[-\s]/g, '') === 'allinclusive';
+  if (planIsAllInclusive) inclusion.concierge = true;
+
+  // If concierge is already bundled into the plan, treat it as unavailable
+  // as an add-on so the card never appears.
+  const conciergeAvailable = !inclusion.concierge && Boolean(ff.addon_concierge_available);
 
   return (
     <AddonsClient
