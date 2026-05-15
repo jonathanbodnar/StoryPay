@@ -22,15 +22,81 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders() });
 }
 
+// US state abbreviation → full name
+const STATE_ABBR: Record<string, string> = {
+  AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',
+  CO:'Colorado',CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',
+  HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',
+  KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',
+  MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',
+  NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',
+  NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',
+  OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',
+  SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',
+  VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',
+  DC:'District of Columbia',
+};
+
+function resolveState(raw: string): string {
+  const up = raw.trim().toUpperCase();
+  if (STATE_ABBR[up]) return STATE_ABBR[up]; // "IN" → "Indiana"
+  return raw.trim();
+}
+
+/**
+ * Parse a free-text "City, State" or "City ST" string.
+ * Examples: "Fremont, Indiana", "Fremont, IN", "Columbus OH"
+ */
+function parseCityState(location: string): { city: string; state: string } {
+  const trimmed = location.trim();
+  const commaIdx = trimmed.lastIndexOf(',');
+  if (commaIdx > 0) {
+    return {
+      city: trimmed.slice(0, commaIdx).trim(),
+      state: resolveState(trimmed.slice(commaIdx + 1).trim()),
+    };
+  }
+  // Trailing 2-letter abbreviation: "Fremont IN"
+  const abbrMatch = trimmed.match(/^(.+)\s+([A-Za-z]{2})$/);
+  if (abbrMatch && STATE_ABBR[abbrMatch[2].toUpperCase()]) {
+    return { city: abbrMatch[1].trim(), state: STATE_ABBR[abbrMatch[2].toUpperCase()] };
+  }
+  return { city: trimmed, state: '' };
+}
+
 /**
  * Published venues for directory browse/search (storyvenue.com city/state/search pages).
- * Query: state, city, q (name contains, case-insensitive). All optional.
+ * Query params (all optional):
+ *   state    — full state name or 2-letter abbreviation, e.g. "Indiana" or "IN"
+ *   city     — partial city name
+ *   q        — venue name search; if it looks like "City, State" it is parsed as location
+ *   location — free-text "City, State" / "City, ST" — split into city + state automatically
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
-  const state = (searchParams.get('state') || '').trim();
-  const city = (searchParams.get('city') || '').trim();
-  const q = (searchParams.get('q') || '').trim();
+  let state    = (searchParams.get('state')    || '').trim();
+  let city     = (searchParams.get('city')     || '').trim();
+  const q      = (searchParams.get('q')        || '').trim();
+  const location = (searchParams.get('location') || '').trim();
+
+  // "location" param splits "City, State" into separate city/state filters
+  if (location) {
+    const parsed = parseCityState(location);
+    if (!city  && parsed.city)  city  = parsed.city;
+    if (!state && parsed.state) state = parsed.state;
+  }
+
+  // If q contains a comma and looks like "City, State", parse it instead of
+  // doing a name search — this handles the common case of typing "Fremont, Indiana"
+  if (q && !city && !state && /,/.test(q)) {
+    const parsed = parseCityState(q);
+    if (parsed.state) {
+      city  = parsed.city;
+      state = parsed.state;
+    }
+  }
+
+  if (state) state = resolveState(state);
 
   let query = supabaseAdmin
     .from('venues')
@@ -48,7 +114,8 @@ export async function GET(request: NextRequest) {
   if (city) {
     query = query.ilike('location_city', `%${city}%`);
   }
-  if (q) {
+  // Only use q for name search when it wasn't consumed as a location
+  if (q && !city && !state) {
     query = query.ilike('name', `%${q}%`);
   }
 
