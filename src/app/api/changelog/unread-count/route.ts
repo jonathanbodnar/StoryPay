@@ -13,21 +13,29 @@ export async function GET() {
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   let lastSeen: string | null = null;
+  let venueCreatedAt: string | null = null;
   try {
     const { data: venue } = await supabaseAdmin
       .from('venues')
-      .select('updates_last_seen_at')
+      .select('updates_last_seen_at, created_at')
       .eq('id', venueId)
       .maybeSingle();
     lastSeen = (venue?.updates_last_seen_at as string | null) ?? null;
+    venueCreatedAt = (venue?.created_at as string | null) ?? null;
   } catch (err) {
     console.warn('[changelog/unread-count] missing venues.updates_last_seen_at column', err);
   }
 
+  // Use the later of: last time they visited the updates page, or the
+  // moment they signed up. This ensures new venues never see old updates
+  // as "unread" — they only get notified about entries published after
+  // their account was created.
+  const floor = lastSeen ?? venueCreatedAt ?? null;
+
   let query = supabaseAdmin
     .from('changelog_entries')
     .select('id', { head: true, count: 'exact' });
-  if (lastSeen) query = query.gt('released_at', lastSeen);
+  if (floor) query = query.gt('released_at', floor);
 
   const { count, error } = await query;
   if (error) {
