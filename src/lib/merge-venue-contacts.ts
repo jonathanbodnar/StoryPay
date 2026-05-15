@@ -95,7 +95,18 @@ function attachVenueCustomerIds(contacts: MergedContact[], vcIdLookup: Map<strin
 export interface MergedContactsResult {
   data: MergedContact[];
   total: number;
+  ghlConnected: boolean;
+  ghlContactsSyncedAt: string | null;
 }
+
+/**
+ * How many contacts to fetch live from GHL on each contacts-page load.
+ * GHL's hard cap is 100/page; we use 100 so we capture recent adds that
+ * haven't been written to venue_customers yet by the nightly sync.
+ * venue_customers (populated by the background sync) is the primary source
+ * of truth for the full contact list — this live fetch is a supplement only.
+ */
+const GHL_LIVE_FETCH_LIMIT = 100;
 
 /**
  * Merged list for the dashboard: GHL + LunarPay + StoryVenue `venue_customers`,
@@ -110,11 +121,11 @@ export async function mergeVenueContacts(
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_refresh_token, ghl_location_id')
+    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_refresh_token, ghl_location_id, ghl_contacts_synced_at')
     .eq('id', venueId)
     .single();
 
-  if (!venue) return { data: [], total: 0 };
+  if (!venue) return { data: [], total: 0, ghlConnected: false, ghlContactsSyncedAt: null };
 
   const [{ data: stageRows }, { data: vcFunnelRows }] = await Promise.all([
     supabaseAdmin
@@ -184,7 +195,7 @@ export async function mergeVenueContacts(
   if (venue.ghl_connected && ghlToken && venue.ghl_location_id) {
     try {
       const ghlResult = await ghlRequest(
-        `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${limit}`,
+        `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${GHL_LIVE_FETCH_LIMIT}`,
         ghlToken,
         { locationId: venue.ghl_location_id },
       );
@@ -348,7 +359,12 @@ export async function mergeVenueContacts(
   const offset = (page - 1) * limit;
   const data = filtered.slice(offset, offset + limit);
 
-  return { data, total };
+  return {
+    data,
+    total,
+    ghlConnected: !!(venue as { ghl_connected?: boolean | null }).ghl_connected,
+    ghlContactsSyncedAt: (venue as { ghl_contacts_synced_at?: string | null }).ghl_contacts_synced_at ?? null,
+  };
 }
 
 /**

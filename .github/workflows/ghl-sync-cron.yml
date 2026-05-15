@@ -1,7 +1,6 @@
-# GHL contacts sync cron — runs once per day at 2:00 AM UTC.
-# Pings /api/cron/ghl-contacts-sync which performs the one-time GHL
-# contact import for venues with a connected GHL sub-account.
-# After initial sync, venues manage contacts natively in StoryVenue.
+# GHL contacts sync cron — runs 4× per day (every 6 hours).
+# Pings /api/cron/ghl-contacts-sync which mirrors GHL contacts into
+# venue_customers so the contacts page shows all records accurately.
 #
 # Required GitHub repo secrets (Settings → Secrets → Actions):
 #   MARKETING_CRON_URL    = https://your-app.up.railway.app  (no trailing slash)
@@ -11,7 +10,7 @@ name: GHL contacts sync cron
 
 on:
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:

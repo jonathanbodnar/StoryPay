@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
     `[customers] venueId=${venueId} ghl_connected=${venue.ghl_connected} ghl_location=${venue.ghl_location_id} has_lp=${!!venue.lunarpay_secret_key}`,
   );
 
-  const result = await mergeVenueContacts(venueId, { search, page, limit });
-  return NextResponse.json(result);
+  const { data, total, ghlConnected, ghlContactsSyncedAt } = await mergeVenueContacts(venueId, { search, page, limit });
+  return NextResponse.json({ data, total, ghlConnected, ghlContactsSyncedAt });
 }
 
 export async function POST(request: NextRequest) {

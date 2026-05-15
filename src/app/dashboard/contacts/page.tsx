@@ -14,6 +14,7 @@ import {
   Download,
   Upload,
   Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { classNames, toTitleCase } from '@/lib/utils';
 import AddLeadModal, {
@@ -38,6 +39,13 @@ interface ContactRow {
 
 const PAGE_SIZE = 20;
 
+interface SyncProgress {
+  status?: string;
+  fetched?: number;
+  total?: number | null;
+  page?: number;
+}
+
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   // contactIds that have unread Venue Direct messages for the current viewer
@@ -47,9 +55,16 @@ export default function ContactsPage() {
   const [showModal, setShowModal] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalContacts, setTotalContacts] = useState<number | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importMessage, setImportMessage] = useState('');
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  // GHL sync state
+  const [ghlConnected, setGhlConnected] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'running' | 'done'>('idle');
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const syncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Shared state for the unified add modal (mirrors the Leads page).
   const [pipelines, setPipelines] = useState<LeadPipeline[]>([]);
@@ -93,18 +108,76 @@ export default function ContactsPage() {
         `/api/customers?search=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&page=${p}`,
       );
       if (res.ok) {
-        const data = await res.json() as { data?: ContactRow[]; total?: number };
+        const data = await res.json() as {
+          data?: ContactRow[];
+          total?: number;
+          ghlConnected?: boolean;
+          ghlContactsSyncedAt?: string | null;
+        };
         const items = (Array.isArray(data) ? data : data.data ?? []) as ContactRow[];
         setContacts(items);
         const total = typeof data.total === 'number' ? data.total : items.length;
         setTotalPages(Math.max(1, Math.ceil(total / PAGE_SIZE)));
+        setTotalContacts(total);
+        if (data.ghlConnected !== undefined) setGhlConnected(!!data.ghlConnected);
+
+        // Auto-trigger GHL sync if connected and not synced in the last 6 hours
+        if (data.ghlConnected) {
+          const lastSync = data.ghlContactsSyncedAt ? new Date(data.ghlContactsSyncedAt).getTime() : 0;
+          const stale = Date.now() - lastSync > 6 * 60 * 60 * 1000;
+          if (stale && p === 1 && !q) {
+            void triggerGhlSync();
+          }
+        }
       }
     } catch {
       // silently fail
     } finally {
       setLoading(false);
     }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const stopSyncPoll = useCallback(() => {
+    if (syncPollRef.current) {
+      clearInterval(syncPollRef.current);
+      syncPollRef.current = null;
+    }
   }, []);
+
+  const pollSyncProgress = useCallback(() => {
+    stopSyncPoll();
+    syncPollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('/api/integrations/ghl/sync-contacts', { cache: 'no-store' });
+        if (!res.ok) { stopSyncPoll(); return; }
+        const d = await res.json() as { progress?: SyncProgress | null; last_synced_at?: string | null };
+        const prog = d.progress;
+        setSyncProgress(prog ?? null);
+        if (!prog || prog.status === 'completed' || prog.status === 'failed' || prog.status === 'partial') {
+          setSyncStatus(prog?.status === 'running' ? 'running' : 'done');
+          stopSyncPoll();
+          // Reload contacts now that sync is done
+          fetchContacts('', 1);
+        }
+      } catch {
+        stopSyncPoll();
+      }
+    }, 3000);
+  }, [stopSyncPoll, fetchContacts]);
+
+  const triggerGhlSync = useCallback(async () => {
+    if (syncStatus === 'running') return;
+    setSyncStatus('running');
+    setSyncProgress(null);
+    try {
+      await fetch('/api/integrations/ghl/sync-contacts', { method: 'POST' });
+      pollSyncProgress();
+    } catch {
+      setSyncStatus('idle');
+    }
+  }, [syncStatus, pollSyncProgress]);
+
+  useEffect(() => () => stopSyncPoll(), [stopSyncPoll]);
 
   useEffect(() => {
     fetchContacts('', 1);
@@ -210,7 +283,11 @@ export default function ContactsPage() {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Contacts</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage your contact list</p>
+          <p className="mt-1 text-sm text-gray-500">
+            {totalContacts !== null
+              ? `${totalContacts.toLocaleString()} contact${totalContacts === 1 ? '' : 's'}`
+              : 'Manage your contact list'}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -220,6 +297,18 @@ export default function ContactsPage() {
             className="hidden"
             onChange={handleImportFile}
           />
+          {ghlConnected && (
+            <button
+              type="button"
+              disabled={syncStatus === 'running'}
+              onClick={() => triggerGhlSync()}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              title="Sync contacts from GoHighLevel"
+            >
+              <RefreshCw size={16} className={syncStatus === 'running' ? 'animate-spin' : ''} />
+              {syncStatus === 'running' ? 'Syncing…' : 'Sync from GHL'}
+            </button>
+          )}
           <button
             type="button"
             disabled={importBusy}
@@ -249,6 +338,28 @@ export default function ContactsPage() {
           </button>
         </div>
       </div>
+
+      {/* GHL sync progress banner */}
+      {syncStatus === 'running' && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <Loader2 size={15} className="shrink-0 animate-spin text-blue-500" />
+          <span>
+            {syncProgress?.total
+              ? `Syncing contacts from GHL… ${(syncProgress.fetched ?? 0).toLocaleString()} of ${syncProgress.total.toLocaleString()}`
+              : syncProgress?.fetched
+                ? `Syncing contacts from GHL… ${syncProgress.fetched.toLocaleString()} fetched`
+                : 'Starting GHL contact sync…'}
+          </span>
+          {syncProgress?.total && syncProgress.fetched ? (
+            <div className="ml-auto h-1.5 w-24 overflow-hidden rounded-full bg-blue-200">
+              <div
+                className="h-full rounded-full bg-blue-500 transition-all"
+                style={{ width: `${Math.min(100, Math.round((syncProgress.fetched / syncProgress.total) * 100))}%` }}
+              />
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {importMessage && (
         <div
