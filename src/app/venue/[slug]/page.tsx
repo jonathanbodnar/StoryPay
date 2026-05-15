@@ -178,7 +178,7 @@ export default async function PublicVenuePage({
           </div>
         )}
 
-        <VenueMapEmbed lat={venue.lat} lng={venue.lng} show={venue.show_map} />
+        <VenueMapEmbed lat={venue.lat} lng={venue.lng} show={venue.show_map} venueName={venue.name} />
         <VenueSocialRow social={venue.social_links} />
         <VenueFaqSection items={venue.faq} />
 
