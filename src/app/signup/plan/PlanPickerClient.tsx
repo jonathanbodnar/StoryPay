@@ -101,7 +101,7 @@ export function SignupStepHeader({
   const steps = [
     { n: 1, label: 'Create account' },
     { n: 2, label: 'Choose plan' },
-    { n: 3, label: 'Add-ons' },
+    { n: 3, label: 'Upgrades' },
     { n: 4, label: 'Add payment' },
   ].slice(0, totalSteps);
 
@@ -253,7 +253,7 @@ export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
                         key={i}
                         className={[
                           'flex items-start gap-2 leading-snug',
-                          isInherits ? 'text-[12px] text-gray-400' : 'text-[13px] text-gray-700',
+                          isInherits ? 'text-[12px] text-gray-500 font-semibold' : 'text-[13px] text-gray-700',
                         ].join(' ')}
                       >
                         <span className="mt-[3px] shrink-0 text-gray-400 select-none">·</span>

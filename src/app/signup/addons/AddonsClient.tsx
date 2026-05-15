@@ -371,7 +371,7 @@ export function AddonsClient({
             className="mt-4 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
           >
             <ChevronLeft size={14} />
-            Back to add-ons
+            Back to upgrades
           </button>
 
           <p className="mt-3 text-center text-[11px] text-gray-400">
@@ -396,13 +396,13 @@ export function AddonsClient({
               Almost there, {ownerFirstName}!
             </p>
           )}
-          <h1 className="text-2xl font-bold text-gray-900">Boost your listing with add-ons</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Boost your listing with upgrades</h1>
           <p className="mt-2 text-sm text-gray-500">
             Add optional upgrades to your <strong>{planName}</strong> plan. You can add or remove these anytime from your dashboard.
           </p>
         </div>
 
-        {/* Add-on cards */}
+        {/* Upgrade cards */}
         <div className="space-y-3">
           <AddonCard
             icon={<BadgeCheck size={20} className="text-blue-500" />}
@@ -451,19 +451,25 @@ export function AddonsClient({
             {effectiveVerified && (
               <div className="flex items-center justify-between text-blue-600">
                 <span>Verified Listing{inclusion.verified ? ' (included)' : ''}</span>
-                <span>{inclusion.verified ? '—' : formatCents(addonPrices.verified_cents) + '/mo'}</span>
+                {inclusion.verified
+                  ? <Check size={14} className="text-emerald-500 shrink-0" />
+                  : <span>{formatCents(addonPrices.verified_cents)}/mo</span>}
               </div>
             )}
             {effectiveSponsored && (
               <div className="flex items-center justify-between text-purple-600">
                 <span>Sponsored Listing{inclusion.sponsored ? ' (included)' : ''}</span>
-                <span>{inclusion.sponsored ? '—' : formatCents(addonPrices.sponsored_cents) + '/mo'}</span>
+                {inclusion.sponsored
+                  ? <Check size={14} className="text-emerald-500 shrink-0" />
+                  : <span>{formatCents(addonPrices.sponsored_cents)}/mo</span>}
               </div>
             )}
             {effectiveConcierge && (
               <div className="flex items-center justify-between text-violet-600">
                 <span>Venue Concierge{inclusion.concierge ? ' (included)' : ''}</span>
-                <span>{inclusion.concierge ? '—' : formatCents(addonPrices.concierge_cents) + '/mo'}</span>
+                {inclusion.concierge
+                  ? <Check size={14} className="text-emerald-500 shrink-0" />
+                  : <span>{formatCents(addonPrices.concierge_cents)}/mo</span>}
               </div>
             )}
             <div className="flex items-center justify-between border-t border-gray-100 pt-2 font-semibold text-gray-900">
