@@ -299,9 +299,12 @@ function SaasPaymentForm({
   // This prevents the Fortis button from ever reverting to its idle (teal) state.
   if (submitted) {
     return (
-      <div className="flex items-center justify-center py-16 gap-2 text-gray-600">
-        <Loader2 size={18} className="animate-spin" />
-        <span className="text-sm font-medium">Activating your trial…</span>
+      <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+        <Loader2 size={24} className="animate-spin text-gray-500" />
+        <p className="text-sm font-semibold text-gray-900">Setting up your dashboard…</p>
+        <p className="text-xs text-gray-500 max-w-xs">
+          Please wait while we activate your trial. Do&nbsp;not navigate away or refresh this page.
+        </p>
       </div>
     );
   }
@@ -415,7 +418,7 @@ export function AddonsClient({
   if (stage === 'payment' && intent) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <SignupStepHeader step={3} />
+        <SignupStepHeader step={4} />
         <div className="mx-auto max-w-xl px-4 py-10 sm:px-6">
           <div className="mb-6 text-center">
             <p className="mb-1 text-sm font-medium text-emerald-600">No charge today!</p>
