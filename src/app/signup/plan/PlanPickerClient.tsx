@@ -194,8 +194,8 @@ export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
           </p>
         </div>
 
-        {/* Plan grid */}
-        <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Plan grid — all cards stretch to equal height so buttons are bottom-pinned */}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {sortedPlans.map((plan) => {
             const content    = getPlanContent(plan.name);
             const isPaid     = (plan.price_monthly_cents ?? 0) > 0;
@@ -203,68 +203,76 @@ export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
             const isLoading  = loadingPlanId === plan.id;
             const isDisabled = !!loadingPlanId && !isLoading;
 
+            // Combine "Everything in X, plus:" as the first bullet item
+            const allBullets: string[] = [
+              ...(content.inherits ? [`Everything in ${content.inherits}, plus:`] : []),
+              ...content.bullets,
+            ];
+
             return (
               <div
                 key={plan.id}
                 className={[
-                  'relative flex flex-col rounded-2xl bg-white px-6 pb-6 pt-7 transition-shadow',
+                  'relative flex flex-col rounded-2xl bg-white px-7 pb-7 pt-8 transition-shadow',
                   isFeatured
-                    ? 'border-2 border-gray-900 shadow-xl'
-                    : 'border border-gray-200 shadow-sm hover:shadow-md',
+                    ? 'border-2 border-gray-900 shadow-lg'
+                    : 'border border-gray-200 shadow-sm',
                 ].join(' ')}
               >
-                {/* "Most Popular" badge */}
+                {/* "Most Popular" badge — sits on top border edge */}
                 {plan.highlight_label && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
-                    <span className="whitespace-nowrap rounded-full bg-gray-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow">
+                  <div className="absolute -top-[14px] left-1/2 -translate-x-1/2 z-10">
+                    <span className="whitespace-nowrap rounded-full bg-gray-900 px-4 py-1 text-[11px] font-bold uppercase tracking-widest text-white">
                       {plan.highlight_label}
                     </span>
                   </div>
                 )}
 
                 {/* Plan name */}
-                <h2 className="text-xl font-bold text-gray-900">{plan.name}</h2>
+                <h2 className="text-[1.35rem] font-bold leading-tight text-gray-900">{plan.name}</h2>
 
                 {/* Tagline */}
                 {content.tagline && (
-                  <p className="mt-1 text-sm italic text-gray-500">{content.tagline}</p>
+                  <p className="mt-1 text-[13px] italic text-gray-500">{content.tagline}</p>
                 )}
 
                 {/* Price */}
-                <div className="mt-5 flex items-baseline gap-1">
-                  <span className="text-4xl font-extrabold tracking-tight text-gray-900">
+                <div className="mt-5 flex items-baseline gap-1.5">
+                  <span className="text-5xl font-extrabold tracking-tight text-gray-900">
                     {isPaid ? formatCents(plan.price_monthly_cents!) : '$0'}
                   </span>
-                  <span className="text-sm text-gray-500">/mo</span>
+                  <span className="text-sm font-normal text-gray-500">/mo</span>
                 </div>
 
-                {/* Feature bullets */}
-                <div className="mt-6 flex-1 space-y-3">
-                  {content.inherits && (
-                    <p className="text-xs font-semibold text-gray-400">
-                      Everything in {content.inherits}, plus:
-                    </p>
-                  )}
-                  <ul className="space-y-2.5">
-                    {content.bullets.map((bullet, i) => (
-                      <li key={i} className="flex items-start gap-2.5 text-sm text-gray-700 leading-snug">
-                        <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-gray-400" />
+                {/* Bullet list — inherits line folded in as first item */}
+                <ul className="mt-6 flex-1 space-y-2.5">
+                  {allBullets.map((bullet, i) => {
+                    const isInherits = content.inherits && i === 0;
+                    return (
+                      <li
+                        key={i}
+                        className={[
+                          'flex items-start gap-2 leading-snug',
+                          isInherits ? 'text-[12px] text-gray-400' : 'text-[13px] text-gray-700',
+                        ].join(' ')}
+                      >
+                        <span className="mt-[3px] shrink-0 text-gray-400 select-none">·</span>
                         {bullet}
                       </li>
-                    ))}
-                  </ul>
-                </div>
+                    );
+                  })}
+                </ul>
 
-                {/* CTA button */}
+                {/* CTA button — always at bottom */}
                 <button
                   type="button"
                   onClick={() => handleSelect(plan.id)}
                   disabled={isDisabled}
                   className={[
-                    'mt-7 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all disabled:opacity-50',
+                    'mt-8 flex w-full items-center justify-center rounded-xl py-3 text-[13px] font-semibold transition-all disabled:opacity-50',
                     isFeatured
                       ? 'bg-gray-900 text-white hover:bg-gray-700'
-                      : 'border border-gray-300 bg-white text-gray-900 hover:border-gray-500 hover:bg-gray-50',
+                      : 'border border-gray-300 bg-white text-gray-900 hover:border-gray-600',
                   ].join(' ')}
                 >
                   {isLoading ? (
