@@ -1,43 +1,95 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import {
-  Check,
-  ChevronRight,
-  Lock,
-  Loader2,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { Lock, Loader2 } from 'lucide-react';
 import type { DirectoryPlanCatalogEntry } from '@/lib/venue-billing';
 
-// ── Feature definitions ────────────────────────────────────────────────────
+// ── Per-plan static content ─────────────────────────────────────────────────
 
-const PLAN_FEATURES: { key: string; label: string; outcome: string }[] = [
-  { key: 'dashboard_home',            label: 'Dashboard & CRM',              outcome: 'Central hub with contacts, leads, and activity metrics' },
-  { key: 'conversations',             label: 'Conversations inbox',          outcome: 'Unified inbox for every client message and inquiry' },
-  { key: 'calendar',                  label: 'Calendar & scheduling',        outcome: 'Block dates, track bookings, and sync availability' },
-  { key: 'payments',                  label: 'Payments & proposals',         outcome: 'Send proposals, collect deposits, and track payments' },
-  { key: 'marketing',                 label: 'Email marketing',              outcome: 'Campaigns, automations, and audience management' },
-  { key: 'listing',                   label: 'Venue directory listing',      outcome: 'Appear in the wedding directory so couples can find you' },
-  { key: 'nav_listing_pricing_guide', label: 'Pricing & availability guide', outcome: 'Share your pricing with couples in a polished branded guide' },
-  { key: 'ai_assistant',              label: 'Ask AI assistant',             outcome: 'Draft emails, respond to leads, and generate content instantly' },
-  { key: 'reports',                   label: 'Analytics & reports',          outcome: 'Revenue insights, booking trends, and performance data' },
-];
+interface PlanContent {
+  tagline: string;
+  inherits: string | null;
+  bullets: string[];
+  ctaLabel: string;
+}
 
-function planIncludesFeature(featureFlags: Record<string, unknown>, key: string): boolean {
-  if (Boolean(featureFlags[key])) return true;
-  if (key === 'nav_listing_pricing_guide' && Boolean(featureFlags.listing)) return true;
-  return false;
+const PLAN_CONTENT: Record<string, PlanContent> = {
+  'all-inclusive': {
+    tagline: 'We fill your calendar. You host.',
+    inherits: 'Booking System',
+    bullets: [
+      'Venue Concierge: our team personally works your leads',
+      'Every bride followed up without you lifting a finger',
+      'Leads re-engaged for months automatically',
+      'Nothing falls through the cracks. Ever.',
+      'Verified and Sponsored badges included',
+    ],
+    ctaLabel: 'Start 14-day trial',
+  },
+  'booking system': {
+    tagline: 'We bring the brides. You close them.',
+    inherits: 'Venue Pro',
+    bullets: [
+      'Managed Meta ads so brides come to you',
+      'Tour-ready leads in your pipeline daily',
+      'Verified badge included',
+      'You handle the follow-up',
+    ],
+    ctaLabel: 'Start 14-day trial',
+  },
+  'venue pro': {
+    tagline: 'Run your venue like a business.',
+    inherits: 'Free',
+    bullets: [
+      'Full lead pipeline so no inquiry gets lost',
+      'Marketing Automations so follow-up runs without you',
+      'Every message in one inbox',
+      'Calendar with conflict detection so you never double-book',
+      'Revenue reports so you know where you stand',
+    ],
+    ctaLabel: 'Start 14-day trial',
+  },
+  'free': {
+    tagline: 'Get listed. Get paid.',
+    inherits: null,
+    bullets: [
+      'Directory listing couples actually find',
+      'Proposals with e-signatures built in',
+      'Built-in payments. 0% processing fees. You keep 100%.',
+    ],
+    ctaLabel: 'Start for free',
+  },
+};
+
+// Desired left-to-right display order
+const PLAN_ORDER: Record<string, number> = {
+  'all-inclusive': 0,
+  'booking system': 1,
+  'venue pro': 2,
+  'free': 3,
+};
+
+function planKey(name: string) {
+  return name.toLowerCase().trim();
+}
+
+function getPlanContent(name: string): PlanContent {
+  return (
+    PLAN_CONTENT[planKey(name)] ?? {
+      tagline: '',
+      inherits: null,
+      bullets: [],
+      ctaLabel: 'Get started',
+    }
+  );
 }
 
 function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(0)}`;
+  return `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
-// ── Step indicator shared component ────────────────────────────────────────
+// ── Step indicator ───────────────────────────────────────────────────────────
 
 export function SignupStepHeader({
   step,
@@ -64,7 +116,6 @@ export function SignupStepHeader({
             return (
               <span key={s.n} className="flex items-center gap-1.5">
                 {i > 0 && <span className="mx-1 text-gray-200">›</span>}
-                {/* Step circle */}
                 <span
                   className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold shrink-0 ${
                     isDone
@@ -76,7 +127,6 @@ export function SignupStepHeader({
                 >
                   {isDone ? '✓' : s.n}
                 </span>
-                {/* Step label */}
                 <span
                   className={
                     isDone
@@ -97,7 +147,7 @@ export function SignupStepHeader({
   );
 }
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
 
 type Props = {
   plans: DirectoryPlanCatalogEntry[];
@@ -108,36 +158,22 @@ type Props = {
   hideHeader?: boolean;
 };
 
-// ── Component ──────────────────────────────────────────────────────────────
+// ── Component ────────────────────────────────────────────────────────────────
 
 export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
-  const router = useRouter();
+  const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
 
-  // Default selection priority:
-  // 1. Plan with a highlight_label (admin-designated featured plan)
-  // 2. Plan marked is_default
-  // 3. First paid plan in the list
-  const defaultPlan = useMemo(() => {
-    const highlighted = plans.find((p) => p.highlight_label);
-    if (highlighted) return highlighted.id;
-    const adminDefault = plans.find((p) => p.is_default);
-    if (adminDefault) return adminDefault.id;
-    const paid = plans.filter((p) => (p.price_monthly_cents ?? 0) > 0);
-    return paid[0]?.id ?? plans[0]?.id ?? '';
-  }, [plans]);
+  // Sort into the desired display order (All-Inclusive → Booking System → Venue Pro → Free)
+  const sortedPlans = [...plans].sort((a, b) => {
+    const aOrd = PLAN_ORDER[planKey(a.name)] ?? 99;
+    const bOrd = PLAN_ORDER[planKey(b.name)] ?? 99;
+    return aOrd - bOrd;
+  });
 
-  const [selectedPlanId, setSelectedPlanId] = useState(defaultPlan);
-  const [loading, setLoading] = useState(false);
-
-  const selectedPlan = useMemo(
-    () => plans.find((p) => p.id === selectedPlanId) ?? null,
-    [plans, selectedPlanId],
-  );
-
-  function handleContinue() {
-    if (!selectedPlanId) return;
-    setLoading(true);
-    router.push(`/signup/addons?plan_id=${selectedPlanId}`);
+  function handleSelect(planId: string) {
+    if (loadingPlanId) return;
+    setLoadingPlanId(planId);
+    window.location.href = `/signup/addons?plan_id=${planId}`;
   }
 
   return (
@@ -148,217 +184,110 @@ export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
         {/* Hero text */}
         <div className="mb-10 text-center">
           {ownerFirstName && (
-            <p className="mb-1 text-sm font-medium text-emerald-600">
+            <p className="mb-2 text-sm font-medium text-emerald-600">
               Welcome, {ownerFirstName}! One more step.
             </p>
           )}
-          <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Choose a plan to get started</h1>
+          <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">StoryVenue Plans</h1>
           <p className="mt-2 text-base text-gray-500">
-            Every paid plan includes a <strong>14-day free trial</strong>. No charge until after your trial ends.
+            14-day free trial. No down payment. No contracts. No cancellation fees.
           </p>
         </div>
 
         {/* Plan grid */}
-        {(() => {
-          const highlightIdx = plans.findIndex((p) => p.highlight_label);
-          const featuredIdx  = highlightIdx >= 0 ? highlightIdx : Math.floor((plans.length - 1) / 2);
+        <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {sortedPlans.map((plan) => {
+            const content    = getPlanContent(plan.name);
+            const isPaid     = (plan.price_monthly_cents ?? 0) > 0;
+            const isFeatured = !!plan.highlight_label;
+            const isLoading  = loadingPlanId === plan.id;
+            const isDisabled = !!loadingPlanId && !isLoading;
 
-          return (
-            <div
-              className={`grid items-center gap-4 ${
-                plans.length <= 2
-                  ? 'sm:grid-cols-2'
-                  : plans.length === 3
-                  ? 'sm:grid-cols-3'
-                  : 'sm:grid-cols-2 lg:grid-cols-4'
-              }`}
-            >
-              {plans.map((plan, idx) => {
-                const isSelected = plan.id === selectedPlanId;
-                const isPaid     = (plan.price_monthly_cents ?? 0) > 0;
-                const badgeLabel = plan.highlight_label ?? null;
-                const isFeatured = idx === featuredIdx;
-
-                // ── Shared card inner content ────────────────────────────────
-                const cardInner = (
-                  <>
-                    {/* Floating badge */}
-                    {badgeLabel && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                        <span className="whitespace-nowrap rounded-full bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white shadow">
-                          {badgeLabel}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Selection radio */}
-                    <div className="mb-2.5 flex items-start">
-                      <div
-                        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                          isSelected ? 'border-gray-900 bg-gray-900' : 'border-gray-300 bg-white'
-                        }`}
-                      >
-                        {isSelected && <div className="h-2 w-2 rounded-full bg-white" />}
-                      </div>
-                    </div>
-
-                    {/* Plan name */}
-                    <div className={`mb-1 font-bold text-gray-900 ${isFeatured ? 'text-lg' : 'text-sm'}`}>
-                      {plan.name}
-                    </div>
-                    {/* Description only on featured card */}
-                    {isFeatured && plan.description && (
-                      <p className="mb-3 text-xs text-gray-500 leading-snug">{plan.description}</p>
-                    )}
-
-                    {/* Price */}
-                    <div className={isFeatured ? 'mb-1' : 'mb-0.5'}>
-                      {isPaid ? (
-                        <div className="flex items-baseline gap-1">
-                          <span className={`font-extrabold text-gray-900 ${isFeatured ? 'text-3xl' : 'text-xl'}`}>
-                            {formatCents(plan.price_monthly_cents!)}
-                          </span>
-                          <span className={`text-gray-500 ${isFeatured ? 'text-sm' : 'text-xs'}`}>/mo</span>
-                        </div>
-                      ) : (
-                        <span className={`font-extrabold text-gray-900 ${isFeatured ? 'text-3xl' : 'text-xl'}`}>
-                          Free
-                        </span>
-                      )}
-                    </div>
-
-                    {isPaid && (
-                      <div className={`inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ${isFeatured ? 'mb-4' : 'mb-2'}`}>
-                        <Sparkles size={9} />
-                        14-day free trial
-                      </div>
-                    )}
-
-                    {/* Feature list
-                        Featured: label + outcome description
-                        Side: label only — keeps them compact */}
-                    <div className={`flex-1 border-t border-gray-100 pt-2.5 ${isFeatured ? 'mt-2 space-y-2.5' : 'mt-1.5 space-y-1.5'}`}>
-                      {PLAN_FEATURES.map((f) => {
-                        const included = planIncludesFeature(
-                          plan.feature_flags as Record<string, unknown>,
-                          f.key,
-                        );
-                        return (
-                          <div key={f.key} className="flex items-start gap-2">
-                            {included ? (
-                              <Check size={12} className="mt-px shrink-0 text-emerald-500" />
-                            ) : (
-                              <X size={12} className="mt-px shrink-0 text-red-400" />
-                            )}
-                            <div>
-                              <div
-                                className={`font-medium leading-tight ${
-                                  isFeatured ? 'text-xs' : 'text-[11px]'
-                                } ${included ? 'text-gray-800' : 'text-gray-400'}`}
-                              >
-                                {f.label}
-                              </div>
-                              {isFeatured && (
-                                <div
-                                  className={`mt-0.5 text-[10px] leading-snug ${
-                                    included ? 'text-gray-500' : 'text-gray-300'
-                                  }`}
-                                >
-                                  {f.outcome}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                );
-
-                // ── Featured (middle) card — full height, scaled up ──────────
-                if (isFeatured) {
-                  return (
-                    <div
-                      key={plan.id}
-                      onClick={() => setSelectedPlanId(plan.id)}
-                      className={[
-                        'relative flex cursor-pointer flex-col rounded-2xl border bg-white p-6 shadow-xl ring-2 ring-gray-900/10 scale-[1.04] z-10 transition-all duration-200',
-                        badgeLabel ? 'mt-4' : 'mt-4',
-                        isSelected ? 'border-gray-900' : 'border-gray-800 hover:border-gray-900',
-                      ].join(' ')}
-                    >
-                      {cardInner}
-                    </div>
-                  );
-                }
-
-                // ── Side cards — wrapper fills row height, card occupies 80%
-                // flex ratios 1 : 8 : 1  →  card = 8/10 = 80% of row height.
-                // Both side cards use identical markup → guaranteed equal height.
-                return (
-                  <div key={plan.id} className="self-stretch flex flex-col">
-                    {/* top spacer — 10% of row height */}
-                    <div className="flex-[1]" />
-                    {/* visible card — 80% of row height */}
-                    <div
-                      onClick={() => setSelectedPlanId(plan.id)}
-                      className={[
-                        'relative flex flex-[8] cursor-pointer flex-col rounded-2xl border bg-white p-4 shadow-sm transition-all duration-200',
-                        isSelected ? 'border-gray-900' : 'border-gray-200 hover:border-gray-400',
-                      ].join(' ')}
-                    >
-                      {cardInner}
-                    </div>
-                    {/* bottom spacer — 10% of row height */}
-                    <div className="flex-[1]" />
+            return (
+              <div
+                key={plan.id}
+                className={[
+                  'relative flex flex-col rounded-2xl bg-white px-6 pb-6 pt-7 transition-shadow',
+                  isFeatured
+                    ? 'border-2 border-gray-900 shadow-xl'
+                    : 'border border-gray-200 shadow-sm hover:shadow-md',
+                ].join(' ')}
+              >
+                {/* "Most Popular" badge */}
+                {plan.highlight_label && (
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
+                    <span className="whitespace-nowrap rounded-full bg-gray-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow">
+                      {plan.highlight_label}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          );
-        })()}
+                )}
 
-        {/* CTA */}
-        <div className="mt-8 flex flex-col items-center gap-3">
-          {/* Registration is a one-way door — no back button here */}
-          <div className="flex items-center gap-2 text-[11px] text-gray-400 mb-1">
+                {/* Plan name */}
+                <h2 className="text-xl font-bold text-gray-900">{plan.name}</h2>
+
+                {/* Tagline */}
+                {content.tagline && (
+                  <p className="mt-1 text-sm italic text-gray-500">{content.tagline}</p>
+                )}
+
+                {/* Price */}
+                <div className="mt-5 flex items-baseline gap-1">
+                  <span className="text-4xl font-extrabold tracking-tight text-gray-900">
+                    {isPaid ? formatCents(plan.price_monthly_cents!) : '$0'}
+                  </span>
+                  <span className="text-sm text-gray-500">/mo</span>
+                </div>
+
+                {/* Feature bullets */}
+                <div className="mt-6 flex-1 space-y-3">
+                  {content.inherits && (
+                    <p className="text-xs font-semibold text-gray-400">
+                      Everything in {content.inherits}, plus:
+                    </p>
+                  )}
+                  <ul className="space-y-2.5">
+                    {content.bullets.map((bullet, i) => (
+                      <li key={i} className="flex items-start gap-2.5 text-sm text-gray-700 leading-snug">
+                        <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-gray-400" />
+                        {bullet}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* CTA button */}
+                <button
+                  type="button"
+                  onClick={() => handleSelect(plan.id)}
+                  disabled={isDisabled}
+                  className={[
+                    'mt-7 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all disabled:opacity-50',
+                    isFeatured
+                      ? 'bg-gray-900 text-white hover:bg-gray-700'
+                      : 'border border-gray-300 bg-white text-gray-900 hover:border-gray-500 hover:bg-gray-50',
+                  ].join(' ')}
+                >
+                  {isLoading ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    content.ctaLabel
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer note */}
+        <div className="mt-10 flex flex-col items-center gap-2">
+          <div className="flex items-center gap-2 text-[11px] text-gray-400">
             <Lock size={11} className="shrink-0" />
             Registration complete — you can&apos;t go back to this step
           </div>
-
-          <button
-            type="button"
-            disabled={loading || !selectedPlanId}
-            onClick={handleContinue}
-            className="flex items-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ backgroundColor: '#1b1b1b' }}
-          >
-            {loading ? (
-              <>
-                <Loader2 size={15} className="animate-spin" />
-                Loading…
-              </>
-            ) : (
-              <>
-                Continue to Add-ons
-                <ChevronRight size={15} />
-              </>
-            )}
-          </button>
-
-          {selectedPlan && (
-            <p className="text-xs text-gray-400">
-              Selected: <strong className="text-gray-600">{selectedPlan.name}</strong>
-              {(selectedPlan.price_monthly_cents ?? 0) > 0
-                ? ` — ${formatCents(selectedPlan.price_monthly_cents!)}/mo`
-                : ' — Free'}
-            </p>
-          )}
+          <p className="text-center text-xs text-gray-400">
+            Prices in USD. Subscription billed monthly. Upgrade, downgrade, or cancel anytime from your dashboard.
+          </p>
         </div>
-
-        <p className="mt-6 text-center text-xs text-gray-400">
-          Prices in USD. Subscription billed monthly. Upgrade, downgrade, or cancel anytime from your dashboard.
-        </p>
       </div>
     </div>
   );
