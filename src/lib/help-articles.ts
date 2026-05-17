@@ -74,9 +74,9 @@ The browser tab uses the StoryVenue icon (favicon), not the full logo. Hosting p
         body: `New venues create an account themselves at storyvenue.com/signup (or app.storyvenue.com/signup).
 
 The signup is a 3-step flow:
-1. Plan picker — choose a directory plan (Free, Pro, Premium, etc.). Plan cards show all features side by side with a highlighted featured plan in the middle. Highlight badges appear on plans that have them configured.
-2. Add-ons — select optional add-ons like Verified ($19/mo), Sponsored ($99/mo), or Venue Concierge ($499/mo). Each add-on shows its value proposition. Free plans can skip paid add-ons. Venue Concierge is only available on plans that support it.
-3. Payment — enter your payment details via secure StoryPay merchant checkout. Free plans skip this step entirely. If a trial period is configured for your plan, the first charge is deferred.
+1. Plan picker — choose a directory plan (Free, Pro, Premium, All-Inclusive, etc.). Plan cards display all features with green checkmarks for items included in each plan. Only public plans are shown. Highlight badges appear on plans that have them configured.
+2. Upgrades — select optional upgrades like Verified ($19/mo), Sponsored ($99/mo), or Venue Concierge ($499/mo). Each upgrade shows its value proposition. Free plans can skip paid upgrades. On the All-Inclusive plan, Venue Concierge is already included — it shows as "Included" and is not an additional charge. Venue Concierge is unavailable on plans that don't support it.
+3. Payment — enter your card or bank details in the secure inline payment form embedded directly on the page (powered by Fortis Elements). You never leave the signup page to pay. Free plans skip this step entirely. If a trial period is configured for your plan, the card is validated but the first charge is deferred until the trial ends.
 
 After completing signup (or selecting a free plan), you are logged straight into a brand-new dashboard with a blank directory listing ready to fill in.
 
@@ -1618,7 +1618,7 @@ Tip: You can also create a contact inline while building a new proposal or invoi
         tags: ['search', 'find contact', 'filter'],
         body: `On the Contacts page there is a search bar at the top. Type any part of a name, email, or phone number and results filter in real time.
 
-Results are paginated (20 per page). Use the Previous / Next buttons at the bottom to navigate.`,
+Results are paginated (20 per page). Use the page navigation bar at the bottom to jump directly to any page (displayed as "Page X of Y") or step through with the Previous / Next arrows.`,
       },
       {
         id: 'cust-profile',
@@ -2892,6 +2892,8 @@ Connect your sub-account
 3. Paste either a **Private Integration Token** (\`pit-…\`) or a **Location API Key**. The form auto-detects which kind it is.
 4. Save. A green "Connected" badge appears.
 
+If SMS or contact sync still fails after step 4, you may also need to paste your sub-account's **Legacy API Key** in the API Key field that appears below the token field. GHL stopped exposing sub-account API keys via its agency endpoint, so some venues need to supply it manually. To find it: in GHL go to Settings → Business Profile → scroll to the API Keys section → copy the Location API Key value and paste it into the StoryVenue Legacy API Key field → Save.
+
 Initial contact sync
 - Click "Sync from StoryVenue Legacy". A progress bar shows fetched vs total contacts.
 - The sync runs in the background — there's no Cloudflare 524 timeout even for big lists. If the 75-second wall-clock budget is hit on the first call, the hourly cron job finishes the rest.
@@ -3087,7 +3089,9 @@ Go to your Profile → Two-Factor Authentication → Disable. You'll need to con
 Lost your authenticator app?
 Use one of the backup codes you saved during setup. If you've lost those too, contact StoryVenue support for manual recovery.
 
-Note: 2FA is per-user — each team member can enable it independently on their own profile. It does not affect other team members or couples.`,
+Note: 2FA is per-user — each team member can enable it independently on their own profile. It does not affect other team members or couples.
+
+Availability note: Two-factor authentication is currently in limited rollout. If you do not see the Two-Factor Authentication section on your Profile page yet, it will appear automatically once it is enabled for your account — no action needed on your end.`,
       },
     ],
   },
@@ -3124,6 +3128,34 @@ Card numbers from clients go directly to our PCI-certified merchant processor �
 
 If payments are showing as unavailable
 Check that your StoryPay merchant onboarding shows as approved in Payments → Settings. If you believe it should be active, contact StoryVenue support with your business name and application date.`,
+      },
+      {
+        id: 'storypay-inline-checkout',
+        title: 'How the client payment form works (inline Fortis Elements)',
+        tags: ['storypay', 'checkout', 'payment form', 'fortis', 'elements', 'inline', 'pay now', 'client pays', 'credit card form', 'card form', 'pay button', 'lunarpay'],
+        body: `When a client clicks the Pay button on a proposal or invoice, the payment form appears inline on the same page — they never leave your proposal or get redirected to a separate checkout site.
+
+How the inline payment form works
+- The payment form is embedded directly inside the proposal/invoice page using Fortis Elements (StoryPay's secure payment widget).
+- The form renders inside a secure iframe — card numbers go straight to the PCI-certified processor without ever touching StoryVenue's servers.
+- If both card and ACH are enabled on your merchant account, clients see two tabs: "Card" (credit/debit) and "Bank account" (eCheck/ACH). They pick the method they prefer.
+- After the client fills in their payment details and clicks the Pay button in the form, the payment processes in real time. A success screen appears on the same page once confirmed.
+
+For installment plans
+- The client's card or bank account is saved (vaulted) securely when they pay the first installment so future installment charges happen automatically — the client only needs to enter their payment info once.
+- Pay-in-full proposals do not vault the card.
+
+For subscriptions (SaaS plan signups)
+- The inline form is also used during signup at storyvenue.com/signup — the payment form appears on the signup page itself so new venues never leave the flow.
+- The card is validated at signup; if a free trial is active the first charge is deferred until the trial ends.
+
+Processing fees
+- If your venue has a processing fee configured (Payments → Settings), it is shown to the client in the payment form before they click Pay. They see the base amount and the fee separately so the total is always transparent.
+
+What if the payment form doesn't load?
+- The form requires JavaScript and a modern browser (Chrome, Safari, Firefox, Edge). Older browsers or aggressive ad blockers can prevent the iframe from loading.
+- If a client reports the form is blank or won't load, ask them to try a different browser or disable browser extensions. Incognito mode is a reliable test.
+- The form will not load on HTTP (non-secure) connections — it requires HTTPS (storyvenue.com proposals always use HTTPS).`,
       },
       {
         id: 'storypay-ach',
