@@ -24,11 +24,18 @@ export function DirectoryRouteGuard({
 
   if (allowedNavIds === null) return <>{children}</>;
 
+  // The billing/plans page must always be reachable — it's where users go
+  // to upgrade. Never gate it regardless of what the plan allows.
+  if (pathname.startsWith('/dashboard/directory-billing')) return <>{children}</>;
+
   const id = resolveNavIdForPath(pathname);
 
   // Unknown route — allow through rather than locking out users on routes
   // not yet added to the registry (e.g. transient detail pages).
   if (!id) return <>{children}</>;
+
+  // Billing nav ids are self-referential — always allow through.
+  if (id === 'nav_listing_directory_billing' || id === 'nav_settings_billing') return <>{children}</>;
 
   if (allowedNavIds.includes(id)) return <>{children}</>;
 

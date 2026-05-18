@@ -225,9 +225,11 @@ export interface LockedFeatureBodyProps {
   requiredTier?: string;
   /** Nav id used to look up feature-specific outcome copy. */
   navId?: string;
+  /** Called when the upgrade button is clicked — use to close a parent modal. */
+  onNavigate?: () => void;
 }
 
-function LockedFeatureBody({ featureName, navId }: LockedFeatureBodyProps) {
+function LockedFeatureBody({ featureName, navId, onNavigate }: LockedFeatureBodyProps) {
   const copy = getOutcome(navId);
 
   return (
@@ -257,6 +259,7 @@ function LockedFeatureBody({ featureName, navId }: LockedFeatureBodyProps) {
       <div className="mt-6 flex flex-col items-center justify-center gap-3">
         <Link
           href="/dashboard/directory-billing"
+          onClick={onNavigate}
           className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
         >
           <Sparkles size={14} />
@@ -274,7 +277,7 @@ export function LockedFeatureModal({
   open,
   onClose,
   ...body
-}: LockedFeatureBodyProps & {
+}: Omit<LockedFeatureBodyProps, 'onNavigate'> & {
   open: boolean;
   onClose: () => void;
 }) {
@@ -309,7 +312,7 @@ export function LockedFeatureModal({
         >
           <X size={18} />
         </button>
-        <LockedFeatureBody {...body} />
+        <LockedFeatureBody {...body} onNavigate={onClose} />
       </div>
     </div>,
     document.body,
