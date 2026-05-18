@@ -1019,6 +1019,7 @@ export default function Sidebar({
         open={lockedItem !== null}
         onClose={() => setLockedItem(null)}
         featureName={lockedItem?.label}
+        navId={lockedItem?.navId}
       />
 
       {/* StoryPay Onboarding Modal */}
