@@ -13,6 +13,7 @@ export type AdminTabKey =
   | 'dashboard'
   | 'venues'
   | 'couples'
+  | 'contacts'
   | 'subscriptions'
   | 'directory-plans'
   | 'directory-badges'
@@ -40,6 +41,7 @@ export const ADMIN_TABS: AdminTabDef[] = [
   { key: 'dashboard',          label: 'Dashboard',           category: 'core' },
   { key: 'venues',             label: 'Venue management',    category: 'venue' },
   { key: 'couples',            label: 'Couples',             category: 'venue' },
+  { key: 'contacts',           label: 'Contacts',            category: 'venue' },
   { key: 'subscriptions',      label: 'Subscriptions',       category: 'venue' },
   { key: 'directory-badges',   label: 'Verified & Sponsored', category: 'venue' },
   { key: 'directory-plans',    label: 'Directory plans',     category: 'venue' },

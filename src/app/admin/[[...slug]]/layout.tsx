@@ -19,6 +19,7 @@ import {
   type AdminVenueRow,
 } from '@/components/admin/VenueManagementPortal';
 import { CoupleManagementPortal } from '@/components/admin/CoupleManagementPortal';
+import { ContactsPortal } from '@/components/admin/ContactsPortal';
 import { DirectoryPlansAdminPanel } from '@/components/admin/DirectoryPlansAdminPanel';
 import { DirectoryBadgesAdminPanel } from '@/components/admin/DirectoryBadgesAdminPanel';
 import { SubscriptionsAdminPanel } from '@/components/admin/SubscriptionsAdminPanel';
@@ -46,6 +47,7 @@ type AdminTabKey =
   | 'dashboard'
   | 'venues'
   | 'couples'
+  | 'contacts'
   | 'subscriptions'
   | 'directory-plans'
   | 'directory-badges'
@@ -69,6 +71,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'dashboard',
   'venues',
   'couples',
+  'contacts',
   'subscriptions',
   'directory-plans',
   'directory-badges',
@@ -510,6 +513,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'venues', label: 'Venue management', icon: Building2 },
   { key: 'couples', label: 'Couples', icon: Heart },
+  { key: 'contacts', label: 'Contacts', icon: Users },
   { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
   { key: 'directory-badges', label: 'Verified & Sponsored', icon: BadgeCheck },
   { key: 'directory-plans', label: 'Directory plans', icon: Layers },
@@ -2710,6 +2714,9 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
         {/* ── Couples Tab ── */}
         {activeTab === 'couples' && <CoupleManagementPortal />}
+
+        {/* ── Contacts Tab (master directory) ── */}
+        {activeTab === 'contacts' && <ContactsPortal />}
 
         {/* ── System / Migrations Tab ── */}
         {activeTab === 'system' && <SystemTab />}
