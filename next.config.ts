@@ -123,16 +123,19 @@ const nextConfig: NextConfig = {
           { key: "Access-Control-Allow-Origin", value: "*" },
         ],
       },
-      // ── Public unauthenticated API — safe to CDN-cache briefly ────────────
+      // ── Public unauthenticated API — short CDN cache ─────────────────────
       // Venue directory + individual venue profiles are read-only, no auth.
-      // 60-second shared cache + 5-minute stale-while-revalidate lets
-      // Cloudflare serve hot venue pages without hammering Railway.
+      // 10-second shared cache with no stale-while-revalidate ensures that
+      // publish/unpublish changes are reflected on the public site within
+      // seconds (revalidatePath busts the Next.js cache; the CDN TTL handles
+      // the rest). Previously 60s + 300s stale caused unpublished venues to
+      // linger on the public side for up to 5 minutes.
       {
         source: "/api/public/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, s-maxage=60, stale-while-revalidate=300",
+            value: "public, s-maxage=10, stale-while-revalidate=0",
           },
         ],
       },

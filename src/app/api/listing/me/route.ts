@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { LISTING_WRITABLE_FIELDS, slugify, type ListingWritableField } from '@/lib/directory';
@@ -176,6 +177,18 @@ export async function PATCH(request: NextRequest) {
   if (!updated) {
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
+
+  // ── Bust ISR / CDN cache when publish status changes ────────────────────
+  // After any listing save (especially publish/unpublish) immediately
+  // invalidate the cached venue page and public API so the change is
+  // reflected site-wide within seconds instead of waiting up to 5 minutes
+  // for stale-while-revalidate to expire.
+  const slug = (updated as unknown as Record<string, unknown>).slug as string | null;
+  if (slug) {
+    revalidatePath(`/venue/${slug}`);
+    revalidatePath(`/api/public/venues/${slug}`);
+  }
+  revalidatePath('/api/public/directory/venues');
 
   return NextResponse.json({ listing: updated });
 }

@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isPublicSponsoredStatus, isPublicVerifiedStatus } from '@/lib/directory-badges';
 
-// Public unauthenticated listing — safe to CDN-cache briefly.
-export const revalidate = 60;
+// Dynamic so revalidatePath() from the listing PATCH can bust this immediately.
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const CACHE_TTL = 'public, s-maxage=60, stale-while-revalidate=300';
+// Short CDN TTL with no stale-while-revalidate — publish/unpublish changes
+// appear within seconds instead of lingering for up to 5 minutes.
+const CACHE_TTL = 'public, s-maxage=10, stale-while-revalidate=0';
 
 function corsHeaders() {
   const origin = process.env.PUBLIC_DIRECTORY_ORIGIN || '*';

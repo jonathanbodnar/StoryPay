@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPublicVenueBySlug } from '@/lib/public-venue-directory';
 
-// This is a public, unauthenticated GET — allow CDN (Cloudflare) to cache it.
-export const revalidate = 60; // ISR: refresh the cached response every 60 s
+// Dynamic so revalidatePath() from the listing PATCH can bust this immediately.
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const CACHE_TTL = 'public, s-maxage=60, stale-while-revalidate=300';
+// 10-second CDN edge cache + no stale-while-revalidate so publish/unpublish
+// changes propagate within seconds (revalidatePath + CDN TTL).
+const CACHE_TTL = 'public, s-maxage=10, stale-while-revalidate=0';
 
 function corsHeaders() {
   const origin = process.env.PUBLIC_DIRECTORY_ORIGIN || '*';

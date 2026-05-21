@@ -103,11 +103,15 @@ export default function CoupleDashboardPage() {
         <ul className="mt-8 space-y-4">
           {items.map(({ venue, saved_at }) => {
             const loc = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
-            const href = venue.slug ? `${DIRECTORY.replace(/\/$/, '')}/venue/${venue.slug}` : '#';
+            const isAvailable = venue.is_published === true && venue.slug;
+            const href = isAvailable ? `${DIRECTORY.replace(/\/$/, '')}/venue/${venue.slug}` : undefined;
             return (
               <li
                 key={venue.id}
-                className="flex gap-4 rounded-2xl border border-gray-200 bg-white p-4"
+                className={[
+                  'flex gap-4 rounded-2xl border bg-white p-4',
+                  isAvailable ? 'border-gray-200' : 'border-gray-100 opacity-60',
+                ].join(' ')}
               >
                 <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-xl bg-gray-100">
                   {venue.cover_image_url ? (
@@ -115,9 +119,16 @@ export default function CoupleDashboardPage() {
                   ) : null}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <a href={href} target="_blank" rel="noreferrer" className="font-semibold text-gray-900 hover:underline">
-                    {venue.name || 'Venue'}
-                  </a>
+                  {isAvailable ? (
+                    <a href={href} target="_blank" rel="noreferrer" className="font-semibold text-gray-900 hover:underline">
+                      {venue.name || 'Venue'}
+                    </a>
+                  ) : (
+                    <span className="font-semibold text-gray-500">{venue.name || 'Venue'}</span>
+                  )}
+                  {!isAvailable && (
+                    <p className="text-[11px] text-amber-600 font-medium">Listing currently unavailable</p>
+                  )}
                   {loc && <p className="text-xs text-gray-500">{loc}</p>}
                   <p className="mt-1 text-[11px] text-gray-400">
                     Saved {new Date(saved_at).toLocaleDateString()}
