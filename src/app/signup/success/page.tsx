@@ -49,37 +49,59 @@ function SuccessInner() {
     if (fired.current) return;
     fired.current = true;
 
-    // ── Google Ads conversion ──────────────────────────────────────────────
-    if (GOOGLE_ADS_ID && typeof window !== 'undefined' && 'gtag' in window) {
-      const g = (window as unknown as { gtag: (...a: unknown[]) => void }).gtag;
-      if (GOOGLE_ADS_LABEL) {
-        g('event', 'conversion', {
-          send_to: `${GOOGLE_ADS_ID}/${GOOGLE_ADS_LABEL}`,
-          value: plan === 'paid' ? 1.0 : 0.0,
+    function fireEvents() {
+      // ── Google Ads conversion ────────────────────────────────────────────
+      if (GOOGLE_ADS_ID && 'gtag' in window) {
+        const g = (window as unknown as { gtag: (...a: unknown[]) => void }).gtag;
+        if (GOOGLE_ADS_LABEL) {
+          g('event', 'conversion', {
+            send_to: `${GOOGLE_ADS_ID}/${GOOGLE_ADS_LABEL}`,
+            value: plan === 'paid' ? 1.0 : 0.0,
+            currency: 'USD',
+          });
+        }
+        g('event', 'sign_up', { method: 'StoryVenue', plan });
+      }
+
+      // ── GA4 custom event ─────────────────────────────────────────────────
+      if (GA4_ID && 'gtag' in window) {
+        const g = (window as unknown as { gtag: (...a: unknown[]) => void }).gtag;
+        g('event', 'registration_complete', { plan });
+      }
+
+      // ── Meta Pixel ───────────────────────────────────────────────────────
+      if (META_PIXEL_ID && 'fbq' in window) {
+        const fbq = (window as unknown as { fbq: (...a: unknown[]) => void }).fbq;
+        fbq('track', 'CompleteRegistration', {
+          content_name: plan,
           currency: 'USD',
+          value: plan === 'paid' ? 1.0 : 0.0,
         });
       }
-      g('event', 'sign_up', { method: 'StoryVenue', plan });
     }
 
-    // ── GA4 custom event ───────────────────────────────────────────────────
-    if (GA4_ID && typeof window !== 'undefined' && 'gtag' in window) {
-      const g = (window as unknown as { gtag: (...a: unknown[]) => void }).gtag;
-      g('event', 'registration_complete', { plan });
-    }
-
-    // ── Meta Pixel ─────────────────────────────────────────────────────────
-    if (META_PIXEL_ID && typeof window !== 'undefined' && 'fbq' in window) {
-      const fbq = (window as unknown as { fbq: (...a: unknown[]) => void }).fbq;
-      fbq('track', 'CompleteRegistration', { content_name: plan, currency: 'USD', value: plan === 'paid' ? 1.0 : 0.0 });
-    }
+    // Give tracking scripts up to 1.5 s to initialise, then fire regardless.
+    // This avoids the race where fbq/gtag scripts load after the useEffect runs.
+    let attempts = 0;
+    const poll = setInterval(() => {
+      const metaReady = !META_PIXEL_ID || 'fbq' in window;
+      const gtagReady = !(GOOGLE_ADS_ID || GA4_ID) || 'gtag' in window;
+      attempts++;
+      if ((metaReady && gtagReady) || attempts >= 15) {
+        clearInterval(poll);
+        fireEvents();
+      }
+    }, 100);
 
     // Redirect to dashboard onboarding after a brief success moment
     const t = setTimeout(() => {
       router.replace('/dashboard?welcome=1');
     }, REDIRECT_DELAY_MS);
 
-    return () => clearTimeout(t);
+    return () => {
+      clearInterval(poll);
+      clearTimeout(t);
+    };
   }, [plan, router]);
 
   // ── Tracking scripts (loaded only when IDs are configured) ───────────────
