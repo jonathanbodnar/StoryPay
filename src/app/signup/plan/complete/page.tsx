@@ -37,7 +37,7 @@ function CompleteInner() {
 
     if (!isCheckout || !sessionId) {
       // No session → skip directly to dashboard (free plan or direct navigation)
-      router.replace('/dashboard?welcome=1');
+      router.replace('/signup/success?plan=free');
       return;
     }
 
@@ -63,7 +63,7 @@ function CompleteInner() {
           return;
         }
         setStatus('success');
-        setTimeout(() => router.replace('/dashboard?welcome=1'), 1800);
+        setTimeout(() => router.replace('/signup/success?plan=paid'), 1800);
       } catch {
         setErrorMsg('Could not reach the server. Check your connection and try again.');
         setStatus('error');
@@ -123,7 +123,7 @@ function CompleteInner() {
                 Try again
               </button>
               <button
-                onClick={() => router.replace('/dashboard?welcome=1')}
+                onClick={() => router.replace('/signup/success?plan=paid')}
                 className="w-full rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
               >
                 Continue to dashboard

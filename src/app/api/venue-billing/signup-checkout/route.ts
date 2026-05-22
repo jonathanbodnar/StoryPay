@@ -19,7 +19,7 @@ const SIGNUP_TRIAL_DAYS = 14;
  * Called during the post-signup onboarding flow when the user picks a plan.
  *
  * 1. Assigns the selected plan to the venue.
- * 2. For free plans ($0 total): returns { redirect: '/dashboard?welcome=1' }
+ * 2. For free plans ($0 total): returns { redirect: '/signup/success?plan=free' }
  *    immediately without requiring a card.
  * 3. For paid plans: creates a LunarPay checkout session with mode:"subscription"
  *    and recurring.trial:true so the card is vaulted but NOT charged. The first
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
       })
       .eq('id', venueId);
 
-    return NextResponse.json({ redirect: '/dashboard?welcome=1' });
+    return NextResponse.json({ redirect: '/signup/success?plan=free' });
   }
 
   // Paid plan — billing must be configured
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
         directory_trial_consumed:      true,
       })
       .eq('id', venueId);
-    return NextResponse.json({ redirect: '/dashboard?welcome=1' });
+    return NextResponse.json({ redirect: '/signup/success?plan=paid' });
   }
 
   // Compute trial end date and persist it on the venue row BEFORE checkout.

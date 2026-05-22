@@ -449,8 +449,8 @@ export function AddonsClient({
               trialEnd={trialEnd}
               onSuccess={() => {
                 // Hard navigation — picks up fresh session state and triggers
-                // the welcome/onboarding popup via the ?welcome=1 param.
-                window.location.href = '/dashboard?welcome=1';
+                // Route through the conversion tracking page before dashboard.
+                window.location.href = '/signup/success?plan=paid';
               }}
               onError={(msg) => setError(msg)}
             />

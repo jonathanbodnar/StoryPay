@@ -115,8 +115,9 @@ function VenueSignupForm() {
         setError(data.error || 'Could not create your account. Please try again.');
         return;
       }
-      // Session cookie is set server-side; redirect to dashboard
-      router.replace(data.redirect ?? '/dashboard?welcome=1');
+      // Session cookie is set server-side; redirect through the conversion
+      // tracking page so analytics platforms can record the registration.
+      router.replace(data.redirect ?? '/signup/success?plan=free');
     } catch {
       setError('Network error. Please try again.');
     } finally {
