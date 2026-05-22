@@ -28,8 +28,10 @@ const GOOGLE_ADS_LABEL = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONV_LABEL ?? '';
 const META_PIXEL_ID    = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? '';
 const GA4_ID           = process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID ?? '';
 
-// Redirect to dashboard after showing success for this long
-const REDIRECT_DELAY_MS = 2200;
+// Redirect to dashboard after showing success for this long.
+// Kept at 3.5 s to give tracking beacons enough time to flush
+// before the page navigates away.
+const REDIRECT_DELAY_MS = 3500;
 
 export default function SignupSuccessPage() {
   return (
@@ -72,11 +74,14 @@ function SuccessInner() {
       // ── Meta Pixel ───────────────────────────────────────────────────────
       if (META_PIXEL_ID && 'fbq' in window) {
         const fbq = (window as unknown as { fbq: (...a: unknown[]) => void }).fbq;
+        // PageView was already fired by the inline script below; just send
+        // the conversion event here.
         fbq('track', 'CompleteRegistration', {
           content_name: plan,
           currency: 'USD',
           value: plan === 'paid' ? 1.0 : 0.0,
         });
+        console.log('[StoryVenue] Meta CompleteRegistration fired', { plan });
       }
     }
 
@@ -127,9 +132,10 @@ function SuccessInner() {
         </>
       )}
 
-      {/* Meta Pixel — injected only when an ID is configured */}
+      {/* Meta Pixel — inline so PageView fires synchronously on first paint,
+          giving the beacon the maximum time to flush before the redirect. */}
       {META_PIXEL_ID && (
-        <Script id="meta-pixel" strategy="afterInteractive">{`
+        <Script id="meta-pixel" strategy="beforeInteractive">{`
           !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
           n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
           n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
