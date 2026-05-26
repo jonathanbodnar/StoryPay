@@ -1,15 +1,20 @@
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getAdminIdentity } from '@/lib/admin-identity';
 
-async function verifyAdmin() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('admin_token')?.value;
-  return token && token === process.env.ADMIN_SECRET;
+/**
+ * Master super admin OR any team member with `dashboard` tab access may read
+ * the platform stats. (Older versions required the master admin_token; that
+ * locked out invited team members and made the dashboard fail silently.)
+ */
+async function verifyDashboardRead(): Promise<boolean> {
+  const id = await getAdminIdentity();
+  if (id.isMasterSuperAdmin) return true;
+  return id.allowedTabs.has('dashboard');
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await verifyAdmin())) {
+  if (!(await verifyDashboardRead())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

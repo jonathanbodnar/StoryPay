@@ -937,7 +937,11 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     setVenuesLoading(true);
     try {
       const res = await fetch('/api/admin/venues');
-      if (res.status === 401) { setAuthState('unauthenticated'); return; }
+      // A 401 here means this team member doesn't have permission to read
+      // venues — NOT that they're logged out. The authoritative auth state
+      // is owned by fetchMe(); never flip it from a tab-specific fetch or
+      // we kick newly-invited team members straight back to the login
+      // screen the moment they sign in.
       if (res.ok) { const d = await res.json(); setVenues(d.venues || []); }
     } catch { /* non-critical — auth state is managed by fetchMe */ }
     finally { setVenuesLoading(false); }

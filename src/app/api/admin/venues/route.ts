@@ -5,18 +5,30 @@ import { agencyCreateMerchant } from '@/lib/lunarpay';
 import { getLunarPayAdminSummary } from '@/lib/lunarpay-venue-admin';
 import { sendEmail } from '@/lib/email';
 import { normalizePhone } from '@/lib/ghl';
+import { getAdminIdentity } from '@/lib/admin-identity';
 
 const REDACT_VENUE_KEYS = new Set(['lunarpay_secret_key', 'lunarpay_org_token']);
 
-async function verifyAdmin() {
+/**
+ * Master super admin OR team member with `venues` tab access can read.
+ * Mutations (POST/PATCH) still require master super admin only — those
+ * routes call `verifyMasterAdmin()` directly.
+ */
+async function verifyVenuesRead(): Promise<boolean> {
+  const id = await getAdminIdentity();
+  if (id.isMasterSuperAdmin) return true;
+  return id.allowedTabs.has('venues');
+}
+
+async function verifyMasterAdmin(): Promise<boolean> {
   const cookieStore = await cookies();
   const adminToken = cookieStore.get('admin_token')?.value;
-  return adminToken && adminToken === process.env.ADMIN_SECRET;
+  return Boolean(adminToken && adminToken === process.env.ADMIN_SECRET);
 }
 
 export async function GET() {
   try {
-    if (!(await verifyAdmin())) {
+    if (!(await verifyVenuesRead())) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -65,7 +77,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    if (!(await verifyAdmin())) {
+    if (!(await verifyMasterAdmin())) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
