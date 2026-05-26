@@ -66,6 +66,12 @@ export function SignupClient() {
 
 function VenueSignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // When the marketing site sends a visitor with ?plan=free we skip the
+  // plan-picker entirely and route straight through /signup/success so the
+  // conversion pixel fires before landing them in the dashboard. Anything
+  // else (or no plan param) falls back to whatever the API returns.
+  const planParam = searchParams.get('plan');
   const [venueName, setVenueName] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -117,7 +123,13 @@ function VenueSignupForm() {
       }
       // Session cookie is set server-side; redirect through the conversion
       // tracking page so analytics platforms can record the registration.
-      router.replace(data.redirect ?? '/signup/success?plan=free');
+      // For free-plan signups originating from the marketing site we skip
+      // the plan-picker step entirely — straight to success → dashboard.
+      const target =
+        planParam === 'free'
+          ? '/signup/success?plan=free'
+          : data.redirect ?? '/signup/success?plan=free';
+      router.replace(target);
     } catch {
       setError('Network error. Please try again.');
     } finally {
