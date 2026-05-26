@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
   if (!email || !isEmail(email)) {
     return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
   }
+  if (!phone) return NextResponse.json({ error: 'Phone number is required.' }, { status: 400 });
   const pwCheck = checkPassword(password);
   if (!pwCheck.valid) {
     return NextResponse.json({ error: pwCheck.message }, { status: 400 });

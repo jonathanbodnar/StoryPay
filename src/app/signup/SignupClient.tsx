@@ -92,12 +92,14 @@ function VenueSignupForm() {
     firstName.trim() &&
     lastName.trim() &&
     email.trim() &&
+    phone.trim() &&
     pwCheck.valid &&
     passwordsMatch;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
+    if (!phone.trim()) { setError('Phone number is required.'); return; }
     if (!pwCheck.valid) { setError(pwCheck.message); return; }
     if (!passwordsMatch) { setError('Passwords do not match.'); return; }
     setLoading(true);
@@ -200,11 +202,11 @@ function VenueSignupForm() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Phone <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone</label>
           <input
             type="tel"
+            required
+            autoComplete="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="(555) 123-4567"
