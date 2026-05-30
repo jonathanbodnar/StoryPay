@@ -132,19 +132,9 @@ function SuccessInner() {
         </>
       )}
 
-      {/* Meta Pixel — inline so PageView fires synchronously on first paint,
-          giving the beacon the maximum time to flush before the redirect. */}
-      {META_PIXEL_ID && (
-        <Script id="meta-pixel" strategy="beforeInteractive">{`
-          !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-          n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-          n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-          t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-          document,'script','https://connect.facebook.net/en_US/fbevents.js');
-          fbq('init', '${META_PIXEL_ID}');
-          fbq('track', 'PageView');
-        `}</Script>
-      )}
+      {/* PageView fires from the site-wide pixel in layout.tsx.
+          No duplicate init needed here — just the CompleteRegistration
+          event is fired from the useEffect above. */}
 
       <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
         <div className="mb-8">
