@@ -36,7 +36,12 @@ export async function POST(req: NextRequest) {
 
   const result = (await getCheckoutSession(secret, sessionId)) as Record<string, unknown>;
   const session = (result.data as Record<string, unknown>) || result;
-  if (session.status !== 'completed') {
+  // 'completed'      → card charged immediately (expired-trial / wall path).
+  // 'trial_started'  → card vaulted, first charge scheduled for the trial-end
+  //                    date (the "Start Venue Pro early" path). Both are
+  //                    success states; we just persist the subscription.
+  const isTrialStart = session.status === 'trial_started';
+  if (session.status !== 'completed' && !isTrialStart) {
     return NextResponse.json(
       { error: `Checkout not completed (status: ${String(session.status)})` },
       { status: 400 },
@@ -91,7 +96,9 @@ export async function POST(req: NextRequest) {
   await supabaseAdmin
     .from('venues')
     .update({
-      directory_subscription_status: 'active',
+      // Card added early stays 'trialing' (with a sub on file) until the trial
+      // ends and the first charge fires; an immediate charge becomes 'active'.
+      directory_subscription_status: isTrialStart ? 'trialing' : 'active',
       directory_subscription_external_id: String(subId),
       platform_lunarpay_customer_id: customerId ? String(customerId) : undefined,
     })
