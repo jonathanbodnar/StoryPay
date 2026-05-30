@@ -42,7 +42,7 @@ export async function POST() {
   const { data: row } = await supabaseAdmin
     .from('venues')
     .select(
-      'directory_addon_verified, directory_addon_sponsored, directory_trial_is_forever',
+      'directory_addon_verified, directory_addon_sponsored, directory_trial_is_forever, directory_trial_ends_at',
     )
     .eq('id', venueId)
     .maybeSingle();
@@ -50,6 +50,20 @@ export async function POST() {
   const addonVerifiedUser = Boolean(r.directory_addon_verified);
   const addonSponsoredUser = Boolean(r.directory_addon_sponsored);
   const trialIsForever = Boolean(r.directory_trial_is_forever);
+
+  // When a venue adds a card while their trial is still running ("start early"),
+  // the first charge must still land on the trial-end date — not today. Pass
+  // recurring.start_on so LunarPay schedules the first payment for then. If the
+  // trial has already expired (the post-trial wall), omit start_on so billing
+  // begins immediately.
+  let trialEndStartOn: string | null = null;
+  const trialEndsRaw = r.directory_trial_ends_at as string | null | undefined;
+  if (trialEndsRaw) {
+    const ends = new Date(trialEndsRaw);
+    if (!Number.isNaN(ends.getTime()) && ends.getTime() > Date.now()) {
+      trialEndStartOn = ends.toISOString().slice(0, 10); // YYYY-MM-DD
+    }
+  }
 
   if (trialIsForever) {
     return NextResponse.json(
@@ -85,7 +99,9 @@ export async function POST() {
     amount: charge.total_cents / 100,
     description: `StoryVenue directory — ${currentPlan?.name ?? 'subscription'} (monthly)`,
     mode: 'subscription',
-    recurring: { frequency: 'monthly' },
+    recurring: trialEndStartOn
+      ? { frequency: 'monthly', start_on: trialEndStartOn }
+      : { frequency: 'monthly' },
     customer_email: ctx.venue.email || undefined,
     customer_name: ctx.venue.name,
     payment_methods: ['cc'],

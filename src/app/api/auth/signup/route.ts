@@ -5,9 +5,17 @@ import bcrypt from 'bcryptjs';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { issueAndSendVerificationEmail } from '@/lib/email-verification';
 import { checkPassword } from '@/lib/password-policy';
+import { resolveVenueProPlan } from '@/lib/trial-plans';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+// Every new venue account starts on a 14-day, no-card-required trial of the
+// paid Venue Pro plan. After 14 days the dashboard gates them behind a wall
+// that requires adding a card (to convert to a paid subscription) or
+// downgrading to the Free plan. The trial is granted here at account creation
+// so the signup flow can skip the plan picker entirely.
+const SIGNUP_TRIAL_DAYS = 14;
 
 interface SignupPayload {
   venue_name?: string;
@@ -241,6 +249,48 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // ── Grant the 14-day Venue Pro trial (no card required) ───────────────────
+  // Assign the Venue Pro plan and snapshot a 14-day trial onto the venue. No
+  // LunarPay subscription is created yet — that only happens when the venue
+  // adds a card (early via the dashboard banner, or at the post-trial wall).
+  // Best-effort: if the plan can't be resolved or the trial columns don't
+  // exist, we log and fall through so signup still completes.
+  try {
+    const venuePro = await resolveVenueProPlan();
+    if (venuePro) {
+      const now = new Date();
+      const trialEndsAt = new Date(now);
+      trialEndsAt.setDate(trialEndsAt.getDate() + SIGNUP_TRIAL_DAYS);
+
+      const trialUpdate = {
+        directory_plan_id:                  venuePro.id,
+        directory_subscription_status:      'trialing',
+        directory_subscription_external_id: null,
+        directory_trial_started_at:         now.toISOString(),
+        directory_trial_ends_at:            trialEndsAt.toISOString(),
+        directory_trial_plan_id:            venuePro.id,
+        directory_trial_is_forever:         false,
+        directory_trial_consumed:           true,
+      };
+
+      const upd = await supabaseAdmin.from('venues').update(trialUpdate).eq('id', venue.id);
+      if (upd.error && /directory_trial_/.test(upd.error.message)) {
+        // Pre-migration safety net: at minimum assign the plan + trialing status.
+        await supabaseAdmin
+          .from('venues')
+          .update({
+            directory_plan_id:             venuePro.id,
+            directory_subscription_status: 'trialing',
+          })
+          .eq('id', venue.id);
+      }
+    } else {
+      console.warn('[signup] could not resolve Venue Pro plan — trial not granted');
+    }
+  } catch (e) {
+    console.warn('[signup] trial grant failed (non-fatal):', e);
+  }
+
   // Email verification gate (H10): we no longer auto-provision the
   // LunarPay merchant during signup. Provisioning runs after the user
   // proves they own the email address by clicking the verification
@@ -277,9 +327,12 @@ export async function POST(request: NextRequest) {
     console.warn('[signup] welcome email failed (non-fatal):', e);
   }
 
-  // Log the user in immediately by setting the session cookie
+  // Log the user in immediately by setting the session cookie. The account is
+  // already on a Venue Pro trial, so skip the plan picker — route straight
+  // through the conversion-tracking success page, which fires the Meta pixel
+  // and then lands them in the dashboard onboarding flow.
   const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30;
-  const response = NextResponse.json({ ok: true, redirect: '/signup/plan' });
+  const response = NextResponse.json({ ok: true, redirect: '/signup/success?plan=free' });
   response.cookies.set('venue_id', venue.id, {
     path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
   });

@@ -32,6 +32,9 @@ export default function DashboardShell({
   directoryBillingPending = false,
   emailVerificationPending = false,
   ownerEmail = '',
+  trialCountdown = false,
+  trialDaysRemaining = 0,
+  trialEndsAt = null,
   children,
 }: {
   venue: Venue;
@@ -48,11 +51,35 @@ export default function DashboardShell({
   emailVerificationPending?: boolean;
   /** Owner email address (shown in the verification banner). */
   ownerEmail?: string;
+  /** True when the venue is on an active (not-yet-expired) Venue Pro trial. */
+  trialCountdown?: boolean;
+  /** Whole days left in the active trial. */
+  trialDaysRemaining?: number;
+  /** ISO trial end date (for the countdown banner copy). */
+  trialEndsAt?: string | null;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null);
   const [verifyResent, setVerifyResent] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [startEarlyBusy, setStartEarlyBusy] = useState(false);
+  const [startEarlyError, setStartEarlyError] = useState('');
+
+  const startTrialEarly = useCallback(async () => {
+    setStartEarlyBusy(true);
+    setStartEarlyError('');
+    try {
+      const res = await fetch('/api/venue-billing/start-paid', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || 'Could not start checkout.');
+      }
+      window.location.href = data.url as string;
+    } catch (e) {
+      setStartEarlyError(e instanceof Error ? e.message : 'Something went wrong.');
+      setStartEarlyBusy(false);
+    }
+  }, []);
 
   const resendVerification = useCallback(async () => {
     setVerifyResent('sending');
@@ -147,6 +174,32 @@ export default function DashboardShell({
         <AnnouncementTicker />
         <MobileDashboardRedirect />
         <main className={`mx-auto flex w-full flex-1 flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
+          {trialCountdown ? (
+            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex-1">
+                <span className="font-semibold">
+                  Venue Pro trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
+                </span>
+                {' '}
+                <span className="text-gray-500">
+                  {startEarlyError
+                    ? startEarlyError
+                    : trialEndsAt
+                      ? `Add a card to keep full access — you won't be charged until ${new Date(trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
+                      : "Add a card to keep full access when your trial ends."}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={startTrialEarly}
+                disabled={startEarlyBusy}
+                className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black disabled:opacity-60"
+              >
+                {startEarlyBusy ? 'Starting…' : 'Start Venue Pro early'}
+              </button>
+            </div>
+          ) : null}
+
           {directoryBillingPending ? (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               <span className="font-semibold">Directory plan payment due.</span>{' '}
