@@ -40,6 +40,7 @@ type PlanRow = {
   trial_period_value?: number | null;
   trial_period_unit?: 'none' | 'days' | 'weeks' | 'months' | 'years' | 'forever' | string | null;
   hide_header?: boolean;
+  contact_sales?: boolean;
 };
 
 type TrialUnit = 'none' | 'days' | 'weeks' | 'months' | 'years' | 'forever';
@@ -110,6 +111,7 @@ export function DirectoryPlansAdminPanel() {
     is_legacy: false,
     highlight_label: '',
     hide_header: false,
+    contact_sales: false,
     trial_period_value: '0' as string,
     trial_period_unit: 'none' as TrialUnit,
   });
@@ -284,6 +286,7 @@ export function DirectoryPlansAdminPanel() {
       is_legacy: Boolean(p.is_legacy),
       highlight_label: p.highlight_label?.trim() ?? '',
       hide_header: Boolean(p.hide_header),
+      contact_sales: Boolean(p.contact_sales),
       trial_period_value: typeof p.trial_period_value === 'number' && p.trial_period_value > 0
         ? String(p.trial_period_value)
         : '0',
@@ -316,6 +319,7 @@ export function DirectoryPlansAdminPanel() {
         is_public: editMeta.is_public,
         is_legacy: editMeta.is_legacy,
         hide_header: editMeta.hide_header,
+        contact_sales: editMeta.contact_sales,
         highlight_label: editMeta.highlight_label.trim() || null,
         price_monthly_cents: editMeta.price_monthly_cents
           ? Math.round(parseFloat(editMeta.price_monthly_cents) * 100)
@@ -876,6 +880,15 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                       />
                       <EyeOff size={12} className="text-teal-600" />
                       <span className="text-teal-800">Landing page mode — hide header on plan picker so this plan displays as a standalone landing page</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs cursor-pointer rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editMeta.contact_sales)}
+                        onChange={(e) => setEditMeta({ ...editMeta, contact_sales: e.target.checked })}
+                      />
+                      <span className="text-indigo-600">📞</span>
+                      <span className="text-indigo-800">Contact sales — hide price and replace upgrade CTA with "Book a Strategy Call" for venues not yet on this plan</span>
                     </label>
                   </div>
                   {/* Highlight badge */}

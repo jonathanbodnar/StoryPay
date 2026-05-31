@@ -52,6 +52,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (typeof body.hide_header === 'boolean') {
     updates.hide_header = body.hide_header;
   }
+  if (typeof body.contact_sales === 'boolean') {
+    updates.contact_sales = body.contact_sales;
+  }
   if (body.highlight_label !== undefined) {
     const label = typeof body.highlight_label === 'string' ? body.highlight_label.trim() : null;
     updates.highlight_label = label || null;
@@ -147,6 +150,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   // Migration 106 not yet applied — drop hide_header and retry.
   if (error && /hide_header/.test(error.message)) {
     delete (updates as Record<string, unknown>).hide_header;
+    const retry = await supabaseAdmin
+      .from('directory_plans')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  // Migration 139 not yet applied — drop contact_sales and retry.
+  if (error && /contact_sales/.test(error.message)) {
+    delete (updates as Record<string, unknown>).contact_sales;
     const retry = await supabaseAdmin
       .from('directory_plans')
       .update(updates)

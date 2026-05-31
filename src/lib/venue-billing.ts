@@ -63,6 +63,12 @@ export type DirectoryPlanCatalogEntry = {
   is_legacy: boolean;
   /** When true, the plan picker hides the top header so the page renders as a standalone landing page. */
   hide_header: boolean;
+  /**
+   * When true the plan price is hidden in the venue billing dashboard and the
+   * upgrade CTA is replaced with a "Book a Strategy Call" button. Venues
+   * already subscribed to the plan still see full self-serve management.
+   */
+  contact_sales: boolean;
 };
 
 // ── Dynamic addon price loader ─────────────────────────────────────────────
@@ -185,6 +191,7 @@ function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
         : null,
     is_legacy: Boolean(row.is_legacy),
     hide_header: Boolean(row.hide_header),
+    contact_sales: Boolean(row.contact_sales),
   };
 }
 
@@ -208,7 +215,7 @@ export async function listDirectoryPlanCatalog(opts?: {
 
   const baseColumns =
     'id, name, slug, description, price_monthly_cents, is_default, sort_order, feature_flags';
-  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit, is_public, highlight_label, is_legacy, hide_header`;
+  const fullColumns = `${baseColumns}, trial_period_value, trial_period_unit, is_public, highlight_label, is_legacy, hide_header, contact_sales`;
 
   let rows: Record<string, unknown>[] | null = null;
 

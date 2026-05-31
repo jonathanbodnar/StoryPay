@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   BadgeCheck,
   BotMessageSquare,
+  Calendar,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -19,6 +20,7 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react';
+import DashboardBookingModal from '@/components/DashboardBookingModal';
 
 const BRAND = '#1b1b1b';
 
@@ -60,6 +62,8 @@ type Plan = {
   trial_period_value?: number;
   trial_period_unit?: 'none' | 'days' | 'weeks' | 'months' | 'years' | 'forever' | string;
   highlight_label?: string | null;
+  /** Hide price + replace upgrade CTA with "Book a call" for non-subscribers. */
+  contact_sales?: boolean;
 };
 
 type TrialState = {
@@ -205,6 +209,7 @@ export default function DirectoryBillingPage() {
   const [confirmPlanId, setConfirmPlanId] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -599,6 +604,9 @@ export default function DirectoryBillingPage() {
               const isCurrent = currentPlan?.id === plan.id && (isActive || isPastDue);
               const isPendingThis = currentPlan?.id === plan.id && isPending;
               const cents = plan.price_monthly_cents ?? 0;
+              // contact_sales: hide price + show "Book a call" only for non-subscribers.
+              // Current subscribers always see full self-serve controls.
+              const isContactSales = Boolean(plan.contact_sales) && !isCurrent;
               const inclusion = summary.plan_addon_inclusion[plan.id] || { verified: false, sponsored: false };
               const planFF = (plan.feature_flags ?? {}) as Record<string, unknown>;
               const conciergeAvailable = Boolean(planFF.addon_concierge_available);
@@ -645,13 +653,21 @@ export default function DirectoryBillingPage() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right">
-                        <div className="font-bold text-sm text-gray-900">
-                          {cents > 0 ? formatCents(cents) : 'Free'}
-                          {cents > 0 && <span className="text-xs font-normal ml-0.5 text-gray-500">/mo</span>}
-                        </div>
-                        {summary.subscription?.next_payment_on && isCurrent ? (
-                          <div className="text-[10px] text-gray-400">Next: {formatDate(summary.subscription.next_payment_on)}</div>
-                        ) : null}
+                        {isContactSales ? (
+                          <div className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600">
+                            <Calendar size={10} /> Book a call
+                          </div>
+                        ) : (
+                          <>
+                            <div className="font-bold text-sm text-gray-900">
+                              {cents > 0 ? formatCents(cents) : 'Free'}
+                              {cents > 0 && <span className="text-xs font-normal ml-0.5 text-gray-500">/mo</span>}
+                            </div>
+                            {summary.subscription?.next_payment_on && isCurrent ? (
+                              <div className="text-[10px] text-gray-400">Next: {formatDate(summary.subscription.next_payment_on)}</div>
+                            ) : null}
+                          </>
+                        )}
                       </div>
                       <ChevronDown
                         size={15}
@@ -867,6 +883,21 @@ export default function DirectoryBillingPage() {
                         <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-semibold text-amber-900">
                           <AlertTriangle size={12} /> Complete checkout above
                         </span>
+                      ) : isContactSales ? (
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => setBookingModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-white"
+                            style={{ backgroundColor: BRAND }}
+                          >
+                            <Calendar size={12} />
+                            Book a Strategy Call
+                          </button>
+                          <p className="text-[11px] text-gray-400 leading-snug">
+                            We&apos;ll review your venue and reach out to get you set up. Free 30-minute call — no pressure.
+                          </p>
+                        </div>
                       ) : (
                         <button
                           type="button"
@@ -1051,6 +1082,11 @@ export default function DirectoryBillingPage() {
           onConfirm={() => void cancelSubscription()}
         />
       ) : null}
+
+      <DashboardBookingModal
+        open={bookingModalOpen}
+        onClose={() => setBookingModalOpen(false)}
+      />
     </div>
   );
 }
