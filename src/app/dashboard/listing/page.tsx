@@ -298,7 +298,8 @@ export default function ListingPage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         type NomAddress = {
           house_number?: string; road?: string; postcode?: string;
-          city?: string; town?: string; village?: string; hamlet?: string;
+          city?: string; town?: string; municipality?: string;
+          village?: string; hamlet?: string;
           suburb?: string; county?: string; state?: string;
         };
         type NomItem = {
@@ -311,10 +312,14 @@ export default function ListingPage() {
         const rows = (await res.json()) as NomItem[];
         if (cancelled) return;
 
-        /** Build a clean "123 Main St, City, ST 12345" from Nominatim's structured address. */
+        /**
+         * Build a clean "123 Main St, City, ST 12345" from Nominatim's structured address.
+         * Only uses city/town/municipality for the city portion — never village/hamlet/suburb,
+         * which are sub-localities that don't match the USPS mailing city.
+         */
         function buildCleanAddress(a: NomAddress): string {
           const street = [a.house_number, a.road].filter(Boolean).join(' ');
-          const cityRaw = a.city || a.town || a.village || a.hamlet || a.suburb || '';
+          const cityRaw = a.city || a.town || a.municipality || '';
           const stateRaw = a.state ?? '';
           const stateCode = US_STATE_ABBR[stateRaw.toLowerCase()] ?? stateRaw;
           const zip = a.postcode ? a.postcode.split('-')[0] : '';
@@ -325,7 +330,8 @@ export default function ListingPage() {
 
         const mapped: AddressSuggestion[] = rows.map((r) => {
           const a = r.address ?? {};
-          const cityRaw = a.city || a.town || a.village || a.hamlet || a.suburb || a.county || '';
+          // Same rule: city/town/municipality only — no village/hamlet/suburb
+          const cityRaw = a.city || a.town || a.municipality || a.county || '';
           const stateRaw = a.state ?? '';
           return {
             place_id: String(r.place_id),
