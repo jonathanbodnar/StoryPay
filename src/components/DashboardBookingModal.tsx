@@ -8,7 +8,7 @@ const CALENDAR_ID  = 'YeI4ZUC2SwV8MXDRKfzr_1779890654536';
 const GHL_SCRIPT   = 'https://link.msgsndr.com/js/form_embed.js';
 
 /**
- * Strategy-call booking modal for the dashboard — same GHL embed used on the
+ * Demo-call booking modal for the dashboard — same GHL embed used on the
  * /book-more-weddings and /strategy-call marketing pages.
  *
  * Usage:
@@ -54,7 +54,7 @@ export default function DashboardBookingModal({
         className={`sm:hidden fixed inset-0 z-[9999] bg-white overflow-y-auto ${open ? '' : '!hidden'}`}
         role="dialog"
         aria-modal="true"
-        aria-label="Book your free strategy call"
+        aria-label="Book your free demo call"
         aria-hidden={!open}
         style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
       >
@@ -69,7 +69,7 @@ export default function DashboardBookingModal({
         <iframe
           src={CALENDAR_URL}
           id={CALENDAR_ID}
-          title="Book your free strategy call"
+          title="Book your free demo call"
           scrolling="no"
           style={{ width: '100%', border: 'none', overflow: 'hidden', display: 'block' }}
         />
@@ -80,7 +80,7 @@ export default function DashboardBookingModal({
         className={`hidden sm:flex fixed inset-0 z-[9999] items-center justify-center bg-black/50 ${open ? '' : '!hidden'}`}
         role="dialog"
         aria-modal="true"
-        aria-label="Book your free strategy call"
+        aria-label="Book your free demo call"
         aria-hidden={!open}
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
@@ -88,8 +88,8 @@ export default function DashboardBookingModal({
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Book a Strategy Call</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Free · 30 minutes · No pitch, no pressure.</p>
+              <h2 className="text-base font-semibold text-gray-900">Book a Demo Call</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Free · 30 minutes · See the full platform in action.</p>
             </div>
             <button
               type="button"
@@ -108,7 +108,7 @@ export default function DashboardBookingModal({
               className="block bg-white"
               style={{ width: '100%', border: 'none', overflow: 'hidden' }}
               scrolling="no"
-              title="Book your free strategy call"
+              title="Book your free demo call"
             />
           </div>
           <p className="shrink-0 text-center text-xs text-gray-400 pb-4">

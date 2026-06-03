@@ -892,10 +892,10 @@ export default function DirectoryBillingPage() {
                             style={{ backgroundColor: BRAND }}
                           >
                             <Calendar size={12} />
-                            Book a Strategy Call
+                            Book a Demo Call
                           </button>
                           <p className="text-[11px] text-gray-400 leading-snug">
-                            We&apos;ll review your venue and reach out to get you set up. Free 30-minute call — no pressure.
+                            See the full platform in action. Free 30-minute demo — no pressure.
                           </p>
                         </div>
                       ) : (
