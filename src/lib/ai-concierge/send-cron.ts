@@ -573,12 +573,12 @@ function nextMorningInVenueTz(timezone: string): Date {
 }
 
 /**
- * Compute the next send time: random between 24 and 72 hours from now,
+ * Compute the next send time: random between 24 and 48 hours from now (1–2 days),
  * pushed into the venue-local 9am–8pm window if it lands outside.
  */
 function computeNextSendAt(timezone: string): Date {
   const minMs = 24 * 60 * 60 * 1000;
-  const maxMs = 72 * 60 * 60 * 1000;
+  const maxMs = 48 * 60 * 60 * 1000;
   const offset = minMs + Math.floor(Math.random() * (maxMs - minMs));
   const naive  = new Date(Date.now() + offset);
   return enforceQuietHours(naive, timezone);

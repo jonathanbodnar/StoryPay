@@ -1945,11 +1945,14 @@ export default function ConversationsPage() {
                       const fromSupport =
                         m.sender_kind === 'concierge' || Boolean(m.sent_on_behalf_of_venue);
                       const fromAi = m.sender_kind === 'ai';
+                      // 'system' = automated outbound message (guide delivery, sequences, etc.)
+                      const fromSystem = m.sender_kind === 'system';
                       const fromUs =
                         m.sender_kind === 'owner' ||
                         m.sender_kind === 'team' ||
                         fromSupport ||
-                        fromAi;
+                        fromAi ||
+                        fromSystem;
                       const alignRight = fromUs && !fromContact;
                       const isEmail = !isInternal && m.channel === 'email';
                       const emailExpanded = expandedEmailIds.has(m.id);
@@ -2160,6 +2163,14 @@ export default function ConversationsPage() {
                                       title="Sent by AI Concierge"
                                     >
                                       <Sparkles size={9} /> AI
+                                    </span>
+                                  )}
+                                  {fromSystem && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-700"
+                                      title="Sent automatically by the system (guide delivery or sequence)"
+                                    >
+                                      <Zap size={9} /> Automated
                                     </span>
                                   )}
                                   {m.visibility === 'external' && m.external_email_sent === true && !m.send_error && (

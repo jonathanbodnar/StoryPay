@@ -249,7 +249,7 @@ export async function GET(
           : m.sender_kind === 'contact'
             ? (m.contact_from_name as string) || 'Contact'
           : m.sender_kind === 'system'
-            ? 'System'
+            ? 'Automated · System'
           : memberNames[m.venue_team_member_id as string] || 'Team member',
     };
   });

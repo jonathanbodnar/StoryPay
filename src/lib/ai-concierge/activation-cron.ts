@@ -122,7 +122,9 @@ export async function runAiActivationCron(
   for (const row of eligible) {
     try {
       const tz = resolveVenueTimezone(row.timezone);
-      const nextSend = enforceQuietHours(new Date(), tz);
+      // Schedule 1 minute out so the operator has a brief window to abort
+      // if the re-enable was accidental before the first message fires.
+      const nextSend = enforceQuietHours(new Date(Date.now() + 60_000), tz);
 
       const updated = await activateLead(sql, row, nextSend, opts.bypassEligibility ?? false);
       if (!updated) {

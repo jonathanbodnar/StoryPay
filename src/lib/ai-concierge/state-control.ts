@@ -91,14 +91,17 @@ export async function setLeadAiState(
   };
 
   if (newState === 'ai_active') {
+    // Always schedule the first send 1 minute out so there's a brief window to
+    // turn AI off if it was enabled by accident before the first message fires.
+    const oneMinuteFromNow = new Date(now.getTime() + 60_000).toISOString();
     if (fromState === 'paused' || isSoftPaused) {
-      // Resume — start immediately so the next cron run picks it up
-      update.ai_next_send_at = now.toISOString();
+      // Resume — schedule in 1 minute so the operator can abort if needed
+      update.ai_next_send_at = oneMinuteFromNow;
     } else if (fromState === null || fromState === 'dormant') {
-      // First-time activation — start the 60-day clock and queue an immediate send
+      // First-time activation — start the 60-day clock and queue first send in 1 minute
       update.ai_first_activated_at      = now.toISOString();
       update.ai_expires_at              = new Date(now.getTime() + SIXTY_DAYS_MS).toISOString();
-      update.ai_next_send_at            = now.toISOString();
+      update.ai_next_send_at            = oneMinuteFromNow;
       update.ai_booking_system_activated = true;
     }
   } else if (newState === 'paused' || newState === 'handoff') {
