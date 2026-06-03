@@ -14,6 +14,53 @@ import { ListingLeadModal } from '@/components/directory/ListingLeadModal';
 
 const APP_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenue.com';
 
+/**
+ * Convert a raw Nominatim display_name into a clean US-style address:
+ *   "1090 Ragged Edge Road, Chambersburg, PA 17202"
+ *
+ * Falls back to just city + state when a street can't be parsed.
+ */
+function formatVenueAddress(
+  locationFull: string | null | undefined,
+  locationCity: string | null | undefined,
+  locationState: string | null | undefined,
+): string | null {
+  const city  = locationCity?.trim()  || '';
+  const state = locationState?.trim() || '';
+
+  // Extract 5-digit US ZIP from the full address string
+  const zip = locationFull?.match(/\b(\d{5})\b/)?.[1] ?? '';
+
+  // Extract street from the Nominatim comma-separated parts.
+  // Skip: state names, "United States", ZIP codes, " County", " Township", city.
+  let street = '';
+  if (locationFull) {
+    const SKIP = [
+      /^united states$/i,
+      /^(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)$/i,
+      /^\d{5}(-\d{4})?$/, // ZIP
+      /\b(county|township|parish|borough)\b/i,
+    ];
+    const parts = locationFull.split(',').map((p) => p.trim()).filter(Boolean);
+    const streetParts = parts.filter((p) => {
+      if (city && p.toLowerCase() === city.toLowerCase()) return false;
+      return !SKIP.some((re) => re.test(p));
+    });
+    if (streetParts.length >= 2 && /^\d+[a-z]?$/i.test(streetParts[0])) {
+      // "1090" + "Ragged Edge Road" → "1090 Ragged Edge Road"
+      street = `${streetParts[0]} ${streetParts[1]}`;
+    } else if (streetParts.length >= 1) {
+      street = streetParts[0];
+    }
+  }
+
+  // Assemble: "Street, City, State ZIP"
+  const line1 = street;
+  const line2 = [city, state].filter(Boolean).join(', ') + (zip ? ` ${zip}` : '');
+  const parts  = [line1, line2].filter(Boolean);
+  return parts.length ? parts.join(', ') : null;
+}
+
 const DIRECTORY_SITE =
   process.env.NEXT_PUBLIC_DIRECTORY_URL || process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL || 'https://storyvenue.com';
 
@@ -71,7 +118,7 @@ export default async function PublicVenuePage({
 
   const { venue } = data;
   const locationLine =
-    venue.location_full ||
+    formatVenueAddress(venue.location_full, venue.location_city, venue.location_state) ||
     [venue.location_city, venue.location_state].filter(Boolean).join(', ') ||
     null;
 
