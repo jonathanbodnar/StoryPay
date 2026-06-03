@@ -312,14 +312,26 @@ export default function ListingPage() {
         const rows = (await res.json()) as NomItem[];
         if (cancelled) return;
 
+        /** Returns true if a place name is an administrative division, not a mailing city. */
+        function isAdminDivision(name: string): boolean {
+          return /\b(township|county|borough|parish|district|municipality)\b/i.test(name);
+        }
+
+        /** Resolve the proper mailing city from Nominatim address fields. */
+        function resolveCity(a: NomAddress): string {
+          for (const candidate of [a.city, a.town, a.municipality]) {
+            if (candidate && !isAdminDivision(candidate)) return candidate;
+          }
+          return '';
+        }
+
         /**
          * Build a clean "123 Main St, City, ST 12345" from Nominatim's structured address.
-         * Only uses city/town/municipality for the city portion — never village/hamlet/suburb,
-         * which are sub-localities that don't match the USPS mailing city.
+         * Never uses county, township, village, hamlet, or suburb — only proper city/town.
          */
         function buildCleanAddress(a: NomAddress): string {
           const street = [a.house_number, a.road].filter(Boolean).join(' ');
-          const cityRaw = a.city || a.town || a.municipality || '';
+          const cityRaw = resolveCity(a);
           const stateRaw = a.state ?? '';
           const stateCode = US_STATE_ABBR[stateRaw.toLowerCase()] ?? stateRaw;
           const zip = a.postcode ? a.postcode.split('-')[0] : '';
@@ -330,15 +342,13 @@ export default function ListingPage() {
 
         const mapped: AddressSuggestion[] = rows.map((r) => {
           const a = r.address ?? {};
-          // Same rule: city/town/municipality only — no village/hamlet/suburb
-          const cityRaw = a.city || a.town || a.municipality || a.county || '';
           const stateRaw = a.state ?? '';
           return {
             place_id: String(r.place_id),
             display_name: buildCleanAddress(a) || r.display_name,
             lat: parseFloat(r.lat),
             lng: parseFloat(r.lon),
-            city: cityRaw,
+            city: resolveCity(a),
             state: US_STATE_ABBR[stateRaw.toLowerCase()] ?? stateRaw,
           };
         });
