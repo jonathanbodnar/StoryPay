@@ -459,7 +459,7 @@ function ActiveLeadsPanel() {
           <CheckCircle2 size={12} className="text-emerald-500" />
           How this works
         </div>
-        <p>AI Concierge automatically follows up with leads via SMS when activated through your Booking System sequence. It never replies on its own. When a lead replies, your team gets notified to respond personally.</p>
+        <p>AI Concierge automatically follows up with leads via SMS on a 1–2 day randomized cadence for up to 60 days. It never replies on its own — when a lead replies, your team gets notified to respond personally.</p>
         <p>Use <strong>Pause</strong> to stop AI outreach for a specific lead, and <strong>Resume</strong> to continue. Your StoryVenue concierge team can also manage this from their side.</p>
       </div>
     </div>

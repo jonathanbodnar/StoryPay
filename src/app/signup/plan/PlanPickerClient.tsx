@@ -17,24 +17,13 @@ interface PlanContent {
 const PLAN_CONTENT: Record<string, PlanContent> = {
   'all-inclusive': {
     tagline: 'We fill your calendar. You host.',
-    inherits: 'Booking System',
+    inherits: 'Venue Pro',
     bullets: [
       'Venue Concierge: our team personally works your leads',
       'Every bride followed up without you lifting a finger',
       'Leads re-engaged for months automatically',
       'Nothing falls through the cracks. Ever.',
       'Verified and Sponsored badges included',
-    ],
-    ctaLabel: 'Start 14-day trial',
-  },
-  'booking system': {
-    tagline: 'We bring the brides. You close them.',
-    inherits: 'Venue Pro',
-    bullets: [
-      'Managed Meta ads so brides come to you',
-      'Tour-ready leads in your pipeline daily',
-      'Verified badge included',
-      'You handle the follow-up',
     ],
     ctaLabel: 'Start 14-day trial',
   },
@@ -65,9 +54,8 @@ const PLAN_CONTENT: Record<string, PlanContent> = {
 // Desired left-to-right display order
 const PLAN_ORDER: Record<string, number> = {
   'all-inclusive': 0,
-  'booking system': 1,
-  'venue pro': 2,
-  'free': 3,
+  'venue pro': 1,
+  'free': 2,
 };
 
 function planKey(name: string) {
@@ -163,8 +151,13 @@ type Props = {
 export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
 
-  // Sort into the desired display order (All-Inclusive → Booking System → Venue Pro → Free)
-  const sortedPlans = [...plans].sort((a, b) => {
+  // Filter out the Booking System plan — it's sold via sales call only
+  const visiblePlans = plans.filter(
+    (p) => !/booking.?system/i.test(p.name) && !/booking.?system/i.test(p.slug ?? ''),
+  );
+
+  // Sort into the desired display order (All-Inclusive → Venue Pro → Free)
+  const sortedPlans = [...visiblePlans].sort((a, b) => {
     const aOrd = PLAN_ORDER[planKey(a.name)] ?? 99;
     const bOrd = PLAN_ORDER[planKey(b.name)] ?? 99;
     return aOrd - bOrd;
@@ -195,7 +188,7 @@ export function PlanPickerClient({ plans, ownerFirstName, hideHeader }: Props) {
         </div>
 
         {/* Plan grid — all cards stretch to equal height so buttons are bottom-pinned */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {sortedPlans.map((plan) => {
             const content    = getPlanContent(plan.name);
             const isPaid     = (plan.price_monthly_cents ?? 0) > 0;

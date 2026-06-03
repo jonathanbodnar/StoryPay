@@ -439,9 +439,14 @@ export default function DirectoryBillingPage() {
 
   const plans = useMemo(() => {
     if (!summary) return [] as Plan[];
-    return [...summary.plans].sort(
-      (a, b) => (a.price_monthly_cents ?? 0) - (b.price_monthly_cents ?? 0),
-    );
+    const currentPlanId = summary.current_plan?.id ?? null;
+    return [...summary.plans]
+      .filter((p) => {
+        // Hide the Booking System plan unless the venue is currently on it
+        const isBookingSystem = /booking.?system/i.test(p.slug ?? '') || /booking.?system/i.test(p.name);
+        return !isBookingSystem || p.id === currentPlanId;
+      })
+      .sort((a, b) => (a.price_monthly_cents ?? 0) - (b.price_monthly_cents ?? 0));
   }, [summary]);
 
   if (loading && !summary) {

@@ -171,9 +171,9 @@ const FEATURE_OUTCOMES: Record<string, FeatureOutcome> = {
   nav_marketing_ai_concierge: {
     headline: 'AI follows up so you don\'t have to',
     outcome:
-      'Personalized SMS messages sent on your behalf, on a 1–3 day cadence, for up to 60 days. AI stops the moment a couple replies — then you take over.',
+      'Personalized SMS messages sent on your behalf, on a 1–2 day randomized cadence, for up to 60 days. AI stops the moment a couple replies — then you take over.',
     upgradeNote:
-      'Included in All-Inclusive. Available as an add-on on the Booking System plan.',
+      'Included in All-Inclusive.',
   },
   nav_marketing_email_settings: {
     headline: 'Send email from your own domain',
