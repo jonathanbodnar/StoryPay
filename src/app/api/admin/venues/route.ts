@@ -60,10 +60,15 @@ export async function GET() {
       }
       const pid = safe.directory_plan_id as string | null | undefined;
       const directory_plans = pid ? planById.get(pid) ?? null : null;
+      const adminToken = safe.admin_login_token as string | null | undefined;
       return {
         ...safe,
         directory_plans,
-        login_url: safe.login_token ? `${appUrl}/login/${safe.login_token}` : null,
+        login_url: adminToken
+          ? `${appUrl}/login/admin/${adminToken}`
+          : safe.login_token
+            ? `${appUrl}/login/${safe.login_token}`
+            : null,
         lunarpay_admin: lpSummary,
       };
     });
@@ -230,7 +235,12 @@ export async function POST(request: Request) {
 
     const appUrl   = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
     const loginToken = (venue as Record<string, unknown>).login_token as string | null | undefined;
-    const loginUrl   = loginToken ? `${appUrl}/login/${loginToken}` : null;
+    const adminLoginToken = (venue as Record<string, unknown>).admin_login_token as string | null | undefined;
+    const loginUrl = adminLoginToken
+      ? `${appUrl}/login/admin/${adminLoginToken}`
+      : loginToken
+        ? `${appUrl}/login/${loginToken}`
+        : null;
 
     // Optionally send the owner a welcome email with the magic login link.
     let inviteSent = false;

@@ -6,13 +6,10 @@ import { verifyAdminCookie } from '@/lib/admin-auth';
 export async function GET() { return POST(); }
 
 /**
- * Migration 140 — enable contact_sales on the highest-priced plan.
+ * Migration 140 — add admin_login_token to venues.
  *
- * Ensures the contact_sales column exists (idempotent from migration 139)
- * and sets contact_sales = TRUE on the plan with the highest
- * price_monthly_cents, replacing the self-serve upgrade CTA with a
- * "Book a Demo Call" button for that tier.
- *
+ * A permanent, reusable UUID token for the admin "Copy login" button.
+ * Never expires, never rotated. Completely separate from login_token.
  * Run once per environment. Idempotent.
  */
 export async function POST() {
@@ -23,29 +20,19 @@ export async function POST() {
     const sql = await getDbAsync();
 
     await sql`
-      ALTER TABLE public.directory_plans
-        ADD COLUMN IF NOT EXISTS contact_sales BOOLEAN NOT NULL DEFAULT FALSE
+      ALTER TABLE public.venues
+        ADD COLUMN IF NOT EXISTS admin_login_token UUID DEFAULT gen_random_uuid()
     `;
 
-    const updated = await sql<{ id: string; name: string }[]>`
-      UPDATE public.directory_plans
-         SET contact_sales = TRUE
-       WHERE id = (
-         SELECT id
-           FROM public.directory_plans
-          WHERE COALESCE(price_monthly_cents, 0) = (
-                  SELECT MAX(COALESCE(price_monthly_cents, 0))
-                    FROM public.directory_plans
-                )
-          ORDER BY sort_order ASC
-          LIMIT 1
-       )
-       RETURNING id, name
+    await sql`
+      UPDATE public.venues
+        SET admin_login_token = gen_random_uuid()
+        WHERE admin_login_token IS NULL
     `;
 
     await sql`SELECT pg_notify('pgrst', 'reload schema')`;
 
-    return NextResponse.json({ ok: true, migration: 140, updated: updated[0] ?? null });
+    return NextResponse.json({ ok: true, migration: 140 });
   } catch (err) {
     console.error('[run-migration-140]', err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
