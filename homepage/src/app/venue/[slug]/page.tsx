@@ -16,6 +16,44 @@ const API_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenu
 const DIRECTORY_SITE =
   process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL || 'https://storyvenue.com';
 
+/**
+ * Convert a raw Nominatim display_name into a clean US-style address:
+ *   "1090 Ragged Edge Road, Chambersburg, PA 17202"
+ */
+function formatVenueAddress(
+  locationFull: string | null | undefined,
+  locationCity: string | null | undefined,
+  locationState: string | null | undefined,
+): string | null {
+  const city  = locationCity?.trim()  || '';
+  const state = locationState?.trim() || '';
+  const zip   = locationFull?.match(/\b(\d{5})\b/)?.[1] ?? '';
+
+  let street = '';
+  if (locationFull) {
+    const SKIP = [
+      /^united states$/i,
+      /^(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)$/i,
+      /^\d{5}(-\d{4})?$/,
+      /\b(county|township|parish|borough)\b/i,
+    ];
+    const parts = locationFull.split(',').map((p) => p.trim()).filter(Boolean);
+    const streetParts = parts.filter((p) => {
+      if (city && p.toLowerCase() === city.toLowerCase()) return false;
+      return !SKIP.some((re) => re.test(p));
+    });
+    if (streetParts.length >= 2 && /^\d+[a-z]?$/i.test(streetParts[0])) {
+      street = `${streetParts[0]} ${streetParts[1]}`;
+    } else if (streetParts.length >= 1) {
+      street = streetParts[0];
+    }
+  }
+
+  const line2 = [city, state].filter(Boolean).join(', ') + (zip ? ` ${zip}` : '');
+  const parts  = [street, line2].filter(Boolean);
+  return parts.length ? parts.join(', ') : null;
+}
+
 type PublicVenuePayload = {
   venue: {
     id: string;
@@ -170,7 +208,7 @@ export default async function PublicVenuePage({
   const listingVerified = venue.listing_verified === true;
   const listingSponsored = venue.listing_sponsored === true;
   const locationLine =
-    venue.location_full ||
+    formatVenueAddress(venue.location_full, venue.location_city, venue.location_state) ||
     [venue.location_city, venue.location_state].filter(Boolean).join(', ') ||
     null;
 
@@ -183,7 +221,22 @@ export default async function PublicVenuePage({
     url: `${DIRECTORY_SITE}/venue/${venue.slug}`,
     ...(venue.cover_image_url ? { image: venue.cover_image_url } : {}),
     ...(locationLine
-      ? { address: { '@type': 'PostalAddress', streetAddress: locationLine } }
+      ? {
+          address: {
+            '@type':         'PostalAddress',
+            streetAddress:   (() => {
+              const zip = venue.location_full?.match(/\b(\d{5})\b/)?.[1] ?? '';
+              const SKIP = [/^united states$/i, /^\d{5}(-\d{4})?$/, /\b(county|township|parish|borough)\b/i, /^(pennsylvania|california|new york|texas|florida|georgia|ohio|michigan|virginia|washington|massachusetts|illinois|arizona|colorado|indiana|tennessee|maryland|north carolina|south carolina|minnesota|wisconsin|missouri|alabama|louisiana|kentucky|oregon|oklahoma|connecticut|iowa|mississippi|arkansas|kansas|utah|nevada|nebraska|new mexico|idaho|west virginia|hawaii|new hampshire|maine|montana|rhode island|delaware|south dakota|north dakota|alaska|vermont|wyoming)$/i];
+              const city = venue.location_city?.trim() || '';
+              const parts = (venue.location_full || '').split(',').map(p => p.trim()).filter(p => p && !(city && p.toLowerCase() === city.toLowerCase()) && !SKIP.some(r => r.test(p)));
+              return parts.length >= 2 && /^\d+[a-z]?$/i.test(parts[0]) ? `${parts[0]} ${parts[1]}` : parts[0] || '';
+            })(),
+            addressLocality:  venue.location_city  || undefined,
+            addressRegion:    venue.location_state || undefined,
+            postalCode:       venue.location_full?.match(/\b(\d{5})\b/)?.[1] || undefined,
+            addressCountry:   'US',
+          },
+        }
       : {}),
     ...(reviews.count > 0 && roundedAvg != null
       ? {
