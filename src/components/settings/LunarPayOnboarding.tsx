@@ -550,7 +550,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
             <CreditCard size={20} className="text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Apply for StoryPay™ Payments</h3>
+            <h3 className="font-semibold text-gray-900">Signup for StoryPay™ Payments</h3>
             <p className="text-xs text-gray-500">Powered by StoryPay&apos;s merchant platform · PCI-compliant</p>
           </div>
         </div>

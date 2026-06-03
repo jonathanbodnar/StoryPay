@@ -210,7 +210,7 @@ export default function DashboardShell({
             </div>
           ) : null}
 
-          {emailVerificationPending ? (
+          {emailVerificationPending && pathname === '/dashboard' ? (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
               <div className="flex-1">
                 <span className="font-semibold">Verify your email address to activate payment processing.</span>{' '}
@@ -251,7 +251,7 @@ export default function DashboardShell({
                   onClick={() => window.dispatchEvent(new CustomEvent('storypay:open-onboarding'))}
                   className="underline font-semibold hover:text-red-700"
                 >
-                  Apply for StoryPay™
+                  Signup for StoryPay™
                 </button>
                 .
               </span>

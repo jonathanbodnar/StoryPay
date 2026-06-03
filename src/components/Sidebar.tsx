@@ -722,7 +722,7 @@ export default function Sidebar({
               </button>
               {paymentsOpen && (
                 <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                  {/* Apply for StoryPay™ — first item, shown when not yet active */}
+                  {/* Signup for StoryPay™ — first item, shown when not yet active */}
                   {paymentsActive === false && (
                     <button
                       type="button"
@@ -730,7 +730,7 @@ export default function Sidebar({
                       className="flex w-full items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors whitespace-nowrap"
                     >
                       <Zap size={13} className="shrink-0 text-indigo-500" />
-                      <span className="truncate">Apply for StoryPay™</span>
+                      <span className="truncate">Signup for StoryPay™</span>
                     </button>
                   )}
                   {(isMobile ? mobilePayments : paymentsFiltered).map((sub) => (
@@ -986,7 +986,7 @@ export default function Sidebar({
             style={{ top: flyoutPos.top, left: flyoutPos.left }}
             role="menu"
           >
-            {/* Apply for StoryPay™ — shown only when not yet active */}
+            {/* Signup for StoryPay™ — shown only when not yet active */}
             {paymentsActive === false && (
               <button
                 type="button"
@@ -994,7 +994,7 @@ export default function Sidebar({
                 className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 border-b border-gray-100 whitespace-nowrap"
               >
                 <Zap size={13} className="shrink-0 text-indigo-500" />
-                <span className="truncate">Apply for StoryPay™</span>
+                <span className="truncate">Signup for StoryPay™</span>
               </button>
             )}
             {paymentsFiltered.map((sub) => (
@@ -1039,7 +1039,7 @@ export default function Sidebar({
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
               <div className="flex items-center gap-2.5">
                 <Zap size={18} className="text-indigo-600" />
-                <h2 className="font-semibold text-gray-900">Apply for StoryPay™</h2>
+                <h2 className="font-semibold text-gray-900">Signup for StoryPay™</h2>
               </div>
               <button
                 type="button"

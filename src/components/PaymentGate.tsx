@@ -44,7 +44,7 @@ export default function PaymentGate({ children }: { children: React.ReactNode })
         className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
       >
         <Zap size={15} />
-        Apply for StoryPay™
+        Signup for StoryPay™
       </button>
     </div>
   );
