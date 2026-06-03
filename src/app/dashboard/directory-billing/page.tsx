@@ -440,14 +440,22 @@ export default function DirectoryBillingPage() {
   const plans = useMemo(() => {
     if (!summary) return [] as Plan[];
     const currentPlanId = summary.current_plan?.id ?? null;
-    return [...summary.plans]
+    const sorted = [...summary.plans]
       .filter((p) => {
         // Hide the Booking System plan unless the venue is currently on it
         const isBookingSystem = /booking.?system/i.test(p.slug ?? '') || /booking.?system/i.test(p.name);
         return !isBookingSystem || p.id === currentPlanId;
       })
       .sort((a, b) => (a.price_monthly_cents ?? 0) - (b.price_monthly_cents ?? 0));
+    return sorted;
   }, [summary]);
+
+  // The highest-priced plan is always treated as contact_sales (demo call)
+  // regardless of the DB flag — no manual migration step required.
+  const topPlanId = useMemo(() => {
+    if (plans.length === 0) return null;
+    return [...plans].sort((a, b) => (b.price_monthly_cents ?? 0) - (a.price_monthly_cents ?? 0))[0]?.id ?? null;
+  }, [plans]);
 
   if (loading && !summary) {
     return (
@@ -611,7 +619,9 @@ export default function DirectoryBillingPage() {
               const cents = plan.price_monthly_cents ?? 0;
               // contact_sales: hide price + show "Book a call" only for non-subscribers.
               // Current subscribers always see full self-serve controls.
-              const isContactSales = Boolean(plan.contact_sales) && !isCurrent;
+              // Treat as contact_sales if the DB flag is set OR if this is
+              // the highest-priced plan and the venue isn't already on it.
+              const isContactSales = (Boolean(plan.contact_sales) || plan.id === topPlanId) && !isCurrent;
               const inclusion = summary.plan_addon_inclusion[plan.id] || { verified: false, sponsored: false };
               const planFF = (plan.feature_flags ?? {}) as Record<string, unknown>;
               const conciergeAvailable = Boolean(planFF.addon_concierge_available);
