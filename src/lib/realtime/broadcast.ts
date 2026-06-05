@@ -28,31 +28,35 @@ import {
 
 // ─── HTTP broadcast ─────────────────────────────────────────────────────────
 
-interface BroadcastMessage {
-  /** Must be prefixed with "realtime:" — this is the internal channel name. */
+/**
+ * Body shape expected by POST /realtime/v1/api/broadcast.
+ * Verified against @supabase/realtime-js RealtimeChannel.httpSend() source:
+ *   - topic  = "realtime:<channelName>"
+ *   - event  = your custom event name (e.g. "message") — NOT "broadcast"
+ *   - payload = your data directly, no extra wrapping
+ * The Supabase Realtime server fans this out to every client subscribed to
+ * channel <channelName> that is listening for event <event>.
+ */
+interface BroadcastHttpMessage {
   topic:   string;
-  event:   'broadcast';
-  payload: {
-    type:    'broadcast';
-    event:   string;
-    payload: unknown;
-  };
+  event:   string;
+  payload: unknown;
 }
 
 async function send(channelName: string, event: string, payload: unknown): Promise<void> {
-  const supabaseUrl   = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey    = process.env.SUPABASE_SERVICE_ROLE_KEY
-                     || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
+                   || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceKey) {
     console.warn('[realtime/broadcast] Missing Supabase env vars — skipping broadcast');
     return;
   }
 
-  const message: BroadcastMessage = {
+  const message: BroadcastHttpMessage = {
     topic:   `realtime:${channelName}`,
-    event:   'broadcast',
-    payload: { type: 'broadcast', event, payload },
+    event,
+    payload,
   };
 
   try {
