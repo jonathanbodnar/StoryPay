@@ -1,14 +1,21 @@
 /**
  * Server-side helpers for broadcasting Realtime events to subscribed UIs.
  *
- * Uses the service-role supabaseAdmin client. Each helper builds a fresh
- * channel handle (Supabase channels are cheap), sends the event, and tears
- * the handle down — fire-and-forget semantics.
+ * Uses Supabase Realtime's HTTP broadcast endpoint
+ * (POST /realtime/v1/api/broadcast) instead of a WebSocket channel.
+ *
+ * Why HTTP instead of WebSocket:
+ *   The supabaseAdmin singleton's Realtime WebSocket goes idle between
+ *   requests on Railway (persistent Node.js server). When ch.subscribe()
+ *   is called the connection is often stale → CHANNEL_ERROR fires →
+ *   the message is silently dropped before it reaches any client. The
+ *   HTTP broadcast endpoint is a stateless POST that the Supabase Realtime
+ *   server fans out to all WS subscribers on that channel, so it works
+ *   regardless of the server's own WebSocket state.
  *
  * Failures are logged but never thrown: realtime is a UX nicety, not a
  * correctness requirement.
  */
-import { supabaseAdmin } from '@/lib/supabase';
 import {
   supportChannels,
   type BrideMessageEvent,
@@ -19,26 +26,52 @@ import {
   type VenueDirectInboxEvent,
 } from './channels';
 
+// ─── HTTP broadcast ─────────────────────────────────────────────────────────
+
+interface BroadcastMessage {
+  /** Must be prefixed with "realtime:" — this is the internal channel name. */
+  topic:   string;
+  event:   'broadcast';
+  payload: {
+    type:    'broadcast';
+    event:   string;
+    payload: unknown;
+  };
+}
+
 async function send(channelName: string, event: string, payload: unknown): Promise<void> {
+  const supabaseUrl   = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey    = process.env.SUPABASE_SERVICE_ROLE_KEY
+                     || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceKey) {
+    console.warn('[realtime/broadcast] Missing Supabase env vars — skipping broadcast');
+    return;
+  }
+
+  const message: BroadcastMessage = {
+    topic:   `realtime:${channelName}`,
+    event:   'broadcast',
+    payload: { type: 'broadcast', event, payload },
+  };
+
   try {
-    const ch = supabaseAdmin.channel(channelName, { config: { broadcast: { ack: false } } });
-    await new Promise<void>((resolve) => {
-      ch.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          ch.send({ type: 'broadcast', event, payload })
-            .catch(() => {})
-            .finally(() => {
-              supabaseAdmin.removeChannel(ch).catch(() => {});
-              resolve();
-            });
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          supabaseAdmin.removeChannel(ch).catch(() => {});
-          resolve();
-        }
-      });
+    const res = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'apikey':        serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({ messages: [message] }),
     });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.warn(`[realtime/broadcast] ${channelName}:${event} → HTTP ${res.status}`, text);
+    }
   } catch (err) {
-    console.warn('[realtime/broadcast]', channelName, event, err);
+    console.warn('[realtime/broadcast] fetch failed', channelName, event, err);
   }
 }
 
