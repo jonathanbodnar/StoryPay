@@ -27,13 +27,16 @@
  */
 
 export const supportChannels = {
-  brideInbox:    () => 'support:bride-inbox',
-  brideThread:   (threadId: string) => `support:thread:${threadId}`,
-  tickets:       () => 'support:tickets',
-  ticket:        (ticketId: string) => `support:ticket:${ticketId}`,
-  venueTickets:  (venueId: string) => `venue:${venueId}:tickets`,
-  venueTicket:   (venueId: string, ticketId: string) => `venue:${venueId}:ticket:${ticketId}`,
-  venueThread:   (venueId: string, threadId: string) => `venue:${venueId}:thread:${threadId}`,
+  brideInbox:       () => 'support:bride-inbox',
+  brideThread:      (threadId: string) => `support:thread:${threadId}`,
+  tickets:          () => 'support:tickets',
+  ticket:           (ticketId: string) => `support:ticket:${ticketId}`,
+  venueTickets:     (venueId: string) => `venue:${venueId}:tickets`,
+  venueTicket:      (venueId: string, ticketId: string) => `venue:${venueId}:ticket:${ticketId}`,
+  venueThread:      (venueId: string, threadId: string) => `venue:${venueId}:thread:${threadId}`,
+  /** Fired whenever any venue-direct message is sent or received so the
+   *  VenueDirectInboxView updates instantly instead of waiting for 30s poll. */
+  venueDirectInbox: () => 'support:venue-direct-inbox',
 } as const;
 
 // ─── Bride conversation events ──────────────────────────────────────────────
@@ -98,6 +101,16 @@ export interface StageChangedEvent {
   pipelineId: string;
   /** 'support' = admin changed it, 'venue' = venue changed it */
   source:     'support' | 'venue';
+}
+
+/** Fired whenever a venue-direct message is sent (concierge → venue) or
+ *  received (venue → concierge). The VenueDirectInboxView subscribes to
+ *  this channel and refreshes its list on any event. */
+export interface VenueDirectInboxEvent {
+  threadId:    string;
+  venueId:     string;
+  /** 'outbound' = concierge sent to venue, 'inbound' = venue replied */
+  direction:   'outbound' | 'inbound';
 }
 
 /** Fired when tags on a contact's lead(s) change (added or removed). */

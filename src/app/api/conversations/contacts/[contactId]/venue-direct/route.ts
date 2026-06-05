@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { getSessionUser, type SessionUser } from '@/lib/session';
-import { broadcastBrideMessageAdminOnly } from '@/lib/realtime/broadcast';
+import { broadcastBrideMessageAdminOnly, broadcastVenueDirectInboxUpdate } from '@/lib/realtime/broadcast';
 
 /** Reader ref for venue_direct read-state. Prefixed `vd:` so it's independent
  *  from bride-conversation read state on the same thread. */
@@ -216,6 +216,8 @@ export async function POST(
     supportOnly:             false,
     mentionedSupportUserIds: [],
   });
+  // Notify VenueDirectInboxView so it refreshes instantly (replaces 30s poll).
+  void broadcastVenueDirectInboxUpdate({ threadId: t.thread.id, venueId, direction: 'inbound' });
 
   return NextResponse.json({
     ok: true,

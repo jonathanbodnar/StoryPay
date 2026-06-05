@@ -30,7 +30,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
-import { broadcastBrideMessage, broadcastBrideMessageAdminOnly } from '@/lib/realtime/broadcast';
+import { broadcastBrideMessage, broadcastBrideMessageAdminOnly, broadcastVenueDirectInboxUpdate } from '@/lib/realtime/broadcast';
 import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
 import { buildVenueDirectReplyToEmail } from '@/lib/conversations-inbound-email';
 
@@ -260,6 +260,8 @@ export async function POST(req: NextRequest) {
     supportOnly:             false,
     mentionedSupportUserIds: [],
   });
+  // Update VenueDirectInboxView in real-time (replaces 30-second poll for this event).
+  void broadcastVenueDirectInboxUpdate({ threadId, venueId: t.venue_id, direction: 'outbound' });
 
   // Build email
   const brideName = [vc?.customer_first_name, vc?.customer_last_name].filter(Boolean).join(' ').trim() || vc?.customer_email || 'a contact';

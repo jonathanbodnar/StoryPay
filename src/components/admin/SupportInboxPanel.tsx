@@ -23,7 +23,7 @@ import {
   Eye, EyeOff, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useBroadcastChannel, useBroadcastChannels } from '@/lib/realtime/use-broadcast-channel';
-import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent } from '@/lib/realtime/channels';
+import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent, type VenueDirectInboxEvent } from '@/lib/realtime/channels';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 import { SupportContextSidebar } from '@/components/admin/SupportContextSidebar';
 import { SlaDot, SlaPill } from '@/components/support/SlaIndicator';
@@ -562,6 +562,7 @@ export function SupportInboxPanel() {
         if (!validThreadIds.has(evt.threadId)) return prev;
         if (prev.messages.some(m => m.id === evt.messageId)) return prev;
         const isNote = evt.supportOnly === true;
+        const isVenueDirect = evt.venueDirectMessage === true;
         const isFromActiveThread = evt.threadId === prev.thread.id;
         const newMsg: ThreadMessage = {
           id:                          evt.messageId,
@@ -580,6 +581,9 @@ export function SupportInboxPanel() {
           sent_on_behalf_of_venue:     evt.sentByVenueSupport,
           support_internal_note:       null,
           support_only:                isNote,
+          // Map broadcast flags → audience so venue_direct messages render
+          // with the correct purple bubble style when they arrive live.
+          audience:                    isVenueDirect ? 'venue_direct' : (isNote ? 'support_only' : 'external'),
           mentioned_support_user_ids:  evt.mentionedSupportUserIds || [],
           created_at:                  evt.createdAt,
         };
@@ -2167,6 +2171,18 @@ function VenueDirectInboxView({
     const id = setInterval(load, 30_000);
     return () => clearInterval(id);
   }, [load]);
+
+  // Realtime: refresh immediately when any venue-direct message is sent or
+  // received, so the inbox updates live without waiting for the 30s poll.
+  useBroadcastChannel(
+    supportChannels.venueDirectInbox(),
+    ['message'],
+    useCallback((_evt, _payload) => {
+      const p = _payload as VenueDirectInboxEvent | null;
+      if (!p) return;
+      void load();
+    }, [load]),
+  );
 
   // When the Close button on a bride reply thread fires, it dispatches
   // 'storypay:vd-acknowledge' so we can instantly clear the "Awaiting reply"

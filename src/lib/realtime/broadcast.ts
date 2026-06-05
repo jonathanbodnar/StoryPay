@@ -16,6 +16,7 @@ import {
   type TicketStatusEvent,
   type StageChangedEvent,
   type TagsChangedEvent,
+  type VenueDirectInboxEvent,
 } from './channels';
 
 async function send(channelName: string, event: string, payload: unknown): Promise<void> {
@@ -89,6 +90,12 @@ export async function broadcastStageChanged(evt: StageChangedEvent): Promise<voi
     send(supportChannels.brideThread(evt.threadId),                       'stage_changed', evt),
     send(supportChannels.venueThread(evt.venueId, evt.threadId),          'stage_changed', evt),
   ]);
+}
+
+/** Broadcast a venue-direct inbox update so VenueDirectInboxView refreshes
+ *  immediately instead of waiting for the 30-second poll cycle. */
+export async function broadcastVenueDirectInboxUpdate(evt: VenueDirectInboxEvent): Promise<void> {
+  await send(supportChannels.venueDirectInbox(), 'message', evt);
 }
 
 /** Broadcast a tag change so the admin context sidebar reflects it without a refresh. */

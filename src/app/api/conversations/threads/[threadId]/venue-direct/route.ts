@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { getSessionUser, type SessionUser } from '@/lib/session';
-import { broadcastBrideMessageAdminOnly } from '@/lib/realtime/broadcast';
+import { broadcastBrideMessageAdminOnly, broadcastVenueDirectInboxUpdate } from '@/lib/realtime/broadcast';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -112,6 +112,8 @@ export async function POST(
     supportOnly:             false,
     mentionedSupportUserIds: [],
   });
+  // Notify VenueDirectInboxView so it refreshes instantly (replaces 30s poll).
+  void broadcastVenueDirectInboxUpdate({ threadId, venueId, direction: 'inbound' });
 
   return NextResponse.json({ ok: true, messageId: msg.id });
 }
