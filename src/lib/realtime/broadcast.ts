@@ -30,8 +30,11 @@ import {
 
 /**
  * Body shape expected by POST /realtime/v1/api/broadcast.
- * Verified against @supabase/realtime-js RealtimeChannel.httpSend() source:
- *   - topic  = "realtime:<channelName>"
+ * Verified end-to-end against @supabase/realtime-js RealtimeChannel.httpSend():
+ *   - topic  = the BARE channel name (e.g. "support:bride-inbox") — the
+ *     library strips the "realtime:" prefix via subTopic before POSTing, so
+ *     including it here makes the server route to the wrong topic and the
+ *     message is accepted (202) but never delivered to any subscriber.
  *   - event  = your custom event name (e.g. "message") — NOT "broadcast"
  *   - payload = your data directly, no extra wrapping
  * The Supabase Realtime server fans this out to every client subscribed to
@@ -54,7 +57,7 @@ async function send(channelName: string, event: string, payload: unknown): Promi
   }
 
   const message: BroadcastHttpMessage = {
-    topic:   `realtime:${channelName}`,
+    topic:   channelName,
     event,
     payload,
   };

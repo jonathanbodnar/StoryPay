@@ -285,6 +285,40 @@ export function SupportInboxPanel() {
     if (subTab === 'bride-replies') fetchInbox();
   }, [subTab, fetchInbox]);
 
+  // Silent safety-net refresh: realtime broadcast is the primary path, but if
+  // a single broadcast is ever dropped (network blip) this self-heals the list
+  // + badge within 20s WITHOUT a loading flicker. Does not auto-select threads.
+  const silentRefreshInbox = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (committedSearch) params.set('search', committedSearch);
+      params.set('filter', brideStatusFilter);
+      params.set('limit', '50');
+      const r = await fetch(`/api/admin/support/bride-inbox?${params.toString()}`, { cache: 'no-store' });
+      if (!r.ok) return;
+      const d = (await r.json()) as { threads: BrideInboxRow[] };
+      if (Array.isArray(d.threads)) setThreads(d.threads);
+    } catch { /* non-critical */ }
+  }, [committedSearch, brideStatusFilter]);
+
+  useEffect(() => {
+    if (subTab !== 'bride-replies') return;
+    const id = setInterval(() => void silentRefreshInbox(), 20_000);
+    return () => clearInterval(id);
+  }, [subTab, silentRefreshInbox]);
+
+  // Also refresh instantly when the tab regains focus (admin switching back).
+  useEffect(() => {
+    if (subTab !== 'bride-replies') return;
+    const onVisible = () => { if (document.visibilityState === 'visible') void silentRefreshInbox(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [subTab, silentRefreshInbox]);
+
   // Keep the "needs reply" badge accurate regardless of which filter is active.
   useEffect(() => {
     if (brideStatusFilter === 'open') {
