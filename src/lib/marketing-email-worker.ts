@@ -239,6 +239,46 @@ export async function onMarketingFormSubmitted(
 }
 
 /**
+ * Default guide templates. These are the SOURCE OF TRUTH for the guide bodies
+ * a venue gets out-of-the-box. The Booking System dashboard surfaces these same
+ * defaults (via `?? DEFAULT_GUIDE_*`) when a venue hasn't customised them, and
+ * `sendBookingSystemGuide` falls back to them too — so the message that's shown
+ * in the UI is exactly the message that actually gets sent.
+ */
+export const DEFAULT_GUIDE_EMAIL_BODY = `Hi {{first_name}},
+
+Thanks for your interest in {{venue_name}}! Your pricing guide is ready — click below to view it.
+
+{{pricing_guide_url}}
+
+We'd love to show you around. Reply to this email or visit the link above to learn more.
+
+– {{venue_name}}`;
+
+export const DEFAULT_GUIDE_SMS_BODY = `Hi {{first_name}}! Thanks for your interest in {{venue_name}}. Here's your pricing guide: {{pricing_guide_url}} — Reply to ask any questions!`;
+
+/** Best-effort write to the platform Error Log. Never throws. */
+async function logGuideIssue(
+  level: 'warning' | 'error',
+  venueId: string,
+  leadId: string,
+  message: string,
+  context: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const { logError } = await import('@/lib/error-log');
+    await logError({
+      level,
+      source:   'api',
+      category: 'booking_guide',
+      message,
+      venueId,
+      context: { leadId, ...context },
+    });
+  } catch { /* logging must never break delivery */ }
+}
+
+/**
  * Phase 1 — Booking System Guide Delivery.
  *
  * Called immediately after a form submit (before the sequence enrollment).
@@ -246,6 +286,8 @@ export async function onMarketingFormSubmitted(
  * SMS using the same merge-var and GHL infrastructure as the sequence worker.
  *
  * Safe to call even if the booking system is disabled — it no-ops silently.
+ * Every skip/failure that prevents delivery is recorded to the Error Log so a
+ * lead never silently goes without their guide.
  */
 export async function sendBookingSystemGuide(
   venueId: string,
@@ -259,23 +301,36 @@ export async function sendBookingSystemGuide(
       .maybeSingle();
 
     const v = vr as Record<string, unknown> | null;
-    if (!v) return;
+    if (!v) {
+      await logGuideIssue('error', venueId, leadId, 'Pricing guide not sent: venue not found', {});
+      return;
+    }
 
     const systemOn = (v.booking_system_enabled as boolean | null) ?? true;
-    if (!systemOn) return;
+    if (!systemOn) return; // intentionally disabled — not an error
 
     const emailOn = (v.booking_guide_email_enabled as boolean | null) ?? true;
     const smsOn   = (v.booking_guide_sms_enabled   as boolean | null) ?? true;
-    if (!emailOn && !smsOn) return;
+    if (!emailOn && !smsOn) return; // both channels intentionally off — not an error
 
     const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
 
+    let emailDelivered = false;
+    let smsDelivered   = false;
+    const failures: string[] = [];
+
     // ── Email guide ───────────────────────────────────────────────────────
     if (emailOn) {
-      const rawBody = ((v.booking_guide_email_body as string | null) || '').trim();
-      if (rawBody) {
-        const vars = await buildMergeVars(venueId, leadId, appOrigin, { forSms: false });
-        if (vars) {
+      // Fall back to the default template when the venue never customised it.
+      // (The DB column is NULL for venues that never edited the guide; the
+      // dashboard shows the default, so we must send the default too.)
+      const rawBody = ((v.booking_guide_email_body as string | null) || '').trim() || DEFAULT_GUIDE_EMAIL_BODY;
+      const vars = await buildMergeVars(venueId, leadId, appOrigin, { forSms: false });
+      if (!vars) {
+        // No email on file, or the lead opted out of marketing email.
+        failures.push('email_skipped: no email address or opted out');
+      } else {
+        try {
           // Create or find an email-channel thread BEFORE sending so we can
           // wire a routing reply-to address. Bride email replies will then
           // land directly in this thread instead of the venue owner's inbox.
@@ -295,42 +350,70 @@ export async function sendBookingSystemGuide(
             replyTo: replyTo,
             subject: `Your pricing guide from ${vars.venue_name}`,
             html:    `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;color:#1b1b1b;line-height:1.6">${htmlBody}</div>`,
-          }).catch((e) => { console.warn('[booking-guide] email failed:', e); return null; });
+          });
 
-          // Log the outbound email so the contact trail starts here
-          if (sent !== null && emailThread) {
-            void logToConversationThread({
-              threadId: emailThread.threadId,
-              venueId,
-              channel: 'email',
-              body: `📧 Guide sent via email:\n${body.slice(0, 600)}`,
-            });
+          if (sent?.success) {
+            emailDelivered = true;
+            // Log the outbound email so the contact trail starts here.
+            if (emailThread) {
+              void logToConversationThread({
+                threadId: emailThread.threadId,
+                venueId,
+                channel: 'email',
+                body: `📧 Guide sent via email:\n${body.slice(0, 600)}`,
+              });
+            }
+          } else {
+            // sendEmail already logs the underlying Resend failure to error_logs.
+            failures.push(`email_failed: ${sent?.error ?? 'unknown send error'}`);
           }
+        } catch (e) {
+          failures.push(`email_threw: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
     }
 
     // ── SMS guide ─────────────────────────────────────────────────────────
     if (smsOn) {
-      const rawSms = ((v.booking_guide_sms_body as string | null) || '').trim();
-      if (rawSms) {
+      const rawSms = ((v.booking_guide_sms_body as string | null) || '').trim() || DEFAULT_GUIDE_SMS_BODY;
+      try {
         // Create or find an SMS-channel thread before sending so we have a
         // threadId ready to log to. GHL inbound webhooks will look up the
         // venue_customer by email or ghl_contact_id and find this same thread.
         const smsThread = await findOrCreateChannelThreadForLead(venueId, leadId, 'sms');
-        const smsResult = await sendAutomationSmsToLead(venueId, leadId, rawSms)
-          .catch((e) => { console.warn('[booking-guide] SMS failed:', e); return { ok: false as const }; });
+        const smsResult = await sendAutomationSmsToLead(venueId, leadId, rawSms);
 
-        if (smsResult.ok && (smsResult as { mergedBody?: string }).mergedBody && smsThread) {
-          void logToConversationThread({
-            threadId: smsThread.threadId,
-            venueId,
-            channel: 'sms',
-            body: `📱 Guide sent via SMS:\n${(smsResult as { mergedBody: string }).mergedBody}`,
-          });
+        if (smsResult.ok && (smsResult as { mergedBody?: string }).mergedBody) {
+          smsDelivered = true;
+          if (smsThread) {
+            void logToConversationThread({
+              threadId: smsThread.threadId,
+              venueId,
+              channel: 'sms',
+              body: `📱 Guide sent via SMS:\n${(smsResult as { mergedBody: string }).mergedBody}`,
+            });
+          }
+        } else if (!smsResult.ok) {
+          failures.push(`sms_failed: ${(smsResult as { error?: string }).error ?? 'unknown'}`);
         }
+      } catch (e) {
+        failures.push(`sms_threw: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
+
+    // ── Delivery outcome → Error Log ──────────────────────────────────────
+    // A lead that gets neither email nor SMS is a real (previously silent)
+    // failure. A partial delivery (one channel worked) is a warning.
+    if (!emailDelivered && !smsDelivered) {
+      await logGuideIssue('error', venueId, leadId,
+        'Pricing guide NOT delivered — lead got no email and no SMS',
+        { emailOn, smsOn, failures, venueName: v.name });
+    } else if (failures.length > 0) {
+      await logGuideIssue('warning', venueId, leadId,
+        'Pricing guide only partially delivered',
+        { emailDelivered, smsDelivered, failures, venueName: v.name });
+    }
+
     // Apply contacted + awaiting_response tags after first outreach (fire-and-forget)
     void import('@/lib/system-tags').then(({ applySystemTag, ensureSystemTagsForVenue }) =>
       ensureSystemTagsForVenue(venueId)
@@ -342,6 +425,9 @@ export async function sendBookingSystemGuide(
     );
   } catch (e) {
     console.warn('[booking-guide] sendBookingSystemGuide error (non-fatal):', e);
+    await logGuideIssue('error', venueId, leadId,
+      `Pricing guide delivery crashed: ${e instanceof Error ? e.message : String(e)}`,
+      { stack: e instanceof Error ? e.stack : undefined });
   }
 }
 

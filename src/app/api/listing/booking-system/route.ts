@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
+import { DEFAULT_GUIDE_EMAIL_BODY, DEFAULT_GUIDE_SMS_BODY } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
@@ -124,8 +125,8 @@ export async function GET() {
     masterEnabled:      (v.booking_system_enabled as boolean | null) ?? true,
     guideEmailEnabled:  (v.booking_guide_email_enabled as boolean | null) ?? true,
     guideSmsEnabled:    (v.booking_guide_sms_enabled   as boolean | null) ?? true,
-    guideEmailBody:     (v.booking_guide_email_body as string | null) ?? DEFAULT_GUIDE_EMAIL,
-    guideSmsBody:       (v.booking_guide_sms_body   as string | null) ?? DEFAULT_GUIDE_SMS,
+    guideEmailBody:     (v.booking_guide_email_body as string | null) ?? DEFAULT_GUIDE_EMAIL_BODY,
+    guideSmsBody:       (v.booking_guide_sms_body   as string | null) ?? DEFAULT_GUIDE_SMS_BODY,
     sequenceEnabled:    automationActive,
     steps,
     automationId,
@@ -279,18 +280,6 @@ function labelForStep(type: string, cfg: Record<string, unknown>): string {
   if (type === 'send_email') return 'Send email';
   return type;
 }
-
-const DEFAULT_GUIDE_EMAIL = `Hi {{first_name}},
-
-Thanks for your interest in {{venue_name}}! Your pricing guide is ready — click below to view it.
-
-{{pricing_guide_url}}
-
-We'd love to show you around. Reply to this email or visit the link above to learn more.
-
-– {{venue_name}}`;
-
-const DEFAULT_GUIDE_SMS = `Hi {{first_name}}! Thanks for your interest in {{venue_name}}. Here's your pricing guide: {{pricing_guide_url}} — Reply to ask any questions!`;
 
 const DEFAULT_AI_MESSAGES = [
   `Hi {{first_name}}, just checking in! {{venue_name}} has some great dates still available. Would love to answer any questions you have.`,
