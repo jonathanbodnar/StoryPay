@@ -79,6 +79,84 @@ function trimStack(stack: string | null): string {
   return (kept.length ? kept : lines).slice(0, 12).join('\n');
 }
 
+/** Plain-English, high-school-level explanation of an error: what happened,
+ *  who/what it affects, and the outcome once fixed. Deterministic (no AI). */
+function explainError(r: ErrorRow): { what: string; impact: string; outcome: string } {
+  const route = r.route || 'a part of the app';
+  const s = r.http_status ?? 0;
+  const statusPhrase =
+    s >= 500 ? 'the server hit a bug and crashed while handling it'
+    : s === 404 ? 'the thing it asked for could not be found'
+    : (s === 401 || s === 403) ? 'it was blocked by a login or permission problem'
+    : s === 429 ? 'it was rate-limited (too many requests too fast)'
+    : s >= 400 ? 'the information it sent was invalid or rejected'
+    : 'it did not complete successfully';
+
+  switch (r.source) {
+    case 'sms':
+      return {
+        what: 'The system tried to send a text message and it failed.',
+        impact: 'The lead or customer did not get their text (for example a follow-up or a guide link), so from their side it looks like nothing happened.',
+        outcome: 'Once fixed, the text will go out and the person will receive their message.',
+      };
+    case 'email':
+      return {
+        what: 'The system tried to send an email and it failed.',
+        impact: 'The recipient never got the email (for example a pricing guide, receipt, or notification).',
+        outcome: 'Once fixed, the email will be delivered to the recipient.',
+      };
+    case 'payment':
+      return {
+        what: 'A billing or payment action with the card processor (LunarPay) failed.',
+        impact: 'A charge, subscription update, or payout may not have gone through — this can affect money and billing for this account.',
+        outcome: 'Once fixed, payments and billing updates will process correctly.',
+      };
+    case 'webhook':
+      return {
+        what: 'An automatic update sent from an outside service could not be processed.',
+        impact: 'Something that is supposed to update on its own (like a payment status or calendar event) may now be out of date.',
+        outcome: 'Once fixed, these automatic updates will apply correctly without anyone doing it by hand.',
+      };
+    case 'ai':
+      return {
+        what: 'The AI assistant ran into a problem while doing its job.',
+        impact: 'An AI action — like an automatic follow-up message to a lead — may not have happened.',
+        outcome: 'Once fixed, the AI will carry out its task as scheduled.',
+      };
+    case 'cron':
+      return {
+        what: 'A scheduled background job (a task that runs automatically on a timer) failed.',
+        impact: 'Automatic work like follow-ups, reminders, or data syncs may have been skipped for that run.',
+        outcome: 'Once fixed, the scheduled job will run reliably on time.',
+      };
+    case 'client':
+      if (r.category === 'api_fetch' || r.category === 'api_network') {
+        return {
+          what: `A page in the app asked the server for data from ${route}, and ${statusPhrase}.`,
+          impact: 'The person using that page did not get what they expected — they may have seen an error, a blank area, or a button that looked like it "did nothing."',
+          outcome: `Once fixed, ${route} will respond correctly and the page will load or save the way it should.`,
+        };
+      }
+      return {
+        what: 'Something in the web page itself crashed while someone was using it in their browser.',
+        impact: 'The page may have frozen, gone blank, or a feature stopped responding for that user.',
+        outcome: 'Once fixed, the page will run smoothly without crashing.',
+      };
+    case 'api':
+      return {
+        what: `A request to ${route} failed — ${statusPhrase}.`,
+        impact: 'Whatever feature relies on that request did not work for the person who triggered it.',
+        outcome: `Once fixed, ${route} will work and the feature will behave normally.`,
+      };
+    default:
+      return {
+        what: 'The app ran into an unexpected problem.',
+        impact: 'A feature may not have worked as expected for whoever ran into it.',
+        outcome: 'Once fixed, this part of the app will work normally again.',
+      };
+  }
+}
+
 /**
  * Build a compact, token-optimized prompt the super admin can paste straight
  * back into the coding chat. Deterministic (no LLM call → free + instant).
@@ -382,6 +460,28 @@ function ErrorDetailDrawer({ row, venueName, onClose, onStatus }: {
               <span>· last {relativeTime(row.last_seen_at)}</span>
             </div>
           </div>
+
+          {/* Plain-English explanation */}
+          {(() => {
+            const ex = explainError(row);
+            return (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">In plain English</p>
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500">What happened</p>
+                  <p className="text-sm text-gray-800">{ex.what}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500">Who / what it affects</p>
+                  <p className="text-sm text-gray-800">{ex.impact}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500">Outcome once fixed</p>
+                  <p className="text-sm text-gray-800">{ex.outcome}</p>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Copy fix prompt — paste straight into the coding chat */}
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
