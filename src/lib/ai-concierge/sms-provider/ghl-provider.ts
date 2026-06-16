@@ -152,14 +152,34 @@ export const ghlSmsProvider: SmsProvider = {
             return await attempt(agencyKey);
           } catch (e2) {
             const msg2 = e2 instanceof Error ? e2.message : 'unknown GHL error';
+            logSmsFailure(venueId, leadId, classifyGhlError(msg2), msg2);
             return errResult(classifyGhlError(msg2), msg2);
           }
         }
       }
+      logSmsFailure(venueId, leadId, classifyGhlError(msg), msg);
       return errResult(classifyGhlError(msg), msg);
     }
   },
 };
+
+/** Record an SMS send failure to the platform Error Log (best-effort). DND and
+ *  invalid-phone are expected/benign so we log them as warnings, not errors. */
+function logSmsFailure(venueId: string, leadId: string, outcome: SmsSendOutcome, message: string): void {
+  void (async () => {
+    try {
+      const { logError } = await import('@/lib/error-log');
+      await logError({
+        level:    (outcome === 'dnd' || outcome === 'invalid_phone') ? 'warning' : 'error',
+        source:   'sms',
+        category: `ghl_${outcome}`,
+        message:  `GHL SMS send failed (${outcome}): ${message}`,
+        venueId,
+        context:  { leadId, outcome },
+      });
+    } catch { /* non-critical */ }
+  })();
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

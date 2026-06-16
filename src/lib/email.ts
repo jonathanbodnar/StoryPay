@@ -388,6 +388,23 @@ export async function sendEmail({
     })();
   }
 
+  // Record delivery failures to the platform Error Log (best-effort, never
+  // throws, logged at 'error' level so it can't trigger a critical-alert loop).
+  if (!result.success) {
+    void (async () => {
+      try {
+        const { logError } = await import('@/lib/error-log');
+        await logError({
+          level:    'error',
+          source:   'email',
+          category: 'resend_send',
+          message:  `Email send failed: ${result.error ?? 'unknown'}`,
+          context:  { to, subject, from: fromHeader },
+        });
+      } catch { /* non-critical */ }
+    })();
+  }
+
   return result;
 }
 

@@ -24,6 +24,7 @@ import {
   type StageChangedEvent,
   type TagsChangedEvent,
   type VenueDirectInboxEvent,
+  type ErrorLoggedEvent,
 } from './channels';
 
 // ─── HTTP broadcast ─────────────────────────────────────────────────────────
@@ -136,6 +137,12 @@ export async function broadcastStageChanged(evt: StageChangedEvent): Promise<voi
  *  immediately instead of waiting for the 30-second poll cycle. */
 export async function broadcastVenueDirectInboxUpdate(evt: VenueDirectInboxEvent): Promise<void> {
   await send(supportChannels.venueDirectInbox(), 'message', evt);
+}
+
+/** Broadcast a newly-logged error so the super-admin Error Log tab + sidebar
+ *  badge update live without a page refresh. */
+export async function broadcastErrorLogged(evt: ErrorLoggedEvent): Promise<void> {
+  await send(supportChannels.adminErrors(), 'error', evt);
 }
 
 /** Broadcast a tag change so the admin context sidebar reflects it without a refresh. */

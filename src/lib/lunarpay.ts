@@ -24,6 +24,16 @@ export async function lpFetch(path: string, { method = 'GET', body, key }: LPReq
     });
   } catch (fetchErr) {
     console.error('[lpFetch] fetch() threw (network/timeout):', fetchErr);
+    void (async () => {
+      try {
+        const { logError } = await import('@/lib/error-log');
+        await logError({
+          level: 'critical', source: 'payment', category: 'lunarpay_network',
+          message: `LunarPay ${method} ${path} network/timeout failure`,
+          error: fetchErr, route: path, method,
+        });
+      } catch { /* non-critical */ }
+    })();
     throw fetchErr;
   }
   console.log('[lpFetch] ←', res.status, url);
@@ -63,6 +73,22 @@ export async function lpFetch(path: string, { method = 'GET', body, key }: LPReq
       responseHeaders: resHeaders,
       isGatewayError: errorText.includes('Missing Authentication Token'),
     });
+    // Record payment failures to the platform Error Log (best-effort).
+    void (async () => {
+      try {
+        const { logError } = await import('@/lib/error-log');
+        await logError({
+          level:      res.status >= 500 ? 'critical' : 'error',
+          source:     'payment',
+          category:   'lunarpay_api',
+          message:    `LunarPay ${method} ${path} → ${res.status}`,
+          route:      path,
+          method,
+          httpStatus: res.status,
+          context:    { requestBody: safeBody, responseText: errorText.slice(0, 500), isGatewayError: errorText.includes('Missing Authentication Token') },
+        });
+      } catch { /* non-critical */ }
+    })();
     throw new Error(`LunarPay API error ${res.status}: ${errorText}`);
   }
 

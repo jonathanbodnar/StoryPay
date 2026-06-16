@@ -29,6 +29,7 @@ export type AdminTabKey =
   | 'blog'
   | 'seo-pages'
   | 'trends'
+  | 'errors'
   | 'system';
 
 export interface AdminTabDef {
@@ -57,6 +58,7 @@ export const ADMIN_TABS: AdminTabDef[] = [
   { key: 'suggested-articles', label: 'Suggested Articles',  category: 'content' },
   { key: 'search-analytics',   label: 'Search Analytics',    category: 'content' },
   { key: 'article-ratings',    label: 'Article Ratings',     category: 'content' },
+  { key: 'errors',             label: 'Error Log',           category: 'tools' },
   { key: 'system',             label: 'System / Migrations', category: 'tools' },
 ];
 

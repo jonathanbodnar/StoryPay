@@ -12,7 +12,7 @@ import {
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
   Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays, Eye, EyeOff,
   Settings, Database, CheckCircle2, AlertCircle, Heart, CreditCard,
-  Inbox, ChevronLeft, PanelLeftClose, PanelLeftOpen,
+  Inbox, ChevronLeft, PanelLeftClose, PanelLeftOpen, AlertTriangle,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -29,6 +29,9 @@ import { BrideInboxBadgeSync } from '@/components/admin/BrideInboxBadgeSync';
 import { CannedRepliesPanel } from '@/components/admin/CannedRepliesPanel';
 import { AdminTeamPanel } from '@/components/admin/AdminTeamPanel';
 import { AdminProfilePanel } from '@/components/admin/AdminProfilePanel';
+import ErrorLogPanel from '@/components/admin/ErrorLogPanel';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels } from '@/lib/realtime/channels';
 
 // Lazy-load the WYSIWYG editor so it doesn't affect admin initial load
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -63,6 +66,7 @@ type AdminTabKey =
   | 'blog'
   | 'seo-pages'
   | 'trends'
+  | 'errors'
   | 'system'
   | 'team'
   | 'profile';
@@ -87,6 +91,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'blog',
   'seo-pages',
   'trends',
+  'errors',
   'system',
   'team',
   'profile',
@@ -529,6 +534,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
   { key: 'search-analytics', label: 'Search Analytics', icon: BarChart2 },
   { key: 'article-ratings', label: 'Article Ratings', icon: Star },
+  { key: 'errors', label: 'Error Log', icon: AlertTriangle },
   { key: 'system', label: 'System / Migrations', icon: Settings },
   { key: 'team', label: 'Team', icon: Users },
   { key: 'profile', label: 'My profile', icon: Settings },
@@ -541,6 +547,7 @@ function AdminNavSidebar({
   onLogout,
   frUnreadCount,
   supportInboxCount,
+  errorCount,
   collapsed,
   onToggleCollapse,
   allowedTabs,
@@ -553,6 +560,7 @@ function AdminNavSidebar({
   onLogout: () => void;
   frUnreadCount: number;
   supportInboxCount?: number;
+  errorCount?: number;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   allowedTabs: Set<string>;
@@ -618,8 +626,9 @@ function AdminNavSidebar({
               : adminHref(key as AdminTabKey);
           const isFrBadge      = key === 'feature-requests' && frUnreadCount > 0;
           const isSupportBadge = key === 'support' && (supportInboxCount ?? 0) > 0;
-          const badgeCount     = isFrBadge ? frUnreadCount : isSupportBadge ? (supportInboxCount ?? 0) : 0;
-          const showBadge      = isFrBadge || isSupportBadge;
+          const isErrorBadge   = key === 'errors' && (errorCount ?? 0) > 0;
+          const badgeCount     = isFrBadge ? frUnreadCount : isSupportBadge ? (supportInboxCount ?? 0) : isErrorBadge ? (errorCount ?? 0) : 0;
+          const showBadge      = isFrBadge || isSupportBadge || isErrorBadge;
           return (
             <Link
               key={key}
@@ -775,6 +784,18 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       if (res.ok) {
         const d = await res.json() as { count?: number };
         if (typeof d.count === 'number') setFrUnreadCount(d.count);
+      }
+    } catch { /* non-critical */ }
+  }, []);
+
+  // Error Log badge (unresolved errors across all sub-accounts)
+  const [errorCount, setErrorCount] = useState(0);
+  const fetchErrorCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/errors?countOnly=1', { cache: 'no-store' });
+      if (res.ok) {
+        const d = await res.json() as { unresolved?: number };
+        if (typeof d.unresolved === 'number') setErrorCount(d.unresolved);
       }
     } catch { /* non-critical */ }
   }, []);
@@ -1013,13 +1034,25 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     router.replace(adminHref('blog'));
   }, [authState, activeTab, tabRest, router]);
 
-  useEffect(() => { if (authState === 'authenticated') { fetchStats(dateRange); fetchAnnouncements(); fetchFrUnreadCount(); fetchSupportInboxCount(); } }, [authState, fetchStats, fetchAnnouncements, fetchFrUnreadCount, fetchSupportInboxCount, dateRange]);
+  useEffect(() => { if (authState === 'authenticated') { fetchStats(dateRange); fetchAnnouncements(); fetchFrUnreadCount(); fetchSupportInboxCount(); fetchErrorCount(); } }, [authState, fetchStats, fetchAnnouncements, fetchFrUnreadCount, fetchSupportInboxCount, fetchErrorCount, dateRange]);
   // Refresh support count every 60s so team always sees current numbers
   useEffect(() => {
     if (authState !== 'authenticated') return;
     const id = setInterval(() => void fetchSupportInboxCount(), 60_000);
     return () => clearInterval(id);
   }, [authState, fetchSupportInboxCount]);
+  // Error Log badge: realtime push on every new error (no refresh) + 60s poll
+  // safety net. Reuses the broadcast system used by the support inbox.
+  useBroadcastChannel(
+    authState === 'authenticated' ? supportChannels.adminErrors() : null,
+    ['error'],
+    useCallback(() => { void fetchErrorCount(); }, [fetchErrorCount]),
+  );
+  useEffect(() => {
+    if (authState !== 'authenticated') return;
+    const id = setInterval(() => void fetchErrorCount(), 60_000);
+    return () => clearInterval(id);
+  }, [authState, fetchErrorCount]);
   // Allow any panel (e.g. SupportInboxPanel after Close) to force-refresh the
   // sidebar badge instantly, without waiting for the 60s tick.
   useEffect(() => {
@@ -1467,6 +1500,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           onLogout={handleLogout}
           frUnreadCount={frUnreadCount}
           supportInboxCount={supportInboxCount}
+          errorCount={errorCount}
           collapsed={sidebarCollapsed}
           onToggleCollapse={toggleSidebar}
           allowedTabs={allowedTabs}
@@ -1494,6 +1528,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           onLogout={handleLogout}
           frUnreadCount={frUnreadCount}
           supportInboxCount={supportInboxCount}
+          errorCount={errorCount}
           allowedTabs={allowedTabs}
           canManageTeam={canManageTeam}
           identityName={identityName}
@@ -2722,6 +2757,9 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         {/* ── Contacts Tab (master directory) ── */}
         {activeTab === 'contacts' && <ContactsPortal />}
 
+        {/* ── Error Log Tab ── */}
+        {activeTab === 'errors' && <ErrorLogPanel />}
+
         {/* ── System / Migrations Tab ── */}
         {activeTab === 'system' && <SystemTab />}
 
@@ -2772,6 +2810,12 @@ const MIGRATIONS = [
     name: 'Couple First/Last Name (077)',
     description: 'Adds first_name and last_name columns to couple_profiles and backfills from display_name where possible. Required for the new couple signup form.',
     endpoint: '/api/admin/run-migration-077',
+  },
+  {
+    id: '142',
+    name: 'Error Log table (142)',
+    description: 'Creates the platform-wide error_logs table that powers the new Error Log tab. Captures failures across API, SMS, email, payments, webhooks and cron for all sub-accounts. Run this once before using the Error Log.',
+    endpoint: '/api/admin/run-migration-142',
   },
 ];
 

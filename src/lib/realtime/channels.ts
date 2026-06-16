@@ -37,6 +37,9 @@ export const supportChannels = {
   /** Fired whenever any venue-direct message is sent or received so the
    *  VenueDirectInboxView updates instantly instead of waiting for 30s poll. */
   venueDirectInbox: () => 'support:venue-direct-inbox',
+  /** Fired whenever a new error is logged platform-wide so the super-admin
+   *  Error Log tab + sidebar badge update live (no refresh). */
+  adminErrors:      () => 'admin:error-feed',
 } as const;
 
 // ─── Bride conversation events ──────────────────────────────────────────────
@@ -111,6 +114,22 @@ export interface VenueDirectInboxEvent {
   venueId:     string;
   /** 'outbound' = concierge sent to venue, 'inbound' = venue replied */
   direction:   'outbound' | 'inbound';
+}
+
+/** Fired when a new error is logged so the admin Error Log feed + badge
+ *  update in real time. Payload is intentionally small — the panel refetches
+ *  detail rows itself; this just signals "something new arrived". */
+export interface ErrorLoggedEvent {
+  id:         string;
+  level:      'info' | 'warning' | 'error' | 'critical';
+  source:     string;
+  category:   string | null;
+  message:    string;
+  venueId:    string | null;
+  /** True when this event bumped an existing fingerprint rather than inserting
+   *  a brand-new row (so the feed can choose to re-sort vs prepend). */
+  deduped:    boolean;
+  createdAt:  string;
 }
 
 /** Fired when tags on a contact's lead(s) change (added or removed). */

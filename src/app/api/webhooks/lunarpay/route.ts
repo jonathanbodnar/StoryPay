@@ -150,6 +150,16 @@ export async function POST(request: NextRequest) {
       await handleLunarPayWebhookForPlatformLedger(payload as unknown as Record<string, unknown>);
     } catch (err) {
       console.error('[webhooks/lunarpay] platform ledger error', err);
+      void (async () => {
+        try {
+          const { logError } = await import('@/lib/error-log');
+          await logError({
+            level: 'critical', source: 'webhook', category: 'lunarpay_ledger',
+            message: 'LunarPay webhook ledger handler failed',
+            error: err, route: '/api/webhooks/lunarpay', context: { event },
+          });
+        } catch { /* non-critical */ }
+      })();
     }
   }
 
