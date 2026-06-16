@@ -14,7 +14,7 @@ import {
   resolvePostSubmit,
   type AddressFieldKey,
 } from '@/lib/marketing-form-schema';
-import { onMarketingFormSubmitted, sendBookingSystemGuide } from '@/lib/marketing-email-worker';
+import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -425,6 +425,13 @@ export async function POST(
     } catch (e) {
       console.warn('[form submit] booking-system lead fallback failed:', e);
     }
+  }
+
+  // Record "New Lead Opportunity" as the first entry in the chat thread,
+  // awaited so it lands before the guide-delivery messages.
+  if (createdLeadId) {
+    await logNewLeadOpportunity(formRow.venue_id, createdLeadId)
+      .catch((e) => console.warn('[form submit] opportunity log failed:', e));
   }
 
   // Phase 1 — Booking System guide delivery (email + SMS, fires immediately)

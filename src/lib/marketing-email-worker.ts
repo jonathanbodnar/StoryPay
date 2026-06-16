@@ -724,13 +724,16 @@ async function findOrCreateChannelThreadForLead(
     }
     if (!vcId) return null;
 
-    // Find existing channel-specific thread
+    // Reuse the lead's existing conversation thread if they already have one
+    // (ANY channel). This keeps every message — guide email, guide SMS, AI
+    // concierge, sequence steps, and inbound replies — on a SINGLE thread per
+    // lead instead of splitting email and SMS into separate threads. The
+    // thread's reply channel is kept current by logToConversationThread.
     const { data: existingThread } = await supabaseAdmin
       .from('conversation_threads')
       .select('id')
       .eq('venue_id', venueId)
       .eq('venue_customer_id', vcId)
-      .eq('external_reply_channel', channel)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -870,6 +873,49 @@ async function logToConversationThread(opts: {
       .eq('venue_id', opts.venueId);
   } catch (e) {
     console.error('[worker] logToConversationThread error (non-fatal):', e);
+  }
+}
+
+/**
+ * Writes the "New Lead Opportunity" marker as the FIRST entry in a lead's
+ * conversation thread, so every lead's chat history starts with a record of
+ * when they came in. Idempotent (never writes a second marker for the same
+ * lead) and best-effort (never throws). Requires the lead to have an email
+ * (the thread is keyed on the contact's email, same as guide delivery).
+ */
+export async function logNewLeadOpportunity(
+  venueId: string,
+  leadId: string,
+  createdAt?: string | Date | null,
+): Promise<void> {
+  try {
+    const thread = await findOrCreateChannelThreadForLead(venueId, leadId, 'email');
+    if (!thread) return;
+
+    // Don't add a second marker if this lead already has one.
+    const { data: existing } = await supabaseAdmin
+      .from('conversation_messages')
+      .select('id')
+      .eq('thread_id', thread.threadId)
+      .ilike('body', 'New Lead Opportunity%')
+      .limit(1)
+      .maybeSingle();
+    if (existing) return;
+
+    const parsed = createdAt ? new Date(createdAt) : new Date();
+    const when = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    const dateStr = when.toLocaleDateString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric',
+    });
+
+    await logToConversationThread({
+      threadId: thread.threadId,
+      venueId,
+      channel: 'email',
+      body: `New Lead Opportunity\n${dateStr}`,
+    });
+  } catch (e) {
+    console.error('[worker] logNewLeadOpportunity error (non-fatal):', e);
   }
 }
 

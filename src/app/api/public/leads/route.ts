@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
-import { onMarketingFormSubmitted, sendBookingSystemGuide } from '@/lib/marketing-email-worker';
+import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
@@ -399,6 +399,12 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     console.error('[public/leads] attach default pipeline', e);
   }
+
+  // Record the very first entry in the lead's chat thread — "New Lead
+  // Opportunity" + created date — so their conversation history always starts
+  // with a record of when they came in. Awaited so it lands BEFORE the
+  // guide-delivery messages and shows up as the first item in the thread.
+  await logNewLeadOpportunity(venue.id, lr.id, lr.created_at);
 
   // Phase 1 — Booking System guide delivery (email + SMS), fire-and-forget.
   // This sends the pricing guide PDF link immediately after form submission,

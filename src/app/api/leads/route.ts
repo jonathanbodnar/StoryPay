@@ -639,6 +639,13 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Record "New Lead Opportunity" as the first entry in the lead's chat thread.
+  await import('@/lib/marketing-email-worker')
+    .then(({ logNewLeadOpportunity }) =>
+      logNewLeadOpportunity(venueId, newId, String(row.created_at ?? new Date().toISOString())),
+    )
+    .catch(() => {});
+
   if (Array.isArray(body.tagIds) && body.tagIds.length > 0) {
     await setLeadTagIds(
       venueId,
