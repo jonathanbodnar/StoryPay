@@ -94,7 +94,10 @@ function shapePayload(v: VenueRow, plan: PlanRow | null): AiConciergeSettingsPay
     || String(plan?.name ?? '').toLowerCase().includes('legacy')
     || String(plan?.slug ?? '').toLowerCase().includes('legacy');
   const addon  = v.directory_addon_concierge === true || planIncludesConcierge || isLegacyPlan;
-  const a2p    = v.a2p_verified === true;
+  // GHL-connected venues have A2P compliance handled by GHL/their carrier
+  // account, not by StoryVenue's direct registration flow. Treat ghl_connected
+  // as satisfying the a2p requirement everywhere.
+  const a2p    = v.a2p_verified === true || v.ghl_connected === true;
   const eligible = addon && a2p;
 
   const blockers: string[] = [];
@@ -204,6 +207,13 @@ export async function PATCH(request: Request) {
       // Sync the addon flag if the plan grants concierge but the column says no
       if ((planIncludesConcierge || isLegacyPlan) && current.directory_addon_concierge !== true) {
         updates.directory_addon_concierge = true;
+      }
+
+      // GHL-connected venues have A2P handled by GHL. The DB CHECK constraint
+      // (migration 098) requires a2p_verified = TRUE. Auto-stamp it so the
+      // constraint passes without a manual support step.
+      if (current.ghl_connected === true && current.a2p_verified !== true) {
+        updates.a2p_verified = true;
       }
 
       updates.ai_concierge_enabled    = true;

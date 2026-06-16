@@ -245,7 +245,7 @@ async function reserveDueLeads(
            AND COALESCE(l2.sms_dnd, false) = false
            AND COALESCE(v2.ai_concierge_enabled, false) = true
            AND COALESCE(v2.directory_addon_concierge, false) = true
-           AND COALESCE(v2.a2p_verified, false) = true
+           AND (COALESCE(v2.a2p_verified, false) = true OR COALESCE(v2.ghl_connected, false) = true)
          ORDER BY l2.ai_next_send_at ASC
          LIMIT ${limit}
        )

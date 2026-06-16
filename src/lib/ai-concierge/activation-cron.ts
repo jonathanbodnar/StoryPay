@@ -197,7 +197,7 @@ async function fetchEligibleLeads(
     : sql`
         COALESCE(v.ai_concierge_enabled, false) = true
         AND COALESCE(v.directory_addon_concierge, false) = true
-        AND COALESCE(v.a2p_verified, false) = true
+        AND (COALESCE(v.a2p_verified, false) = true OR COALESCE(v.ghl_connected, false) = true)
       `;
 
   const rows = await sql<EligibleLeadRow[]>`
@@ -249,7 +249,7 @@ async function activateLead(
           WHERE v.id = leads.venue_id
             AND COALESCE(v.ai_concierge_enabled, false) = true
             AND COALESCE(v.directory_addon_concierge, false) = true
-            AND COALESCE(v.a2p_verified, false) = true
+            AND (COALESCE(v.a2p_verified, false) = true OR COALESCE(v.ghl_connected, false) = true)
         )
       `;
 

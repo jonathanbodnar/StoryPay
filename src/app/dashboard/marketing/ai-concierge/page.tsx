@@ -233,9 +233,9 @@ export default function AiConciergeSettingsPage() {
                 actionUrl={!data.eligibility.addonPurchased ? '/dashboard/directory-billing' : undefined}
                 actionLabel="View plans" />
               <EligibilityRow label="A2P 10DLC compliance" ok={data.eligibility.a2pVerified}
-                okLabel="Verified by StoryVenue"
+                okLabel={data.ghlConnected ? 'Active via your connected messaging account' : 'Verified by StoryVenue'}
                 failLabel="Not yet verified — required by carriers before any AI SMS can be sent"
-                info="A2P verification is handled by our team after your venue completes its messaging registration. Reach out to support if this has been pending more than 5 business days." />
+                info={data.ghlConnected ? undefined : 'A2P verification is handled by our team after your venue completes its messaging registration. Reach out to support if this has been pending more than 5 business days.'} />
               <EligibilityRow label="SMS messaging connected" ok={data.ghlConnected}
                 okLabel="Connected — AI will send through your messaging account"
                 failLabel="Not connected — AI has nowhere to send SMS through. Connect on the General settings page."
