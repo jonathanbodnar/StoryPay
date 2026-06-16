@@ -360,7 +360,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
 
       const { data: tag } = await supabaseAdmin
         .from('marketing_tags')
-        .select('id, name, venue_id')
+        .select('id, name, venue_id, system_key')
         .eq('id', body.tagId)
         .eq('venue_id', venueId)
         .maybeSingle();
@@ -377,7 +377,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
         leadId = created;
       }
 
-      const tg = tag as { id: string; name: string };
+      const tg = tag as { id: string; name: string; system_key: string | null };
       const { error: insErr } = await supabaseAdmin
         .from('lead_tag_assignments')
         .upsert(
@@ -392,6 +392,33 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
         action:   'tag_added_by_support',
         details:  { tag_id: tg.id, tag_name: tg.name, by: triggeredBy },
       }).then(() => {}, () => {});
+
+      // Fire marketing automation triggers for this tag addition.
+      // This is what makes venue automations like "When tag X added → send
+      // email / activate AI" actually execute from the support inbox.
+      void import('@/lib/marketing-email-worker')
+        .then(({ onMarketingTagAdded }) =>
+          onMarketingTagAdded(venueId, leadId!, [tg.id]),
+        )
+        .catch((e) => console.error('[support/add_tag] onMarketingTagAdded failed:', e));
+
+      // Special case: if the agent applied the ai_active system tag, activate
+      // AI immediately. Tags are normally a *reflection* of ai_state, not a
+      // cause — without this, applying "AI Active" from the sidebar would
+      // show the tag but never actually start follow-up messages.
+      if (tg.system_key === 'ai_active') {
+        void import('@/lib/ai-concierge/state-control')
+          .then(({ setLeadAiState }) =>
+            setLeadAiState({
+              leadId:      leadId!,
+              venueId,
+              newState:    'ai_active',
+              reason:      'support_tag_applied',
+              triggeredBy: `support:${triggeredBy}`,
+            }),
+          )
+          .catch((e) => console.error('[support/add_tag] AI activate failed:', e));
+      }
 
       if (venueCustomerId) {
         void fanoutTagsChanged(threadId, venueId, venueCustomerId, 'support');
@@ -439,6 +466,31 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
           action:   'tag_removed_by_support',
           details:  { tag_id: body.tagId, by: triggeredBy },
         }).then(() => {}, () => {});
+      }
+
+      // If agent removed the ai_active system tag, pause AI follow-up so
+      // the lead stops receiving automated messages.
+      if (lead?.id) {
+        const { data: removedTag } = await supabaseAdmin
+          .from('marketing_tags')
+          .select('system_key')
+          .eq('id', body.tagId)
+          .eq('venue_id', venueId)
+          .maybeSingle();
+        const sk = (removedTag as { system_key: string | null } | null)?.system_key;
+        if (sk === 'ai_active') {
+          void import('@/lib/ai-concierge/state-control')
+            .then(({ setLeadAiState }) =>
+              setLeadAiState({
+                leadId:      lead!.id,
+                venueId,
+                newState:    'paused',
+                reason:      'support_tag_removed',
+                triggeredBy: `support:${triggeredBy}`,
+              }),
+            )
+            .catch((e) => console.error('[support/remove_tag] AI pause failed:', e));
+        }
       }
 
       if (venueCustomerId) {
