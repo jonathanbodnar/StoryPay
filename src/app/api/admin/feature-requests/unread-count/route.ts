@@ -19,19 +19,27 @@ async function verifyAdmin() {
 export async function GET() {
   if (!(await verifyAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Gracefully handle the case where admin_read_at hasn't been migrated yet.
-  const { count, error } = await supabaseAdmin
-    .from('feature_requests')
-    .select('id', { count: 'exact', head: true })
-    .not('venue_id', 'is', null)   // exclude admin-created requests
-    .neq('status', 'completed')
-    .is('admin_read_at', null);
+  // This is a non-critical sidebar badge. It must NEVER return a 500 — a
+  // transient failure (e.g. a PostgREST schema-cache reload after a migration)
+  // can return an error object with an empty message, which previously fell
+  // through to a 500 with {"error":""} and broke the admin badge fetch. On any
+  // failure we log the real detail server-side and degrade gracefully to 0.
+  try {
+    const { count, error } = await supabaseAdmin
+      .from('feature_requests')
+      .select('id', { count: 'exact', head: true })
+      .not('venue_id', 'is', null)   // exclude admin-created requests
+      .neq('status', 'completed')
+      .is('admin_read_at', null);
 
-  if (error) {
-    // Column missing (pre-migration) — return 0 gracefully
-    if (/admin_read_at/i.test(error.message)) return NextResponse.json({ count: 0 });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.warn('[feature-requests/unread-count] query error (degrading to 0):', error.message || error);
+      return NextResponse.json({ count: 0 });
+    }
+
+    return NextResponse.json({ count: count ?? 0 });
+  } catch (err) {
+    console.error('[feature-requests/unread-count] unexpected error (degrading to 0):', err);
+    return NextResponse.json({ count: 0 });
   }
-
-  return NextResponse.json({ count: count ?? 0 });
 }
