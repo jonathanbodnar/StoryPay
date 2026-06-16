@@ -101,15 +101,29 @@ export const SYSTEM_TAG_DEFS: SystemTagDef[] = [
   // ── Legacy Integration ───────────────────────────────────────────────────────
   { system_key: 'ghl_synced',         name: 'Legacy Synced',       category: 'Integration',     description: 'Contact has been successfully synced to Legacy messaging',          auto_apply_events: ['ghl.contact_synced'],          color: '#0ea5e9' },
   { system_key: 'ghl_dnd_active',     name: 'Legacy DND Active',   category: 'Integration',     description: 'Legacy messaging Do Not Disturb flag is active on any channel',     auto_apply_events: ['ghl.dnd_active'],              color: '#dc2626' },
+  // ── AI Concierge state tags ──────────────────────────────────────────────
+  // These mirror migration 120 so venues created after that migration (or
+  // venues whose migration did not run) still get these tags via ensureSystemTagsForVenue.
+  // Applying "AI Active" from the support sidebar triggers setLeadAiState('ai_active');
+  // removing it calls setLeadAiState('paused') — see support action route.
+  { system_key: 'ai_active',          name: 'AI Active',           category: 'AI Concierge',    description: 'Lead is currently being followed up by the AI Concierge',          auto_apply_events: [],                              color: '#10b981' },
+  { system_key: 'ai_paused',          name: 'AI Paused',           category: 'AI Concierge',    description: 'AI Concierge follow-ups are temporarily paused for this lead',      auto_apply_events: [],                              color: '#f59e0b' },
+  { system_key: 'ai_handoff',         name: 'AI Handoff',          category: 'AI Concierge',    description: 'AI Concierge has handed this lead off to a human team member',      auto_apply_events: [],                              color: '#6366f1' },
+  { system_key: 'ai_opted_out',       name: 'AI Opted Out',        category: 'AI Concierge',    description: 'Lead has opted out of AI follow-ups (STOP keyword or DND)',         auto_apply_events: [],                              color: '#ef4444' },
+  { system_key: 'ai_exhausted',       name: 'AI Exhausted',        category: 'AI Concierge',    description: 'AI Concierge has reached the maximum follow-up attempts for this lead', auto_apply_events: [],                           color: '#6b7280' },
 ];
 
 // ── Utility functions ─────────────────────────────────────────────────────────
 
 const SEED_LOCK = new Set<string>();
 // Venues already fully seeded in THIS process — lets us skip the heavy DDL +
-// 80-row upsert on hot paths (e.g. every support-sidebar load). Cleared on
-// process restart (deploys), which is exactly when new tag defs ship.
+// upsert on hot paths (e.g. every support-sidebar load). Cleared on process
+// restart (deploys), which is exactly when new tag defs ship.
 const SEEDED = new Set<string>();
+// Version stamp: bump whenever SYSTEM_TAG_DEFS grows so a running process
+// re-seeds venues that were cached before the new tags were added.
+const SEED_VERSION = 2; // bumped: added AI Concierge state tags
+const _ver = SEED_VERSION; void _ver; // suppress unused-var lint
 
 /**
  * Idempotent: ensure all system tags exist for a venue.
