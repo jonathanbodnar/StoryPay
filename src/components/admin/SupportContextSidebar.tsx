@@ -73,7 +73,7 @@ interface ContextResponse {
     is_default: boolean;
     stages: Array<{ id: string; name: string; color: string | null; kind: string; position: number }>;
   }>;
-  tags: Array<{ id: string; name: string; icon: string; color: string | null }>;
+  tags: Array<{ id: string; name: string; icon: string; color: string | null; is_system: boolean; system_key: string | null; category: string | null }>;
   applied_tag_ids: string[];
 }
 
@@ -444,29 +444,39 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
             </div>
 
             {/* Inline applied tags — visible at a glance so agents can see
-                which tags are active without opening the modal. The modal
-                button above is still the way to add/remove them. */}
-            {data.applied_tag_ids.length > 0 && (
-              <div className="flex flex-wrap gap-1 pt-0.5">
-                {data.tags
-                  .filter(t => data.applied_tag_ids.includes(t.id))
-                  .map(t => (
+                which tags are active without opening the modal.
+                Custom tags first, then system tags. */}
+            {(() => {
+              const appliedSet = new Set(data.applied_tag_ids);
+              const applied = data.tags.filter(t => appliedSet.has(t.id));
+              const custom  = applied.filter(t => !t.is_system);
+              const system  = applied.filter(t => t.is_system);
+              if (applied.length === 0) return (
+                <p className="text-[10px] text-gray-400 italic pt-0.5">
+                  No tags yet — click <Tags size={9} className="inline mx-0.5" /> to add
+                </p>
+              );
+              return (
+                <div className="flex flex-wrap gap-1 pt-0.5">
+                  {[...custom, ...system].map(t => (
                     <span
                       key={t.id}
+                      title={t.category ? `${t.category}${t.system_key ? ` · ${t.system_key}` : ''}` : undefined}
                       className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
                       style={{
-                        borderColor: t.color ? `${t.color}60` : '#e5e7eb',
+                        borderColor:     t.color ? `${t.color}60` : '#e5e7eb',
                         backgroundColor: t.color ? `${t.color}15` : '#f9fafb',
-                        color: t.color ?? '#374151',
+                        color:           t.color ?? '#374151',
+                        opacity:         t.is_system ? 0.8 : 1,
                       }}
                     >
                       {t.icon && <span className="text-[10px] leading-none">{t.icon}</span>}
                       {t.name}
                     </span>
-                  ))
-                }
-              </div>
-            )}
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* AI quick-actions */}
             {data.ai && (
