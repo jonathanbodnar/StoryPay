@@ -904,9 +904,10 @@ export async function logNewLeadOpportunity(
 
     const parsed = createdAt ? new Date(createdAt) : new Date();
     const when = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-    const dateStr = when.toLocaleDateString('en-US', {
-      month: 'long', day: 'numeric', year: 'numeric',
-    });
+    const mm = String(when.getMonth() + 1).padStart(2, '0');
+    const dd = String(when.getDate()).padStart(2, '0');
+    const yy = String(when.getFullYear()).slice(-2);
+    const dateStr = `${mm}-${dd}-${yy}`;
 
     await logToConversationThread({
       threadId: thread.threadId,
