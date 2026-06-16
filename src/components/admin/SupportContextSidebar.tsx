@@ -58,6 +58,7 @@ interface ContextResponse {
     plan:               { id: string; name: string; price_cents: number; is_legacy: boolean } | null;
     addons:             { concierge: boolean; verified: boolean; sponsored: boolean };
     a2p:                { verified: boolean; brand_status: string | null; campaign_status: string | null };
+    ghl_connected:      boolean;
     ai_concierge_enabled: boolean;
     ai_persona:         string | null;
     open_tickets_count: number;
@@ -442,11 +443,39 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
               )}
             </div>
 
+            {/* Inline applied tags — visible at a glance so agents can see
+                which tags are active without opening the modal. The modal
+                button above is still the way to add/remove them. */}
+            {data.applied_tag_ids.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-0.5">
+                {data.tags
+                  .filter(t => data.applied_tag_ids.includes(t.id))
+                  .map(t => (
+                    <span
+                      key={t.id}
+                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                      style={{
+                        borderColor: t.color ? `${t.color}60` : '#e5e7eb',
+                        backgroundColor: t.color ? `${t.color}15` : '#f9fafb',
+                        color: t.color ?? '#374151',
+                      }}
+                    >
+                      {t.icon && <span className="text-[10px] leading-none">{t.icon}</span>}
+                      {t.name}
+                    </span>
+                  ))
+                }
+              </div>
+            )}
+
             {/* AI quick-actions */}
             {data.ai && (
               <AiActionRow
                 ai={data.ai}
                 disabled={!data.lead_id || actionPending}
+                onActivate={() =>
+                  runAction({ action: 'activate_ai' }, undefined, 'AI activated — first message in ~1 min')
+                }
                 onPause={() =>
                   runAction({ action: 'pause_ai' }, undefined, 'AI paused')
                 }
@@ -529,12 +558,16 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                   </span>
                 )}
                 {data.venue.a2p.verified ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" title="A2P verified">
-                    <ShieldCheck size={9} /> A2P
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" title={`A2P verified${data.venue.a2p.campaign_status ? ` · campaign: ${data.venue.a2p.campaign_status}` : ''}`}>
+                    <ShieldCheck size={9} /> A2P ✓
+                  </span>
+                ) : data.venue.ghl_connected ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 text-teal-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" title="GHL connected — SMS active">
+                    <ShieldCheck size={9} /> SMS Active
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 text-gray-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" title="A2P not verified">
-                    <ShieldAlert size={9} /> No A2P
+                  <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 text-gray-500 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide" title="No GHL connection or A2P registration">
+                    <ShieldAlert size={9} /> No SMS
                   </span>
                 )}
                 {data.venue.ai_concierge_enabled && (
@@ -844,20 +877,34 @@ function TagsModal({
 function AiActionRow({
   ai,
   disabled,
+  onActivate,
   onPause,
   onReEnable,
 }: {
   ai: NonNullable<ContextResponse['ai']>;
-  disabled: boolean;
+  disabled:   boolean;
+  onActivate: () => void;
   onPause:    () => void;
   onReEnable: () => void;
 }) {
-  const canPause = ai.state === 'ai_active';
-  const canReEnable = ['paused', 'handoff', 'opted_out', 'exhausted'].includes(ai.state);
-  if (!canPause && !canReEnable) return null;
+  const canActivate  = ai.state === 'dormant';
+  const canPause     = ai.state === 'ai_active';
+  const canReEnable  = ['paused', 'handoff', 'opted_out', 'exhausted'].includes(ai.state);
+  if (!canActivate && !canPause && !canReEnable) return null;
 
   return (
-    <div className="flex items-center gap-1 pt-0.5">
+    <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+      {canActivate && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onActivate}
+          className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 disabled:opacity-50"
+          title="Manually start AI follow-up now (sends first message in ~1 min)"
+        >
+          <Sparkles size={9} /> Activate AI
+        </button>
+      )}
       {canPause && (
         <button
           type="button"
@@ -874,7 +921,7 @@ function AiActionRow({
           disabled={disabled}
           onClick={onReEnable}
           className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 hover:bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 disabled:opacity-50"
-          title="Reset state to dormant; activation cron picks up after 24h cooldown"
+          title="Reset state to dormant; cron picks up after 24h cooldown"
         >
           <Sparkles size={9} /> Re-enable AI
         </button>

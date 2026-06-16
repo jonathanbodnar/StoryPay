@@ -44,6 +44,7 @@ export async function GET(
         id, name, notification_email, timezone, created_at,
         directory_plan_id, directory_addon_concierge, directory_addon_verified, directory_addon_sponsored,
         a2p_verified, a2p_brand_status, a2p_campaign_status,
+        ghl_connected,
         ai_concierge_enabled, ai_assistant_persona_name,
         ai_concierge_notify_emails
       `)
@@ -367,6 +368,7 @@ export async function GET(
         brand_status:    (v.a2p_brand_status as string | null) ?? null,
         campaign_status: (v.a2p_campaign_status as string | null) ?? null,
       },
+      ghl_connected:        Boolean(v.ghl_connected),
       ai_concierge_enabled: Boolean(v.ai_concierge_enabled),
       ai_persona:           (v.ai_assistant_persona_name as string | null) ?? null,
       open_tickets_count:   openTicketsCount ?? 0,

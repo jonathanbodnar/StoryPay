@@ -36,6 +36,7 @@ type ActionBody =
   | { action: 'add_tag';      tagId:   string }
   | { action: 'remove_tag';   tagId:   string }
   | { action: 're_enable_ai' }
+  | { action: 'activate_ai' }
   | { action: 'pause_ai' };
 
 interface LeadRow {
@@ -445,6 +446,45 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
       }
 
       return NextResponse.json({ ok: true });
+    }
+
+    case 'activate_ai': {
+      if (!lead) return NextResponse.json({ error: 'No lead linked to this thread yet' }, { status: 422 });
+      if (lead.ai_state !== 'dormant') {
+        return NextResponse.json({
+          error: `Cannot activate — lead AI state is "${lead.ai_state}", not "dormant"`,
+        }, { status: 422 });
+      }
+      const nextSendAt = new Date(Date.now() + 60 * 1000); // 1-minute warmup
+      const { data: activated, error: actErr } = await supabaseAdmin
+        .from('leads')
+        .update({
+          ai_state:               'ai_active',
+          ai_first_activated_at:  new Date().toISOString(),
+          ai_next_send_at:        nextSendAt.toISOString(),
+          updated_at:             new Date().toISOString(),
+        })
+        .eq('id', lead.id)
+        .eq('venue_id', venueId)
+        .eq('ai_state', 'dormant')
+        .select('id')
+        .maybeSingle();
+      if (actErr || !activated) {
+        return NextResponse.json({
+          error: actErr?.message ?? 'Lead state changed before update — refresh and retry',
+        }, { status: 409 });
+      }
+      await ensureVenueAiResources(venueId);
+      await recordAiStateTransition({
+        leadId:      lead.id,
+        venueId:     venueId,
+        fromState:   'dormant',
+        toState:     'ai_active',
+        reason:      'manually_activated',
+        triggeredBy: triggeredBy,
+        metadata:    { next_send_at: nextSendAt.toISOString() },
+      });
+      return NextResponse.json({ ok: true, next_send_at: nextSendAt.toISOString() });
     }
 
     case 're_enable_ai': {
