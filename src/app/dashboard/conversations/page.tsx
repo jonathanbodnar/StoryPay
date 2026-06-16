@@ -42,6 +42,7 @@ import {
   BotOff,
   Play,
   Clock,
+  BookOpen,
 } from 'lucide-react';
 import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
@@ -257,6 +258,7 @@ export default function ConversationsPage() {
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState('');
   const [draftIntent, setDraftIntent] = useState('');
+  const [guideAdded, setGuideAdded] = useState(false);
   const [showDraftIntent, setShowDraftIntent] = useState(false);
   const [savedRepliesOpen, setSavedRepliesOpen] = useState(false);
   const [dndSaving, setDndSaving] = useState(false);
@@ -2650,6 +2652,27 @@ export default function ConversationsPage() {
                             >
                               <Zap size={16} strokeWidth={1.75} />
                             </button>
+                            {/* Pricing guide link — always live, always current version */}
+                            {threadDetail?.venue_id && (
+                              <button
+                                type="button"
+                                title="Insert pricing guide link (always shows the current version of your guide)"
+                                aria-label="Insert pricing guide link"
+                                onClick={() => {
+                                  const guideUrl = `${window.location.origin}/guide/${threadDetail.venue_id}`;
+                                  setBody((b) => b ? `${b}\n${guideUrl}` : guideUrl);
+                                  setComposerExpanded(true);
+                                  setGuideAdded(true);
+                                  setTimeout(() => setGuideAdded(false), 2000);
+                                }}
+                                className={classNames(
+                                  'rounded-lg p-1.5 transition-colors hover:bg-emerald-50 hover:text-emerald-700',
+                                  guideAdded ? 'bg-emerald-50 text-emerald-600' : 'text-gray-500',
+                                )}
+                              >
+                                <BookOpen size={16} strokeWidth={1.75} />
+                              </button>
+                            )}
                             <div className="relative">
                               <button
                                 type="button"
