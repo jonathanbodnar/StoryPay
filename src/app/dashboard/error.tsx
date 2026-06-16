@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { reportClientError } from '@/components/ClientErrorLogger';
 
 export default function DashboardError({
   error,
@@ -12,6 +13,13 @@ export default function DashboardError({
 }) {
   useEffect(() => {
     console.error('[DashboardError]', error);
+    reportClientError({
+      level: 'error',
+      category: 'react_render',
+      message: error.message || 'Dashboard render error',
+      stack: error.stack,
+      context: { digest: error.digest },
+    });
   }, [error]);
 
   return (

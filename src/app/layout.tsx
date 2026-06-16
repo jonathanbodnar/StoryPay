@@ -4,6 +4,7 @@ import Script from 'next/script';
 import './globals.css';
 import { getPageSeo } from '@/lib/page-seo';
 import PWAInstaller from '@/components/PWAInstaller';
+import ClientErrorLogger from '@/components/ClientErrorLogger';
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? '';
 
@@ -147,6 +148,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased bg-white text-gray-900">
         {children}
         <PWAInstaller />
+        <ClientErrorLogger />
       </body>
       {/* Meta Pixel — site-wide, fires PageView on every page */}
       {META_PIXEL_ID && (

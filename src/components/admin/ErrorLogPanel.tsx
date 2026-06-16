@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, RefreshCw, Search, AlertTriangle, AlertOctagon, Info,
-  X, ExternalLink, CheckCircle2, Eye, Ban, Radio,
+  X, ExternalLink, CheckCircle2, Eye, Ban, Radio, Copy, ClipboardCheck, Wand2,
 } from 'lucide-react';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type ErrorLoggedEvent } from '@/lib/realtime/channels';
@@ -66,6 +66,46 @@ function relativeTime(iso: string): string {
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
   return `${d}d ago`;
+}
+
+/** Keep only the most useful stack frames (app code), drop framework noise,
+ *  cap the length — keeps the fix prompt small + high-signal. */
+function trimStack(stack: string | null): string {
+  if (!stack) return '';
+  const lines = stack.split('\n').map(l => l.trim());
+  const kept = lines.filter(l =>
+    !/node_modules|webpack-internal|next\/dist|node:internal/.test(l),
+  );
+  return (kept.length ? kept : lines).slice(0, 12).join('\n');
+}
+
+/**
+ * Build a compact, token-optimized prompt the super admin can paste straight
+ * back into the coding chat. Deterministic (no LLM call → free + instant).
+ * Only includes high-signal fields; omits empty ones to save tokens.
+ */
+function buildFixPrompt(r: ErrorRow, venueName?: string): string {
+  const lines: string[] = [];
+  const seen = r.occurrence_count > 1 ? ` (seen ${r.occurrence_count}x)` : '';
+  lines.push(`Fix this StoryPay ${r.source} error${seen}.`);
+  lines.push('');
+  lines.push(`Error: ${r.message}`);
+  if (r.route)  lines.push(`Where: ${r.method ? r.method + ' ' : ''}${r.route}${r.http_status ? ` [HTTP ${r.http_status}]` : ''}`);
+  if (r.category) lines.push(`Area: ${r.source}/${r.category}`);
+  if (r.venue_id) lines.push(`Venue: ${venueName || r.venue_id}`);
+
+  const stack = trimStack(r.stack);
+  if (stack) { lines.push('Stack:'); lines.push(stack); }
+
+  if (r.context && Object.keys(r.context).length) {
+    let ctx = '';
+    try { ctx = JSON.stringify(r.context); } catch { /* ignore */ }
+    if (ctx && ctx !== '{}') lines.push(`Context: ${ctx.slice(0, 600)}`);
+  }
+
+  lines.push('');
+  lines.push('Find the root cause in the repo and fix it with minimal changes. Explain the bug in 1-2 sentences, then make the fix.');
+  return lines.join('\n');
 }
 
 export default function ErrorLogPanel() {
@@ -299,8 +339,24 @@ function ErrorDetailDrawer({ row, venueName, onClose, onStatus }: {
   onStatus: (status: Status, notes?: string) => void;
 }) {
   const [notes, setNotes] = useState(row.notes ?? '');
+  const [copied, setCopied] = useState(false);
   const ls = LEVEL_STYLES[row.level];
   const appBase = 'https://app.storyvenue.com';
+
+  const copyFixPrompt = async () => {
+    const prompt = buildFixPrompt(row, venueName);
+    try {
+      await navigator.clipboard.writeText(prompt);
+    } catch {
+      // Fallback for older browsers / non-secure contexts.
+      const ta = document.createElement('textarea');
+      ta.value = prompt; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch { /* ignore */ }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -324,6 +380,25 @@ function ErrorDetailDrawer({ row, venueName, onClose, onStatus }: {
               {row.occurrence_count > 1 && <span className="font-bold text-gray-900">· seen ×{row.occurrence_count}</span>}
               <span>· first {relativeTime(row.created_at)}</span>
               <span>· last {relativeTime(row.last_seen_at)}</span>
+            </div>
+          </div>
+
+          {/* Copy fix prompt — paste straight into the coding chat */}
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Wand2 size={16} className="text-indigo-600 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-indigo-900">Copy fix prompt</p>
+                  <p className="text-[11px] text-indigo-700/80">Token-optimized — paste it into the dev chat to get this fixed.</p>
+                </div>
+              </div>
+              <button
+                onClick={copyFixPrompt}
+                className={`shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${copied ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+              >
+                {copied ? <><ClipboardCheck size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
+              </button>
             </div>
           </div>
 
