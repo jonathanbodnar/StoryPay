@@ -276,61 +276,61 @@ export async function GET(
 
   // 10. Venue's tags + tags applied to this lead.
   //
-  // Background: seed system tags for this venue (idempotent) so they always
-  // appear in the tag list — and if there's no lead yet, create one from the
-  // venue_customer record so future refreshes can show applied tags.
-  void (async () => {
-    try {
-      const { ensureSystemTagsForVenue, applySystemTags } = await import('@/lib/system-tags');
-      await ensureSystemTagsForVenue(t.venue_id);
+  // Seed system tags for this venue (idempotent, awaited) so the full tag
+  // library is ALWAYS present in the picker — and if this contact has no lead
+  // row yet, create one from the venue_customer so tags can be applied/tracked.
+  // This MUST run synchronously before the tag query below: on Railway,
+  // fire-and-forget promises are killed once the response is sent.
+  try {
+    const { ensureSystemTagsForVenue, applySystemTags } = await import('@/lib/system-tags');
+    await ensureSystemTagsForVenue(t.venue_id);
 
-      // If no lead was resolved above, try to create one from the venue_customer
-      // so tags can be tracked against them going forward.
-      if (!lead && c) {
-        const email = ((c.customer_email as string) || '').trim().toLowerCase();
-        const phone = ((c.phone as string) || '').trim();
-        const fn    = ((c.first_name as string) || '').trim();
-        const ln    = ((c.last_name as string) || '').trim();
-        const name  = [fn, ln].filter(Boolean).join(' ') || email || phone || null;
-        if (name) {
-          // Check one more time by email to avoid duplicate creation
-          let newLeadId: string | null = null;
-          if (email) {
-            const { data: existing } = await supabaseAdmin
-              .from('leads')
-              .select('id')
-              .eq('venue_id', t.venue_id)
-              .ilike('email', email)
-              .limit(1);
-            newLeadId = (existing?.[0] as { id: string } | undefined)?.id ?? null;
-          }
-          if (!newLeadId) {
-            const { data: inserted } = await supabaseAdmin
-              .from('leads')
-              .insert({
-                venue_id:   t.venue_id,
-                name,
-                first_name: fn || null,
-                last_name:  ln || null,
-                email:      email || null,
-                phone:      phone || null,
-                source:     'contact',
-                status:     'new',
-                position:   0,
-              })
-              .select('id')
-              .maybeSingle();
-            newLeadId = (inserted as { id: string } | null)?.id ?? null;
-          }
-          if (newLeadId) {
-            await applySystemTags(t.venue_id, newLeadId, ['new_lead', 'inquiry_received']);
-          }
+    if (!lead && c) {
+      const email = ((c.customer_email as string) || '').trim().toLowerCase();
+      const phone = ((c.phone as string) || '').trim();
+      const fn    = ((c.first_name as string) || '').trim();
+      const ln    = ((c.last_name as string) || '').trim();
+      const name  = [fn, ln].filter(Boolean).join(' ') || email || phone || null;
+      if (name) {
+        let newLeadId: string | null = null;
+        if (email) {
+          const { data: existing } = await supabaseAdmin
+            .from('leads')
+            .select('id')
+            .eq('venue_id', t.venue_id)
+            .ilike('email', email)
+            .limit(1);
+          newLeadId = (existing?.[0] as { id: string } | undefined)?.id ?? null;
+        }
+        if (!newLeadId) {
+          const { data: inserted } = await supabaseAdmin
+            .from('leads')
+            .insert({
+              venue_id:   t.venue_id,
+              name,
+              first_name: fn || null,
+              last_name:  ln || null,
+              email:      email || null,
+              phone:      phone || null,
+              source:     'contact',
+              status:     'new',
+              position:   0,
+            })
+            .select('id')
+            .maybeSingle();
+          newLeadId = (inserted as { id: string } | null)?.id ?? null;
+        }
+        if (newLeadId) {
+          await applySystemTags(t.venue_id, newLeadId, ['new_lead', 'inquiry_received']);
+          // Make the freshly-created lead the canonical one for the rest of
+          // this response so its applied tags show immediately (no 2nd refresh).
+          allMatchingLeadIds.add(newLeadId);
         }
       }
-    } catch (e) {
-      console.error('[bride-context] system-tags seed error:', e);
     }
-  })();
+  } catch (e) {
+    console.error('[bride-context] system-tags seed error:', e);
+  }
 
   const { data: tagRows } = await supabaseAdmin
     .from('marketing_tags')

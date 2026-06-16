@@ -106,14 +106,21 @@ export const SYSTEM_TAG_DEFS: SystemTagDef[] = [
 // ── Utility functions ─────────────────────────────────────────────────────────
 
 const SEED_LOCK = new Set<string>();
+// Venues already fully seeded in THIS process — lets us skip the heavy DDL +
+// 80-row upsert on hot paths (e.g. every support-sidebar load). Cleared on
+// process restart (deploys), which is exactly when new tag defs ship.
+const SEEDED = new Set<string>();
 
 /**
  * Idempotent: ensure all system tags exist for a venue.
  * Also runs migration-085 DDL if the columns haven't been added yet so the
  * function works even on a fresh database before the migration is applied manually.
+ *
+ * @param force  Re-run even if already seeded this process (default false).
  */
-export async function ensureSystemTagsForVenue(venueId: string): Promise<void> {
-  if (SEED_LOCK.has(venueId)) return; // avoid duplicate concurrent seeds
+export async function ensureSystemTagsForVenue(venueId: string, force = false): Promise<void> {
+  if (!force && SEEDED.has(venueId)) return;   // already done this process
+  if (SEED_LOCK.has(venueId)) return;          // avoid duplicate concurrent seeds
   SEED_LOCK.add(venueId);
   try {
     // ── 1. Ensure migration-085 columns exist (self-healing) ─────────────────
@@ -146,10 +153,33 @@ export async function ensureSystemTagsForVenue(venueId: string): Promise<void> {
       auto_apply_events:  def.auto_apply_events,
     }));
 
-    await supabaseAdmin
+    const { error: upsertErr } = await supabaseAdmin
       .from('marketing_tags')
       .upsert(rows, { onConflict: 'venue_id,system_key', ignoreDuplicates: false })
       .select('id');
+
+    if (upsertErr) {
+      // onConflict can fail if the unique index isn't there yet. Fall back to
+      // inserting only the system_keys that don't already exist so we never
+      // leave a venue with an empty tag library.
+      console.error('[system-tags] upsert failed, falling back to insert-missing:', upsertErr.message);
+      const { data: existing } = await supabaseAdmin
+        .from('marketing_tags')
+        .select('system_key')
+        .eq('venue_id', venueId)
+        .not('system_key', 'is', null);
+      const have = new Set((existing ?? []).map(r => (r as { system_key: string }).system_key));
+      const missing = rows.filter(r => !have.has(r.system_key));
+      if (missing.length > 0) {
+        const { error: insErr } = await supabaseAdmin.from('marketing_tags').insert(missing);
+        if (insErr) {
+          console.error('[system-tags] insert-missing failed:', insErr.message);
+          return; // do NOT mark seeded — retry next call
+        }
+      }
+    }
+
+    SEEDED.add(venueId); // success — skip the heavy path next time this process
   } catch (e) {
     console.error('[system-tags] ensureSystemTagsForVenue error:', e);
   } finally {
