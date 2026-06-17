@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Lock, Loader2, Sparkles, ArrowDownToLine } from 'lucide-react';
+import { trackClient } from '@/lib/analytics-client';
 
 /**
  * Full-page blocking wall shown when a venue's 14-day Venue Pro trial has
@@ -17,9 +18,13 @@ export default function TrialExpiredWall({ venueName }: { venueName: string }) {
   const [busy, setBusy] = useState<'add_card' | 'downgrade' | null>(null);
   const [error, setError] = useState('');
 
+  // Analytics: conversion blocker — venue hit the expired-trial paywall.
+  useEffect(() => { trackClient('trial_wall_hit', { label: 'Trial expired wall' }); }, []);
+
   async function addCard() {
     setBusy('add_card');
     setError('');
+    trackClient('upgrade_started', { label: 'Add card (trial wall)' });
     try {
       const res = await fetch('/api/venue-billing/start-paid', { method: 'POST' });
       const data = await res.json().catch(() => ({}));

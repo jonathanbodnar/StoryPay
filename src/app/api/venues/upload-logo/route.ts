@@ -95,5 +95,12 @@ export async function POST(request: NextRequest) {
     console.warn('[upload-logo] media library sync failed:', regErr);
   }
 
+  // Analytics: funnel milestone — venue uploads its logo (branding step).
+  void import('@/lib/analytics')
+    .then(({ trackMilestone }) => trackMilestone('branding_completed', {
+      venueId, label: 'Logo uploaded',
+    }))
+    .catch(() => { /* non-fatal */ });
+
   return NextResponse.json({ url: publicUrl });
 }

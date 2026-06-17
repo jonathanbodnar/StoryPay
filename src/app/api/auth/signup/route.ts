@@ -25,6 +25,7 @@ interface SignupPayload {
   phone?: string;
   password?: string;
   remember_me?: boolean;
+  attribution?: Record<string, string>;
 }
 
 function isEmail(s: string): boolean {
@@ -249,10 +250,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Analytics: record the top-of-funnel "signup" milestone (best-effort).
+  // Analytics: record the top-of-funnel "signup" milestone (best-effort), with
+  // UTM / referrer attribution so we can see which channels produce venues that
+  // actually activate — not just sign up.
   void import('@/lib/analytics')
     .then(({ trackMilestone }) => trackMilestone('signup', {
       venueId: venue.id, userEmail: email, role: 'owner', label: venueName,
+      properties: payload.attribution && typeof payload.attribution === 'object'
+        ? payload.attribution : undefined,
     }))
     .catch(() => { /* non-fatal */ });
 

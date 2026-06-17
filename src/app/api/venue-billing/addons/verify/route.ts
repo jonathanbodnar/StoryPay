@@ -154,5 +154,13 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Analytics: expansion revenue — venue enables a paid add-on.
+  void import('@/lib/analytics')
+    .then(({ trackEvent }) => trackEvent({
+      event: 'addon_enabled', kind: 'auto', venueId, label: 'Add-on enabled',
+      properties: { verified: addonVerified, sponsored: addonSponsored, concierge: addonConcierge },
+    }))
+    .catch(() => { /* non-fatal */ });
+
   return NextResponse.json({ ok: true, subscription_id: String(subId), total_cents: charge.total_cents });
 }

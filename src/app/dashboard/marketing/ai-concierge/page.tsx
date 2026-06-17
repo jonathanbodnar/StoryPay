@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { trackClient } from '@/lib/analytics-client';
 import {
   Sparkles, Loader2, Check, AlertTriangle, ShieldCheck,
   ShieldAlert, MessageSquare, BadgeCheck, ExternalLink,
@@ -122,6 +123,10 @@ export default function AiConciergeSettingsPage() {
   }
 
   useEffect(() => { void load(); }, []);
+
+  // Analytics: interest signal — venue opened the AI Concierge settings.
+  // Compare against the ai_enabled milestone to find the interest→adoption gap.
+  useEffect(() => { trackClient('ai_settings_opened', { label: 'AI Concierge settings' }); }, []);
 
   async function patch(body: Record<string, unknown>) {
     const res = await fetch('/api/dashboard/settings/ai-concierge', {

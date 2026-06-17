@@ -50,6 +50,7 @@ import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawe
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type StageChangedEvent } from '@/lib/realtime/channels';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
+import { trackClient } from '@/lib/analytics-client';
 
 interface ThreadRow {
   thread_id: string;
@@ -2663,6 +2664,7 @@ export default function ConversationsPage() {
                                   setBody((b) => b ? `${b}\n${guideUrl}` : guideUrl);
                                   setComposerExpanded(true);
                                   setGuideAdded(true);
+                                  trackClient('pricing_guide_inserted', { label: 'Venue composer', properties: { channel: composerTab } });
                                   setTimeout(() => setGuideAdded(false), 2000);
                                 }}
                                 className={classNames(

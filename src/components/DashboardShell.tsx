@@ -12,6 +12,7 @@ import MobileDashboardRedirect from '@/components/MobileDashboardRedirect';
 // ImpersonationBanner rendered server-side in layout.tsx (black bar)
 import { DirectoryRouteGuard } from '@/components/DirectoryRouteGuard';
 import UsageTracker from '@/components/analytics/UsageTracker';
+import { trackClient } from '@/lib/analytics-client';
 
 const STORAGE_KEY = 'storypay.dashboard.sidebarCollapsed';
 
@@ -69,6 +70,7 @@ export default function DashboardShell({
   const startTrialEarly = useCallback(async () => {
     setStartEarlyBusy(true);
     setStartEarlyError('');
+    trackClient('upgrade_started', { label: 'Start Venue Pro early' });
     try {
       const res = await fetch('/api/venue-billing/start-paid', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
@@ -121,6 +123,12 @@ export default function DashboardShell({
       router.replace('/dashboard');
     }
   }, [searchParams, router]);
+
+  // Analytics: the trial countdown banner is an upgrade prompt — record a view
+  // so we can measure prompt → upgrade_started → upgrade conversion.
+  useEffect(() => {
+    if (trialCountdown) trackClient('upgrade_prompt_viewed', { label: 'Trial countdown banner' });
+  }, [trialCountdown]);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((c) => {

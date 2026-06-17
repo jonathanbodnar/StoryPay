@@ -12,6 +12,13 @@ export async function POST() {
 
   try {
     await cancelVenueSubscription(user.venueId);
+    // Analytics: churn signal — venue cancels its subscription.
+    void import('@/lib/analytics')
+      .then(({ trackEvent }) => trackEvent({
+        event: 'subscription_canceled', kind: 'auto', venueId: user.venueId,
+        userEmail: user.memberEmail, role: user.role, label: 'Subscription canceled',
+      }))
+      .catch(() => { /* non-fatal */ });
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Cancel failed';

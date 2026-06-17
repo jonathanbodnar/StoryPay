@@ -120,6 +120,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Analytics: every successful login (engagement / DAU) + first_login once.
+    void import('@/lib/analytics')
+      .then(({ trackEvent, trackMilestone }) => {
+        trackEvent({ event: 'login', kind: 'auto', venueId: venue.id, userEmail: normalized, role: 'owner', label: 'Logged in' });
+        trackMilestone('first_login', { venueId: venue.id, userEmail: normalized, role: 'owner', label: 'First login' });
+      })
+      .catch(() => { /* non-fatal */ });
+
     return buildVenueAuthSuccessResponse({
       venueId:    venue.id,
       rememberMe: Boolean(rememberMe),

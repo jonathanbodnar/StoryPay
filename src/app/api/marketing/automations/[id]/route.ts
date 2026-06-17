@@ -141,6 +141,15 @@ export async function PATCH(
     }
   }
 
+  // Analytics: automation goes live (first transition draft/paused → active).
+  if (body.status === 'active' && existing.status !== 'active') {
+    void import('@/lib/analytics')
+      .then(({ trackEvent }) => trackEvent({
+        event: 'automation_published', kind: 'auto', venueId, label: 'Automation activated',
+      }))
+      .catch(() => { /* non-fatal */ });
+  }
+
   const { data: auto } = await supabaseAdmin.from('marketing_automations').select('*').eq('id', id).single();
   const { data: steps } = await supabaseAdmin
     .from('marketing_automation_steps')

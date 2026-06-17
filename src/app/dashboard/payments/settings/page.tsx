@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
 import PaymentGate from '@/components/PaymentGate';
+import { trackClient } from '@/lib/analytics-client';
 
 interface VenueInfo {
   id: string;
@@ -38,6 +39,9 @@ function PaymentSettingsInner() {
   useEffect(() => {
     void loadVenue(true);
   }, []);
+
+  // Analytics: interest signal — venue opened payments setup.
+  useEffect(() => { trackClient('payments_setup_opened', { label: 'Payments setup' }); }, []);
 
   const toggleAcceptAch = async (next: boolean) => {
     if (!venue) return;

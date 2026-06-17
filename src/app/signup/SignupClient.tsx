@@ -8,6 +8,20 @@ import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { ModeToggle } from '@/app/login/LoginClient';
 import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 import { checkPassword } from '@/lib/password-policy';
+import { trackClient } from '@/lib/analytics-client';
+
+/** Collect UTM / referrer attribution from the current URL for acquisition analytics. */
+function collectAttribution(sp: URLSearchParams): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']) {
+    const v = sp.get(k);
+    if (v) out[k] = v.slice(0, 120);
+  }
+  if (typeof document !== 'undefined' && document.referrer) {
+    out.referrer = document.referrer.slice(0, 200);
+  }
+  return out;
+}
 
 /**
  * Unified signup page with a toggle for venue owners vs. wedding couples.
@@ -104,6 +118,7 @@ function VenueSignupForm() {
     if (!passwordsMatch) { setError('Passwords do not match.'); return; }
     setLoading(true);
     setError('');
+    const attribution = collectAttribution(searchParams);
     try {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
@@ -116,11 +131,13 @@ function VenueSignupForm() {
           phone:       phone.trim(),
           password,
           remember_me: rememberMe,
+          attribution,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Could not create your account. Please try again.');
+        trackClient('form_error', { label: 'venue_signup', properties: { message: String(data.error || res.status) } });
         return;
       }
       // Session cookie is set server-side; redirect through the conversion
@@ -134,6 +151,7 @@ function VenueSignupForm() {
       router.replace(target);
     } catch {
       setError('Network error. Please try again.');
+      trackClient('form_error', { label: 'venue_signup', properties: { message: 'network_error' } });
     } finally {
       setLoading(false);
     }

@@ -22,6 +22,7 @@ import {
   UserPlus, Flag, X, Radio, Sparkles, FileText, Maximize2, Minimize2,
   Eye, EyeOff, ChevronDown, ChevronUp, BookOpen,
 } from 'lucide-react';
+import { trackClient } from '@/lib/analytics-client';
 import { useBroadcastChannel, useBroadcastChannels } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent, type VenueDirectInboxEvent } from '@/lib/realtime/channels';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
@@ -1687,9 +1688,10 @@ function ThreadDetailView({
                     type="button"
                     title="Insert pricing guide link (always shows the latest version)"
                     onClick={() => {
-                      const guideUrl = `${window.location.origin}/guide/${detail.venue!.id}`;
+                      const guideUrl = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/guide/${detail.venue!.id}`;
                       onReplyBodyChange(replyBody ? `${replyBody}\n${guideUrl}` : guideUrl);
                       setGuideAdded(true);
+                      trackClient('pricing_guide_inserted', { label: 'Admin support inbox' });
                       setTimeout(() => setGuideAdded(false), 2000);
                     }}
                     className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${

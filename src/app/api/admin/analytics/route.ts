@@ -35,11 +35,16 @@ interface EventRow {
 }
 
 const FUNNEL_LABELS: Record<string, string> = {
-  signup:          'Signed up',
-  guide_published: 'Published pricing guide',
-  ai_enabled:      'Enabled AI Concierge',
-  first_lead:      'Captured first lead',
-  upgrade:         'Upgraded to paid',
+  signup:             'Signed up',
+  first_login:        'Logged in',
+  branding_completed: 'Added branding / logo',
+  listing_published:  'Published listing',
+  guide_created:      'Started pricing guide',
+  guide_published:    'Published pricing guide',
+  first_lead:         'Captured first lead',
+  lead_replied:       'Replied to a lead',
+  ai_enabled:         'Enabled AI Concierge',
+  upgrade:            'Upgraded to paid',
 };
 
 function topN(counts: Map<string, number>, n: number): { key: string; count: number }[] {

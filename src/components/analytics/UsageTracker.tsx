@@ -22,7 +22,7 @@ import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
 interface QueuedEvent {
-  event: 'pageview' | 'click';
+  event: 'pageview' | 'click' | 'rage_click' | 'session_start';
   path: string;
   label?: string;
   sessionId: string;
@@ -106,6 +106,23 @@ export default function UsageTracker() {
     timer.current = setTimeout(() => flush(), FLUSH_INTERVAL_MS);
   };
 
+  // Fire session_start once per browser tab session.
+  useEffect(() => {
+    try {
+      const KEY = 'sp.analytics.started';
+      if (!sessionStorage.getItem(KEY)) {
+        sessionStorage.setItem(KEY, '1');
+        enqueue({
+          event: 'session_start',
+          path: window.location.pathname,
+          sessionId: getSessionId(),
+          properties: document.referrer ? { referrer: document.referrer.slice(0, 200) } : undefined,
+        });
+      }
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Pageview on every route change.
   useEffect(() => {
     if (!pathname) return;
@@ -122,9 +139,33 @@ export default function UsageTracker() {
 
   // Global click capture + flush-on-hide. Registered once.
   useEffect(() => {
+    // Rage-click detector: 3+ clicks at ~the same spot within a short window.
+    let lastX = 0, lastY = 0, burst = 0, lastT = 0, raged = false;
+
     const onClick = (ev: MouseEvent) => {
       const el = ev.target as HTMLElement | null;
       if (!el) return;
+
+      // Frustration signal: rapid repeated clicks in the same area.
+      const now = Date.now();
+      const near = Math.abs(ev.clientX - lastX) < 24 && Math.abs(ev.clientY - lastY) < 24;
+      if (near && now - lastT < 600) {
+        burst += 1;
+      } else {
+        burst = 1; raged = false;
+      }
+      lastX = ev.clientX; lastY = ev.clientY; lastT = now;
+      if (burst >= 3 && !raged) {
+        raged = true;
+        const ri = labelFor(el);
+        enqueue({
+          event: 'rage_click',
+          path: window.location.pathname,
+          label: ri?.label,
+          sessionId: getSessionId(),
+        });
+      }
+
       const info = labelFor(el);
       if (!info) return;
       enqueue({

@@ -100,6 +100,14 @@ export async function POST(request: NextRequest) {
     error = fallback.error;
   }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Analytics: venue creates a marketing automation (feature adoption).
+  void import('@/lib/analytics')
+    .then(({ trackEvent }) => trackEvent({
+      event: 'automation_created', kind: 'auto', venueId,
+      label: name, properties: { trigger_type: triggerType },
+    }))
+    .catch(() => { /* non-fatal */ });
   const steps = Array.isArray(body.steps) ? body.steps : [];
   if (steps.length > 0) {
     const rows = steps.map((s) => ({

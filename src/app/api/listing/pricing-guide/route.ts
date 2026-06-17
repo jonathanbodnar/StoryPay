@@ -186,14 +186,16 @@ export async function PATCH(req: Request) {
     );
   }
 
-  // Analytics: funnel milestone — first time this venue publishes its guide.
-  if (update.enabled === true) {
-    void import('@/lib/analytics')
-      .then(({ trackMilestone }) => trackMilestone('guide_published', {
-        venueId, label: 'Pricing guide published',
-      }))
-      .catch(() => { /* non-fatal */ });
-  }
+  // Analytics: funnel milestones — first time this venue saves a guide
+  // (guide_created) and first time it's published (guide_published).
+  void import('@/lib/analytics')
+    .then(({ trackMilestone }) => {
+      trackMilestone('guide_created', { venueId, label: 'Pricing guide started' });
+      if (update.enabled === true) {
+        trackMilestone('guide_published', { venueId, label: 'Pricing guide published' });
+      }
+    })
+    .catch(() => { /* non-fatal */ });
 
   return NextResponse.json({ guide: data });
 }

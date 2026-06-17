@@ -22,9 +22,14 @@ export type AnalyticsKind = 'auto' | 'milestone';
 /** Named funnel milestones, in funnel order. Keep in sync with the admin panel. */
 export const FUNNEL_MILESTONES = [
   'signup',
+  'first_login',
+  'branding_completed',
+  'listing_published',
+  'guide_created',
   'guide_published',
-  'ai_enabled',
   'first_lead',
+  'lead_replied',
+  'ai_enabled',
   'upgrade',
 ] as const;
 export type FunnelMilestone = (typeof FUNNEL_MILESTONES)[number];

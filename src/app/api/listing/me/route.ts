@@ -190,5 +190,14 @@ export async function PATCH(request: NextRequest) {
   }
   revalidatePath('/api/public/directory/venues');
 
+  // Analytics: funnel milestone — venue makes its directory listing live.
+  if (updates.is_published === true) {
+    void import('@/lib/analytics')
+      .then(({ trackMilestone }) => trackMilestone('listing_published', {
+        venueId, label: 'Directory listing published',
+      }))
+      .catch(() => { /* non-fatal */ });
+  }
+
   return NextResponse.json({ listing: updated });
 }

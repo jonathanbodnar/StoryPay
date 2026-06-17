@@ -25,7 +25,20 @@ interface IncomingEvent {
 }
 
 const MAX_EVENTS = 50;
-const ALLOWED_AUTO_EVENTS = new Set(['pageview', 'click']);
+// Auto-capture firehose from the global UsageTracker.
+const ALLOWED_AUTO_EVENTS = new Set(['pageview', 'click', 'rage_click', 'session_start']);
+// Curated named events components may fire via trackClient(). Anything not
+// listed here is dropped so the client can't write arbitrary event names.
+const ALLOWED_CLIENT_EVENTS = new Set([
+  'ai_settings_opened',
+  'payments_setup_opened',
+  'trial_wall_hit',
+  'upgrade_prompt_viewed',
+  'upgrade_started',
+  'pricing_guide_inserted',
+  'form_error',
+  'signup_started',
+]);
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,7 +55,8 @@ export async function POST(req: NextRequest) {
     let recorded = 0;
     for (const e of events.slice(0, MAX_EVENTS)) {
       const name = (e.event || '').toString();
-      if (!ALLOWED_AUTO_EVENTS.has(name)) continue; // ingest is only for auto-capture
+      const isAuto = ALLOWED_AUTO_EVENTS.has(name);
+      if (!isAuto && !ALLOWED_CLIENT_EVENTS.has(name)) continue; // allowlist only
       await trackEvent({
         event:      name,
         kind:       'auto',

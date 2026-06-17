@@ -31,6 +31,13 @@ export async function POST() {
 
   try {
     const result = await changeVenuePlan(venueId, freePlan.id);
+    // Analytics: churn signal — venue downgrades to the Free plan.
+    void import('@/lib/analytics')
+      .then(({ trackEvent }) => trackEvent({
+        event: 'subscription_canceled', kind: 'auto', venueId, label: 'Downgraded to Free',
+        properties: { type: 'downgrade_free' },
+      }))
+      .catch(() => { /* non-fatal */ });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Could not downgrade to Free';

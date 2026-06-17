@@ -651,6 +651,18 @@ ${triggerBlock}
     return NextResponse.json({ error: insErr?.message ?? 'Failed to save message' }, { status: 500 });
   }
 
+  // Analytics: outbound message to a lead — engagement signal (conversation_sent
+  // each time, with channel) + lead_replied milestone the first time the venue
+  // responds to any lead. Only counts true external sends.
+  if (visibility === 'external') {
+    void import('@/lib/analytics')
+      .then(({ trackEvent, trackMilestone }) => {
+        trackEvent({ event: 'conversation_sent', kind: 'auto', venueId, label: 'Replied to lead', properties: { channel: messageChannel } });
+        trackMilestone('lead_replied', { venueId, label: 'First reply to a lead' });
+      })
+      .catch(() => { /* non-fatal */ });
+  }
+
   // Keep the thread's external_reply_channel in sync with what was actually sent
   // so the chat list badge reflects the correct channel (SMS vs Email).
   if (visibility === 'external' && (replyChannel === 'sms' || replyChannel === 'email')) {
