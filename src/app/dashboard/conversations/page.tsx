@@ -2695,6 +2695,7 @@ export default function ConversationsPage() {
                                   threadId={selectedId}
                                   channel={composerTab === 'email' ? 'email' : 'sms'}
                                   onInsert={(b) => { setBody(b); setComposerExpanded(true); }}
+                                  align="left"
                                 />
                               )}
                             </div>
