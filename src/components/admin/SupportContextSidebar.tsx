@@ -285,11 +285,12 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
         </div>
         <button
           type="button"
-          onClick={load}
-          className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-800"
+          onClick={() => void load()}
+          disabled={loading}
+          className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-800 disabled:opacity-50"
           title="Refresh"
         >
-          <RefreshCw size={10} /> Refresh
+          <RefreshCw size={10} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>
 
