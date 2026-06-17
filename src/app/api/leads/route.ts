@@ -670,6 +670,13 @@ export async function POST(request: NextRequest) {
     source: (data as LeadRow).source,
   });
 
+  // Analytics: funnel milestone — first lead this venue ever captures.
+  void import('@/lib/analytics')
+    .then(({ trackMilestone }) => trackMilestone('first_lead', {
+      venueId, label: 'First lead captured', properties: { source: (data as LeadRow).source },
+    }))
+    .catch(() => { /* non-fatal */ });
+
   // Fan out to Zapier / external integrations subscribed to lead.created
   void dispatchIntegrationEvent(venueId, 'lead.created', {
     lead: {

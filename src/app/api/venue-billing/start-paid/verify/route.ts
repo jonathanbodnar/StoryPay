@@ -104,6 +104,15 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', venueId);
 
+  // Analytics: funnel milestone — venue converts to a paying plan (card on file).
+  const upgradePlanId = ctx.plan.id;
+  void import('@/lib/analytics')
+    .then(({ trackMilestone }) => trackMilestone('upgrade', {
+      venueId, label: 'Upgraded to paid',
+      properties: { plan: upgradePlanId, mode: isTrialStart ? 'card_on_trial' : 'immediate' },
+    }))
+    .catch(() => { /* non-fatal */ });
+
   await supabaseAdmin.from('platform_billing_events').insert({
     venue_id: venueId,
     directory_plan_id: ctx.plan.id,

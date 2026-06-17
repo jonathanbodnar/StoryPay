@@ -240,6 +240,15 @@ export async function POST(request: NextRequest) {
 
   const lr = lead as { id: string; created_at: string; email: string; phone: string | null };
 
+  // Analytics: funnel milestone — first lead this venue ever captures.
+  if (!(venue as { is_demo?: boolean }).is_demo) {
+    void import('@/lib/analytics')
+      .then(({ trackMilestone }) => trackMilestone('first_lead', {
+        venueId: venue.id, label: 'First lead captured', properties: { source: 'public_listing' },
+      }))
+      .catch(() => { /* non-fatal */ });
+  }
+
   // Skip duplicate recording for demo venues — they exist to test resubmission.
   if (!(venue as { is_demo?: boolean }).is_demo) {
     void recordDuplicateCandidatesForNewLead(venue.id, lr.id, lr.email, lr.phone, lr.created_at);

@@ -11,6 +11,7 @@ import MobileFab from '@/components/MobileFab';
 import MobileDashboardRedirect from '@/components/MobileDashboardRedirect';
 // ImpersonationBanner rendered server-side in layout.tsx (black bar)
 import { DirectoryRouteGuard } from '@/components/DirectoryRouteGuard';
+import UsageTracker from '@/components/analytics/UsageTracker';
 
 const STORAGE_KEY = 'storypay.dashboard.sidebarCollapsed';
 
@@ -154,6 +155,7 @@ export default function DashboardShell({
       style={{ backgroundColor: '#ffffff', '--sidebar-w': rail ? '60px' : '216px' } as React.CSSProperties}
     >
       {/* ImpersonationBanner removed — rendered once in layout.tsx */}
+      <UsageTracker />
       <Sidebar
         venue={venue}
         role={role}

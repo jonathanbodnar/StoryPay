@@ -250,6 +250,12 @@ export async function PATCH(request: Request) {
     void ensureVenueAiResources(venueId).catch((e) => {
       console.error('[ai-concierge settings] ensureVenueAiResources failed:', e);
     });
+    // Analytics: funnel milestone — first time this venue turns AI on.
+    void import('@/lib/analytics')
+      .then(({ trackMilestone }) => trackMilestone('ai_enabled', {
+        venueId, userEmail: user.memberEmail, role: user.role, label: 'AI Concierge enabled',
+      }))
+      .catch(() => { /* non-fatal */ });
   }
 
   const updatedResult = await loadVenueRow(venueId);

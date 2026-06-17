@@ -186,5 +186,14 @@ export async function PATCH(req: Request) {
     );
   }
 
+  // Analytics: funnel milestone — first time this venue publishes its guide.
+  if (update.enabled === true) {
+    void import('@/lib/analytics')
+      .then(({ trackMilestone }) => trackMilestone('guide_published', {
+        venueId, label: 'Pricing guide published',
+      }))
+      .catch(() => { /* non-fatal */ });
+  }
+
   return NextResponse.json({ guide: data });
 }

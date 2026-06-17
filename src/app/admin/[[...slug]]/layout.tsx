@@ -30,6 +30,7 @@ import { CannedRepliesPanel } from '@/components/admin/CannedRepliesPanel';
 import { AdminTeamPanel } from '@/components/admin/AdminTeamPanel';
 import { AdminProfilePanel } from '@/components/admin/AdminProfilePanel';
 import ErrorLogPanel from '@/components/admin/ErrorLogPanel';
+import AnalyticsPanel from '@/components/admin/AnalyticsPanel';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
 
@@ -66,6 +67,7 @@ type AdminTabKey =
   | 'blog'
   | 'seo-pages'
   | 'trends'
+  | 'analytics'
   | 'errors'
   | 'system'
   | 'team'
@@ -91,6 +93,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'blog',
   'seo-pages',
   'trends',
+  'analytics',
   'errors',
   'system',
   'team',
@@ -534,6 +537,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
   { key: 'search-analytics', label: 'Search Analytics', icon: BarChart2 },
   { key: 'article-ratings', label: 'Article Ratings', icon: Star },
+  { key: 'analytics', label: 'Usage Analytics', icon: BarChart2 },
   { key: 'errors', label: 'Error Log', icon: AlertTriangle },
   { key: 'system', label: 'System / Migrations', icon: Settings },
   { key: 'team', label: 'Team', icon: Users },
@@ -2758,6 +2762,8 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         {activeTab === 'contacts' && <ContactsPortal />}
 
         {/* ── Error Log Tab ── */}
+        {activeTab === 'analytics' && <AnalyticsPanel />}
+
         {activeTab === 'errors' && <ErrorLogPanel />}
 
         {/* ── System / Migrations Tab ── */}

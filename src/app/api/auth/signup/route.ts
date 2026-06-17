@@ -249,6 +249,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Analytics: record the top-of-funnel "signup" milestone (best-effort).
+  void import('@/lib/analytics')
+    .then(({ trackMilestone }) => trackMilestone('signup', {
+      venueId: venue.id, userEmail: email, role: 'owner', label: venueName,
+    }))
+    .catch(() => { /* non-fatal */ });
+
   // ── Grant the 14-day Venue Pro trial (no card required) ───────────────────
   // Assign the Venue Pro plan and snapshot a 14-day trial onto the venue. No
   // LunarPay subscription is created yet — that only happens when the venue
