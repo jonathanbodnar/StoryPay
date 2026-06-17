@@ -2597,7 +2597,7 @@ export default function ConversationsPage() {
                           </div>
                         )}
                         {(composerTab === 'email' || composerTab === 'sms') && (
-                          <div className="flex flex-wrap items-center gap-0.5 border-t border-gray-100 bg-white px-2 py-1">
+                          <div className="relative flex flex-wrap items-center gap-0.5 border-t border-gray-100 bg-white px-2 py-1">
                             <div className="relative">
                               <button
                                 type="button"
@@ -2659,7 +2659,7 @@ export default function ConversationsPage() {
                                 title="Insert pricing guide link (always shows the current version of your guide)"
                                 aria-label="Insert pricing guide link"
                                 onClick={() => {
-                                  const guideUrl = `${window.location.origin}/guide/${threadDetail.venue_id}`;
+                                  const guideUrl = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/guide/${threadDetail.venue_id}`;
                                   setBody((b) => b ? `${b}\n${guideUrl}` : guideUrl);
                                   setComposerExpanded(true);
                                   setGuideAdded(true);
@@ -2673,32 +2673,30 @@ export default function ConversationsPage() {
                                 <BookOpen size={16} strokeWidth={1.75} />
                               </button>
                             )}
-                            <div className="relative">
-                              <button
-                                type="button"
-                                onClick={() => setSavedRepliesOpen((v) => !v)}
-                                className={classNames(
-                                  'rounded-lg p-1.5 transition-colors hover:bg-gray-100',
-                                  savedRepliesOpen ? 'bg-violet-50 text-violet-700' : 'text-gray-500 hover:text-gray-800',
-                                )}
-                                aria-label="Saved replies"
-                                title="Insert a saved reply"
-                              >
-                                <FileText size={16} strokeWidth={1.75} />
-                              </button>
-                              {selectedId && (
-                                <CannedReplyPicker
-                                  open={savedRepliesOpen}
-                                  onClose={() => setSavedRepliesOpen(false)}
-                                  listEndpoint="/api/dashboard/canned-replies"
-                                  renderEndpoint={(id) => `/api/dashboard/canned-replies/${id}/render`}
-                                  threadId={selectedId}
-                                  channel={composerTab === 'email' ? 'email' : 'sms'}
-                                  onInsert={(b) => { setBody(b); setComposerExpanded(true); }}
-                                  align="left"
-                                />
+                            <button
+                              type="button"
+                              onClick={() => setSavedRepliesOpen((v) => !v)}
+                              className={classNames(
+                                'rounded-lg p-1.5 transition-colors hover:bg-gray-100',
+                                savedRepliesOpen ? 'bg-violet-50 text-violet-700' : 'text-gray-500 hover:text-gray-800',
                               )}
-                            </div>
+                              aria-label="Saved replies"
+                              title="Insert a saved reply"
+                            >
+                              <FileText size={16} strokeWidth={1.75} />
+                            </button>
+                            {selectedId && (
+                              <CannedReplyPicker
+                                open={savedRepliesOpen}
+                                onClose={() => setSavedRepliesOpen(false)}
+                                listEndpoint="/api/dashboard/canned-replies"
+                                renderEndpoint={(id) => `/api/dashboard/canned-replies/${id}/render`}
+                                threadId={selectedId}
+                                channel={composerTab === 'email' ? 'email' : 'sms'}
+                                onInsert={(b) => { setBody(b); setComposerExpanded(true); }}
+                                fullWidth
+                              />
+                            )}
                             <button
                               type="button"
                               onClick={() => setShowDraftIntent((v) => !v)}

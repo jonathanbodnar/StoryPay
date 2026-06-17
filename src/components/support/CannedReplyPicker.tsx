@@ -44,11 +44,17 @@ export interface CannedReplyPickerProps {
    * 'left'            — left edge aligns with anchor, extends rightward.
    */
   align?:         'left' | 'right';
+  /**
+   * When true, the picker spans the full width of its positioned ancestor
+   * (inset-x-0 w-auto) instead of a fixed w-80/w-96. Use when the relative
+   * anchor is the entire toolbar row.
+   */
+  fullWidth?:     boolean;
 }
 
 export function CannedReplyPicker({
   open, onClose, listEndpoint, renderEndpoint, threadId, agentName, channel, onInsert,
-  align = 'right',
+  align = 'right', fullWidth = false,
 }: CannedReplyPickerProps) {
   const [templates, setTemplates] = useState<CannedReplyTemplate[]>([]);
   const [loading,   setLoading]   = useState(false);
@@ -122,7 +128,7 @@ export function CannedReplyPicker({
   if (!open) return null;
 
   return (
-    <div className={`absolute z-30 bottom-full mb-2 w-80 sm:w-96 rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden ${align === 'left' ? 'left-0' : 'right-0'}`}>
+    <div className={`absolute z-30 bottom-full mb-2 rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden ${fullWidth ? 'inset-x-0 w-auto' : align === 'left' ? 'left-0 w-80 sm:w-96' : 'right-0 w-80 sm:w-96'}`}>
       <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-gray-50/60 px-3 py-2">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
           <FileText size={12} /> Saved replies
