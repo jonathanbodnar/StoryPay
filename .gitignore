@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# graphify knowledge graph (rebuilt locally for free via git hook; not committed to avoid repo bloat)
+/graphify-out/
