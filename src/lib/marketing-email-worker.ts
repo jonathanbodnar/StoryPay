@@ -10,7 +10,7 @@ import { mergeMarketingFields, renderMarketingEmailHtml, type MergeFieldRecord }
 import { injectVenueDataIntoDefinition } from '@/lib/marketing-email-injection';
 import { resolveCampaignRecipients } from '@/lib/marketing-email-audience';
 import { signMarketingOpenToken, signMarketingUnsubscribeToken } from '@/lib/marketing-email-tokens';
-import { addCalendarDaysYmd, resolveVenueTimezone } from '@/lib/venue-timezone';
+import { addCalendarDaysYmd, resolveVenueTimezone, formatLeadOpportunityStamp } from '@/lib/venue-timezone';
 import { formatInTimeZone } from 'date-fns-tz';
 import { logStepExecution } from '@/lib/workflow-execution-logs';
 
@@ -904,16 +904,24 @@ export async function logNewLeadOpportunity(
 
     const parsed = createdAt ? new Date(createdAt) : new Date();
     const when = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-    const mm = String(when.getMonth() + 1).padStart(2, '0');
-    const dd = String(when.getDate()).padStart(2, '0');
-    const yy = String(when.getFullYear()).slice(-2);
-    const dateStr = `${mm}-${dd}-${yy}`;
+
+    // Timestamp in the venue's own registered timezone, e.g. "6-26-26 4:32pm EST"
+    // (month-day-year + 12-hour time + short tz abbreviation).
+    const { data: venueRow } = await supabaseAdmin
+      .from('venues')
+      .select('timezone')
+      .eq('id', venueId)
+      .maybeSingle();
+    const stamp = formatLeadOpportunityStamp(
+      when,
+      (venueRow as { timezone?: string | null } | null)?.timezone,
+    );
 
     await logToConversationThread({
       threadId: thread.threadId,
       venueId,
       channel: 'email',
-      body: `New Lead Opportunity\n${dateStr}`,
+      body: `New Lead Opportunity!\n${stamp}`,
     });
   } catch (e) {
     console.error('[worker] logNewLeadOpportunity error (non-fatal):', e);

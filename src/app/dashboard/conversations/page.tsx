@@ -1947,6 +1947,21 @@ export default function ConversationsPage() {
                         );
                       }
 
+                      // "New Lead Opportunity" marker — the first entry written
+                      // to every lead's thread. Render as plain, boxless text
+                      // (no email card): a bold title + a timestamp line in the
+                      // venue's own timezone (e.g. "6-26-26 4:32pm EST").
+                      if (m.sender_kind === 'system' && /^New Lead Opportunity/i.test(m.body.trim())) {
+                        const lines = m.body.split('\n').map((s) => s.trim()).filter(Boolean);
+                        const stamp = lines.slice(1).join(' ').trim();
+                        return (
+                          <div key={m.id} className="flex flex-col items-center gap-0.5 py-3 text-center">
+                            <span className="text-[13px] font-semibold text-gray-700">New Lead Opportunity!</span>
+                            {stamp && <span className="text-[11px] text-gray-400">{stamp}</span>}
+                          </div>
+                        );
+                      }
+
                       const isInternal = m.visibility === 'internal';
                       const fromContact = m.sender_kind === 'contact';
                       const fromSupport =

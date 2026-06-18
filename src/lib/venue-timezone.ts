@@ -116,6 +116,23 @@ export function timeStrInTimeZone(isoUtc: string, timeZone: string): string {
 }
 
 /**
+ * Human-friendly stamp like "6-26-26 4:32pm EST": month-day-year (no leading
+ * zeros, 2-digit year), 12-hour time (lowercase am/pm, no space), and the
+ * short timezone abbreviation — all rendered in the venue's registered zone.
+ */
+export function formatLeadOpportunityStamp(
+  when: Date | string,
+  rawTimeZone: string | null | undefined,
+): string {
+  const tz = resolveVenueTimezone(rawTimeZone);
+  const d = typeof when === 'string' ? new Date(when) : when;
+  const date = formatInTimeZone(d, tz, 'M-d-yy');
+  const time = formatInTimeZone(d, tz, 'h:mm a').replace(/\s+/g, '').toLowerCase();
+  const abbr = getIntlShortTimeZoneName(tz, d);
+  return abbr ? `${date} ${time} ${abbr}` : `${date} ${time}`;
+}
+
+/**
  * Interpret wall-clock date + time as local in `timeZone` and return UTC Date.
  */
 export function wallClockToUtc(dateYmd: string, timeHHmm: string, timeZone: string): Date {
