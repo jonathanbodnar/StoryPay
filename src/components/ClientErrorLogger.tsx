@@ -133,8 +133,11 @@ export default function ClientErrorLogger() {
 
       try {
         const res = await originalFetch(input, init);
-        // Log server failures on our own API only (4xx as warning, 5xx as error).
-        if (isApi && !isSelf && res.status >= 400) {
+        // Log server failures on our own API only (4xx as warning, 5xx as error),
+        // but skip *expected* auth/validation outcomes (wrong password, duplicate
+        // email, not-signed-in admin polls). Those are normal user input — not
+        // platform bugs — and would otherwise flood the error log with noise.
+        if (isApi && !isSelf && res.status >= 400 && !isExpectedApiFailure(cleanPath(url), res.status)) {
           let detail = '';
           try { detail = (await res.clone().text()).slice(0, 300); } catch { /* ignore */ }
           reportClientError({
@@ -171,6 +174,25 @@ export default function ClientErrorLogger() {
   }, []);
 
   return null;
+}
+
+/**
+ * True for HTTP failures that are *expected* by design and therefore not worth
+ * logging as platform errors:
+ *
+ *   - 401 / 403 anywhere — "not signed in" / "not allowed". This is normal auth
+ *     state (e.g. a wrong password on sign-in, or admin dashboard polls that
+ *     fire before a session exists), not a bug.
+ *   - 400 / 409 / 422 / 429 on auth & credential endpoints — normal user-facing
+ *     validation (missing field, duplicate email, weak password, rate limit).
+ */
+const AUTH_PATHS = /^\/api\/(auth\b|admin\/login\b|admin\/auth\b)/;
+function isExpectedApiFailure(path: string, status: number): boolean {
+  if (status === 401 || status === 403) return true;
+  if (AUTH_PATHS.test(path) && (status === 400 || status === 409 || status === 422 || status === 429)) {
+    return true;
+  }
+  return false;
 }
 
 /** Strip origin + query so routes group cleanly in the error log. */
