@@ -16,6 +16,7 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase';
 import { GuideViewTracker } from '@/components/public/GuideViewTracker';
+import InlinePdfGuide from '@/components/public/InlinePdfGuide';
 
 interface Props {
   params: Promise<{ venueId: string }>;
@@ -135,63 +136,18 @@ export default async function GuidePage({ params, searchParams }: Props) {
         />
       </div>
 
-      {/* Mobile fallback — shown via CSS when iframe is not useful */}
+      {/* Mobile: iframe PDF doesn't render on iOS/Android, so we rasterise the
+          PDF inline with pdf.js instead of forcing a tap-to-download card. */}
       <style>{`
         @media (max-width: 640px) {
           .pdf-frame { display: none !important; }
-          .mobile-cta { display: flex !important; }
+          .pdf-mobile { display: block !important; }
         }
-        .mobile-cta { display: none; }
+        .pdf-mobile { display: none; }
       `}</style>
 
-      <div className="mobile-cta" style={{
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 16,
-        padding: '48px 24px',
-        textAlign: 'center',
-      }}>
-        <div style={{ fontSize: 48, lineHeight: 1 }}>📄</div>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 18, color: '#1b1b1b', marginBottom: 6 }}>
-            {venueName} — Pricing Guide
-          </div>
-          <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 24 }}>
-            Tap the button below to open or save the full Pricing &amp; Availability Guide.
-          </div>
-        </div>
-        <a
-          href={downloadUrl}
-          download
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            background: '#1b1b1b',
-            color: '#fff',
-            fontWeight: 700,
-            fontSize: 15,
-            borderRadius: 12,
-            padding: '14px 28px',
-            textDecoration: 'none',
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Download Pricing Guide
-        </a>
-        <a
-          href={pdfUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ fontSize: 13, color: '#6b7280', textDecoration: 'underline' }}
-        >
-          Open in browser instead
-        </a>
+      <div className="pdf-mobile">
+        <InlinePdfGuide pdfUrl={pdfUrl} downloadUrl={downloadUrl} venueName={venueName} />
       </div>
     </div>
   );
