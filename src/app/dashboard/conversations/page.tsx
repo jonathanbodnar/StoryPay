@@ -282,8 +282,12 @@ export default function ConversationsPage() {
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const deepLinkConsumed = useRef(false);
 
-  const loadThreads = useCallback(async () => {
-    setLoadingList(true);
+  // `silent` background refreshes update the thread array WITHOUT flipping
+  // `loadingList`, which would swap the whole list for the spinner and reset
+  // the left pane's scroll position back to the top. Only the initial mount
+  // load and filter changes should show the spinner.
+  const loadThreads = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoadingList(true);
     try {
       const params = new URLSearchParams();
       if (threadListFilter === 'unread') params.set('unread', '1');
@@ -373,7 +377,7 @@ export default function ConversationsPage() {
         setSelectedId(threadId);
         if (composeTab) setComposerTab(composeTab);
         setMobileShowThread(true);
-        await loadThreads();
+        await loadThreads({ silent: true });
         window.history.replaceState({}, '', '/dashboard/conversations');
       } catch {
         /* ignore */
@@ -535,7 +539,7 @@ export default function ConversationsPage() {
       scrollToBottomNow();
       if (tRes.ok) {
         await fetch(`/api/conversations/threads/${id}/read`, { method: 'POST' });
-        await loadThreads();
+        await loadThreads({ silent: true });
       }
     } finally {
       setLoadingThread(false);
@@ -647,7 +651,7 @@ export default function ConversationsPage() {
     function onVisible() {
       if (document.visibilityState !== 'visible') return;
       // Refresh the threads list so left-pane stage badges stay current.
-      void loadThreads();
+      void loadThreads({ silent: true });
       // Refresh the open thread's stage info without disrupting the chat.
       if (selectedId) {
         fetch(`/api/conversations/threads/${selectedId}`, { cache: 'no-store' })
@@ -1014,7 +1018,7 @@ export default function ConversationsPage() {
           const msgs = (await r.json()) as Msg[];
           if (Array.isArray(msgs)) setMessages(msgs);
         } catch { /* non-fatal */ }
-        void loadThreads();
+        void loadThreads({ silent: true });
       } finally {
         setSending(false);
       }
@@ -1075,7 +1079,7 @@ export default function ConversationsPage() {
         };
         setMessages(prev => [...prev, newMsg]);
       }
-      void loadThreads();
+      void loadThreads({ silent: true });
     } finally {
       setSending(false);
     }
@@ -1097,7 +1101,7 @@ export default function ConversationsPage() {
       });
       if (!res.ok) return;
       if (selectedId) await reloadMessages(selectedId);
-      await loadThreads();
+      await loadThreads({ silent: true });
     } finally {
       setDndSaving(false);
     }
@@ -1124,7 +1128,7 @@ export default function ConversationsPage() {
       console.error('[conversations] star/pin toggle:', msg);
       return;
     }
-    await loadThreads();
+    await loadThreads({ silent: true });
     if (selectedId === threadId) await reloadMessages(threadId);
   }
 
@@ -1237,7 +1241,7 @@ export default function ConversationsPage() {
       setContactSearch('');
       setSelectedId(data.id);
       setMobileShowThread(true);
-      await loadThreads();
+      await loadThreads({ silent: true });
     } finally {
       setCreatingThread(false);
     }
@@ -1357,7 +1361,7 @@ export default function ConversationsPage() {
                             compose="sms"
                             existingThreadId={existingThread?.thread_id ?? null}
                             onSelectThread={(id) => { setSelectedId(id); setMobileShowThread(true); setComposerTab('sms'); }}
-                            onLoadThreads={loadThreads}
+                            onLoadThreads={() => loadThreads({ silent: true })}
                             title={`SMS ${tcName}`}
                           />
                           <TeamContactButton
@@ -1367,7 +1371,7 @@ export default function ConversationsPage() {
                             compose="email"
                             existingThreadId={existingThread?.thread_id ?? null}
                             onSelectThread={(id) => { setSelectedId(id); setMobileShowThread(true); setComposerTab('email'); }}
-                            onLoadThreads={loadThreads}
+                            onLoadThreads={() => loadThreads({ silent: true })}
                             title={`Email ${tcName}`}
                           />
                         </div>
