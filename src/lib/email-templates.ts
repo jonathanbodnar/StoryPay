@@ -94,6 +94,18 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
     button_text: 'View Proposal',
     footer:      null,
   },
+  // Owner-side "a contact replied" email. Fires on every inbound reply (the
+  // first reply after a public-listing form fill, and every reply while the AI
+  // Concierge is active so the owner can step in and take the conversation
+  // over). Without this default, getVenueEmailTemplate() returned null for the
+  // 'new_message' scenario and the email never sent.
+  new_message: {
+    subject:     '{{customer_name}} replied — {{organization}}',
+    heading:     'New reply from {{customer_name}}',
+    body:        '{{customer_name}} just replied to {{organization}}.\n\n"{{message_preview}}"\n\nIf the AI Concierge is active it may respond automatically — open the conversation to review and take it over anytime.',
+    button_text: 'View Conversation',
+    footer:      null,
+  },
 };
 
 // ─── Loader ───────────────────────────────────────────────────────────────────

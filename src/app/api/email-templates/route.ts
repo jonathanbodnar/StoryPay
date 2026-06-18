@@ -128,6 +128,18 @@ export const DEFAULT_TEMPLATES: Record<string, {
       button_text: 'View Proposal',
     },
   },
+  new_message: {
+    label: 'Contact Replied',
+    description: 'Notification sent to you when a contact replies (first reply after a form fill, and every reply while the AI Concierge is active so you can take over)',
+    icon: 'MessageSquare',
+    variables: ['{{contact.full_name}}', '{{customer_name}}', '{{message_preview}}', '{{venue.name}}'],
+    defaults: {
+      subject: '{{customer_name}} replied — {{organization}}',
+      heading: 'New reply from {{customer_name}}',
+      body: '{{customer_name}} just replied to {{organization}}.\n\n"{{message_preview}}"\n\nIf the AI Concierge is active it may respond automatically — open the conversation to review and take it over anytime.',
+      button_text: 'View Conversation',
+    },
+  },
 };
 
 async function getVenueId() {

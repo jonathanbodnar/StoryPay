@@ -7,6 +7,7 @@ import {
   listGhlConversationMessages,
   normalizePhone,
 } from '@/lib/ghl';
+import { notifyOwnerNewMessage } from '@/lib/owner-notifications';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-sms.storypay.placeholder';
 
@@ -422,6 +423,22 @@ export async function insertInboundGhlSms(params: {
       }
     };
     void broadcastInbound();
+
+    // Owner notification — fire on EVERY inbound SMS reply, independent of the
+    // AI Concierge state machine. This guarantees the venue owner is emailed
+    // when: (a) a contact replies for the first time after a public-listing
+    // form fill, and (b) any time the AI is active and a contact replies (so
+    // the owner can take the conversation over) — including repeated re-entries
+    // into AI follow-up. Mirrors the inbound-email path. Best-effort and gated
+    // by the venue's email_new_message toggle + recipient email, so it applies
+    // uniformly to every sub-account.
+    notifyOwnerNewMessage({
+      venueId,
+      threadId,
+      fromName:  contactName?.trim() || null,
+      fromEmail: '',
+      bodyText:  messageBody.trim(),
+    });
   }
 
   return { ok: true, inserted: true, venueCustomerId: customerId };
