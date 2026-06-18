@@ -1985,6 +1985,9 @@ function MessageBubble({
   const isInternal = msg.visibility === 'internal';
   const isAi = msg.sender_kind === 'ai';
   const isConcierge = msg.sender_kind === 'concierge' || msg.sent_on_behalf_of_venue;
+  // Venue-sent = the venue's own owner/team replying (not concierge/support,
+  // not AI). Gets an explicit "Sent by Venue" badge for unambiguous attribution.
+  const isVenue = (msg.sender_kind === 'owner' || msg.sender_kind === 'team') && !isConcierge && !isAi;
   const isSupportNote = msg.support_only === true;
   const isVenueDirect = msg.audience === 'venue_direct';
 
@@ -2072,6 +2075,11 @@ function MessageBubble({
           {isConcierge && (
             <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">
               Sent by Support
+            </span>
+          )}
+          {isVenue && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-0.5 text-[10px] font-medium">
+              <Building2 size={10} /> Sent by Venue
             </span>
           )}
           <ChannelChip channel={msg.channel} />

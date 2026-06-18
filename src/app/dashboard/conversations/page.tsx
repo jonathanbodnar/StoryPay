@@ -1960,6 +1960,15 @@ export default function ConversationsPage() {
                         fromSupport ||
                         fromAi ||
                         fromSystem;
+                      // Venue-sent = the owner/team replying themselves (not AI,
+                      // not StoryVenue support, not an automated system send).
+                      // Gets an explicit "Sent by Venue" badge so attribution is
+                      // unambiguous no matter who responded.
+                      const fromVenue =
+                        (m.sender_kind === 'owner' || m.sender_kind === 'team') &&
+                        !fromSupport &&
+                        !fromAi &&
+                        !fromSystem;
                       const alignRight = fromUs && !fromContact;
                       const isEmail = !isInternal && m.channel === 'email';
                       const emailExpanded = expandedEmailIds.has(m.id);
@@ -2178,6 +2187,14 @@ export default function ConversationsPage() {
                                       title="Sent automatically by the system (guide delivery or sequence)"
                                     >
                                       <Zap size={9} /> Automated
+                                    </span>
+                                  )}
+                                  {fromVenue && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-indigo-700"
+                                      title={m.author_label ? `Sent by ${m.author_label}` : 'Sent by the venue'}
+                                    >
+                                      <Building2 size={9} /> Sent by Venue
                                     </span>
                                   )}
                                   {m.visibility === 'external' && m.external_email_sent === true && !m.send_error && (
