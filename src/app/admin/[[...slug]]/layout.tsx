@@ -1478,6 +1478,11 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
                     {showAdminPass ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
+                <div className="mt-1.5 text-right">
+                  <Link href="/reset-password/admin" className="text-xs text-gray-500 hover:text-gray-800 transition-colors">
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
             </div>
             <button type="submit" className="w-full text-white font-semibold py-2.5 rounded-xl transition-colors hover:opacity-85" style={{ backgroundColor: BRAND }}>
