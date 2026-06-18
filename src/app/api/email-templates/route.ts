@@ -140,6 +140,30 @@ export const DEFAULT_TEMPLATES: Record<string, {
       button_text: 'View Conversation',
     },
   },
+  new_lead: {
+    label: 'New Lead',
+    description: 'Notification sent to you when a new lead is captured (public listing form, manual add, or API)',
+    icon: 'UserPlus',
+    variables: ['{{customer_name}}', '{{contact.full_name}}', '{{email}}', '{{source}}', '{{venue.name}}'],
+    defaults: {
+      subject: 'New lead: {{customer_name}} — {{organization}}',
+      heading: 'New Lead',
+      body: 'You have a new lead for {{organization}}.\n\nName: {{customer_name}}\nEmail: {{email}}\nSource: {{source}}\n\nReach out while they\u2019re hot — open their contact to start the conversation.',
+      button_text: 'View Lead',
+    },
+  },
+  ai_handoff: {
+    label: 'AI Concierge Handoff',
+    description: 'Notification sent to you when the AI Concierge escalates a conversation and needs you to take over',
+    icon: 'Bot',
+    variables: ['{{customer_name}}', '{{contact.full_name}}', '{{reason}}', '{{venue.name}}'],
+    defaults: {
+      subject: 'Action needed: AI Concierge handed off {{customer_name}} — {{organization}}',
+      heading: 'AI Concierge Handoff',
+      body: 'The AI Concierge handed the conversation with {{customer_name}} off to you.\n\nReason: {{reason}}\n\nOpen the conversation to take over and reply.',
+      button_text: 'View Conversation',
+    },
+  },
 };
 
 async function getVenueId() {
