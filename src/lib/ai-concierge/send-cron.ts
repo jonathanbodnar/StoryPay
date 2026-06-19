@@ -100,6 +100,7 @@ export interface SendCronResult {
 interface ReservedLeadRow {
   id:                       string;
   venue_id:                 string;
+  phone:                    string | null;
   ai_first_activated_at:    Date | null;
   ai_expires_at:            Date | null;
   ai_attempt_count:         number;
@@ -107,6 +108,15 @@ interface ReservedLeadRow {
   timezone:                 string | null;
   ai_assistant_persona_name: string | null;
 }
+
+/**
+ * Hard floor between two AI follow-ups to the same contact. The cadence is
+ * 24–48h (computeNextSendAt), so legitimate consecutive sends are always ≥24h
+ * apart — a 22h floor never blocks them but does block any second send caused by
+ * a reset schedule, duplicate lead rows for one person, or a cron race. This is
+ * what guarantees "at most one AI follow-up per contact per day".
+ */
+const MIN_SEND_INTERVAL_HOURS = 22;
 
 // ── Main entry ─────────────────────────────────────────────────────────────
 
@@ -219,6 +229,7 @@ async function reserveDueLeads(
       RETURNING
         l.id,
         l.venue_id,
+        l.phone,
         l.ai_first_activated_at,
         l.ai_expires_at,
         l.ai_attempt_count,
@@ -255,6 +266,7 @@ async function reserveDueLeads(
     RETURNING
       l.id,
       l.venue_id,
+      l.phone,
       l.ai_first_activated_at,
       l.ai_expires_at,
       l.ai_attempt_count,
@@ -299,6 +311,25 @@ async function processOneLead(
       detail:    `Inside quiet hours; rescheduled to ${nextWindow.toISOString()}`,
     });
     return { kind: 'skipped', reason: 'quiet_hours' };
+  }
+
+  // 3.4. Once-per-day guard. This cron is the ONLY place AI follow-ups are sent,
+  // so it's the right chokepoint to guarantee a contact never gets more than one
+  // follow-up per ~day — no matter how ai_next_send_at got set (re-activation
+  // resetting the schedule, duplicate lead rows for the same person, or a race
+  // between ticks). Skipped for admin force-sends (bypassQuietHours). Fail-open:
+  // a guard query error must never halt the whole send run.
+  if (!bypassQuietHours && await contactSentRecently(sql, row, MIN_SEND_INTERVAL_HOURS)) {
+    const next = computeNextSendAt(tz);
+    await rescheduleLead(row.id, next);
+    await logAiRun({
+      leadId:  row.id,
+      venueId: row.venue_id,
+      attempt: row.ai_attempt_count + 1,
+      outcome: 'skipped_recent_send',
+      detail:  `A follow-up already reached this contact within ${MIN_SEND_INTERVAL_HOURS}h; rescheduled to ${next.toISOString()}`,
+    });
+    return { kind: 'skipped', reason: 'recent_send' };
   }
 
   // 3.5. Per-venue daily spend cap. Cheaper than building a prompt + calling
@@ -475,6 +506,51 @@ async function processOneLead(
 
 function isUnsendableOutcome(outcome: SmsSendOutcome): boolean {
   return outcome === 'invalid_phone' || outcome === 'dnd' || outcome === 'permanent_error';
+}
+
+/**
+ * Has this contact already received a *sent* AI follow-up within the last
+ * `hours`? Matched by the contact's phone (last 10 digits, format-insensitive)
+ * so duplicate lead rows for the same person are de-duped; falls back to this
+ * lead alone when no usable phone is on file.
+ *
+ * Fail-open: any query error returns false (don't block sending) and is logged,
+ * so a schema hiccup can never stall the entire send cron.
+ */
+async function contactSentRecently(
+  sql: postgres.Sql,
+  row: ReservedLeadRow,
+  hours: number,
+): Promise<boolean> {
+  try {
+    const last10 = (row.phone || '').replace(/[^0-9]/g, '').slice(-10);
+    if (last10.length === 10) {
+      const rows = await sql`
+        SELECT 1
+          FROM public.ai_runs r
+          JOIN public.leads l ON l.id = r.lead_id
+         WHERE r.venue_id = ${row.venue_id}
+           AND r.outcome = 'sent'
+           AND r.created_at > NOW() - make_interval(hours => ${hours})
+           AND right(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10) = ${last10}
+         LIMIT 1
+      `;
+      return rows.length > 0;
+    }
+
+    const rows = await sql`
+      SELECT 1
+        FROM public.ai_runs r
+       WHERE r.lead_id = ${row.id}
+         AND r.outcome = 'sent'
+         AND r.created_at > NOW() - make_interval(hours => ${hours})
+       LIMIT 1
+    `;
+    return rows.length > 0;
+  } catch (e) {
+    console.error('[ai-send] once-per-day guard check failed (fail-open):', e instanceof Error ? e.message : e);
+    return false;
+  }
 }
 
 async function rescheduleLead(leadId: string, nextSendAt: Date): Promise<void> {

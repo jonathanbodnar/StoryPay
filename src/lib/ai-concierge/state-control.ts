@@ -45,6 +45,15 @@ export interface SetLeadAiStateResult {
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
 
+/**
+ * Only a next-send pushed further out than the normal 24–48h cadence (plus a
+ * little quiet-hours slack) is treated as a deliberate snooze that "resume"
+ * should pull forward. Anything inside the normal window is just the regular
+ * follow-up cadence and must be left untouched so re-activation can't trigger a
+ * same-day duplicate send.
+ */
+const SOFT_PAUSE_MIN_FUTURE_MS = 49 * 60 * 60 * 1000;
+
 export async function setLeadAiState(
   input: SetLeadAiStateInput,
 ): Promise<SetLeadAiStateResult> {
@@ -74,9 +83,16 @@ export async function setLeadAiState(
   // pushes ai_next_send_at without changing ai_state). Asking to "resume"
   // such a lead should NOT be a no-op — it should yank the next send back
   // to NOW so the cron picks it up.
+  //
+  // CRITICAL: a *normally*-scheduled active lead always has its next send 24–48h
+  // out (see computeNextSendAt in send-cron), so a naive ">now" check would flag
+  // EVERY active lead as snoozed. Re-applying ai_active (booking-workflow
+  // re-enrollment, re-adding the tag, etc.) would then reset the send to ~now and
+  // fire a second follow-up the SAME DAY. Only a send pushed beyond the normal
+  // cadence ceiling counts as a genuine manual snooze worth resuming early.
   const isSoftPaused = fromState === 'ai_active'
     && currentNextSendAt !== null
-    && currentNextSendAt.getTime() > now.getTime() + 60_000;
+    && currentNextSendAt.getTime() > now.getTime() + SOFT_PAUSE_MIN_FUTURE_MS;
 
   // No-op if already at target state AND not soft-paused (a soft-paused
   // resume needs to actually clear the snooze).
