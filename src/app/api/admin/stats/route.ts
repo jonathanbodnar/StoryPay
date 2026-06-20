@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
 
   const { data: directoryVenues, error: directoryVenuesErr } = await supabaseAdmin
     .from('venues')
-    .select('id, directory_plan_id, directory_subscription_status')
+    .select('id, directory_plan_id, directory_subscription_status, directory_trial_ends_at, directory_trial_consumed, last_login_at, is_demo')
     .not('directory_plan_id', 'is', null);
 
   if (directoryVenuesErr) {
@@ -151,6 +151,52 @@ export async function GET(request: NextRequest) {
     venueCount: v.venueCount,
     mrrCents: v.mrrCents,
   }));
+
+  // ── Trial funnel: per-venue breakdown of where signups end up ──────────────
+  // Definitions:
+  //   activeTrialing  — trial period still running (trial_ends_at > now)
+  //   expiredNoAction — trial ended but still on 'trialing' status (never upgraded/downgraded)
+  //   upgraded        — moved to status='active' (paid) after trial was consumed
+  //   downgraded      — trial was consumed but status ended up canceled/none/pending (chose free)
+  //   neverLoggedIn   — trial expired and last_login_at is null (signed up, never came back)
+  // Only non-demo venues are counted.
+  const PLAN_PRICE_CENTS = 9700; // $97/mo — Venue Pro
+  const now_iso = new Date().toISOString();
+
+  let trialFunnel = {
+    totalSignups:       0,
+    activeTrialing:     0,
+    expiredNoAction:    0,
+    upgraded:           0,
+    downgraded:         0,
+    neverLoggedIn:      0,
+  };
+
+  for (const row of directoryVenues ?? []) {
+    if ((row as Record<string, unknown>).is_demo) continue;
+    trialFunnel.totalSignups++;
+    const st         = ((row as Record<string, unknown>).directory_subscription_status as string) ?? 'none';
+    const trialEnds  = (row as Record<string, unknown>).directory_trial_ends_at as string | null;
+    const consumed   = Boolean((row as Record<string, unknown>).directory_trial_consumed);
+    const lastLogin  = (row as Record<string, unknown>).last_login_at as string | null;
+    const trialActive = trialEnds ? trialEnds > now_iso : false;
+
+    if (st === 'active') {
+      trialFunnel.upgraded++;
+    } else if (st === 'trialing') {
+      if (trialActive) {
+        trialFunnel.activeTrialing++;
+      } else {
+        // Trial period is over but they're still on trialing — took no action.
+        trialFunnel.expiredNoAction++;
+        // Count never-logged-in separately (signed up but ghosted).
+        if (!lastLogin) trialFunnel.neverLoggedIn++;
+      }
+    } else if (consumed && (st === 'canceled' || st === 'none' || st === 'pending' || st === '')) {
+      // They went through the trial and chose not to pay.
+      trialFunnel.downgraded++;
+    }
+  }
 
   let platformSaaSRevenueInRangeCents = 0;
   const saasMonthly: Record<string, number> = {};
@@ -227,5 +273,7 @@ export async function GET(request: NextRequest) {
     directoryMrrByPlan,
     platformSaaSRevenueInRangeCents,
     platformSaaSMonthlyChart,
+    trialFunnel,
+    trialPlanPriceCents: PLAN_PRICE_CENTS,
   });
 }

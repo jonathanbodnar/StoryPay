@@ -138,6 +138,15 @@ interface AdminStats {
   directoryMrrByPlan?: { planId: string; name: string; slug: string; venueCount: number; mrrCents: number }[];
   platformSaaSRevenueInRangeCents?: number;
   platformSaaSMonthlyChart?: { month: string; label: string; revenue: number }[];
+  trialFunnel?: {
+    totalSignups: number;
+    activeTrialing: number;
+    expiredNoAction: number;
+    upgraded: number;
+    downgraded: number;
+    neverLoggedIn: number;
+  };
+  trialPlanPriceCents?: number;
 }
 interface Announcement { id: string; message: string; link_text: string | null; link_url: string | null; is_active: boolean; created_at: string; }
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated';
@@ -1556,54 +1565,6 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <h2 className="font-heading text-xl text-gray-900">Super Admin Dashboard</h2>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={async () => {
-                    const res = await fetch('/api/admin/setup-db', { method: 'POST' });
-                    const data = await res.json();
-                    const missing = data.missing ?? [];
-                    if (missing.length === 0) {
-                      alert('All tables and columns exist — production DB is up to date.');
-                    } else {
-                      const sql = data.sqlToRun;
-                      prompt(
-                        `${missing.length} item(s) missing. Copy this SQL and run it in your production Supabase SQL Editor:`,
-                        sql
-                      );
-                    }
-                  }}
-                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                >
-                  🛠 Setup DB
-                </button>
-                <button
-                  onClick={async () => {
-                    const res = await fetch('/api/admin/setup-directory-db', { method: 'POST' });
-                    const data = await res.json();
-                    if (data.ok) {
-                      alert(`Directory schema OK:\n${(data.results ?? []).map((r: { name: string; status: string }) => `• ${r.name}: ${r.status}`).join('\n')}`);
-                    } else {
-                      const errs = (data.results ?? []).filter((r: { status: string }) => r.status === 'error');
-                      alert(`Directory schema had errors:\n${errs.map((r: { name: string; error: string }) => `• ${r.name}: ${r.error}`).join('\n')}`);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                >
-                  🌐 Setup Directory Schema
-                </button>
-                <button
-                  onClick={async () => {
-                    const res = await fetch('/api/admin/setup-directory-storage', { method: 'POST' });
-                    const data = await res.json();
-                    if (res.ok) {
-                      alert(`Storage bucket: ${data.bucket}\n${data.created ? 'Created new bucket.' : (data.note ?? 'Already existed.')}`);
-                    } else {
-                      alert(`Failed to provision bucket: ${data.error ?? 'unknown error'}`);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                >
-                  🖼 Setup Directory Bucket
-                </button>
                 <DateRangePicker value={dateRange} onChange={r => { setDateRange(r); fetchStats(r); }} />
               </div>
             </div>
@@ -1620,57 +1581,71 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
               <KPICard label="Total Contacts" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#888888" onClick={() => openDrill('customers')} />
             </div>
 
-            <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-4 sm:p-5 space-y-3">
+            <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-4 sm:p-5 space-y-4">
               <div>
                 <h3 className="text-sm font-semibold text-gray-900">Directory SaaS (StoryVenue)</h3>
                 <p className="text-xs text-gray-500 mt-1 max-w-3xl">
-                  MRR from priced directory plans assigned to venues. &quot;Active&quot; counts venues with subscription status
-                  active or trialing (set when recurring billing is wired). &quot;Assigned&quot; includes all non-canceled
-                  assignments
-                  {statsLoading
-                    ? '.'
-                    : ` (${stats?.directoryAssignedPayingVenueCount ?? 0} paying venues).`}{' '}
-                  SaaS cash sums <code className="text-[10px] bg-white px-1 rounded border">platform_billing_events</code>{' '}
-                  in the selected date range (populate via webhooks or jobs).
+                  Only <strong>active</strong> (paid) subscriptions count toward MRR. Trialing venues are free trials. SaaS cash sums actual charges from <code className="text-[10px] bg-white px-1 rounded border">platform_billing_events</code>.
                 </p>
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <KPICard
-                  label="MRR (active subs)"
-                  value={statsLoading ? '...' : formatCents(stats?.directoryActiveMrrCents ?? 0)}
-                  icon={Repeat}
-                  color="#0d9488"
-                />
-                <KPICard
-                  label="MRR (assigned plans)"
-                  value={statsLoading ? '...' : formatCents(stats?.directoryAssignedMrrCents ?? 0)}
-                  icon={Layers}
-                  color="#6366f1"
-                />
-                <KPICard
-                  label="Active subscriptions"
-                  value={statsLoading ? '...' : stats?.directoryActiveSubscriptionCount ?? 0}
-                  icon={Check}
-                  color="#0d9488"
-                />
-                <KPICard
-                  label="SaaS cash (range)"
-                  value={statsLoading ? '...' : formatCents(stats?.platformSaaSRevenueInRangeCents ?? 0)}
-                  icon={Wallet}
-                  color="#b45309"
-                />
+
+              {/* Revenue row */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <KPICard label="MRR (active subs)" value={statsLoading ? '...' : formatCents(stats?.directoryActiveMrrCents ?? 0)} icon={Repeat} color="#0d9488" />
+                <KPICard label="Active subscriptions" value={statsLoading ? '...' : stats?.directoryActiveSubscriptionCount ?? 0} icon={Check} color="#0d9488" />
+                <KPICard label="MRR (assigned plans)" value={statsLoading ? '...' : formatCents(stats?.directoryAssignedMrrCents ?? 0)} icon={Layers} color="#6366f1" />
+                <KPICard label="SaaS cash (range)" value={statsLoading ? '...' : formatCents(stats?.platformSaaSRevenueInRangeCents ?? 0)} icon={Wallet} color="#b45309" />
               </div>
+
+              {/* Trial funnel */}
+              {(() => {
+                const f = stats?.trialFunnel;
+                const price = stats?.trialPlanPriceCents ?? 9700;
+                const fmt = (n: number) => formatCents(n);
+                const pct = (n: number) => f?.totalSignups ? Math.round((n / f.totalSignups) * 100) : 0;
+                if (statsLoading || !f) return (
+                  <div className="rounded-lg border border-gray-100 bg-white p-4 text-xs text-gray-400">
+                    {statsLoading ? 'Loading trial funnel…' : 'No trial data yet.'}
+                  </div>
+                );
+                const rows: { label: string; count: number; sub: string; color: string; dot: string }[] = [
+                  { label: 'Total signups', count: f.totalSignups, sub: 'All non-demo venues', color: 'text-gray-700', dot: 'bg-gray-400' },
+                  { label: 'Active trial', count: f.activeTrialing, sub: `${pct(f.activeTrialing)}% of signups · potential ${fmt(f.activeTrialing * price)}/mo`, color: 'text-blue-700', dot: 'bg-blue-400' },
+                  { label: 'Trial expired – no action', count: f.expiredNoAction, sub: `${pct(f.expiredNoAction)}% of signups · ${fmt(f.expiredNoAction * price)}/mo opportunity`, color: 'text-amber-700', dot: 'bg-amber-400' },
+                  { label: '↳ Never logged in after signup', count: f.neverLoggedIn, sub: `Ghosted — signed up but never returned`, color: 'text-amber-600', dot: 'bg-amber-200' },
+                  { label: 'Upgraded to paid', count: f.upgraded, sub: `${pct(f.upgraded)}% conversion · ${fmt(f.upgraded * price)}/mo actual MRR`, color: 'text-emerald-700', dot: 'bg-emerald-400' },
+                  { label: 'Downgraded / churned', count: f.downgraded, sub: `${pct(f.downgraded)}% of signups · ${fmt(f.downgraded * price)}/mo lost MRR`, color: 'text-red-600', dot: 'bg-red-400' },
+                ];
+                return (
+                  <div className="rounded-lg border border-gray-100 bg-white overflow-hidden">
+                    <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
+                      <p className="text-xs font-semibold text-gray-700">Trial funnel <span className="font-normal text-gray-400">— {fmt(price)}/mo per venue</span></p>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      {rows.map((r) => (
+                        <div key={r.label} className={`flex items-center justify-between px-4 py-2.5 gap-4 ${r.label.startsWith('↳') ? 'pl-8 bg-gray-50/40' : ''}`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${r.dot}`} />
+                            <div>
+                              <p className={`text-xs font-semibold ${r.color}`}>{r.label}</p>
+                              <p className="text-[10px] text-gray-400 leading-tight">{r.sub}</p>
+                            </div>
+                          </div>
+                          <span className={`text-sm font-bold tabular-nums flex-shrink-0 ${r.color}`}>{r.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {(stats?.directoryMrrByPlan?.length ?? 0) > 0 ? (
                 <div className="rounded-lg border border-gray-100 bg-white p-3 text-xs">
-                  <p className="font-semibold text-gray-600 mb-2">MRR by plan (assigned, non-canceled)</p>
+                  <p className="font-semibold text-gray-600 mb-2">MRR by plan (active paid only)</p>
                   <ul className="space-y-1.5">
                     {stats!.directoryMrrByPlan!.map((row) => (
                       <li key={row.planId} className="flex flex-wrap justify-between gap-2 text-gray-700">
-                        <span>
-                          {row.name}{' '}
-                          <span className="text-gray-400 font-mono">({row.slug})</span> — {row.venueCount} venue
-                          {row.venueCount === 1 ? '' : 's'}
-                        </span>
+                        <span>{row.name} <span className="text-gray-400 font-mono">({row.slug})</span> — {row.venueCount} venue{row.venueCount === 1 ? '' : 's'}</span>
                         <span className="font-medium tabular-nums">{formatCents(row.mrrCents)}</span>
                       </li>
                     ))}
