@@ -261,6 +261,28 @@ export async function POST(request: NextRequest) {
     }))
     .catch(() => { /* non-fatal */ });
 
+  // Notify jason@storyvenue.com of every new signup (best-effort).
+  void (async () => {
+    try {
+      const signedUpAt = new Date().toLocaleString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+      });
+      await sendEmail({
+        to: 'jason@storyvenue.com',
+        subject: `New signup: ${venueName}`,
+        html: newVenueSignupEmailHtml({
+          venueName,
+          firstName: firstName || '',
+          lastName:  lastName  || '',
+          email,
+          phone:     phone     || '',
+          signedUpAt,
+        }),
+      });
+    } catch { /* non-fatal */ }
+  })();
+
   // ── Grant the 14-day Venue Pro trial (no card required) ───────────────────
   // Assign the Venue Pro plan and snapshot a 14-day trial onto the venue. No
   // LunarPay subscription is created yet — that only happens when the venue
@@ -393,4 +415,50 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function newVenueSignupEmailHtml({
+  venueName,
+  firstName,
+  lastName,
+  email,
+  phone,
+  signedUpAt,
+}: {
+  venueName: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  signedUpAt: string;
+}): string {
+  const row = (label: string, value: string) =>
+    value
+      ? `<tr>
+          <td style="padding:8px 12px;font-size:13px;font-weight:600;color:#6b7280;white-space:nowrap;vertical-align:top;">${escapeHtml(label)}</td>
+          <td style="padding:8px 12px;font-size:13px;color:#111827;">${escapeHtml(value)}</td>
+        </tr>`
+      : '';
+
+  return `
+<div style="font-family:'Open Sans',Arial,sans-serif;max-width:520px;margin:0 auto;background:#ffffff">
+  <div style="background-color:#1b1b1b;padding:24px 28px;border-radius:12px 12px 0 0">
+    <h1 style="color:white;font-size:20px;margin:0;font-weight:300">StoryVenue</h1>
+  </div>
+  <div style="padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+    <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#22c55e;">New Signup</p>
+    <h2 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#111827;">${escapeHtml(venueName)}</h2>
+    <table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
+      ${row('Venue', venueName)}
+      ${row('First name', firstName)}
+      ${row('Last name', lastName)}
+      ${row('Email', email)}
+      ${row('Phone', phone || '—')}
+      ${row('Signed up', signedUpAt)}
+    </table>
+    <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">
+      View in admin → <a href="https://app.storyvenue.com/admin/venues" style="color:#1b1b1b;">app.storyvenue.com/admin/venues</a>
+    </p>
+  </div>
+</div>`;
 }
