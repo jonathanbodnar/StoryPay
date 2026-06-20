@@ -20,6 +20,7 @@ import {
   Ban,
   RotateCcw,
   RefreshCw,
+  Clock,
 } from 'lucide-react';
 import { DIRECTORY_BADGE_STATUSES, directoryBadgeLabel } from '@/lib/directory-badges';
 import {
@@ -40,6 +41,7 @@ export type AdminVenueRow = Record<string, unknown> & {
   lunarpay_merchant_id?: number | string | null;
   setup_completed: boolean;
   created_at: string;
+  last_login_at?: string | null;
   login_url: string | null;
   directory_plan_id?: string | null;
   directory_verified_status?: string | null;
@@ -63,34 +65,47 @@ function lunarPaySummaryForRow(v: AdminVenueRow): LunarPayAdminSummary {
 function LunarPayStatusCell({ venue, summary }: { venue: AdminVenueRow; summary: LunarPayAdminSummary }) {
   const badgeClass =
     summary.category === 'active_approved'
-      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
       : summary.category === 'denied'
-        ? 'border-red-200 bg-red-50 text-red-900'
+        ? 'border-red-200 bg-red-50 text-red-800'
         : summary.category === 'not_provisioned'
-          ? 'border-gray-200 bg-gray-50 text-gray-700'
-          : 'border-amber-200 bg-amber-50 text-amber-900';
+          ? 'border-gray-200 bg-gray-100 text-gray-600'
+          : 'border-amber-200 bg-amber-50 text-amber-800';
 
   const mid = venue.lunarpay_merchant_id;
+  const sub = summary.payments_ready
+    ? 'Can charge'
+    : summary.category === 'not_provisioned'
+      ? 'No merchant'
+      : summary.onboarding_status
+        ? summary.onboarding_status.charAt(0).toUpperCase() + summary.onboarding_status.slice(1)
+        : null;
 
   return (
-    <div className="space-y-1">
-      <span
-        className={`inline-flex max-w-[220px] rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-snug ${badgeClass}`}
-      >
+    <div className="space-y-0.5">
+      <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${badgeClass}`}>
         {summary.label}
       </span>
-      {mid != null && String(mid).length > 0 ? (
-        <div className="text-[10px] font-mono text-gray-400">Merchant {String(mid)}</div>
-      ) : null}
-      {summary.payments_ready ? (
-        <div className="text-[10px] text-emerald-700">Can process card payments</div>
-      ) : summary.category === 'not_provisioned' ? (
-        <div className="text-[10px] text-gray-500">No agency merchant on file</div>
-      ) : (
-        <div className="text-[10px] text-gray-500 capitalize">Status: {summary.onboarding_status}</div>
-      )}
+      <div className="text-[10px] text-gray-400 leading-none">
+        {mid != null && String(mid).length > 0
+          ? `#${String(mid)}${sub ? ` · ${sub}` : ''}`
+          : sub ?? '—'}
+      </div>
     </div>
   );
+}
+
+/** Format a UTC timestamp as "Jun 19, 2026 10:42 PM" in the local timezone */
+function fmtTs(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
+  } catch {
+    return '—';
+  }
 }
 
 type PlanOpt = { id: string; name: string; slug: string; price_monthly_cents?: number | null };
@@ -908,6 +923,8 @@ export function VenueManagementPortal({
               <tr className="border-b border-gray-200 bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                 <th className="px-3 py-3">Venue</th>
                 <th className="px-3 py-3">Contact</th>
+                <th className="px-3 py-3">Signed Up</th>
+                <th className="px-3 py-3">Last Login</th>
                 <th className="px-3 py-3">LunarPay</th>
                 <th className="px-3 py-3">Plan</th>
                 <th className="px-3 py-3">Verified</th>
@@ -918,13 +935,13 @@ export function VenueManagementPortal({
             <tbody className="divide-y divide-gray-100">
               {venuesLoading ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-8 text-gray-400">
+                  <td colSpan={9} className="text-center py-8 text-gray-400">
                     Loading…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-8 text-gray-400 text-sm">
+                  <td colSpan={9} className="text-center py-8 text-gray-400 text-sm">
                     No venues match
                   </td>
                 </tr>
@@ -936,15 +953,33 @@ export function VenueManagementPortal({
                   const lpSum = lunarPaySummaryForRow(venue);
                   return (
                     <tr key={venue.id} className="hover:bg-gray-50/80">
-                      <td className="px-3 py-3 align-top">
-                        <div className="font-medium text-gray-900">{venue.name}</div>
+                      <td className="px-3 py-3 align-top max-w-[200px]">
+                        <div className="font-semibold text-gray-900 leading-tight">{venue.name}</div>
                         {venue.slug ? (
-                          <div className="text-[11px] text-gray-400 font-mono">{venue.slug}</div>
+                          <div className="text-[10px] text-gray-400 font-mono truncate" title={venue.slug}>
+                            {venue.slug}
+                          </div>
+                        ) : null}
+                        {venue.is_demo ? (
+                          <span className="mt-0.5 inline-flex items-center rounded-full bg-violet-50 border border-violet-200 px-1.5 py-0 text-[9px] font-semibold text-violet-700 leading-tight">DEMO</span>
                         ) : null}
                       </td>
                       <td className="px-3 py-3 align-top text-xs text-gray-600">
                         <div>{venue.email || '—'}</div>
                         {venue.phone ? <div className="text-gray-500">{venue.phone}</div> : null}
+                      </td>
+                      <td className="px-3 py-3 align-top text-[11px] text-gray-500 whitespace-nowrap">
+                        {fmtTs(venue.created_at)}
+                      </td>
+                      <td className="px-3 py-3 align-top whitespace-nowrap">
+                        {venue.last_login_at ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-gray-600">
+                            <Clock size={10} className="text-gray-400 shrink-0" />
+                            {fmtTs(venue.last_login_at)}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-gray-400">Never</span>
+                        )}
                       </td>
                       <td className="px-3 py-3 align-top">
                         <LunarPayStatusCell venue={venue} summary={lpSum} />
@@ -1472,6 +1507,15 @@ function VenueMobileCard({
       <div className="font-semibold text-gray-900">{venue.name}</div>
       <div className="text-xs text-gray-600">{venue.email}</div>
       {venue.phone ? <div className="text-xs text-gray-500">{venue.phone}</div> : null}
+      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-gray-500">
+        <span>Signed up: <span className="text-gray-700">{fmtTs(venue.created_at)}</span></span>
+        <span className="inline-flex items-center gap-1">
+          <Clock size={10} className="text-gray-400" />
+          {venue.last_login_at
+            ? <span className="text-gray-700">{fmtTs(venue.last_login_at)}</span>
+            : <span className="text-gray-400">Never logged in</span>}
+        </span>
+      </div>
       <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-2 py-2">
         <LunarPayStatusCell venue={venue} summary={lpSummary} />
       </div>

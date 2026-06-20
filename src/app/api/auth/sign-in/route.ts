@@ -120,6 +120,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Stamp the last-login timestamp for the super-admin venue list. Best-effort.
+    void (async () => {
+      try {
+        await supabaseAdmin
+          .from('venues')
+          .update({ last_login_at: new Date().toISOString() })
+          .eq('id', venue.id);
+      } catch { /* non-fatal */ }
+    })();
+
     // Analytics: every successful login (engagement / DAU) + first_login once.
     void import('@/lib/analytics')
       .then(({ trackEvent, trackMilestone }) => {
