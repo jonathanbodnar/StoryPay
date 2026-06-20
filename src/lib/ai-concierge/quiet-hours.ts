@@ -1,10 +1,10 @@
 /**
  * Quiet hours helper for the AI Concierge.
  *
- * Quiet hours are defined as 9:00–20:00 in the venue's local timezone
- * (matching `ai_config.message_constraints.quiet_hours_start_local` /
- * `quiet_hours_end_local`). Outside that window, AI sends are deferred to
- * the next 9am venue-local.
+ * Send window: 9:00 am – 9:00 pm in the venue's registered timezone.
+ * Any send scheduled outside that window is pushed forward to the next
+ * 9 am in that same timezone. The venue timezone comes from venues.timezone
+ * and is resolved via resolveVenueTimezone (falls back to America/New_York).
  */
 
 import { formatInTimeZone } from 'date-fns-tz';
@@ -15,14 +15,14 @@ import {
 } from '@/lib/venue-timezone';
 
 /** Send window in venue-local hours (24h). Inclusive start, exclusive end. */
-export const QUIET_HOURS_START_LOCAL_HH = 9;   // 09:00
-export const QUIET_HOURS_END_LOCAL_HH   = 20;  // 20:00
+export const QUIET_HOURS_START_LOCAL_HH = 9;   // 09:00 am
+export const QUIET_HOURS_END_LOCAL_HH   = 21;  // 09:00 pm — no sends at/after this hour
 
 /**
- * If `t` is inside quiet hours (before 9am OR at/after 8pm venue-local),
+ * If `t` is inside quiet hours (before 9am OR at/after 9pm venue-local),
  * advance to the next 9am venue-local.
  *
- * If `t` is already inside the send window, return it unchanged.
+ * If `t` is already inside the send window (9am–9pm), return it unchanged.
  */
 export function enforceQuietHours(t: Date, timezone: string | null | undefined): Date {
   const tz = resolveVenueTimezone(timezone);
@@ -40,13 +40,13 @@ export function enforceQuietHours(t: Date, timezone: string | null | undefined):
     return wallClockToUtc(localDate, '09:00', tz);
   }
 
-  // At/after 8pm local → push to tomorrow 9am local
+  // At/after 9pm local → push to tomorrow 9am local
   const tomorrow = addCalendarDaysYmd(localDate, 1, tz);
   return wallClockToUtc(tomorrow, '09:00', tz);
 }
 
 /**
- * Convenience: is this instant currently inside the send window?
+ * Convenience: is this instant currently outside the 9am–9pm send window?
  */
 export function isInsideQuietHours(t: Date, timezone: string | null | undefined): boolean {
   const tz = resolveVenueTimezone(timezone);
