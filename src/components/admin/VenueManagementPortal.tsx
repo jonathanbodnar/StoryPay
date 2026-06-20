@@ -252,7 +252,7 @@ export function VenueManagementPortal({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return venues.filter((v) => {
+    const list = venues.filter((v) => {
       if (q) {
         const blob = [v.name, v.email, v.phone, v.slug, v.ghl_location_id]
           .filter(Boolean)
@@ -279,6 +279,12 @@ export function VenueManagementPortal({
         if (filterPlan !== 'none' && pid !== filterPlan) return false;
       }
       return true;
+    });
+    // Demo venues always float to the top for easy access.
+    return [...list].sort((a, b) => {
+      if (a.is_demo && !b.is_demo) return -1;
+      if (!a.is_demo && b.is_demo) return 1;
+      return 0;
     });
   }, [venues, search, filterVerified, filterSponsored, filterPlan, filterLunarPay]);
 

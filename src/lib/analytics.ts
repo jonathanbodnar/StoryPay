@@ -19,6 +19,46 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export type AnalyticsKind = 'auto' | 'milestone';
 
+// ── Demo / internal venue exclusion ──────────────────────────────────────────
+// Demo venues and venues flagged is_demo=true are excluded from all analytics
+// so they don't dilute real usage stats.
+//
+// We cache the set of excluded venue IDs in memory with a 5-minute TTL so we
+// never hit the DB more than once per module-load window.
+
+interface DemoCache {
+  ids: Set<string>;
+  fetchedAt: number; // Date.now()
+}
+
+let _demoCache: DemoCache | null = null;
+const DEMO_CACHE_TTL_MS = 5 * 60 * 1000;
+
+async function getDemoVenueIds(): Promise<Set<string>> {
+  if (_demoCache && Date.now() - _demoCache.fetchedAt < DEMO_CACHE_TTL_MS) {
+    return _demoCache.ids;
+  }
+  try {
+    const { data } = await supabaseAdmin
+      .from('venues')
+      .select('id')
+      .eq('is_demo', true);
+    const ids = new Set((data ?? []).map((r) => r.id as string));
+    _demoCache = { ids, fetchedAt: Date.now() };
+    return ids;
+  } catch {
+    // On error, return existing cache (even if stale) so we don't accidentally
+    // start tracking demo events due to a transient DB blip.
+    return _demoCache?.ids ?? new Set();
+  }
+}
+
+async function isDemoVenue(venueId: string | null | undefined): Promise<boolean> {
+  if (!venueId) return false;
+  const ids = await getDemoVenueIds();
+  return ids.has(venueId);
+}
+
 /** Named funnel milestones, in funnel order. Keep in sync with the admin panel. */
 export const FUNNEL_MILESTONES = [
   'signup',
@@ -81,6 +121,9 @@ function capProperties(props: Record<string, unknown> | null | undefined): Recor
  */
 export async function trackEvent(input: TrackEventInput): Promise<string | null> {
   try {
+    // Never track demo venues — keeps analytics clean.
+    if (await isDemoVenue(input.venueId)) return null;
+
     const kind: AnalyticsKind = input.kind ?? 'auto';
     const row = {
       event:      String(input.event).slice(0, 120),

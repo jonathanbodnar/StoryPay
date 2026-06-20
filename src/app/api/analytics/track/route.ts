@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getSessionUser } from '@/lib/session';
 import { trackEvent } from '@/lib/analytics';
 
@@ -45,6 +46,13 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => null)) as { events?: IncomingEvent[] } | null;
     const events = Array.isArray(body?.events) ? body!.events! : [];
     if (events.length === 0) return NextResponse.json({ ok: true, recorded: 0 });
+
+    // Drop all events when a super admin is impersonating a venue — their
+    // browsing activity should never pollute real usage stats.
+    const jar = await cookies();
+    if (jar.get('admin_impersonating')?.value === '1') {
+      return NextResponse.json({ ok: true, recorded: 0 });
+    }
 
     // Resolve actor server-side (cannot be spoofed by the client).
     const user = await getSessionUser();
