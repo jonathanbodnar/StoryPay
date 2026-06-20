@@ -251,6 +251,13 @@ export function VenueManagementPortal({
     setCreating(false);
   }
 
+  const PAGE_SIZE = 25;
+  const [page, setPage] = useState(1);
+
+  // Reset to page 1 whenever filters/search change.
+  const prevFiltersRef = { search, filterVerified, filterSponsored, filterPlan, filterLunarPay };
+  useEffect(() => { setPage(1); }, [search, filterVerified, filterSponsored, filterPlan, filterLunarPay]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = venues.filter((v) => {
@@ -288,6 +295,19 @@ export function VenueManagementPortal({
       return 0;
     });
   }, [venues, search, filterVerified, filterSponsored, filterPlan, filterLunarPay]);
+
+  // Split filtered list into pinned demos + paginated regulars.
+  const demoVenues    = useMemo(() => filtered.filter((v) => v.is_demo),  [filtered]);
+  const regularVenues = useMemo(() => filtered.filter((v) => !v.is_demo), [filtered]);
+  const totalRegular  = regularVenues.length;
+  const totalPages    = Math.max(1, Math.ceil(totalRegular / PAGE_SIZE));
+  const safePage      = Math.min(page, totalPages);
+  const pagedVenues   = useMemo(
+    () => regularVenues.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [regularVenues, safePage, PAGE_SIZE],
+  );
+  // Total real (non-demo) venues ever registered (unfiltered).
+  const totalRealVenues = useMemo(() => venues.filter((v) => !v.is_demo).length, [venues]);
 
   const lunarPayCounts = useMemo(() => {
     let ready = 0;
@@ -873,7 +893,7 @@ export function VenueManagementPortal({
           </div>
         </div>
         <p className="text-xs text-gray-400">
-          Showing {filtered.length} of {venues.length} venues · LunarPay ready: {lunarPayCounts.ready} /{' '}
+          Showing {totalRegular} of {venues.length} venues · LunarPay ready: {lunarPayCounts.ready} /{' '}
           {lunarPayCounts.total}
         </p>
       </div>
@@ -929,7 +949,7 @@ export function VenueManagementPortal({
           <div className="rounded-xl border border-gray-200 bg-white text-center py-10 text-gray-400"><Loader2 size={18} className="animate-spin inline" /></div>
         ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-gray-200 bg-white text-center py-10 text-gray-400 text-sm">No venues match</div>
-        ) : filtered.map((venue) => {
+        ) : [...demoVenues, ...pagedVenues].map((venue) => {
           const vs = (venue.directory_verified_status as string) || 'none';
           const ss = (venue.directory_sponsored_status as string) || 'none';
           const busy = savingKey !== null;
@@ -1088,6 +1108,61 @@ export function VenueManagementPortal({
             </div>
           );
         })}
+
+        {/* Total venues signed up + pagination */}
+        {!venuesLoading && filtered.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1 pt-1 pb-2">
+            <p className="text-xs text-gray-500">
+              <span className="font-semibold text-gray-700">{totalRealVenues}</span> venue{totalRealVenues !== 1 ? 's' : ''} signed up total
+            </p>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                >
+                  ‹ Prev
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((n) => n === 1 || n === totalPages || Math.abs(n - safePage) <= 2)
+                  .reduce<(number | '…')[]>((acc, n, idx, arr) => {
+                    if (idx > 0 && (n as number) - (arr[idx - 1] as number) > 1) acc.push('…');
+                    acc.push(n);
+                    return acc;
+                  }, [])
+                  .map((n, i) =>
+                    n === '…' ? (
+                      <span key={`ellipsis-${i}`} className="px-1 text-xs text-gray-400">…</span>
+                    ) : (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setPage(n as number)}
+                        className={`min-w-[28px] px-2 py-1 rounded-lg border text-xs font-medium transition-colors ${
+                          safePage === n
+                            ? 'border-gray-800 bg-gray-800 text-white'
+                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    )
+                  )}
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                >
+                  Next ›
+                </button>
+                <span className="ml-1 text-xs text-gray-400">Page {safePage} of {totalPages}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {/* DemoVenueCard component is defined at the bottom of this file */}
     </div>
