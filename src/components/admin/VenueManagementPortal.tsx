@@ -916,229 +916,146 @@ export function VenueManagementPortal({
         )}
       </div>
 
-      <div className="hidden sm:block rounded-xl border border-gray-200 bg-white overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                <th className="px-3 py-3">Venue</th>
-                <th className="px-3 py-3">Contact</th>
-                <th className="px-3 py-3">Signed Up</th>
-                <th className="px-3 py-3">Last Login</th>
-                <th className="px-3 py-3">LunarPay</th>
-                <th className="px-3 py-3">Plan</th>
-                <th className="px-3 py-3">Verified</th>
-                <th className="px-3 py-3">Sponsored</th>
-                <th className="px-3 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {venuesLoading ? (
-                <tr>
-                  <td colSpan={9} className="text-center py-8 text-gray-400">
-                    Loading…
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="text-center py-8 text-gray-400 text-sm">
-                    No venues match
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((venue) => {
-                  const vs = (venue.directory_verified_status as string) || 'none';
-                  const ss = (venue.directory_sponsored_status as string) || 'none';
-                  const busy = savingKey !== null;
-                  const lpSum = lunarPaySummaryForRow(venue);
-                  return (
-                    <tr key={venue.id} className="hover:bg-gray-50/80">
-                      <td className="px-3 py-3 align-top max-w-[200px]">
-                        <div className="font-semibold text-gray-900 leading-tight">{venue.name}</div>
-                        {venue.slug ? (
-                          <div className="text-[10px] text-gray-400 font-mono truncate" title={venue.slug}>
-                            {venue.slug}
-                          </div>
-                        ) : null}
-                        {venue.is_demo ? (
-                          <span className="mt-0.5 inline-flex items-center rounded-full bg-violet-50 border border-violet-200 px-1.5 py-0 text-[9px] font-semibold text-violet-700 leading-tight">DEMO</span>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-3 align-top text-xs text-gray-600">
-                        <div>{venue.email || '—'}</div>
-                        {venue.phone ? <div className="text-gray-500">{venue.phone}</div> : null}
-                      </td>
-                      <td className="px-3 py-3 align-top text-[11px] text-gray-500 whitespace-nowrap">
-                        {fmtTs(venue.created_at)}
-                      </td>
-                      <td className="px-3 py-3 align-top whitespace-nowrap">
-                        {venue.last_login_at ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-gray-600">
-                            <Clock size={10} className="text-gray-400 shrink-0" />
-                            {fmtTs(venue.last_login_at)}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-gray-400">Never</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 align-top">
-                        <LunarPayStatusCell venue={venue} summary={lpSum} />
-                      </td>
-                      <td className="px-3 py-3 align-top">
-                        <select
-                          value={venue.directory_plan_id || ''}
-                          disabled={busy}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            void patchVenue(venue.id, {
-                              directory_plan_id: v === '' ? null : v,
-                            });
-                          }}
-                          className="w-full min-w-[140px] max-w-[200px] rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
-                        >
-                          <option value="">Full (no plan)</option>
-                          {plans.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="text-[10px] text-gray-500 mt-1">
-                          SaaS: {(venue.directory_subscription_status as string) || '—'}
-                        </div>
-                        {(plans.find((p) => p.id === venue.directory_plan_id)?.price_monthly_cents ?? 0) > 0 ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void copyDirectoryBillingLink(venue.id)}
-                            className="mt-1 text-[10px] font-medium text-amber-800 hover:underline"
-                          >
-                            Copy SaaS billing link
-                          </button>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-3 align-top">
-                        <select
-                          value={vs}
-                          disabled={busy}
-                          onChange={(e) =>
-                            void patchVenue(venue.id, { directory_verified_status: e.target.value })
-                          }
-                          className="w-full min-w-[120px] max-w-[190px] rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
-                        >
-                          {DIRECTORY_BADGE_STATUSES.map((s) => (
-                            <option key={s} value={s}>
-                              {directoryBadgeLabel(s)}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-3 py-3 align-top">
-                        <select
-                          value={ss}
-                          disabled={busy}
-                          onChange={(e) =>
-                            void patchVenue(venue.id, { directory_sponsored_status: e.target.value })
-                          }
-                          className="w-full min-w-[120px] max-w-[190px] rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
-                        >
-                          {DIRECTORY_BADGE_STATUSES.map((s) => (
-                            <option key={s} value={s}>
-                              {directoryBadgeLabel(s)}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-3 py-3 align-top">
-                        <div className="flex flex-col gap-1.5">
-                          <button
-                            type="button"
-                            disabled={!venue.login_url}
-                            onClick={() => {
-                              if (!venue.login_url) return;
-                              void navigator.clipboard.writeText(venue.login_url);
-                              setCopiedId(venue.id);
-                              setTimeout(() => setCopiedId(null), 2000);
-                            }}
-                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium hover:bg-gray-50 disabled:opacity-40"
-                          >
-                            <Copy size={12} />
-                            {copiedId === venue.id ? 'Copied' : 'Copy login'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={invitingId === venue.id || !venue.email}
-                            onClick={() => void sendInviteToVenue(venue.id)}
-                            title={venue.email ? `Send a fresh magic-link login to ${venue.email}` : 'No email on file'}
-                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                          >
-                            <Send size={12} />
-                            {invitingId === venue.id
-                              ? 'Sending…'
-                              : inviteToastId === venue.id
-                                ? 'Sent ✓'
-                                : 'Send invite'}
-                          </button>
-                          {inviteToastId === venue.id && inviteToastMsg && (
-                            <p className="text-[10px] text-emerald-700 px-1">{inviteToastMsg}</p>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => void viewAsVenue(venue.id)}
-                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-pink-200 bg-pink-50 px-2 py-1 text-[11px] font-semibold text-pink-900 hover:bg-pink-100"
-                          >
-                            <Eye size={12} /> View as venue
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setPwTarget(venue); setPwValue(''); setPwConfirm(''); setPwError(''); setPwSuccess(false); setShowPw(false); }}
-                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
-                          >
-                            <KeyRound size={12} /> Set password
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const current = venue.directory_trial_ends_at as string | null | undefined;
-                              const def = current
-                                ? new Date(current).toISOString().slice(0, 10)
-                                : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-                              setTrialTarget(venue);
-                              setTrialDate(def);
-                              setTrialError('');
-                              setTrialSuccess(false);
-                            }}
-                            className="inline-flex items-center justify-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-100"
-                          >
-                            <CalendarClock size={12} /> Extend trial
-                          </button>
-                          {Boolean(venue.directory_plan_id || venue.directory_subscription_external_id) && (
-                            <button
-                              type="button"
-                              onClick={() => void openBillingModal(venue)}
-                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700 hover:bg-orange-100"
-                            >
-                              <CreditCard size={12} /> Billing
-                            </button>
-                          )}
-                          {!venue.is_demo && (
-                            <button
-                              type="button"
-                              onClick={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
-                              className="inline-flex items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
-                            >
-                              <Trash2 size={12} /> Delete
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Desktop card list — no horizontal scroll, 3-strip layout per venue */}
+      <div className="hidden sm:block rounded-xl border border-gray-200 bg-white divide-y divide-gray-100 overflow-hidden">
+        {venuesLoading ? (
+          <div className="text-center py-10 text-gray-400"><Loader2 size={18} className="animate-spin inline" /></div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-10 text-gray-400 text-sm">No venues match</div>
+        ) : filtered.map((venue) => {
+          const vs = (venue.directory_verified_status as string) || 'none';
+          const ss = (venue.directory_sponsored_status as string) || 'none';
+          const busy = savingKey !== null;
+          const lpSum = lunarPaySummaryForRow(venue);
+          const hasBilling = Boolean(venue.directory_plan_id || venue.directory_subscription_external_id);
+          return (
+            <div key={venue.id} className="px-4 py-3 hover:bg-gray-50/60 space-y-2">
+
+              {/* ── Strip 1: identity + dates ── */}
+              <div className="flex flex-wrap items-start gap-x-6 gap-y-0.5">
+                <div className="min-w-0">
+                  <span className="font-semibold text-sm text-gray-900 leading-tight">{venue.name}</span>
+                  {venue.is_demo && (
+                    <span className="ml-1.5 inline-flex items-center rounded-full bg-violet-50 border border-violet-200 px-1.5 py-0 text-[9px] font-semibold text-violet-700">DEMO</span>
+                  )}
+                  {venue.slug && (
+                    <div className="text-[10px] font-mono text-gray-400 truncate max-w-[220px]">{venue.slug}</div>
+                  )}
+                </div>
+                <div className="text-xs text-gray-600 leading-tight">
+                  <div>{venue.email || '—'}</div>
+                  {venue.phone && <div className="text-gray-400">{venue.phone}</div>}
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-gray-400 ml-auto flex-shrink-0">
+                  <span>Signed up: <span className="text-gray-600">{fmtTs(venue.created_at)}</span></span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock size={10} />
+                    {venue.last_login_at
+                      ? <span className="text-gray-600">{fmtTs(venue.last_login_at)}</span>
+                      : <span>Never</span>}
+                  </span>
+                </div>
+              </div>
+
+              {/* ── Strip 2: status pills + dropdowns ── */}
+              <div className="flex flex-wrap items-center gap-2">
+                <LunarPayStatusCell venue={venue} summary={lpSum} />
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-semibold text-gray-400">Plan</span>
+                  <select
+                    value={venue.directory_plan_id || ''}
+                    disabled={busy}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      void patchVenue(venue.id, { directory_plan_id: v === '' ? null : v });
+                    }}
+                    className="rounded-md border border-gray-200 px-1.5 py-0.5 text-[11px] bg-white"
+                  >
+                    <option value="">Full (no plan)</option>
+                    {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                {(venue.directory_subscription_status as string) && (
+                  <span className="text-[10px] text-gray-400">
+                    SaaS: <span className="text-gray-600">{String(venue.directory_subscription_status)}</span>
+                  </span>
+                )}
+                {(plans.find((p) => p.id === venue.directory_plan_id)?.price_monthly_cents ?? 0) > 0 && (
+                  <button type="button" disabled={busy} onClick={() => void copyDirectoryBillingLink(venue.id)}
+                    className="text-[10px] font-medium text-amber-700 hover:underline">
+                    Copy billing link
+                  </button>
+                )}
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-semibold text-gray-400">Verified</span>
+                  <select value={vs} disabled={busy}
+                    onChange={(e) => void patchVenue(venue.id, { directory_verified_status: e.target.value })}
+                    className="rounded-md border border-gray-200 px-1.5 py-0.5 text-[11px] bg-white">
+                    {DIRECTORY_BADGE_STATUSES.map((s) => <option key={s} value={s}>{directoryBadgeLabel(s)}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-semibold text-gray-400">Sponsored</span>
+                  <select value={ss} disabled={busy}
+                    onChange={(e) => void patchVenue(venue.id, { directory_sponsored_status: e.target.value })}
+                    className="rounded-md border border-gray-200 px-1.5 py-0.5 text-[11px] bg-white">
+                    {DIRECTORY_BADGE_STATUSES.map((s) => <option key={s} value={s}>{directoryBadgeLabel(s)}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* ── Strip 3: actions ── */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button type="button" disabled={!venue.login_url}
+                  onClick={() => { if (!venue.login_url) return; void navigator.clipboard.writeText(venue.login_url); setCopiedId(venue.id); setTimeout(() => setCopiedId(null), 2000); }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-medium hover:bg-gray-50 disabled:opacity-40">
+                  <Copy size={11} />{copiedId === venue.id ? 'Copied' : 'Copy login'}
+                </button>
+                <button type="button" disabled={invitingId === venue.id || !venue.email}
+                  onClick={() => void sendInviteToVenue(venue.id)}
+                  title={venue.email ? `Send magic-link to ${venue.email}` : 'No email on file'}
+                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+                  <Send size={11} />
+                  {invitingId === venue.id ? 'Sending…' : inviteToastId === venue.id ? 'Sent ✓' : 'Send invite'}
+                </button>
+                <button type="button" onClick={() => void viewAsVenue(venue.id)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-pink-200 bg-pink-50 px-2 py-0.5 text-[11px] font-semibold text-pink-900 hover:bg-pink-100">
+                  <Eye size={11} /> View as venue
+                </button>
+                <button type="button"
+                  onClick={() => { setPwTarget(venue); setPwValue(''); setPwConfirm(''); setPwError(''); setPwSuccess(false); setShowPw(false); }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100">
+                  <KeyRound size={11} /> Set password
+                </button>
+                <button type="button"
+                  onClick={() => {
+                    const current = venue.directory_trial_ends_at as string | null | undefined;
+                    const def = current ? new Date(current).toISOString().slice(0, 10) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+                    setTrialTarget(venue); setTrialDate(def); setTrialError(''); setTrialSuccess(false);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-100">
+                  <CalendarClock size={11} /> Extend trial
+                </button>
+                {hasBilling && (
+                  <button type="button" onClick={() => void openBillingModal(venue)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700 hover:bg-orange-100">
+                    <CreditCard size={11} /> Billing
+                  </button>
+                )}
+                {!venue.is_demo && (
+                  <button type="button" onClick={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
+                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100">
+                    <Trash2 size={11} /> Delete
+                  </button>
+                )}
+                {inviteToastId === venue.id && inviteToastMsg && (
+                  <span className="text-[10px] text-emerald-700">{inviteToastMsg}</span>
+                )}
+              </div>
+
+            </div>
+          );
+        })}
       </div>
     </div>
 
