@@ -1113,7 +1113,18 @@ export function VenueManagementPortal({
         {!venuesLoading && filtered.length > 0 && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1 pt-1 pb-2">
             <p className="text-xs text-gray-500">
-              <span className="font-semibold text-gray-700">{totalRealVenues}</span> venue{totalRealVenues !== 1 ? 's' : ''} signed up total
+              {totalPages > 1 ? (
+                <>
+                  Showing{' '}
+                  <span className="font-semibold text-gray-700">
+                    {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, totalRegular)}
+                  </span>
+                  {' '}of{' '}
+                  <span className="font-semibold text-gray-700">{totalRealVenues}</span> venues
+                </>
+              ) : (
+                <><span className="font-semibold text-gray-700">{totalRealVenues}</span> venue{totalRealVenues !== 1 ? 's' : ''} signed up total</>
+              )}
             </p>
             {totalPages > 1 && (
               <div className="flex items-center gap-1">
