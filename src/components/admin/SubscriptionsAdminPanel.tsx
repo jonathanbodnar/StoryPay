@@ -221,7 +221,7 @@ export function SubscriptionsAdminPanel() {
             <CreditCard size={16} className="text-gray-700" /> Revenue by plan
           </h3>
           <p className="mt-1 text-xs text-gray-500">
-            Active + trialing venues only contribute to MRR.
+            Only <strong>active</strong> (paid) subscriptions contribute to MRR. Trialing venues are free trials — excluded from MRR.
           </p>
         </div>
         {plans.length === 0 ? (

@@ -131,7 +131,9 @@ export async function GET() {
 
     const plan = v.directory_plan_id ? planById.get(v.directory_plan_id) || null : null;
     const planCents = plan?.price_monthly_cents ?? 0;
-    const isActive = status === 'active' || status === 'trialing';
+    // Only status='active' (real paid subscription) counts toward MRR.
+    // Trialing venues have not paid — they must not inflate MRR or subscription counts.
+    const isActive = status === 'active';
 
     // Compute real MRR = plan base + any active addon prices
     const hasVerified  = Boolean(v.directory_addon_verified);
@@ -227,7 +229,7 @@ export async function GET() {
       canceled_count: totalCanceled,
       unsubscribed_count: totalUnsubscribed,
       venue_count: venues.length,
-      paying_count: totalActive + totalTrialing,
+      paying_count: totalActive, // trialing = free trial, not paying
     },
     plans: Array.from(planStats.values())
       .sort((a, b) => b.mrrCents - a.mrrCents || a.plan.name.localeCompare(b.plan.name))

@@ -75,8 +75,11 @@ export async function GET(request: NextRequest) {
   }));
 
   // ── StoryVenue directory SaaS: MRR from plan assignments + cash from platform_billing_events ──
-  const ACTIVE_SUB = new Set(['active', 'trialing']);
-  const EXCLUDE_FROM_ASSIGNED_MRR = new Set(['canceled']);
+  // Only venues with status='active' (real paid subscription) count toward MRR.
+  // Trialing venues are on a free trial — they have not paid and must not inflate MRR.
+  const ACTIVE_SUB = new Set(['active']);
+  // "Assigned MRR" = venues with a priced plan + status active or past_due (past_due still owes the bill).
+  const EXCLUDE_FROM_ASSIGNED_MRR = new Set(['canceled', 'trialing', 'none', 'pending', '']);
 
   let directoryActiveMrrCents = 0;
   let directoryAssignedMrrCents = 0;
