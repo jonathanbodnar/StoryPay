@@ -444,10 +444,12 @@ function SequenceEditor({
   steps,
   onStepsChange,
   leadsData,
+  allowAi = true,
 }: {
   steps: StepConfig[];
   onStepsChange: (s: StepConfig[]) => void;
   leadsData: StepLeadsPayload | null;
+  allowAi?: boolean;
 }) {
   const dragSrc = useRef<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
@@ -565,7 +567,7 @@ function SequenceEditor({
         >
           <Plus size={13} /> Wait
         </button>
-        {!steps.some(s => s.step_type === 'start_ai_concierge') && (
+        {!steps.some(s => s.step_type === 'start_ai_concierge') && allowAi && (
           <button
             type="button"
             onClick={() => addStep('start_ai_concierge')}
@@ -785,6 +787,7 @@ export default function BookingSystemPage() {
             steps={cfg.phase3Steps}
             onStepsChange={(steps) => void save({ phase3Steps: steps })}
             leadsData={null}
+            allowAi={false}
           />
         </PhaseCard>
 
@@ -802,6 +805,7 @@ export default function BookingSystemPage() {
             steps={cfg.phase4Steps}
             onStepsChange={(steps) => void save({ phase4Steps: steps })}
             leadsData={null}
+            allowAi={false}
           />
         </PhaseCard>
 
@@ -819,6 +823,7 @@ export default function BookingSystemPage() {
             steps={cfg.phase5Steps}
             onStepsChange={(steps) => void save({ phase5Steps: steps })}
             leadsData={null}
+            allowAi={false}
           />
         </PhaseCard>
 
