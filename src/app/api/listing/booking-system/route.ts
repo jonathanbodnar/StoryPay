@@ -311,9 +311,9 @@ export async function PATCH(req: NextRequest) {
 
   try {
     await saveAutomation(STL_NAME, body.sequenceEnabled, body.steps, 'form_submitted');
-    await saveAutomation(PHASE3_NAME, body.phase3Enabled, body.phase3Steps, 'manual');
-    await saveAutomation(PHASE4_NAME, body.phase4Enabled, body.phase4Steps, 'manual');
-    await saveAutomation(PHASE5_NAME, body.phase5Enabled, body.phase5Steps, 'manual');
+    await saveAutomation(PHASE3_NAME, body.phase3Enabled, body.phase3Steps, 'tag_added');
+    await saveAutomation(PHASE4_NAME, body.phase4Enabled, body.phase4Steps, 'tag_added');
+    await saveAutomation(PHASE5_NAME, body.phase5Enabled, body.phase5Steps, 'tag_added');
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Failed to save automations' }, { status: 500 });
   }
