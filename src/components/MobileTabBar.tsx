@@ -13,7 +13,7 @@ import { Home, MessageCircle, Inbox, Calendar, CreditCard } from 'lucide-react';
 const TABS = [
   { label: 'Home',        href: '/dashboard/home',          icon: Home,          match: ['/dashboard/home', '/dashboard'] },
   { label: 'Messages',    href: '/dashboard/conversations', icon: MessageCircle, match: ['/dashboard/conversations'] },
-  { label: 'Leads',       href: '/dashboard/leads',         icon: Inbox,         match: ['/dashboard/leads'] },
+  { label: 'Lead Inbox',  href: '/dashboard/leads',         icon: Inbox,         match: ['/dashboard/leads'] },
   { label: 'Calendar',    href: '/dashboard/calendar',      icon: Calendar,      match: ['/dashboard/calendar'] },
   { label: 'Payments',    href: '/dashboard/payments/new',  icon: CreditCard,    match: ['/dashboard/payments', '/dashboard/transactions', '/dashboard/proposals', '/dashboard/offerings'] },
 ];
