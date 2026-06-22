@@ -89,9 +89,15 @@ export function toTitleCase(str: string | null | undefined): string {
 }
 
 export function generateToken(): string {
+  const digits = '0123456789';
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
-  for (let i = 0; i < 64; i++) {
+  // First 8 characters are purely numerical for the invoice/proposal number
+  for (let i = 0; i < 8; i++) {
+    result += digits.charAt(Math.floor(Math.random() * digits.length));
+  }
+  // Remaining 56 characters are alphanumeric for security
+  for (let i = 0; i < 56; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
