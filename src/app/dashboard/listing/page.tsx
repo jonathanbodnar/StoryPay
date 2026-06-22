@@ -216,7 +216,7 @@ function KpiCard({
   icon: React.ElementType;
   label: string;
   value: string | number;
-  sub?: string;
+  sub?: string | null;
   deltaVal?: number | null;
   color?: 'gray' | 'blue' | 'green' | 'purple' | 'amber' | 'rose';
 }) {
@@ -541,7 +541,6 @@ export default function ListingAnalyticsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Listing Analytics</h1>
-          <p className="mt-0.5 text-sm text-gray-500">How visitors find and engage with your listing</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <DateRangePicker value={dateRange} onChange={setDateRange} />
@@ -572,34 +571,8 @@ export default function ListingAnalyticsPage() {
           </div>
         </div>
       )}
-      {!d?._migration_pending && !loading && d && (
-        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2.5 text-sm text-emerald-700">
-          <CheckCircle size={14} /> Tracking active — collecting data from your public listing
-        </div>
-      )}
-
       {/* ── Smart alerts ───────────────────────────────────────────────── */}
-      {d && !d._migration_pending && computeAlerts(d).filter(a => !dismissedAlerts.has(a.type)).map(alert => {
-        const colors = {
-          green: 'bg-emerald-50 border-emerald-100 text-emerald-900',
-          amber: 'bg-amber-50 border-amber-100 text-amber-900',
-          red:   'bg-red-50 border-red-100 text-red-900',
-          blue:  'bg-blue-50 border-blue-100 text-blue-900',
-        };
-        const icons = { green: <Zap size={15} className="text-emerald-500 shrink-0" />, amber: <Bell size={15} className="text-amber-500 shrink-0" />, red: <TrendingDown size={15} className="text-red-500 shrink-0" />, blue: <CheckCircle size={15} className="text-blue-500 shrink-0" /> };
-        return (
-          <div key={alert.type} className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${colors[alert.color]}`}>
-            {icons[alert.color]}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold">{alert.title}</p>
-              <p className="text-xs mt-0.5 opacity-80">{alert.body}</p>
-            </div>
-            <button onClick={() => setDismissedAlerts(s => new Set([...s, alert.type]))} className="shrink-0 opacity-50 hover:opacity-100 transition-opacity mt-0.5">
-              <X size={13} />
-            </button>
-          </div>
-        );
-      })}
+      {/* Alerts and tracking banner removed per user request */}
 
       {/* ── Realtime panel ─────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
@@ -757,10 +730,10 @@ export default function ListingAnalyticsPage() {
               sub={`vs ${d.prior.unique_sessions} prior`}
               deltaVal={delta(d.unique_sessions, d.prior.unique_sessions)} color="purple" />
             <KpiCard icon={MousePointerClick} label="Inquiries sent" value={d.contact_form_submits.toLocaleString()}
-              sub={`${d.leads_created} leads created`}
+              sub={null}
               deltaVal={delta(d.contact_form_submits, d.prior.contact_form_submits)} color="green" />
             <KpiCard icon={TrendingUp} label="Conversion rate" value={`${d.conversion_rate}%`}
-              sub="Views → inquiry"
+              sub={null}
               deltaVal={delta(d.conversion_rate, d.prior.conversion_rate)} color="amber" />
           </div>
 
@@ -1236,8 +1209,6 @@ export default function ListingAnalyticsPage() {
 
       <div className="pb-4">
         <p className="text-xs text-gray-400 text-center">
-          Delta % compares current period to the previous equal-length period. All times are UTC.
-          <span className="mx-2">·</span>
           <Radio size={10} className="inline" /> Live panel refreshes every 30 seconds.
         </p>
       </div>
