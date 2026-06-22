@@ -6,7 +6,7 @@ export const VENUE_MEDIA_PREFIX = 'media';
 /** Max upload size for listing + media library (matches bucket config). */
 export const VENUE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 /** Larger cap for documents (PDFs / spreadsheets / etc.) */
-export const VENUE_FILE_MAX_BYTES = 25 * 1024 * 1024;
+export const VENUE_FILE_MAX_BYTES = 50 * 1024 * 1024;
 
 export const VENUE_IMAGE_ALLOWED_MIME = [
   'image/jpeg',

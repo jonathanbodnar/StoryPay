@@ -4,7 +4,7 @@
  * Limits:
  *  - Free plan (no paid plan): 250 MB
  *  - Paid plans: 2 GB
- *  - Per-file: 10 MB (enforced by upload endpoints)
+ *  - Per-file: 50 MB (enforced by upload endpoints)
  *
  * Count-based limits (enforced by individual endpoints):
  *  - Gallery listing photos: 25
@@ -19,7 +19,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export const FREE_QUOTA_BYTES  = 250 * 1024 * 1024;        // 250 MB
 export const PAID_QUOTA_BYTES  = 2  * 1024 * 1024 * 1024;  // 2 GB
-export const PER_FILE_MAX_BYTES = 10 * 1024 * 1024;         // 10 MB
+export const PER_FILE_MAX_BYTES = 50 * 1024 * 1024;         // 50 MB
 export const WARN_THRESHOLD    = 0.80;                       // 80%
 
 export interface QuotaStatus {
@@ -86,7 +86,7 @@ export async function checkUploadQuota(
   fileSizeBytes: number,
 ): Promise<string | null> {
   if (fileSizeBytes > PER_FILE_MAX_BYTES) {
-    return `File exceeds the 10 MB per-file limit. Please compress or reduce the file size and try again.`;
+    return `File exceeds the 50 MB per-file limit. Please compress or reduce the file size and try again.`;
   }
 
   const status = await getVenueStorageUsage(venueId);

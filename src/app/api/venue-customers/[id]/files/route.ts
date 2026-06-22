@@ -85,7 +85,7 @@ export async function POST(
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
   if (file.size > PER_FILE_MAX_BYTES) {
-    return NextResponse.json({ error: 'File exceeds the 10 MB per-file limit.' }, { status: 413 });
+    return NextResponse.json({ error: 'File exceeds the 50 MB per-file limit.' }, { status: 413 });
   }
 
   const mimeType = (file.type || '').toLowerCase().split(';')[0].trim();
