@@ -82,7 +82,6 @@ const marketingItems: NavItem[] = [
   { label: 'Audiences',            href: '/dashboard/marketing/email/audiences',    icon: Users,          navId: 'nav_marketing_email_segments' },
   { label: 'Email Notifications',  href: '/dashboard/settings/notifications',       icon: Bell,           navId: 'nav_settings_notifications' },
   { label: 'Forms',                href: '/dashboard/marketing/form-builder',       icon: LayoutTemplate, navId: 'nav_marketing_form_builder' },
-  { label: 'AI Concierge',         href: '/dashboard/marketing/ai-concierge',      icon: Sparkles,       navId: 'nav_marketing_ai_concierge' },
   { label: 'Email settings',       href: '/dashboard/marketing/email/settings',    icon: Settings,       navId: 'nav_marketing_email_settings' },
 ];
 

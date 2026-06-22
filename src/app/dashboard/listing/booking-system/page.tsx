@@ -10,6 +10,7 @@ import {
 import type { BookingSystemConfig, StepConfig } from '@/app/api/listing/booking-system/route';
 import type { StepLeadsPayload, StepLeadInfo } from '@/app/api/listing/booking-system/step-leads/route';
 import RichTextEditor from '@/components/RichTextEditor';
+import AiConciergeSettingsPage from '@/app/dashboard/marketing/ai-concierge/page';
 
 // ─── Shared primitives ────────────────────────────────────────────────────
 
@@ -889,20 +890,20 @@ export default function BookingSystemPage() {
           />
         </PhaseCard>
 
-        {/* AI Concierge info callout */}
-        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-600 mt-0.5">
-            <Bot size={16} className="text-white" />
+        {/* Phase 6 — AI Concierge Settings */}
+        <PhaseCard
+          number={6}
+          title="AI Concierge"
+          subtitle="A personal AI assistant that follows up with quiet leads via SMS until they reply or 60 days pass."
+          icon={<Bot size={18} className="text-emerald-600" />}
+          accent="bg-emerald-50"
+          enabled={cfg.aiEnabled}
+          onToggle={(v) => void save({ aiEnabled: v })}
+        >
+          <div className="pt-2">
+            <AiConciergeSettingsPage />
           </div>
-          <div>
-            <p className="text-[13px] font-semibold text-emerald-900">AI Concierge takes over here</p>
-            <p className="mt-0.5 text-[12px] text-emerald-700 leading-relaxed">
-              When the <span className="font-medium">Activate AI Concierge</span> block fires in your sequence, 
-              the AI picks up the conversation and keeps reaching out on your behalf.
-              Cadence, messages, and controls are managed by your StoryVenue account team.
-            </p>
-          </div>
-        </div>
+        </PhaseCard>
       </div>
     </div>
   );

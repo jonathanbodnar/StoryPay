@@ -170,19 +170,9 @@ export default function AiConciergeSettingsPage() {
   }
 
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="font-heading text-2xl font-semibold text-gray-900 flex items-center gap-2">
-          <Sparkles size={22} className="text-purple-500" /> AI Concierge
-        </h1>
-        <p className="mt-1 text-sm text-gray-500">
-          A personal AI assistant that follows up with quiet leads via SMS until they reply or 60 days pass.
-        </p>
-      </div>
-
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 mb-6">
+      <div className="flex gap-1 border-b border-gray-200 px-4 pt-4 bg-gray-50/50">
         {([
           { id: 'overview', label: 'Overview', icon: Sparkles },
           { id: 'leads',    label: 'Active Leads', icon: Bot,
