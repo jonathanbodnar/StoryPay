@@ -926,7 +926,7 @@ export default function Sidebar({
 
   return (
     <>
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 border-b border-gray-200" style={{ backgroundColor: '#fafaf9' }}>
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 border-b border-gray-200" style={{ backgroundColor: '#ffffff' }}>
         <Link href="/dashboard">
           <Image src="/storyvenue-dark-logo.png" alt="StoryVenue" width={90} height={22} />
         </Link>
@@ -959,7 +959,7 @@ export default function Sidebar({
         className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[280px] transition-transform duration-300 border-r border-gray-200 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ backgroundColor: '#fafaf9' }}
+        style={{ backgroundColor: '#ffffff' }}
       >
         <NavContent rail={false} onCloseMobile={() => setMobileOpen(false)} isMobile />
       </aside>
@@ -968,7 +968,7 @@ export default function Sidebar({
         className={`hidden lg:block fixed left-0 top-0 bottom-0 z-30 transition-[width] duration-200 ease-out border-r border-gray-200 ${
           collapsed ? 'w-[60px]' : 'w-[216px]'
         }`}
-        style={{ backgroundColor: '#fafaf9' }}
+        style={{ backgroundColor: '#ffffff' }}
       >
         <NavContent rail={collapsed} />
       </aside>
