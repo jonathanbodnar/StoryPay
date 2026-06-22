@@ -1197,9 +1197,9 @@ Privacy: only approximate location data (city-level) is captured. No names, emai
       },
       {
         id: 'listing-booking-system',
-        title: 'Speed to Lead Booking System — automated guide delivery and follow-up sequence',
+        title: 'Speed to Lead System — automated guide delivery and follow-up sequence',
         tags: ['booking system', 'speed to lead', 'guide delivery', 'pricing guide', 'pdf', 'sms guide', 'email guide', 'follow-up sequence', 'automation', 'bride', 'lead form', 'public listing', 'pricing_guide_url', 'merge variable', 'ai concierge trigger'],
-        body: `The Speed to Lead Booking System (Venue listing → Booking System) automates everything that happens the moment a bride submits the inquiry form on your public storyvenue.com listing.
+        body: `The Speed to Lead System (Venue listing → Booking System) automates everything that happens the moment a bride submits the inquiry form on your public storyvenue.com listing.
 
 Overview
 The system has two phases:

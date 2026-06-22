@@ -724,7 +724,7 @@ export default function BookingSystemPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600">
               <Zap size={16} className="text-white" />
             </div>
-            <h1 className="text-[22px] font-bold text-gray-900 tracking-tight">Speed to Lead Booking System</h1>
+            <h1 className="text-[22px] font-bold text-gray-900 tracking-tight">Speed to Lead System</h1>
           </div>
           <p className="text-[13px] text-gray-500 ml-10">
             Automatically follow up with every new lead — from first inquiry to booked tour.

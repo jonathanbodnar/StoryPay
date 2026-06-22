@@ -946,7 +946,7 @@ Where to find variable pickers:
 - Notifications page: variable pills below each template editor, click to copy
 - Calendar settings → Notifications: merge tag reference in each channel editor
 
-## Speed to Lead Booking System
+## Speed to Lead System
 - Path: Venue listing → Booking System (/dashboard/listing/booking-system). Visibility is controlled by a checkbox on the venue's directory plan — if hidden, the menu item does not appear.
 - The Booking System is a venue-specific speed-to-lead automation that fires the moment a bride submits the public listing inquiry form on storyvenue.com. It is completely independent of GHL (GoHighLevel); GHL is only used for A2P SMS delivery to legacy clients.
 - Two phases covered by the Booking System page:
