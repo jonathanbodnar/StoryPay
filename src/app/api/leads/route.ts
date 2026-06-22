@@ -467,7 +467,7 @@ export async function POST(request: NextRequest) {
     venueWebsiteUrl?: string;
     opportunityValue?: number | string;
     weddingDate?: string;
-    guestCount?: number;
+    guestCount?: number | string;
     message?: string;
     bookingTimeline?: string;
     venueMatters?: string;
@@ -540,7 +540,12 @@ export async function POST(request: NextRequest) {
   const opportunityValue =
     body.opportunityValue === undefined || body.opportunityValue === '' || body.opportunityValue === null
       ? null
-      : Number(body.opportunityValue);
+      : Number(String(body.opportunityValue).replace(/,/g, ''));
+
+  const guestCount =
+    body.guestCount === undefined || body.guestCount === '' || body.guestCount === null
+      ? null
+      : Number(String(body.guestCount).replace(/,/g, ''));
 
   const spaceId = typeof body.spaceId === 'string' && body.spaceId.trim() ? body.spaceId.trim() : null;
   if (spaceId) {
@@ -564,7 +569,7 @@ export async function POST(request: NextRequest) {
     venue_website_url:  body.venueWebsiteUrl || null,
     opportunity_value:  opportunityValue,
     wedding_date:       body.weddingDate || null,
-    guest_count:        body.guestCount ?? null,
+    guest_count:        guestCount,
     booking_timeline:   body.bookingTimeline?.trim() || null,
     venue_matters:      body.venueMatters?.trim()    || null,
     message:            body.message || null,

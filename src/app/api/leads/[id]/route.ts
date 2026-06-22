@@ -87,7 +87,7 @@ export async function PATCH(
     venueWebsiteUrl?: string;
     opportunityValue?: number | string | null;
     weddingDate?: string | null;
-    guestCount?: number | null;
+    guestCount?: number | string | null;
     bookingTimeline?: string | null;
     venueMatters?: string | null;
     message?: string | null;
@@ -142,11 +142,17 @@ export async function PATCH(
   if (typeof body.venueMatters === 'string' || body.venueMatters === null) updates.venue_matters = body.venueMatters || null;
   if (typeof body.message === 'string' || body.message === null) updates.message = body.message;
   if (body.weddingDate === null || typeof body.weddingDate === 'string') updates.wedding_date = body.weddingDate || null;
-  if (body.guestCount === null || typeof body.guestCount === 'number') updates.guest_count = body.guestCount;
+  if (body.guestCount === null || typeof body.guestCount === 'number' || typeof body.guestCount === 'string') {
+    if (body.guestCount === null || body.guestCount === '') updates.guest_count = null;
+    else {
+      const n = Number(String(body.guestCount).replace(/,/g, ''));
+      if (!Number.isNaN(n)) updates.guest_count = n;
+    }
+  }
   if (body.opportunityValue === null || body.opportunityValue === '' || body.opportunityValue === undefined) {
     if (body.opportunityValue !== undefined) updates.opportunity_value = null;
   } else if (typeof body.opportunityValue === 'number' || typeof body.opportunityValue === 'string') {
-    const n = Number(body.opportunityValue);
+    const n = Number(String(body.opportunityValue).replace(/,/g, ''));
     if (!Number.isNaN(n)) updates.opportunity_value = n;
   }
   if (body.pipelineId === null || typeof body.pipelineId === 'string') updates.pipeline_id = body.pipelineId || null;

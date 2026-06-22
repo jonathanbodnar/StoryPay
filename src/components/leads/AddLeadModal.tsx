@@ -518,7 +518,8 @@ export default function AddLeadModal({
                 label="Opportunity value"
                 prefix={<DollarSign className="w-3.5 h-3.5 text-gray-400" />}
                 value={draft.opportunityValue}
-                type="number"
+                type="text"
+                inputMode="numeric"
                 onChange={(v) => set('opportunityValue', v)}
               />
               <DraftField
@@ -532,7 +533,8 @@ export default function AddLeadModal({
               <DraftField
                 label="Guest count"
                 value={draft.guestCount}
-                type="number"
+                type="text"
+                inputMode="numeric"
                 onChange={(v) => set('guestCount', v)}
               />
               <div>
@@ -646,12 +648,14 @@ function DraftField({
   value,
   onChange,
   type = 'text',
+  inputMode,
   prefix,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  inputMode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search';
   prefix?: React.ReactNode;
 }) {
   return (
@@ -663,6 +667,7 @@ function DraftField({
         {prefix && <span className="absolute left-2.5 top-1/2 -translate-y-1/2">{prefix}</span>}
         <input
           type={type}
+          inputMode={inputMode}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={`w-full rounded-xl border border-gray-200 ${prefix ? 'pl-7' : 'pl-3'} pr-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none`}

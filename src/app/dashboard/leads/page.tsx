@@ -589,9 +589,9 @@ export default function LeadsPage() {
         phone:             draft.phone,
         venueName:         draft.venueName,
         venueWebsiteUrl:   draft.venueWebsiteUrl,
-        opportunityValue: draft.opportunityValue ? Number(draft.opportunityValue) : null,
+        opportunityValue: draft.opportunityValue ? Number(draft.opportunityValue.replace(/,/g, '')) : null,
         weddingDate:       draft.weddingDate || null,
-        guestCount:        draft.guestCount ? Number(draft.guestCount) : null,
+        guestCount:        draft.guestCount ? Number(draft.guestCount.replace(/,/g, '')) : null,
         bookingTimeline:   draft.bookingTimeline.trim() || undefined,
         venueMatters:      draft.venueMatters.trim() || undefined,
         message:           draft.message,
@@ -2217,8 +2217,11 @@ function LeadDrawer({
                 </p>
               </div>
             ) : (
-              <Field label="Opportunity value" value={lead.opportunity_value?.toString() ?? ''} type="number" prefix="$"
-                onSave={(v) => void saveField('opportunityValue', v === '' ? null : Number(v))} saving={savingField === 'opportunityValue'} />
+              <Field label="Opportunity value" value={lead.opportunity_value?.toLocaleString('en-US') ?? ''} type="text" inputMode="numeric" prefix="$"
+                onSave={(v) => {
+                  const cleaned = v.replace(/,/g, '');
+                  void saveField('opportunityValue', cleaned === '' ? null : Number(cleaned));
+                }} saving={savingField === 'opportunityValue'} />
             )}
           </section>
 
@@ -2230,8 +2233,11 @@ function LeadDrawer({
               onSave={(v) => void saveField('venueWebsiteUrl', v)} saving={savingField === 'venueWebsiteUrl'} />
             <Field label="Wedding date" value={lead.wedding_date ?? ''} type="date"
               onSave={(v) => void saveField('weddingDate', v || null)} saving={savingField === 'weddingDate'} />
-            <Field label="Guest count" value={lead.guest_count?.toString() ?? ''} type="number"
-              onSave={(v) => void saveField('guestCount', v === '' ? null : Number(v))} saving={savingField === 'guestCount'} />
+            <Field label="Guest count" value={lead.guest_count?.toLocaleString('en-US') ?? ''} type="text" inputMode="numeric"
+              onSave={(v) => {
+                const cleaned = v.replace(/,/g, '');
+                void saveField('guestCount', cleaned === '' ? null : Number(cleaned));
+              }} saving={savingField === 'guestCount'} />
           </section>
 
           <section className="grid grid-cols-2 gap-3">
@@ -2713,7 +2719,7 @@ function LeadDrawer({
 
 // Inline-edit field helper used in the drawer. Auto-saves on blur / Enter.
 function Field({
-  label, value, onSave, saving, type = 'text', prefix, className,
+  label, value, onSave, saving, type = 'text', prefix, className, inputMode,
 }: {
   label: string;
   value: string;
@@ -2722,6 +2728,7 @@ function Field({
   type?: string;
   prefix?: string;
   className?: string;
+  inputMode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search';
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => { setDraft(value); }, [value]);
@@ -2737,6 +2744,7 @@ function Field({
         )}
         <input
           type={type}
+          inputMode={inputMode}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => { if (draft !== value) onSave(draft); }}

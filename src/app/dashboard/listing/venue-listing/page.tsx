@@ -8,6 +8,7 @@ import {
   Link2, HelpCircle, Plus, Trash2, ChevronDown,
 } from 'lucide-react';
 import { slugify } from '@/lib/directory';
+import { FormattedNumberInput } from '@/components/FormattedNumberInput';
 
 type FaqRow = { question: string; answer: string };
 
@@ -936,18 +937,18 @@ export default function ListingPage() {
           </div>
           <div>
             <label className={LABEL}>Max guests</label>
-            <input type="number" className={INPUT} value={listing.capacity_max ?? ''}
-              onChange={(e) => update('capacity_max', e.target.value ? Number(e.target.value) : null)} />
+            <FormattedNumberInput className={INPUT} value={listing.capacity_max}
+              onChange={(v) => update('capacity_max', v)} />
           </div>
           <div>
             <label className={LABEL}>Price from ($)</label>
-            <input type="number" className={INPUT} value={listing.price_min ?? ''}
-              onChange={(e) => update('price_min', e.target.value ? Number(e.target.value) : null)} />
+            <FormattedNumberInput className={INPUT} value={listing.price_min}
+              onChange={(v) => update('price_min', v)} />
           </div>
           <div>
             <label className={LABEL}>Price to ($)</label>
-            <input type="number" className={INPUT} value={listing.price_max ?? ''}
-              onChange={(e) => update('price_max', e.target.value ? Number(e.target.value) : null)} />
+            <FormattedNumberInput className={INPUT} value={listing.price_max}
+              onChange={(v) => update('price_max', v)} />
           </div>
         </div>
       </section>

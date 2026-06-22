@@ -98,7 +98,7 @@ function surcharge(subtotalCents: number): LineItem {
 }
 
 function lineCents(amountStr: string): number {
-  const v = parseFloat(amountStr || '0');
+  const v = parseFloat((amountStr || '0').replace(/,/g, ''));
   return Number.isNaN(v) ? 0 : Math.round(v * 100);
 }
 
@@ -971,8 +971,21 @@ function NewProposalInvoicePageInner() {
  ) : (
  <>
  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
- <input type="number"min="0"step="0.01"value={item.amount}
- onChange={e=>updateItem(item.id,'amount',e.target.value)}
+ <input type="text" inputMode="decimal" value={item.amount}
+ onChange={e=>{
+   const val = e.target.value;
+   if (!/^[0-9.,]*$/.test(val)) return;
+   updateItem(item.id,'amount',val);
+ }}
+ onBlur={() => {
+   const cleaned = item.amount.replace(/,/g, '');
+   if (cleaned) {
+     const num = Number(cleaned);
+     if (!Number.isNaN(num)) {
+       updateItem(item.id, 'amount', num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+     }
+   }
+ }}
  placeholder="0.00"
  className={`w-full rounded-lg border pl-6 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none transition-colors ${item.isSurcharge?'border-gray-200 bg-gray-100 font-medium':'border-gray-200 focus:border-gray-400'}`}/>
  </>
@@ -1206,8 +1219,21 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
  <div key={inst.id} className="flex items-center gap-2">
  <div className="relative flex-1">
  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
- <input type="number"min="0"step="0.01"value={inst.amount}
- onChange={e=>setInstallments(p=>p.map(i=>i.id===inst.id?{...i,amount:e.target.value}:i))}
+ <input type="text" inputMode="decimal" value={inst.amount}
+ onChange={e=>{
+   const val = e.target.value;
+   if (!/^[0-9.,]*$/.test(val)) return;
+   setInstallments(p=>p.map(i=>i.id===inst.id?{...i,amount:val}:i));
+ }}
+ onBlur={() => {
+   const cleaned = inst.amount.replace(/,/g, '');
+   if (cleaned) {
+     const num = Number(cleaned);
+     if (!Number.isNaN(num)) {
+       setInstallments(p=>p.map(i=>i.id===inst.id?{...i,amount:num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}:i));
+     }
+   }
+ }}
  placeholder="0.00"className="w-full rounded-2xl border border-gray-200 pl-7 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"/>
  </div>
  <input type="date"min={today()} value={inst.date}
@@ -1229,7 +1255,22 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
  <label className="block text-xs font-medium text-gray-500 mb-1.5">Amount / Period</label>
  <div className="relative">
  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
- <input type="number"min="0"step="0.01"value={subAmount} onChange={e=>setSubAmount(e.target.value)} placeholder="0.00"className="w-full rounded-2xl border border-gray-200 pl-7 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"/>
+ <input type="text" inputMode="decimal" value={subAmount} 
+ onChange={e=>{
+   const val = e.target.value;
+   if (!/^[0-9.,]*$/.test(val)) return;
+   setSubAmount(val);
+ }}
+ onBlur={() => {
+   const cleaned = subAmount.replace(/,/g, '');
+   if (cleaned) {
+     const num = Number(cleaned);
+     if (!Number.isNaN(num)) {
+       setSubAmount(num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+     }
+   }
+ }}
+ placeholder="0.00"className="w-full rounded-2xl border border-gray-200 pl-7 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"/>
  </div>
  </div>
  <div>

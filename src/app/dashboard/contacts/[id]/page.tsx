@@ -890,7 +890,7 @@ export default function CustomerDetailPage() {
     const res = await fetch('/api/spaces', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newSpaceName.trim(), color: newSpaceColor, capacity: newSpaceCap ? Number(newSpaceCap) : null }),
+      body: JSON.stringify({ name: newSpaceName.trim(), color: newSpaceColor, capacity: newSpaceCap ? Number(newSpaceCap.replace(/,/g, '')) : null }),
     });
     if (res.ok) {
       const s = await res.json();
@@ -1662,7 +1662,16 @@ export default function CustomerDetailPage() {
                     <input type="color" value={newSpaceColor} onChange={e => setNewSpaceColor(e.target.value)}
                       className="h-8 w-10 rounded border border-gray-200 cursor-pointer" />
                   </div>
-                  <input type="number" value={newSpaceCap} onChange={e => setNewSpaceCap(e.target.value)}
+                  <input type="text" inputMode="numeric" value={newSpaceCap} onChange={e => setNewSpaceCap(e.target.value)}
+                    onBlur={() => {
+                      const cleaned = newSpaceCap.replace(/,/g, '');
+                      if (cleaned) {
+                        const num = Number(cleaned);
+                        if (!Number.isNaN(num)) {
+                          setNewSpaceCap(num.toLocaleString('en-US'));
+                        }
+                      }
+                    }}
                     placeholder="Capacity"
                     className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
                   <button onClick={addSpace} disabled={!newSpaceName.trim() || savingSpace}

@@ -327,11 +327,23 @@ return {};
  <div className="relative flex-1 sm:flex-none sm:w-full">
  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
  <input
- type="number"
- min="0"
- step="0.01"
+ type="text"
+ inputMode="decimal"
  value={item.amount}
- onChange={(e) => updateLineItem(item.id, 'amount', e.target.value)}
+ onChange={(e) => {
+   const val = e.target.value;
+   if (!/^[0-9.,]*$/.test(val)) return;
+   updateLineItem(item.id, 'amount', val);
+ }}
+ onBlur={() => {
+   const cleaned = item.amount.replace(/,/g, '');
+   if (cleaned) {
+     const num = Number(cleaned);
+     if (!Number.isNaN(num)) {
+       updateLineItem(item.id, 'amount', num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+     }
+   }
+ }}
  placeholder="0.00"
  className={`w-full rounded-md border pl-6 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 ${item.isSurcharge ? 'border-blue-200 bg-blue-50/60 font-medium' : 'border-gray-300'}`}
  />
@@ -431,13 +443,23 @@ paymentType === type
  <div className="relative flex-1">
  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
  <input
- type="number"
- min="0"
- step="0.01"
+ type="text"
+ inputMode="decimal"
  value={inst.amount}
- onChange={(e) =>
- setInstallments((prev) => prev.map((i) => (i.id === inst.id ? { ...i, amount: e.target.value } : i)))
- }
+ onChange={(e) => {
+   const val = e.target.value;
+   if (!/^[0-9.,]*$/.test(val)) return;
+   setInstallments((prev) => prev.map((i) => (i.id === inst.id ? { ...i, amount: val } : i)));
+ }}
+ onBlur={() => {
+   const cleaned = inst.amount.replace(/,/g, '');
+   if (cleaned) {
+     const num = Number(cleaned);
+     if (!Number.isNaN(num)) {
+       setInstallments((prev) => prev.map((i) => (i.id === inst.id ? { ...i, amount: num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) } : i)));
+     }
+   }
+ }}
  placeholder="0.00"
  className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition"
  />
