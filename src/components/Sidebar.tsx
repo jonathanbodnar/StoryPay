@@ -796,8 +796,6 @@ export default function Sidebar({
           </div>
         ) : null}
 
-        {renderMenuItems(bottomMenuItems, isMobile, rail, onCloseMobile)}
-
         {isAdmin && (isMobile ? mobileSettings : settingsFiltered).length > 0 ? (
           <div>
             {rail ? (
@@ -840,6 +838,8 @@ export default function Sidebar({
             )}
           </div>
         ) : null}
+
+        {renderMenuItems(bottomMenuItems, isMobile, rail, onCloseMobile)}
       </nav>
 
       <div className={`px-3 py-4 border-t border-gray-200 space-y-1 ${rail ? 'flex flex-col items-center' : ''}`}>
