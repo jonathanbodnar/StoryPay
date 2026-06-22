@@ -715,7 +715,7 @@ export default function BookingSystemPage() {
   const aiBlocked = !cfg.a2pVerified || !cfg.ghlConnected;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 sm:px-0">
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-0">
 
       {/* Header */}
       <div className="mb-8 flex items-start justify-between gap-4">
