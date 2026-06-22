@@ -139,12 +139,12 @@ interface AdminStats {
   platformSaaSRevenueInRangeCents?: number;
   platformSaaSMonthlyChart?: { month: string; label: string; revenue: number }[];
   trialFunnel?: {
-    totalSignups: number;
-    activeTrialing: number;
-    expiredNoAction: number;
-    upgraded: number;
-    downgraded: number;
-    neverLoggedIn: number;
+    totalSignups: { count: number; venues: any[] };
+    activeTrialing: { count: number; venues: any[] };
+    expiredNoAction: { count: number; venues: any[] };
+    upgraded: { count: number; venues: any[] };
+    downgraded: { count: number; venues: any[] };
+    neverLoggedIn: { count: number; venues: any[] };
   };
   trialPlanPriceCents?: number;
 }
@@ -156,7 +156,7 @@ function formatShort(c: number) { const d = c / 100; return d >= 1000 ? `$${(d/1
 function getDefaultRange(): DateRange { const p = PRESETS.find(x => x.label === 'Last 30 days')!; return { ...p.getRange(), label: p.label }; }
 
 // Drill-down types
-type DrillKey = 'venues' | 'waitlist' | 'customers' | 'failed' | 'pending' | null;
+type DrillKey = 'venues' | 'waitlist' | 'customers' | 'failed' | 'pending' | 'trial_total' | 'trial_active' | 'trial_expired' | 'trial_never_logged_in' | 'trial_upgraded' | 'trial_downgraded' | null;
 interface WaitlistEntry { id: string; first_name: string | null; last_name: string | null; email: string; phone: string | null; venue_name: string | null; referral_source: string | null; created_at: string; }
 interface FailedPayment { id: string; customer_name: string | null; price: number; status: string; created_at: string; }
 interface ChangelogEntry { id: string; title: string; description: string; category: string; released_at: string; }
@@ -1602,19 +1602,19 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
                 const f = stats?.trialFunnel;
                 const price = stats?.trialPlanPriceCents ?? 9700;
                 const fmt = (n: number) => formatCents(n);
-                const pct = (n: number) => f?.totalSignups ? Math.round((n / f.totalSignups) * 100) : 0;
+                const pct = (n: number) => f?.totalSignups?.count ? Math.round((n / f.totalSignups.count) * 100) : 0;
                 if (statsLoading || !f) return (
                   <div className="rounded-lg border border-gray-100 bg-white p-4 text-xs text-gray-400">
                     {statsLoading ? 'Loading trial funnel…' : 'No trial data yet.'}
                   </div>
                 );
-                const rows: { label: string; count: number; sub: string; color: string; dot: string }[] = [
-                  { label: 'Total signups', count: f.totalSignups, sub: 'All non-demo venues', color: 'text-gray-700', dot: 'bg-gray-400' },
-                  { label: 'Active trial', count: f.activeTrialing, sub: `${pct(f.activeTrialing)}% of signups · potential ${fmt(f.activeTrialing * price)}/mo`, color: 'text-blue-700', dot: 'bg-blue-400' },
-                  { label: 'Trial expired – no action', count: f.expiredNoAction, sub: `${pct(f.expiredNoAction)}% of signups · ${fmt(f.expiredNoAction * price)}/mo opportunity`, color: 'text-amber-700', dot: 'bg-amber-400' },
-                  { label: '↳ Never logged in after signup', count: f.neverLoggedIn, sub: `Ghosted — signed up but never returned`, color: 'text-amber-600', dot: 'bg-amber-200' },
-                  { label: 'Upgraded to paid', count: f.upgraded, sub: `${pct(f.upgraded)}% conversion · ${fmt(f.upgraded * price)}/mo actual MRR`, color: 'text-emerald-700', dot: 'bg-emerald-400' },
-                  { label: 'Downgraded / churned', count: f.downgraded, sub: `${pct(f.downgraded)}% of signups · ${fmt(f.downgraded * price)}/mo lost MRR`, color: 'text-red-600', dot: 'bg-red-400' },
+                const rows: { label: string; count: number; sub: string; color: string; dot: string; drillKey: DrillKey; data: any[] }[] = [
+                  { label: 'Total signups', count: f.totalSignups.count, sub: 'All non-demo venues', color: 'text-gray-700', dot: 'bg-gray-400', drillKey: 'trial_total', data: f.totalSignups.venues },
+                  { label: 'Active trial', count: f.activeTrialing.count, sub: `${pct(f.activeTrialing.count)}% of signups · potential ${fmt(f.activeTrialing.count * price)}/mo`, color: 'text-blue-700', dot: 'bg-blue-400', drillKey: 'trial_active', data: f.activeTrialing.venues },
+                  { label: 'Trial expired – no action', count: f.expiredNoAction.count, sub: `${pct(f.expiredNoAction.count)}% of signups · ${fmt(f.expiredNoAction.count * price)}/mo opportunity`, color: 'text-amber-700', dot: 'bg-amber-400', drillKey: 'trial_expired', data: f.expiredNoAction.venues },
+                  { label: '↳ Never logged in after signup', count: f.neverLoggedIn.count, sub: `Ghosted — signed up but never returned`, color: 'text-amber-600', dot: 'bg-amber-200', drillKey: 'trial_never_logged_in', data: f.neverLoggedIn.venues },
+                  { label: 'Upgraded to paid', count: f.upgraded.count, sub: `${pct(f.upgraded.count)}% conversion · ${fmt(f.upgraded.count * price)}/mo actual MRR`, color: 'text-emerald-700', dot: 'bg-emerald-400', drillKey: 'trial_upgraded', data: f.upgraded.venues },
+                  { label: 'Downgraded / churned', count: f.downgraded.count, sub: `${pct(f.downgraded.count)}% of signups · ${fmt(f.downgraded.count * price)}/mo lost MRR`, color: 'text-red-600', dot: 'bg-red-400', drillKey: 'trial_downgraded', data: f.downgraded.venues },
                 ];
                 return (
                   <div className="rounded-lg border border-gray-100 bg-white overflow-hidden">
@@ -1623,7 +1623,16 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
                     </div>
                     <div className="divide-y divide-gray-50">
                       {rows.map((r) => (
-                        <div key={r.label} className={`flex items-center justify-between px-4 py-2.5 gap-4 ${r.label.startsWith('↳') ? 'pl-8 bg-gray-50/40' : ''}`}>
+                        <div 
+                          key={r.label} 
+                          className={`flex items-center justify-between px-4 py-2.5 gap-4 cursor-pointer hover:bg-gray-50/80 transition-colors ${r.label.startsWith('↳') ? 'pl-8 bg-gray-50/40' : ''}`}
+                          onClick={() => {
+                            if (r.count > 0) {
+                              setDrillKey(r.drillKey);
+                              setDrillData(r.data);
+                            }
+                          }}
+                        >
                           <div className="flex items-center gap-2 min-w-0">
                             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${r.dot}`} />
                             <div>

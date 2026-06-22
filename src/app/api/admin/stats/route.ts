@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     supabaseAdmin.from('venues').select('*', { count: 'exact', head: true }),
     supabaseAdmin
       .from('venues')
-      .select('id, directory_plan_id, directory_subscription_status, directory_trial_ends_at, directory_trial_consumed, last_login_at, is_demo')
+      .select('id, name, email, ghl_location_id, directory_plan_id, directory_subscription_status, directory_trial_ends_at, directory_trial_consumed, last_login_at, is_demo, setup_completed, created_at')
       .not('directory_plan_id', 'is', null),
     (async () => {
       let peq = supabaseAdmin.from('platform_billing_events').select('amount_cents, occurred_at');
@@ -180,17 +180,30 @@ export async function GET(request: NextRequest) {
   const now_iso = new Date().toISOString();
 
   let trialFunnel = {
-    totalSignups:       0,
-    activeTrialing:     0,
-    expiredNoAction:    0,
-    upgraded:           0,
-    downgraded:         0,
-    neverLoggedIn:      0,
+    totalSignups:       { count: 0, venues: [] as any[] },
+    activeTrialing:     { count: 0, venues: [] as any[] },
+    expiredNoAction:    { count: 0, venues: [] as any[] },
+    upgraded:           { count: 0, venues: [] as any[] },
+    downgraded:         { count: 0, venues: [] as any[] },
+    neverLoggedIn:      { count: 0, venues: [] as any[] },
   };
 
   for (const row of directoryVenues ?? []) {
     if ((row as Record<string, unknown>).is_demo) continue;
-    trialFunnel.totalSignups++;
+    
+    // We only need basic info for the drill-down modal
+    const venueInfo = {
+      id: row.id,
+      name: (row as any).name || 'Unnamed Venue',
+      email: (row as any).email || '',
+      ghl_location_id: (row as any).ghl_location_id || '',
+      setup_completed: (row as any).setup_completed || false,
+      created_at: (row as any).created_at || new Date().toISOString(),
+    };
+
+    trialFunnel.totalSignups.count++;
+    trialFunnel.totalSignups.venues.push(venueInfo);
+
     const st         = ((row as Record<string, unknown>).directory_subscription_status as string) ?? 'none';
     const trialEnds  = (row as Record<string, unknown>).directory_trial_ends_at as string | null;
     const consumed   = Boolean((row as Record<string, unknown>).directory_trial_consumed);
@@ -198,19 +211,26 @@ export async function GET(request: NextRequest) {
     const trialActive = trialEnds ? trialEnds > now_iso : false;
 
     if (st === 'active') {
-      trialFunnel.upgraded++;
+      trialFunnel.upgraded.count++;
+      trialFunnel.upgraded.venues.push(venueInfo);
     } else if (st === 'trialing') {
       if (trialActive) {
-        trialFunnel.activeTrialing++;
+        trialFunnel.activeTrialing.count++;
+        trialFunnel.activeTrialing.venues.push(venueInfo);
       } else {
         // Trial period is over but they're still on trialing — took no action.
-        trialFunnel.expiredNoAction++;
+        trialFunnel.expiredNoAction.count++;
+        trialFunnel.expiredNoAction.venues.push(venueInfo);
         // Count never-logged-in separately (signed up but ghosted).
-        if (!lastLogin) trialFunnel.neverLoggedIn++;
+        if (!lastLogin) {
+          trialFunnel.neverLoggedIn.count++;
+          trialFunnel.neverLoggedIn.venues.push(venueInfo);
+        }
       }
     } else if (consumed && (st === 'canceled' || st === 'none' || st === 'pending' || st === '')) {
       // They went through the trial and chose not to pay.
-      trialFunnel.downgraded++;
+      trialFunnel.downgraded.count++;
+      trialFunnel.downgraded.venues.push(venueInfo);
     }
   }
 
