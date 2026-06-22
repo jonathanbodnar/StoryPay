@@ -95,11 +95,11 @@ export function VenueMediaPickerModal({
   const acceptString =
     activeTab === 'image' ? IMAGE_ACCEPT : activeTab === 'file' ? FILE_ACCEPT : ALL_ACCEPT;
   const uploadLabel =
-    activeTab === 'image'
-      ? uploading ? 'Uploading…' : 'Upload images'
-      : activeTab === 'file'
+    mode === 'file' || activeTab === 'file'
       ? uploading ? 'Uploading…' : 'Upload files'
-      : uploading ? 'Uploading…' : 'Upload';
+      : activeTab === 'image'
+      ? uploading ? 'Uploading…' : 'Upload images'
+      : uploading ? 'Uploading…' : 'Upload files';
 
   if (!open) return null;
 
