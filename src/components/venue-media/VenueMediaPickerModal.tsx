@@ -62,7 +62,10 @@ export function VenueMediaPickerModal({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const { assets, loading, uploading, error, uploadFiles, reload } = useVenueMediaLibrary();
-  const [activeTab, setActiveTab] = useState<VenueMediaPickerMode>(mode);
+  const [activeTabState, setActiveTabState] = useState<VenueMediaPickerMode>(mode);
+  
+  // If mode is forced to 'image' or 'file', use that. Otherwise use the selected tab.
+  const activeTab = mode === 'all' ? activeTabState : mode;
 
   const handlePick = useCallback(
     (a: VenueMediaAssetRow) => {
@@ -128,7 +131,7 @@ export function VenueMediaPickerModal({
               <button
                 key={t}
                 type="button"
-                onClick={() => setActiveTab(t)}
+                onClick={() => setActiveTabState(t)}
                 className={`rounded-lg px-3 py-1 text-xs font-medium transition ${
                   activeTab === t
                     ? 'bg-white text-gray-900 shadow-sm'
