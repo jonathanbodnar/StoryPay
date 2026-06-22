@@ -201,15 +201,13 @@ export default function AiConciergeSettingsPage() {
               <h2 className="font-heading text-base font-semibold text-gray-900">How AI Concierge works</h2>
             </div>
             <div className="px-6 py-5 space-y-3 text-sm text-gray-600">
-              <Step n={1} title="14-day silence triggers activation"
-                body="When a lead doesn't reply to your automated email sequence for 14 days, AI Concierge activates and starts following up via SMS." />
-              <Step n={2} title="Random 1–3 day cadence for up to 60 days"
+              <Step n={1} title="Random 1–3 day cadence for up to 60 days"
                 body="The AI sends short, varied SMS messages on a randomized cadence — never spammy, always casual. Each message picks a fresh angle so it never feels repetitive." />
-              <Step n={3} title="Reply = AI stops"
+              <Step n={2} title="Reply = AI stops"
                 body="The moment the bride replies, the AI pauses and you (or your team) take over. We tag the contact and notify you immediately by email." />
-              <Step n={4} title="Quiet hours respected"
+              <Step n={3} title="Quiet hours respected"
                 body="AI never sends outside 9am–8pm in your venue's local timezone. Late replies get queued for the next morning." />
-              <Step n={5} title="60-day hard cap"
+              <Step n={4} title="60-day hard cap"
                 body="If a bride still hasn't replied after 60 days of follow-up, the AI moves her to your &quot;Not Interested&quot; pipeline and never messages her again automatically." />
             </div>
           </section>

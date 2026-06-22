@@ -702,12 +702,12 @@ export default function BookingSystemPage() {
   }
 
   if (loading) return (
-    <div className="flex min-h-[400px] items-center justify-center">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-0 flex min-h-[400px] items-center justify-center">
       <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
     </div>
   );
   if (!cfg) return (
-    <div className="flex min-h-[400px] items-center justify-center text-sm text-gray-500">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-0 flex min-h-[400px] items-center justify-center text-sm text-gray-500">
       {error || 'Unable to load settings.'}
     </div>
   );
@@ -715,7 +715,7 @@ export default function BookingSystemPage() {
   const aiBlocked = !cfg.a2pVerified || !cfg.ghlConnected;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-0">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-0">
 
       {/* Header */}
       <div className="mb-8 flex items-start justify-between gap-4">
