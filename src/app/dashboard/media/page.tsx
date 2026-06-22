@@ -184,6 +184,9 @@ export default function MediaLibraryPage() {
   const [usageLoading, setUsageLoading] = useState(true);
   const [dragActive, setDragActive] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
   const [storageQuota, setStorageQuota] = useState<{
     usageBytes: number; limitBytes: number; percentUsed: number; nearLimit: boolean; atLimit: boolean; freePlan: boolean;
   } | null>(null);
@@ -324,9 +327,40 @@ export default function MediaLibraryPage() {
     setDeletingId(null);
     if (ok) {
       setPendingDelete(null);
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(pendingDelete.id);
+        return next;
+      });
       void refreshUsage();
     }
   }, [pendingDelete, remove, refreshUsage]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const confirmBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setBulkDeleting(true);
+    const ids = Array.from(selectedIds);
+    let successCount = 0;
+    for (const id of ids) {
+      const ok = await remove(id);
+      if (ok) successCount++;
+    }
+    setBulkDeleting(false);
+    if (successCount > 0) {
+      setPendingBulkDelete(false);
+      setSelectedIds(new Set());
+      void refreshUsage();
+    }
+  }, [selectedIds, remove, refreshUsage]);
 
   // Filter + sort
   const filtered = useMemo(() => {
@@ -628,6 +662,42 @@ export default function MediaLibraryPage() {
         </div>
       )}
 
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-brand-900">
+              {selectedIds.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+                else setSelectedIds(new Set(filtered.map(a => a.id)));
+              }}
+              className="text-xs text-brand-700 hover:text-brand-900 font-medium"
+            >
+              {selectedIds.size === filtered.length ? 'Deselect all' : 'Select all'}
+            </button>
+            <span className="text-brand-200">|</span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-brand-700 hover:text-brand-900"
+            >
+              Clear
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPendingBulkDelete(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete selected
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-20 text-gray-400">
           <Loader2 className="h-6 w-6 animate-spin" />
@@ -655,13 +725,15 @@ export default function MediaLibraryPage() {
         </div>
       ) : view === 'grid' ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {filtered.map((a) => (
-            <AssetCardGrid
-              key={a.id}
-              asset={a}
-              copied={copied === a.public_url}
-              menuOpen={menuId === a.id}
-              onOpenMenu={() => setMenuId(menuId === a.id ? null : a.id)}
+            {filtered.map((a) => (
+              <AssetCardGrid
+                key={a.id}
+                asset={a}
+                copied={copied === a.public_url}
+                menuOpen={menuId === a.id}
+                selected={selectedIds.has(a.id)}
+                onToggleSelect={() => toggleSelect(a.id)}
+                onOpenMenu={() => setMenuId(menuId === a.id ? null : a.id)}
               onCopy={() => copyUrl(a.public_url)}
               onRename={() => startRename(a)}
               onDelete={() => requestDelete(a)}
@@ -686,6 +758,8 @@ export default function MediaLibraryPage() {
                 asset={a}
                 copied={copied === a.public_url}
                 menuOpen={menuId === a.id}
+                selected={selectedIds.has(a.id)}
+                onToggleSelect={() => toggleSelect(a.id)}
                 onOpenMenu={() => setMenuId(menuId === a.id ? null : a.id)}
                 onCopy={() => copyUrl(a.public_url)}
                 onRename={() => startRename(a)}
@@ -772,6 +846,55 @@ export default function MediaLibraryPage() {
         />
       ) : null}
 
+      {/* ----- Bulk Delete confirm ----- */}
+      {pendingBulkDelete ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+              <h2 className="text-sm font-semibold text-gray-900">Delete {selectedIds.size} files?</h2>
+              <button
+                type="button"
+                onClick={() => setPendingBulkDelete(false)}
+                className="text-gray-400 hover:text-gray-700"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-3 p-5">
+              <p className="text-sm text-gray-600">
+                Are you sure you want to delete {selectedIds.size} file{selectedIds.size === 1 ? '' : 's'}? This action cannot be undone.
+              </p>
+              <p className="text-xs text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                If any of these files are used in your listing, branding, emails, or forms, deleting them will break the public URLs in those places.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setPendingBulkDelete(false)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmBulkDelete()}
+                disabled={bulkDeleting}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {bulkDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Delete files
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* ----- Preview modal (images, PDFs, Office docs, text) ----- */}
       {previewAsset ? (
         <PreviewModal asset={previewAsset} onClose={() => setPreviewAsset(null)} />
@@ -784,6 +907,8 @@ function AssetCardGrid({
   asset,
   copied,
   menuOpen,
+  selected,
+  onToggleSelect,
   onOpenMenu,
   onCopy,
   onRename,
@@ -795,6 +920,8 @@ function AssetCardGrid({
   asset: VenueMediaAssetRow;
   copied: boolean;
   menuOpen: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
   onOpenMenu: () => void;
   onCopy: () => void;
   onRename: () => void;
@@ -806,7 +933,7 @@ function AssetCardGrid({
   const isImage = isImageAsset(asset);
   const [triggerEl, setTriggerEl] = useState<HTMLButtonElement | null>(null);
   return (
-    <div className="group relative overflow-visible rounded-xl border border-gray-200 bg-white transition hover:border-gray-300 hover:shadow-sm">
+    <div className={`group relative overflow-visible rounded-xl border transition hover:shadow-sm ${selected ? 'border-brand-600 ring-1 ring-brand-600' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
       <button
         type="button"
         onClick={onPreview}
@@ -831,6 +958,14 @@ function AssetCardGrid({
           {fileTypeLabel(asset.content_type)}
         </span>
       </button>
+      <div className="absolute right-2 top-2 z-10" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          className="h-4 w-4 cursor-pointer rounded border-gray-300 text-brand-600 focus:ring-brand-600 bg-white/90 backdrop-blur"
+        />
+      </div>
       <div className="flex items-start justify-between gap-2 px-3 pb-3 pt-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-medium text-gray-900" title={displayName(asset)}>
@@ -887,6 +1022,8 @@ function AssetRowList({
   asset,
   copied,
   menuOpen,
+  selected,
+  onToggleSelect,
   onOpenMenu,
   onCopy,
   onRename,
@@ -897,6 +1034,8 @@ function AssetRowList({
   asset: VenueMediaAssetRow;
   copied: boolean;
   menuOpen: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
   onOpenMenu: () => void;
   onCopy: () => void;
   onRename: () => void;
@@ -907,7 +1046,15 @@ function AssetRowList({
   const isImage = isImageAsset(asset);
   const [triggerEl, setTriggerEl] = useState<HTMLButtonElement | null>(null);
   return (
-    <li className="grid grid-cols-[1fr,120px,180px,160px] items-center gap-4 border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50">
+    <li className={`grid grid-cols-[auto,1fr,120px,180px,160px] items-center gap-4 border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50 ${selected ? 'bg-brand-50/50' : ''}`}>
+      <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          className="h-4 w-4 cursor-pointer rounded border-gray-300 text-brand-600 focus:ring-brand-600"
+        />
+      </div>
       <button type="button" onClick={onPreview} className="flex min-w-0 items-center gap-3 text-left">
         <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-100">
           {isImage ? (
