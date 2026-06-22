@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 import { classNames } from '@/lib/utils';
+import { DashboardOverview } from './DashboardOverview';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -414,29 +415,33 @@ export default function ReportsPage() {
  const [dateRange, setDateRange] = useState<DateRange>(getDefaultRange);
 
  return (
- <div>
- <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
- <div>
- <h1 className="font-heading text-2xl text-gray-900">Reports</h1>
- <p className="mt-1 text-sm text-gray-500">Generate and download financial reports for accounting and insights</p>
- </div>
- <DateRangePicker value={dateRange} onChange={setDateRange} />
- </div>
+ <div className="min-h-full bg-white space-y-12">
+   <DashboardOverview />
 
- {/* Date range display */}
- <div className="mb-6 rounded-lg border border-brand-900/10 bg-brand-900/3 px-4 py-3 flex items-center gap-2">
- <span className="text-xs font-semibold text-brand-900 uppercase tracking-wider">Period:</span>
- <span className="text-sm text-gray-700 font-medium">{dateRange.label}</span>
- <span className="text-gray-400 text-sm">·</span>
- <span className="text-xs text-gray-500">{dateRange.from} to {dateRange.to}</span>
- </div>
+   <div>
+     <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+     <div>
+     <h1 className="font-heading text-2xl text-gray-900">Reports</h1>
+     <p className="mt-1 text-sm text-gray-500">Generate and download financial reports for accounting and insights</p>
+     </div>
+     <DateRangePicker value={dateRange} onChange={setDateRange} />
+     </div>
 
- <div className="space-y-4">
- {REPORTS.map((report) => (
- <ReportCard key={report.type} report={report} dateRange={dateRange} />
- ))}
- <AccountingExportCard dateRange={dateRange} />
- </div>
+     {/* Date range display */}
+     <div className="mb-6 rounded-lg border border-brand-900/10 bg-brand-900/3 px-4 py-3 flex items-center gap-2">
+     <span className="text-xs font-semibold text-brand-900 uppercase tracking-wider">Period:</span>
+     <span className="text-sm text-gray-700 font-medium">{dateRange.label}</span>
+     <span className="text-gray-400 text-sm">·</span>
+     <span className="text-xs text-gray-500">{dateRange.from} to {dateRange.to}</span>
+     </div>
+
+     <div className="space-y-4">
+     {REPORTS.map((report) => (
+     <ReportCard key={report.type} report={report} dateRange={dateRange} />
+     ))}
+     <AccountingExportCard dateRange={dateRange} />
+     </div>
+   </div>
  </div>
  );
 }

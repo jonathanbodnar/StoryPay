@@ -1,1169 +1,1134 @@
 'use client';
 
-import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import Image from 'next/image';
+import dynamic from 'next/dynamic';
+
+// Leaflet touches `window` at import time, so defer to the browser only.
+const VisitorMap = dynamic(() => import('./VisitorMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-96 w-full rounded-2xl border border-gray-200 bg-gray-50 animate-pulse" />
+  ),
+});
 import {
-  Loader2, Save, CheckCircle2, Store, Globe, MapPin, Users, DollarSign,
-  Image as ImageIcon, ExternalLink, Eye, EyeOff, AlertCircle, RotateCcw,
-  Link2, HelpCircle, Plus, Trash2, ChevronDown,
+  Eye, Users, MousePointerClick, TrendingUp,
+  Smartphone, Monitor, Tablet, MapPin,
+  RefreshCw, CheckCircle, AlertCircle, Clock,
+  ArrowUpRight, ArrowDownRight, Minus, Search,
+  Radio, DollarSign, CalendarDays, UserCheck,
+  Link2, Mail, Bell, Copy, Download, Check, X,
+  Send, Zap, TrendingDown,
 } from 'lucide-react';
-import { slugify } from '@/lib/directory';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, BarChart, Bar, Cell,
+} from 'recharts';
 
-type FaqRow = { question: string; answer: string };
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-type SocialLinks = {
-  facebook?: string;
-  instagram?: string;
-  tiktok?: string;
-  pinterest?: string;
-  website?: string;
+type FunnelStep = { step: string; count: number; pct: number | null };
+
+type PriorMetrics = {
+  total_views: number;
+  unique_sessions: number;
+  contact_form_submits: number;
+  leads_created: number;
+  conversion_rate: number;
 };
 
-interface Listing {
-  id: string | null;
-  slug: string | null;
-  name: string | null;
-  description: string | null;
-  venue_type: string | null;
-  location_full: string | null;
-  location_city: string | null;
-  location_state: string | null;
-  lat: number | null;
-  lng: number | null;
-  capacity_min: number | null;
-  capacity_max: number | null;
-  price_min: number | null;
-  price_max: number | null;
-  indoor_outdoor: string | null;
-  features: string[];
-  cover_image_url: string | null;
+type AnalyticsPayload = {
+  days: number;
+  venue_name: string;
+  venue_slug: string;
   gallery_images: string[];
-  availability_notes: string | null;
-  is_published: boolean;
-  onboarding_completed: boolean;
-  social_links: SocialLinks;
-  faq: FaqRow[];
-  show_map: boolean;
-  notification_email: string | null;
-  notification_phone: string | null;
-  email_notifications: boolean;
-  brand_email: string | null;
-  brand_phone: string | null;
-}
-
-const INPUT = 'w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors';
-const LABEL = 'block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide';
-const CARD = 'rounded-3xl border border-gray-200 bg-white p-6 sm:p-8';
-const SECTION_TITLE = 'font-heading text-lg text-gray-900 mb-1';
-const SECTION_HINT = 'text-sm text-gray-500 mb-5';
-
-const VENUE_TYPES = ['barn', 'ballroom', 'garden', 'winery', 'beach', 'estate', 'rustic', 'modern', 'historic', 'other'];
-const INDOOR_OUTDOOR = ['indoor', 'outdoor', 'both'];
-const FEATURE_OPTIONS = [
-  'Ceremony site', 'Reception site', 'Bridal suite', 'Groom\'s suite',
-  'On-site parking', 'Wheelchair accessible', 'In-house catering',
-  'BYO catering allowed', 'Bar service', 'Dance floor', 'Overnight accommodations',
-  'Pet friendly', 'Outdoor ceremony', 'Tented options',
-];
-
-const DIRECTORY_URL = process.env.NEXT_PUBLIC_DIRECTORY_URL ?? 'https://storyvenue.com';
-
-function emptyListing(): Listing {
-  return {
-    id: null, slug: null, name: null, description: null, venue_type: null,
-    location_full: null, location_city: null, location_state: null,
-    lat: null, lng: null,
-    // Minimum guests defaults to 0 so owners see a concrete value rather
-    // than an empty field — venues that accept intimate bookings still
-    // show "0–max" instead of a blank where couples expect a number.
-    capacity_min: 0, capacity_max: null, price_min: null, price_max: null,
-    indoor_outdoor: null, features: [], cover_image_url: null, gallery_images: [],
-    availability_notes: null, is_published: false, onboarding_completed: false,
-    social_links: {}, faq: [], show_map: true,
-    notification_email: null, notification_phone: null, email_notifications: true,
-    brand_email: null, brand_phone: null,
-  };
-}
-
-type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
-
-const AUTOSAVE_DEBOUNCE_MS = 800;
-
-// US state name → USPS two-letter code. Nominatim returns full state names
-// ("Ohio") so we normalize them here to match the "State" field's convention.
-const US_STATE_ABBR: Record<string, string> = {
-  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
-  colorado: 'CO', connecticut: 'CT', delaware: 'DE', 'district of columbia': 'DC',
-  florida: 'FL', georgia: 'GA', hawaii: 'HI', idaho: 'ID', illinois: 'IL',
-  indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY', louisiana: 'LA',
-  maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN',
-  mississippi: 'MS', missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV',
-  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
-  'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH', oklahoma: 'OK',
-  oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
-  'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
-  virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI',
-  wyoming: 'WY',
+  total_views: number;
+  total_impressions: number;
+  unique_sessions: number;
+  total_interactions: number;
+  conversion_rate: number;
+  contact_form_opens: number;
+  contact_form_submits: number;
+  leads_created: number;
+  avg_session_duration: number;
+  daily: { date: string; views: number; unique_sessions: number; impressions: number }[];
+  event_counts: Record<string, number>;
+  scroll_depth: { pct_25: number; pct_50: number; pct_75: number; pct_100: number };
+  devices: Record<string, number>;
+  referrers: { source: string; count: number }[];
+  top_countries: { country: string; count: number }[];
+  top_states: { country: string; region: string; count: number }[];
+  top_cities: { city: string; region: string | null; country: string | null; count: number }[];
+  inquiry_dow: number[];
+  photo_views: { index: number; count: number }[];
+  social_clicks: Record<string, number>;
+  funnel: FunnelStep[];
+  prior: PriorMetrics;
+  _migration_pending?: boolean;
 };
 
-type AddressSuggestion = {
-  /** OpenStreetMap place id, used as the React key. */
-  place_id: string;
-  /** Single-line formatted address for the dropdown + "Full address" field. */
-  display_name: string;
-  /** Parsed USA components used to auto-fill city / state coords. */
-  lat: number;
-  lng: number;
-  city: string;
-  state: string;
+// ── Realtime + lead insight types ─────────────────────────────────────────────
+type RealtimePayload = {
+  active_now: number;
+  active_5m: number;
+  active_30m: number;
+  today_views: number;
+  activity: {
+    session_id: string;
+    event_type: string;
+    label: string;
+    country: string | null;
+    region: string | null;
+    city: string | null;
+    flag: string;
+    device_type: string | null;
+    ago_seconds: number;
+  }[];
+  geo_live: { country: string; flag: string; count: number; cities: string[] }[];
+  geo_points?: {
+    session_id: string;
+    lat: number;
+    lng: number;
+    city: string | null;
+    region: string | null;
+    country: string | null;
+    flag: string;
+    label: string;
+    ago_seconds: number;
+    live: boolean;
+  }[];
+  _migration_pending?: boolean;
 };
 
-export default function ListingPage() {
-  const [listing, setListing] = useState<Listing>(emptyListing());
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<SaveStatus>('idle');
-  const [error, setError] = useState('');
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+type LeadInsightsPayload = {
+  total_leads: number;
+  avg_guest_count: number | null;
+  avg_opportunity_value: number | null;
+  guest_buckets: { label: string; count: number }[];
+  sources: { source: string; count: number }[];
+  event_months: { month: string; count: number }[];
+  value_buckets: { label: string; count: number }[];
+  timelines: { label: string; count: number }[];
+  lead_trend: { month: string; count: number }[];
+};
 
-  // Address autocomplete state (see LocationAutocomplete section below).
-  const [addrSuggestions, setAddrSuggestions] = useState<AddressSuggestion[]>([]);
-  const [addrOpen, setAddrOpen] = useState(false);
-  const [addrLoading, setAddrLoading] = useState(false);
+// ── Constants ─────────────────────────────────────────────────────────────────
+const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAYS_OPTIONS = [1, 7, 14, 30, 60, 90];
+const CHART_BLUE  = '#3b82f6';
+const CHART_DARK  = '#1b1b1b';
+const DIRECTORY_SITE =
+  process.env.NEXT_PUBLIC_DIRECTORY_URL ||
+  process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL ||
+  'https://storyvenue.com';
 
-  // Which FAQ row is currently expanded in the accordion. null = all collapsed.
-  // Newly added rows auto-open so the owner can immediately fill them in; the
-  // "Save" button on each row just collapses it (autosave handles persistence).
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
-  // True until the user manually edits the slug field. While true, the slug
-  // auto-tracks the venue name (e.g. "The Barn at New Albany" → "the-barn-at-new-albany").
-  const [autoSlug, setAutoSlug] = useState(false);
+const UTM_PRESETS = [
+  { id: 'instagram', label: 'Instagram bio', source: 'instagram', medium: 'social' },
+  { id: 'facebook',  label: 'Facebook post', source: 'facebook',  medium: 'social' },
+  { id: 'email',     label: 'Email signature', source: 'email',   medium: 'email' },
+  { id: 'print',     label: 'Print / flyer',  source: 'print',    medium: 'offline' },
+  { id: 'tiktok',    label: 'TikTok bio',     source: 'tiktok',   medium: 'social' },
+  { id: 'google',    label: 'Google Ads',     source: 'google',   medium: 'cpc' },
+  { id: 'custom',    label: 'Custom…',        source: '',          medium: '' },
+] as const;
 
-  // Refs that always point at the latest listing / loading state so the
-  // debounced save doesn't have to be recreated on every edit.
-  const listingRef = useRef(listing);
-  listingRef.current = listing;
-  const loadingRef = useRef(loading);
-  loadingRef.current = loading;
-  const inFlightRef = useRef<AbortController | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+// ── Alert types ────────────────────────────────────────────────────────────────
+type Alert = { type: 'spike' | 'drought' | 'no_inquiry' | 'milestone' | 'photo'; title: string; body: string; color: 'green' | 'amber' | 'red' | 'blue' };
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const res = await fetch('/api/listing/me', { cache: 'no-store' });
-        if (!alive) return;
-        if (res.ok) {
-          const data = await res.json();
-          if (data.listing) {
-            const next: Listing = {
-              ...emptyListing(),
-              ...data.listing,
-              features: Array.isArray(data.listing.features) ? data.listing.features : [],
-              gallery_images: Array.isArray(data.listing.gallery_images) ? data.listing.gallery_images : [],
-              social_links:
-                data.listing.social_links && typeof data.listing.social_links === 'object'
-                  ? (data.listing.social_links as SocialLinks)
-                  : {},
-              faq: Array.isArray(data.listing.faq) ? (data.listing.faq as FaqRow[]) : [],
-              show_map: data.listing.show_map !== false,
-              lat: data.listing.lat != null ? Number(data.listing.lat) : null,
-              lng: data.listing.lng != null ? Number(data.listing.lng) : null,
-              // Older listings may have a null capacity_min in the DB. The
-              // field's contract is "always a concrete number, defaulting
-              // to 0", so normalize on read.
-              capacity_min: data.listing.capacity_min != null ? Number(data.listing.capacity_min) : 0,
-            };
-            // If slug is blank or already matches slugify(name), keep auto-mode on
-            // so further name edits continue updating the URL. If the user (or a
-            // previous session) hand-edited the slug, leave auto-mode off so we
-            // don't clobber their choice.
-            const expected = next.name ? slugify(next.name) : '';
-            const shouldAutoSlug = !next.slug || next.slug === expected;
-            // If auto-mode is on and slug is blank, populate it immediately so
-            // the field doesn't show empty on load.
-            if (shouldAutoSlug && !next.slug && next.name) {
-              next.slug = slugify(next.name);
-            }
-            setListing(next);
-            setAutoSlug(shouldAutoSlug);
-          }
-        } else {
-          const data = await res.json().catch(() => ({}));
-          setError(data.error ?? `Failed to load listing (HTTP ${res.status})`);
-          setStatus('error');
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load listing');
-        setStatus('error');
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
+function computeAlerts(d: AnalyticsPayload): Alert[] {
+  const alerts: Alert[] = [];
+  const pct = d.prior.total_views ? Math.round(((d.total_views - d.prior.total_views) / d.prior.total_views) * 100) : null;
 
-  // Abort any in-flight request when unmounting so we don't leak network.
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (inFlightRef.current) inFlightRef.current.abort();
-    };
-  }, []);
+  if (pct !== null && pct >= 80 && d.total_views >= 10)
+    alerts.push({ type: 'spike', title: `Views are up ${pct}% this period`, body: 'Great momentum! Make sure your contact form is easy to find so visitors can reach you.', color: 'green' });
 
-  const doSave = useCallback(async (overrides?: Partial<Listing>): Promise<boolean> => {
-    if (loadingRef.current) return false;
+  if (d.total_views === 0 && d.days >= 7)
+    alerts.push({ type: 'drought', title: 'No listing views in this period', body: 'Share your listing link on Instagram or in wedding Facebook groups to start getting traffic.', color: 'amber' });
 
-    if (inFlightRef.current) inFlightRef.current.abort();
-    const controller = new AbortController();
-    inFlightRef.current = controller;
+  if (d.contact_form_submits === 0 && d.total_views >= 15)
+    alerts.push({ type: 'no_inquiry', title: 'No inquiries despite steady traffic', body: `${d.total_views} views with 0 inquiries — make sure your contact form is visible and your pricing is clear.`, color: 'red' });
 
-    setStatus('saving');
-    setError('');
+  if ([100, 500, 1000, 5000].includes(d.total_views) || (d.total_views >= 100 && d.total_views <= 110 && d.prior.total_views < 100))
+    alerts.push({ type: 'milestone', title: `Milestone: ${d.total_views.toLocaleString()} listing views!`, body: 'Your listing is getting real attention. Keep your gallery and availability up to date.', color: 'blue' });
 
-    const payload = { ...listingRef.current, ...(overrides ?? {}) };
+  if (d.gallery_images.length < 6 && d.total_views > 0)
+    alerts.push({ type: 'photo', title: `You only have ${d.gallery_images.length} photos`, body: 'Venues with 15+ photos get 3× more inquiries. Upload more to make a stronger first impression.', color: 'amber' });
 
-    try {
-      const res = await fetch('/api/listing/me', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? `Failed to save (HTTP ${res.status})`);
-      setListing({
-        ...emptyListing(),
-        ...data.listing,
-        features: Array.isArray(data.listing.features) ? data.listing.features : [],
-        gallery_images: Array.isArray(data.listing.gallery_images) ? data.listing.gallery_images : [],
-        social_links:
-          data.listing.social_links && typeof data.listing.social_links === 'object'
-            ? (data.listing.social_links as SocialLinks)
-            : {},
-        faq: Array.isArray(data.listing.faq) ? (data.listing.faq as FaqRow[]) : [],
-        show_map: data.listing.show_map !== false,
-        lat: data.listing.lat != null ? Number(data.listing.lat) : null,
-        lng: data.listing.lng != null ? Number(data.listing.lng) : null,
-        capacity_min: data.listing.capacity_min != null ? Number(data.listing.capacity_min) : 0,
-      });
-      setStatus('saved');
-      setLastSavedAt(new Date());
-      return true;
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return false;
-      setError(e instanceof Error ? e.message : 'Failed to save');
-      setStatus('error');
-      return false;
-    } finally {
-      if (inFlightRef.current === controller) inFlightRef.current = null;
-    }
-  }, []);
+  return alerts;
+}
 
-  const scheduleAutosave = useCallback(() => {
-    if (loadingRef.current) return;
-    setStatus('dirty');
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => { void doSave(); }, AUTOSAVE_DEBOUNCE_MS);
-  }, [doSave]);
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-  function update<K extends keyof Listing>(key: K, value: Listing[K]) {
-    setListing((prev) => ({ ...prev, [key]: value }));
-    scheduleAutosave();
-  }
+function delta(current: number, prior: number): number | null {
+  if (!prior) return null;
+  return Math.round(((current - prior) / prior) * 100);
+}
 
-  // Debounced address suggestions, powered by Nominatim (OpenStreetMap). Same
-  // provider as the embedded map on the public listing, so the lat/lng we
-  // record here lines up perfectly with the pin the couple eventually sees.
-  // Re-fires whenever the "Full address" input changes and the dropdown is
-  // open; closes when the user picks a suggestion or clicks outside.
-  useEffect(() => {
-    const q = (listing.location_full ?? '').trim();
-    if (!addrOpen || q.length < 4) {
-      setAddrSuggestions([]);
-      setAddrLoading(false);
-      return;
-    }
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      setAddrLoading(true);
-      try {
-        const url =
-          `https://nominatim.openstreetmap.org/search` +
-          `?q=${encodeURIComponent(q)}` +
-          `&format=json&addressdetails=1&limit=5&countrycodes=us`;
-        const res = await fetch(url, {
-          headers: { Accept: 'application/json' },
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        type NomAddress = {
-          house_number?: string; road?: string; postcode?: string;
-          city?: string; town?: string; municipality?: string;
-          village?: string; hamlet?: string;
-          suburb?: string; county?: string; state?: string;
-        };
-        type NomItem = {
-          place_id: number | string;
-          display_name: string;
-          lat: string;
-          lon: string;
-          address?: NomAddress;
-        };
-        const rows = (await res.json()) as NomItem[];
-        if (cancelled) return;
+function fmtDuration(seconds: number): string {
+  if (!seconds) return '—';
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s ? `${m}m ${s}s` : `${m}m`;
+}
 
-        /** Returns true if a place name is an administrative division, not a mailing city. */
-        function isAdminDivision(name: string): boolean {
-          return /\b(township|county|borough|parish|district|municipality)\b/i.test(name);
-        }
+function formatDate(dateStr: string): string {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
-        /** Resolve the proper mailing city from Nominatim address fields. */
-        function resolveCity(a: NomAddress): string {
-          for (const candidate of [a.city, a.town, a.municipality]) {
-            if (candidate && !isAdminDivision(candidate)) return candidate;
-          }
-          return '';
-        }
+function fmtAgo(seconds: number): string {
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  return `${Math.floor(seconds / 3600)}h ago`;
+}
 
-        /**
-         * Build a clean "123 Main St, City, ST 12345" from Nominatim's structured address.
-         * Never uses county, township, village, hamlet, or suburb — only proper city/town.
-         */
-        function buildCleanAddress(a: NomAddress): string {
-          const street = [a.house_number, a.road].filter(Boolean).join(' ');
-          const cityRaw = resolveCity(a);
-          const stateRaw = a.state ?? '';
-          const stateCode = US_STATE_ABBR[stateRaw.toLowerCase()] ?? stateRaw;
-          const zip = a.postcode ? a.postcode.split('-')[0] : '';
-          const cityLine = [cityRaw, stateCode ? (zip ? `${stateCode} ${zip}` : stateCode) : zip]
-            .filter(Boolean).join(', ');
-          return [street, cityLine].filter(Boolean).join(', ');
-        }
+function fmtCents(cents: number | null): string {
+  if (!cents) return '—';
+  return `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+}
 
-        const mapped: AddressSuggestion[] = rows.map((r) => {
-          const a = r.address ?? {};
-          const stateRaw = a.state ?? '';
-          return {
-            place_id: String(r.place_id),
-            display_name: buildCleanAddress(a) || r.display_name,
-            lat: parseFloat(r.lat),
-            lng: parseFloat(r.lon),
-            city: resolveCity(a),
-            state: US_STATE_ABBR[stateRaw.toLowerCase()] ?? stateRaw,
-          };
-        });
-        setAddrSuggestions(mapped);
-      } catch {
-        if (!cancelled) setAddrSuggestions([]);
-      } finally {
-        if (!cancelled) setAddrLoading(false);
-      }
-    }, 350);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [listing.location_full, addrOpen]);
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-  function pickAddress(s: AddressSuggestion) {
-    setListing((prev) => ({
-      ...prev,
-      location_full: s.display_name,
-      location_city: s.city || prev.location_city,
-      location_state: s.state || prev.location_state,
-      lat: Number.isFinite(s.lat) ? s.lat : prev.lat,
-      lng: Number.isFinite(s.lng) ? s.lng : prev.lng,
-    }));
-    setAddrOpen(false);
-    setAddrSuggestions([]);
-    scheduleAutosave();
-  }
-
-  function updateName(value: string) {
-    setListing((prev) => {
-      const next = { ...prev, name: value };
-      if (autoSlug) next.slug = slugify(value);
-      return next;
-    });
-    scheduleAutosave();
-  }
-
-  function updateSlug(value: string) {
-    // Sanitize as the user types so they can never end up with spaces / weird
-    // characters / uppercase, but DON'T force a final hyphen collapse yet so
-    // "the-barn-" is still editable into "the-barn-at-new-albany".
-    const cleaned = value
-      .toLowerCase()
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9-]+/g, '-')
-      .replace(/-{2,}/g, '-')
-      .slice(0, 80);
-    setAutoSlug(false);
-    setListing((prev) => ({ ...prev, slug: cleaned }));
-    scheduleAutosave();
-  }
-
-  function resetSlugFromName() {
-    setAutoSlug(true);
-    setListing((prev) => ({ ...prev, slug: prev.name ? slugify(prev.name) : null }));
-    scheduleAutosave();
-  }
-
-  function toggleFeature(feat: string) {
-    setListing((prev) => {
-      const has = prev.features.includes(feat);
-      return { ...prev, features: has ? prev.features.filter(f => f !== feat) : [...prev.features, feat] };
-    });
-    scheduleAutosave();
-  }
-
-  function updateSocial(key: keyof SocialLinks, value: string) {
-    setListing((prev) => {
-      const next = { ...prev.social_links };
-      if (!value) delete next[key];
-      else next[key] = value;
-      return { ...prev, social_links: next };
-    });
-    scheduleAutosave();
-  }
-
-  function addFaq() {
-    setListing((prev) => {
-      const faq = [...prev.faq, { question: '', answer: '' }];
-      // Open the row we just added so the owner can start typing immediately.
-      setOpenFaq(faq.length - 1);
-      return { ...prev, faq };
-    });
-    scheduleAutosave();
-  }
-
-  function updateFaqRow(index: number, field: 'question' | 'answer', value: string) {
-    setListing((prev) => {
-      const faq = prev.faq.map((row, i) =>
-        i === index ? { ...row, [field]: value } : row,
-      );
-      return { ...prev, faq };
-    });
-    scheduleAutosave();
-  }
-
-  function removeFaqRow(index: number) {
-    setListing((prev) => ({ ...prev, faq: prev.faq.filter((_, i) => i !== index) }));
-    // If we removed the currently-open row (or a row before it), reindex the
-    // "open" pointer so the accordion stays consistent.
-    setOpenFaq((cur) => {
-      if (cur == null) return cur;
-      if (cur === index) return null;
-      return cur > index ? cur - 1 : cur;
-    });
-    scheduleAutosave();
-  }
-
-  // Flush a pending autosave and save immediately (e.g. button clicks, page leave).
-  const flushAndSave = useCallback(async (overrides?: Partial<Listing>): Promise<boolean> => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-    return doSave(overrides);
-  }, [doSave]);
-
-  // Best-effort flush on tab close / navigate away.
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (status === 'dirty' || status === 'saving') {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [status]);
-
-  async function save(nextPublished?: boolean) {
-    await flushAndSave(
-      typeof nextPublished === 'boolean' ? { is_published: nextPublished } : undefined,
-    );
-  }
-
-  const publicUrl = useMemo(() => {
-    if (!listing.slug) return null;
-    return `${DIRECTORY_URL}/venue/${listing.slug}`;
-  }, [listing.slug]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24 text-gray-400">
-        <Loader2 className="w-5 h-5 animate-spin" />
-      </div>
-    );
-  }
-
+function DeltaBadge({ pct }: { pct: number | null }) {
+  if (pct === null) return null;
+  if (pct === 0) return (
+    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+      <Minus size={9} /> 0%
+    </span>
+  );
+  const up = pct > 0;
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-heading text-2xl text-gray-900 flex items-center gap-2">
-            <Store className="w-6 h-6" /> Listing dashboard
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Manage how your venue appears on <a href={DIRECTORY_URL} target="_blank" rel="noreferrer" className="underline">storyvenue.com</a>.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {publicUrl && (
-            <a
-              href={publicUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <ExternalLink className="w-3.5 h-3.5" /> View public page
-            </a>
-          )}
-          <button
-            onClick={() => save(!listing.is_published)}
-            disabled={status === 'saving'}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
-              listing.is_published
-                ? 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                : 'text-white'
-            }`}
-            style={listing.is_published ? undefined : { backgroundColor: '#1b1b1b' }}
-          >
-            {listing.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            {listing.is_published ? 'Unpublish' : 'Publish'}
-          </button>
-        </div>
-      </header>
+    <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${up ? 'text-emerald-700 bg-emerald-100' : 'text-red-600 bg-red-100'}`}>
+      {up ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}
+      {Math.abs(pct)}%
+    </span>
+  );
+}
 
-      {status === 'error' && error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start justify-between gap-3">
-          <span className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-            <span>{error}</span>
-          </span>
-          <button
-            onClick={() => { void flushAndSave(); }}
-            className="text-xs font-semibold underline underline-offset-2 hover:no-underline"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}>Basics</h2>
-        <p className={SECTION_HINT}>Your venue name and URL slug.</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className={LABEL}>Venue name</label>
-            <input
-              type="text"
-              className={INPUT}
-              value={listing.name ?? ''}
-              onChange={(e) => updateName(e.target.value)}
-              placeholder="The Maple Barn"
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className={`${LABEL} mb-0`}>URL slug</label>
-              {!autoSlug && listing.name && (
-                <button
-                  type="button"
-                  onClick={resetSlugFromName}
-                  className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 hover:text-gray-700"
-                  title="Reset slug from venue name"
-                >
-                  <RotateCcw className="w-3 h-3" /> Auto
-                </button>
-              )}
-            </div>
-            <div className="flex items-center rounded-2xl border border-gray-200 bg-gray-50 focus-within:border-gray-400 focus-within:bg-white transition-colors">
-              <span className="pl-3.5 pr-1 text-sm text-gray-400 whitespace-nowrap">{DIRECTORY_URL.replace(/^https?:\/\//, '')}/venue/</span>
-              <input
-                type="text"
-                className="flex-1 bg-transparent px-1 py-2.5 text-sm text-gray-900 focus:outline-none"
-                value={listing.slug ?? ''}
-                onChange={(e) => updateSlug(e.target.value)}
-                placeholder="the-maple-barn"
-              />
-            </div>
-            <p className="mt-1.5 text-xs text-gray-400">
-              {autoSlug
-                ? 'Auto-generated from your venue name.'
-                : 'Lowercase letters, numbers, and dashes only.'}
-            </p>
-          </div>
-          <div>
-            <label className={LABEL}>Venue type</label>
-            <select
-              className={INPUT}
-              value={listing.venue_type ?? ''}
-              onChange={(e) => update('venue_type', e.target.value || null)}
-            >
-              <option value="">Select</option>
-              {VENUE_TYPES.map((t) => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={LABEL}>Indoor / outdoor</label>
-            <select
-              className={INPUT}
-              value={listing.indoor_outdoor ?? ''}
-              onChange={(e) => update('indoor_outdoor', e.target.value || null)}
-            >
-              <option value="">Select</option>
-              {INDOOR_OUTDOOR.map((t) => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}
-            </select>
-          </div>
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}><Store className="inline w-4 h-4 -mt-0.5" /> Contact info</h2>
-        <p className={SECTION_HINT}>Public email and phone shown on your storyvenue.com listing so couples can reach you.</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className={LABEL}>Contact email</label>
-            <input
-              type="email"
-              className={INPUT}
-              value={listing.brand_email ?? ''}
-              onChange={(e) => update('brand_email', e.target.value || null)}
-              placeholder="hello@yourvenue.com"
-            />
-          </div>
-          <div>
-            <label className={LABEL}>Contact phone</label>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-gray-500">
-                +1
-              </span>
-              <input
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel-national"
-                className={`${INPUT} pl-10`}
-                value={formatUsLocal(listing.brand_phone)}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/\D+/g, '').slice(0, 10);
-                  update('brand_phone', digits ? `+1${digits}` : null);
-                }}
-                placeholder="(614) 555-1234"
-              />
-            </div>
-            <p className="mt-1 text-[11px] text-gray-400">USA only — the +1 country code is added automatically.</p>
-          </div>
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}><MapPin className="inline w-4 h-4 -mt-0.5" /> Location</h2>
-        <p className={SECTION_HINT}>Where couples will find you.</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
-          <div className="sm:col-span-4 relative">
-            <label className={LABEL}>Full address</label>
-            <input
-              type="text"
-              className={INPUT}
-              value={listing.location_full ?? ''}
-              onChange={(e) => {
-                update('location_full', e.target.value);
-                setAddrOpen(true);
-              }}
-              onFocus={() => setAddrOpen(true)}
-              onBlur={() => {
-                // Delay so clicks on a suggestion register before we close.
-                setTimeout(() => setAddrOpen(false), 150);
-              }}
-              placeholder="Start typing — we'll find your location on the map"
-              autoComplete="off"
-            />
-            {addrOpen && (listing.location_full ?? '').trim().length >= 4 && (
-              <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
-                {addrLoading && addrSuggestions.length === 0 ? (
-                  <div className="px-4 py-3 text-xs text-gray-400">Searching…</div>
-                ) : addrSuggestions.length === 0 ? (
-                  <div className="px-4 py-3 text-xs text-gray-400">No matches — keep typing.</div>
-                ) : (
-                  <ul className="max-h-64 overflow-auto py-1">
-                    {addrSuggestions.map((s) => (
-                      <li key={s.place_id}>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => {
-                            // Keep the input focused; onBlur's timeout will close.
-                            e.preventDefault();
-                            pickAddress(s);
-                          }}
-                          className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs hover: focus:bg-gray-50"
-                        >
-                          <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
-                          <span className="text-gray-700">{s.display_name}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            <p className="mt-1 text-[11px] text-gray-400">
-              Picking a suggestion auto-fills city, state, latitude, and longitude.
-            </p>
-          </div>
-          <div className="sm:col-span-3">
-            <label className={LABEL}>City</label>
-            <input
-              type="text"
-              className={INPUT}
-              value={listing.location_city ?? ''}
-              onChange={(e) => update('location_city', e.target.value)}
-            />
-          </div>
-          <div className="sm:col-span-3">
-            <label className={LABEL}>State</label>
-            <input
-              type="text"
-              className={INPUT}
-              value={listing.location_state ?? ''}
-              onChange={(e) => update('location_state', e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <label className={LABEL}>Latitude</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              className={INPUT}
-              value={listing.lat ?? ''}
-              onChange={(e) => {
-                const v = e.target.value.trim();
-                if (!v) {
-                  update('lat', null);
-                  return;
-                }
-                const n = parseFloat(v);
-                update('lat', Number.isFinite(n) ? n : null);
-              }}
-              placeholder="e.g. 40.7128"
-            />
-          </div>
-          <div>
-            <label className={LABEL}>Longitude</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              className={INPUT}
-              value={listing.lng ?? ''}
-              onChange={(e) => {
-                const v = e.target.value.trim();
-                if (!v) {
-                  update('lng', null);
-                  return;
-                }
-                const n = parseFloat(v);
-                update('lng', Number.isFinite(n) ? n : null);
-              }}
-              placeholder="e.g. -74.0060"
-            />
-          </div>
-          <div className="flex flex-col justify-end pb-1">
-            <label className="flex cursor-pointer items-center gap-3">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
-                checked={listing.show_map}
-                onChange={(e) => update('show_map', e.target.checked)}
-              />
-              <span className="text-sm text-gray-700">Show embedded map on public listing</span>
-            </label>
-            <p className="mt-2 text-xs text-gray-400">Requires both coordinates. Map uses OpenStreetMap.</p>
-          </div>
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}><Link2 className="inline w-4 h-4 -mt-0.5" /> Social &amp; web</h2>
-        <p className={SECTION_HINT}>Full URLs starting with https:// — shown as icons on your public venue page.</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {(
-            [
-              ['facebook', 'Facebook'],
-              ['instagram', 'Instagram'],
-              ['tiktok', 'TikTok'],
-              ['pinterest', 'Pinterest'],
-              ['website', 'Website'],
-            ] as const
-          ).map(([key, label]) => (
-            <div key={key}>
-              <label className={LABEL}>{label}</label>
-              <input
-                type="url"
-                className={INPUT}
-                value={listing.social_links[key] ?? ''}
-                onChange={(e) => updateSocial(key, e.target.value)}
-                placeholder="https://"
-              />
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}><HelpCircle className="inline w-4 h-4 -mt-0.5" /> FAQ</h2>
-        <p className={SECTION_HINT}>Questions and answers for couples visiting your venue page. Click an item to edit.</p>
-        <div className="space-y-2">
-          {listing.faq.map((row, i) => {
-            const isOpen = openFaq === i;
-            const preview = row.question.trim() || `Item ${i + 1} — click to write a question`;
-            return (
-              <div
-                key={i}
-                className={`overflow-hidden rounded-2xl border transition-colors ${
-                  isOpen ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50/80'
-                }`}
-              >
-                {/* Collapsed/summary row: click anywhere to toggle. Separate
-                    trash button keeps remove action explicit. */}
-                <div className="flex items-center gap-2 px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setOpenFaq(isOpen ? null : i)}
-                    className="flex flex-1 items-center gap-3 text-left"
-                    aria-expanded={isOpen}
-                  >
-                    <ChevronDown
-                      className={`h-4 w-4 flex-shrink-0 text-gray-400 transition-transform ${
-                        isOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                    <span
-                      className={`truncate text-sm ${
-                        row.question.trim() ? 'font-medium text-gray-900' : 'italic text-gray-400'
-                      }`}
-                    >
-                      {preview}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeFaqRow(i)}
-                    className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
-                    aria-label="Remove FAQ item"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-                {isOpen && (
-                  <div className="border-t border-gray-200 px-4 py-4">
-                    <label className={LABEL}>Question</label>
-                    <input
-                      type="text"
-                      className={`${INPUT} mb-3`}
-                      value={row.question}
-                      onChange={(e) => updateFaqRow(i, 'question', e.target.value)}
-                      placeholder="Do you allow outside catering?"
-                      autoFocus
-                    />
-                    <label className={LABEL}>Answer</label>
-                    <textarea
-                      className={`${INPUT} min-h-[100px]`}
-                      value={row.answer}
-                      onChange={(e) => updateFaqRow(i, 'answer', e.target.value)}
-                      placeholder="We offer in-house catering and can accommodate licensed vendors…"
-                    />
-                    <div className="mt-3 flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => removeFaqRow(i)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" /> Delete
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          // Flush the pending autosave so the user knows their
-                          // edits are persisted the moment the row collapses.
-                          await flushAndSave();
-                          setOpenFaq(null);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-white hover:opacity-90"
-                        style={{ backgroundColor: '#1b1b1b' }}
-                      >
-                        <Save className="h-3.5 w-3.5" /> Save
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          <button
-            type="button"
-            onClick={addFaq}
-            className="inline-flex items-center gap-2 rounded-xl border border-dashed border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-400"
-          >
-            <Plus className="h-4 w-4" /> Add FAQ item
-          </button>
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}><Users className="inline w-4 h-4 -mt-0.5" /> Capacity &amp; pricing</h2>
-        <p className={SECTION_HINT}>Give couples a sense of scale and budget.</p>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div>
-            <label className={LABEL}>Min guests</label>
-            <input
-              type="number"
-              min={0}
-              className={INPUT}
-              value={listing.capacity_min ?? 0}
-              onChange={(e) => {
-                // Empty string or a negative value both fall back to 0 so
-                // this field can never be left "unset" — matches what
-                // couples see on the public listing page.
-                const n = e.target.value === '' ? 0 : Number(e.target.value);
-                update('capacity_min', Number.isFinite(n) && n >= 0 ? n : 0);
-              }}
-            />
-          </div>
-          <div>
-            <label className={LABEL}>Max guests</label>
-            <input type="number" className={INPUT} value={listing.capacity_max ?? ''}
-              onChange={(e) => update('capacity_max', e.target.value ? Number(e.target.value) : null)} />
-          </div>
-          <div>
-            <label className={LABEL}>Price from ($)</label>
-            <input type="number" className={INPUT} value={listing.price_min ?? ''}
-              onChange={(e) => update('price_min', e.target.value ? Number(e.target.value) : null)} />
-          </div>
-          <div>
-            <label className={LABEL}>Price to ($)</label>
-            <input type="number" className={INPUT} value={listing.price_max ?? ''}
-              onChange={(e) => update('price_max', e.target.value ? Number(e.target.value) : null)} />
-          </div>
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}><Globe className="inline w-4 h-4 -mt-0.5" /> About</h2>
-        <p className={SECTION_HINT}>Tell couples why they&apos;ll love getting married here.</p>
-        <div className="space-y-4">
-          <div>
-            <label className={LABEL}>Description</label>
-            <textarea
-              className={`${INPUT} min-h-[180px]`}
-              value={listing.description ?? ''}
-              onChange={(e) => update('description', e.target.value)}
-              placeholder="A historic barn on 40 acres of rolling pasture..."
-            />
-          </div>
-          <div>
-            <label className={LABEL}>Availability notes</label>
-            <textarea
-              className={`${INPUT} min-h-[80px]`}
-              value={listing.availability_notes ?? ''}
-              onChange={(e) => update('availability_notes', e.target.value)}
-              placeholder="Open May–October. Saturdays booked 9+ months in advance."
-            />
-          </div>
-          <div>
-            <label className={LABEL}>Features</label>
-            <div className="flex flex-wrap gap-2">
-              {FEATURE_OPTIONS.map((feat) => {
-                const active = listing.features.includes(feat);
-                return (
-                  <button
-                    key={feat}
-                    type="button"
-                    onClick={() => toggleFeature(feat)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      active
-                        ? 'text-white border-transparent'
-                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                    style={active ? { backgroundColor: '#1b1b1b' } : undefined}
-                  >
-                    {feat}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}><ImageIcon className="inline w-4 h-4 -mt-0.5" /> Photos</h2>
-        <p className={SECTION_HINT}>Your cover image and gallery photos.</p>
-        <div className="flex items-center justify-between gap-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5">
-          <div className="flex items-center gap-4">
-            {listing.cover_image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={listing.cover_image_url} alt="Cover" className="h-16 w-24 rounded-lg object-cover" />
-            ) : (
-              <div className="h-16 w-24 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
-                <ImageIcon className="w-5 h-5" />
-              </div>
-            )}
-            <div className="text-sm">
-              <div className="font-medium text-gray-900">
-                {listing.gallery_images.length} gallery photo{listing.gallery_images.length === 1 ? '' : 's'}
-                {listing.cover_image_url ? ' • cover set' : ' • no cover'}
-              </div>
-              <div className="text-gray-500">Upload, reorder, and pick your cover.</div>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/dashboard/media"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Media
-            </Link>
-            <Link
-              href="/dashboard/listing/images"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Manage photos
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}><DollarSign className="inline w-4 h-4 -mt-0.5" /> Lead notifications</h2>
-        <p className={SECTION_HINT}>Where new inquiries from the directory should go.</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className={LABEL}>Notification email</label>
-            <input
-              type="email"
-              className={INPUT}
-              value={listing.notification_email ?? ''}
-              onChange={(e) => update('notification_email', e.target.value || null)}
-              placeholder="Defaults to your account email"
-            />
-          </div>
-          <div>
-            <label className={LABEL}>Notification phone (SMS)</label>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-gray-500">
-                +1
-              </span>
-              <input
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel-national"
-                className={`${INPUT} pl-10`}
-                value={formatUsLocal(listing.notification_phone)}
-                onChange={(e) => {
-                  // Strip non-digits and the country code so the owner types
-                  // "614 555 1234" naturally. We store E.164 on save (see
-                  // listing-sanitize.ts → normalizeUsPhone).
-                  const digits = e.target.value.replace(/\D+/g, '').slice(0, 10);
-                  update('notification_phone', digits ? `+1${digits}` : null);
-                }}
-                placeholder="(614) 555-1234"
-              />
-            </div>
-            <p className="mt-1 text-[11px] text-gray-400">USA only — the +1 country code is added automatically.</p>
-          </div>
-          <label className="flex items-center gap-3 self-end pb-2 sm:col-span-2">
-            <input
-              type="checkbox"
-              checked={listing.email_notifications}
-              onChange={(e) => update('email_notifications', e.target.checked)}
-              className="h-4 w-4"
-            />
-            <span className="text-sm text-gray-700">Email me when I receive a new lead</span>
-          </label>
-        </div>
-      </section>
-
-      <div className="sticky bottom-4 flex items-center justify-end gap-3">
-        <StatusBadge status={status} lastSavedAt={lastSavedAt} />
-        <button
-          onClick={() => save()}
-          disabled={status === 'saving'}
-          className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
-          style={{ backgroundColor: '#1b1b1b' }}
-        >
-          {status === 'saving' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {status === 'saving' ? 'Saving…' : 'Save changes'}
-        </button>
+function KpiCard({
+  icon: Icon, label, value, sub, deltaVal, color = 'gray',
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  sub?: string;
+  deltaVal?: number | null;
+  color?: 'gray' | 'blue' | 'green' | 'purple' | 'amber' | 'rose';
+}) {
+  const bg = { gray: 'bg-white', blue: 'bg-blue-50', green: 'bg-emerald-50', purple: 'bg-purple-50', amber: 'bg-amber-50', rose: 'bg-rose-50' }[color];
+  const border = { gray: 'border-gray-200', blue: 'border-blue-100', green: 'border-emerald-100', purple: 'border-purple-100', amber: 'border-amber-100', rose: 'border-rose-100' }[color];
+  const iconColor = { gray: 'text-gray-400', blue: 'text-blue-500', green: 'text-emerald-500', purple: 'text-purple-500', amber: 'text-amber-500', rose: 'text-rose-500' }[color];
+  return (
+    <div className={`rounded-2xl border p-5 ${bg} ${border}`}>
+      <div className="flex items-start justify-between mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+        <Icon size={16} className={iconColor} />
+      </div>
+      <p className="text-3xl font-bold text-gray-900 mb-1">{value}</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
+        {deltaVal !== undefined && <DeltaBadge pct={deltaVal} />}
       </div>
     </div>
   );
 }
 
-function StatusBadge({
-  status,
-  lastSavedAt,
-}: {
-  status: SaveStatus;
-  lastSavedAt: Date | null;
-}) {
-  if (status === 'saving') {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-900/5 px-3 py-1.5 text-xs font-medium text-gray-600">
-        <Loader2 className="w-3 h-3 animate-spin" /> Saving…
-      </span>
-    );
-  }
-  if (status === 'dirty') {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
-        Unsaved changes
-      </span>
-    );
-  }
-  if (status === 'error') {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
-        <AlertCircle className="w-3 h-3" /> Save failed
-      </span>
-    );
-  }
-  if (status === 'saved' && lastSavedAt) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
-        <CheckCircle2 className="w-3 h-3" /> Saved {formatRelative(lastSavedAt)}
-      </span>
-    );
-  }
-  return null;
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="text-sm font-semibold text-gray-900">{children}</h2>;
 }
 
-/**
- * Render a stored E.164 number ("+16145551234") back into a human-friendly
- * "(614) 555-1234" so the owner sees exactly what they'll receive SMS on.
- * Also gracefully handles the intermediate "+1614555" while they're typing.
- */
-function formatUsLocal(phone: string | null): string {
-  if (!phone) return '';
-  const digits = phone.replace(/\D+/g, '');
-  const local = digits.startsWith('1') ? digits.slice(1) : digits;
-  const d = local.slice(0, 10);
-  if (d.length === 0) return '';
-  if (d.length <= 3) return `(${d}`;
-  if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
-  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+function EmptyState({ message }: { message: string }) {
+  return <p className="py-6 text-center text-xs text-gray-400">{message}</p>;
 }
 
-function formatRelative(d: Date): string {
-  const now = Date.now();
-  const diff = Math.max(0, Math.floor((now - d.getTime()) / 1000));
-  if (diff < 5) return 'just now';
-  if (diff < 60) return `${diff}s ago`;
-  const mins = Math.floor(diff / 60);
-  if (mins < 60) return `${mins}m ago`;
-  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function MiniBarRow({ label, value, max }: { label: string; value: number; max: number }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-28 shrink-0 text-xs text-gray-600 truncate">{label}</span>
+      <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+        <div className="h-full rounded-full bg-gray-800 transition-all" style={{ width: max ? `${(value / max) * 100}%` : '0%' }} />
+      </div>
+      <span className="w-8 text-right text-xs font-semibold text-gray-700 shrink-0">{value}</span>
+    </div>
+  );
+}
+
+function ScrollBar({ label, pct }: { label: string; pct: number }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs">
+        <span className="text-gray-500">{label}</span>
+        <span className="font-semibold text-gray-800">{pct}%</span>
+      </div>
+      <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${CHART_BLUE}, #1d4ed8)` }} />
+      </div>
+    </div>
+  );
+}
+
+// Recharts custom tooltip
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string }[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-lg text-xs">
+      <p className="font-semibold text-gray-700 mb-1">{label}</p>
+      {payload.map(p => (
+        <p key={p.name} className="text-gray-600">{p.name}: <span className="font-bold text-gray-900">{p.value}</span></p>
+      ))}
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+export default function ListingAnalyticsPage() {
+  const [data, setData] = useState<AnalyticsPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [days, setDays] = useState(30);
+  const [error, setError] = useState('');
+
+  const [rt, setRt] = useState<RealtimePayload | null>(null);
+  const [rtLoading, setRtLoading] = useState(true);
+  const rtInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [insights, setInsights] = useState<LeadInsightsPayload | null>(null);
+
+  // ── Digest state ──────────────────────────────────────────────────────────
+  const [digestSending, setDigestSending] = useState(false);
+  const [digestSent, setDigestSent] = useState(false);
+  const [digestError, setDigestError] = useState('');
+
+  // ── Alerts dismissed ─────────────────────────────────────────────────────
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
+
+  // ── UTM builder state ─────────────────────────────────────────────────────
+  const [utmPreset, setUtmPreset] = useState<string>('instagram');
+  const [utmSource, setUtmSource] = useState('');
+  const [utmMedium, setUtmMedium] = useState('');
+  const [utmCampaign, setUtmCampaign] = useState('');
+  const [utmCopied, setUtmCopied] = useState(false);
+
+  // ── QR code state ─────────────────────────────────────────────────────────
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrWithUtm, setQrWithUtm] = useState(false);
+  const [qrGenerating, setQrGenerating] = useState(false);
+
+  async function load(d: number) {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/listing-analytics?days=${d}`);
+      if (!res.ok) { setError('Could not load analytics'); return; }
+      setData(await res.json() as AnalyticsPayload);
+    } catch {
+      setError('Network error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadRealtime() {
+    try {
+      const res = await fetch('/api/listing-analytics/realtime');
+      if (res.ok) setRt(await res.json() as RealtimePayload);
+    } catch { /* silent */ } finally {
+      setRtLoading(false);
+    }
+  }
+
+  async function loadInsights() {
+    try {
+      const res = await fetch('/api/listing-analytics/lead-insights?days=365');
+      if (res.ok) setInsights(await res.json() as LeadInsightsPayload);
+    } catch { /* silent */ }
+  }
+
+  async function sendTestDigest() {
+    setDigestSending(true); setDigestError(''); setDigestSent(false);
+    try {
+      const res = await fetch('/api/analytics-digest-preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const json = await res.json() as { ok?: boolean; success?: boolean; error?: string };
+      if (json.ok || json.success) setDigestSent(true);
+      else setDigestError(json.error ?? 'Failed to send digest');
+    } catch { setDigestError('Network error'); } finally { setDigestSending(false); }
+  }
+
+  // UTM link builder
+  const buildUtmUrl = useCallback((): string => {
+    if (!data?.venue_slug) return '';
+    const base = `${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${data.venue_slug}`;
+    const preset = UTM_PRESETS.find(p => p.id === utmPreset);
+    const source = utmPreset === 'custom' ? utmSource : (preset?.source ?? '');
+    const medium = utmPreset === 'custom' ? utmMedium : (preset?.medium ?? '');
+    const campaign = utmCampaign.trim();
+    const params = new URLSearchParams();
+    if (source) params.set('utm_source', source);
+    if (medium) params.set('utm_medium', medium);
+    if (campaign) params.set('utm_campaign', campaign);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  }, [data?.venue_slug, utmPreset, utmSource, utmMedium, utmCampaign]);
+
+  async function copyUtmUrl() {
+    const url = buildUtmUrl();
+    if (!url) return;
+    await navigator.clipboard.writeText(url);
+    setUtmCopied(true);
+    setTimeout(() => setUtmCopied(false), 2000);
+  }
+
+  async function generateQr() {
+    const url = qrWithUtm ? buildUtmUrl() : (data?.venue_slug ? `${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${data.venue_slug}` : '');
+    if (!url) return;
+    setQrGenerating(true);
+    try {
+      const QRCode = (await import('qrcode')).default;
+      const dataUrl = await QRCode.toDataURL(url, { width: 400, margin: 2, color: { dark: '#111827', light: '#ffffff' } });
+      setQrDataUrl(dataUrl);
+    } catch { /* noop */ } finally { setQrGenerating(false); }
+  }
+
+  function downloadQr() {
+    if (!qrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = qrDataUrl;
+    a.download = `${data?.venue_slug ?? 'listing'}-qr.png`;
+    a.click();
+  }
+
+  useEffect(() => { void load(days); }, [days]);
+
+  useEffect(() => {
+    void loadRealtime();
+    void loadInsights();
+    rtInterval.current = setInterval(() => void loadRealtime(), 30000);
+    return () => { if (rtInterval.current) clearInterval(rtInterval.current); };
+  }, []);
+
+  // Reset QR when URL changes
+  useEffect(() => { setQrDataUrl(null); }, [data?.venue_slug, utmPreset, utmSource, utmMedium, utmCampaign, qrWithUtm]);
+
+  const totalDevices = data ? Object.values(data.devices).reduce((a, b) => a + b, 0) : 0;
+  const hasImpressions = (data?.total_impressions ?? 0) > 0;
+
+  // Build photo map: index → url
+  const photoMap: Record<number, string> = {};
+  data?.gallery_images.forEach((url, i) => { photoMap[i] = url; });
+
+  const d = data;
+
+  return (
+    <div className="px-4 py-8 space-y-8">
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Listing Analytics</h1>
+          <p className="mt-0.5 text-sm text-gray-500">How visitors find and engage with your listing</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden">
+            {DAYS_OPTIONS.map(opt => (
+              <button key={opt} onClick={() => setDays(opt)}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${days === opt ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+                {opt}d
+              </button>
+            ))}
+          </div>
+          <button onClick={() => void load(days)} disabled={loading}
+            className="p-2 rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Status banners ─────────────────────────────────────────────── */}
+      {error && (
+        <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
+          <AlertCircle size={15} /> {error}
+        </div>
+      )}
+      {d?._migration_pending && (
+        <div className="flex items-start gap-3 rounded-2xl bg-amber-50 border border-amber-100 px-5 py-4">
+          <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900">Database migration pending</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Run migration <code className="font-mono">056_listing_analytics.sql</code> in your Supabase SQL editor to start collecting data.
+            </p>
+          </div>
+        </div>
+      )}
+      {!d?._migration_pending && !loading && d && (
+        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2.5 text-sm text-emerald-700">
+          <CheckCircle size={14} /> Tracking active — collecting data from your public listing
+        </div>
+      )}
+
+      {/* ── Smart alerts ───────────────────────────────────────────────── */}
+      {d && !d._migration_pending && computeAlerts(d).filter(a => !dismissedAlerts.has(a.type)).map(alert => {
+        const colors = {
+          green: 'bg-emerald-50 border-emerald-100 text-emerald-900',
+          amber: 'bg-amber-50 border-amber-100 text-amber-900',
+          red:   'bg-red-50 border-red-100 text-red-900',
+          blue:  'bg-blue-50 border-blue-100 text-blue-900',
+        };
+        const icons = { green: <Zap size={15} className="text-emerald-500 shrink-0" />, amber: <Bell size={15} className="text-amber-500 shrink-0" />, red: <TrendingDown size={15} className="text-red-500 shrink-0" />, blue: <CheckCircle size={15} className="text-blue-500 shrink-0" /> };
+        return (
+          <div key={alert.type} className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${colors[alert.color]}`}>
+            {icons[alert.color]}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">{alert.title}</p>
+              <p className="text-xs mt-0.5 opacity-80">{alert.body}</p>
+            </div>
+            <button onClick={() => setDismissedAlerts(s => new Set([...s, alert.type]))} className="shrink-0 opacity-50 hover:opacity-100 transition-opacity mt-0.5">
+              <X size={13} />
+            </button>
+          </div>
+        );
+      })}
+
+      {/* ── Realtime panel ─────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            </span>
+            <h2 className="text-sm font-semibold text-gray-900">Live right now</h2>
+            <span className="text-xs text-gray-400">· auto-refreshes every 30s</span>
+          </div>
+          <button onClick={() => { setRtLoading(true); void loadRealtime(); }} disabled={rtLoading}
+            className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-50 disabled:opacity-40 transition-colors">
+            <RefreshCw size={13} className={rtLoading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+
+        {/* Live stats */}
+        <div className="grid grid-cols-3 divide-x divide-gray-100">
+          {[
+            { label: 'On listing right now', value: rt?.active_now ?? '—', sub: 'live visitors' },
+            { label: 'Active today', value: rt?.today_views ?? '—', sub: 'page views' },
+            { label: 'Last 30 min', value: rt?.active_30m ?? '—', sub: 'unique sessions' },
+          ].map(({ label, value, sub }) => (
+            <div key={label} className="px-6 py-4 text-center">
+              <p className="text-2xl font-bold text-gray-900">{value}</p>
+              <p className="text-[11px] font-semibold text-gray-500 mt-0.5">{label}</p>
+              <p className="text-[10px] text-gray-400">{sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Realtime world map */}
+        {rt && !rt._migration_pending && (
+          <div className="px-5 py-4 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Live visitor map
+              </p>
+              <div className="flex items-center gap-4 text-[10px] text-gray-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="relative inline-flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                  </span>
+                  On the page now
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
+                  Last 30 min
+                </span>
+                <span className="text-gray-300">· scroll or use + / − to zoom to city view</span>
+              </div>
+            </div>
+            <div className="relative">
+              <VisitorMap points={rt.geo_points ?? []} />
+              {(rt.geo_points?.length ?? 0) === 0 && (
+                <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[500] rounded-full bg-white/95 border border-gray-200 px-4 py-1.5 shadow-sm">
+                  <p className="text-[11px] font-medium text-gray-500">
+                    No visitors in the last 30 minutes — markers will appear here in realtime
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Activity feed + geo side by side */}
+        {rt && !rt._migration_pending && (rt.activity.length > 0 || rt.geo_live.length > 0) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+
+            {/* Activity feed */}
+            <div className="px-5 py-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Recent activity</p>
+              {rt.activity.length > 0 ? (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {rt.activity.map((a, i) => (
+                    <div key={i} className="flex items-center gap-3 py-1.5">
+                      <span className="text-lg leading-none">{a.flag}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800 truncate">{a.label}</p>
+                        <p className="text-[10px] text-gray-400 truncate">
+                          {[a.city, a.region, a.country].filter(Boolean).join(', ') || 'Unknown location'}
+                          {a.device_type ? ` · ${a.device_type}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-gray-400 shrink-0">{fmtAgo(a.ago_seconds)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 py-4 text-center">No activity in the last 30 minutes</p>
+              )}
+            </div>
+
+            {/* Live geo breakdown */}
+            <div className="px-5 py-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Where visitors are right now</p>
+              {rt.geo_live.length > 0 ? (
+                <div className="space-y-2">
+                  {rt.geo_live.map(g => (
+                    <div key={g.country} className="flex items-center gap-3">
+                      <span className="text-lg leading-none w-6 shrink-0">{g.flag}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800">{g.country}</p>
+                        {g.cities.length > 0 && (
+                          <p className="text-[10px] text-gray-400 truncate">{g.cities.join(', ')}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-emerald-400"
+                            style={{ width: `${rt.geo_live[0] ? (g.count / rt.geo_live[0].count) * 100 : 0}%` }} />
+                        </div>
+                        <span className="text-[11px] font-semibold text-gray-600 w-5 text-right">{g.count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 py-4 text-center">No location data available yet</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {rt?._migration_pending && (
+          <div className="px-6 py-4 text-xs text-gray-400 text-center">
+            Run migration 056_listing_analytics.sql to enable live tracking
+          </div>
+        )}
+      </div>
+
+      {/* ── Loading skeletons ───────────────────────────────────────────── */}
+      {loading && !d && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-2xl border border-gray-200 bg-white p-5 h-28 animate-pulse">
+              <div className="h-3 w-20 bg-gray-100 rounded mb-3" /><div className="h-8 w-16 bg-gray-200 rounded" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {d && (
+        <>
+          {/* ── KPI Cards ────────────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard icon={Eye} label="Listing views" value={d.total_views.toLocaleString()}
+              sub={`vs ${d.prior.total_views} prior`}
+              deltaVal={delta(d.total_views, d.prior.total_views)} color="blue" />
+            <KpiCard icon={Users} label="Unique visitors" value={d.unique_sessions.toLocaleString()}
+              sub={`vs ${d.prior.unique_sessions} prior`}
+              deltaVal={delta(d.unique_sessions, d.prior.unique_sessions)} color="purple" />
+            <KpiCard icon={MousePointerClick} label="Inquiries sent" value={d.contact_form_submits.toLocaleString()}
+              sub={`${d.leads_created} leads created`}
+              deltaVal={delta(d.contact_form_submits, d.prior.contact_form_submits)} color="green" />
+            <KpiCard icon={TrendingUp} label="Conversion rate" value={`${d.conversion_rate}%`}
+              sub="Views → inquiry"
+              deltaVal={delta(d.conversion_rate, d.prior.conversion_rate)} color="amber" />
+          </div>
+
+          {/* Avg session duration + impressions */}
+          <div className="grid grid-cols-2 gap-4">
+            <KpiCard icon={Clock} label="Avg time on listing" value={fmtDuration(d.avg_session_duration)}
+              sub="Per engaged session" color="rose" />
+            <KpiCard icon={Search} label="Search impressions"
+              value={hasImpressions ? d.total_impressions.toLocaleString() : '—'}
+              sub={hasImpressions ? 'Times seen in search results' : 'Tracked when directory search launches'}
+              color="gray" />
+          </div>
+
+          {/* ── Views + Unique visitors chart ────────────────────────────── */}
+          {/* `d.daily` is backfilled server-side for the full window, so a
+              30-day request always returns 30 data points (zeros where there
+              was no traffic). The empty state only fires when the window has
+              ZERO views AND ZERO impressions across every day — otherwise we
+              show the continuous chart so the dashboard makes it obvious the
+              historical events are there. */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-6">
+            <SectionTitle>Daily views — last {days} days</SectionTitle>
+            <p className="text-xs text-gray-400 mt-0.5 mb-5">Total page views vs unique visitors each day</p>
+            {d.daily.length > 0 && (d.total_views > 0 || d.total_impressions > 0 || d.unique_sessions > 0) ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={d.daily.map(row => ({ ...row, date: formatDate(row.date) }))}
+                  margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="viewsGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={CHART_BLUE} stopOpacity={0.2} />
+                      <stop offset="100%" stopColor={CHART_BLUE} stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="sessionsGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={CHART_DARK} stopOpacity={0.12} />
+                      <stop offset="100%" stopColor={CHART_DARK} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="views" name="Views" stroke={CHART_BLUE} strokeWidth={2} fill="url(#viewsGrad)" dot={false} activeDot={{ r: 4 }} />
+                  <Area type="monotone" dataKey="unique_sessions" name="Unique visitors" stroke={CHART_DARK} strokeWidth={1.5} strokeDasharray="4 2" fill="url(#sessionsGrad)" dot={false} activeDot={{ r: 3 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyState message="No view data yet — visit your public listing to test tracking." />
+            )}
+          </div>
+
+          {/* ── Conversion Funnel ────────────────────────────────────────── */}
+          {d.funnel.length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-6">
+              <SectionTitle>Conversion funnel</SectionTitle>
+              <p className="text-xs text-gray-400 mt-0.5 mb-5">How visitors move from discovery to inquiry</p>
+              <div className="space-y-2">
+                {d.funnel.map((step, i) => {
+                  const maxCount = d.funnel[0]?.count || 1;
+                  const barPct = maxCount ? (step.count / maxCount) * 100 : 0;
+                  const colors = ['bg-blue-600', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-emerald-500'];
+                  return (
+                    <div key={step.step} className="flex items-center gap-4">
+                      <span className="w-32 shrink-0 text-xs text-gray-600 font-medium">{step.step}</span>
+                      <div className="flex-1 h-8 rounded-lg bg-gray-100 overflow-hidden relative">
+                        <div className={`h-full rounded-lg transition-all ${colors[i] ?? 'bg-gray-400'}`}
+                          style={{ width: `${barPct}%` }} />
+                        <span className="absolute inset-0 flex items-center px-3 text-xs font-bold text-white mix-blend-darken" style={{ color: barPct > 20 ? '#fff' : '#374151' }}>
+                          {step.count.toLocaleString()}
+                        </span>
+                      </div>
+                      {step.pct !== null && (
+                        <span className="w-14 shrink-0 text-right text-xs text-gray-400">{step.pct}% CTR</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Scroll depth + Engagement ────────────────────────────────── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+              <SectionTitle>Scroll depth</SectionTitle>
+              <p className="text-xs text-gray-400">% of visitors who scroll this far</p>
+              <ScrollBar label="25% of page"    pct={d.scroll_depth.pct_25} />
+              <ScrollBar label="50% of page"    pct={d.scroll_depth.pct_50} />
+              <ScrollBar label="75% of page"    pct={d.scroll_depth.pct_75} />
+              <ScrollBar label="Bottom of page" pct={d.scroll_depth.pct_100} />
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+              <SectionTitle>Engagement breakdown</SectionTitle>
+              {[
+                { label: 'Photo views',   value: d.event_counts['photo_view'] ?? 0 },
+                { label: 'FAQ opens',     value: d.event_counts['faq_open'] ?? 0 },
+                { label: 'Map clicks',    value: d.event_counts['map_click'] ?? 0 },
+                { label: 'Social clicks', value: d.event_counts['social_click'] ?? 0 },
+                { label: 'Form opens',    value: d.event_counts['contact_form_open'] ?? 0 },
+                { label: 'Form submits',  value: d.event_counts['contact_form_submit'] ?? 0 },
+              ].map(item => (
+                <MiniBarRow key={item.label} {...item}
+                  max={Math.max(...[
+                    d.event_counts['photo_view'] ?? 0,
+                    d.event_counts['faq_open'] ?? 0,
+                    d.event_counts['map_click'] ?? 0,
+                    d.event_counts['social_click'] ?? 0,
+                    d.event_counts['contact_form_open'] ?? 0,
+                    d.event_counts['contact_form_submit'] ?? 0,
+                  ], 1)} />
+              ))}
+            </div>
+          </div>
+
+          {/* ── Traffic sources + devices ────────────────────────────────── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+              <SectionTitle>Traffic sources</SectionTitle>
+              {d.referrers.length > 0
+                ? d.referrers.map(r => <MiniBarRow key={r.source} label={r.source} value={r.count} max={d.referrers[0]?.count ?? 1} />)
+                : <EmptyState message="No data yet" />}
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-4">
+              <SectionTitle>Devices</SectionTitle>
+              {totalDevices > 0 ? (
+                <div className="space-y-3">
+                  {[{ key: 'mobile', icon: Smartphone, label: 'Mobile' }, { key: 'desktop', icon: Monitor, label: 'Desktop' }, { key: 'tablet', icon: Tablet, label: 'Tablet' }].map(({ key, icon: Icon, label }) => {
+                    const count = d.devices[key] ?? 0;
+                    const pct = totalDevices ? Math.round((count / totalDevices) * 100) : 0;
+                    return (
+                      <div key={key} className="flex items-center gap-3">
+                        <Icon size={14} className="text-gray-400 shrink-0" />
+                        <span className="w-16 text-xs text-gray-600">{label}</span>
+                        <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-gray-800" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs font-semibold text-gray-700 w-10 text-right">{pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : <EmptyState message="No data yet" />}
+            </div>
+          </div>
+
+          {/* ── Inquiry day-of-week chart ─────────────────────────────────── */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-6">
+            <SectionTitle>Inquiries by day of week</SectionTitle>
+            <p className="text-xs text-gray-400 mt-0.5 mb-5">When people are most likely to send you an inquiry</p>
+            {d.inquiry_dow.some(v => v > 0) ? (
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={d.inquiry_dow.map((count, i) => ({ day: DOW_LABELS[i], count }))}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={24} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar dataKey="count" name="Inquiries" radius={[6, 6, 0, 0]}>
+                    {d.inquiry_dow.map((_, i) => (
+                      <Cell key={i} fill={d.inquiry_dow[i] === Math.max(...d.inquiry_dow) ? CHART_BLUE : '#e5e7eb'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState message="No inquiry data yet" />}
+          </div>
+
+          {/* ── Photo performance grid ────────────────────────────────────── */}
+          {d.photo_views.length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-6">
+              <SectionTitle>Photo performance</SectionTitle>
+              <p className="text-xs text-gray-400 mt-0.5 mb-5">How many times each gallery photo was viewed</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {d.photo_views.map(({ index, count }) => {
+                  const maxCount = d.photo_views[0]?.count ?? 1;
+                  const url = photoMap[index];
+                  const intensity = Math.round((count / maxCount) * 100);
+                  return (
+                    <div key={index} className="relative rounded-xl overflow-hidden border border-gray-200 aspect-[4/3] bg-gray-100 group">
+                      {url ? (
+                        <Image src={url} alt={`Photo ${index + 1}`} fill className="object-cover" unoptimized sizes="200px" />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400">
+                          Photo {index + 1}
+                        </div>
+                      )}
+                      {/* Overlay */}
+                      <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <p className="text-white text-2xl font-bold">{count}</p>
+                        <p className="text-white/80 text-[10px]">views</p>
+                      </div>
+                      {/* Always-visible badge */}
+                      <div className="absolute bottom-2 right-2 rounded-lg px-1.5 py-0.5 text-[10px] font-bold text-white"
+                        style={{ background: `rgba(0,0,0,${0.4 + intensity * 0.004})` }}>
+                        {count}
+                      </div>
+                      {/* Top performer badge */}
+                      {index === d.photo_views[0]?.index && (
+                        <div className="absolute top-2 left-2 rounded-full bg-amber-400 px-2 py-0.5 text-[9px] font-bold text-white">
+                          #1
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Geography ────────────────────────────────────────────────── */}
+          {(d.top_cities.length > 0 || d.top_states.length > 0 || d.top_countries.length > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {d.top_cities.length > 0 && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                  <div className="flex items-center gap-2"><MapPin size={13} className="text-gray-400" /><SectionTitle>Top cities</SectionTitle></div>
+                  {d.top_cities.map((c, i) => {
+                    // "Columbus, Ohio" — or fall back to "Columbus, US" if no region was resolved.
+                    const label = [c.city, c.region || c.country].filter(Boolean).join(', ');
+                    return <MiniBarRow key={`${c.city}-${c.region ?? ''}-${i}`} label={label} value={c.count} max={d.top_cities[0]?.count ?? 1} />;
+                  })}
+                </div>
+              )}
+              {d.top_states.length > 0 && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                  <div className="flex items-center gap-2"><MapPin size={13} className="text-gray-400" /><SectionTitle>Top states / regions</SectionTitle></div>
+                  {d.top_states.map((s, i) => (
+                    <MiniBarRow
+                      key={`${s.region}-${s.country}-${i}`}
+                      label={`${s.region}${s.country ? ` · ${s.country}` : ''}`}
+                      value={s.count}
+                      max={d.top_states[0]?.count ?? 1}
+                    />
+                  ))}
+                </div>
+              )}
+              {d.top_countries.length > 0 && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                  <div className="flex items-center gap-2"><ArrowUpRight size={13} className="text-gray-400" /><SectionTitle>Top countries</SectionTitle></div>
+                  {d.top_countries.map(c => <MiniBarRow key={c.country} label={c.country} value={c.count} max={d.top_countries[0]?.count ?? 1} />)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Social clicks ─────────────────────────────────────────────── */}
+          {Object.keys(d.social_clicks).length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+              <SectionTitle>Social link clicks</SectionTitle>
+              {Object.entries(d.social_clicks).sort(([,a],[,b])=>b-a).map(([platform, count]) => (
+                <MiniBarRow key={platform} label={platform} value={count} max={Math.max(...Object.values(d.social_clicks), 1)} />
+              ))}
+            </div>
+          )}
+          {/* ── Lead insights (demographics from your own data) ──────── */}
+          {insights && insights.total_leads > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pt-2">
+                <UserCheck size={16} className="text-gray-400" />
+                <h2 className="text-base font-semibold text-gray-900">Lead insights</h2>
+                <span className="text-xs text-gray-400">— from {insights.total_leads} inquiries (all time)</span>
+              </div>
+              <p className="text-xs text-gray-500 -mt-2">
+                Demographic-style breakdowns built from your actual inquiry data — no third-party tracking needed.
+              </p>
+
+              {/* Summary KPIs */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <KpiCard icon={Users} label="Avg guest count" value={insights.avg_guest_count ?? '—'} sub="Per inquiry" color="blue" />
+                <KpiCard icon={DollarSign} label="Avg deal value" value={fmtCents(insights.avg_opportunity_value)} sub="When set" color="green" />
+                <KpiCard icon={Users} label="Total leads" value={insights.total_leads.toLocaleString()} sub="All time" color="purple" />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Guest count distribution */}
+                {insights.guest_buckets.length > 0 && (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                    <div className="flex items-center gap-2"><Users size={13} className="text-gray-400" /><SectionTitle>Guest count breakdown</SectionTitle></div>
+                    {insights.guest_buckets.map(b => (
+                      <MiniBarRow key={b.label} label={b.label} value={b.count} max={Math.max(...insights.guest_buckets.map(x=>x.count), 1)} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Lead sources */}
+                {insights.sources.length > 0 && (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                    <div className="flex items-center gap-2"><ArrowUpRight size={13} className="text-gray-400" /><SectionTitle>How leads found you</SectionTitle></div>
+                    {insights.sources.map(s => (
+                      <MiniBarRow key={s.source} label={s.source} value={s.count} max={insights.sources[0]?.count ?? 1} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Event month distribution */}
+              {insights.event_months.some(m => m.count > 0) && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                  <div className="flex items-center gap-2 mb-1"><CalendarDays size={13} className="text-gray-400" /><SectionTitle>Wedding month popularity</SectionTitle></div>
+                  <p className="text-xs text-gray-400 mb-5">Which months your leads are planning their events</p>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart data={insights.event_months} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Bar dataKey="count" name="Leads" radius={[4,4,0,0]}>
+                        {insights.event_months.map((m, i) => (
+                          <Cell key={i} fill={m.count === Math.max(...insights.event_months.map(x=>x.count)) ? CHART_BLUE : '#e5e7eb'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Opportunity value ranges */}
+                {insights.value_buckets.length > 0 && (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                    <div className="flex items-center gap-2"><DollarSign size={13} className="text-gray-400" /><SectionTitle>Deal value ranges</SectionTitle></div>
+                    {insights.value_buckets.map(b => (
+                      <MiniBarRow key={b.label} label={b.label} value={b.count} max={Math.max(...insights.value_buckets.map(x=>x.count),1)} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Booking timelines */}
+                {insights.timelines.length > 0 && (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                    <div className="flex items-center gap-2"><Clock size={13} className="text-gray-400" /><SectionTitle>Booking timeline</SectionTitle></div>
+                    {insights.timelines.filter(t=>t.label !== 'Unknown').map(t => (
+                      <MiniBarRow key={t.label} label={t.label} value={t.count} max={Math.max(...insights.timelines.map(x=>x.count),1)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Tools: UTM link builder + QR code ─────────────────────────── */}
+      {d && d.venue_slug && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pt-2">
+            <Link2 size={16} className="text-gray-400" />
+            <h2 className="text-base font-semibold text-gray-900">Marketing tools</h2>
+          </div>
+          <p className="text-xs text-gray-500 -mt-2">Create trackable links and QR codes so you know exactly which campaigns drive traffic to your listing.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* UTM link builder */}
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <Link2 size={13} className="text-gray-400" />
+                <SectionTitle>UTM link builder</SectionTitle>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Channel</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {UTM_PRESETS.map(p => (
+                    <button key={p.id} onClick={() => setUtmPreset(p.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${utmPreset === p.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {utmPreset === 'custom' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1 block">Source</label>
+                    <input value={utmSource} onChange={e => setUtmSource(e.target.value)} placeholder="e.g. instagram" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1 block">Medium</label>
+                    <input value={utmMedium} onChange={e => setUtmMedium(e.target.value)} placeholder="e.g. social" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1 block">Campaign name <span className="font-normal normal-case opacity-60">(optional)</span></label>
+                <input value={utmCampaign} onChange={e => setUtmCampaign(e.target.value)} placeholder="e.g. spring2026" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              </div>
+
+              <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2.5 flex items-center gap-2 min-w-0">
+                <span className="flex-1 text-[11px] text-gray-600 font-mono truncate">{buildUtmUrl()}</span>
+                <button onClick={() => void copyUtmUrl()} className={`shrink-0 flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${utmCopied ? 'bg-emerald-600 text-white' : 'bg-gray-900 text-white hover:bg-gray-700'}`}>
+                  {utmCopied ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy</>}
+                </button>
+              </div>
+            </div>
+
+            {/* QR code generator */}
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="14" width="3" height="3"/><rect x="14" y="18" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/></svg>
+                <SectionTitle>QR code generator</SectionTitle>
+              </div>
+              <p className="text-xs text-gray-400">Generate a scannable QR for print materials, brochures, or your venue lobby.</p>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div onClick={() => setQrWithUtm(v => !v)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${qrWithUtm ? 'bg-gray-900' : 'bg-gray-200'}`}>
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${qrWithUtm ? 'translate-x-4' : 'translate-x-1'}`} />
+                </div>
+                <span className="text-xs text-gray-600">Include UTM tracking from builder</span>
+              </label>
+
+              <div className="flex flex-col items-center gap-4">
+                {qrDataUrl ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <Image src={qrDataUrl} alt="QR code" width={180} height={180} unoptimized className="rounded-xl border border-gray-100" />
+                    <button onClick={downloadQr} className="flex items-center gap-1.5 rounded-xl bg-gray-900 text-white px-4 py-2 text-xs font-semibold hover:bg-gray-700 transition-colors">
+                      <Download size={12} /> Download PNG
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => void generateQr()} disabled={qrGenerating} className="flex items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 px-6 py-8 text-sm text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-all disabled:opacity-40 w-full justify-center">
+                    {qrGenerating ? <RefreshCw size={14} className="animate-spin" /> : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Generate QR code</>}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Weekly digest ──────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-900">
+              <Mail size={15} className="text-white" />
+            </span>
+            <div>
+              <p className="font-semibold text-gray-900 text-sm">Weekly email digest</p>
+              <p className="text-xs text-gray-400 mt-0.5">Auto-sends every Monday morning with views, inquiries, top photo, and one actionable tip.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {digestSent && (
+              <span className="flex items-center gap-1 text-xs text-emerald-600 font-semibold">
+                <Check size={12} /> Sent to your email
+              </span>
+            )}
+            {digestError && (
+              <span className="text-xs text-red-500">{digestError}</span>
+            )}
+            <button onClick={() => void sendTestDigest()} disabled={digestSending}
+              className="flex items-center gap-2 rounded-xl bg-gray-900 text-white px-4 py-2 text-xs font-semibold hover:bg-gray-700 disabled:opacity-40 transition-colors">
+              {digestSending ? <RefreshCw size={12} className="animate-spin" /> : <Send size={12} />}
+              {digestSending ? 'Sending…' : 'Send test digest'}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { icon: Eye, label: 'Views this week', desc: 'With % vs prior week' },
+            { icon: MousePointerClick, label: 'Inquiries sent', desc: 'Form submits + leads' },
+            { icon: TrendingUp, label: 'Conversion rate', desc: 'Views → inquiry' },
+            { icon: Bell, label: 'Smart tip', desc: 'One actionable insight' },
+          ].map(({ icon: Icon, label, desc }) => (
+            <div key={label} className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-3">
+              <Icon size={13} className="text-gray-400 mb-2" />
+              <p className="text-xs font-semibold text-gray-700">{label}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="pb-4">
+        <p className="text-xs text-gray-400 text-center">
+          Delta % compares current period to the previous equal-length period. All times are UTC.
+          <span className="mx-2">·</span>
+          <Radio size={10} className="inline" /> Live panel refreshes every 30 seconds.
+        </p>
+      </div>
+    </div>
+  );
 }

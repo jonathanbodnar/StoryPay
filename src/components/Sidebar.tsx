@@ -50,12 +50,9 @@ interface SidebarProps {
 }
 
 const menuItems: NavItem[] = [
-  { label: 'Ask AI', href: '/dashboard/ai', icon: Sparkles, navId: 'nav_main_ai' },
-  { label: 'Home', href: '/dashboard', icon: LayoutDashboard, navId: 'nav_main_home' },
+  { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
-  { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
-  { label: 'Leads', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Media', href: '/dashboard/media', icon: Images, navId: 'nav_main_media' },
   { label: 'Reports', href: '/dashboard/reports', icon: BarChart2, navId: 'nav_main_reports' },
   { label: 'Help Center', href: '/dashboard/help', icon: BookOpen, navId: 'nav_main_help' },
@@ -95,11 +92,12 @@ const settingsItems: NavItem[] = [
 ];
 
 const listingItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard, navId: 'nav_listing_dashboard' },
-  { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: Sparkles, navId: 'nav_listing_pricing_guide' },
-  { label: 'Booking System', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
-  { label: 'Analytics', href: '/dashboard/listing/analytics', icon: BarChart3, navId: 'nav_listing_analytics' },
+  { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard, navId: 'nav_listing_analytics' },
+  { label: 'Venue Listing', href: '/dashboard/listing/venue-listing', icon: Store, navId: 'nav_listing_dashboard' },
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
+  { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: Sparkles, navId: 'nav_listing_pricing_guide' },
+  { label: 'Speed to Lead System', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
+  { label: 'Leads', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Verified & Sponsored', href: '/dashboard/listing/directory', icon: BadgeCheck, navId: 'nav_listing_directory' },
 ];
 
@@ -557,6 +555,49 @@ export default function Sidebar({
       </div>
 
       <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {(isMobile ? mobileListing : listingFiltered).length > 0 ? (
+        <div>
+          {rail ? (
+            <button
+              type="button"
+              title="Bride Booking System"
+              onClick={(e) => openFlyout('listing', e.currentTarget)}
+              className={groupBtn(isOnListing || flyout === 'listing', true)}
+              style={groupBtnStyle(isOnListing || flyout === 'listing')}
+            >
+              <Store size={16} />
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => toggleGroup('listing')}
+                className={groupBtn(isOnListing && listingOpen, false)}
+                style={groupBtnStyle(isOnListing && listingOpen)}
+              >
+                <div className="flex items-center gap-3">
+                  <Store size={16} />
+                  <span>Bride Booking System</span>
+                </div>
+                <ChevronDown
+                  size={13}
+                  className={`transition-transform duration-200 ${listingOpen ? 'rotate-180' : ''} ${
+                    isOnListing && listingOpen ? 'text-white/50' : 'text-gray-400'
+                  }`}
+                />
+              </button>
+              {listingOpen && (
+                <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
+                  {(isMobile ? mobileListing : listingFiltered).map((sub) => (
+                    <SubNavLink key={sub.label} sub={sub} active={listingSubActive(sub.href)} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        ) : null}
+
         {menuItems.filter((item) => {
           // Role-based filters still hide entries entirely — admin-only
           // pages are not "locked", they simply don't apply to members.
@@ -643,49 +684,6 @@ export default function Sidebar({
             </Link>
           );
         })}
-
-        {(isMobile ? mobileListing : listingFiltered).length > 0 ? (
-        <div>
-          {rail ? (
-            <button
-              type="button"
-              title="Venue listing"
-              onClick={(e) => openFlyout('listing', e.currentTarget)}
-              className={groupBtn(isOnListing || flyout === 'listing', true)}
-              style={groupBtnStyle(isOnListing || flyout === 'listing')}
-            >
-              <Store size={16} />
-            </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => toggleGroup('listing')}
-                className={groupBtn(isOnListing && listingOpen, false)}
-                style={groupBtnStyle(isOnListing && listingOpen)}
-              >
-                <div className="flex items-center gap-3">
-                  <Store size={16} />
-                  <span>Venue listing</span>
-                </div>
-                <ChevronDown
-                  size={13}
-                  className={`transition-transform duration-200 ${listingOpen ? 'rotate-180' : ''} ${
-                    isOnListing && listingOpen ? 'text-white/50' : 'text-gray-400'
-                  }`}
-                />
-              </button>
-              {listingOpen && (
-                <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                  {(isMobile ? mobileListing : listingFiltered).map((sub) => (
-                    <SubNavLink key={sub.label} sub={sub} active={listingSubActive(sub.href)} />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-        ) : null}
 
         {(isMobile ? mobilePayments : paymentsFiltered).length > 0 ? (
         <div>
