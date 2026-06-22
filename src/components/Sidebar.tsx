@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
@@ -156,6 +156,7 @@ export default function Sidebar({
   const isOwner = role === 'owner';
   const isAdmin = role === 'owner' || role === 'admin';
   const pathname = usePathname();
+  const router = useRouter();
   /**
    * Plan-level access check. Returns true when the current plan grants this
    * nav id (or when there is no plan at all — legacy_full). Locked items
@@ -163,7 +164,10 @@ export default function Sidebar({
    * navigates or opens the upgrade modal.
    */
   const navOk = (navId: string) => allowedNavIds === null || allowedNavIds.includes(navId);
-  const isOnListing = pathname.startsWith('/dashboard/listing');
+  // "Lead Inbox" lives at /dashboard/leads but belongs to the Bride Booking
+  // System group, so treat it as part of the listing section too — otherwise
+  // navigating to it would collapse the group.
+  const isOnListing = pathname.startsWith('/dashboard/listing') || pathname.startsWith('/dashboard/leads');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [flyout, setFlyout] = useState<FlyoutGroup>(null);
   const [flyoutPos, setFlyoutPos] = useState<{ top: number; left: number } | null>(null);
@@ -332,8 +336,7 @@ export default function Sidebar({
     else if (isOnPayments) setOpenGroup('payments');
     else if (isOnSettings) setOpenGroup('settings');
     else setOpenGroup(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [pathname, isOnListing, isOnMarketing, isOnPayments, isOnSettings]);
 
   function listingSubActive(subHref: string) {
     if (subHref === '/dashboard/listing') {
@@ -664,9 +667,12 @@ export default function Sidebar({
             </button>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => toggleGroup('listing')}
+              <Link
+                href="/dashboard/listing"
+                onClick={(e) => {
+                  if (!listingOpen) setOpenGroup('listing');
+                  if (isMobile) onCloseMobile?.();
+                }}
                 className={groupBtn(isOnListing && listingOpen, false)}
                 style={groupBtnStyle(isOnListing && listingOpen)}
               >
@@ -680,7 +686,7 @@ export default function Sidebar({
                     isOnListing && listingOpen ? 'text-white/50' : 'text-[#1b1b1b]'
                   }`}
                 />
-              </button>
+              </Link>
               {listingOpen && (
                 <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
                   {(isMobile ? mobileListing : listingFiltered).map((sub) => (
