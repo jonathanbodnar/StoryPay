@@ -58,7 +58,6 @@ const menuItems: NavItem[] = [
   { label: 'Leads', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Media', href: '/dashboard/media', icon: Images, navId: 'nav_main_media' },
   { label: 'Reports', href: '/dashboard/reports', icon: BarChart2, navId: 'nav_main_reports' },
-  { label: "What's New", href: '/dashboard/updates', icon: Megaphone, navId: 'nav_main_updates' },
   { label: 'Help Center', href: '/dashboard/help', icon: BookOpen, navId: 'nav_main_help' },
 ];
 
@@ -562,7 +561,6 @@ export default function Sidebar({
           // Role-based filters still hide entries entirely — admin-only
           // pages are not "locked", they simply don't apply to members.
           if (!isAdmin && item.label === 'Reports') return false;
-          if (!isAdmin && item.label === "What's New") return false;
           // On mobile, restrict to the curated phone-friendly route list.
           // "Ask AI" is a button, not a route, so always allowed.
           if (isMobile && item.label !== 'Ask AI' && !MOBILE_ALLOWED_NAV_IDS.has(item.navId)) return false;
