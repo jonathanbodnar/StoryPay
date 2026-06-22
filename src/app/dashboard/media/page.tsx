@@ -187,6 +187,8 @@ export default function MediaLibraryPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 25;
   const [storageQuota, setStorageQuota] = useState<{
     usageBytes: number; limitBytes: number; percentUsed: number; nearLimit: boolean; atLimit: boolean; freePlan: boolean;
   } | null>(null);
@@ -394,6 +396,16 @@ export default function MediaLibraryPage() {
     });
     return list;
   }, [assets, filter, query, sort]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, query, sort]);
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginatedAssets = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
 
   const stats = useMemo(() => {
     const totalBytes = assets.reduce((acc, a) => acc + a.size_bytes, 0);
@@ -671,12 +683,12 @@ export default function MediaLibraryPage() {
             <button
               type="button"
               onClick={() => {
-                if (selectedIds.size === filtered.length) setSelectedIds(new Set());
-                else setSelectedIds(new Set(filtered.map(a => a.id)));
+                if (selectedIds.size === paginatedAssets.length) setSelectedIds(new Set());
+                else setSelectedIds(new Set(paginatedAssets.map(a => a.id)));
               }}
               className="text-xs text-brand-700 hover:text-brand-900 font-medium"
             >
-              {selectedIds.size === filtered.length ? 'Deselect all' : 'Select all'}
+              {selectedIds.size === paginatedAssets.length ? 'Deselect all' : 'Select all'}
             </button>
             <span className="text-brand-200">|</span>
             <button
@@ -725,7 +737,7 @@ export default function MediaLibraryPage() {
         </div>
       ) : view === 'grid' ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {filtered.map((a) => (
+            {paginatedAssets.map((a) => (
               <AssetCardGrid
                 key={a.id}
                 asset={a}
@@ -752,7 +764,7 @@ export default function MediaLibraryPage() {
             <span className="text-right">Size · Date · Actions</span>
           </div>
           <ul>
-            {filtered.map((a) => (
+            {paginatedAssets.map((a) => (
               <AssetRowList
                 key={a.id}
                 asset={a}
@@ -769,6 +781,34 @@ export default function MediaLibraryPage() {
               />
             ))}
           </ul>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
+          <p className="text-sm text-gray-500">
+            Showing <span className="font-medium text-gray-900">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> to{' '}
+            <span className="font-medium text-gray-900">{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}</span> of{' '}
+            <span className="font-medium text-gray-900">{filtered.length}</span> results
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
 
