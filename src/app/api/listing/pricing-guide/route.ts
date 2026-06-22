@@ -14,6 +14,8 @@ function emptyGuide(venueId: string) {
   return {
     venue_id: venueId,
     enabled: false,
+    use_custom_pricing_guide: false,
+    custom_pricing_guide_url: null,
     cover_image_url: null,
     cover_generated_at: null,
     cover_source_image_url: null,
@@ -125,6 +127,8 @@ export async function GET() {
 
 const ALLOWED_PATCH_FIELDS = new Set([
   'enabled',
+  'use_custom_pricing_guide',
+  'custom_pricing_guide_url',
   'cover_image_url',
   'cover_generated_at',
   'cover_source_image_url',

@@ -60,6 +60,11 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to load guide' }, { status: 500 });
   }
 
+  // If the venue uses a custom uploaded PDF, redirect directly to it
+  if (guide?.use_custom_pricing_guide && guide?.custom_pricing_guide_url) {
+    return NextResponse.redirect(guide.custom_pricing_guide_url);
+  }
+
   // Load child rows (spaces + packages + accommodations)
   const guideId = guide?.id ?? null;
   const [spacesRes, packagesRes, accommodationsRes] = await Promise.all([

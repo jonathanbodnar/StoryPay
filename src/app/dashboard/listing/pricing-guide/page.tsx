@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   Loader2, Save, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
   Plus, Trash2, GripVertical, Image as ImageIcon, Sparkles, Star,
-  ArrowLeft, Upload, Eye, Wand2, Download,
+  ArrowLeft, Upload, Eye, Wand2, Download, FileText,
 } from 'lucide-react';
 import { AIField } from '@/components/pricing-guide/AIField';
 import PreviewGuideModal from '@/components/pricing-guide/PreviewGuideModal';
@@ -46,6 +46,8 @@ type Package = {
 interface Guide {
   venue_id: string;
   enabled: boolean;
+  use_custom_pricing_guide: boolean;
+  custom_pricing_guide_url: string | null;
   cover_image_url: string | null;
   cover_generated_at: string | null;
   cover_source_image_url: string | null;
@@ -180,6 +182,7 @@ export default function PricingGuidePage() {
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [mediaPickerTarget, setMediaPickerTarget] = useState<
     | { kind: 'cover' }
+    | { kind: 'custom_pdf' }
     | { kind: 'gallery' }
     | { kind: 'about-photo' }
     | { kind: 'accommodations-photo' }
@@ -199,6 +202,9 @@ export default function PricingGuidePage() {
     switch (mediaPickerTarget.kind) {
       case 'cover':
         updateParent('cover_image_url', url);
+        break;
+      case 'custom_pdf':
+        updateParent('custom_pricing_guide_url', url);
         break;
       case 'gallery':
         if (!guide.gallery.some((g) => g.url === url) && guide.gallery.length < 9) {
@@ -634,6 +640,94 @@ export default function PricingGuidePage() {
         </button>
       </div>
 
+      {/* ── Custom PDF Toggle ─────────────────────────────────────── */}
+      <div className={`${CARD} flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
+            <FileText size={18} />
+          </div>
+          <div>
+            <h2 className="font-heading text-lg text-gray-900">Use custom PDF upload</h2>
+            <p className="mt-0.5 text-sm text-gray-500 max-w-xl">
+              Override the AI-generated pricing guide with your own custom PDF. When enabled, leads will download this file instead, and it will be sent in automated SMS/emails.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={guide.use_custom_pricing_guide}
+          onClick={() => updateParent('use_custom_pricing_guide', !guide.use_custom_pricing_guide)}
+          className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors ${guide.use_custom_pricing_guide ? 'bg-violet-500' : 'bg-gray-300'}`}
+        >
+          <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${guide.use_custom_pricing_guide ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
+      </div>
+
+      {guide.use_custom_pricing_guide && (
+        <Section
+          title="Upload Custom PDF"
+          hint="Select a PDF from your media library to use as your pricing guide."
+          icon={<Upload size={18} />}
+        >
+          <div className="flex flex-col gap-4">
+            {guide.custom_pricing_guide_url ? (
+              <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded bg-red-100 text-red-600">
+                    <FileText size={20} />
+                  </div>
+                  <div className="truncate">
+                    <p className="truncate text-sm font-medium text-gray-900">
+                      {guide.custom_pricing_guide_url.split('/').pop()}
+                    </p>
+                    <a
+                      href={guide.custom_pricing_guide_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-violet-600 hover:underline"
+                    >
+                      View current PDF
+                    </a>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openMediaPicker({ kind: 'custom_pdf' })}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateParent('custom_pricing_guide_url', null)}
+                    className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                <FileText size={32} className="mx-auto mb-3 text-gray-400" />
+                <h3 className="text-sm font-medium text-gray-900">No custom PDF selected</h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  Choose a file from your media library to use as your pricing guide.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openMediaPicker({ kind: 'custom_pdf' })}
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                >
+                  <Upload size={16} /> Select PDF
+                </button>
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
+
       {/* ── Cover image (page 1) ────────────────────────────────────── */}
       <Section
         title="Front cover"
@@ -703,7 +797,9 @@ export default function PricingGuidePage() {
         />
       </Section>
 
-      {/* ── Photo gallery ──────────────────────────────────────────── */}
+      {!guide.use_custom_pricing_guide && (
+        <>
+          {/* ── Photo gallery ──────────────────────────────────────────── */}
       <Section
         title="Photo gallery"
         hint="Upload exactly 9 photos for the best layout. The gallery page uses a pinterest-style grid: rows alternate wide/narrow and equal-thirds columns. Mix landscape and portrait shots — each image is automatically cropped to fill its cell."
@@ -1223,6 +1319,8 @@ export default function PricingGuidePage() {
           <div className="py-6 text-center text-sm text-gray-400">Loading contact info…</div>
         )}
       </Section>
+        </>
+      )}
 
       {/* ── Bottom save indicator ──────────────────────────────────── */}
       <div className="flex items-center justify-end gap-2 pb-4 text-xs text-gray-400">
@@ -1245,8 +1343,8 @@ export default function PricingGuidePage() {
       <VenueMediaPickerModal
         open={mediaPickerOpen}
         onOpenChange={setMediaPickerOpen}
-        mode="image"
-        title="Select a photo"
+        mode={mediaPickerTarget?.kind === 'custom_pdf' ? 'file' : 'image'}
+        title={mediaPickerTarget?.kind === 'custom_pdf' ? 'Select a PDF' : 'Select a photo'}
         onSelect={(url) => handleMediaSelect(url)}
       />
     </div>

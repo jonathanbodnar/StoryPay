@@ -53,6 +53,12 @@ export async function GET(req: NextRequest) {
   }
 
   const guideId = guide?.id ?? null;
+
+  // If the venue uses a custom uploaded PDF, redirect directly to it
+  if (guide?.use_custom_pricing_guide && guide?.custom_pricing_guide_url) {
+    return NextResponse.redirect(guide.custom_pricing_guide_url);
+  }
+
   const [spacesRes, packagesRes, accommodationsRes] = await Promise.all([
     guideId
       ? supabaseAdmin.from('venue_pricing_guide_spaces').select('*').eq('pricing_guide_id', guideId).order('position', { ascending: true })
