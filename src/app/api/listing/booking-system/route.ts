@@ -24,6 +24,9 @@ export const runtime  = 'nodejs';
 
 // Name used to identify the managed Speed-to-Lead automation.
 const STL_NAME = 'Speed to Lead — Booking System';
+const PHASE3_NAME = 'Nurture Sequence — Booking System';
+const PHASE4_NAME = 'Booked Tour Sequence — Booking System';
+const PHASE5_NAME = 'Booked Wedding Sequence — Booking System';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -51,7 +54,16 @@ export interface BookingSystemConfig {
   steps:                  StepConfig[];
   automationId:           string | null;
   automationActive:       boolean;
-  // Phase 3 — AI Concierge long-tail
+  // Phase 3 — Nurture
+  phase3Enabled:          boolean;
+  phase3Steps:            StepConfig[];
+  // Phase 4 — Booked Tour
+  phase4Enabled:          boolean;
+  phase4Steps:            StepConfig[];
+  // Phase 5 — Booked Wedding
+  phase5Enabled:          boolean;
+  phase5Steps:            StepConfig[];
+  // Phase 6 — AI Concierge long-tail
   aiEnabled:              boolean;
   aiPersonaName:          string;
   aiMaxDays:              number;
@@ -86,40 +98,48 @@ export async function GET() {
 
   const v = venue as unknown as Record<string, unknown>;
 
-  // Load the managed automation (if it exists).
-  const { data: auto } = await supabaseAdmin
+  // Load the managed automations
+  const { data: autos } = await supabaseAdmin
     .from('marketing_automations')
-    .select('id, status')
+    .select('id, name, status')
     .eq('venue_id', venueId)
-    .eq('name', STL_NAME)
-    .maybeSingle();
+    .in('name', [STL_NAME, PHASE3_NAME, PHASE4_NAME, PHASE5_NAME]);
 
-  let steps: StepConfig[] = [];
-  let automationId: string | null = null;
-  let automationActive = false;
+  const loadAuto = async (name: string) => {
+    const auto = autos?.find(a => a.name === name);
+    let steps: StepConfig[] = [];
+    let automationId: string | null = null;
+    let automationActive = false;
 
-  if (auto) {
-    automationId   = auto.id as string;
-    automationActive = (auto.status as string) === 'active';
-    const { data: stepRows } = await supabaseAdmin
-      .from('marketing_automation_steps')
-      .select('id, step_order, step_type, config_json')
-      .eq('automation_id', auto.id)
-      .order('step_order', { ascending: true });
+    if (auto) {
+      automationId   = auto.id as string;
+      automationActive = (auto.status as string) === 'active';
+      const { data: stepRows } = await supabaseAdmin
+        .from('marketing_automation_steps')
+        .select('id, step_order, step_type, config_json')
+        .eq('automation_id', auto.id)
+        .order('step_order', { ascending: true });
 
-    steps = (stepRows ?? []).map((s) => {
-      const cfg = (s.config_json ?? {}) as Record<string, unknown>;
-      return {
-        id:            s.id as string,
-        step_order:    s.step_order as number,
-        step_type:     s.step_type as StepConfig['step_type'],
-        label:         (cfg.label as string | undefined) ?? labelForStep(s.step_type as string, cfg),
-        body:          (cfg.body as string | undefined) ?? '',
-        subject:       (cfg.subject as string | undefined) ?? '',
-        delay_minutes: (cfg.delay_minutes as number | undefined) ?? 0,
-      };
-    });
-  }
+      steps = (stepRows ?? []).map((s) => {
+        const cfg = (s.config_json ?? {}) as Record<string, unknown>;
+        return {
+          id:            s.id as string,
+          step_order:    s.step_order as number,
+          step_type:     s.step_type as StepConfig['step_type'],
+          label:         (cfg.label as string | undefined) ?? labelForStep(s.step_type as string, cfg),
+          body:          (cfg.body as string | undefined) ?? '',
+          subject:       (cfg.subject as string | undefined) ?? '',
+          delay_minutes: (cfg.delay_minutes as number | undefined) ?? 0,
+        };
+      });
+    }
+    return { steps, automationId, automationActive };
+  };
+
+  const phase2 = await loadAuto(STL_NAME);
+  const phase3 = await loadAuto(PHASE3_NAME);
+  const phase4 = await loadAuto(PHASE4_NAME);
+  const phase5 = await loadAuto(PHASE5_NAME);
 
   const cfg: BookingSystemConfig = {
     masterEnabled:      (v.booking_system_enabled as boolean | null) ?? true,
@@ -127,10 +147,16 @@ export async function GET() {
     guideSmsEnabled:    (v.booking_guide_sms_enabled   as boolean | null) ?? true,
     guideEmailBody:     (v.booking_guide_email_body as string | null) ?? DEFAULT_GUIDE_EMAIL_BODY,
     guideSmsBody:       (v.booking_guide_sms_body   as string | null) ?? DEFAULT_GUIDE_SMS_BODY,
-    sequenceEnabled:    automationActive,
-    steps,
-    automationId,
-    automationActive,
+    sequenceEnabled:    phase2.automationActive,
+    steps:              phase2.steps,
+    automationId:       phase2.automationId,
+    automationActive:   phase2.automationActive,
+    phase3Enabled:      phase3.automationActive,
+    phase3Steps:        phase3.steps,
+    phase4Enabled:      phase4.automationActive,
+    phase4Steps:        phase4.steps,
+    phase5Enabled:      phase5.automationActive,
+    phase5Steps:        phase5.steps,
     aiEnabled:          (v.ai_concierge_enabled as boolean | null) ?? false,
     aiPersonaName:      (v.ai_assistant_persona_name as string | null) ?? 'StoryVenue Concierge',
     aiMaxDays:          (v.booking_ai_max_days     as number | null) ?? 60,
@@ -182,15 +208,22 @@ export async function PATCH(req: NextRequest) {
   }
 
   // ── Sequence steps ───────────────────────────────────────────────────────
-  if (body.steps !== undefined || body.sequenceEnabled !== undefined) {
-    const status = body.sequenceEnabled === false ? 'inactive' : 'active';
+  const saveAutomation = async (
+    name: string,
+    enabled: boolean | undefined,
+    steps: StepConfig[] | undefined,
+    triggerType: string
+  ) => {
+    if (enabled === undefined && steps === undefined) return;
+
+    const status = enabled === false ? 'inactive' : 'active';
 
     // Find or create the managed automation.
     let { data: auto } = await supabaseAdmin
       .from('marketing_automations')
       .select('id')
       .eq('venue_id', venueId)
-      .eq('name', STL_NAME)
+      .eq('name', name)
       .maybeSingle();
 
     if (!auto) {
@@ -198,43 +231,43 @@ export async function PATCH(req: NextRequest) {
         .from('marketing_automations')
         .insert({
           venue_id:      venueId,
-          name:          STL_NAME,
+          name:          name,
           status,
-          trigger_type:  'form_submitted',
+          trigger_type:  triggerType,
           trigger_config: {},
         })
         .select('id')
         .single();
       if (createErr) {
-        console.error('[booking-system] failed to create automation:', createErr);
-        return NextResponse.json({ error: `Failed to create automation: ${createErr.message}` }, { status: 500 });
+        console.error(`[booking-system] failed to create automation ${name}:`, createErr);
+        throw new Error(`Failed to create automation: ${createErr.message}`);
       }
       auto = created;
-    } else if (body.sequenceEnabled !== undefined) {
+    } else if (enabled !== undefined) {
       const { error: statusErr } = await supabaseAdmin
         .from('marketing_automations')
         .update({ status })
         .eq('id', auto.id);
-      if (statusErr) console.warn('[booking-system] sequence status update failed:', statusErr);
+      if (statusErr) console.warn(`[booking-system] sequence status update failed for ${name}:`, statusErr);
     }
 
-    if (!auto) return NextResponse.json({ error: 'Could not create automation' }, { status: 500 });
+    if (!auto) throw new Error(`Could not create automation ${name}`);
 
     const autoId = auto.id as string;
 
-    if (body.steps !== undefined) {
+    if (steps !== undefined) {
       // Delete all existing steps then re-insert in order.
       const { error: delErr } = await supabaseAdmin
         .from('marketing_automation_steps')
         .delete()
         .eq('automation_id', autoId);
       if (delErr) {
-        console.error('[booking-system] failed to clear existing steps:', delErr);
-        return NextResponse.json({ error: `Failed to clear existing steps: ${delErr.message}` }, { status: 500 });
+        console.error(`[booking-system] failed to clear existing steps for ${name}:`, delErr);
+        throw new Error(`Failed to clear existing steps: ${delErr.message}`);
       }
 
-      if (body.steps.length > 0) {
-        const inserts = body.steps.map((s, i) => ({
+      if (steps.length > 0) {
+        const inserts = steps.map((s, i) => ({
           automation_id: autoId,
           step_order:    i,
           step_type:     s.step_type,
@@ -250,19 +283,24 @@ export async function PATCH(req: NextRequest) {
           .from('marketing_automation_steps')
           .insert(inserts);
         if (insErr) {
-          console.error('[booking-system] failed to insert steps:', insErr);
-          // Detect the missing-migration case so we can give a clear hint
+          console.error(`[booking-system] failed to insert steps for ${name}:`, insErr);
           const msg = insErr.message || 'Unknown insert error';
           const hint = /step_type_check|violates check constraint/i.test(msg)
             ? 'Database migration 119 has not been applied yet — please run migrations/119_booking_system_step_types.sql in Supabase.'
             : null;
-          return NextResponse.json({
-            error: `Failed to save steps: ${msg}`,
-            hint,
-          }, { status: 500 });
+          throw new Error(`Failed to save steps: ${msg}${hint ? ` (${hint})` : ''}`);
         }
       }
     }
+  };
+
+  try {
+    await saveAutomation(STL_NAME, body.sequenceEnabled, body.steps, 'form_submitted');
+    await saveAutomation(PHASE3_NAME, body.phase3Enabled, body.phase3Steps, 'manual');
+    await saveAutomation(PHASE4_NAME, body.phase4Enabled, body.phase4Steps, 'manual');
+    await saveAutomation(PHASE5_NAME, body.phase5Enabled, body.phase5Steps, 'manual');
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Failed to save automations' }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

@@ -593,10 +593,7 @@ export default function BookingSystemPage() {
   const [error, setError]         = useState('');
   const [leadsData, setLeadsData] = useState<StepLeadsPayload | null>(null);
 
-  // Placeholders for new phases
-  const [phase3Enabled, setPhase3Enabled] = useState(false);
-  const [phase4Enabled, setPhase4Enabled] = useState(false);
-  const [phase5Enabled, setPhase5Enabled] = useState(false);
+  // Placeholders for new phases (removed local state, using cfg)
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -781,12 +778,14 @@ export default function BookingSystemPage() {
           subtitle="Tips to picking / touring venues (5 email sequence)"
           icon={<Mail size={18} className="text-pink-600" />}
           accent="bg-pink-50"
-          enabled={phase3Enabled}
-          onToggle={setPhase3Enabled}
+          enabled={cfg.phase3Enabled}
+          onToggle={(v) => void save({ phase3Enabled: v })}
         >
-          <div className="py-8 text-center text-sm text-gray-400 italic">
-            Sequence builder coming soon...
-          </div>
+          <SequenceEditor
+            steps={cfg.phase3Steps}
+            onStepsChange={(steps) => void save({ phase3Steps: steps })}
+            leadsData={null}
+          />
         </PhaseCard>
 
         {/* Phase 4 — Booked Tour */}
@@ -796,12 +795,14 @@ export default function BookingSystemPage() {
           subtitle="If they book a tour, what to expect (5 email sequence)"
           icon={<Users size={18} className="text-amber-600" />}
           accent="bg-amber-50"
-          enabled={phase4Enabled}
-          onToggle={setPhase4Enabled}
+          enabled={cfg.phase4Enabled}
+          onToggle={(v) => void save({ phase4Enabled: v })}
         >
-          <div className="py-8 text-center text-sm text-gray-400 italic">
-            Sequence builder coming soon...
-          </div>
+          <SequenceEditor
+            steps={cfg.phase4Steps}
+            onStepsChange={(steps) => void save({ phase4Steps: steps })}
+            leadsData={null}
+          />
         </PhaseCard>
 
         {/* Phase 5 — Booked Wedding */}
@@ -811,12 +812,14 @@ export default function BookingSystemPage() {
           subtitle="If they book a wedding, what to expect (5 email sequence)"
           icon={<CheckCircle2 size={18} className="text-emerald-600" />}
           accent="bg-emerald-50"
-          enabled={phase5Enabled}
-          onToggle={setPhase5Enabled}
+          enabled={cfg.phase5Enabled}
+          onToggle={(v) => void save({ phase5Enabled: v })}
         >
-          <div className="py-8 text-center text-sm text-gray-400 italic">
-            Sequence builder coming soon...
-          </div>
+          <SequenceEditor
+            steps={cfg.phase5Steps}
+            onStepsChange={(steps) => void save({ phase5Steps: steps })}
+            leadsData={null}
+          />
         </PhaseCard>
 
         {/* AI Concierge info callout */}
