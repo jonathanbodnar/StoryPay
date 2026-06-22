@@ -30,11 +30,31 @@ export async function GET(req: Request) {
   if (!venue) return NextResponse.json({ error: 'No venue' }, { status: 404 });
 
   const url = new URL(req.url);
-  const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10), 365);
+  const fromParam = url.searchParams.get('from');
+  const toParam = url.searchParams.get('to');
+  
+  let since = '';
+  let until = '';
+  let priorFrom = '';
+  let days = 30;
 
-  const now = Date.now();
-  const since     = new Date(now - days * 86400000).toISOString();
-  const priorFrom = new Date(now - days * 2 * 86400000).toISOString();
+  if (fromParam && toParam) {
+    const fromDate = new Date(fromParam + 'T00:00:00Z');
+    const toDate = new Date(toParam + 'T23:59:59.999Z');
+    since = fromDate.toISOString();
+    until = toDate.toISOString();
+    
+    const diffTime = Math.abs(toDate.getTime() - fromDate.getTime());
+    days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    priorFrom = new Date(fromDate.getTime() - diffTime).toISOString();
+  } else {
+    days = Math.min(parseInt(url.searchParams.get('days') || '30', 10), 365);
+    const now = Date.now();
+    since = new Date(now - days * 86400000).toISOString();
+    until = new Date(now).toISOString();
+    priorFrom = new Date(now - days * 2 * 86400000).toISOString();
+  }
 
   // Fetch current + prior period in one wide query then split
   const { data: allEvents, error } = await supabaseAdmin
@@ -42,6 +62,7 @@ export async function GET(req: Request) {
     .select('session_id, event_type, event_data, referrer, utm_source, device_type, country, region, city, created_at')
     .eq('venue_id', venueId)
     .gte('created_at', priorFrom)
+    .lte('created_at', until)
     .order('created_at', { ascending: true });
 
   if (error) {
@@ -75,14 +96,14 @@ export async function GET(req: Request) {
     venue_name: String((venue as Record<string,unknown>).name ?? ''),
     venue_slug: String((venue as Record<string,unknown>).slug ?? ''),
     gallery_images: galleryImages,
-    ...buildMetrics(current, leads ?? [], days),
+    ...buildMetrics(current, leads ?? [], days, until),
     prior: buildPriorMetrics(prior, priorLeads ?? []),
   });
 }
 
 // ── Core metric builder ────────────────────────────────────────────────────────
 
-function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string }[], days: number) {
+function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string }[], days: number, until: string) {
   const pageViews = rows.filter(r => r.event_type === 'page_view');
   const impressions = rows.filter(r => r.event_type === 'listing_impression');
   const allSessions = new Set(rows.map(r => r.session_id));
@@ -139,11 +160,11 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
   // so the keys match `created_at.slice(0,10)` (which is also UTC). Render
   // oldest → newest so the chart x-axis flows left-to-right naturally.
   const daily: { date: string; views: number; unique_sessions: number; impressions: number }[] = [];
-  const todayUtc = new Date();
-  todayUtc.setUTCHours(0, 0, 0, 0);
+  const endUtc = new Date(until);
+  endUtc.setUTCHours(0, 0, 0, 0);
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(todayUtc);
-    d.setUTCDate(todayUtc.getUTCDate() - i);
+    const d = new Date(endUtc);
+    d.setUTCDate(endUtc.getUTCDate() - i);
     const key = d.toISOString().slice(0, 10);
     const bucket = dailyMap[key];
     daily.push({

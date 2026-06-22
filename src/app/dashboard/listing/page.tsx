@@ -120,7 +120,6 @@ type LeadInsightsPayload = {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const DAYS_OPTIONS = [1, 7, 14, 30, 60, 90];
 const CHART_BLUE  = '#3b82f6';
 const CHART_DARK  = '#1b1b1b';
 const DIRECTORY_SITE =
@@ -373,12 +372,19 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   );
 }
 
+import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
+
+function getDefaultRange(): DateRange {
+  const preset = PRESETS.find(p => p.label === 'Last 30 days')!;
+  return { ...preset.getRange(), label: preset.label };
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ListingAnalyticsPage() {
   const [data, setData] = useState<AnalyticsPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [days, setDays] = useState(30);
+  const [dateRange, setDateRange] = useState<DateRange>(getDefaultRange);
   const [error, setError] = useState('');
 
   const [rt, setRt] = useState<RealtimePayload | null>(null);
@@ -408,11 +414,11 @@ export default function ListingAnalyticsPage() {
   const [qrWithUtm, setQrWithUtm] = useState(false);
   const [qrGenerating, setQrGenerating] = useState(false);
 
-  async function load(d: number) {
+  async function load(range: DateRange) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/listing-analytics?days=${d}`);
+      const res = await fetch(`/api/listing-analytics?from=${range.from}&to=${range.to}`);
       if (!res.ok) { setError('Could not load analytics'); return; }
       setData(await res.json() as AnalyticsPayload);
     } catch {
@@ -438,12 +444,12 @@ export default function ListingAnalyticsPage() {
     } catch { /* silent */ }
   }
 
-  const daysRef = useRef(days);
-  useEffect(() => { daysRef.current = days; }, [days]);
+  const dateRangeRef = useRef(dateRange);
+  useEffect(() => { dateRangeRef.current = dateRange; }, [dateRange]);
 
-  async function loadFunnel(d: number) {
+  async function loadFunnel(range: DateRange) {
     try {
-      const res = await fetch(`/api/listing-analytics/lead-funnel?days=${d}`, { cache: 'no-store' });
+      const res = await fetch(`/api/listing-analytics/lead-funnel?from=${range.from}&to=${range.to}`, { cache: 'no-store' });
       if (res.ok) setFunnel(await res.json() as LeadFunnelPayload);
     } catch { /* silent */ }
   }
@@ -502,16 +508,16 @@ export default function ListingAnalyticsPage() {
   }
 
   useEffect(() => { 
-    void load(days); 
-    void loadFunnel(days);
-  }, [days]);
+    void load(dateRange); 
+    void loadFunnel(dateRange);
+  }, [dateRange]);
 
   useEffect(() => {
     void loadRealtime();
     void loadInsights();
     rtInterval.current = setInterval(() => { 
       void loadRealtime(); 
-      void loadFunnel(daysRef.current); 
+      void loadFunnel(dateRangeRef.current); 
     }, 30000);
     return () => { if (rtInterval.current) clearInterval(rtInterval.current); };
   }, []);
@@ -538,15 +544,8 @@ export default function ListingAnalyticsPage() {
           <p className="mt-0.5 text-sm text-gray-500">How visitors find and engage with your listing</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden">
-            {DAYS_OPTIONS.map(opt => (
-              <button key={opt} onClick={() => setDays(opt)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${days === opt ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-                {opt}d
-              </button>
-            ))}
-          </div>
-          <button onClick={() => { void load(days); void loadFunnel(days); }} disabled={loading}
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <button onClick={() => { void load(dateRange); void loadFunnel(dateRange); }} disabled={loading}
             className="p-2 rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -783,7 +782,7 @@ export default function ListingAnalyticsPage() {
               show the continuous chart so the dashboard makes it obvious the
               historical events are there. */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
-            <SectionTitle>Daily views — last {days} days</SectionTitle>
+            <SectionTitle>Daily views — {dateRange.label}</SectionTitle>
             <p className="text-xs text-gray-400 mt-0.5 mb-5">Total page views vs unique visitors each day</p>
             {d.daily.length > 0 && (d.total_views > 0 || d.total_impressions > 0 || d.unique_sessions > 0) ? (
               <ResponsiveContainer width="100%" height={220}>

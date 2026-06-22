@@ -49,8 +49,23 @@ export async function GET(req: Request) {
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const url = new URL(req.url);
-  const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10), 365);
-  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const fromParam = url.searchParams.get('from');
+  const toParam = url.searchParams.get('to');
+  
+  let since = '';
+  let until = '';
+  let days = 30;
+
+  if (fromParam && toParam) {
+    const fromDate = new Date(fromParam + 'T00:00:00Z');
+    const toDate = new Date(toParam + 'T23:59:59.999Z');
+    since = fromDate.toISOString();
+    until = toDate.toISOString();
+    days = 1; // Just to trigger the gte/lte logic
+  } else {
+    days = Math.min(parseInt(url.searchParams.get('days') || '30', 10), 365);
+    since = new Date(Date.now() - days * 86400000).toISOString();
+  }
 
   let leadsQuery = supabaseAdmin
     .from('leads')
@@ -59,6 +74,9 @@ export async function GET(req: Request) {
     
   if (days > 0) {
     leadsQuery = leadsQuery.gte('created_at', since);
+  }
+  if (until) {
+    leadsQuery = leadsQuery.lte('created_at', until);
   }
 
   const [{ data: leads }, { data: stages }] = await Promise.all([
