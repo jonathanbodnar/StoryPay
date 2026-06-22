@@ -38,6 +38,11 @@ export interface StepConfig {
   // send_sms / send_email
   body?:        string;
   subject?:     string;
+  preview_text?: string;
+  image_url?:   string;
+  image_link?:  string;
+  button_text?: string;
+  button_link?: string;
   // delay (1-3 days only for booking system)
   delay_minutes?: number;
 }
@@ -129,6 +134,11 @@ export async function GET() {
           label:         (cfg.label as string | undefined) ?? labelForStep(s.step_type as string, cfg),
           body:          (cfg.body as string | undefined) ?? '',
           subject:       (cfg.subject as string | undefined) ?? '',
+          preview_text:  (cfg.preview_text as string | undefined) ?? '',
+          image_url:     (cfg.image_url as string | undefined) ?? '',
+          image_link:    (cfg.image_link as string | undefined) ?? '',
+          button_text:   (cfg.button_text as string | undefined) ?? '',
+          button_link:   (cfg.button_link as string | undefined) ?? '',
           delay_minutes: (cfg.delay_minutes as number | undefined) ?? 0,
         };
       });
@@ -275,6 +285,11 @@ export async function PATCH(req: NextRequest) {
             label:         s.label,
             body:          s.body          ?? '',
             subject:       s.subject       ?? '',
+            preview_text:  s.preview_text  ?? '',
+            image_url:     s.image_url     ?? '',
+            image_link:    s.image_link    ?? '',
+            button_text:   s.button_text   ?? '',
+            button_link:   s.button_link   ?? '',
             delay_minutes: s.delay_minutes ?? 0,
             mode:          s.step_type === 'send_email' ? 'quick' : undefined,
           },

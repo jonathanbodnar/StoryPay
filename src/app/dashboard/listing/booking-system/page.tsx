@@ -5,10 +5,11 @@ import {
   Zap, Mail, MessageSquare, Bot, ChevronDown, ChevronUp,
   Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, GripVertical,
   Clock, Send, Users, ExternalLink, SkipForward, X as XIcon,
-  RefreshCw,
+  RefreshCw, Image as ImageIcon, Link as LinkIcon,
 } from 'lucide-react';
 import type { BookingSystemConfig, StepConfig } from '@/app/api/listing/booking-system/route';
 import type { StepLeadsPayload, StepLeadInfo } from '@/app/api/listing/booking-system/step-leads/route';
+import RichTextEditor from '@/components/RichTextEditor';
 
 // ─── Shared primitives ────────────────────────────────────────────────────
 
@@ -235,7 +236,7 @@ function MessageBlock({
       </button>
 
       {expanded && (
-        <div className="border-t border-gray-100 px-3 pb-3 pt-2.5 space-y-2">
+        <div className="border-t border-gray-100 px-3 pb-3 pt-2.5 space-y-3">
           <InlineInput
             value={step.label}
             onChange={(v) => onChange({ ...step, label: v })}
@@ -243,21 +244,80 @@ function MessageBlock({
             className="w-full"
           />
           {!isSms && (
-            <InlineInput
-              value={step.subject ?? ''}
-              onChange={(v) => onChange({ ...step, subject: v })}
-              placeholder="Subject line"
-              className="w-full"
-            />
+            <div className="space-y-2">
+              <InlineInput
+                value={step.subject ?? ''}
+                onChange={(v) => onChange({ ...step, subject: v })}
+                placeholder="Subject line"
+                className="w-full font-medium"
+              />
+              <InlineInput
+                value={step.preview_text ?? ''}
+                onChange={(v) => onChange({ ...step, preview_text: v })}
+                placeholder="Preview text (optional preheader)"
+                className="w-full text-gray-500"
+              />
+            </div>
           )}
-          <TextArea
-            value={step.body ?? ''}
-            onChange={(v) => onChange({ ...step, body: v })}
-            rows={4}
-            placeholder={isSms
-              ? 'SMS body… {{first_name}}, {{venue_name}}'
-              : 'Email body… {{first_name}}, {{venue_name}}'}
-          />
+          
+          {isSms ? (
+            <TextArea
+              value={step.body ?? ''}
+              onChange={(v) => onChange({ ...step, body: v })}
+              rows={4}
+              placeholder={'SMS body… {{first_name}}, {{venue_name}}'}
+            />
+          ) : (
+            <div className="space-y-3 border border-gray-200 rounded-lg p-3 bg-gray-50/50">
+              <div className="space-y-2">
+                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5"><ImageIcon size={12}/> Image Block (Optional)</label>
+                <div className="flex gap-2">
+                  <InlineInput
+                    value={step.image_url ?? ''}
+                    onChange={(v) => onChange({ ...step, image_url: v })}
+                    placeholder="Image URL (https://...)"
+                    className="flex-1"
+                  />
+                  <InlineInput
+                    value={step.image_link ?? ''}
+                    onChange={(v) => onChange({ ...step, image_link: v })}
+                    placeholder="Link URL (when clicked)"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Email Body</label>
+                <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+                  <RichTextEditor
+                    content={step.body ?? ''}
+                    onChange={(v: string) => onChange({ ...step, body: v })}
+                    placeholder="Email body… {{first_name}}, {{venue_name}}"
+                    minHeight={120}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5"><LinkIcon size={12}/> Button Block (Optional)</label>
+                <div className="flex gap-2">
+                  <InlineInput
+                    value={step.button_text ?? ''}
+                    onChange={(v) => onChange({ ...step, button_text: v })}
+                    placeholder="Button Text (e.g. Book a Tour)"
+                    className="flex-1"
+                  />
+                  <InlineInput
+                    value={step.button_link ?? ''}
+                    onChange={(v) => onChange({ ...step, button_link: v })}
+                    placeholder="Button Link (https://...)"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
