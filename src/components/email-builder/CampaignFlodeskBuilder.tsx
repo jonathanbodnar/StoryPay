@@ -4428,7 +4428,7 @@ export function CampaignFlodeskBuilder({
           right: 0,
           zIndex: 30,
           background: '#ffffff',
-          boxShadow: '0 1px 18px rgba(0,0,0,0.05)',
+          borderBottom: '1px solid #e5e7eb',
           transition: 'left 200ms ease-out',
         }}
       >
