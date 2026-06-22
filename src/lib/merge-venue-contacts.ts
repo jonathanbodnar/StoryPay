@@ -134,8 +134,9 @@ export async function mergeVenueContacts(
       .eq('venue_id', venueId),
     supabaseAdmin
       .from('venue_customers')
-      .select('id, customer_email, ghl_contact_id, lunarpay_customer_id, stage_id, pipeline_stage')
-      .eq('venue_id', venueId),
+      .select('id, customer_email, first_name, last_name, phone, ghl_contact_id, lunarpay_customer_id, stage_id, pipeline_stage')
+      .eq('venue_id', venueId)
+      .order('created_at', { ascending: false }),
   ]);
 
   const stageById = new Map<string, { name: string; color: string }>();
@@ -189,147 +190,126 @@ export async function mergeVenueContacts(
     }
   }
 
-  const merged: MergedContact[] = [];
-  const seenEmails = new Set<string>();
-
-  if (venue.ghl_connected && ghlToken && venue.ghl_location_id) {
-    try {
-      const ghlResult = await ghlRequest(
-        `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${GHL_LIVE_FETCH_LIMIT}`,
-        ghlToken,
-        { locationId: venue.ghl_location_id },
-      );
-      for (const c of ghlResult.contacts || []) {
-        const email = ((c.email as string) || '').toLowerCase();
-        const id = c.id as string;
-        merged.push({
-          id,
-          name: [c.firstName, c.lastName].filter(Boolean).join(' ') || (c.email as string) || 'Unknown',
-          firstName: (c.firstName as string) || '',
-          lastName: (c.lastName as string) || '',
-          email: (c.email as string) || '',
-          phone: (c.phone as string) || '',
-          source: 'ghl',
-        });
-        if (email) seenEmails.add(email);
-      }
-    } catch (err) {
-      console.error('[mergeVenueContacts] GHL fetch error:', err);
-    }
-  }
-
-  if (venue.lunarpay_secret_key) {
-    try {
-      const lpResult = await listCustomers(venue.lunarpay_secret_key, search, page, limit);
-      const raw = lpResult.data || lpResult;
-      const list = Array.isArray(raw) ? raw : [];
-      for (const c of list) {
-        const email = ((c.email as string) || '').toLowerCase();
-        if (email && seenEmails.has(email)) continue;
-        const firstName = (c.firstName as string) || '';
-        const lastName = (c.lastName as string) || '';
-        merged.push({
-          id: c.id as string | number,
-          name:
-            (c.name as string) ||
-            [firstName, lastName].filter(Boolean).join(' ') ||
-            (c.email as string) ||
-            'Unknown',
-          firstName,
-          lastName,
-          email: (c.email as string) || '',
-          phone: (c.phone as string) || '',
-          source: 'lunarpay',
-        });
-        if (email) seenEmails.add(email);
-      }
-    } catch (err) {
-      console.error('[mergeVenueContacts] LunarPay fetch error:', err);
-    }
-  }
-
-  try {
-    const { data: rows, error } = await supabaseAdmin
-      .from('venue_customers')
-      .select('id, customer_email, first_name, last_name, phone, ghl_contact_id, lunarpay_customer_id')
-      .eq('venue_id', venueId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('[mergeVenueContacts] venue_customers fetch error:', error);
-    } else {
-      for (const c of rows ?? []) {
-        const email = (c.customer_email || '').toLowerCase();
-        if (email && seenEmails.has(email)) continue;
-        merged.push({
-          id: c.lunarpay_customer_id || c.ghl_contact_id || c.id,
-          name:
-            [c.first_name, c.last_name].filter(Boolean).join(' ') || c.customer_email || 'Unknown',
-          firstName: c.first_name || '',
-          lastName: c.last_name || '',
-          email: c.customer_email || '',
-          phone: c.phone || '',
-          source: 'storypay',
-        });
-        if (email) seenEmails.add(email);
-      }
-    }
-  } catch (err) {
-    console.error('[mergeVenueContacts] venue_customers fetch error:', err);
-  }
-
-  // Also pull directly from the `leads` table for any contacts that were
-  // created before the venue_customers mirror write was added. This ensures
-  // leads page contacts always appear on the contacts page too.
-  try {
-    const { data: leadRows, error: leadErr } = await supabaseAdmin
+  const [ghlResult, lpResult, { data: leadRows, error: leadErr }] = await Promise.all([
+    (venue.ghl_connected && ghlToken && venue.ghl_location_id)
+      ? ghlRequest(
+          `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${GHL_LIVE_FETCH_LIMIT}`,
+          ghlToken,
+          { locationId: venue.ghl_location_id },
+        ).catch(err => {
+          console.error('[mergeVenueContacts] GHL fetch error:', err);
+          return { contacts: [] };
+        })
+      : Promise.resolve({ contacts: [] }),
+    venue.lunarpay_secret_key
+      ? listCustomers(venue.lunarpay_secret_key, search, page, limit).catch(err => {
+          console.error('[mergeVenueContacts] LunarPay fetch error:', err);
+          return { data: [] };
+        })
+      : Promise.resolve({ data: [] }),
+    supabaseAdmin
       .from('leads')
       .select('id, first_name, last_name, name, email, phone, stage_id, pipeline_id, status, created_at')
       .eq('venue_id', venueId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+  ]);
 
-    if (leadErr) {
-      console.error('[mergeVenueContacts] leads fetch error:', leadErr);
-    } else {
-      for (const l of leadRows ?? []) {
-        const email = ((l.email as string) || '').toLowerCase();
-        if (email && seenEmails.has(email)) continue;
-        const firstName = (l.first_name as string) || '';
-        const lastName  = (l.last_name  as string) || '';
-        const fullName  = (l.name as string) || [firstName, lastName].filter(Boolean).join(' ') || email || 'Unknown';
-        merged.push({
-          id: l.id as string,
-          name: fullName,
-          firstName,
-          lastName,
-          email: (l.email as string) || '',
-          phone: (l.phone as string) || '',
-          source: 'storypay',
+  const merged: MergedContact[] = [];
+  const seenEmails = new Set<string>();
+
+  for (const c of ghlResult?.contacts || []) {
+    const email = ((c.email as string) || '').toLowerCase();
+    const id = c.id as string;
+    merged.push({
+      id,
+      name: [c.firstName, c.lastName].filter(Boolean).join(' ') || (c.email as string) || 'Unknown',
+      firstName: (c.firstName as string) || '',
+      lastName: (c.lastName as string) || '',
+      email: (c.email as string) || '',
+      phone: (c.phone as string) || '',
+      source: 'ghl',
+    });
+    if (email) seenEmails.add(email);
+  }
+
+  const lpRaw = lpResult?.data || lpResult;
+  const lpList = Array.isArray(lpRaw) ? lpRaw : [];
+  for (const c of lpList) {
+    const email = ((c.email as string) || '').toLowerCase();
+    if (email && seenEmails.has(email)) continue;
+    const firstName = (c.firstName as string) || '';
+    const lastName = (c.lastName as string) || '';
+    merged.push({
+      id: c.id as string | number,
+      name:
+        (c.name as string) ||
+        [firstName, lastName].filter(Boolean).join(' ') ||
+        (c.email as string) ||
+        'Unknown',
+      firstName,
+      lastName,
+      email: (c.email as string) || '',
+      phone: (c.phone as string) || '',
+      source: 'lunarpay',
+    });
+    if (email) seenEmails.add(email);
+  }
+
+  for (const c of vcFunnelRows ?? []) {
+    const email = (c.customer_email || '').toLowerCase();
+    if (email && seenEmails.has(email)) continue;
+    merged.push({
+      id: c.lunarpay_customer_id || c.ghl_contact_id || c.id,
+      name:
+        [c.first_name, c.last_name].filter(Boolean).join(' ') || c.customer_email || 'Unknown',
+      firstName: c.first_name || '',
+      lastName: c.last_name || '',
+      email: c.customer_email || '',
+      phone: c.phone || '',
+      source: 'storypay',
+    });
+    if (email) seenEmails.add(email);
+  }
+
+  if (leadErr) {
+    console.error('[mergeVenueContacts] leads fetch error:', leadErr);
+  } else {
+    for (const l of leadRows ?? []) {
+      const email = ((l.email as string) || '').toLowerCase();
+      if (email && seenEmails.has(email)) continue;
+      const firstName = (l.first_name as string) || '';
+      const lastName  = (l.last_name  as string) || '';
+      const fullName  = (l.name as string) || [firstName, lastName].filter(Boolean).join(' ') || email || 'Unknown';
+      merged.push({
+        id: l.id as string,
+        name: fullName,
+        firstName,
+        lastName,
+        email: (l.email as string) || '',
+        phone: (l.phone as string) || '',
+        source: 'storypay',
+      });
+      if (email) seenEmails.add(email);
+      // Back-fill venue_customers so future loads are fast and the mirror is consistent
+      if (email) {
+        supabaseAdmin.from('venue_customers').upsert(
+          {
+            venue_id:       venueId,
+            customer_email: email,
+            first_name:     firstName || null,
+            last_name:      lastName  || null,
+            phone:          (l.phone as string) || null,
+            pipeline_id:    (l.pipeline_id as string) || null,
+            stage_id:       (l.stage_id   as string) || null,
+            pipeline_stage: (l.status     as string) || null,
+            updated_at:     new Date().toISOString(),
+          },
+          { onConflict: 'venue_id,customer_email' },
+        ).then(({ error: e }) => {
+          if (e) console.warn('[mergeVenueContacts] backfill upsert warn:', e.message);
         });
-        if (email) seenEmails.add(email);
-        // Back-fill venue_customers so future loads are fast and the mirror is consistent
-        if (email) {
-          supabaseAdmin.from('venue_customers').upsert(
-            {
-              venue_id:       venueId,
-              customer_email: email,
-              first_name:     firstName || null,
-              last_name:      lastName  || null,
-              phone:          (l.phone as string) || null,
-              pipeline_id:    (l.pipeline_id as string) || null,
-              stage_id:       (l.stage_id   as string) || null,
-              pipeline_stage: (l.status     as string) || null,
-              updated_at:     new Date().toISOString(),
-            },
-            { onConflict: 'venue_id,customer_email' },
-          ).then(({ error: e }) => {
-            if (e) console.warn('[mergeVenueContacts] backfill upsert warn:', e.message);
-          });
-        }
       }
     }
-  } catch (err) {
-    console.error('[mergeVenueContacts] leads fetch error:', err);
   }
 
   attachFunnelMetadata(merged, funnelLookup);
