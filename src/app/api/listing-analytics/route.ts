@@ -169,7 +169,7 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
   // Render oldest → newest so the chart x-axis flows left-to-right naturally.
   const daily: { date: string; views: number; unique_sessions: number; impressions: number }[] = [];
   const endUtc = new Date(until);
-  for (let i = days; i >= 0; i--) {
+  for (let i = days - 1; i >= 0; i--) {
     const d = new Date(endUtc);
     d.setUTCDate(endUtc.getUTCDate() - i);
     const key = d.toISOString().slice(0, 10);
