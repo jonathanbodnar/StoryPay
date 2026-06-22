@@ -92,10 +92,10 @@ export async function GET(req: Request) {
   for (const r of rows) {
     const v = r.opportunity_value;
     if (v == null)         { valueBuckets['Not set']++;   continue; }
-    if (v < 100000)        { valueBuckets['<$1k']++;      continue; }
-    if (v < 500000)        { valueBuckets['$1k–$5k']++;   continue; }
-    if (v < 1000000)       { valueBuckets['$5k–$10k']++;  continue; }
-    if (v < 2000000)       { valueBuckets['$10k–$20k']++; continue; }
+    if (v < 1000)        { valueBuckets['<$1k']++;      continue; }
+    if (v < 5000)        { valueBuckets['$1k–$5k']++;   continue; }
+    if (v < 10000)       { valueBuckets['$5k–$10k']++;  continue; }
+    if (v < 20000)       { valueBuckets['$10k–$20k']++; continue; }
     valueBuckets['$20k+']++;
   }
 
