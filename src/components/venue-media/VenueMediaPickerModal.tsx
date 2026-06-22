@@ -3,6 +3,7 @@
 import { FileText, Loader2, Upload, X } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useVenueMediaLibrary, type VenueMediaAssetRow } from './useVenueMediaLibrary';
+import { PdfThumbnail } from './PdfThumbnail';
 
 const IMAGE_ACCEPT =
   'image/jpeg,image/jpg,image/png,image/webp,image/avif,image/gif,.jpg,.jpeg,.png,.webp,.avif,.gif';
@@ -51,6 +52,7 @@ export function VenueMediaPickerModal({
   onSelect,
   title = 'Media library',
   mode = 'image',
+  restrictSelection,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -59,6 +61,8 @@ export function VenueMediaPickerModal({
   title?: string;
   /** `image` keeps the original image-only flow. `file` shows non-image docs. `all` shows everything. */
   mode?: VenueMediaPickerMode;
+  /** If set, forces items outside this type to be unselectable (greyed out) instead of hiding them. */
+  restrictSelection?: 'image' | 'file' | 'all';
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const { assets, loading, uploading, error, uploadFiles, reload } = useVenueMediaLibrary();
@@ -94,6 +98,14 @@ export function VenueMediaPickerModal({
     if (activeTab === 'file') return assets.filter((a) => !isImageAsset(a));
     return assets;
   }, [assets, activeTab]);
+
+  const actualRestrict = restrictSelection ?? mode;
+
+  const isSelectable = useCallback((a: VenueMediaAssetRow) => {
+    if (actualRestrict === 'image') return isImageAsset(a);
+    if (actualRestrict === 'file') return !isImageAsset(a);
+    return true;
+  }, [actualRestrict]);
 
   const acceptString =
     mode === 'file' || activeTab === 'file'
@@ -190,29 +202,39 @@ export function VenueMediaPickerModal({
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {filtered.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => handlePick(a)}
-                  className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50 text-left transition hover:border-gray-400 hover:ring-2 hover:ring-gray-900/10"
-                >
-                  {isImageAsset(a) ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={a.public_url} alt="" className="h-28 w-full object-cover" />
-                  ) : (
-                    <div className="flex h-28 w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-gray-100 to-gray-50 text-gray-500">
-                      <FileText className="h-7 w-7" />
-                      <span className="text-[11px] font-semibold uppercase tracking-wide">
-                        {fileLabel(a.content_type)}
-                      </span>
-                    </div>
-                  )}
-                  <span className="block truncate px-2 py-1.5 text-[11px] text-gray-600">
-                    {a.display_name ?? a.file_name}
-                  </span>
-                </button>
-              ))}
+              {filtered.map((a) => {
+                const selectable = isSelectable(a);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    disabled={!selectable}
+                    onClick={() => selectable && handlePick(a)}
+                    className={`group relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50 text-left transition ${
+                      selectable
+                        ? 'hover:border-gray-400 hover:ring-2 hover:ring-gray-900/10'
+                        : 'cursor-not-allowed opacity-40 grayscale-[0.5]'
+                    }`}
+                  >
+                    {isImageAsset(a) ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={a.public_url} alt="" className="h-28 w-full object-cover" />
+                    ) : a.content_type === 'application/pdf' ? (
+                      <PdfThumbnail url={a.public_url} />
+                    ) : (
+                      <div className="flex h-28 w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-gray-100 to-gray-50 text-gray-500">
+                        <FileText className="h-7 w-7" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wide">
+                          {fileLabel(a.content_type)}
+                        </span>
+                      </div>
+                    )}
+                    <span className="block truncate px-2 py-1.5 text-[11px] text-gray-600">
+                      {a.display_name ?? a.file_name}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

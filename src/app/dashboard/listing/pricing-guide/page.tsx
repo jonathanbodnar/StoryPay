@@ -1343,7 +1343,8 @@ export default function PricingGuidePage() {
       <VenueMediaPickerModal
         open={mediaPickerOpen}
         onOpenChange={setMediaPickerOpen}
-        mode={mediaPickerTarget?.kind === 'custom_pdf' ? 'file' : 'image'}
+        mode={mediaPickerTarget?.kind === 'custom_pdf' ? 'all' : 'image'}
+        restrictSelection={mediaPickerTarget?.kind === 'custom_pdf' ? 'file' : 'image'}
         title={mediaPickerTarget?.kind === 'custom_pdf' ? 'Select a PDF' : 'Select a photo'}
         onSelect={(url) => handleMediaSelect(url)}
       />
