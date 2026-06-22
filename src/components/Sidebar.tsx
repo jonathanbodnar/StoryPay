@@ -509,7 +509,7 @@ export default function Sidebar({
     );
   }
 
-  const renderMenuItems = (items: NavItem[]) => {
+  const renderMenuItems = (items: NavItem[], isMobile: boolean = false, rail: boolean = false, onCloseMobile?: () => void) => {
     return items.filter((item) => {
       // Role-based filters still hide entries entirely — admin-only
       // pages are not "locked", they simply don't apply to members.
@@ -693,7 +693,7 @@ export default function Sidebar({
         </div>
         ) : null}
 
-        {renderMenuItems(topMenuItems)}
+        {renderMenuItems(topMenuItems, isMobile, rail, onCloseMobile)}
 
         <div className="my-2 border-t border-gray-200" />
 
@@ -751,7 +751,7 @@ export default function Sidebar({
         </div>
         ) : null}
 
-        {renderMenuItems(middleMenuItems)}
+        {renderMenuItems(middleMenuItems, isMobile, rail, onCloseMobile)}
 
         {isAdmin && (isMobile ? mobileMarketing : marketingFiltered).length > 0 ? (
           <div>
@@ -796,7 +796,7 @@ export default function Sidebar({
           </div>
         ) : null}
 
-        {renderMenuItems(bottomMenuItems)}
+        {renderMenuItems(bottomMenuItems, isMobile, rail, onCloseMobile)}
 
         {isAdmin && (isMobile ? mobileSettings : settingsFiltered).length > 0 ? (
           <div>
