@@ -613,13 +613,15 @@ function SequenceEditor({
         >
           <Plus size={13} /> SMS
         </button>
-        <button
-          type="button"
-          onClick={() => addStep('send_email')}
-          className="flex items-center gap-1.5 rounded-xl border border-dashed border-blue-200 px-3 py-2 text-[12px] font-medium text-blue-500 hover:bg-blue-50 transition-colors"
-        >
-          <Plus size={13} /> Email
-        </button>
+        {steps.filter(s => s.step_type === 'send_email').length < 5 && (
+          <button
+            type="button"
+            onClick={() => addStep('send_email')}
+            className="flex items-center gap-1.5 rounded-xl border border-dashed border-blue-200 px-3 py-2 text-[12px] font-medium text-blue-500 hover:bg-blue-50 transition-colors"
+          >
+            <Plus size={13} /> Email
+          </button>
+        )}
         <button
           type="button"
           onClick={() => addStep('delay')}
