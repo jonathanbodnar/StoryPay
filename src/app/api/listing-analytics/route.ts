@@ -60,21 +60,35 @@ export async function GET(req: Request) {
     priorFrom = new Date(now - days * 2 * 86400000).toISOString();
   }
 
-  // Fetch current + prior period in one wide query then split
-  const { data: allEvents, error } = await supabaseAdmin
-    .from('listing_events')
-    .select('session_id, event_type, event_data, referrer, utm_source, device_type, country, region, city, created_at')
-    .eq('venue_id', venueId)
-    .gte('created_at', priorFrom)
-    .lte('created_at', until)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    if (/listing_events/i.test(error.message)) return NextResponse.json(emptyPayload(days));
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // Fetch current + prior period then split. PostgREST caps a single request
+  // at 1000 rows, so we paginate in 1000-row pages to pull EVERY event in the
+  // window — otherwise the oldest 1000 events come back and recent days
+  // (including today) get silently truncated, making the chart look empty.
+  const PAGE = 1000;
+  const MAX_PAGES = 60; // safety cap → up to 60k events
+  const allEvents: EventRow[] = [];
+  let fetchError: { message: string } | null = null;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { data, error } = await supabaseAdmin
+      .from('listing_events')
+      .select('session_id, event_type, event_data, referrer, utm_source, device_type, country, region, city, created_at')
+      .eq('venue_id', venueId)
+      .gte('created_at', priorFrom)
+      .lte('created_at', until)
+      .order('created_at', { ascending: true })
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+    if (error) { fetchError = error; break; }
+    const batch = (data ?? []) as EventRow[];
+    allEvents.push(...batch);
+    if (batch.length < PAGE) break; // last page reached
   }
 
-  const rows = (allEvents ?? []) as EventRow[];
+  if (fetchError) {
+    if (/listing_events/i.test(fetchError.message)) return NextResponse.json(emptyPayload(days));
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
+
+  const rows = allEvents;
   const current = rows.filter(r => r.created_at >= since);
   const prior    = rows.filter(r => r.created_at < since);
 
