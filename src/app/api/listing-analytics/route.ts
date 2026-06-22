@@ -79,11 +79,16 @@ export async function GET(req: Request) {
   const prior    = rows.filter(r => r.created_at < since);
 
   // Also fetch leads created in period (for funnel bottom)
-  const { data: leads } = await supabaseAdmin
+  let leadsQuery = supabaseAdmin
     .from('leads')
     .select('id, created_at, source')
     .eq('venue_id', venueId)
     .gte('created_at', since);
+  if (until) {
+    leadsQuery = leadsQuery.lte('created_at', until);
+  }
+  const { data: leads } = await leadsQuery;
+  
   const { data: priorLeads } = await supabaseAdmin
     .from('leads')
     .select('id')
@@ -237,8 +242,8 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
 
   // ── DOW heatmap ───────────────────────────────────────────────────────────
   const dowCounts = Array(7).fill(0) as number[];
-  for (const row of rows.filter(r => r.event_type === 'contact_form_submit')) {
-    dowCounts[new Date(row.created_at).getDay()]++;
+  for (const lead of leads) {
+    dowCounts[new Date(lead.created_at).getDay()]++;
   }
 
   // ── Photos ────────────────────────────────────────────────────────────────
