@@ -39,13 +39,17 @@ export async function GET(req: Request) {
   let days = 30;
 
   if (fromParam && toParam) {
+    // Treat the input dates as local dates (e.g. 2026-05-24 means start of that day in local time)
+    // but since we don't know the user's timezone here, we'll just use UTC for consistency
+    // with how the chart renders.
     const fromDate = new Date(fromParam + 'T00:00:00Z');
     const toDate = new Date(toParam + 'T23:59:59.999Z');
     since = fromDate.toISOString();
     until = toDate.toISOString();
     
+    // Calculate days inclusive of start and end
     const diffTime = Math.abs(toDate.getTime() - fromDate.getTime());
-    days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    days = Math.round(diffTime / (1000 * 60 * 60 * 24));
     
     priorFrom = new Date(fromDate.getTime() - diffTime).toISOString();
   } else {
@@ -156,13 +160,11 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
     if (row.event_type === 'listing_impression') dailyMap[day].impressions++;
   }
 
-  // Build the full date axis (today, today-1, ..., today-(days-1)) in UTC
-  // so the keys match `created_at.slice(0,10)` (which is also UTC). Render
-  // oldest → newest so the chart x-axis flows left-to-right naturally.
+  // Build the full date axis in UTC so the keys match `created_at.slice(0,10)`
+  // Render oldest → newest so the chart x-axis flows left-to-right naturally.
   const daily: { date: string; views: number; unique_sessions: number; impressions: number }[] = [];
   const endUtc = new Date(until);
-  endUtc.setUTCHours(0, 0, 0, 0);
-  for (let i = days - 1; i >= 0; i--) {
+  for (let i = days; i >= 0; i--) {
     const d = new Date(endUtc);
     d.setUTCDate(endUtc.getUTCDate() - i);
     const key = d.toISOString().slice(0, 10);
