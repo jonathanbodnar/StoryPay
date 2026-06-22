@@ -670,8 +670,13 @@ export default function Sidebar({
               <Link
                 href="/dashboard/listing"
                 onClick={(e) => {
-                  if (!listingOpen) setOpenGroup('listing');
-                  if (isMobile) onCloseMobile?.();
+                  if (listingOpen) {
+                    e.preventDefault();
+                    setOpenGroup(null);
+                  } else {
+                    setOpenGroup('listing');
+                  }
+                  if (isMobile && !listingOpen) onCloseMobile?.();
                 }}
                 className={groupBtn(isOnListing && listingOpen, false)}
                 style={groupBtnStyle(isOnListing && listingOpen)}
