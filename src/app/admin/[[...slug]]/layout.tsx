@@ -1667,7 +1667,9 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
             {drillKey && (() => {
               const q = drillSearch.toLowerCase().trim();
 
-              const filteredVenues = drillKey === 'venues' && drillData
+              const isTrialKey = drillKey.startsWith('trial_');
+
+              const filteredVenues = (drillKey === 'venues' || isTrialKey) && drillData
                 ? (drillData as unknown as Venue[]).filter(v =>
                     !q ||
                     v.name?.toLowerCase().includes(q) ||
@@ -1702,29 +1704,46 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
                   )
                 : [];
 
-              const resultCount = drillKey === 'venues' ? filteredVenues.length
+              const resultCount = (drillKey === 'venues' || isTrialKey) ? filteredVenues.length
                 : drillKey === 'customers' ? filteredCustomers.length
                 : drillKey === 'waitlist' ? filteredWaitlist.length
                 : filteredPayments.length;
 
-              const showSearch = drillKey === 'venues' || drillKey === 'customers' || drillKey === 'waitlist';
+              const showSearch = drillKey === 'venues' || drillKey === 'customers' || drillKey === 'waitlist' || isTrialKey;
+
+              const getModalTitle = () => {
+                switch (drillKey) {
+                  case 'venues': return 'Active Venues';
+                  case 'waitlist': return 'Waitlist Signups';
+                  case 'customers': return 'Contacts';
+                  case 'failed': return 'Failed Payments';
+                  case 'pending': return 'Pending Payments';
+                  case 'trial_total': return 'Total Signups';
+                  case 'trial_active': return 'Active Trial Venues';
+                  case 'trial_expired': return 'Expired Trial Venues';
+                  case 'trial_never_logged_in': return 'Never Logged In Venues';
+                  case 'trial_upgraded': return 'Upgraded Venues';
+                  case 'trial_downgraded': return 'Downgraded Venues';
+                  default: return 'Details';
+                }
+              };
 
               return (
                 <DrillModal
-                  title={drillKey === 'venues' ? 'Active Venues' : drillKey === 'waitlist' ? 'Waitlist Signups' : drillKey === 'customers' ? 'Contacts' : drillKey === 'failed' ? 'Failed Payments' : 'Pending Payments'}
+                  title={getModalTitle()}
                   count={drillLoading ? undefined : resultCount}
                   onClose={() => { setDrillKey(null); setDrillData(null); setDrillSearch(''); }}
                   searchQuery={showSearch ? drillSearch : undefined}
                   onSearchChange={showSearch ? setDrillSearch : undefined}
                   searchPlaceholder={
-                    drillKey === 'venues' ? 'Search by name, email, or location ID...' :
+                    (drillKey === 'venues' || isTrialKey) ? 'Search by name, email, or location ID...' :
                     drillKey === 'customers' ? 'Search by name, email, or phone...' :
                     'Search by name, email, phone, or venue...'
                   }
                 >
                   {drillLoading ? (
                     <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
-                  ) : drillKey === 'venues' ? (
+                  ) : (drillKey === 'venues' || isTrialKey) ? (
                     filteredVenues.length === 0 ? <p className="text-center text-gray-400 py-8 text-sm">{q ? 'No venues match your search' : 'No venues found'}</p> : (
                       <div className="space-y-2">
                         {filteredVenues.map(v => (
