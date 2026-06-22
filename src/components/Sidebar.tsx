@@ -558,10 +558,10 @@ export default function Sidebar({
         {(isMobile ? mobileListing : listingFiltered).length > 0 ? (
         <div>
           {rail ? (
-            <button
-              type="button"
-              title="Bride Booking System"
-              onClick={(e) => openFlyout('listing', e.currentTarget)}
+              <button
+                type="button"
+                title="Bride Booking System™"
+                onClick={(e) => openFlyout('listing', e.currentTarget)}
               className={groupBtn(isOnListing || flyout === 'listing', true)}
               style={groupBtnStyle(isOnListing || flyout === 'listing')}
             >
@@ -577,7 +577,7 @@ export default function Sidebar({
               >
                 <div className="flex items-center gap-3">
                   <Store size={16} />
-                  <span>Bride Booking System</span>
+                  <span>Bride Booking System™</span>
                 </div>
                 <ChevronDown
                   size={13}
