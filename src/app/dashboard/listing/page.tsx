@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, Fragment } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 
@@ -18,7 +18,7 @@ import {
   ArrowUpRight, ArrowDownRight, Minus, Search,
   Radio, DollarSign, CalendarDays, UserCheck,
   Link2, Mail, Bell, Copy, Download, Check, X,
-  Send, Zap, TrendingDown,
+  Send, Zap, TrendingDown, Inbox, MessageCircle, CalendarCheck, Heart,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -98,6 +98,12 @@ type RealtimePayload = {
     live: boolean;
   }[];
   _migration_pending?: boolean;
+};
+
+type LeadFunnelStep = { key: string; label: string; count: number };
+type LeadFunnelPayload = {
+  steps: LeadFunnelStep[];
+  conversions: (number | null)[];
 };
 
 type LeadInsightsPayload = {
@@ -237,6 +243,93 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="text-sm font-semibold text-gray-900">{children}</h2>;
 }
 
+// ── Booking funnel (top-of-dashboard) ─────────────────────────────────────────
+const FUNNEL_ICONS = [Inbox, MessageCircle, CalendarCheck, Heart];
+const FUNNEL_FALLBACK: LeadFunnelStep[] = [
+  { key: 'leads', label: 'Leads', count: 0 },
+  { key: 'conversations', label: 'Conversations Started', count: 0 },
+  { key: 'tours', label: 'Booked Tours', count: 0 },
+  { key: 'weddings', label: 'Booked Weddings', count: 0 },
+];
+
+function FunnelMetrics({ funnel }: { funnel: LeadFunnelPayload | null }) {
+  const steps = funnel?.steps?.length ? funnel.steps : FUNNEL_FALLBACK;
+  const conversions = funnel?.conversions ?? [null, null, null];
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900">Booking funnel</h2>
+          <p className="text-xs text-gray-400 mt-0.5">How leads progress from inquiry to a booked wedding</p>
+        </div>
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          Live
+        </span>
+      </div>
+
+      {/* Desktop: horizontal funnel with dashed connectors + conversion % */}
+      <div className="hidden md:flex items-stretch">
+        {steps.map((step, i) => {
+          const Icon = FUNNEL_ICONS[i] ?? Inbox;
+          return (
+            <Fragment key={step.key}>
+              <div className="flex-1 min-w-0">
+                <div className="h-full rounded-2xl border border-gray-200 bg-gray-50/60 px-4 py-5 text-center">
+                  <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gray-900">
+                    <Icon size={18} className="text-white" />
+                  </div>
+                  <p className="text-3xl font-bold text-gray-900 tabular-nums">{step.count.toLocaleString()}</p>
+                  <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">{step.label}</p>
+                </div>
+              </div>
+              {i < steps.length - 1 && (
+                <div className="flex w-14 lg:w-24 shrink-0 flex-col items-center justify-center">
+                  <div className="w-full border-t-2 border-dashed border-gray-300" />
+                  <span className="mt-2 text-xs font-bold text-gray-800 tabular-nums">
+                    {conversions[i] != null ? `${conversions[i]}%` : '—'}
+                  </span>
+                  <span className="text-[9px] font-medium uppercase tracking-wider text-gray-400">conversion</span>
+                </div>
+              )}
+            </Fragment>
+          );
+        })}
+      </div>
+
+      {/* Mobile: vertical stack with dashed connectors */}
+      <div className="md:hidden space-y-1">
+        {steps.map((step, i) => {
+          const Icon = FUNNEL_ICONS[i] ?? Inbox;
+          return (
+            <div key={step.key}>
+              <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50/60 px-4 py-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-900 shrink-0">
+                  <Icon size={16} className="text-white" />
+                </div>
+                <p className="flex-1 min-w-0 text-[11px] font-semibold uppercase tracking-wider text-gray-500">{step.label}</p>
+                <p className="text-2xl font-bold text-gray-900 tabular-nums">{step.count.toLocaleString()}</p>
+              </div>
+              {i < steps.length - 1 && (
+                <div className="flex items-center gap-2 py-1 pl-9">
+                  <div className="h-5 border-l-2 border-dashed border-gray-300" />
+                  <span className="text-[11px] font-bold text-gray-600">
+                    {conversions[i] != null ? `${conversions[i]}% conversion` : '—'}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({ message }: { message: string }) {
   return <p className="py-6 text-center text-xs text-gray-400">{message}</p>;
 }
@@ -293,6 +386,7 @@ export default function ListingAnalyticsPage() {
   const rtInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [insights, setInsights] = useState<LeadInsightsPayload | null>(null);
+  const [funnel, setFunnel] = useState<LeadFunnelPayload | null>(null);
 
   // ── Digest state ──────────────────────────────────────────────────────────
   const [digestSending, setDigestSending] = useState(false);
@@ -341,6 +435,13 @@ export default function ListingAnalyticsPage() {
     try {
       const res = await fetch('/api/listing-analytics/lead-insights?days=365');
       if (res.ok) setInsights(await res.json() as LeadInsightsPayload);
+    } catch { /* silent */ }
+  }
+
+  async function loadFunnel() {
+    try {
+      const res = await fetch('/api/listing-analytics/lead-funnel', { cache: 'no-store' });
+      if (res.ok) setFunnel(await res.json() as LeadFunnelPayload);
     } catch { /* silent */ }
   }
 
@@ -402,7 +503,8 @@ export default function ListingAnalyticsPage() {
   useEffect(() => {
     void loadRealtime();
     void loadInsights();
-    rtInterval.current = setInterval(() => void loadRealtime(), 30000);
+    void loadFunnel();
+    rtInterval.current = setInterval(() => { void loadRealtime(); void loadFunnel(); }, 30000);
     return () => { if (rtInterval.current) clearInterval(rtInterval.current); };
   }, []);
 
@@ -442,6 +544,9 @@ export default function ListingAnalyticsPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Booking funnel — first thing on the dashboard, always live ──── */}
+      <FunnelMetrics funnel={funnel} />
 
       {/* ── Status banners ─────────────────────────────────────────────── */}
       {error && (
