@@ -1628,7 +1628,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
       <header
         style={{
           position: 'fixed', top: 0,
-          left: 'var(--sidebar-w, 216px)', right: 0, zIndex: 30,
+          left: 'var(--sidebar-w, 260px)', right: 0, zIndex: 30,
           background: '#ffffff',
           borderBottom: '1px solid #e5e7eb',
           transition: 'left 200ms ease-out',
@@ -1743,7 +1743,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
         <div
           style={{
             position: 'fixed', top: 52,
-            left: 'var(--sidebar-w, 216px)', right: 0, bottom: 0,
+            left: 'var(--sidebar-w, 260px)', right: 0, bottom: 0,
             display: 'flex', overflow: 'hidden',
             background: '#ffffff',
           }}

@@ -160,7 +160,7 @@ export default function DashboardShell({
   return (
     <div
       className="min-h-screen"
-      style={{ backgroundColor: '#ffffff', '--sidebar-w': rail ? '60px' : '216px' } as React.CSSProperties}
+      style={{ backgroundColor: '#ffffff', '--sidebar-w': rail ? '60px' : '260px' } as React.CSSProperties}
     >
       {/* ImpersonationBanner removed — rendered once in layout.tsx */}
       <UsageTracker />
@@ -177,7 +177,7 @@ export default function DashboardShell({
 
       <div
         className={`flex min-h-screen flex-col transition-[margin] duration-200 ease-out ${
-          rail ? 'lg:ml-[60px]' : 'lg:ml-[216px]'
+          rail ? 'lg:ml-[60px]' : 'lg:ml-[260px]'
         }`}
       >
         <div className="h-14 shrink-0 lg:hidden" />

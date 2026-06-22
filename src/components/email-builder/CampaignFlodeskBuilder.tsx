@@ -4424,7 +4424,7 @@ export function CampaignFlodeskBuilder({
         style={{
           position: 'fixed',
           top: 0,
-          left: 'var(--sidebar-w, 216px)',
+          left: 'var(--sidebar-w, 260px)',
           right: 0,
           zIndex: 30,
           background: '#ffffff',
@@ -4493,7 +4493,7 @@ export function CampaignFlodeskBuilder({
         style={{
           position: 'fixed',
           top: 52,
-          left: 'var(--sidebar-w, 216px)',
+          left: 'var(--sidebar-w, 260px)',
           right: 0,
           bottom: 0,
           display: 'flex',

@@ -964,7 +964,7 @@ export default function Sidebar({
 
       <aside
         className={`hidden lg:block fixed left-0 top-0 bottom-0 z-30 transition-[width] duration-200 ease-out border-r border-gray-200 ${
-          collapsed ? 'w-[60px]' : 'w-[230px]'
+          collapsed ? 'w-[60px]' : 'w-[260px]'
         }`}
         style={{ backgroundColor: '#ffffff' }}
       >
