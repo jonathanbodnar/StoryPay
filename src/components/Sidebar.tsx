@@ -49,12 +49,18 @@ interface SidebarProps {
   isLegacyPlan?: boolean;
 }
 
-const menuItems: NavItem[] = [
-  { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
-  { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
+const topMenuItems: NavItem[] = [
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
+  { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
+  { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
+];
+
+const middleMenuItems: NavItem[] = [
   { label: 'Media', href: '/dashboard/media', icon: Images, navId: 'nav_main_media' },
   { label: 'Reports', href: '/dashboard/reports', icon: BarChart2, navId: 'nav_main_reports' },
+];
+
+const bottomMenuItems: NavItem[] = [
   { label: 'Help Center', href: '/dashboard/help', icon: BookOpen, navId: 'nav_main_help' },
 ];
 
@@ -503,6 +509,95 @@ export default function Sidebar({
     );
   }
 
+  const renderMenuItems = (items: NavItem[]) => {
+    return items.filter((item) => {
+      // Role-based filters still hide entries entirely — admin-only
+      // pages are not "locked", they simply don't apply to members.
+      if (!isAdmin && item.label === 'Reports') return false;
+      // On mobile, restrict to the curated phone-friendly route list.
+      // "Ask AI" is a button, not a route, so always allowed.
+      if (isMobile && item.label !== 'Ask AI' && !MOBILE_ALLOWED_NAV_IDS.has(item.navId)) return false;
+      return true;
+    }).map((item) => {
+      const Icon = item.icon;
+      const isAI = item.label === 'Ask AI' || item.label === 'Support';
+      const isHelpCenter = item.label === 'Help Center';
+      const isConversations = item.href === '/dashboard/conversations';
+      const isUpdates = item.href === '/dashboard/updates';
+      const isConcierge = item.href === '/dashboard/concierge';
+      const showConvBadge = isConversations && convUnread > 0;
+      const showUpdatesBadge = isUpdates && updatesUnread > 0;
+      const showConciergeBadge = isConcierge && conciergeUnread > 0;
+      const badgeCount = showConvBadge
+        ? convUnread
+        : showUpdatesBadge
+          ? updatesUnread
+          : showConciergeBadge
+            ? conciergeUnread
+            : 0;
+      const showBadge = showConvBadge || showUpdatesBadge || showConciergeBadge;
+      const locked = !navOk(item.navId);
+      // Locked items can't be active; their grey style overrides the
+      // selected highlight even on the route they "would" match.
+      const active = !locked && isActive(item.href);
+      return (
+        <Link
+          key={item.label}
+          href={locked ? '#' : isAI ? '#' : isHelpCenter ? '/dashboard/help?reset=1' : item.href}
+          onClick={
+            locked
+              ? (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setLockedItem(item);
+                }
+              : isAI
+                ? (e) => {
+                  e.preventDefault();
+                  window.dispatchEvent(new Event('open-ask-ai'));
+                  onCloseMobile?.();
+                }
+                : () => onCloseMobile?.()
+          }
+          title={
+            locked
+              ? `${item.label} (locked — upgrade to access)`
+              : rail
+                ? showBadge
+                  ? `${item.label} (${badgeCount} unread)`
+                  : item.label
+                : undefined
+          }
+          aria-disabled={locked}
+          className={classNames(
+            navItem(active && !isAI, rail),
+            !rail && (isConversations || isUpdates) ? 'w-full' : '',
+          )}
+          style={navItemStyle(active && !isAI)}
+        >
+          <span className={rail && showBadge ? 'relative inline-flex' : 'inline-flex'}>
+            <Icon size={16} className="shrink-0" />
+            {rail && showBadge ? (
+              <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+            ) : null}
+          </span>
+          {!rail && (
+            <>
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {locked ? (
+                <Lock size={12} className="ml-auto shrink-0 text-gray-400" />
+              ) : showBadge ? (
+                <span className="ml-auto shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
+                  {badgeCount > 99 ? '99+' : badgeCount}
+                </span>
+              ) : null}
+            </>
+          )}
+        </Link>
+      );
+    });
+  };
+
   const NavContent = ({ rail, onCloseMobile, isMobile = false }: { rail: boolean; onCloseMobile?: () => void; isMobile?: boolean }) => (
     <div className="flex flex-col h-full">
       <div className={`px-3 pt-5 pb-2 ${rail ? 'flex flex-col items-center gap-2' : ''}`}>
@@ -598,92 +693,9 @@ export default function Sidebar({
         </div>
         ) : null}
 
-        {menuItems.filter((item) => {
-          // Role-based filters still hide entries entirely — admin-only
-          // pages are not "locked", they simply don't apply to members.
-          if (!isAdmin && item.label === 'Reports') return false;
-          // On mobile, restrict to the curated phone-friendly route list.
-          // "Ask AI" is a button, not a route, so always allowed.
-          if (isMobile && item.label !== 'Ask AI' && !MOBILE_ALLOWED_NAV_IDS.has(item.navId)) return false;
-          return true;
-        }).map((item) => {
-          const Icon = item.icon;
-          const isAI = item.label === 'Ask AI' || item.label === 'Support';
-          const isHelpCenter = item.label === 'Help Center';
-          const isConversations = item.href === '/dashboard/conversations';
-          const isUpdates = item.href === '/dashboard/updates';
-          const isConcierge = item.href === '/dashboard/concierge';
-          const showConvBadge = isConversations && convUnread > 0;
-          const showUpdatesBadge = isUpdates && updatesUnread > 0;
-          const showConciergeBadge = isConcierge && conciergeUnread > 0;
-          const badgeCount = showConvBadge
-            ? convUnread
-            : showUpdatesBadge
-              ? updatesUnread
-              : showConciergeBadge
-                ? conciergeUnread
-                : 0;
-          const showBadge = showConvBadge || showUpdatesBadge || showConciergeBadge;
-          const locked = !navOk(item.navId);
-          // Locked items can't be active; their grey style overrides the
-          // selected highlight even on the route they "would" match.
-          const active = !locked && isActive(item.href);
-          return (
-            <Link
-              key={item.label}
-              href={locked ? '#' : isAI ? '#' : isHelpCenter ? '/dashboard/help?reset=1' : item.href}
-              onClick={
-                locked
-                  ? (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setLockedItem(item);
-                    }
-                  : isAI
-                    ? (e) => {
-                      e.preventDefault();
-                      window.dispatchEvent(new Event('open-ask-ai'));
-                      onCloseMobile?.();
-                    }
-                    : () => onCloseMobile?.()
-              }
-              title={
-                locked
-                  ? `${item.label} (locked — upgrade to access)`
-                  : rail
-                    ? showBadge
-                      ? `${item.label} (${badgeCount} unread)`
-                      : item.label
-                    : undefined
-              }
-              aria-disabled={locked}
-              className={classNames(
-                navItem(active && !isAI, rail),
-                !rail && (isConversations || isUpdates) ? 'w-full' : '',
-              )}
-              style={navItemStyle(active && !isAI)}
-            >
-              <span className={rail && showBadge ? 'relative inline-flex' : 'inline-flex'}>
-                <Icon size={16} className="shrink-0" />
-                {rail && showBadge ? (
-                  <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
-                ) : null}
-              </span>
-              {!rail && (
-                <>
-                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                  {locked ? (
-                    <Lock size={12} className="ml-auto shrink-0 text-gray-400" />
-                  ) : showBadge ? (
-                    <span className="ml-auto shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
-                      {badgeCount > 99 ? '99+' : badgeCount}
-                    </span>
-                  ) : null}
-                </>
-              )}
-            </Link>
-          );
-        })}
+        {renderMenuItems(topMenuItems)}
+
+        <div className="my-2 border-t border-gray-200" />
 
         {(isMobile ? mobilePayments : paymentsFiltered).length > 0 ? (
         <div>
@@ -739,6 +751,8 @@ export default function Sidebar({
         </div>
         ) : null}
 
+        {renderMenuItems(middleMenuItems)}
+
         {isAdmin && (isMobile ? mobileMarketing : marketingFiltered).length > 0 ? (
           <div>
             {rail ? (
@@ -781,6 +795,8 @@ export default function Sidebar({
             )}
           </div>
         ) : null}
+
+        {renderMenuItems(bottomMenuItems)}
 
         {isAdmin && (isMobile ? mobileSettings : settingsFiltered).length > 0 ? (
           <div>
