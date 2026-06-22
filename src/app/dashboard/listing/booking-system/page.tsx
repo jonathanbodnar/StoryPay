@@ -40,6 +40,8 @@ function PhaseCard({
   icon: React.ReactNode; enabled: boolean; onToggle: (v: boolean) => void;
   disabled?: boolean; children?: React.ReactNode; accent: string;
 }) {
+  const [isOpen, setIsOpen] = useState(true);
+
   return (
     <div className={`rounded-2xl border bg-white transition-shadow ${enabled ? 'shadow-sm border-gray-200' : 'border-gray-100 opacity-60'}`}>
       <div className="flex items-start gap-4 p-5">
@@ -48,8 +50,11 @@ function PhaseCard({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-3">
-            <div>
-              <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">Phase {number}</span>
+            <div className="cursor-pointer flex-1" onClick={() => setIsOpen(!isOpen)}>
+              <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase flex items-center gap-1">
+                Phase {number}
+                {isOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </span>
               <h3 className="text-[15px] font-semibold text-gray-900 leading-tight">{title}</h3>
               <p className="mt-0.5 text-[12px] text-gray-500">{subtitle}</p>
             </div>
@@ -57,7 +62,7 @@ function PhaseCard({
           </div>
         </div>
       </div>
-      {enabled && children && (
+      {enabled && isOpen && children && (
         <div className="border-t border-gray-100 px-5 pb-5 pt-4">
           {children}
         </div>
@@ -588,6 +593,11 @@ export default function BookingSystemPage() {
   const [error, setError]         = useState('');
   const [leadsData, setLeadsData] = useState<StepLeadsPayload | null>(null);
 
+  // Placeholders for new phases
+  const [phase3Enabled, setPhase3Enabled] = useState(false);
+  const [phase4Enabled, setPhase4Enabled] = useState(false);
+  const [phase5Enabled, setPhase5Enabled] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -762,6 +772,51 @@ export default function BookingSystemPage() {
             onStepsChange={(steps) => void save({ steps })}
             leadsData={leadsData}
           />
+        </PhaseCard>
+
+        {/* Phase 3 — Nurture */}
+        <PhaseCard
+          number={3}
+          title="Nurture Sequence"
+          subtitle="Tips to picking / touring venues (5 email sequence)"
+          icon={<Mail size={18} className="text-pink-600" />}
+          accent="bg-pink-50"
+          enabled={phase3Enabled}
+          onToggle={setPhase3Enabled}
+        >
+          <div className="py-8 text-center text-sm text-gray-400 italic">
+            Sequence builder coming soon...
+          </div>
+        </PhaseCard>
+
+        {/* Phase 4 — Booked Tour */}
+        <PhaseCard
+          number={4}
+          title="Booked Tour"
+          subtitle="If they book a tour, what to expect (5 email sequence)"
+          icon={<Users size={18} className="text-amber-600" />}
+          accent="bg-amber-50"
+          enabled={phase4Enabled}
+          onToggle={setPhase4Enabled}
+        >
+          <div className="py-8 text-center text-sm text-gray-400 italic">
+            Sequence builder coming soon...
+          </div>
+        </PhaseCard>
+
+        {/* Phase 5 — Booked Wedding */}
+        <PhaseCard
+          number={5}
+          title="Booked Wedding"
+          subtitle="If they book a wedding, what to expect (5 email sequence)"
+          icon={<CheckCircle2 size={18} className="text-emerald-600" />}
+          accent="bg-emerald-50"
+          enabled={phase5Enabled}
+          onToggle={setPhase5Enabled}
+        >
+          <div className="py-8 text-center text-sm text-gray-400 italic">
+            Sequence builder coming soon...
+          </div>
         </PhaseCard>
 
         {/* AI Concierge info callout */}
