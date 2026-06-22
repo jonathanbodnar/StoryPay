@@ -43,12 +43,33 @@ export async function GET(request: NextRequest) {
     statusBreakdown[s] = (statusBreakdown[s] || 0) + 1;
   }
 
-  // Waitlist count
-  const { count: waitlistCount } = await supabaseAdmin.from('waitlist').select('*', { count: 'exact', head: true });
+  // Waitlist count, Venue count, Directory venues, Platform events, Feature requests
+  const [
+    { count: waitlistCount },
+    { count: venueCount },
+    { data: directoryVenues, error: directoryVenuesErr },
+    { data: platformEvents, error: platformEventsErr },
+    { data: frData, error: frError }
+  ] = await Promise.all([
+    supabaseAdmin.from('waitlist').select('*', { count: 'exact', head: true }),
+    supabaseAdmin.from('venues').select('*', { count: 'exact', head: true }),
+    supabaseAdmin
+      .from('venues')
+      .select('id, directory_plan_id, directory_subscription_status, directory_trial_ends_at, directory_trial_consumed, last_login_at, is_demo')
+      .not('directory_plan_id', 'is', null),
+    (async () => {
+      let peq = supabaseAdmin.from('platform_billing_events').select('amount_cents, occurred_at');
+      if (from) peq = peq.gte('occurred_at', from);
+      if (toEnd) peq = peq.lte('occurred_at', toEnd);
+      return peq;
+    })(),
+    supabaseAdmin
+      .from('feature_requests')
+      .select('id, title, vote_count, status, created_at, admin_read_at, category, venue_id')
+      .order('created_at', { ascending: false })
+  ]);
 
-  // Venue count
-  const { count: venueCount } = await supabaseAdmin.from('venues').select('*', { count: 'exact', head: true });
-
+  // Monthly chart
   // Monthly chart
   const now = new Date();
   const rangeStart = from ? new Date(from) : new Date(now.getFullYear(), now.getMonth() - 5, 1);
@@ -89,11 +110,6 @@ export async function GET(request: NextRequest) {
     string,
     { name: string; slug: string; venueCount: number; mrrCents: number }
   >();
-
-  const { data: directoryVenues, error: directoryVenuesErr } = await supabaseAdmin
-    .from('venues')
-    .select('id, directory_plan_id, directory_subscription_status, directory_trial_ends_at, directory_trial_consumed, last_login_at, is_demo')
-    .not('directory_plan_id', 'is', null);
 
   if (directoryVenuesErr) {
     console.warn('[admin/stats] directory SaaS venues query:', directoryVenuesErr.message);
@@ -207,11 +223,6 @@ export async function GET(request: NextRequest) {
     saasCursor.setMonth(saasCursor.getMonth() + 1);
   }
 
-  let peq = supabaseAdmin.from('platform_billing_events').select('amount_cents, occurred_at');
-  if (from) peq = peq.gte('occurred_at', from);
-  if (toEnd) peq = peq.lte('occurred_at', toEnd);
-  const { data: platformEvents, error: platformEventsErr } = await peq;
-
   if (!platformEventsErr && platformEvents) {
     for (const e of platformEvents) {
       const amt = e.amount_cents ?? 0;
@@ -232,26 +243,20 @@ export async function GET(request: NextRequest) {
   // Feature requests — all of them (no limit) so the admin tab has the full list.
   // admin_read_at and category are optional columns; fall back gracefully if missing.
   let featureRequests: { id: string; title: string; vote_count: number; status: string; created_at: string; admin_read_at: string | null; category: string; venue_id: string | null }[] = [];
-  {
-    const { data, error } = await supabaseAdmin
+  if (frError && /admin_read_at|category/i.test(frError.message)) {
+    // Pre-migration fallback
+    const { data: plain } = await supabaseAdmin
       .from('feature_requests')
-      .select('id, title, vote_count, status, created_at, admin_read_at, category, venue_id')
+      .select('id, title, vote_count, status, created_at, venue_id')
       .order('created_at', { ascending: false });
-    if (error && /admin_read_at|category/i.test(error.message)) {
-      // Pre-migration fallback
-      const { data: plain } = await supabaseAdmin
-        .from('feature_requests')
-        .select('id, title, vote_count, status, created_at, venue_id')
-        .order('created_at', { ascending: false });
-      featureRequests = (plain ?? []).map(r => ({ ...r, admin_read_at: null, category: 'feature_request' }));
-    } else {
-      featureRequests = (data ?? []).map(r => ({
-        ...r,
-        admin_read_at: (r as Record<string, unknown>).admin_read_at as string | null ?? null,
-        category: (r as Record<string, unknown>).category as string ?? 'feature_request',
-        venue_id: (r as Record<string, unknown>).venue_id as string | null ?? null,
-      }));
-    }
+    featureRequests = (plain ?? []).map(r => ({ ...r, admin_read_at: null, category: 'feature_request' }));
+  } else {
+    featureRequests = (frData ?? []).map(r => ({
+      ...r,
+      admin_read_at: (r as Record<string, unknown>).admin_read_at as string | null ?? null,
+      category: (r as Record<string, unknown>).category as string ?? 'feature_request',
+      venue_id: (r as Record<string, unknown>).venue_id as string | null ?? null,
+    }));
   }
 
   return NextResponse.json({

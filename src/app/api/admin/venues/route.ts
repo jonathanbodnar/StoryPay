@@ -38,16 +38,21 @@ export async function GET() {
       }, { status: 500 });
     }
 
-    const { data: venues, error } = await supabaseAdmin
-      .from('venues')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const [
+      { data: venues, error },
+      { data: planRows }
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('venues')
+        .select('*')
+        .order('created_at', { ascending: false }),
+      supabaseAdmin.from('directory_plans').select('id, name, slug')
+    ]);
 
     if (error) {
       return NextResponse.json({ error: `Supabase error: ${error.message}` }, { status: 500 });
     }
 
-    const { data: planRows } = await supabaseAdmin.from('directory_plans').select('id, name, slug');
     const planById = new Map((planRows || []).map((p) => [p.id as string, p]));
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';

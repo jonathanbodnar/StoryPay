@@ -23,8 +23,14 @@ export async function GET(request: NextRequest) {
   const out: { id: string; first_name: string; last_name: string; customer_email: string }[] = [];
   const seen = new Set<string>();
 
-  for (const c of merged.slice(0, 24)) {
-    const vid = await ensureVenueCustomerIdForMergedContact(venueId, c);
+  const candidates = merged.slice(0, 24);
+  const vids = await Promise.all(
+    candidates.map((c) => ensureVenueCustomerIdForMergedContact(venueId, c))
+  );
+
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    const vid = vids[i];
     if (!vid || seen.has(vid)) continue;
     seen.add(vid);
     out.push({

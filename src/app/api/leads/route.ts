@@ -278,7 +278,7 @@ export async function GET(request: NextRequest) {
 
   let noteCounts: Record<string, number> = {};
   if (leadIds.length > 0) {
-    const [{ data: notes }] = await Promise.all([
+    const [{ data: notes }, venueData] = await Promise.all([
       supabaseAdmin.from('lead_notes').select('lead_id').in('lead_id', leadIds),
       venuePromise,
     ]);

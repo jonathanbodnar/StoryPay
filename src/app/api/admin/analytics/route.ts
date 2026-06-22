@@ -73,12 +73,37 @@ export async function GET(req: NextRequest) {
       : null;
 
     // ── Pull the window's events (capped) for in-memory aggregation. ──────────
-    const { data: rowsRaw, error } = await supabaseAdmin
+    const rowsPromise = supabaseAdmin
       .from('analytics_events')
       .select('id, created_at, event, kind, venue_id, user_email, role, path, label, session_id')
       .gte('created_at', sinceIso)
       .order('created_at', { ascending: false })
       .limit(50000);
+
+    // ── Funnel: distinct venues reaching each milestone (all-time, the true
+    //    "where do people drop off after signing up" view). ───────────────────
+    const milestonePromise = supabaseAdmin
+      .from('analytics_events')
+      .select('event, venue_id')
+      .eq('kind', 'milestone')
+      .limit(50000);
+
+    // ── Trending: event volume this window vs the previous window. ────────────
+    const prevRowsPromise = prevSinceIso
+      ? supabaseAdmin
+          .from('analytics_events')
+          .select('event')
+          .gte('created_at', prevSinceIso)
+          .lt('created_at', sinceIso)
+          .limit(50000)
+      : Promise.resolve({ data: null, error: null });
+
+    const [
+      { data: rowsRaw, error },
+      { data: milestoneRows },
+      { data: prevRows }
+    ] = await Promise.all([rowsPromise, milestonePromise, prevRowsPromise]);
+
     if (error) throw new Error(error.message);
     const rows = (rowsRaw ?? []) as EventRow[];
 
@@ -104,13 +129,6 @@ export async function GET(req: NextRequest) {
       eventCountsThis.set(r.event, (eventCountsThis.get(r.event) ?? 0) + 1);
     }
 
-    // ── Funnel: distinct venues reaching each milestone (all-time, the true
-    //    "where do people drop off after signing up" view). ───────────────────
-    const { data: milestoneRows } = await supabaseAdmin
-      .from('analytics_events')
-      .select('event, venue_id')
-      .eq('kind', 'milestone')
-      .limit(50000);
     const milestoneVenues: Record<string, Set<string>> = {};
     for (const m of FUNNEL_MILESTONES) milestoneVenues[m] = new Set();
     for (const r of (milestoneRows ?? []) as { event: string; venue_id: string | null }[]) {
@@ -128,15 +146,8 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // ── Trending: event volume this window vs the previous window. ────────────
     let trending: { event: string; count: number; prev: number; delta: number }[] = [];
     if (prevSinceIso) {
-      const { data: prevRows } = await supabaseAdmin
-        .from('analytics_events')
-        .select('event')
-        .gte('created_at', prevSinceIso)
-        .lt('created_at', sinceIso)
-        .limit(50000);
       const prevCounts = new Map<string, number>();
       for (const r of (prevRows ?? []) as { event: string }[]) {
         prevCounts.set(r.event, (prevCounts.get(r.event) ?? 0) + 1);
