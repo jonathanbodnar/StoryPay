@@ -43,17 +43,26 @@ function leadRank(
   return { rank: 1, lost };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const url = new URL(req.url);
+  const days = Math.min(parseInt(url.searchParams.get('days') || '30', 10), 365);
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+
+  let leadsQuery = supabaseAdmin
+    .from('leads')
+    .select('id, status, stage_id')
+    .eq('venue_id', venueId);
+    
+  if (days > 0) {
+    leadsQuery = leadsQuery.gte('created_at', since);
+  }
+
   const [{ data: leads }, { data: stages }] = await Promise.all([
-    supabaseAdmin
-      .from('leads')
-      .select('id, status, stage_id')
-      .eq('venue_id', venueId)
-      .limit(5000),
+    leadsQuery.limit(5000),
     supabaseAdmin
       .from('lead_pipeline_stages')
       .select('id, name, kind, position')

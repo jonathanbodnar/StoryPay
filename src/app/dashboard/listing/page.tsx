@@ -438,9 +438,12 @@ export default function ListingAnalyticsPage() {
     } catch { /* silent */ }
   }
 
-  async function loadFunnel() {
+  const daysRef = useRef(days);
+  useEffect(() => { daysRef.current = days; }, [days]);
+
+  async function loadFunnel(d: number) {
     try {
-      const res = await fetch('/api/listing-analytics/lead-funnel', { cache: 'no-store' });
+      const res = await fetch(`/api/listing-analytics/lead-funnel?days=${d}`, { cache: 'no-store' });
       if (res.ok) setFunnel(await res.json() as LeadFunnelPayload);
     } catch { /* silent */ }
   }
@@ -498,13 +501,18 @@ export default function ListingAnalyticsPage() {
     a.click();
   }
 
-  useEffect(() => { void load(days); }, [days]);
+  useEffect(() => { 
+    void load(days); 
+    void loadFunnel(days);
+  }, [days]);
 
   useEffect(() => {
     void loadRealtime();
     void loadInsights();
-    void loadFunnel();
-    rtInterval.current = setInterval(() => { void loadRealtime(); void loadFunnel(); }, 30000);
+    rtInterval.current = setInterval(() => { 
+      void loadRealtime(); 
+      void loadFunnel(daysRef.current); 
+    }, 30000);
     return () => { if (rtInterval.current) clearInterval(rtInterval.current); };
   }, []);
 
@@ -538,7 +546,7 @@ export default function ListingAnalyticsPage() {
               </button>
             ))}
           </div>
-          <button onClick={() => void load(days)} disabled={loading}
+          <button onClick={() => { void load(days); void loadFunnel(days); }} disabled={loading}
             className="p-2 rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
