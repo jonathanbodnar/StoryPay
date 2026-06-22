@@ -722,19 +722,13 @@ export default function ListingAnalyticsPage() {
       {d && (
         <>
           {/* ── KPI Cards ────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <KpiCard icon={Eye} label="Listing views" value={d.total_views.toLocaleString()}
               sub={`vs ${d.prior.total_views} prior`}
               deltaVal={delta(d.total_views, d.prior.total_views)} color="blue" />
             <KpiCard icon={Users} label="Unique visitors" value={d.unique_sessions.toLocaleString()}
               sub={`vs ${d.prior.unique_sessions} prior`}
               deltaVal={delta(d.unique_sessions, d.prior.unique_sessions)} color="purple" />
-            <KpiCard icon={MousePointerClick} label="Inquiries sent" value={d.contact_form_submits.toLocaleString()}
-              sub={null}
-              deltaVal={delta(d.contact_form_submits, d.prior.contact_form_submits)} color="green" />
-            <KpiCard icon={TrendingUp} label="Conversion rate" value={`${d.conversion_rate}%`}
-              sub={null}
-              deltaVal={delta(d.conversion_rate, d.prior.conversion_rate)} color="amber" />
           </div>
 
           {/* Avg session duration + impressions */}
@@ -783,36 +777,6 @@ export default function ListingAnalyticsPage() {
               <EmptyState message="No view data yet — visit your public listing to test tracking." />
             )}
           </div>
-
-          {/* ── Conversion Funnel ────────────────────────────────────────── */}
-          {d.funnel.length > 0 && (
-            <div className="rounded-2xl border border-gray-200 bg-white p-6">
-              <SectionTitle>Conversion funnel</SectionTitle>
-              <p className="text-xs text-gray-400 mt-0.5 mb-5">How visitors move from discovery to inquiry</p>
-              <div className="space-y-2">
-                {d.funnel.map((step, i) => {
-                  const maxCount = d.funnel[0]?.count || 1;
-                  const barPct = maxCount ? (step.count / maxCount) * 100 : 0;
-                  const colors = ['bg-blue-600', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-emerald-500'];
-                  return (
-                    <div key={step.step} className="flex items-center gap-4">
-                      <span className="w-32 shrink-0 text-xs text-gray-600 font-medium">{step.step}</span>
-                      <div className="flex-1 h-8 rounded-lg bg-gray-100 overflow-hidden relative">
-                        <div className={`h-full rounded-lg transition-all ${colors[i] ?? 'bg-gray-400'}`}
-                          style={{ width: `${barPct}%` }} />
-                        <span className="absolute inset-0 flex items-center px-3 text-xs font-bold text-white mix-blend-darken" style={{ color: barPct > 20 ? '#fff' : '#374151' }}>
-                          {step.count.toLocaleString()}
-                        </span>
-                      </div>
-                      {step.pct !== null && (
-                        <span className="w-14 shrink-0 text-right text-xs text-gray-400">{step.pct}% CTR</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* ── Scroll depth + Engagement ────────────────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
