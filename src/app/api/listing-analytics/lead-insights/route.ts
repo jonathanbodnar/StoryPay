@@ -13,13 +13,32 @@ export async function GET(req: Request) {
   const days = Math.min(parseInt(url.searchParams.get('days') || '90', 10), 365);
   const since = new Date(Date.now() - days * 86400000).toISOString();
 
-  const { data: leads } = await supabaseAdmin
-    .from('leads')
-    .select('guest_count, wedding_date, source, booking_timeline, opportunity_value, referral_source, created_at')
-    .eq('venue_id', venueId)
-    .gte('created_at', since);
+  const [{ data: leads }, { data: stages }] = await Promise.all([
+    supabaseAdmin
+      .from('leads')
+      .select('guest_count, wedding_date, source, booking_timeline, opportunity_value, referral_source, created_at, status, stage_id')
+      .eq('venue_id', venueId)
+      .gte('created_at', since),
+    supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('id, name, kind, position')
+      .eq('venue_id', venueId),
+  ]);
 
   const rows = leads ?? [];
+
+  const stageById = new Map<string, { name: string; kind: string; position: number }>(
+    ((stages ?? []) as Array<{ id: string; name: string; kind: string; position: number }>).map((s) => [
+      s.id,
+      { name: s.name, kind: s.kind, position: s.position },
+    ]),
+  );
+
+  function isBookedWedding(status: string | null, stageId: string | null) {
+    const stage = stageId ? stageById.get(stageId) : undefined;
+    const kind = stage?.kind ?? '';
+    return kind === 'won' || status === 'booked_wedding';
+  }
 
   // ── Guest count buckets ───────────────────────────────────────────────────
   const guestBuckets: Record<string, number> = {
@@ -101,8 +120,9 @@ export async function GET(req: Request) {
     ? Math.round(rows.filter(r => r.guest_count != null).reduce((s,r) => s + (r.guest_count ?? 0), 0) / rows.filter(r => r.guest_count != null).length)
     : null;
 
-  const avgValue = rows.filter(r => r.opportunity_value != null).length
-    ? Math.round(rows.filter(r => r.opportunity_value != null).reduce((s,r) => s + (r.opportunity_value ?? 0), 0) / rows.filter(r => r.opportunity_value != null).length)
+  const bookedLeadsWithValue = rows.filter(r => r.opportunity_value != null && isBookedWedding(r.status, r.stage_id));
+  const avgValue = bookedLeadsWithValue.length
+    ? Math.round(bookedLeadsWithValue.reduce((s,r) => s + (r.opportunity_value ?? 0), 0) / bookedLeadsWithValue.length)
     : null;
 
   return NextResponse.json({

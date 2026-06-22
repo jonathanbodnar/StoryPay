@@ -964,7 +964,7 @@ export default function ListingAnalyticsPage() {
               {/* Summary KPIs */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <KpiCard icon={Users} label="Avg guest count" value={insights.avg_guest_count ?? '—'} sub="Per inquiry" color="blue" />
-                <KpiCard icon={DollarSign} label="Avg deal value" value={fmtCents(insights.avg_opportunity_value)} sub="When set" color="green" />
+                <KpiCard icon={DollarSign} label="Avg deal value" value={fmtCents(insights.avg_opportunity_value)} sub="Booked weddings" color="green" />
                 <KpiCard icon={Users} label="Total leads" value={insights.total_leads.toLocaleString()} sub="All time" color="purple" />
               </div>
 
