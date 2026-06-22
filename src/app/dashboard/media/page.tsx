@@ -399,10 +399,6 @@ export default function MediaLibraryPage() {
             <Images className="h-6 w-6 text-brand-600" />
             Media
           </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            One library for every image and file you reuse across your listing, branding, emails,
-            and forms — upload once, copy a stable URL, and reuse it anywhere.
-          </p>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
           <input
