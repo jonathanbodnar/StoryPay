@@ -418,7 +418,7 @@ export default function ListingAnalyticsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/listing-analytics?from=${range.from}&to=${range.to}`);
+      const res = await fetch(`/api/listing-analytics?from=${range.from}&to=${range.to}`, { cache: 'no-store' });
       if (!res.ok) { setError('Could not load analytics'); return; }
       setData(await res.json() as AnalyticsPayload);
     } catch {
@@ -755,7 +755,7 @@ export default function ListingAnalyticsPage() {
               show the continuous chart so the dashboard makes it obvious the
               historical events are there. */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
-            <SectionTitle>Daily views — {dateRange.label}</SectionTitle>
+            <SectionTitle>Daily views</SectionTitle>
             <p className="text-xs text-gray-400 mt-0.5 mb-5">Total page views vs unique visitors each day</p>
             {d.daily.length > 0 && (d.total_views > 0 || d.total_impressions > 0 || d.unique_sessions > 0) ? (
               <ResponsiveContainer width="100%" height={220}>
