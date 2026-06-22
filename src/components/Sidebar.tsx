@@ -565,7 +565,7 @@ export default function Sidebar({
               className={groupBtn(isOnListing || flyout === 'listing', true)}
               style={groupBtnStyle(isOnListing || flyout === 'listing')}
             >
-              <Store size={16} />
+              <Store size={16} className={!(isOnListing || flyout === 'listing') ? 'text-[#1b1b1b]' : ''} />
             </button>
           ) : (
             <>
@@ -575,14 +575,14 @@ export default function Sidebar({
                 className={groupBtn(isOnListing && listingOpen, false)}
                 style={groupBtnStyle(isOnListing && listingOpen)}
               >
-                <div className="flex items-center gap-3">
+                <div className={`flex items-center gap-3 ${!(isOnListing && listingOpen) ? 'text-[#1b1b1b]' : ''}`}>
                   <Store size={16} />
-                  <span>Bride Booking System™</span>
+                  <span className="font-bold">Bride Booking System™</span>
                 </div>
                 <ChevronDown
                   size={13}
                   className={`transition-transform duration-200 ${listingOpen ? 'rotate-180' : ''} ${
-                    isOnListing && listingOpen ? 'text-white/50' : 'text-gray-400'
+                    isOnListing && listingOpen ? 'text-white/50' : 'text-[#1b1b1b]'
                   }`}
                 />
               </button>
