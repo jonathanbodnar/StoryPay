@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     if (type === 'charges') {
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, customer_email, customer_lunarpay_id, price, status, charge_id, checkout_session_id, transaction_id, paid_at, refunded_at, created_at, payment_type, payment_config')
+        .select('id, public_token, customer_name, customer_email, customer_lunarpay_id, price, status, charge_id, checkout_session_id, transaction_id, paid_at, refunded_at, created_at, payment_type, payment_config')
         .eq('venue_id', venueId)
         .in('status', ['paid', 'refunded', 'partial_refund'])
         .order('paid_at', { ascending: false });
@@ -74,7 +74,8 @@ export async function GET(request: NextRequest) {
 
           return {
             id: p.id,
-            description: `Proposal - ${p.customer_name}`,
+            invoiceNumber: p.public_token ? p.public_token.slice(0, 8).toUpperCase() : null,
+            description: `Invoice #${p.public_token ? p.public_token.slice(0, 8).toUpperCase() : p.id.slice(0, 8)} - ${p.customer_name}`,
             amount: paidAmount,
             fullInvoiceAmount: p.price,
             paymentType: p.payment_type,
@@ -97,12 +98,12 @@ export async function GET(request: NextRequest) {
       // Build a proposal lookup by payment_schedule_id for customer names + first payment info
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, customer_email, customer_lunarpay_id, payment_schedule_id, price, payment_config, status')
+        .select('id, public_token, customer_name, customer_email, customer_lunarpay_id, payment_schedule_id, price, payment_config, status')
         .eq('venue_id', venueId)
         .not('payment_schedule_id', 'is', null);
 
       const proposalMap: Record<string, {
-        proposalId: string; customerName: string | null; customerId: string | null;
+        proposalId: string; publicToken: string | null; customerName: string | null; customerId: string | null;
         firstPaymentCents: number; totalPayments: number; totalAmount: number; proposalStatus: string;
       }> = {};
       for (const p of proposals ?? []) {
@@ -123,6 +124,7 @@ export async function GET(request: NextRequest) {
         const firstPaymentCents = installments.length > 0 ? installments[0].amount : 0;
         proposalMap[String(p.payment_schedule_id)] = {
           proposalId: p.id,
+          publicToken: p.public_token ?? null,
           customerName: p.customer_name ?? null,
           customerId,
           firstPaymentCents,
@@ -147,7 +149,7 @@ export async function GET(request: NextRequest) {
           const displayTotalAmount = linked ? (s.totalAmount as number ?? 0) + linked.firstPaymentCents : (s.totalAmount as number ?? 0);
           // Override LP's description (which only covers the schedule portion)
           const displayDescription = linked
-            ? `Installment plan — ${displayPaymentsCompleted} of ${displayPaymentsTotal} payments`
+            ? `Installment plan #${linked.publicToken ? linked.publicToken.slice(0, 8).toUpperCase() : linked.proposalId.slice(0, 8)} — ${displayPaymentsCompleted} of ${displayPaymentsTotal} payments`
             : (s.description as string) ?? 'Installment plan';
 
           return {
@@ -176,11 +178,11 @@ export async function GET(request: NextRequest) {
       // Build a proposal lookup by subscription_id for customer names
       const { data: proposals } = await supabaseAdmin
         .from('proposals')
-        .select('id, customer_name, customer_email, customer_lunarpay_id, subscription_id')
+        .select('id, public_token, customer_name, customer_email, customer_lunarpay_id, subscription_id')
         .eq('venue_id', venueId)
         .not('subscription_id', 'is', null);
 
-      const proposalMap: Record<string, { proposalId: string; customerName: string | null; customerId: string | null }> = {};
+      const proposalMap: Record<string, { proposalId: string; publicToken: string | null; customerName: string | null; customerId: string | null }> = {};
       for (const p of proposals ?? []) {
         if (!p.subscription_id) continue;
         let customerId = p.customer_lunarpay_id ?? null;
@@ -196,6 +198,7 @@ export async function GET(request: NextRequest) {
         }
         proposalMap[String(p.subscription_id)] = {
           proposalId: p.id,
+          publicToken: p.public_token ?? null,
           customerName: p.customer_name ?? null,
           customerId,
         };
@@ -209,7 +212,8 @@ export async function GET(request: NextRequest) {
         const linked = proposalMap[String(sub.id)];
         return {
           id: linked?.proposalId ?? null,
-          description: linked?.customerName ? `Proposal - ${linked.customerName}` : `Subscription #${sub.id}`,
+          invoiceNumber: linked?.publicToken ? linked.publicToken.slice(0, 8).toUpperCase() : null,
+          description: linked?.customerName ? `Invoice #${linked.publicToken ? linked.publicToken.slice(0, 8).toUpperCase() : linked.proposalId.slice(0, 8)} - ${linked.customerName}` : `Subscription #${sub.id}`,
           amount: sub.amount ?? 0,
           frequency: sub.frequency ?? 'monthly',
           status: sub.status ?? 'unknown',

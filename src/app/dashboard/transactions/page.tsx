@@ -9,6 +9,7 @@ import RefundModal from '@/components/RefundModal';
 
 interface Charge {
  id: string;
+ invoiceNumber?: string | null;
  description: string;
  amount: number;
  fullInvoiceAmount?: number;

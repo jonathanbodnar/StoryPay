@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
   }
 
   const publicToken = generateToken();
+  const invoiceNumber = publicToken.slice(0, 8).toUpperCase();
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
@@ -108,7 +109,10 @@ export async function POST(request: NextRequest) {
 
   const invoiceContent = `
     <div style="font-family: 'Open Sans', Arial, sans-serif;">
-      <h2 style="font-family: 'Open Sans', -apple-system, sans-serif; font-size: 22px; font-weight: 600; color: #111827; margin: 0 0 20px;">Invoice</h2>
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 20px;">
+        <h2 style="font-family: 'Open Sans', -apple-system, sans-serif; font-size: 22px; font-weight: 600; color: #111827; margin: 0;">Invoice</h2>
+        <span style="font-family: 'Open Sans', -apple-system, sans-serif; font-size: 14px; color: #6b7280; font-weight: 500;">#${invoiceNumber}</span>
+      </div>
       <table style="width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
         <thead>
           <tr style="background-color: #f9fafb;">
@@ -254,7 +258,7 @@ export async function POST(request: NextRequest) {
         organization:   venueName,
         customer_name:  customerName || 'there',
         amount:         amountStr,
-        invoice_number: proposal.id.slice(0, 8).toUpperCase(),
+        invoice_number: invoiceNumber,
         due_date:       '',
       };
       console.log(`[invoice] Sending templated email to ${customerEmail}`);
