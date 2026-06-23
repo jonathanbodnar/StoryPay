@@ -56,7 +56,6 @@ const topMenuItems: NavItem[] = [
 ];
 
 const middleMenuItems: NavItem[] = [
-  { label: 'Media', href: '/dashboard/media', icon: Images, navId: 'nav_main_media' },
   { label: 'Reports', href: '/dashboard/reports', icon: BarChart2, navId: 'nav_main_reports' },
 ];
 
@@ -82,6 +81,7 @@ const marketingItems: NavItem[] = [
   { label: 'Audiences',            href: '/dashboard/marketing/email/audiences',    icon: Users,          navId: 'nav_marketing_email_segments' },
   { label: 'Email Notifications',  href: '/dashboard/settings/notifications',       icon: Bell,           navId: 'nav_settings_notifications' },
   { label: 'Forms',                href: '/dashboard/marketing/form-builder',       icon: LayoutTemplate, navId: 'nav_marketing_form_builder' },
+  { label: 'Media',                href: '/dashboard/media',                        icon: Images,         navId: 'nav_main_media' },
   { label: 'Email settings',       href: '/dashboard/marketing/email/settings',    icon: Settings,       navId: 'nav_marketing_email_settings' },
 ];
 
