@@ -25,7 +25,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const BUCKET = 'venue-images';
-const MAX_PHOTOS = 8;
+const MAX_PHOTOS = 20;
 
 async function getVenueId(): Promise<string | null> {
   const c = await cookies();
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const { data: venueRow } = await supabaseAdmin
     .from('venues')
     .select(
-      'description, location_city, location_state, location_full, lat, lng, venue_type, cover_image_url, gallery_images',
+      'description, location_city, location_state, location_full, lat, lng, venue_type, cover_image_url, gallery_images, social_links',
     )
     .eq('id', venueId)
     .maybeSingle();
@@ -140,6 +140,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const existingGallery = Array.isArray(v.gallery_images) ? (v.gallery_images as unknown[]) : [];
   if (existingGallery.length === 0 && rehosted.length > 0) {
     venueUpdate.gallery_images = rehosted;
+  }
+
+  // Carry Google's website link into the venue's social links (fill empty only).
+  const existingSocials =
+    v.social_links && typeof v.social_links === 'object' && !Array.isArray(v.social_links)
+      ? (v.social_links as Record<string, unknown>)
+      : {};
+  if (isEmpty(existingSocials.website) && profile.website) {
+    venueUpdate.social_links = { ...existingSocials, website: profile.website };
   }
 
   const { error: venueErr } = await supabaseAdmin

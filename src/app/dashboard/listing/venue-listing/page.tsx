@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Loader2, Save, CheckCircle2, Store, Globe, MapPin, Users, DollarSign,
+  Loader2, Save, CheckCircle2, Store, Globe, MapPin, Users,
   Image as ImageIcon, ExternalLink, Eye, EyeOff, AlertCircle, RotateCcw,
   Link2, HelpCircle, Plus, Trash2, ChevronDown,
 } from 'lucide-react';
@@ -1036,56 +1036,6 @@ export default function ListingPage() {
               Manage photos
             </Link>
           </div>
-        </div>
-      </section>
-
-      <section className={CARD}>
-        <h2 className={SECTION_TITLE}><DollarSign className="inline w-4 h-4 -mt-0.5" /> Lead notifications</h2>
-        <p className={SECTION_HINT}>Where new inquiries from the directory should go.</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className={LABEL}>Notification email</label>
-            <input
-              type="email"
-              className={INPUT}
-              value={listing.notification_email ?? ''}
-              onChange={(e) => update('notification_email', e.target.value || null)}
-              placeholder="Defaults to your account email"
-            />
-          </div>
-          <div>
-            <label className={LABEL}>Notification phone (SMS)</label>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-gray-500">
-                +1
-              </span>
-              <input
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel-national"
-                className={`${INPUT} pl-10`}
-                value={formatUsLocal(listing.notification_phone)}
-                onChange={(e) => {
-                  // Strip non-digits and the country code so the owner types
-                  // "614 555 1234" naturally. We store E.164 on save (see
-                  // listing-sanitize.ts → normalizeUsPhone).
-                  const digits = e.target.value.replace(/\D+/g, '').slice(0, 10);
-                  update('notification_phone', digits ? `+1${digits}` : null);
-                }}
-                placeholder="(614) 555-1234"
-              />
-            </div>
-            <p className="mt-1 text-[11px] text-gray-400">USA only — the +1 country code is added automatically.</p>
-          </div>
-          <label className="flex items-center gap-3 self-end pb-2 sm:col-span-2">
-            <input
-              type="checkbox"
-              checked={listing.email_notifications}
-              onChange={(e) => update('email_notifications', e.target.checked)}
-              className="h-4 w-4"
-            />
-            <span className="text-sm text-gray-700">Email me when I receive a new lead</span>
-          </label>
         </div>
       </section>
 

@@ -24,12 +24,21 @@ import {
 const SKIP_KEY = 'sv_onboarding_skipped';
 const BRAND = '#1b1b1b';
 
-// Mirrors FEATURE_OPTIONS in the venue-listing editor so selections carry over.
+// Mirrors the venue-listing editor so selections carry over to the listing.
 const FEATURE_OPTIONS = [
   'Ceremony site', 'Reception site', 'Bridal suite', "Groom's suite",
   'On-site parking', 'Wheelchair accessible', 'In-house catering',
   'BYO catering allowed', 'Bar service', 'Dance floor', 'Overnight accommodations',
   'Pet friendly', 'Outdoor ceremony', 'Tented options',
+];
+const VENUE_TYPES = ['barn', 'ballroom', 'garden', 'winery', 'beach', 'estate', 'rustic', 'modern', 'historic', 'other'];
+const INDOOR_OUTDOOR = ['indoor', 'outdoor', 'both'];
+const SOCIAL_FIELDS: { key: string; label: string; placeholder: string }[] = [
+  { key: 'website', label: 'Website', placeholder: 'https://yourvenue.com' },
+  { key: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/…' },
+  { key: 'facebook', label: 'Facebook', placeholder: 'https://facebook.com/…' },
+  { key: 'tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@…' },
+  { key: 'pinterest', label: 'Pinterest', placeholder: 'https://pinterest.com/…' },
 ];
 
 type Candidate = {
@@ -391,10 +400,13 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   const [seasonality, setSeasonality] = useState('');
   const [differentiators, setDifferentiators] = useState('');
   const [features, setFeatures] = useState<string[]>([]);
+  const [venueType, setVenueType] = useState('');
+  const [indoorOutdoor, setIndoorOutdoor] = useState('');
+  const [socials, setSocials] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Preload any features already set on the listing so they stay checked.
+  // Preload anything already set on the listing so it stays in sync.
   useEffect(() => {
     (async () => {
       try {
@@ -402,6 +414,16 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
         if (!res.ok) return;
         const d = await res.json();
         if (Array.isArray(d.features)) setFeatures(d.features.filter((f: unknown): f is string => typeof f === 'string'));
+        if (typeof d.venue_type === 'string') setVenueType(d.venue_type);
+        if (typeof d.indoor_outdoor === 'string') setIndoorOutdoor(d.indoor_outdoor);
+        if (d.social_links && typeof d.social_links === 'object' && !Array.isArray(d.social_links)) {
+          const s: Record<string, string> = {};
+          for (const { key } of SOCIAL_FIELDS) {
+            const v = (d.social_links as Record<string, unknown>)[key];
+            if (typeof v === 'string') s[key] = v;
+          }
+          setSocials(s);
+        }
       } catch { /* ignore */ }
     })();
   }, []);
@@ -421,6 +443,9 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           seasonality,
           differentiators,
           features,
+          venue_type: venueType || undefined,
+          indoor_outdoor: indoorOutdoor || undefined,
+          social_links: socials,
         }),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not draft your guide.'); return; }
@@ -456,6 +481,21 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           </div>
         </Field>
 
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Venue type">
+            <select value={venueType} onChange={(e) => setVenueType(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-400">
+              <option value="">Select</option>
+              {VENUE_TYPES.map((t) => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}
+            </select>
+          </Field>
+          <Field label="Indoor / outdoor">
+            <select value={indoorOutdoor} onChange={(e) => setIndoorOutdoor(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-400">
+              <option value="">Select</option>
+              {INDOOR_OUTDOOR.map((t) => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}
+            </select>
+          </Field>
+        </div>
+
         <Field label="Features (select all that apply)">
           <div className="flex flex-wrap gap-2">
             {FEATURE_OPTIONS.map((f) => {
@@ -481,6 +521,20 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
 
         <Field label="What makes you special? (top 2–3)">
           <textarea value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} rows={2} placeholder="e.g. waterfront ceremony site, on-site suites, in-house catering" className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+        </Field>
+
+        <Field label="Social & website links (optional)">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {SOCIAL_FIELDS.map(({ key, label, placeholder }) => (
+              <input
+                key={key}
+                value={socials[key] ?? ''}
+                onChange={(e) => setSocials((prev) => ({ ...prev, [key]: e.target.value }))}
+                placeholder={`${label} — ${placeholder}`}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400"
+              />
+            ))}
+          </div>
         </Field>
       </div>
 

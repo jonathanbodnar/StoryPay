@@ -174,11 +174,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     ? (body.features as unknown[]).filter((f): f is string => typeof f === 'string').slice(0, 30)
     : null;
 
-  // Persist selected listing features onto the venue (the listing reads these).
-  if (features) {
+  const VENUE_TYPES = ['barn', 'ballroom', 'garden', 'winery', 'beach', 'estate', 'rustic', 'modern', 'historic', 'other'];
+  const INDOOR_OUTDOOR = ['indoor', 'outdoor', 'both'];
+  const venueType = typeof body.venue_type === 'string' && VENUE_TYPES.includes(body.venue_type) ? body.venue_type : null;
+  const indoorOutdoor = typeof body.indoor_outdoor === 'string' && INDOOR_OUTDOOR.includes(body.indoor_outdoor) ? body.indoor_outdoor : null;
+
+  // Sanitize social links: keep only known keys with non-empty string values.
+  const SOCIAL_KEYS = ['facebook', 'instagram', 'tiktok', 'pinterest', 'website'];
+  let socialLinks: Record<string, string> | null = null;
+  if (body.social_links && typeof body.social_links === 'object' && !Array.isArray(body.social_links)) {
+    const raw = body.social_links as Record<string, unknown>;
+    const cleaned: Record<string, string> = {};
+    for (const k of SOCIAL_KEYS) {
+      const val = raw[k];
+      if (typeof val === 'string' && val.trim()) cleaned[k] = val.trim().slice(0, 500);
+    }
+    socialLinks = cleaned;
+  }
+
+  // Persist listing fields entered in the wizard onto the venue (single source
+  // of truth — the public listing reads these).
+  const venueFields: Record<string, unknown> = {};
+  if (features) venueFields.features = features;
+  if (venueType) venueFields.venue_type = venueType;
+  if (indoorOutdoor) venueFields.indoor_outdoor = indoorOutdoor;
+  if (socialLinks) venueFields.social_links = socialLinks;
+  if (Object.keys(venueFields).length > 0) {
     await supabaseAdmin
       .from('venues')
-      .update({ features })
+      .update(venueFields)
       .eq('id', venueId)
       .then(undefined, () => { /* non-fatal */ });
   }
