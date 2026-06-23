@@ -435,13 +435,7 @@ export default function MediaLibraryPage() {
 
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-900"
-          >
-            ← Back to dashboard
-          </Link>
-          <h1 className="mt-1 flex items-center gap-2 font-heading text-2xl text-gray-900">
+          <h1 className="flex items-center gap-2 font-heading text-2xl text-gray-900">
             <Images className="h-6 w-6 text-brand-600" />
             Media
           </h1>

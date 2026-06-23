@@ -283,23 +283,18 @@ export default function Sidebar({
     return () => window.removeEventListener('storypay:open-onboarding', handler);
   }, []);
 
-  // Notifications lives under /dashboard/settings/* but belongs to the Payments
-  // menu group. Treat its path as payments-active, not settings-active.
-  const paymentSettingsPaths = [
-    '/dashboard/settings/notifications',
-  ];
-  const isOnPaymentSettings = paymentSettingsPaths.some((p) => pathname.startsWith(p));
   // /dashboard/directory-billing is the SaaS plan & billing page. It also has a
   // legacy entry under "Venue listing" but its canonical home is Settings → Billing.
   const isOnSettingsBilling = pathname.startsWith('/dashboard/directory-billing');
   const isOnSettings =
-    (pathname.startsWith('/dashboard/settings') && !isOnPaymentSettings) || isOnSettingsBilling;
-  const isOnMarketing = pathname.startsWith('/dashboard/marketing');
+    (pathname.startsWith('/dashboard/settings') && !pathname.startsWith('/dashboard/settings/notifications')) || isOnSettingsBilling;
+  const isOnMarketing = pathname.startsWith('/dashboard/marketing')
+    || pathname.startsWith('/dashboard/settings/notifications')
+    || pathname.startsWith('/dashboard/media');
   const isOnPayments = pathname.startsWith('/dashboard/payments')
     || pathname.startsWith('/dashboard/transactions')
     || pathname.startsWith('/dashboard/invoices')
-    || pathname.startsWith('/dashboard/proposals')
-    || isOnPaymentSettings;
+    || pathname.startsWith('/dashboard/proposals');
 
   // For legacy plans, filter out the Billing item from Settings and Listing groups
   const visibleSettingsItems = isLegacyPlan
