@@ -20,6 +20,8 @@ import {
   UserCircle,
   Zap,
   Lock,
+  CircleDollarSign,
+  Rocket,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
@@ -98,8 +100,8 @@ const listingItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard, navId: 'nav_listing_analytics' },
   { label: 'Venue Listing', href: '/dashboard/listing/venue-listing', icon: Store, navId: 'nav_listing_dashboard' },
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
-  { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: Sparkles, navId: 'nav_listing_pricing_guide' },
-  { label: 'Speed to Lead System', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
+  { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: CircleDollarSign, navId: 'nav_listing_pricing_guide' },
+  { label: 'Speed to Lead System', href: '/dashboard/listing/booking-system', icon: Rocket, navId: 'nav_listing_booking_system' },
   { label: 'Verified & Sponsored', href: '/dashboard/listing/directory', icon: BadgeCheck, navId: 'nav_listing_directory' },
 ];
 
