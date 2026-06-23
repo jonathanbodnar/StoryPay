@@ -25,7 +25,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const BUCKET = 'venue-images';
-const MAX_PHOTOS = 5;
+const MAX_PHOTOS = 8;
 
 async function getVenueId(): Promise<string | null> {
   const c = await cookies();
@@ -93,12 +93,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // Re-host the top N photos (sequential to stay polite to Google + storage).
-  const rehosted: string[] = [];
+  // Google doesn't tag photos as exterior/interior, but building/outside shots
+  // are almost always landscape-oriented — so we prefer the first landscape
+  // photo as the cover, falling back to Google's own ranking (photo[0]).
+  const rehostedPairs: { url: string; landscape: boolean }[] = [];
   for (let i = 0; i < Math.min(profile.photos.length, MAX_PHOTOS); i++) {
     const uri = await resolveGooglePhotoUri(profile.photos[i].name);
     if (!uri) continue;
     const publicUrl = await rehostPhoto(venueId, uri, i);
-    if (publicUrl) rehosted.push(publicUrl);
+    if (!publicUrl) continue;
+    const p = profile.photos[i];
+    rehostedPairs.push({ url: publicUrl, landscape: (p.widthPx ?? 0) > (p.heightPx ?? 0) });
+  }
+
+  const rehosted: string[] = rehostedPairs.map((r) => r.url);
+  const coverIdx = rehostedPairs.findIndex((r) => r.landscape);
+  if (coverIdx > 0) {
+    const [cover] = rehosted.splice(coverIdx, 1);
+    rehosted.unshift(cover);
   }
 
   // ── Mirror onto the venue (fill empties only — never clobber edits) ──────────

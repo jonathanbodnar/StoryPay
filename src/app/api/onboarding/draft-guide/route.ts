@@ -170,6 +170,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     differentiators: String(body.differentiators ?? '').trim(),
   };
 
+  const features = Array.isArray(body.features)
+    ? (body.features as unknown[]).filter((f): f is string => typeof f === 'string').slice(0, 30)
+    : null;
+
+  // Persist selected listing features onto the venue (the listing reads these).
+  if (features) {
+    await supabaseAdmin
+      .from('venues')
+      .update({ features })
+      .eq('id', venueId)
+      .then(undefined, () => { /* non-fatal */ });
+  }
+
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('name, location_city, location_state, description')
@@ -177,13 +190,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .maybeSingle();
 
   const venueName = (venue?.name as string) || 'our venue';
+  // Weave selected amenities into the differentiators we hand the AI.
+  const aForAi: Answers = {
+    ...a,
+    differentiators: [a.differentiators, features?.length ? `Amenities: ${features.join(', ')}` : '']
+      .filter(Boolean)
+      .join('. '),
+  };
   const draft =
     (await aiDraft(
       venueName,
       (venue?.location_city as string) || '',
       (venue?.location_state as string) || '',
       (venue?.description as string) || '',
-      a,
+      aForAi,
     )) ?? templateDraft(venueName, a);
 
   // ── Persist parent guide fields (guide-primary) ──────────────────────────────

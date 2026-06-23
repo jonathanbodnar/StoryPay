@@ -15,7 +15,7 @@
  * follow-up email can say "you're 1 step from going live".
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, Link2, Check, Copy, Share2, Sparkles, Loader2, X,
   ArrowRight, ArrowLeft, MapPin, Star, PartyPopper, ImageIcon, RotateCcw,
@@ -23,6 +23,14 @@ import {
 
 const SKIP_KEY = 'sv_onboarding_skipped';
 const BRAND = '#1b1b1b';
+
+// Mirrors FEATURE_OPTIONS in the venue-listing editor so selections carry over.
+const FEATURE_OPTIONS = [
+  'Ceremony site', 'Reception site', 'Bridal suite', "Groom's suite",
+  'On-site parking', 'Wheelchair accessible', 'In-house catering',
+  'BYO catering allowed', 'Bar service', 'Dance floor', 'Overnight accommodations',
+  'Pet friendly', 'Outdoor ceremony', 'Tented options',
+];
 
 type Candidate = {
   place_id: string;
@@ -110,6 +118,15 @@ export default function OnboardingWizard() {
     window.addEventListener('storyvenue:open-setup', onOpen);
     return () => window.removeEventListener('storyvenue:open-setup', onOpen);
   }, []);
+
+  // Lock background scroll while the modal is open so the page (and the live
+  // map behind it) doesn't scroll/shift.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
 
   const saveStep = useCallback((n: number) => {
     void fetch('/api/onboarding/state', {
@@ -200,29 +217,50 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [imported, setImported] = useState<{ profile: ImportedProfile; photos: string[]; review_count: number } | null>(null);
+  const reqIdRef = useRef(0);
 
-  const find = async () => {
-    setError(null); setCandidates([]); setLoading(true);
-    try {
-      const looksLikeUrl = /https?:\/\/|maps\.|goo\.gl/i.test(input);
-      if (mode === 'link' || looksLikeUrl) {
-        const res = await fetch('/api/listing/google-reviews/resolve-url', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: input }),
-        });
-        const d = await res.json();
-        if (!res.ok) { setError(d.error || 'Could not resolve that link.'); return; }
-        setCandidates([d]);
-      } else {
+  const looksLikeUrl = (s: string) => /https?:\/\/|maps\.|goo\.gl/i.test(s);
+
+  // Live, debounced search-as-you-type for the "Search by name" mode. Results
+  // refine the more you type. Stale responses are dropped via a request id.
+  useEffect(() => {
+    if (mode !== 'search') return;
+    const q = input.trim();
+    if (looksLikeUrl(q)) return;
+    if (q.length < 3) { setCandidates([]); setError(null); setLoading(false); return; }
+    const id = ++reqIdRef.current;
+    setLoading(true);
+    const t = setTimeout(async () => {
+      try {
         const res = await fetch('/api/listing/google-reviews/search', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: input }),
+          body: JSON.stringify({ query: q }),
         });
         const d = await res.json();
-        if (!res.ok) { setError(d.error || 'Search failed.'); return; }
-        if (!d.candidates?.length) { setError('No matches — try adding your city, or paste your Google Maps link.'); return; }
-        setCandidates(d.candidates);
+        if (id !== reqIdRef.current) return; // a newer keystroke superseded this
+        if (!res.ok) { setError(d.error || 'Search failed.'); setCandidates([]); return; }
+        setError(null);
+        setCandidates(d.candidates ?? []);
+      } catch {
+        if (id === reqIdRef.current) setError('Something went wrong. Try again.');
+      } finally {
+        if (id === reqIdRef.current) setLoading(false);
       }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [input, mode]);
+
+  // Used by the "Paste Google link" mode (explicit submit).
+  const resolveLink = async () => {
+    setError(null); setCandidates([]); setLoading(true);
+    try {
+      const res = await fetch('/api/listing/google-reviews/resolve-url', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: input }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setError(d.error || 'Could not resolve that link.'); return; }
+      setCandidates([d]);
     } catch { setError('Something went wrong. Try again.'); }
     finally { setLoading(false); }
   };
@@ -287,26 +325,35 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
       </div>
 
       <div className="mt-5 flex gap-2">
-        <button onClick={() => setMode('search')} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium ${mode === 'search' ? 'border-transparent text-white' : 'border-gray-200 text-gray-600'}`} style={mode === 'search' ? { backgroundColor: BRAND } : {}}>
+        <button onClick={() => { setMode('search'); setCandidates([]); setError(null); }} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium ${mode === 'search' ? 'border-transparent text-white' : 'border-gray-200 text-gray-600'}`} style={mode === 'search' ? { backgroundColor: BRAND } : {}}>
           <Search size={14} /> Search by name
         </button>
-        <button onClick={() => setMode('link')} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium ${mode === 'link' ? 'border-transparent text-white' : 'border-gray-200 text-gray-600'}`} style={mode === 'link' ? { backgroundColor: BRAND } : {}}>
+        <button onClick={() => { setMode('link'); setCandidates([]); setError(null); }} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium ${mode === 'link' ? 'border-transparent text-white' : 'border-gray-200 text-gray-600'}`} style={mode === 'link' ? { backgroundColor: BRAND } : {}}>
           <Link2 size={14} /> Paste Google link
         </button>
       </div>
 
       <div className="mt-3 flex gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && input.trim()) find(); }}
-          placeholder={mode === 'search' ? 'Your venue name + city' : 'Paste your Google Maps link'}
-          className="flex-1 rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400"
-        />
-        <button onClick={find} disabled={loading || !input.trim()} className="rounded-lg px-4 text-sm font-medium text-white disabled:opacity-40" style={{ backgroundColor: BRAND }}>
-          {loading ? <Loader2 size={16} className="animate-spin" /> : 'Find'}
-        </button>
+        <div className="relative flex-1">
+          {mode === 'search' && <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />}
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && mode === 'link' && input.trim()) resolveLink(); }}
+            placeholder={mode === 'search' ? 'Start typing your venue name…' : 'Paste your Google Maps link'}
+            className={`w-full rounded-lg border border-gray-200 py-2.5 pr-9 text-sm outline-none focus:border-gray-400 ${mode === 'search' ? 'pl-9' : 'pl-3'}`}
+          />
+          {loading && <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />}
+        </div>
+        {mode === 'link' && (
+          <button onClick={resolveLink} disabled={loading || !input.trim()} className="rounded-lg px-4 text-sm font-medium text-white disabled:opacity-40" style={{ backgroundColor: BRAND }}>
+            {loading ? <Loader2 size={16} className="animate-spin" /> : 'Find'}
+          </button>
+        )}
       </div>
+      {mode === 'search' && input.trim().length >= 3 && !loading && candidates.length === 0 && !error && (
+        <p className="mt-2 text-sm text-gray-400">No matches yet — keep typing, add your city, or paste your Google link.</p>
+      )}
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
 
@@ -343,8 +390,24 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   const [inclusivity, setInclusivity] = useState('');
   const [seasonality, setSeasonality] = useState('');
   const [differentiators, setDifferentiators] = useState('');
+  const [features, setFeatures] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Preload any features already set on the listing so they stay checked.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/venues/me', { cache: 'no-store' });
+        if (!res.ok) return;
+        const d = await res.json();
+        if (Array.isArray(d.features)) setFeatures(d.features.filter((f: unknown): f is string => typeof f === 'string'));
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  const toggleFeature = (f: string) =>
+    setFeatures((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
 
   const submit = async () => {
     setSaving(true); setError(null);
@@ -357,6 +420,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           inclusivity,
           seasonality,
           differentiators,
+          features,
         }),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not draft your guide.'); return; }
@@ -389,6 +453,25 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
                 {label}
               </button>
             ))}
+          </div>
+        </Field>
+
+        <Field label="Features (select all that apply)">
+          <div className="flex flex-wrap gap-2">
+            {FEATURE_OPTIONS.map((f) => {
+              const active = features.includes(f);
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => toggleFeature(f)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${active ? 'border-transparent text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                  style={active ? { backgroundColor: BRAND } : {}}
+                >
+                  {f}
+                </button>
+              );
+            })}
           </div>
         </Field>
 
