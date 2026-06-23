@@ -144,6 +144,9 @@ export async function GET(request: NextRequest) {
         q1 = q1.or('excluded_from_pipeline.is.null,excluded_from_pipeline.eq.false');
       }
 
+      // Hide GHL-imported placeholder contacts that have no real email
+      q1 = q1.not('email', 'ilike', '%@ghl-import.storyvenue.placeholder%');
+
       if (status)        q1 = q1.eq('status', status);
       if (pipelineId)    q1 = q1.eq('pipeline_id', pipelineId);
       if (stageId)       q1 = q1.eq('stage_id', stageId);
@@ -235,6 +238,7 @@ export async function GET(request: NextRequest) {
         .select(cols)
         .eq('venue_id', venueId)
         .not('pipeline_id', 'is', null)
+        .not('email', 'ilike', '%@ghl-import.storyvenue.placeholder%')
         .or(orphanFilter)
         .limit(500);
       if (orphanUseExclude) {
@@ -317,6 +321,7 @@ export async function GET(request: NextRequest) {
           .from('leads')
           .select(cols)
           .eq('venue_id', venueId)
+          .not('email', 'ilike', '%@ghl-import.storyvenue.placeholder%')
           .in('id', missingNoteLeadIds);
         if (!r.error) {
           extraLeads = (r.data ?? []) as unknown as LeadRow[];
