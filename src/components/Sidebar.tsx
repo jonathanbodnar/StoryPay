@@ -853,30 +853,29 @@ export default function Sidebar({
           <Link
             href="/dashboard/profile"
             title={rail ? 'My Profile' : undefined}
-            className={`flex items-center gap-2 transition-colors text-sm w-full rounded-lg hover:bg-gray-50 ${
-              pathname === '/dashboard/profile'
-                ? 'bg-gray-100 text-gray-900 font-semibold'
-                : 'text-gray-600 hover:text-gray-900'
-            } ${rail ? 'justify-center px-2 py-2' : 'px-2 py-1.5'}`}
+            className={classNames(navItem(pathname === '/dashboard/profile', rail), 'w-full')}
+            style={navItemStyle(pathname === '/dashboard/profile')}
           >
-            {memberName ? (
-              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-[9px] font-bold text-white flex-shrink-0">
-                {memberName.charAt(0).toUpperCase()}
-              </div>
-            ) : (
-              <UserCircle size={16} className="flex-shrink-0" />
-            )}
-            {!rail && <span className="truncate">{memberName ?? 'My Profile'}</span>}
+            <span className="relative flex items-center justify-center">
+              {memberName ? (
+                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-700 text-[9px] font-bold text-white shrink-0">
+                  {memberName.charAt(0).toUpperCase()}
+                </div>
+              ) : (
+                <UserCircle size={16} className="shrink-0" />
+              )}
+            </span>
+            {!rail && <span className="min-w-0 flex-1 truncate">{memberName ?? 'My Profile'}</span>}
           </Link>
           <a
             href="/api/auth/logout"
             title="Logout"
-            className={`flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full rounded-lg hover:bg-gray-50 ${
-              rail ? 'justify-center px-2 py-2' : 'px-2 py-1.5'
-            }`}
+            className={classNames(navItem(false, rail), 'w-full')}
           >
-            <LogOut size={16} />
-            {!rail && <span>Logout</span>}
+            <span className="relative flex items-center justify-center">
+              <LogOut size={16} className="shrink-0" />
+            </span>
+            {!rail && <span className="min-w-0 flex-1 truncate">Logout</span>}
           </a>
         </div>
       </nav>
