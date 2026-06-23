@@ -847,50 +847,39 @@ export default function Sidebar({
         ) : null}
 
         {renderMenuItems(bottomMenuItems, isMobile, rail, onCloseMobile)}
-      </nav>
 
-      <div className={`px-3 py-4 border-t border-gray-200 space-y-1 ${rail ? 'flex flex-col items-center' : ''}`}>
-        {/* My Profile — visible to all users */}
-        <Link
-          href="/dashboard/profile"
-          title={rail ? 'My Profile' : undefined}
-          className={`flex items-center gap-2 transition-colors text-sm w-full rounded-lg hover:bg-gray-50 ${
-            pathname === '/dashboard/profile'
-              ? 'bg-gray-100 text-gray-900 font-semibold'
-              : 'text-gray-600 hover:text-gray-900'
-          } ${rail ? 'justify-center px-2 py-2' : 'px-2 py-1.5'}`}
-        >
-          {memberName ? (
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-[9px] font-bold text-white flex-shrink-0">
-              {memberName.charAt(0).toUpperCase()}
-            </div>
-          ) : (
-            <UserCircle size={16} className="flex-shrink-0" />
-          )}
-          {!rail && <span className="truncate">{memberName ?? 'My Profile'}</span>}
-        </Link>
-        <button
-          type="button"
-          title="Contact support"
-          onClick={() => window.dispatchEvent(new Event('open-support'))}
-          className={`flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full rounded-lg hover:bg-gray-50 ${
-            rail ? 'justify-center px-2 py-2' : 'px-2 py-1.5'
-          }`}
-        >
-          <HelpCircle size={16} />
-          {!rail && <span>Support</span>}
-        </button>
-        <a
-          href="/api/auth/logout"
-          title="Logout"
-          className={`flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full rounded-lg hover:bg-gray-50 ${
-            rail ? 'justify-center px-2 py-2' : 'px-2 py-1.5'
-          }`}
-        >
-          <LogOut size={16} />
-          {!rail && <span>Logout</span>}
-        </a>
-      </div>
+        <div className={`space-y-0.5 pt-0.5 ${rail ? 'flex flex-col items-center' : ''}`}>
+          {/* My Profile — visible to all users */}
+          <Link
+            href="/dashboard/profile"
+            title={rail ? 'My Profile' : undefined}
+            className={`flex items-center gap-2 transition-colors text-sm w-full rounded-lg hover:bg-gray-50 ${
+              pathname === '/dashboard/profile'
+                ? 'bg-gray-100 text-gray-900 font-semibold'
+                : 'text-gray-600 hover:text-gray-900'
+            } ${rail ? 'justify-center px-2 py-2' : 'px-2 py-1.5'}`}
+          >
+            {memberName ? (
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-[9px] font-bold text-white flex-shrink-0">
+                {memberName.charAt(0).toUpperCase()}
+              </div>
+            ) : (
+              <UserCircle size={16} className="flex-shrink-0" />
+            )}
+            {!rail && <span className="truncate">{memberName ?? 'My Profile'}</span>}
+          </Link>
+          <a
+            href="/api/auth/logout"
+            title="Logout"
+            className={`flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors text-sm w-full rounded-lg hover:bg-gray-50 ${
+              rail ? 'justify-center px-2 py-2' : 'px-2 py-1.5'
+            }`}
+          >
+            <LogOut size={16} />
+            {!rail && <span>Logout</span>}
+          </a>
+        </div>
+      </nav>
     </div>
   );
 
