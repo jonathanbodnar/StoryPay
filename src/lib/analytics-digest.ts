@@ -1,6 +1,6 @@
 /**
- * Weekly analytics digest — builds metrics for one venue over the past 7 days
- * vs the prior 7 days, then renders and sends an HTML email via Resend.
+ * Monthly analytics digest — builds metrics for one venue over the past 30 days
+ * vs the prior 30 days, then renders and sends an HTML email via Resend.
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
@@ -47,27 +47,27 @@ export async function buildDigestMetrics(venueId: string): Promise<DigestMetrics
   if (!venue?.email) return null;
 
   const now = Date.now();
-  const since7d  = new Date(now - 7  * 86400000).toISOString();
-  const since14d = new Date(now - 14 * 86400000).toISOString();
+  const since30d = new Date(now - 30 * 86400000).toISOString();
+  const since60d = new Date(now - 60 * 86400000).toISOString();
 
   const { data: current } = await supabaseAdmin
     .from('listing_events')
     .select('session_id, event_type, event_data, created_at')
     .eq('venue_id', venueId)
-    .gte('created_at', since7d);
+    .gte('created_at', since30d);
 
   const { data: prior } = await supabaseAdmin
     .from('listing_events')
     .select('session_id, event_type, created_at')
     .eq('venue_id', venueId)
-    .gte('created_at', since14d)
-    .lt('created_at', since7d);
+    .gte('created_at', since60d)
+    .lt('created_at', since30d);
 
   const { data: newLeads } = await supabaseAdmin
     .from('leads')
     .select('id')
     .eq('venue_id', venueId)
-    .gte('created_at', since7d);
+    .gte('created_at', since30d);
 
   const rows = current ?? [];
   const priorRows = prior ?? [];
@@ -162,7 +162,7 @@ function fmtDuration(seconds: number): string {
 export function buildDigestHtml(m: DigestMetrics): string {
   const listingUrl = `${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${m.venueSlug}`;
   const dashboardUrl = `${APP_URL}/dashboard/listing/analytics`;
-  const weekStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const monthStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const tip = smartTip(m);
 
   const stat = (label: string, value: string | number, delta?: string) => `
@@ -183,8 +183,8 @@ export function buildDigestHtml(m: DigestMetrics): string {
   <!-- Header -->
   <tr><td style="background:#111827;border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
     <div style="font-size:13px;font-weight:600;color:#9ca3af;letter-spacing:0.1em;text-transform:uppercase;">StoryVenue</div>
-    <div style="font-size:22px;font-weight:700;color:#ffffff;margin-top:6px;">Your weekly listing report</div>
-    <div style="font-size:13px;color:#6b7280;margin-top:4px;">Week ending ${weekStr}</div>
+    <div style="font-size:22px;font-weight:700;color:#ffffff;margin-top:6px;">Your monthly listing report</div>
+    <div style="font-size:13px;color:#6b7280;margin-top:4px;">Month ending ${monthStr}</div>
   </td></tr>
 
   <!-- Venue name -->
@@ -228,7 +228,7 @@ export function buildDigestHtml(m: DigestMetrics): string {
   <!-- Top photo -->
   <tr><td style="background:#ffffff;padding:0 32px 24px;">
     <div style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">
-      🏆 Most viewed photo this week (${m.topPhotoViews} views)
+      🏆 Most viewed photo this month (${m.topPhotoViews} views)
     </div>
     <img src="${m.topPhotoUrl}" alt="Top photo" width="100%" style="border-radius:12px;object-fit:cover;max-height:220px;display:block;" />
   </td></tr>` : ''}
@@ -238,7 +238,7 @@ export function buildDigestHtml(m: DigestMetrics): string {
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px 20px;">
       <tr>
         <td>
-          <div style="font-size:12px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">💡 This week's tip</div>
+          <div style="font-size:12px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">💡 This month's tip</div>
           <div style="font-size:14px;color:#1e3a5f;line-height:1.6;">${tip}</div>
         </td>
       </tr>
@@ -281,10 +281,10 @@ export async function sendAnalyticsDigest(venueId: string): Promise<{ ok: boolea
   if (!metrics) return { ok: false, reason: 'no_email' };
 
   const html = buildDigestHtml(metrics);
-  const weekStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const monthStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const subject = metrics.views > 0
-    ? `Your listing had ${metrics.views} view${metrics.views !== 1 ? 's' : ''} this week — ${weekStr}`
-    : `Your weekly StoryVenue report — ${weekStr}`;
+    ? `Your listing had ${metrics.views} view${metrics.views !== 1 ? 's' : ''} this month — ${monthStr}`
+    : `Your monthly StoryVenue report — ${monthStr}`;
 
   const result = await sendEmail({
     to: metrics.email,

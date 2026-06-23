@@ -15,12 +15,16 @@ async function getVenueId(): Promise<string | null> {
   return cookieStore.get('venue_id')?.value ?? null;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
   const metrics = await buildDigestMetrics(venueId);
   if (!metrics) return NextResponse.json({ error: 'No metrics or email' }, { status: 404 });
+
+  if (req.nextUrl.searchParams.get('format') === 'json') {
+    return NextResponse.json(metrics);
+  }
 
   const html = buildDigestHtml(metrics);
   return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });

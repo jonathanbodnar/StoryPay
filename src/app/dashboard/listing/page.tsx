@@ -464,6 +464,66 @@ export default function ListingAnalyticsPage() {
     } catch { setDigestError('Network error'); } finally { setDigestSending(false); }
   }
 
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  async function downloadDigestPDF() {
+    setPdfDownloading(true);
+    try {
+      const res = await fetch('/api/analytics-digest-preview?format=json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to fetch metrics');
+      const metrics = await res.json();
+
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      // Header
+      doc.setFillColor(17, 24, 39); // gray-900
+      doc.rect(0, 0, 210, 24, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('StoryVenue', 14, 12);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Monthly Listing Report', 14, 18);
+      
+      const monthStr = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      doc.text(`Month ending ${monthStr}`, 140, 18);
+
+      // Venue Name
+      doc.setTextColor(17, 24, 39);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text(metrics.venueName || 'Your Venue', 14, 36);
+
+      // Stats Table
+      autoTable(doc, {
+        startY: 44,
+        head: [['Metric', 'Last 30 Days', 'vs Prior 30 Days']],
+        body: [
+          ['Listing views', String(metrics.views), metrics.views > metrics.priorViews ? `+${Math.round(((metrics.views - metrics.priorViews) / (metrics.priorViews || 1)) * 100)}%` : `${Math.round(((metrics.views - metrics.priorViews) / (metrics.priorViews || 1)) * 100)}%`],
+          ['Unique visitors', String(metrics.uniqueVisitors), metrics.uniqueVisitors > metrics.priorUniqueVisitors ? `+${Math.round(((metrics.uniqueVisitors - metrics.priorUniqueVisitors) / (metrics.priorUniqueVisitors || 1)) * 100)}%` : `${Math.round(((metrics.uniqueVisitors - metrics.priorUniqueVisitors) / (metrics.priorUniqueVisitors || 1)) * 100)}%`],
+          ['Inquiries sent', String(metrics.formSubmits), metrics.formSubmits > metrics.priorFormSubmits ? `+${Math.round(((metrics.formSubmits - metrics.priorFormSubmits) / (metrics.priorFormSubmits || 1)) * 100)}%` : `${Math.round(((metrics.formSubmits - metrics.priorFormSubmits) / (metrics.priorFormSubmits || 1)) * 100)}%`],
+          ['Leads created', String(metrics.leadsCreated), '—'],
+          ['Conversion rate', `${metrics.conversionRate}%`, '—'],
+          ['Read past halfway', `${metrics.scrollPct50}%`, '—'],
+          ['Avg time on listing', `${Math.floor(metrics.avgSessionDuration / 60)}m ${metrics.avgSessionDuration % 60}s`, '—'],
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39] },
+        styles: { font: 'helvetica', fontSize: 10 },
+      });
+
+      doc.save(`StoryVenue_Monthly_Report_${monthStr.replace(/\s+/g, '_')}.pdf`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setPdfDownloading(false);
+    }
+  }
+
   // UTM link builder
   const buildUtmUrl = useCallback((): string => {
     if (!data?.venue_slug) return '';
@@ -1126,7 +1186,7 @@ export default function ListingAnalyticsPage() {
         </div>
       )}
 
-      {/* ── Weekly digest ──────────────────────────────────────────────── */}
+      {/* ── Monthly digest ──────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-gray-200 bg-white p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
@@ -1134,8 +1194,8 @@ export default function ListingAnalyticsPage() {
               <Mail size={15} className="text-white" />
             </span>
             <div>
-              <p className="font-semibold text-gray-900 text-sm">Weekly email digest</p>
-              <p className="text-xs text-gray-400 mt-0.5">Auto-sends every Monday morning with views, inquiries, top photo, and one actionable tip.</p>
+              <p className="font-semibold text-gray-900 text-sm">Monthly email digest</p>
+              <p className="text-xs text-gray-400 mt-0.5">Auto-sends on the 1st of every month with stats and info from the last 30 days.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1147,17 +1207,22 @@ export default function ListingAnalyticsPage() {
             {digestError && (
               <span className="text-xs text-red-500">{digestError}</span>
             )}
+            <button onClick={() => void downloadDigestPDF()} disabled={pdfDownloading}
+              className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold hover:bg-gray-50 disabled:opacity-40 transition-colors">
+              {pdfDownloading ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+              {pdfDownloading ? 'Generating…' : 'Download PDF'}
+            </button>
             <button onClick={() => void sendTestDigest()} disabled={digestSending}
               className="flex items-center gap-2 rounded-xl bg-gray-900 text-white px-4 py-2 text-xs font-semibold hover:bg-gray-700 disabled:opacity-40 transition-colors">
               {digestSending ? <RefreshCw size={12} className="animate-spin" /> : <Send size={12} />}
-              {digestSending ? 'Sending…' : 'Send test digest'}
+              {digestSending ? 'Sending…' : 'Send now'}
             </button>
           </div>
         </div>
 
         <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { icon: Eye, label: 'Views this week', desc: 'With % vs prior week' },
+            { icon: Eye, label: 'Views (last 30 days)', desc: 'With % vs prior 30 days' },
             { icon: MousePointerClick, label: 'Inquiries sent', desc: 'Form submits + leads' },
             { icon: TrendingUp, label: 'Conversion rate', desc: 'Views → inquiry' },
             { icon: Bell, label: 'Smart tip', desc: 'One actionable insight' },

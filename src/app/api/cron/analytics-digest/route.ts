@@ -13,7 +13,7 @@ function authorize(request: NextRequest): boolean {
   return request.nextUrl.searchParams.get('secret') === secret;
 }
 
-/** Weekly analytics digest — sends to all published venues.
+/** Monthly analytics digest — sends to all published venues.
  *  Can also target a single venue: ?venue_id=<uuid>
  */
 export async function GET(request: NextRequest) {
