@@ -233,6 +233,11 @@ export async function POST(request: NextRequest) {
       name:             venueName,
       email,
       phone:            phone || null,
+      // Seed the public contact email (shown on the listing) from the
+      // registration email — single source of truth. The owner can change it
+      // later in the listing editor's Contact info section.
+      brand_email:      email,
+      brand_phone:      phone || null,
       password_hash:    passwordHash,
       setup_completed:  true,
       owner_first_name: firstName || null,
