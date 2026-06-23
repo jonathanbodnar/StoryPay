@@ -7,8 +7,6 @@ import {
  CheckCircle2,
  MessageSquare,
  Loader2,
- Rocket,
- RotateCcw,
  Users,
  Download,
  AlertCircle,
@@ -72,7 +70,6 @@ export default function SettingsPage() {
  });
 
  // Onboarding state — only need reset here, checklist lives on dashboard
- const [resetting, setResetting] = useState(false);
 
  // GHL contact sync
  interface SyncProgress {
@@ -215,18 +212,7 @@ export default function SettingsPage() {
    return () => stopSyncPolling();
  }, []);
 
- async function resetOnboarding() {
- setResetting(true);
- try {
-   await fetch('/api/onboarding', {
-     method: 'POST', headers: { 'Content-Type': 'application/json' },
-     body: JSON.stringify({ action: 'reset' }),
-   });
-   window.dispatchEvent(new Event('onboarding:reset'));
- } finally { setResetting(false); }
- }
-
- async function loadVenue() {
+  async function loadVenue() {
  try {
  const res = await fetch('/api/venues/me', { cache: 'no-store' });
  if (res.ok) {
@@ -368,27 +354,7 @@ try {
 
  <div className="space-y-6">
 
- {/* ── Setup Guide (owners only, desktop only) ── */}
- {isOwner && <section className="hidden md:block rounded-2xl border border-gray-200 bg-white overflow-hidden">
- <div className="flex items-center justify-between gap-4 px-6 py-5">
- <div className="flex items-center gap-3">
- <Rocket size={18} className="text-gray-400"/>
- <div>
- <h2 className="font-heading text-base font-semibold text-gray-900">Setup Guide</h2>
- <p className="text-xs text-gray-400 mt-0.5">Reactivate the Getting Started guide on your dashboard.</p>
- </div>
- </div>
- <button
- onClick={resetOnboarding}
- disabled={resetting}
- className="flex items-center gap-1.5 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
- >
- {resetting ? <Loader2 size={14} className="animate-spin"/> : <RotateCcw size={14} />}
- Restart Setup Guide
- </button>
- </div>
- </section>}
-
+ 
  {/* StoryVenue Legacy (Messaging) Integration */}
  <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
