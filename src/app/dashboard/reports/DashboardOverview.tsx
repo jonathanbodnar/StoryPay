@@ -291,11 +291,6 @@ export function DashboardOverview() {
  return (
  <div className="min-h-full bg-white">
 
-      {/* ── Onboarding Checklist — desktop only ── */}
-      <div className="hidden md:block">
-        <OnboardingChecklist />
-      </div>
-
       {/* ── Install app banner — shown until dismissed or installed ── */}
       {!installBannerDismissed && (
         <InstallAppCard variant="banner" onDismiss={dismissInstallBanner} />
@@ -304,8 +299,6 @@ export function DashboardOverview() {
  {/* ── Header ── */}
  <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
  <div>
- <h1 className="font-heading text-2xl leading-tight"style={{ color: B.primary }}>Home</h1>
- <p className="mt-0.5 text-sm text-gray-500">Your venue payment dashboard</p>
  </div>
  <div className="flex items-center gap-2.5 flex-wrap">
  <DateRangePicker value={dateRange} onChange={setDateRange} />
