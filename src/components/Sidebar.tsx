@@ -81,11 +81,11 @@ const marketingItems: NavItem[] = [
   { label: 'Email Notifications',  href: '/dashboard/settings/notifications',       icon: Bell,           navId: 'nav_settings_notifications' },
   { label: 'Forms',                href: '/dashboard/marketing/form-builder',       icon: LayoutTemplate, navId: 'nav_marketing_form_builder' },
   { label: 'Media',                href: '/dashboard/media',                        icon: Images,         navId: 'nav_main_media' },
-  { label: 'Email settings',       href: '/dashboard/marketing/email/settings',    icon: Settings,       navId: 'nav_marketing_email_settings' },
 ];
 
 const settingsItems: NavItem[] = [
   { label: 'General', href: '/dashboard/settings', icon: Settings, navId: 'nav_settings_general' },
+  { label: 'Email settings', href: '/dashboard/marketing/email/settings', icon: Mail, navId: 'nav_marketing_email_settings' },
   { label: 'Push Notifications', href: '/dashboard/settings/push', icon: Bell, navId: 'nav_settings_push' },
   { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette, navId: 'nav_settings_branding' },
   { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Link2, navId: 'nav_settings_integrations' },
@@ -287,8 +287,8 @@ export default function Sidebar({
   // legacy entry under "Venue listing" but its canonical home is Settings → Billing.
   const isOnSettingsBilling = pathname.startsWith('/dashboard/directory-billing');
   const isOnSettings =
-    (pathname.startsWith('/dashboard/settings') && !pathname.startsWith('/dashboard/settings/notifications')) || isOnSettingsBilling;
-  const isOnMarketing = pathname.startsWith('/dashboard/marketing')
+    (pathname.startsWith('/dashboard/settings') && !pathname.startsWith('/dashboard/settings/notifications')) || isOnSettingsBilling || pathname.startsWith('/dashboard/marketing/email/settings');
+  const isOnMarketing = (pathname.startsWith('/dashboard/marketing') && !pathname.startsWith('/dashboard/marketing/email/settings'))
     || pathname.startsWith('/dashboard/settings/notifications')
     || pathname.startsWith('/dashboard/media');
   const isOnPayments = pathname.startsWith('/dashboard/payments')
