@@ -201,7 +201,7 @@ export default function AiConciergeSettingsPage() {
               <h2 className="font-heading text-base font-semibold text-gray-900">How AI Concierge works</h2>
             </div>
             <div className="px-6 py-5 space-y-3 text-sm text-gray-600">
-              <Step n={1} title="Random 1–3 day cadence for up to 60 days"
+              <Step n={1} title="Random 1–2 day cadence for up to 60 days"
                 body="The AI sends short, varied SMS messages on a randomized cadence — never spammy, always casual. Each message picks a fresh angle so it never feels repetitive." />
               <Step n={2} title="Reply = AI stops"
                 body="The moment the bride replies, the AI pauses and you (or your team) take over. We tag the contact and notify you immediately by email." />
