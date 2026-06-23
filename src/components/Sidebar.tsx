@@ -55,11 +55,10 @@ const topMenuItems: NavItem[] = [
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
 ];
 
-const middleMenuItems: NavItem[] = [
-  { label: 'Reports', href: '/dashboard/reports', icon: BarChart2, navId: 'nav_main_reports' },
-];
+const middleMenuItems: NavItem[] = [];
 
 const bottomMenuItems: NavItem[] = [
+  { label: 'Reports', href: '/dashboard/reports', icon: BarChart2, navId: 'nav_main_reports' },
   { label: 'Help Center', href: '/dashboard/help', icon: BookOpen, navId: 'nav_main_help' },
 ];
 
