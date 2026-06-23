@@ -165,7 +165,7 @@ export async function GET() {
     phase3Steps:        phase3.steps,
     phase4Enabled:      phase4.automationActive,
     phase4Steps:        phase4.steps,
-    phase5Enabled:      phase5.automationActive,
+    phase5Enabled:      phase5.automationId ? phase5.automationActive : false,
     phase5Steps:        phase5.steps,
     aiEnabled:          (v.ai_concierge_enabled as boolean | null) ?? false,
     aiPersonaName:      (v.ai_assistant_persona_name as string | null) ?? 'StoryVenue Concierge',
@@ -313,7 +313,7 @@ export async function PATCH(req: NextRequest) {
     await saveAutomation(STL_NAME, body.sequenceEnabled, body.steps, 'form_submitted');
     await saveAutomation(PHASE3_NAME, body.phase3Enabled, body.phase3Steps, 'tag_added');
     await saveAutomation(PHASE4_NAME, body.phase4Enabled, body.phase4Steps, 'tag_added');
-    await saveAutomation(PHASE5_NAME, body.phase5Enabled, body.phase5Steps, 'tag_added');
+    await saveAutomation(PHASE5_NAME, body.phase5Enabled ?? false, body.phase5Steps, 'tag_added');
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Failed to save automations' }, { status: 500 });
   }
