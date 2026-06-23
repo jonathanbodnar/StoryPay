@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 const SKIP_KEY = 'sv_onboarding_skipped';
-const BRAND = '#0d9488';
+const BRAND = '#1b1b1b';
 
 type Candidate = {
   place_id: string;
