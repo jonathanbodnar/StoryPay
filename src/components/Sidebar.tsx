@@ -847,38 +847,38 @@ export default function Sidebar({
         ) : null}
 
         {renderMenuItems(bottomMenuItems, isMobile, rail, onCloseMobile)}
-
-        <div className={`space-y-0.5 pt-0.5 ${rail ? 'flex flex-col items-center' : ''}`}>
-          {/* My Profile — visible to all users */}
-          <Link
-            href="/dashboard/profile"
-            title={rail ? 'My Profile' : undefined}
-            className={classNames(navItem(pathname === '/dashboard/profile', rail), 'w-full')}
-            style={navItemStyle(pathname === '/dashboard/profile')}
-          >
-            <span className="relative flex items-center justify-center">
-              {memberName ? (
-                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-700 text-[9px] font-bold text-white shrink-0">
-                  {memberName.charAt(0).toUpperCase()}
-                </div>
-              ) : (
-                <UserCircle size={16} className="shrink-0" />
-              )}
-            </span>
-            {!rail && <span className="min-w-0 flex-1 truncate">{memberName ?? 'My Profile'}</span>}
-          </Link>
-          <a
-            href="/api/auth/logout"
-            title="Logout"
-            className={classNames(navItem(false, rail), 'w-full')}
-          >
-            <span className="relative flex items-center justify-center">
-              <LogOut size={16} className="shrink-0" />
-            </span>
-            {!rail && <span className="min-w-0 flex-1 truncate">Logout</span>}
-          </a>
-        </div>
       </nav>
+
+      <div className={`px-3 py-4 border-t border-gray-200 space-y-0.5 ${rail ? 'flex flex-col items-center' : ''}`}>
+        {/* My Profile — visible to all users */}
+        <Link
+          href="/dashboard/profile"
+          title={rail ? 'My Profile' : undefined}
+          className={classNames(navItem(pathname === '/dashboard/profile', rail), 'w-full')}
+          style={navItemStyle(pathname === '/dashboard/profile')}
+        >
+          <span className="relative flex items-center justify-center">
+            {memberName ? (
+              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-700 text-[9px] font-bold text-white shrink-0">
+                {memberName.charAt(0).toUpperCase()}
+              </div>
+            ) : (
+              <UserCircle size={16} className="shrink-0" />
+            )}
+          </span>
+          {!rail && <span className="min-w-0 flex-1 truncate">{memberName ?? 'My Profile'}</span>}
+        </Link>
+        <a
+          href="/api/auth/logout"
+          title="Logout"
+          className={classNames(navItem(false, rail), 'w-full')}
+        >
+          <span className="relative flex items-center justify-center">
+            <LogOut size={16} className="shrink-0" />
+          </span>
+          {!rail && <span className="min-w-0 flex-1 truncate">Logout</span>}
+        </a>
+      </div>
     </div>
   );
 
