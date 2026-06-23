@@ -23,35 +23,9 @@ import {
   CircleDollarSign,
   Rocket,
   Building2,
+  Diamond,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
-
-function DiamondRingIcon({ size = 16, className = '' }: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      {/* Ring band */}
-      <circle cx="12" cy="16" r="5" />
-      {/* Diamond top left facet */}
-      <path d="M9 8l-3 4h6z" />
-      {/* Diamond top right facet */}
-      <path d="M15 8l3 4h-6z" />
-      {/* Diamond top edge */}
-      <path d="M9 8h6" />
-      {/* Diamond bottom center line */}
-      <path d="M12 12l-3-4M12 12l3-4" />
-    </svg>
-  );
-}
 import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
 import { LockedFeatureModal } from '@/components/LockedFeatureView';
 
@@ -683,7 +657,7 @@ export default function Sidebar({
               className={groupBtn(isOnListing || flyout === 'listing', true)}
               style={groupBtnStyle(isOnListing || flyout === 'listing')}
             >
-              <DiamondRingIcon size={16} className={!(isOnListing || flyout === 'listing') ? 'text-[#1b1b1b]' : ''} />
+              <Diamond size={16} className={!(isOnListing || flyout === 'listing') ? 'text-[#1b1b1b]' : ''} />
             </button>
           ) : (
             <>
@@ -702,7 +676,7 @@ export default function Sidebar({
                 style={groupBtnStyle(isOnListing && listingOpen)}
               >
                 <div className={`flex items-center gap-3 ${!(isOnListing && listingOpen) ? 'text-[#1b1b1b]' : ''}`}>
-                  <DiamondRingIcon size={16} />
+                  <Diamond size={16} />
                   <span className="font-bold">Bride Booking System™</span>
                 </div>
                 <ChevronDown

@@ -36,16 +36,16 @@ function Toggle({
 }
 
 function PhaseCard({
-  number, title, subtitle, icon, enabled, onToggle, disabled, children, accent,
+  number, title, subtitle, icon, enabled, onToggle, disabled, children, accent, noPadding, defaultOpen,
 }: {
   number: number; title: string; subtitle: string;
   icon: React.ReactNode; enabled: boolean; onToggle: (v: boolean) => void;
-  disabled?: boolean; children?: React.ReactNode; accent: string;
+  disabled?: boolean; children?: React.ReactNode; accent: string; noPadding?: boolean; defaultOpen?: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(defaultOpen ?? true);
 
   return (
-    <div className={`rounded-2xl border bg-white transition-shadow ${enabled ? 'shadow-sm border-gray-200' : 'border-gray-100 opacity-60'}`}>
+    <div className={`rounded-2xl border bg-white transition-shadow overflow-hidden ${enabled ? 'shadow-sm border-gray-200' : 'border-gray-100 opacity-60'}`}>
       <div className="flex items-start gap-4 p-5">
         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent}`}>
           {icon}
@@ -65,7 +65,7 @@ function PhaseCard({
         </div>
       </div>
       {enabled && isOpen && children && (
-        <div className="border-t border-gray-100 px-5 pb-5 pt-4">
+        <div className={`border-t border-gray-100 ${noPadding ? '' : 'px-5 pb-5 pt-4'}`}>
           {children}
         </div>
       )}
@@ -881,6 +881,7 @@ export default function BookingSystemPage() {
           accent="bg-emerald-50"
           enabled={cfg.phase5Enabled}
           onToggle={(v) => void save({ phase5Enabled: v })}
+          defaultOpen={false}
         >
           <SequenceEditor
             steps={cfg.phase5Steps}
@@ -899,10 +900,9 @@ export default function BookingSystemPage() {
           accent="bg-emerald-50"
           enabled={cfg.aiEnabled}
           onToggle={(v) => void save({ aiEnabled: v })}
+          noPadding
         >
-          <div className="pt-2">
-            <AiConciergeSettingsPage />
-          </div>
+          <AiConciergeSettingsPage />
         </PhaseCard>
       </div>
     </div>
