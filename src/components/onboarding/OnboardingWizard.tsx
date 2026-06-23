@@ -160,10 +160,10 @@ export default function OnboardingWizard() {
   );
 }
 
-/** Persistent launcher shown until onboarding is complete. */
+/** Persistent launcher shown top-left until onboarding is complete. */
 function LauncherBubble({ onClick }: { onClick: () => void }) {
   return (
-    <div className="group fixed bottom-6 left-6 z-[90] flex items-center">
+    <div className="group fixed top-16 left-4 z-[90] flex items-center lg:top-[80px] lg:left-[284px]">
       <button
         onClick={onClick}
         className="flex items-center gap-2 rounded-full py-2.5 pl-3 pr-4 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-[1.03]"
@@ -174,7 +174,7 @@ function LauncherBubble({ onClick }: { onClick: () => void }) {
         </span>
         Finish setup
       </button>
-      <div className="pointer-events-none absolute bottom-full left-0 mb-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+      <div className="pointer-events-none absolute top-full left-0 mt-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
         Publish your booking system to start getting leads. This goes away once your listing and guide are live.
       </div>
     </div>
