@@ -29,11 +29,11 @@ export default function OfflinePage() {
             by the service worker, so a raw <img> always renders. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/storyvenue-sidebar-mark.png"
+          src="/storyvenue-dark-logo.png"
           alt="StoryVenue"
-          width={56}
-          height={56}
-          style={{ borderRadius: 12, marginBottom: 20 }}
+          width={160}
+          height={40}
+          style={{ margin: '0 auto 24px', display: 'block' }}
         />
         <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 10 }}>
           You&rsquo;re offline

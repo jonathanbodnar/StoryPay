@@ -30,6 +30,7 @@ const PRECACHE_URLS = [
   OFFLINE_URL,
   '/manifest.json',
   '/storyvenue-sidebar-mark.png',
+  '/storyvenue-dark-logo.png',
 ];
 
 // ── install ──────────────────────────────────────────────────────────────────
