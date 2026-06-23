@@ -50,6 +50,7 @@ interface SidebarProps {
 }
 
 const topMenuItems: NavItem[] = [
+  { label: 'Lead Inbox', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
@@ -99,7 +100,6 @@ const listingItems: NavItem[] = [
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
   { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: Sparkles, navId: 'nav_listing_pricing_guide' },
   { label: 'Speed to Lead System', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
-  { label: 'Lead Inbox', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Verified & Sponsored', href: '/dashboard/listing/directory', icon: BadgeCheck, navId: 'nav_listing_directory' },
 ];
 
@@ -163,7 +163,7 @@ export default function Sidebar({
   // "Lead Inbox" lives at /dashboard/leads but belongs to the Bride Booking
   // System group, so treat it as part of the listing section too — otherwise
   // navigating to it would collapse the group.
-  const isOnListing = pathname.startsWith('/dashboard/listing') || pathname.startsWith('/dashboard/leads');
+  const isOnListing = pathname.startsWith('/dashboard/listing');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [flyout, setFlyout] = useState<FlyoutGroup>(null);
   const [flyoutPos, setFlyoutPos] = useState<{ top: number; left: number } | null>(null);
