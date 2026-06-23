@@ -22,6 +22,7 @@ import {
   Lock,
   CircleDollarSign,
   Rocket,
+  Building2,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
@@ -101,7 +102,7 @@ const listingItems: NavItem[] = [
   { label: 'Venue Listing', href: '/dashboard/listing/venue-listing', icon: Store, navId: 'nav_listing_dashboard' },
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
   { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: CircleDollarSign, navId: 'nav_listing_pricing_guide' },
-  { label: 'Speed to Lead System', href: '/dashboard/listing/booking-system', icon: Rocket, navId: 'nav_listing_booking_system' },
+  { label: 'Speed to Lead System', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
   { label: 'Verified & Sponsored', href: '/dashboard/listing/directory', icon: BadgeCheck, navId: 'nav_listing_directory' },
 ];
 
@@ -655,7 +656,7 @@ export default function Sidebar({
               className={groupBtn(isOnListing || flyout === 'listing', true)}
               style={groupBtnStyle(isOnListing || flyout === 'listing')}
             >
-              <Store size={16} className={!(isOnListing || flyout === 'listing') ? 'text-[#1b1b1b]' : ''} />
+              <Building2 size={16} className={!(isOnListing || flyout === 'listing') ? 'text-[#1b1b1b]' : ''} />
             </button>
           ) : (
             <>
@@ -674,7 +675,7 @@ export default function Sidebar({
                 style={groupBtnStyle(isOnListing && listingOpen)}
               >
                 <div className={`flex items-center gap-3 ${!(isOnListing && listingOpen) ? 'text-[#1b1b1b]' : ''}`}>
-                  <Store size={16} />
+                  <Building2 size={16} />
                   <span className="font-bold">Bride Booking System™</span>
                 </div>
                 <ChevronDown
