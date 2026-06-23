@@ -12,6 +12,8 @@ import {
  AlertCircle,
  Copy,
  Webhook,
+ RotateCcw,
+ Sparkles,
 } from 'lucide-react';
 
 interface VenueInfo {
@@ -212,6 +214,23 @@ export default function SettingsPage() {
    return () => stopSyncPolling();
  }, []);
 
+ // Re-run the post-signup setup wizard (Google import → guide → publish).
+ const [restarting, setRestarting] = useState(false);
+ async function restartOnboarding() {
+   setRestarting(true);
+   try {
+     await fetch('/api/onboarding/state', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ action: 'restart' }),
+     });
+     try { sessionStorage.removeItem('sv_onboarding_skipped'); } catch { /* ignore */ }
+     window.location.href = '/dashboard/listing?onboarding=1';
+   } catch {
+     setRestarting(false);
+   }
+ }
+
   async function loadVenue() {
  try {
  const res = await fetch('/api/venues/me', { cache: 'no-store' });
@@ -354,7 +373,28 @@ try {
 
  <div className="space-y-6">
 
- 
+ {/* Setup wizard — re-run the guided onboarding flow */}
+ <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+ <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
+ <Sparkles size={18} className="text-gray-400" />
+ <h2 className="font-heading text-base font-semibold text-gray-900">Setup Wizard</h2>
+ </div>
+ <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
+ <div className="min-w-0">
+ <p className="text-sm font-medium text-gray-900">Re-run guided setup</p>
+ <p className="mt-0.5 text-sm text-gray-500">Re-import from Google, redraft your guide, and republish. Your live page stays up until you republish.</p>
+ </div>
+ <button
+ onClick={() => void restartOnboarding()}
+ disabled={restarting}
+ className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+ >
+ {restarting ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+ {restarting ? 'Starting…' : 'Restart setup wizard'}
+ </button>
+ </div>
+ </section>
+
  {/* StoryVenue Legacy (Messaging) Integration */}
  <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">

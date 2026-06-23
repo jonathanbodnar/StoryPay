@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Search, Link2, Check, Copy, Share2, Sparkles, Loader2, X,
-  ArrowRight, ArrowLeft, MapPin, Star, PartyPopper, ImageIcon,
+  ArrowRight, ArrowLeft, MapPin, Star, PartyPopper, ImageIcon, RotateCcw,
 } from 'lucide-react';
 
 const SKIP_KEY = 'sv_onboarding_skipped';
@@ -64,6 +64,22 @@ export default function OnboardingWizard() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Forced re-open (from the "Restart setup" button) — bypass the skip flag
+      // and the published gate so a live venue can re-run the wizard.
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('onboarding') === '1') {
+          sessionStorage.removeItem(SKIP_KEY);
+          setVisible(true);
+          setStep(0);
+          setChecking(false);
+          params.delete('onboarding');
+          const qs = params.toString();
+          window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+          return;
+        }
+      } catch { /* ignore */ }
+
       try {
         if (sessionStorage.getItem(SKIP_KEY) === '1') { setChecking(false); return; }
         const res = await fetch('/api/onboarding/state', { cache: 'no-store' });
@@ -101,6 +117,15 @@ export default function OnboardingWizard() {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
       <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+        {step > 0 && step < 3 && (
+          <button
+            onClick={() => go(0)}
+            className="absolute left-4 top-4 z-10 flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Start over"
+          >
+            <RotateCcw size={13} /> Start over
+          </button>
+        )}
         <button
           onClick={skip}
           className="absolute right-4 top-4 z-10 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"

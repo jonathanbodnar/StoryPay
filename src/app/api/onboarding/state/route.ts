@@ -11,6 +11,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getOrCreatePricingGuideId } from '@/lib/pricing-guide';
+import { slugify } from '@/lib/directory';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -24,6 +25,34 @@ async function getVenueId(): Promise<string | null> {
 
 function liveUrl(slug: string | null): string | null {
   return slug ? `${DIRECTORY_URL}/venue/${slug}` : null;
+}
+
+/**
+ * Ensures the venue has a unique slug so it can have a public URL. New signups
+ * are created without one. Returns the existing or newly-assigned slug.
+ */
+async function ensureVenueSlug(venueId: string, name: string | null): Promise<string | null> {
+  const base = slugify(name || '') || `venue-${venueId.slice(0, 8)}`;
+  let candidate = base;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { data: clash } = await supabaseAdmin
+      .from('venues')
+      .select('id')
+      .eq('slug', candidate)
+      .neq('id', venueId)
+      .maybeSingle();
+    if (!clash) break;
+    candidate = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+  }
+  const { error } = await supabaseAdmin
+    .from('venues')
+    .update({ slug: candidate })
+    .eq('id', venueId);
+  if (error) {
+    console.error('[onboarding] ensureVenueSlug', error.message);
+    return null;
+  }
+  return candidate;
 }
 
 export async function GET(): Promise<NextResponse> {
@@ -90,23 +119,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: guideErr.message }, { status: 500 });
     }
 
-    // 2. Publish the listing + stamp activation.
-    const { data: venue, error: vErr } = await supabaseAdmin
+    // 2. Make sure the venue has a slug — new signups don't get one, and
+    //    without it there's no public URL (the success screen needs one).
+    const { data: current } = await supabaseAdmin
+      .from('venues')
+      .select('slug, name')
+      .eq('id', venueId)
+      .maybeSingle();
+
+    let slug = (current?.slug as string | null) ?? null;
+    if (!slug) {
+      slug = await ensureVenueSlug(venueId, (current?.name as string) ?? null);
+    }
+
+    // 3. Publish the listing + stamp activation.
+    const { error: vErr } = await supabaseAdmin
       .from('venues')
       .update({
         is_published: true,
         onboarding_completed_at: new Date().toISOString(),
         onboarding_last_step: 3,
       })
-      .eq('id', venueId)
-      .select('slug')
-      .single();
+      .eq('id', venueId);
     if (vErr) {
       console.error('[onboarding/publish] venue publish', vErr.message);
       return NextResponse.json({ error: vErr.message }, { status: 500 });
     }
-
-    const slug = (venue?.slug as string) ?? null;
 
     // Analytics milestone — the one metric we optimize for.
     void import('@/lib/analytics')
@@ -116,6 +154,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .catch(() => { /* non-fatal */ });
 
     return NextResponse.json({ ok: true, is_published: true, slug, live_url: liveUrl(slug) });
+  }
+
+  if (action === 'restart') {
+    // Re-open the wizard from the top. Leaves the listing published (we don't
+    // un-publish a live page) but clears the completion stamp so it shows again.
+    await supabaseAdmin
+      .from('venues')
+      .update({ onboarding_completed_at: null, onboarding_last_step: 0 })
+      .eq('id', venueId);
+    return NextResponse.json({ ok: true });
   }
 
   return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
