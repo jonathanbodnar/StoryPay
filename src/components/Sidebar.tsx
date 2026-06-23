@@ -602,7 +602,7 @@ export default function Sidebar({
         <div className={`flex items-center w-full ${rail ? 'flex-col gap-2' : 'justify-between gap-2'}`}>
           <Link
             href="/dashboard"
-            className={rail ? 'flex justify-center' : 'block min-w-0'}
+            className={rail ? 'flex justify-center' : 'block min-w-0 pl-3'}
             onClick={onCloseMobile}
           >
             {rail ? (

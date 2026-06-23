@@ -12,6 +12,7 @@ import MobileDashboardRedirect from '@/components/MobileDashboardRedirect';
 // ImpersonationBanner rendered server-side in layout.tsx (black bar)
 import { DirectoryRouteGuard } from '@/components/DirectoryRouteGuard';
 import UsageTracker from '@/components/analytics/UsageTracker';
+import OnboardingLauncher from '@/components/onboarding/OnboardingLauncher';
 import { trackClient } from '@/lib/analytics-client';
 
 const STORAGE_KEY = 'storypay.dashboard.sidebarCollapsed';
@@ -184,6 +185,7 @@ export default function DashboardShell({
         <AnnouncementTicker />
         <MobileDashboardRedirect />
         <main className={`mx-auto flex w-full flex-1 flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
+          <OnboardingLauncher />
           {trialCountdown ? (
             <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex-1">
