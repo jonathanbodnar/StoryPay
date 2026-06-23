@@ -8,6 +8,7 @@ import DashboardShell from '@/components/DashboardShell';
 import AskAIWidget from '@/components/AskAIWidget';
 import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
 import TrialExpiredWall from '@/components/TrialExpiredWall';
+import OnboardingWizard from '@/components/onboarding/OnboardingWizard';
 
 export default async function DashboardLayout({
  children,
@@ -101,6 +102,7 @@ export default async function DashboardLayout({
  {children}
  </DashboardShell>
  <AskAIWidget />
+ {user.isAdmin && !isImpersonating && <OnboardingWizard />}
  </div>
  );
 }
