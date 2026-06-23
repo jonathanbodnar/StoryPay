@@ -56,40 +56,47 @@ type Draft = {
 };
 
 export default function OnboardingWizard() {
-  const [visible, setVisible] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [complete, setComplete] = useState(false); // listing published + guide live, or onboarded
+  const [open, setOpen] = useState(false);          // modal open
   const [step, setStep] = useState(0);
 
-  // Gate on onboarding state.
+  // Gate on onboarding state. "Complete" = they published via the wizard, OR
+  // they manually finished both the listing (is_published) and the pricing
+  // guide (guide_enabled). Until then we keep a persistent launcher bubble.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Forced re-open (from the "Restart setup" button) — bypass the skip flag
-      // and the published gate so a live venue can re-run the wizard.
+      // Forced re-open (from the "Restart setup" button) — open immediately,
+      // regardless of completion or the per-session skip flag.
+      let forced = false;
       try {
         const params = new URLSearchParams(window.location.search);
         if (params.get('onboarding') === '1') {
+          forced = true;
           sessionStorage.removeItem(SKIP_KEY);
-          setVisible(true);
-          setStep(0);
-          setChecking(false);
           params.delete('onboarding');
           const qs = params.toString();
           window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
-          return;
         }
       } catch { /* ignore */ }
 
       try {
-        if (sessionStorage.getItem(SKIP_KEY) === '1') { setChecking(false); return; }
         const res = await fetch('/api/onboarding/state', { cache: 'no-store' });
-        if (!res.ok) { setChecking(false); return; }
+        if (!res.ok) { setChecking(false); if (forced) setOpen(true); return; }
         const s = await res.json();
         if (cancelled) return;
-        // Show only for venues that haven't finished AND aren't live yet.
-        if (!s.completed && !s.is_published) {
-          setVisible(true);
-          setStep(typeof s.last_step === 'number' ? Math.min(s.last_step, 3) : 0);
+        const isComplete = Boolean(s.completed) || (Boolean(s.is_published) && Boolean(s.guide_enabled));
+        setComplete(isComplete);
+        setStep(typeof s.last_step === 'number' ? Math.min(s.last_step, 3) : 0);
+
+        if (forced) {
+          setStep(0);
+          setOpen(true);
+        } else if (!isComplete) {
+          // Auto-open once per session; after that the bubble re-summons it.
+          const skipped = (() => { try { return sessionStorage.getItem(SKIP_KEY) === '1'; } catch { return false; } })();
+          setOpen(!skipped);
         }
       } catch { /* ignore */ }
       finally { if (!cancelled) setChecking(false); }
@@ -107,12 +114,18 @@ export default function OnboardingWizard() {
 
   const go = useCallback((n: number) => { setStep(n); saveStep(n); }, [saveStep]);
 
-  const skip = useCallback(() => {
+  // Close the modal but keep the launcher bubble (until truly complete).
+  const dismiss = useCallback(() => {
     try { sessionStorage.setItem(SKIP_KEY, '1'); } catch {}
-    setVisible(false);
+    setOpen(false);
   }, []);
 
-  if (checking || !visible) return null;
+  if (checking) return null;
+
+  // When the modal is closed: show the persistent bubble until complete.
+  if (!open) {
+    return complete ? null : <LauncherBubble onClick={() => setOpen(true)} />;
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
@@ -127,7 +140,7 @@ export default function OnboardingWizard() {
           </button>
         )}
         <button
-          onClick={skip}
+          onClick={dismiss}
           className="absolute right-4 top-4 z-10 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           aria-label="Close"
         >
@@ -137,11 +150,32 @@ export default function OnboardingWizard() {
         <StepDots step={step} />
 
         <div className="px-6 pb-8 pt-2 sm:px-10">
-          {step === 0 && <ConnectStep onNext={() => go(1)} onSkip={skip} />}
+          {step === 0 && <ConnectStep onNext={() => go(1)} onSkip={dismiss} />}
           {step === 1 && <QuestionsStep onBack={() => go(0)} onNext={() => go(2)} />}
           {step === 2 && <ReviewStep onBack={() => go(1)} onNext={() => go(3)} />}
-          {step === 3 && <PublishStep onDone={() => setVisible(false)} />}
+          {step === 3 && <PublishStep onDone={() => { setComplete(true); setOpen(false); }} />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Persistent launcher shown until onboarding is complete. */
+function LauncherBubble({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="group fixed bottom-6 left-6 z-[90] flex items-center">
+      <button
+        onClick={onClick}
+        className="flex items-center gap-2 rounded-full py-2.5 pl-3 pr-4 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-[1.03]"
+        style={{ backgroundColor: BRAND }}
+      >
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15">
+          <Sparkles size={14} />
+        </span>
+        Finish setup
+      </button>
+      <div className="pointer-events-none absolute bottom-full left-0 mb-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+        Publish your booking system to start getting leads. This goes away once your listing and guide are live.
       </div>
     </div>
   );

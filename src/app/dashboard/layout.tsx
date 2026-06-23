@@ -102,7 +102,7 @@ export default async function DashboardLayout({
  {children}
  </DashboardShell>
  <AskAIWidget />
- {user.isAdmin && !isImpersonating && <OnboardingWizard />}
+ {user.isAdmin && <OnboardingWizard />}
  </div>
  );
 }
