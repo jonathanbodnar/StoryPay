@@ -24,6 +24,7 @@ import {
   Rocket,
   Building2,
   Diamond,
+  Gem,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
@@ -657,7 +658,7 @@ export default function Sidebar({
               className={groupBtn(isOnListing || flyout === 'listing', true)}
               style={groupBtnStyle(isOnListing || flyout === 'listing')}
             >
-              <Diamond size={16} className={!(isOnListing || flyout === 'listing') ? 'text-[#1b1b1b]' : ''} />
+              <Gem size={16} className={!(isOnListing || flyout === 'listing') ? 'text-[#1b1b1b]' : ''} />
             </button>
           ) : (
             <>
@@ -676,7 +677,7 @@ export default function Sidebar({
                 style={groupBtnStyle(isOnListing && listingOpen)}
               >
                 <div className={`flex items-center gap-3 ${!(isOnListing && listingOpen) ? 'text-[#1b1b1b]' : ''}`}>
-                  <Diamond size={16} />
+                  <Gem size={16} />
                   <span className="font-bold">Bride Booking System™</span>
                 </div>
                 <ChevronDown
