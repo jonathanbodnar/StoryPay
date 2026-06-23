@@ -149,7 +149,7 @@ export default function AiConciergeSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex items-center justify-center py-20 min-h-[500px]">
         <Loader2 className="animate-spin text-gray-400" size={24} />
       </div>
     );
@@ -157,7 +157,7 @@ export default function AiConciergeSettingsPage() {
 
   if (!data) {
     return (
-      <div className="py-20 text-center">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden py-20 text-center min-h-[500px] flex flex-col items-center justify-center">
         <p className="text-gray-500 mb-4">{error || 'Unable to load AI Concierge settings.'}</p>
         <button
           onClick={() => { setLoading(true); void load(); }}
@@ -170,9 +170,9 @@ export default function AiConciergeSettingsPage() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div className="bg-white overflow-hidden min-h-[500px]">
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 px-4 pt-4 bg-gray-50/50">
+      <div className="flex gap-1 border-b border-gray-200 px-4 pt-2 bg-white">
         {([
           { id: 'overview', label: 'Overview', icon: Sparkles },
           { id: 'leads',    label: 'Active Leads', icon: Bot,
@@ -194,7 +194,7 @@ export default function AiConciergeSettingsPage() {
 
       {/* Overview tab */}
       {activeTab === 'overview' && (
-        <div className="space-y-6">
+        <div className="space-y-6 pt-6">
           <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
             <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
               <MessageSquare size={18} className="text-gray-400" />
@@ -294,7 +294,11 @@ export default function AiConciergeSettingsPage() {
       )}
 
       {/* Active Leads tab */}
-      {activeTab === 'leads' && <ActiveLeadsPanel />}
+      {activeTab === 'leads' && (
+        <div className="pt-6">
+          <ActiveLeadsPanel />
+        </div>
+      )}
     </div>
   );
 }
