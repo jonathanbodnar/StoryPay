@@ -553,7 +553,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
       <div className="mt-6 flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"><ArrowLeft size={14} /> Back</button>
         <button onClick={submit} disabled={saving} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
-          {saving ? <><Loader2 size={16} className="animate-spin" /> Writing your guide…</> : <>Draft my guide <Sparkles size={16} /></>}
+          {saving ? <><Loader2 size={16} className="animate-spin" /> Writing your guide…</> : <>Write my guide <Sparkles size={16} /></>}
         </button>
       </div>
     </div>
@@ -624,6 +624,14 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
     return <div className="flex h-48 items-center justify-center text-gray-400"><Loader2 size={24} className="animate-spin" /></div>;
   }
 
+  // Block publishing while any field exceeds its limit. maxLength caps typing,
+  // but AI/Google drafts loaded in can exceed it, so guard the continue button.
+  const overCongrats = congrats.length > 500;
+  const overAbout = about.length > 700;
+  const overPricingIntro = pricingIntro.length > 400;
+  const overAvailability = availability.length > 400;
+  const anyOver = overCongrats || overAbout || overPricingIntro || overAvailability;
+
   return (
     <div>
       <h2 className="text-xl font-semibold text-gray-900">This becomes the guide brides see</h2>
@@ -634,32 +642,37 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Welcome message</label>
           <textarea value={congrats} maxLength={500} onChange={(e) => setCongrats(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${congrats.length >= 500 ? 'text-red-500' : 'text-gray-400'}`}>{congrats.length}/500</div>
+          {overCongrats && <p className="mt-1 text-xs font-medium text-red-500">Trim to 500 characters to continue.</p>}
+        </div>
+
+        {/* Most important input on the screen: the price brides see first. */}
+        <div className="rounded-xl border-2 p-4 shadow-sm" style={{ borderColor: BRAND, backgroundColor: `${BRAND}0d` }}>
+          <label className="mb-2 flex items-center gap-1.5 text-base font-semibold" style={{ color: BRAND }}>
+            <Star size={16} /> Verify your pricing
+          </label>
+          <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Starting at $5,000" className="w-full rounded-lg border border-gray-300 bg-white px-3 py-3 text-base font-medium outline-none focus:border-gray-400" />
+          <p className="mt-2 text-xs text-gray-500">This is what brides see first. Make sure it&apos;s accurate.</p>
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">About your venue</label>
           <textarea value={about} maxLength={700} onChange={(e) => setAbout(e.target.value)} rows={6} className="w-full resize-y min-h-[136px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${about.length >= 700 ? 'text-red-500' : 'text-gray-400'}`}>{about.length}/700</div>
-        </div>
-
-        <div className="rounded-xl border-2 p-3" style={{ borderColor: `${BRAND}66`, backgroundColor: `${BRAND}0d` }}>
-          <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold" style={{ color: BRAND }}>
-            <Star size={14} /> Verify your pricing
-          </label>
-          <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Starting at $5,000" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-          <p className="mt-1.5 text-xs text-gray-500">This is what brides see first. Make sure it&apos;s accurate.</p>
+          {overAbout && <p className="mt-1 text-xs font-medium text-red-500">Trim to 700 characters to continue.</p>}
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Pricing intro</label>
           <textarea value={pricingIntro} maxLength={400} onChange={(e) => setPricingIntro(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${pricingIntro.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{pricingIntro.length}/400</div>
+          {overPricingIntro && <p className="mt-1 text-xs font-medium text-red-500">Trim to 400 characters to continue.</p>}
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Availability</label>
           <textarea value={availability} maxLength={400} onChange={(e) => setAvailability(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${availability.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{availability.length}/400</div>
+          {overAvailability && <p className="mt-1 text-xs font-medium text-red-500">Trim to 400 characters to continue.</p>}
         </div>
       </div>
 
@@ -667,7 +680,7 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
 
       <div className="mt-6 flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"><ArrowLeft size={14} /> Back</button>
-        <button onClick={save} disabled={saving} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
+        <button onClick={save} disabled={saving || anyOver} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
           {saving ? <Loader2 size={16} className="animate-spin" /> : <>Looks good <ArrowRight size={16} /></>}
         </button>
       </div>
@@ -736,7 +749,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
           <PartyPopper size={28} style={{ color: BRAND }} />
         </div>
         <h2 className="text-2xl font-bold text-gray-900">You&apos;re live!</h2>
-        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System&trade; is on. Add this link to your Instagram bio, TikTok bio, email signature, and website. The second a bride requests your pricing, she&apos;s in your inbox. Call her first.</p>
+        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System is on. Add this link to your Instagram bio, TikTok bio, email signature, and website. The second a bride requests your pricing, she&apos;s in your inbox. Call her first.</p>
 
         {/* ── The activation moment (primary) ───────────────────────────── */}
         {testStatus === 'done' && testLead ? (
@@ -757,7 +770,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
                 <Mail size={14} /> Welcome email sent to {testEmailTo}
               </p>
             )}
-            <p className="mt-2 text-sm text-gray-500">That&apos;s your Bride Booking System&trade; working. Every real bride who taps your link does this automatically.</p>
+            <p className="mt-2 text-sm text-gray-500">That&apos;s your Bride Booking System working. Every real bride who taps your link does this automatically.</p>
           </div>
         ) : (
           <>
@@ -805,7 +818,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
         <Sparkles size={24} style={{ color: BRAND }} />
       </div>
       <h2 className="text-xl font-semibold text-gray-900">One click from going live</h2>
-      <p className="mt-1 text-sm text-gray-500">Publish to switch on your Bride Booking System&trade;. The second a bride requests your pricing, she&apos;s in your inbox. Call her first.</p>
+      <p className="mt-1 text-sm text-gray-500">Publish to switch on your Bride Booking System. The second a bride requests your pricing, she&apos;s in your inbox. Call her first.</p>
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
