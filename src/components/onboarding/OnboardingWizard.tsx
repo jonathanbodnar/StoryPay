@@ -61,17 +61,6 @@ type ImportedProfile = {
   venue_type: string | null;
 };
 
-type Draft = {
-  congratulatory_message: string;
-  about_venue: string;
-  pricing_intro: string;
-  availability_text: string;
-  cta_headline: string;
-  cta_body: string;
-  cta_button_label: string;
-  price_label: string;
-};
-
 export default function OnboardingWizard() {
   const [checking, setChecking] = useState(true);
   const [complete, setComplete] = useState(false); // listing published + guide live, or onboarded
@@ -556,9 +545,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /* ── Step 2: Review the draft ───────────────────────────────────────────── */
 function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const [loading, setLoading] = useState(true);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  // Every field is editable so the owner can override or simply confirm.
+  const [congrats, setCongrats] = useState('');
   const [about, setAbout] = useState('');
   const [price, setPrice] = useState('');
+  const [pricingIntro, setPricingIntro] = useState('');
+  const [availability, setAvailability] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -569,19 +561,11 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
         const d = await res.json();
         const g = d.guide ?? {};
         const firstPkg = (g.packages ?? [])[0];
-        const draftObj: Draft = {
-          congratulatory_message: g.congratulatory_message ?? '',
-          about_venue: g.about_venue ?? '',
-          pricing_intro: g.pricing_intro ?? '',
-          availability_text: g.availability_text ?? '',
-          cta_headline: g.cta_headline ?? '',
-          cta_body: g.cta_body ?? '',
-          cta_button_label: g.cta_button_label ?? 'Schedule a tour',
-          price_label: firstPkg?.price_label ?? '',
-        };
-        setDraft(draftObj);
-        setAbout(draftObj.about_venue);
-        setPrice(draftObj.price_label);
+        setCongrats(g.congratulatory_message ?? '');
+        setAbout(g.about_venue ?? '');
+        setPrice(firstPkg?.price_label ?? '');
+        setPricingIntro(g.pricing_intro ?? '');
+        setAvailability(g.availability_text ?? '');
       } catch { setError('Could not load your draft.'); }
       finally { setLoading(false); }
     })();
@@ -592,7 +576,13 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
     try {
       await fetch('/api/onboarding/draft-guide', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ about_venue: about, price_label: price }),
+        body: JSON.stringify({
+          congratulatory_message: congrats,
+          about_venue: about,
+          pricing_intro: pricingIntro,
+          availability_text: availability,
+          price_label: price,
+        }),
       });
       onNext();
     } catch { setError('Could not save. Try again.'); }
@@ -606,13 +596,14 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
   return (
     <div>
       <h2 className="text-xl font-semibold text-gray-900">Here&apos;s your guide — take a look</h2>
-      <p className="mt-1 text-sm text-gray-500">We wrote it for you. Skim it, tweak anything, but <strong>double-check your price</strong> — that&apos;s the promise to the bride.</p>
-
-      {draft?.congratulatory_message && (
-        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm italic text-gray-600">“{draft.congratulatory_message}”</div>
-      )}
+      <p className="mt-1 text-sm text-gray-500">We wrote it for you. Edit anything to override it, or leave it as-is to confirm — but <strong>double-check your price</strong>, that&apos;s the promise to the bride.</p>
 
       <div className="mt-4 space-y-4">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">Welcome message</label>
+          <textarea value={congrats} onChange={(e) => setCongrats(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+        </div>
+
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">About your venue</label>
           <textarea value={about} onChange={(e) => setAbout(e.target.value)} rows={4} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
@@ -626,8 +617,15 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
           <p className="mt-1.5 text-xs text-gray-500">This is what brides see first. Make sure it&apos;s accurate.</p>
         </div>
 
-        {draft?.pricing_intro && <PreviewLine label="Pricing intro" text={draft.pricing_intro} />}
-        {draft?.availability_text && <PreviewLine label="Availability" text={draft.availability_text} />}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">Pricing intro</label>
+          <textarea value={pricingIntro} onChange={(e) => setPricingIntro(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">Availability</label>
+          <textarea value={availability} onChange={(e) => setAvailability(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+        </div>
       </div>
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
@@ -638,15 +636,6 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
           {saving ? <Loader2 size={16} className="animate-spin" /> : <>Looks good <ArrowRight size={16} /></>}
         </button>
       </div>
-    </div>
-  );
-}
-
-function PreviewLine({ label, text }: { label: string; text: string }) {
-  return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="mt-0.5 text-sm text-gray-600">{text}</p>
     </div>
   );
 }

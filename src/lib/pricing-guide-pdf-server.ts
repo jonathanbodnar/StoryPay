@@ -364,6 +364,22 @@ export async function generatePricingGuidePdfServer(
     return raw ?? '';
   }
 
+  // Draw a calligraphy initial at (x, baseline y) and return the x where the
+  // following serif caps should begin. Script glyphs overhang their advance
+  // width, so we pad past the advance to clear the flourish (0.353 = pt→mm).
+  function scriptInitial(
+    letter: string, x: number, y: number, sizePt: number,
+    color: readonly number[] = PAL.ink,
+  ): number {
+    tc(color);
+    doc.setFont(F.script, 'normal');
+    doc.setFontSize(sizePt);
+    doc.text(letter, x, y);
+    const adv = doc.getTextWidth(letter);
+    const overhang = sizePt * 0.353 * 0.30;
+    return x + adv + overhang;
+  }
+
   function wrap(text: string, w: number, size: number, font: string): string[] {
     doc.setFont(font, 'normal');
     doc.setFontSize(size);
@@ -523,13 +539,19 @@ export async function generatePricingGuidePdfServer(
   // ════════════════════════════════════════════════════════════════════
   page();
   {
-    let y = MARGIN + 22;
-    doc.setFont(F.script, 'normal'); doc.setFontSize(74); tc(PAL.ink);
-    const wW = doc.getTextWidth('W');
-    doc.text('W', MARGIN, y);
-    tracked('ELCOME', MARGIN + wW * 0.62, y - 6, 38, 1.4, PAL.ink, F.serif, 'normal', 'left');
-    y += 12;
-    tracked('OUR DOORS, YOUR STORY', MARGIN, y, 9, 2.2, PAL.mute, F.bodySemi, 'normal', 'left'); y += 14;
+    // Measured, centered wordmark: script W (80pt) + serif ELCOME (38pt).
+    const wBaseline = 53;
+    doc.setFont(F.script, 'normal'); doc.setFontSize(80);
+    const wAdv = doc.getTextWidth('W');
+    const wOver = 80 * 0.353 * 0.30;
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(38);
+    const eGap = 1.4;
+    let eW = 0; for (const ch of 'ELCOME') eW += doc.getTextWidth(ch) + eGap; eW -= eGap;
+    const wStart = CX - (wAdv + wOver + eW) / 2;
+    const eX = scriptInitial('W', wStart, wBaseline, 80, PAL.ink);
+    tracked('ELCOME', eX, wBaseline - 6, 38, eGap, PAL.ink, F.serif, 'normal', 'left');
+    let y = wBaseline + 11;
+    tracked('OUR DOORS, YOUR STORY', CX, y, 9, 2.2, PAL.mute, F.bodySemi, 'normal', 'center'); y += 14;
     doc.setFont(F.serif, 'normal'); doc.setFontSize(15); tc(PAL.soft);
     doc.text('Where your celebration becomes a memory', CX, y, { align: 'center' }); y += 7;
     shortRule(CX - 7, y, 14); y += 10;
@@ -559,26 +581,40 @@ export async function generatePricingGuidePdfServer(
   // ════════════════════════════════════════════════════════════════════
   if (hasAbout) {
     page();
-    const aboutImg = getImg(guide.about_photos?.[0]?.url ?? null) ?? nextPhoto();
-    imgCover(aboutImg, 0, 0, W, 150);
-    frame();
-    let y = 150 + 22;
-    tracked(`ABOUT ${name.toUpperCase()}`, MARGIN, y, 11, 1.8, PAL.ink, F.serif, 'normal', 'left');
-    doc.setFont(F.script, 'normal'); doc.setFontSize(22); tc(PAL.mute);
-    doc.text('our story', MARGIN, y + 11); y += 20;
-
     const body = (guide.about_venue ?? '').trim();
     const initial = body.charAt(0).toUpperCase() || 'A';
-    const rest = body.slice(1);
-    doc.setFont(F.script, 'normal'); doc.setFontSize(50); tc(PAL.ink);
-    doc.text(initial, MARGIN, y + 9);
-    const dropW = doc.getTextWidth(initial) + 3;
-    const colW = (CONTENT_W - dropW - 10) / 2;
-    const lines = wrap(rest, colW, 10, F.body);
-    const half = Math.ceil(lines.length / 2);
+    const restBody = body.slice(1);
+
+    // Measure the drop cap up front so we can size the indent + decide photo
+    // height: short copy gets a taller photo so the page never sits half-empty.
+    const dcSize = 46;
+    doc.setFont(F.script, 'normal'); doc.setFontSize(dcSize);
+    const dropW = doc.getTextWidth(initial);
+    const indent = dropW + dcSize * 0.353 * 0.32;
+    const lineH = 4.9;
+    const fullLines = wrap(restBody, CONTENT_W, 10, F.body);
+    const photoH = fullLines.length <= 8 ? 176 : 150;
+
+    const aboutImg = getImg(guide.about_photos?.[0]?.url ?? null) ?? nextPhoto();
+    imgCover(aboutImg, 0, 0, W, photoH);
+    frame();
+    let y = photoH + 22;
+    tracked(`ABOUT ${name.toUpperCase()}`, MARGIN, y, 11, 1.8, PAL.ink, F.serif, 'normal', 'left');
+    doc.setFont(F.script, 'normal'); doc.setFontSize(22); tc(PAL.mute);
+    doc.text('our story', MARGIN, y + 11); y += 22;
+
+    // Drop cap with the first three lines indented to clear the glyph, then the
+    // remainder re-wrapped to the full width.
+    const indented = wrap(restBody, CONTENT_W - indent, 10, F.body);
+    const firstThree = indented.slice(0, 3);
+    const remainder = restBody.slice(firstThree.join(' ').length).trimStart();
+    const restLines = remainder ? wrap(remainder, CONTENT_W, 10, F.body) : [];
+
+    scriptInitial(initial, MARGIN, y + 9, dcSize, PAL.ink);
     doc.setFont(F.body, 'normal'); doc.setFontSize(10); tc(PAL.soft);
-    doc.text(lines.slice(0, half), MARGIN + dropW, y);
-    doc.text(lines.slice(half), MARGIN + dropW + colW + 10, y);
+    let by = y + 3;
+    firstThree.forEach((ln) => { doc.text(ln, MARGIN + indent, by); by += lineH; });
+    restLines.forEach((ln) => { doc.text(ln, MARGIN, by); by += lineH; });
     footer();
   }
 
@@ -653,28 +689,37 @@ export async function generatePricingGuidePdfServer(
     doc.setFont(F.serif, 'normal'); doc.setFontSize(34); tc(PAL.ink);
     doc.text('PACKAGES', MARGIN + 6, H - MARGIN - 30, { angle: 90 });
 
-    const cardX = 64;
-    const cardW = W - cardX - MARGIN;
-    const gapY  = 6;
-    const cardH = (H - MARGIN * 2 - gapY * (pkgs.length - 1)) / pkgs.length;
-    let y = MARGIN;
-    pkgs.forEach((pkg) => {
-      const ph = Math.min(cardH, 64);
-      imgCover(nextPhoto(), cardX, y, 52, ph);
-      const tx = cardX + 60;
-      let ty = y + 8;
+    const px = 58, ciW = 50, ciH = 62;
+    const tx = px + ciW + 8;          // text column start (clears the image)
+    const nameW = W - MARGIN - tx;    // wrap long names instead of running off
+    const gap = pkgs.length > 1 ? 18 : 0;
+    const nameLH = 8, priceH = 8, itemLH = 5.4;
+
+    // Measure each card so the stack can be vertically centered on the page.
+    const cards = pkgs.map((pkg) => {
+      const nameLines = wrap(pkg.name ?? 'Package', nameW, 22, F.script);
+      const items = (pkg.included_items ?? []).slice(0, 6);
+      const textH = nameLines.length * nameLH + (pkg.price_label ? priceH : 0) + items.length * itemLH;
+      return { pkg, nameLines, items, textH, h: Math.max(ciH, textH + 4) };
+    });
+    const stackH = cards.reduce((s, c) => s + c.h, 0) + gap * (cards.length - 1);
+    const top = MARGIN, avail = H - 2 * MARGIN;
+    let cy0 = top + Math.max(0, (avail - stackH) / 2);
+
+    cards.forEach(({ pkg, nameLines, items, textH, h }) => {
+      imgCover(nextPhoto(), px, cy0 + Math.max(0, (h - ciH) / 2), ciW, ciH);
+      let ty = cy0 + Math.max(0, (h - textH) / 2) + 7;
       doc.setFont(F.script, 'normal'); doc.setFontSize(22); tc(PAL.ink);
-      doc.text(pkg.name ?? 'Package', tx, ty); ty += 9;
+      nameLines.forEach((ln) => { doc.text(ln, tx, ty); ty += nameLH; });
       if (pkg.price_label) {
         doc.setFont(F.serif, 'normal'); doc.setFontSize(12); tc(PAL.soft);
-        doc.text(pkg.price_label, tx, ty); ty += 8;
+        doc.text(pkg.price_label, tx, ty); ty += priceH;
       }
-      doc.setFont(F.body, 'normal'); doc.setFontSize(8); tc(PAL.mute);
-      (pkg.included_items ?? []).slice(0, 6).forEach((it) => {
+      items.forEach((it) => {
         tracked(it.toUpperCase(), tx, ty, 7.5, 0.6, PAL.mute, F.body, 'normal', 'left');
-        ty += 5.4;
+        ty += itemLH;
       });
-      y += cardH + gapY;
+      cy0 += h + gap;
     });
     footer();
   }
@@ -691,14 +736,17 @@ export async function generatePricingGuidePdfServer(
       tracked(space.capacity.toUpperCase(), MARGIN, y, 8.5, 1.6, PAL.mute, F.bodySemi, 'normal', 'left');
       y += 9;
     }
-    imgCover(getImg(space.image_url) ?? nextPhoto(), FRAME, y, W - 2 * FRAME, 132);
-    y += 132 + 12;
-    if (space.description) {
-      const lines = wrap(space.description, CONTENT_W, 11, F.body);
-      const maxLines = Math.floor((H - 24 - y) / 5.4);
-      doc.setFont(F.body, 'normal'); doc.setFontSize(11); tc(PAL.soft);
-      doc.text(lines.slice(0, maxLines), MARGIN, y);
-    }
+    const desc = (space.description && space.description.trim())
+      || `A versatile space at ${name}, ready to be styled for your ceremony, dinner, and dancing. Ask us how it can be arranged for your celebration.`;
+    const lineH = 5.4, gap = 12;
+    const descLines = wrap(desc, CONTENT_W, 11, F.body);
+    const descBlockH = descLines.length * lineH;
+    const photoH = Math.max(150, H - 16 - y - descBlockH - gap);
+    imgCover(getImg(space.image_url) ?? nextPhoto(), FRAME, y, W - 2 * FRAME, photoH);
+    const dy = y + photoH + gap;
+    const maxLines = Math.max(1, Math.floor((H - 16 - dy) / lineH));
+    doc.setFont(F.body, 'normal'); doc.setFontSize(11); tc(PAL.soft);
+    doc.text(descLines.slice(0, maxLines), MARGIN, dy);
     footer();
   }
 
@@ -742,15 +790,19 @@ export async function generatePricingGuidePdfServer(
       imgCover(nextPhoto(), FRAME + i * (cw + FRAME), MARGIN, cw, stripH);
     });
     const review = guide.reviews[0];
-    let y = MARGIN + stripH + 26;
-    tracked('KIND WORDS', CX, y, 9, 2.2, PAL.mute, F.bodySemi, 'normal', 'center'); y += 16;
-    const quote = `\u201C${(review.body ?? 'An unforgettable place to celebrate.').slice(0, 280)}\u201D`;
-    const lines = wrap(quote, CONTENT_W - 20, 16, F.serif);
+    const quote = `\u201C${(review.body ?? 'An unforgettable place to celebrate.').trim()}\u201D`;
+    const qLines = wrap(quote, CONTENT_W - 20, 16, F.serif);
+    const labelH = 16, quoteH = qLines.length * 7.5 + 12;
+    const authorH = review.author ? 8 : 0, locH = review.location ? 6 : 0;
+    const blockH = labelH + quoteH + authorH + locH;
+    const bandTop = MARGIN + stripH, bandBottom = H - 24;
+    let y = bandTop + Math.max(14, (bandBottom - bandTop - blockH) / 2);
+    tracked('KIND WORDS', CX, y, 9, 2.2, PAL.mute, F.bodySemi, 'normal', 'center'); y += labelH;
     doc.setFont(F.serif, 'normal'); doc.setFontSize(16); tc(PAL.ink);
-    doc.text(lines, CX, y, { align: 'center' }); y += lines.length * 7.5 + 12;
+    doc.text(qLines, CX, y, { align: 'center' }); y += quoteH;
     if (review.author) {
       doc.setFont(F.script, 'normal'); doc.setFontSize(22); tc(PAL.soft);
-      doc.text(review.author, CX, y, { align: 'center' }); y += 8;
+      doc.text(review.author, CX, y, { align: 'center' }); y += authorH;
     }
     if (review.location) {
       tracked(review.location.toUpperCase(), CX, y, 8, 1.6, PAL.mute, F.body, 'normal', 'center');
@@ -763,17 +815,20 @@ export async function generatePricingGuidePdfServer(
   // ════════════════════════════════════════════════════════════════════
   page();
   {
-    let y = MARGIN + 16;
-    tracked("WHAT'S INCLUDED", MARGIN, y, 22, 1.4, PAL.ink, F.serif, 'normal', 'left'); y += 8;
+    const titleY = MARGIN + 16;
+    tracked("WHAT'S INCLUDED", MARGIN, titleY, 22, 1.4, PAL.ink, F.serif, 'normal', 'left');
     doc.setFont(F.serif, 'normal'); doc.setFontSize(12); tc(PAL.soft);
-    doc.text('Everything you need to host with ease.', MARGIN, y); y += 16;
+    doc.text('Everything you need to host with ease.', MARGIN, titleY + 8);
 
-    const cols = 3;
+    const items = includedItems.slice(0, 9);
+    const cols = 3, fRowH = 42;
+    const fRows = Math.ceil(items.length / cols);
+    const fBandTop = 60, fBandBottom = H - 24;
+    const gridTop = fBandTop + Math.max(0, (fBandBottom - fBandTop - fRows * fRowH) / 2) + 14;
     const colW = CONTENT_W / cols;
-    const rowH = 30;
-    includedItems.slice(0, 9).forEach((item, i) => {
+    items.forEach((item, i) => {
       const cxi = MARGIN + (i % cols) * colW;
-      const cyi = y + Math.floor(i / cols) * rowH;
+      const cyi = gridTop + Math.floor(i / cols) * fRowH;
       dc(PAL.rule); doc.setLineWidth(0.5);
       doc.circle(cxi + 3, cyi, 3, 'S');
       const lines = wrap(item, colW - 12, 11, F.serif);
@@ -826,14 +881,17 @@ export async function generatePricingGuidePdfServer(
     let y = MARGIN + 8;
     doc.setFont(F.serif, 'normal'); doc.setFontSize(28); tc(PAL.ink);
     doc.text(acc.name ?? 'Accommodations', MARGIN, y); y += 12;
-    imgCover(getImg(acc.image_url) ?? nextPhoto(), FRAME, y, W - 2 * FRAME, 140);
-    y += 140 + 12;
-    if (acc.description) {
-      const lines = wrap(acc.description, CONTENT_W, 11, F.body);
-      const maxLines = Math.floor((H - 24 - y) / 5.4);
-      doc.setFont(F.body, 'normal'); doc.setFontSize(11); tc(PAL.soft);
-      doc.text(lines.slice(0, maxLines), MARGIN, y);
-    }
+    const desc = (acc.description && acc.description.trim())
+      || `A comfortable retreat at ${name} for getting ready and staying close to the celebration. Ask us about availability for your date.`;
+    const lineH = 5.4, gap = 12;
+    const descLines = wrap(desc, CONTENT_W, 11, F.body);
+    const descBlockH = descLines.length * lineH;
+    const photoH = Math.max(150, H - 16 - y - descBlockH - gap);
+    imgCover(getImg(acc.image_url) ?? nextPhoto(), FRAME, y, W - 2 * FRAME, photoH);
+    const dy = y + photoH + gap;
+    const maxLines = Math.max(1, Math.floor((H - 16 - dy) / lineH));
+    doc.setFont(F.body, 'normal'); doc.setFontSize(11); tc(PAL.soft);
+    doc.text(descLines.slice(0, maxLines), MARGIN, dy);
     footer();
   }
 
@@ -842,13 +900,10 @@ export async function generatePricingGuidePdfServer(
   // ════════════════════════════════════════════════════════════════════
   page();
   {
-    let y = MARGIN + 22;
-    doc.setFont(F.script, 'normal'); doc.setFontSize(72); tc(PAL.ink);
-    const fW = doc.getTextWidth('F');
-    doc.text('F', MARGIN, y);
-    tracked('REQUENTLY', MARGIN + fW * 0.6, y - 14, 22, 1.2, PAL.ink, F.serif, 'normal', 'left');
-    tracked('ASKED QUESTIONS', MARGIN + fW * 0.6, y - 2, 22, 1.2, PAL.ink, F.serif, 'normal', 'left');
-    y += 14;
+    const fReqX = scriptInitial('F', MARGIN, 44, 56, PAL.ink);
+    tracked('REQUENTLY', fReqX, 38, 22, 1.2, PAL.ink, F.serif, 'normal', 'left');
+    tracked('ASKED QUESTIONS', fReqX, 50, 22, 1.2, PAL.ink, F.serif, 'normal', 'left');
+    let y = 60;
     dc(PAL.rule); doc.setLineWidth(0.4); doc.line(MARGIN, y, W - MARGIN, y); y += 12;
 
     faqs.slice(0, 4).forEach(([q, a], i) => {
