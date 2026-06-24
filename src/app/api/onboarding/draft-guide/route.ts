@@ -50,6 +50,7 @@ type DraftedGuide = {
   cta_button_label: string;
   package_name: string;
   package_description: string;
+  space_description: string;
   capacity_label: string;
 };
 
@@ -78,6 +79,7 @@ function cleanDraft(d: DraftedGuide): DraftedGuide {
     cta_button_label: d.cta_button_label,
     package_name: d.package_name,
     package_description: cleanCopy(d.package_description),
+    space_description: cleanCopy(d.space_description),
     capacity_label: d.capacity_label,
   };
 }
@@ -101,6 +103,9 @@ function templateDraft(venueName: string, a: Answers): DraftedGuide {
     package_description: a.inclusivity === 'all_inclusive'
       ? 'Our all-inclusive package covering your core wedding-day needs.'
       : 'Exclusive use of the venue for your wedding day.',
+    space_description: a.inclusivity === 'all_inclusive'
+      ? `${venueName} offers an all-inclusive space for your ceremony and reception. The team handles setup, service, and the details, and the room flexes from a seated ceremony to a full reception with room for your guests and the dance floor.`
+      : `${venueName} is a versatile space for your ceremony, dinner, and dancing. The room flexes from a seated ceremony to a full reception, with room for your guests, the dance floor, and the details that make the day yours.`,
     capacity_label: capacityLabel(a.max_capacity),
   };
 }
@@ -141,7 +146,8 @@ Return JSON with EXACTLY these string keys:
   "cta_body": "1 sentence encouraging them to book a tour",
   "cta_button_label": "2-4 word button text",
   "package_name": "name for their starting package",
-  "package_description": "1 sentence describing what the starting package includes"
+  "package_description": "1 sentence describing what the starting package includes",
+  "space_description": "2-3 sentences describing the main event space: capacity, ceremony vs reception flow, and what the space handles"
 }`;
 
     const res = await client.chat.completions.create({
@@ -165,6 +171,7 @@ Return JSON with EXACTLY these string keys:
       cta_button_label: parsed.cta_button_label || fallback.cta_button_label,
       package_name: parsed.package_name || fallback.package_name,
       package_description: parsed.package_description || fallback.package_description,
+      space_description: parsed.space_description || fallback.space_description,
       capacity_label: capacityLabel(a.max_capacity),
     };
   } catch (e) {
@@ -308,7 +315,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       name: draft.package_name,
       price_label: label,
       description: draft.package_description,
-      included_items: [],
+      // Seed editable "What's included" items from the chosen amenities so the
+      // owner can refine them and the PDF mirrors the package.
+      included_items: features && features.length ? features.slice(0, 8) : [],
       position: 0,
     });
   }
@@ -324,7 +333,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     await supabaseAdmin.from('venue_pricing_guide_spaces').insert({
       pricing_guide_id: guideId,
       name: 'Main Event Space',
-      description: a.inclusivity === 'all_inclusive' ? 'All-inclusive event space' : null,
+      // Persist a real, editable description so the editor and PDF match
+      // (no render-time-only evergreen text the owner cannot see or change).
+      description: draft.space_description,
       capacity: draft.capacity_label,
       // Seed the space photo from the gallery so the section stores its own
       // image reference (editor + PDF resolve the same value).

@@ -403,6 +403,59 @@ export async function generatePricingGuidePdfServer(
     return `${slice.slice(0, lastSpace > 0 ? lastSpace : cap).trim()}…`;
   }
 
+  /**
+   * Wrap text, then avoid a "widow" — a last line of only one or two words —
+   * by pulling words down from the previous line. Deterministic; never leaves a
+   * single word stranded on its own line.
+   */
+  function wrapNoWidow(text: string, w: number, size: number, font: string): string[] {
+    const lines = wrap(text, w, size, font);
+    if (lines.length < 2) return lines;
+    const last = lines[lines.length - 1].trim().split(/\s+/);
+    if (last.length > 2) return lines;
+    const prev = lines[lines.length - 2].trim().split(/\s+/);
+    while (last.length < 3 && prev.length > 1) last.unshift(prev.pop() as string);
+    const newPrev = prev.join(' ');
+    const newLast = last.join(' ');
+    doc.setFont(font, 'normal');
+    doc.setFontSize(size);
+    if (doc.getTextWidth(newLast) > w) return lines; // can't fit — leave as-is
+    return [...lines.slice(0, -2), newPrev, newLast];
+  }
+
+  /** Build the longest prefix of whole sentences that fits within maxLines. */
+  function fitSentences(text: string, w: number, size: number, font: string, maxLines: number): string {
+    const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
+    let acc = '';
+    for (const s of sentences) {
+      const trial = `${acc}${s}`.trim();
+      if (wrap(trial, w, size, font).length > maxLines) break;
+      acc = `${trial} `;
+    }
+    const fitted = acc.trim();
+    if (fitted) return fitted;
+    // Single very long sentence: fall back to a clean sentence-cap trim.
+    return wrap(trimToSentence(text, maxLines * 70), w, size, font).join(' ');
+  }
+
+  /** Draw a row of n filled five-pointed stars centered on cx at baseline y. */
+  function drawStars(cx: number, y: number, n: number, r: number, gap: number, color: readonly number[]) {
+    const star = (sx: number, sy: number) => {
+      const pts: [number, number][] = [];
+      for (let i = 0; i < 10; i++) {
+        const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+        const rad = i % 2 === 0 ? r : r * 0.42;
+        pts.push([sx + rad * Math.cos(ang), sy + rad * Math.sin(ang)]);
+      }
+      const segs = pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]] as [number, number]);
+      fc(color);
+      doc.lines(segs, pts[0][0], pts[0][1], [1, 1], 'F', true);
+    };
+    const total = n * 2 * r + (n - 1) * gap;
+    let x = cx - total / 2 + r;
+    for (let i = 0; i < n; i++) { star(x, y); x += 2 * r + gap; }
+  }
+
   // ── Contact line values ──────────────────────────────────────────────
   const phoneStr   = fmtPhone(venue.phone);
   const emailStr   = (venue.email ?? '').trim();
@@ -478,59 +531,38 @@ export async function generatePricingGuidePdfServer(
   }
 
   // ── Evergreen content (clean copy, no banned words) ──────────────────
-  const whyBlocks: [string, string][] = (() => {
-    const headers = ['One team, every detail', 'A space that flexes to your day', 'Photos you will frame', 'Pricing without surprises'];
-    if (guide.why_points && guide.why_points.length) {
-      return guide.why_points.slice(0, 4).map((p, i) => [headers[i] ?? 'Why book with us', p] as [string, string]);
-    }
-    return [
-      ['One team, every detail', `Your booking comes with people who know ${name} from first tour to last dance. Clear answers and honest pricing, start to finish.`],
-      ['A space that flexes to your day', `Host the ceremony, dinner, and dancing in one place. We arrange the room around your plan, not the other way around.`],
-      ['Photos you will frame', `Every corner of ${name} is built for the camera. Beautiful light, clean lines, and views your guests remember.`],
-      ['Pricing without surprises', `You see what is included before you commit. Ask about your date and we tailor a package to your guest count and season.`],
-    ];
-  })();
-
-  const journey: [string, string][] = (guide.journey && guide.journey.length)
-    ? guide.journey.slice(0, 4)
-    : [
-        ['Tour the venue', `Walk the space in person. We show you every corner and answer your questions.`],
-        ['Reserve your date', `Found the one? We hold your date and keep the booking simple.`],
-        ['Plan together', `We help map timing, layout, and the details that make the day yours.`],
-        ['Celebrate', `Arrive, relax, and be present. We handle the venue so you can enjoy it.`],
-      ];
-
+  // FAQ is built-in (no editor surface yet) — 6 entries to balance the page.
   const faqs: [string, string][] = (guide.faqs && guide.faqs.length)
-    ? guide.faqs.slice(0, 4)
+    ? guide.faqs.slice(0, 6)
     : [
         ['How many guests can you host?',
           guide.spaces[0]?.capacity
             ? `Our main space seats ${guide.spaces[0].capacity.replace(/^up to\s*/i, 'up to ')}.`
             : `Tell us your guest count and we will confirm the right space for your celebration.`],
         ['What dates are available?',
-          guide.availability_text?.trim() || `Dates book quickly. Send us your season and we will check availability.`],
+          guide.availability_text?.trim() || `Dates book quickly. Send us your season and we will check availability for you.`],
         ["What's included?",
           `Your booking includes exclusive use of the space for your event. Ask us for the full list that comes with your package.`],
+        ['Do you allow outside vendors?',
+          `Yes. Bring the team you love, or ask us for a list of caterers, florists, and photographers we trust.`],
+        ['Is parking available on site?',
+          `Yes. On-site parking keeps arrival simple for you and your guests on the day.`],
         ['How do we book a tour?',
-          `Use the contact details in this guide. We will set up a time that works for you.`],
+          `Use the contact details in this guide. We will set up a time that works for your schedule.`],
       ];
 
-  const includedItems: string[] = (venue.features && venue.features.length)
-    ? venue.features.slice(0, 8)
-    : [
-        'Exclusive venue access', 'Tables and chairs', 'On-site parking',
-        'Getting-ready space', 'Event coordination', 'Setup and cleanup',
-        'Flexible vendor policy', 'Scenic photo spots',
-      ];
-
-  const checklist: [string, string[]][] = [
-    ['12+ months out', ['Set your budget', 'Draft your guest list', 'Pick your season', 'Tour and book your venue', 'Choose your wedding party']],
-    ['9 to 12 months', ['Book photographer and videographer', 'Secure caterer and bar', 'Book your officiant', 'Start dress shopping', 'Reserve hotel blocks']],
-    ['6 to 9 months', ['Book your florist', 'Book DJ or band', 'Book hair and makeup', 'Order invitations', 'Plan menu and tasting', 'Register for gifts']],
-    ['3 to 6 months', ['Finalize attire and fittings', 'Send your invitations', 'Plan ceremony details', 'Book transportation', 'Arrange rehearsal dinner']],
-    ['1 to 2 months', ['Finalize headcount and seating', 'Confirm timeline with vendors', 'Apply for marriage license', 'Final dress fitting']],
-    ['Final week', ['Confirm vendor arrival times', 'Prepare final payments and tips', 'Pack for the honeymoon', 'Delegate a day-of point person', 'Relax']],
-  ];
+  // "What's Included" prefers the package's editable items so the PDF mirrors
+  // what the owner can change in the editor; then venue features; then evergreen.
+  const includedItems: string[] = (() => {
+    const pkgItems = (guide.packages[0]?.included_items ?? []).filter((s) => !!s && s.trim());
+    if (pkgItems.length) return pkgItems.slice(0, 8);
+    if (venue.features && venue.features.length) return venue.features.slice(0, 8);
+    return [
+      'Exclusive venue access', 'Tables and chairs', 'On-site parking',
+      'Getting-ready space', 'Event coordination', 'Setup and cleanup',
+      'Flexible vendor policy', 'Scenic photo spots',
+    ];
+  })();
 
   // ════════════════════════════════════════════════════════════════════
   // COVER (page 1)
@@ -544,8 +576,6 @@ export async function generatePricingGuidePdfServer(
     doc.setFont(F.serif, 'normal'); doc.setFontSize(T.cover); tc(PAL.white);
     let ty = H * 0.5 - (titleLines.length - 1) * 9;
     titleLines.forEach((ln) => { doc.text(ln, CX, ty, { align: 'center' }); ty += T.cover * 0.42; });
-    doc.setFont(F.italic, 'normal'); doc.setFontSize(15); tc(PAL.white);
-    doc.text('Everything you need to picture your day', CX, ty + 6, { align: 'center' });
   }
   {
     const contact = [phoneStr, emailStr, websiteStr].filter(Boolean).join('   ·   ');
@@ -565,7 +595,7 @@ export async function generatePricingGuidePdfServer(
   // ── Welcome ──────────────────────────────────────────────────────────
   addSection('Welcome', () => {
     page();
-    let y = pageHeader({ eyebrow: 'Our doors, your story', title: 'Welcome', align: 'center' });
+    let y = pageHeader({ eyebrow: 'Our Venue, Your Story', title: 'Welcome', align: 'center' });
     const msg = guide.congratulatory_message?.trim()
       || `Welcome to ${name}. We are so glad you found us. This guide walks you through the spaces, the pricing, and the details that make your day feel effortless.`;
     const lines = wrap(msg, CONTENT_W - 24, T.lead, F.body);
@@ -618,54 +648,6 @@ export async function generatePricingGuidePdfServer(
     footer();
   });
 
-  // ── Why Book With Us (horizontal title, 4 benefit blocks, 1 photo) ───
-  addSection('Why Book With Us', () => {
-    page();
-    const y0 = pageHeader({ eyebrow: 'The difference', title: 'Why Book With Us' });
-    const colW = 96;                 // text column
-    const imgX = MARGIN + colW + 8;  // photo column
-    const imgW = W - MARGIN - imgX;
-    imgCover(nextPhoto(), imgX, y0, imgW, BOTTOM - 4 - y0);
-
-    let y = y0 + 2;
-    const blockGap = (BOTTOM - 6 - y0) / whyBlocks.length;
-    whyBlocks.forEach(([head, bodyTxt]) => {
-      doc.setFont(F.serif, 'normal'); doc.setFontSize(14); tc(PAL.ink);
-      const hLines = wrap(head, colW, 14, F.serif);
-      doc.text(hLines, MARGIN, y);
-      let yy = y + hLines.length * 6.4 + 1.5;
-      doc.setFont(F.body, 'normal'); doc.setFontSize(T.small); tc(PAL.soft);
-      const bLines = wrap(bodyTxt, colW, T.small, F.body);
-      doc.text(bLines, MARGIN, yy);
-      yy += bLines.length * 4.8;
-      y = Math.max(yy + 6, y + blockGap);
-    });
-    footer();
-  });
-
-  // ── Your Journey (balanced two-column: steps left, photo right) ──────
-  addSection('Your Journey', () => {
-    page();
-    const y0 = pageHeader({ eyebrow: 'From hello to I do', title: 'Your Journey' });
-    const colW = 96;
-    const imgX = MARGIN + colW + 8;
-    const imgW = W - MARGIN - imgX;
-    const bottom = BOTTOM - 4;
-    imgCover(nextPhoto(), imgX, y0, imgW, bottom - y0);
-
-    const stepGap = (bottom - y0) / journey.length;
-    journey.forEach(([title, bodyTxt], i) => {
-      const y = y0 + i * stepGap + 4;
-      tracked(`0${i + 1}`, MARGIN, y, 12, 1.5, PAL.faint, F.bodySemi, 'normal', 'left');
-      doc.setFont(F.serif, 'normal'); doc.setFontSize(14); tc(PAL.ink);
-      doc.text(title, MARGIN + 14, y);
-      const bLines = wrap(bodyTxt, colW - 14, T.small, F.body);
-      doc.setFont(F.body, 'normal'); doc.setFontSize(T.small); tc(PAL.soft);
-      doc.text(bLines, MARGIN + 14, y + 6);
-    });
-    footer();
-  });
-
   // ── The Spaces (single balanced page) ────────────────────────────────
   addSection('The Spaces', () => {
     page();
@@ -677,14 +659,17 @@ export async function generatePricingGuidePdfServer(
     }
     const desc = (space?.description?.trim())
       || `A versatile space at ${name}, ready for your ceremony, dinner, and dancing. The room flexes from a seated ceremony to a full reception, with space for your guests, the dance floor, and the details that make the day yours. Ask us how it can be arranged for your celebration.`;
-    const lineH = LH, gap = 12;
-    const descLines = wrap(desc, CONTENT_W, T.body, F.body);
-    const descBlockH = descLines.length * lineH;
-    const photoH = Math.max(150, BOTTOM - 6 - y - descBlockH - gap);
+    const gap = 12;
+    const minPhotoH = 92;
+    // How many full lines fit if the photo sits at its minimum height.
+    const maxLines = Math.max(2, Math.floor((BOTTOM - 4 - (y + minPhotoH + gap)) / LH));
+    // Show whole sentences only — never a clipped, unfinished sentence.
+    const shown = wrap(fitSentences(desc, CONTENT_W, T.body, F.body, maxLines), CONTENT_W, T.body, F.body);
+    const descBlockH = shown.length * LH;
+    const photoH = BOTTOM - 4 - y - descBlockH - gap; // photo fills the rest
     imgCover(getImg(space?.image_url ?? null) ?? nextPhoto(), FRAME, y, W - 2 * FRAME, photoH);
-    const dy = y + photoH + gap;
     doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.soft);
-    doc.text(descLines.slice(0, Math.max(1, Math.floor((BOTTOM - 4 - dy) / lineH))), MARGIN, dy);
+    doc.text(shown, MARGIN, y + photoH + gap);
     footer();
   });
 
@@ -731,71 +716,56 @@ export async function generatePricingGuidePdfServer(
     footer();
   });
 
-  // ── Stories (5-star reviews only, hard caps) ─────────────────────────
+  // ── Stories (5-star reviews only — title + reviews, no photos) ───────
   if (hasStories) {
     addSection('Stories', () => {
       page();
-      let y = pageHeader({ eyebrow: 'In their words', title: 'Stories', align: 'center' });
-      const stripImgs = pool.slice(0, 3);
-      if (stripImgs.length) {
-        const cw = (CONTENT_W - 2 * 3) / 3;
-        stripImgs.forEach((im, i) => imgCover(im, MARGIN + i * (cw + 3), y, cw, 52));
-        y += 52 + 14;
-      } else { y += 6; }
+      const top = pageHeader({ eyebrow: 'In their words', title: 'Stories', align: 'center' });
+      const GOLD = [183, 142, 72] as const;
 
-      const stories = fiveStar.slice(0, 2);
-      const perCap = stories.length > 1 ? 300 : 460;
-      const avail = BOTTOM - 8 - y;
-      const slotH = avail / stories.length;
-      stories.forEach((rv, i) => {
-        let sy = y + i * slotH;
+      const stories = fiveStar.slice(0, 5);
+      const count = stories.length;
+      const perCap = count >= 5 ? 150 : count >= 4 ? 190 : count >= 3 ? 240 : 320;
+      const qSize = count >= 4 ? 12 : 13;
+      const qLH = qSize * 0.46;
+
+      // Measure every block so the page distributes them evenly top to bottom.
+      const blocks = stories.map((rv) => {
         const quote = `\u201C${trimToSentence(rv.body ?? '', perCap)}\u201D`;
-        const qLines = wrap(quote, CONTENT_W - 24, 14, F.italic);
-        doc.setFont(F.italic, 'normal'); doc.setFontSize(14); tc(PAL.ink);
+        const qLines = wrapNoWidow(quote, CONTENT_W - 30, qSize, F.italic);
+        const h = 6 /*stars*/ + 4 + qLines.length * qLH + 7 /*name*/ + (rv.location ? 5 : 0);
+        return { rv, qLines, h };
+      });
+      const totalH = blocks.reduce((a, b) => a + b.h, 0);
+      const avail = BOTTOM - 8 - top;
+      const lead = Math.max(8, (avail - totalH) / (count + 1));
+
+      let sy = top + lead;
+      blocks.forEach(({ rv, qLines }) => {
+        drawStars(CX, sy, 5, 1.9, 1.6, GOLD);
+        sy += 10;
+        doc.setFont(F.italic, 'normal'); doc.setFontSize(qSize); tc(PAL.ink);
         doc.text(qLines, CX, sy, { align: 'center' });
-        sy += qLines.length * 6.6 + 6;
+        sy += qLines.length * qLH + 5;
         if (rv.author) {
-          doc.setFont(F.serif, 'normal'); doc.setFontSize(13); tc(PAL.soft);
+          doc.setFont(F.serif, 'normal'); doc.setFontSize(12.5); tc(PAL.soft);
           doc.text(rv.author, CX, sy, { align: 'center' }); sy += 6;
         }
         if (rv.location) {
           tracked(rv.location.toUpperCase(), CX, sy, 8, 1.6, PAL.mute, F.bodySemi, 'normal', 'center');
+          sy += 5;
         }
+        sy += lead;
       });
       footer();
     });
   }
 
-  // ── Planning Checklist (full bridal checklist, time-grouped) ─────────
-  addSection('Planning Checklist', () => {
-    page();
-    const y0 = pageHeader({ eyebrow: 'Your roadmap', title: 'Planning Checklist' });
-    const cols = 2;
-    const colW = (CONTENT_W - 14) / cols;
-    const colX = [MARGIN, MARGIN + colW + 14];
-    const colY = [y0, y0];
-    checklist.forEach((grp, idx) => {
-      const c = idx % cols;
-      let y = colY[c];
-      const [header, items] = grp;
-      tracked(header.toUpperCase(), colX[c], y, 9, 1.4, PAL.ink, F.bodySemi, 'normal', 'left'); y += 7;
-      items.forEach((it) => {
-        dc(PAL.mute); doc.setLineWidth(0.4); doc.rect(colX[c], y - 3, 3, 3, 'S');
-        doc.setFont(F.body, 'normal'); doc.setFontSize(T.small); tc(PAL.soft);
-        const itLines = wrap(it, colW - 7, T.small, F.body);
-        doc.text(itLines, colX[c] + 6, y);
-        y += Math.max(1, itLines.length) * 4.7 + 1.4;
-      });
-      colY[c] = y + 8;
-    });
-    footer();
-  });
-
-  // ── FAQ (clean single Playfair line) ─────────────────────────────────
+  // ── FAQ (clean single Playfair line; built-in 5-6 to balance page) ───
   addSection('Questions', () => {
     page();
     const top = pageHeader({ eyebrow: 'Good to know', title: 'Frequently Asked Questions' });
-    const items = faqs.slice(0, 4);
+    const items = faqs.slice(0, 6);
     const slotH = (BOTTOM - 8 - top) / items.length;
     items.forEach(([q, a], i) => {
       const y = top + i * slotH;
@@ -804,34 +774,34 @@ export async function generatePricingGuidePdfServer(
       doc.setFont(F.serif, 'normal'); doc.setFontSize(13); tc(PAL.ink);
       doc.text(qLines, MARGIN + 14, y);
       const yy = y + qLines.length * 6 + 2;
-      const aLines = wrap(a, CONTENT_W - 14, T.body, F.body);
+      const aLines = wrapNoWidow(a, CONTENT_W - 14, T.body, F.body);
       doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.soft);
       doc.text(aLines, MARGIN + 14, yy);
     });
     footer();
   });
 
-  // ── Save the Date (Get In Touch + Thank You merged) ──────────────────
+  // ── Save the Date (full-bleed hero with overlaid text) ───────────────
   addSection('Save the Date', () => {
     page();
-    let y = pageHeader({ eyebrow: 'We would love to host you', title: 'Save the Date', align: 'center' });
-    doc.setFont(F.body, 'normal'); doc.setFontSize(T.lead); tc(PAL.soft);
-    const invite = wrap(`Reach out to check your date and book a tour of ${name}. We will help you picture the day from here.`, CONTENT_W - 20, T.lead, F.body);
-    doc.text(invite, CX, y, { align: 'center' });
-    y += invite.length * 6 + 10;
+    imgCover(nextPhoto() ?? getImg(coverSrc), 0, 0, W, H);
+    overlay(0, 0, W, H, 0.42);
+    frame();
 
+    doc.setFont(F.italic, 'normal'); doc.setFontSize(15); tc(PAL.white);
+    doc.text('We would love to host you', CX, H * 0.42, { align: 'center' });
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(34); tc(PAL.white);
+    doc.text('Save the Date', CX, H * 0.42 + 16, { align: 'center' });
+
+    doc.setFont(F.body, 'normal'); doc.setFontSize(T.lead); tc(PAL.white);
+    const invite = wrap(`Reach out to check your date and book a tour of ${name}.`, CONTENT_W - 30, T.lead, F.body);
+    doc.text(invite, CX, H * 0.42 + 30, { align: 'center' });
+
+    let cy = H - 52;
     [phoneStr, emailStr, websiteStr].filter(Boolean).forEach((line) => {
-      tracked(line.toUpperCase(), CX, y, 9, 1.6, PAL.ink, F.bodySemi, 'normal', 'center');
-      y += 8;
+      tracked(line.toUpperCase(), CX, cy, 9, 1.6, PAL.white, F.bodySemi, 'normal', 'center');
+      cy += 9;
     });
-    if (cityState) {
-      doc.setFont(F.italic, 'normal'); doc.setFontSize(12); tc(PAL.mute);
-      doc.text(`Based in ${cityState}`, CX, y + 2, { align: 'center' }); y += 8;
-    }
-    y += 6;
-    const ph = BOTTOM - 4 - y;
-    if (ph > 40) imgCover(nextPhoto() ?? getImg(coverSrc), MARGIN, y, CONTENT_W, ph);
-    footer();
   });
 
   // ════════════════════════════════════════════════════════════════════
