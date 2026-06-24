@@ -226,7 +226,9 @@ export async function PATCH(req: NextRequest) {
   ) => {
     if (enabled === undefined && steps === undefined) return;
 
-    const status = enabled === false ? 'inactive' : 'active';
+    // Must match the marketing_automations_status_chk constraint, which only
+    // allows 'draft' | 'active' | 'paused'. The "off" state is 'paused'.
+    const status = enabled === false ? 'paused' : 'active';
 
     // Find or create the managed automation.
     let { data: auto } = await supabaseAdmin
