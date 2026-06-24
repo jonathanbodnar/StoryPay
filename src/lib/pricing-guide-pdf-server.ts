@@ -530,26 +530,14 @@ export async function generatePricingGuidePdfServer(
     return { cols: 1, rows: 1, count: 1 };
   }
 
-  // ── Evergreen content (clean copy, no banned words) ──────────────────
-  // FAQ is built-in (no editor surface yet) — 6 entries to balance the page.
-  const faqs: [string, string][] = (guide.faqs && guide.faqs.length)
-    ? guide.faqs.slice(0, 6)
-    : [
-        ['How many guests can you host?',
-          guide.spaces[0]?.capacity
-            ? `Our main space seats ${guide.spaces[0].capacity.replace(/^up to\s*/i, 'up to ')}.`
-            : `Tell us your guest count and we will confirm the right space for your celebration.`],
-        ['What dates are available?',
-          guide.availability_text?.trim() || `Dates book quickly. Send us your season and we will check availability for you.`],
-        ["What's included?",
-          `Your booking includes exclusive use of the space for your event. Ask us for the full list that comes with your package.`],
-        ['Do you allow outside vendors?',
-          `Yes. Bring the team you love, or ask us for a list of caterers, florists, and photographers we trust.`],
-        ['Is parking available on site?',
-          `Yes. On-site parking keeps arrival simple for you and your guests on the day.`],
-        ['How do we book a tour?',
-          `Use the contact details in this guide. We will set up a time that works for your schedule.`],
-      ];
+  // ── FAQ: owner-entered only ──────────────────────────────────────────
+  // The FAQ page is NEVER auto-generated. It renders only when the owner has
+  // manually added questions in the pricing-guide editor (and an answer is
+  // present). Onboarding does not seed these.
+  const faqs: [string, string][] = (guide.faqs ?? [])
+    .map((f) => [String(f?.[0] ?? '').trim(), String(f?.[1] ?? '').trim()] as [string, string])
+    .filter(([q, a]) => q.length > 0 && a.length > 0)
+    .slice(0, 6);
 
   // "What's Included" prefers the package's editable items so the PDF mirrors
   // what the owner can change in the editor; then venue features; then evergreen.
@@ -761,25 +749,27 @@ export async function generatePricingGuidePdfServer(
     });
   }
 
-  // ── FAQ (clean single Playfair line; built-in 5-6 to balance page) ───
-  addSection('Questions', () => {
-    page();
-    const top = pageHeader({ eyebrow: 'Good to know', title: 'Frequently Asked Questions' });
-    const items = faqs.slice(0, 6);
-    const slotH = (BOTTOM - 8 - top) / items.length;
-    items.forEach(([q, a], i) => {
-      const y = top + i * slotH;
-      tracked(`0${i + 1}`, MARGIN, y, 12, 1.5, PAL.faint, F.bodySemi, 'normal', 'left');
-      const qLines = wrap(q, CONTENT_W - 14, 13, F.serif);
-      doc.setFont(F.serif, 'normal'); doc.setFontSize(13); tc(PAL.ink);
-      doc.text(qLines, MARGIN + 14, y);
-      const yy = y + qLines.length * 6 + 2;
-      const aLines = wrapNoWidow(a, CONTENT_W - 14, T.body, F.body);
-      doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.soft);
-      doc.text(aLines, MARGIN + 14, yy);
+  // ── FAQ — owner-entered only; never auto-generated ───────────────────
+  if (faqs.length) {
+    addSection('Questions', () => {
+      page();
+      const top = pageHeader({ eyebrow: 'Good to know', title: 'Frequently Asked Questions' });
+      const items = faqs.slice(0, 6);
+      const slotH = (BOTTOM - 8 - top) / items.length;
+      items.forEach(([q, a], i) => {
+        const y = top + i * slotH;
+        tracked(`0${i + 1}`, MARGIN, y, 12, 1.5, PAL.faint, F.bodySemi, 'normal', 'left');
+        const qLines = wrap(q, CONTENT_W - 14, 13, F.serif);
+        doc.setFont(F.serif, 'normal'); doc.setFontSize(13); tc(PAL.ink);
+        doc.text(qLines, MARGIN + 14, y);
+        const yy = y + qLines.length * 6 + 2;
+        const aLines = wrapNoWidow(a, CONTENT_W - 14, T.body, F.body);
+        doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.soft);
+        doc.text(aLines, MARGIN + 14, yy);
+      });
+      footer();
     });
-    footer();
-  });
+  }
 
   // ── Save the Date (full-bleed hero with overlaid text) ───────────────
   addSection('Save the Date', () => {

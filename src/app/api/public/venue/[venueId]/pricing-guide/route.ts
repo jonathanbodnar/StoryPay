@@ -104,6 +104,8 @@ export async function GET(
     accommodations_image_url: guide?.accommodations_image_url ?? null,
     pricing_intro:            guide?.pricing_intro            ?? null,
     reviews:                  (guide?.reviews as { author?: string; location?: string; body?: string; rating?: number }[]) ?? [],
+    faqs:                     ((guide?.faqs as { question?: string; answer?: string }[]) ?? [])
+                                .map((f) => [f?.question ?? '', f?.answer ?? ''] as [string, string]),
     availability_text:        guide?.availability_text        ?? null,
     availability_image_url:   guide?.availability_image_url   ?? null,
     cta_headline:             guide?.cta_headline             ?? null,

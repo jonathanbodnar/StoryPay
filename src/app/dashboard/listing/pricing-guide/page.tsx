@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   Loader2, Save, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
   Plus, Trash2, GripVertical, Image as ImageIcon, Sparkles, Star,
-  ArrowLeft, Upload, Eye, Wand2, Download, FileText,
+  ArrowLeft, Upload, Eye, Wand2, Download, FileText, HelpCircle,
 } from 'lucide-react';
 import { AIField } from '@/components/pricing-guide/AIField';
 import PreviewGuideModal from '@/components/pricing-guide/PreviewGuideModal';
@@ -16,6 +16,8 @@ import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPicker
 type GalleryItem = { url: string; caption?: string };
 const ABOUT_PHOTO_MAX = 4;
 type ReviewItem = { author?: string; location?: string; body?: string; rating?: number };
+
+type FaqItem = { question: string; answer: string };
 
 type Space = {
   id: string;
@@ -61,6 +63,7 @@ interface Guide {
   accommodations_image_url: string | null;
   pricing_intro: string | null;
   reviews: ReviewItem[];
+  faqs: FaqItem[];
   availability_text: string | null;
   availability_image_url: string | null;
   cta_headline: string | null;
@@ -260,7 +263,7 @@ export default function PricingGuidePage() {
         const seedJson  = seedRes.ok ? ((await seedRes.json()) as SeedShape) : null;
         const contactJson = contactRes.ok ? ((await contactRes.json()) as { listing: VenueContact }) : null;
         if (!cancelled) {
-          setGuide(guideJson.guide);
+          setGuide({ ...guideJson.guide, faqs: guideJson.guide.faqs ?? [] });
           if (guideJson.schemaMissing) setSchemaMissing(true);
           if (seedJson) setSeedData(seedJson);
           if (contactJson?.listing) setVenueContact(contactJson.listing);
@@ -1272,6 +1275,85 @@ export default function PricingGuidePage() {
               className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 py-4 text-sm font-medium text-gray-600 hover:border-gray-300 hover:bg-white"
             >
               <Plus size={16} /> Add review ({6 - guide.reviews.length} left)
+            </button>
+          )}
+        </div>
+      </Section>
+
+      {/* ── Questions (FAQ) — optional, owner-entered ──────────────── */}
+      <Section
+        title="Questions"
+        hint="Optional. Add the questions couples ask most. The FAQ page only appears in your guide when you add at least one question here — nothing is auto-generated."
+        icon={<HelpCircle size={18} />}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          {(guide.faqs ?? []).length === 0 && (
+            <p className="text-sm text-gray-500">
+              No questions yet. Add 5–6 for a balanced FAQ page. Leave this empty to skip the page entirely.
+            </p>
+          )}
+
+          {(guide.faqs ?? []).map((f, idx) => (
+            <div key={idx} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="relative">
+                <input
+                  className={`${INPUT} pr-20`}
+                  maxLength={120}
+                  placeholder="Question (e.g. Do you allow outside catering?)"
+                  value={f.question ?? ''}
+                  onChange={(e) => {
+                    const next = (guide.faqs ?? []).map((x, i) => i === idx ? { ...x, question: e.target.value } : x);
+                    updateParent('faqs', next);
+                  }}
+                />
+                <div className={`absolute top-1/2 right-3 -translate-y-1/2 text-xs font-mono tabular-nums ${
+                  (f.question?.length ?? 0) >= 120 ? 'text-red-500'
+                  : (f.question?.length ?? 0) >= 100 ? 'text-amber-500'
+                  : 'text-gray-400'
+                }`}>
+                  {f.question?.length ?? 0}/120
+                </div>
+              </div>
+              <div className="relative mt-3">
+                <textarea
+                  rows={3}
+                  maxLength={300}
+                  className={`${TEXTAREA} pr-16`}
+                  placeholder="Answer couples can rely on…"
+                  value={f.answer ?? ''}
+                  onChange={(e) => {
+                    const next = (guide.faqs ?? []).map((x, i) => i === idx ? { ...x, answer: e.target.value } : x);
+                    updateParent('faqs', next);
+                  }}
+                />
+                <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
+                  (f.answer?.length ?? 0) >= 300 ? 'text-red-500'
+                  : (f.answer?.length ?? 0) >= 260 ? 'text-amber-500'
+                  : 'text-gray-400'
+                }`}>
+                  {f.answer?.length ?? 0}/300
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => updateParent('faqs', (guide.faqs ?? []).filter((_, i) => i !== idx))}
+                  className="text-xs text-gray-500 hover:text-red-600"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {(guide.faqs ?? []).length < 8 && (
+            <button
+              type="button"
+              onClick={() => updateParent('faqs', [...(guide.faqs ?? []), { question: '', answer: '' }])}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 py-4 text-sm font-medium text-gray-600 hover:border-gray-300 hover:bg-white"
+            >
+              <Plus size={16} /> Add question
             </button>
           )}
         </div>
