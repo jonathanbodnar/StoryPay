@@ -455,7 +455,10 @@ const NEUTRAL_REPLY_OUTCOME: Outcome = {
   tags:             ['ai_replied'],
   stage:            'conversation_started',
   scenario:         'ai_reply_received',
-  notifyRoles:      ['venue_owner'],
+  // Notify BOTH the venue owner and the concierge team on every reply — the
+  // moment the bride engages, a human needs to take over, so both inboxes get
+  // the hand-off email (previously only the owner was emailed).
+  notifyRoles:      ['venue_owner', 'concierge'],
   transitionReason: 'inbound_reply',
   isTcpa:           false,
 };

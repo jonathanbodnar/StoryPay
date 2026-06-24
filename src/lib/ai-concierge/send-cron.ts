@@ -257,6 +257,34 @@ async function reserveDueLeads(
            AND COALESCE(v2.ai_concierge_enabled, false) = true
            AND COALESCE(v2.directory_addon_concierge, false) = true
            AND (COALESCE(v2.a2p_verified, false) = true OR COALESCE(v2.ghl_connected, false) = true)
+           -- Defense-in-depth gate #1 — never message a contact the venue has
+           -- marked "Not Interested", whether by moving them into the Not
+           -- Interested stage OR applying the Not Interested tag. ai_state used
+           -- to be the only gate, so a manual stage/tag change (which does NOT
+           -- flip ai_state) left the AI happily sending. Fail-open: if the
+           -- venue's resource cache hasn't resolved the UUID, the comparison is
+           -- against NULL and never blocks.
+           AND (v2.ai_concierge_resources #>> '{stages,not_interested}') IS DISTINCT FROM l2.stage_id::text
+           AND NOT EXISTS (
+                 SELECT 1 FROM public.lead_tag_assignments lta_ni
+                  WHERE lta_ni.lead_id = l2.id
+                    AND lta_ni.tag_id::text = (v2.ai_concierge_resources #>> '{tags,ai_not_interested}')
+               )
+           -- Defense-in-depth gate #2 — only send when the lead is genuinely in
+           -- the AI follow-up lane: sitting in the Follow-up stage OR still
+           -- carrying the AI Active tag. Fail-open: if either UUID is missing
+           -- from the cache we skip this gate entirely so we can't silently
+           -- halt a whole venue whose resources never resolved.
+           AND (
+                 (v2.ai_concierge_resources #>> '{stages,followup}') IS NULL
+              OR (v2.ai_concierge_resources #>> '{tags,ai_active}')   IS NULL
+              OR l2.stage_id::text = (v2.ai_concierge_resources #>> '{stages,followup}')
+              OR EXISTS (
+                   SELECT 1 FROM public.lead_tag_assignments lta_act
+                    WHERE lta_act.lead_id = l2.id
+                      AND lta_act.tag_id::text = (v2.ai_concierge_resources #>> '{tags,ai_active}')
+                 )
+               )
          ORDER BY l2.ai_next_send_at ASC
          LIMIT ${limit}
        )
@@ -358,6 +386,29 @@ async function processOneLead(
   if (spend.atWarning) {
     void maybeSendCapWarningEmail({ venueId: row.venue_id, evaluation: spend, variant: 'warning' })
       .catch((e) => console.error('[ai-send] cap-warning email failed:', e));
+  }
+
+  // 3.6. Final eligibility re-check, immediately before we spend a DeepSeek
+  // call + an SMS. This closes the race between reservation (which bumps
+  // ai_next_send_at out 15 min but leaves ai_state untouched) and the actual
+  // send. If the bride replied in that window the inbound webhook flips
+  // ai_state away from 'ai_active' (paused / handoff / opted_out), or a human
+  // hit Pause / marked Not Interested — in any of those cases we must NOT fire
+  // one last message. "Stops as soon as the lead replies" depends on this.
+  const { data: fresh } = await supabaseAdmin
+    .from('leads')
+    .select('ai_state')
+    .eq('id', row.id)
+    .maybeSingle();
+  if (!fresh || (fresh as { ai_state?: string }).ai_state !== 'ai_active') {
+    await logAiRun({
+      leadId:  row.id,
+      venueId: row.venue_id,
+      attempt: row.ai_attempt_count + 1,
+      outcome: 'skipped_state_changed',
+      detail:  `ai_state is now "${(fresh as { ai_state?: string } | null)?.ai_state ?? 'missing'}" — reply/pause landed after reservation; not sending`,
+    });
+    return { kind: 'skipped', reason: 'state_changed' };
   }
 
   // 4. Build prompt
