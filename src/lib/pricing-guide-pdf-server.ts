@@ -539,7 +539,7 @@ export async function generatePricingGuidePdfServer(
     .filter(([q, a]) => q.length > 0 && a.length > 0)
     .slice(0, 6);
 
-  // "What's Included" prefers the package's editable items so the PDF mirrors
+  // "Venue Features" prefers the package's editable items so the PDF mirrors
   // what the owner can change in the editor; then venue features; then evergreen.
   const includedItems: string[] = (() => {
     const pkgItems = (guide.packages[0]?.included_items ?? []).filter((s) => !!s && s.trim());
@@ -560,7 +560,7 @@ export async function generatePricingGuidePdfServer(
   frame();
   tracked(name.toUpperCase(), CX, 46, 12, 2.6, PAL.white, F.body, 'normal', 'center');
   {
-    const titleLines = wrap('Pricing & Planning Guide', CONTENT_W, T.cover, F.serif);
+    const titleLines = wrap('Pricing & Availability Guide', CONTENT_W, T.cover, F.serif);
     doc.setFont(F.serif, 'normal'); doc.setFontSize(T.cover); tc(PAL.white);
     let ty = H * 0.5 - (titleLines.length - 1) * 9;
     titleLines.forEach((ln) => { doc.text(ln, CX, ty, { align: 'center' }); ty += T.cover * 0.42; });
@@ -585,7 +585,7 @@ export async function generatePricingGuidePdfServer(
     page();
     let y = pageHeader({ eyebrow: 'Our Venue, Your Story', title: 'Welcome', align: 'center' });
     const msg = guide.congratulatory_message?.trim()
-      || `Welcome to ${name}. We are so glad you found us. This guide walks you through the spaces, the pricing, and the details that make your day feel effortless.`;
+      || `Congratulations on your engagement, and welcome to ${name}. From the first tour to your final send-off, our team is here to make planning feel calm and joyful. This guide walks you through our spaces, our pricing, and the little details that turn a wedding day into the day you have been picturing. We cannot wait to show you around and help you imagine your celebration here.`;
     const lines = wrap(msg, CONTENT_W - 24, T.lead, F.body);
     doc.setFont(F.body, 'normal'); doc.setFontSize(T.lead); tc(PAL.soft);
     doc.text(lines, CX, y + 2, { align: 'center' });
@@ -616,13 +616,18 @@ export async function generatePricingGuidePdfServer(
     footer();
   });
 
-  // ── Our Story (intro + 2x2 about photos) ─────────────────────────────
-  addSection('Our Story', () => {
+  // ── About Us (intro + 2x2 about photos) ──────────────────────────────
+  addSection('About Us', () => {
     page();
-    let y = pageHeader({ eyebrow: 'About the venue', title: 'Our Story' });
+    let y = pageHeader({ eyebrow: 'Our Venue', title: 'About Us' });
     const body = (guide.about_venue?.trim())
-      || `${name} was made for gatherings that matter. The setting, the light, and the room all work together so your celebration feels effortless and entirely yours.`;
-    const lines = wrap(body, CONTENT_W, T.body, F.body).slice(0, 7);
+      || `${name} was made for the gatherings that matter most. The setting, the light, and the spaces all work together so your celebration feels relaxed, beautiful, and entirely your own. Couples choose us because every corner is ready for a real wedding day, from the quiet moments before the ceremony to the last dance of the night. Our team knows this place inside and out, and we love helping you picture exactly how your day will unfold here. Come see it for yourself, and we will help you imagine the rest.`;
+    // Reserve room for at least a two-row photo grid, then fill the text block
+    // with whole sentences so the page reads full without clipping mid-thought.
+    const reserveGrid = 74;
+    const maxTextH = Math.max(LH * 3, BOTTOM - 6 - y - reserveGrid - 10);
+    const maxLines = Math.max(3, Math.floor(maxTextH / LH));
+    const lines = wrap(fitSentences(body, CONTENT_W, T.body, F.body, maxLines), CONTENT_W, T.body, F.body);
     doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.soft);
     doc.text(lines, MARGIN, y);
     y += lines.length * LH + 10;
@@ -646,7 +651,7 @@ export async function generatePricingGuidePdfServer(
       y += 6;
     }
     const desc = (space?.description?.trim())
-      || `A versatile space at ${name}, ready for your ceremony, dinner, and dancing. The room flexes from a seated ceremony to a full reception, with space for your guests, the dance floor, and the details that make the day yours. Ask us how it can be arranged for your celebration.`;
+      || `A versatile space at ${name}, ready for your ceremony, dinner, and dancing all in one place. The room flexes easily from a seated ceremony to a full reception, with plenty of room for your guests, a generous dance floor, and the little details that make the day feel like yours. Natural light, comfortable flow, and flexible layouts mean you can shape the space around your vision rather than the other way around. Whether you are planning an intimate dinner or a lively party, our team will help you arrange every detail so the day runs smoothly from the first toast to the last song.`;
     const gap = 12;
     const minPhotoH = 92;
     // How many full lines fit if the photo sits at its minimum height.
@@ -678,8 +683,8 @@ export async function generatePricingGuidePdfServer(
     doc.text(nLines, CX, y, { align: 'center' });
     y += nLines.length * LH + 12;
 
-    // What's Included list on the same page.
-    tracked("WHAT'S INCLUDED", CX, y, 9, 2.2, PAL.mute, F.bodySemi, 'normal', 'center'); y += 10;
+    // Venue Features list on the same page.
+    tracked('VENUE FEATURES', CX, y, 9, 2.2, PAL.mute, F.bodySemi, 'normal', 'center'); y += 10;
     const cols = 2;
     const colW = (CONTENT_W - 16) / cols;
     const rowH = 9.5;

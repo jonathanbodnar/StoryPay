@@ -178,6 +178,14 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
 
+  // The pricing guide About text shares this column (single source of truth).
+  // Flag it as a deliberate edit so a later onboarding draft never overwrites it.
+  if ('description' in updates) {
+    void import('@/lib/pricing-guide-edits')
+      .then(({ markGuideFieldsEdited }) => markGuideFieldsEdited(venueId, ['about_venue']))
+      .catch(() => { /* non-fatal */ });
+  }
+
   // ── Bust ISR / CDN cache when publish status changes ────────────────────
   // After any listing save (especially publish/unpublish) immediately
   // invalidate the cached venue page and public API so the change is

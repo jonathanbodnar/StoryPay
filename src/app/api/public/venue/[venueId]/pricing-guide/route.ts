@@ -40,7 +40,7 @@ export async function GET(
   // below picks whichever is populated.
   const { data: venue, error: venueErr } = await supabaseAdmin
     .from('venues')
-    .select('name, location_city, location_state, location_full, lat, lng, brand_phone, brand_email, logo_url, brand_logo_url, social_links, features, owner_first_name, owner_last_name, faq')
+    .select('name, location_city, location_state, location_full, lat, lng, brand_phone, brand_email, logo_url, brand_logo_url, social_links, features, owner_first_name, owner_last_name, faq, description')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -98,7 +98,8 @@ export async function GET(
     congratulatory_message:   guide?.congratulatory_message   ?? null,
     gallery:                  (guide?.gallery as { url: string; caption?: string }[]) ?? [],
     about_photos:             (guide?.about_photos as { url: string; caption?: string }[]) ?? [],
-    about_venue:              guide?.about_venue              ?? null,
+    // About text is a single source of truth with the public listing: venues.description
+    about_venue:              (venue?.description as string)?.trim() || guide?.about_venue || null,
     accommodations_text:      guide?.accommodations_text      ?? null,
     accommodations_photos:    (guide?.accommodations_photos as { url: string; caption?: string }[]) ?? [],
     accommodations_image_url: guide?.accommodations_image_url ?? null,

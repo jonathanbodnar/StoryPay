@@ -90,9 +90,9 @@ function templateDraft(venueName: string, a: Answers): DraftedGuide {
       ? 'an all-inclusive experience with everything handled under one roof'
       : 'a beautiful venue-only space you can make your own';
   return {
-    congratulatory_message: `Congratulations on your engagement! We'd be honored to host your wedding at ${venueName}.`,
-    about_venue: `${venueName} offers ${incl}. ${a.differentiators ? a.differentiators : ''}`.trim(),
-    pricing_intro: `Here's a look at our pricing and what's included so you can plan with confidence.`,
+    congratulatory_message: `Congratulations on your engagement, and welcome to ${venueName}. We would be honored to host your wedding here. From your first tour to your last dance, our team is here to make planning feel calm, clear, and exciting. This guide walks you through everything you need to picture your day with us.`,
+    about_venue: `${venueName} offers ${incl}. ${a.differentiators ? a.differentiators + '. ' : ''}Couples choose us because the setting, the spaces, and the flow all work together for a real wedding day, from quiet getting-ready moments to a full celebration with family and friends. Our team knows this place inside and out and loves helping you imagine exactly how your day will unfold here. Come see it in person, and we will help you picture the rest.`.trim(),
+    pricing_intro: `Here is a clear look at our pricing and the venue features included so you can plan with confidence. We keep things transparent, with no hidden fees, and we are happy to tailor the details to fit your day.`,
     availability_text: a.seasonality
       ? `Availability: ${a.seasonality}`
       : `Dates book quickly, so reach out to check availability for your season.`,
@@ -104,8 +104,8 @@ function templateDraft(venueName: string, a: Answers): DraftedGuide {
       ? 'Our all-inclusive package covering your core wedding-day needs.'
       : 'Exclusive use of the venue for your wedding day.',
     space_description: a.inclusivity === 'all_inclusive'
-      ? `${venueName} offers an all-inclusive space for your ceremony and reception. The team handles setup, service, and the details, and the room flexes from a seated ceremony to a full reception with room for your guests and the dance floor.`
-      : `${venueName} is a versatile space for your ceremony, dinner, and dancing. The room flexes from a seated ceremony to a full reception, with room for your guests, the dance floor, and the details that make the day yours.`,
+      ? `${venueName} offers an all-inclusive space for your ceremony and reception, all in one place. Our team handles setup, service, and the details so you can stay present with your guests. The room flexes easily from a seated ceremony to a full reception, with plenty of space for dinner, a generous dance floor, and the little touches that make the day yours. Whether you are planning an intimate gathering or a lively party, we will help you arrange every detail so the day runs smoothly from the first toast to the last song.`
+      : `${venueName} is a versatile space for your ceremony, dinner, and dancing, all under one roof. The room flexes easily from a seated ceremony to a full reception, with plenty of room for your guests, a generous dance floor, and the details that make the day feel like yours. Natural light and flexible layouts mean you can shape the space around your vision rather than the other way around. Whether you are planning an intimate dinner or a big celebration, our team will help you arrange every detail so the day flows beautifully.`,
     capacity_label: capacityLabel(a.max_capacity),
   };
 }
@@ -136,18 +136,20 @@ Inclusivity: ${a.inclusivity || '(unknown)'}
 Seasonality / availability: ${a.seasonality || '(unknown)'}
 Top differentiators: ${a.differentiators || '(unknown)'}
 
+Write generously so each page of the printed guide feels full and warm. Do NOT write thin, one-line copy.
+
 Return JSON with EXACTLY these string keys:
 {
-  "congratulatory_message": "1-2 sentences congratulating the bride and welcoming her",
-  "about_venue": "2-3 sentence vivid description of the venue weaving in the differentiators",
-  "pricing_intro": "1-2 sentences introducing the pricing section, transparent and reassuring",
-  "availability_text": "1-2 sentences about availability/seasonality and urgency to book",
+  "congratulatory_message": "3-4 warm sentences congratulating the bride, welcoming her, and previewing what this guide covers (about 350-450 characters)",
+  "about_venue": "5-6 vivid sentences describing the venue, weaving in the differentiators and why couples love getting married here (about 550-700 characters)",
+  "pricing_intro": "2-3 reassuring sentences introducing the pricing section, transparent and confident (about 250-350 characters)",
+  "availability_text": "1-2 sentences about availability/seasonality and gentle urgency to book",
   "cta_headline": "short punchy headline inviting a tour",
   "cta_body": "1 sentence encouraging them to book a tour",
   "cta_button_label": "2-4 word button text",
   "package_name": "name for their starting package",
   "package_description": "1 sentence describing what the starting package includes",
-  "space_description": "2-3 sentences describing the main event space: capacity, ceremony vs reception flow, and what the space handles"
+  "space_description": "4-5 sentences describing the main event space: capacity, ceremony vs reception flow, layout flexibility, and what the space handles (about 500-650 characters)"
 }`;
 
     const res = await client.chat.completions.create({
@@ -155,7 +157,7 @@ Return JSON with EXACTLY these string keys:
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' },
       temperature: 0.7,
-      max_tokens: 700,
+      max_tokens: 1100,
     });
 
     const raw = res.choices[0]?.message?.content ?? '';
@@ -301,6 +303,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .eq('id', guideId);
   if (guideErr) console.warn('[draft-guide] guide update', guideErr.message);
 
+  // About text shares a single source of truth with the public listing
+  // (venues.description). Seed it with the fuller AI copy unless the owner has
+  // manually edited the About field (tracked via the about_venue edit flag).
+  if (!edited['about_venue'] && draft.about_venue?.trim()) {
+    await supabaseAdmin
+      .from('venues')
+      .update({ description: draft.about_venue })
+      .eq('id', venueId)
+      .then(undefined, () => { /* non-fatal */ });
+  }
+
   // ── Starting-price package (create one if none exist) ────────────────────────
   const label = priceLabel(a.starting_price);
   const { data: existingPkgs } = await supabaseAdmin
@@ -383,6 +396,17 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
   const guideUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const k of ['about_venue', 'pricing_intro', 'congratulatory_message', 'availability_text'] as const) {
     if (typeof body[k] === 'string') guideUpdate[k] = cleanCopy(body[k] as string);
+  }
+
+  // About text is shared with the public listing (venues.description). When the
+  // review step confirms/edits it, write the canonical column too so the guide,
+  // the listing, and the PDF all read the same copy.
+  if (typeof body.about_venue === 'string') {
+    await supabaseAdmin
+      .from('venues')
+      .update({ description: cleanCopy(body.about_venue as string) })
+      .eq('id', venueId)
+      .then(undefined, () => { /* non-fatal */ });
   }
   if (Object.keys(guideUpdate).length > 1) {
     const { error } = await supabaseAdmin

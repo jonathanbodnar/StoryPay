@@ -141,6 +141,7 @@ type VenueContact = {
   location_full: string | null;
   location_city: string | null;
   location_state: string | null;
+  description: string | null;
   faq: FaqRow[];
 };
 
@@ -270,6 +271,11 @@ export default function PricingGuidePage() {
             setVenueContact({
               ...contactJson.listing,
               faq: Array.isArray(contactJson.listing.faq) ? contactJson.listing.faq : [],
+              // Seed the About text from the listing description (the shared
+              // source of truth); fall back to any legacy guide about_venue.
+              description: (contactJson.listing.description?.trim()
+                || guideJson.guide.about_venue
+                || '') as string,
             });
           }
         }
@@ -883,35 +889,40 @@ export default function PricingGuidePage() {
       </Section>
 
       {/* ── About the venue ────────────────────────────────────────── */}
-      {/* Max 700 chars → text + 2×2 photo grid fit on one perfect page */}
+      {/* Shares one source of truth with the public listing description. */}
       <Section
         title="About the venue"
-        hint="Keep to 700 characters or less. The PDF about page pairs your description with a 2×2 photo grid — staying within the limit ensures everything lands perfectly on one page."
+        hint="This is the same description shown on your public venue listing — edit here or there and it stays in sync. The PDF About page pairs your text with a 2×2 photo grid; 900 characters or less keeps everything on one page."
         icon={<ImageIcon size={18} />}
       >
+        {venueContact && (
+          <p className="mb-3 flex items-center gap-1.5 text-xs text-emerald-600">
+            <CheckCircle2 size={12} /> Auto-synced with your venue listing description
+          </p>
+        )}
         <AIField
           section="about_venue"
-          value={guide.about_venue ?? ''}
-          onChange={(v) => updateParent('about_venue', v)}
+          value={venueContact?.description ?? ''}
+          onChange={(v) => updateContact('description', v)}
           render={({ value, onChange }) => (
             <div className="relative">
               <textarea
                 rows={8}
-                maxLength={700}
+                maxLength={900}
                 className={`${TEXTAREA} pr-28`}
-                placeholder="Tucked into the rolling hills of Napa, our barn-and-vineyard estate has hosted couples for over a decade…"
+                placeholder="Our barn-and-vineyard estate has hosted couples for over a decade…"
                 value={value}
                 onChange={onChange}
               />
               {/* Live character counter */}
               <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
-                (value?.length ?? 0) >= 700
+                (value?.length ?? 0) >= 900
                   ? 'text-red-500'
-                  : (value?.length ?? 0) >= 600
+                  : (value?.length ?? 0) >= 760
                   ? 'text-amber-500'
                   : 'text-gray-400'
               }`}>
-                {value?.length ?? 0}/700
+                {value?.length ?? 0}/900
               </div>
             </div>
           )}

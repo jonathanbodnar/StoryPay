@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { MapPin } from 'lucide-react';
+import { MapPin, Sparkles } from 'lucide-react';
 import { getPublicVenueBySlug } from '@/lib/public-venue-directory';
 import { ListingReviewsBlock } from '@/components/directory/ListingReviewsBlock';
 import { DirectoryListingBadges } from '@/components/directory/DirectoryListingBadges';
@@ -222,6 +222,25 @@ export default async function PublicVenuePage({
             {venue.description.split(/\n\n+/).map((p, i) => (
               <p key={i}>{p}</p>
             ))}
+          </div>
+        )}
+
+        {venue.features.length > 0 && (
+          <div>
+            <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold text-gray-900">
+              <Sparkles size={20} className="text-amber-600/90" />
+              Features &amp; amenities
+            </h2>
+            <ul className="flex flex-wrap gap-2">
+              {venue.features.map((f) => (
+                <li
+                  key={f}
+                  className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+                >
+                  {f}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
