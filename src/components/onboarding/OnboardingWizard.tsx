@@ -92,7 +92,9 @@ export default function OnboardingWizard() {
         if (!res.ok) { setChecking(false); if (forced) setOpen(true); return; }
         const s = await res.json();
         if (cancelled) return;
-        const isComplete = Boolean(s.completed) || (Boolean(s.is_published) && Boolean(s.guide_enabled));
+        // Hide the wizard/pill once they've completed onboarding OR published
+        // their listing manually — a live listing means they're done here.
+        const isComplete = Boolean(s.completed) || Boolean(s.is_published);
         setComplete(isComplete);
         setStep(typeof s.last_step === 'number' ? Math.min(s.last_step, 3) : 0);
 
@@ -154,7 +156,7 @@ export default function OnboardingWizard() {
 
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center overscroll-contain bg-gray-900/60 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl">
+      <div className="relative w-full max-w-2xl sm:max-w-[52rem] max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl">
         {step > 0 && step < 3 && (
           <button
             onClick={() => go(0)}
@@ -217,7 +219,8 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
   const [mode, setMode] = useState<'search' | 'link'>('search');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [importingId, setImportingId] = useState<string | null>(null);
+  const importing = importingId !== null;
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [imported, setImported] = useState<{ profile: ImportedProfile; photos: string[]; review_count: number } | null>(null);
@@ -270,7 +273,7 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
   };
 
   const importProfile = async (placeId: string) => {
-    setImporting(true); setError(null);
+    setImportingId(placeId); setError(null);
     try {
       const res = await fetch('/api/listing/google-reviews/import-profile', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -280,7 +283,7 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
       if (!res.ok) { setError(d.error || 'Import failed.'); return; }
       setImported(d);
     } catch { setError('Import failed. Try again.'); }
-    finally { setImporting(false); }
+    finally { setImportingId(null); }
   };
 
   if (imported) {
@@ -324,7 +327,7 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${BRAND}1a` }}>
           <Sparkles size={24} style={{ color: BRAND }} />
         </div>
-        <h2 className="text-xl font-semibold text-gray-900">Let&apos;s build your booking system</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Let&apos;s Build Your Bride Booking System&trade;</h2>
         <p className="mt-1 text-sm text-gray-500">Connect Google and we&apos;ll auto-fill your venue — name, photos, reviews and more. No typing.</p>
       </div>
 
@@ -372,7 +375,7 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
               </div>
               <div className="ml-3 flex flex-shrink-0 items-center gap-2">
                 {c.rating != null && <span className="flex items-center gap-0.5 text-xs text-gray-600"><Star size={12} className="fill-amber-400 text-amber-400" />{c.rating}</span>}
-                {importing ? <Loader2 size={16} className="animate-spin text-gray-400" /> : <ArrowRight size={16} className="text-gray-400" />}
+                {importingId === c.place_id ? <Loader2 size={16} className="animate-spin text-gray-400" /> : <ArrowRight size={16} className="text-gray-400" />}
               </div>
             </button>
           ))}
@@ -393,7 +396,6 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   const [maxGuests, setMaxGuests] = useState('');
   const [priceFrom, setPriceFrom] = useState('');
   const [priceTo, setPriceTo] = useState('');
-  const [seasonality, setSeasonality] = useState('');
   const [differentiators, setDifferentiators] = useState('');
   const [features, setFeatures] = useState<string[]>([]);
   const [venueType, setVenueType] = useState('');
@@ -446,7 +448,6 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           capacity_max: maxGuests,
           price_min: priceFrom,
           price_max: priceTo,
-          seasonality,
           differentiators,
           features,
           venue_type: venueType || undefined,
@@ -520,12 +521,8 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           </div>
         </Field>
 
-        <Field label="Availability / busy season (optional)">
-          <input value={seasonality} onChange={(e) => setSeasonality(e.target.value)} placeholder="e.g. May–October books fast" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-        </Field>
-
-        <Field label="What makes you special? (top 2–3)">
-          <textarea value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} rows={2} placeholder="e.g. waterfront ceremony site, on-site suites, in-house catering" className="w-full resize-y min-h-[64px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+        <Field label="Describe 3–4 things that make your venue special?">
+          <textarea value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} rows={4} placeholder="e.g. waterfront ceremony site, on-site suites, in-house catering" className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
         </Field>
 
         <Field label="Social & website links (optional)">
@@ -617,19 +614,19 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900">Here&apos;s your guide — take a look</h2>
-      <p className="mt-1 text-sm text-gray-500">We wrote it for you. Edit anything to override it, or leave it as-is to confirm — but <strong>double-check your price</strong>, that&apos;s the promise to the bride.</p>
+      <h2 className="text-xl font-semibold text-gray-900">This becomes your Pricing &amp; Availability guide</h2>
+      <p className="mt-1 text-sm text-gray-500">We turned your answers into the pages brides see in your guide. Tweak anything now, or leave it as-is — you can always edit every page later on your Pricing Guide page. Just <strong>double-check your price</strong>; that&apos;s the promise to the bride.</p>
 
       <div className="mt-4 space-y-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Welcome message</label>
-          <textarea value={congrats} maxLength={500} onChange={(e) => setCongrats(e.target.value)} rows={2} className="w-full resize-y min-h-[64px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={congrats} maxLength={500} onChange={(e) => setCongrats(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${congrats.length >= 500 ? 'text-red-500' : 'text-gray-400'}`}>{congrats.length}/500</div>
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">About your venue</label>
-          <textarea value={about} maxLength={700} onChange={(e) => setAbout(e.target.value)} rows={4} className="w-full resize-y min-h-[64px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={about} maxLength={700} onChange={(e) => setAbout(e.target.value)} rows={6} className="w-full resize-y min-h-[136px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${about.length >= 700 ? 'text-red-500' : 'text-gray-400'}`}>{about.length}/700</div>
         </div>
 
@@ -643,13 +640,13 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Pricing intro</label>
-          <textarea value={pricingIntro} maxLength={400} onChange={(e) => setPricingIntro(e.target.value)} rows={2} className="w-full resize-y min-h-[64px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={pricingIntro} maxLength={400} onChange={(e) => setPricingIntro(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${pricingIntro.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{pricingIntro.length}/400</div>
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Availability</label>
-          <textarea value={availability} maxLength={400} onChange={(e) => setAvailability(e.target.value)} rows={2} className="w-full resize-y min-h-[64px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={availability} maxLength={400} onChange={(e) => setAvailability(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${availability.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{availability.length}/400</div>
         </div>
       </div>
@@ -707,7 +704,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
           <PartyPopper size={28} style={{ color: BRAND }} />
         </div>
         <h2 className="text-2xl font-bold text-gray-900">You&apos;re live!</h2>
-        <p className="mt-1 text-sm text-gray-500">Your booking system is published. Share this link and start collecting leads.</p>
+        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System&trade; is live. Drop this link in your Instagram &amp; TikTok bio, your email signature, and your website — every bride who taps it gets your guide and turns into a booked lead.</p>
 
         <div className="mt-5 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-2">
           <span className="flex-1 truncate px-2 text-sm text-gray-700">{liveUrl}</span>
@@ -736,7 +733,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
         <Sparkles size={24} style={{ color: BRAND }} />
       </div>
       <h2 className="text-xl font-semibold text-gray-900">One click from going live</h2>
-      <p className="mt-1 text-sm text-gray-500">Publishing makes your guide live at your public venue URL. Brides who land there get your guide instantly — that&apos;s your lead loop.</p>
+      <p className="mt-1 text-sm text-gray-500">Publish to turn on your Bride Booking System&trade;. Every bride who opens your link gets your pricing instantly and books a tour — so a single click becomes a booked lead, even while you sleep.</p>
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 

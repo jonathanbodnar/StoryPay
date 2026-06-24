@@ -29,7 +29,8 @@ export default function OnboardingLauncher() {
         if (!res.ok) return;
         const s = await res.json();
         if (cancelled) return;
-        const complete = Boolean(s.completed) || (Boolean(s.is_published) && Boolean(s.guide_enabled));
+        // A published listing (manually or via the wizard) means setup is done.
+        const complete = Boolean(s.completed) || Boolean(s.is_published);
         setShow(!complete);
       } catch { /* ignore */ }
     })();
