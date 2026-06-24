@@ -65,6 +65,30 @@ function capacityLabel(cap: string): string {
   return `Up to ${parseInt(digits, 10).toLocaleString('en-US')} guests`;
 }
 
+// Models routinely ignore "no em dashes", so strip them deterministically.
+function deDash(s: string): string {
+  return s
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/\s+,/g, ',')
+    .replace(/,\s*,/g, ',')
+    .trim();
+}
+
+function cleanDraft(d: DraftedGuide): DraftedGuide {
+  return {
+    congratulatory_message: deDash(d.congratulatory_message),
+    about_venue: deDash(d.about_venue),
+    pricing_intro: deDash(d.pricing_intro),
+    availability_text: deDash(d.availability_text),
+    cta_headline: deDash(d.cta_headline),
+    cta_body: deDash(d.cta_body),
+    cta_button_label: d.cta_button_label,
+    package_name: d.package_name,
+    package_description: deDash(d.package_description),
+    capacity_label: d.capacity_label,
+  };
+}
+
 function templateDraft(venueName: string, a: Answers): DraftedGuide {
   const incl =
     a.inclusivity === 'all_inclusive'
@@ -76,7 +100,7 @@ function templateDraft(venueName: string, a: Answers): DraftedGuide {
     pricing_intro: `Here's a look at our pricing and what's included so you can plan with confidence.`,
     availability_text: a.seasonality
       ? `Availability: ${a.seasonality}`
-      : `Dates book quickly — reach out to check availability for your season.`,
+      : `Dates book quickly, so reach out to check availability for your season.`,
     cta_headline: 'Ready to see it in person?',
     cta_body: `Schedule a tour of ${venueName} and let's start planning your perfect day.`,
     cta_button_label: 'Schedule a tour',
@@ -99,7 +123,12 @@ async function aiDraft(
   try {
     const client = getDeepSeekClient();
     const loc = [city, state].filter(Boolean).join(', ');
-    const prompt = `You are writing a warm, concise wedding-venue "Pricing & Availability Guide" for brides. Write in second person to the bride, friendly and confident, never generic or salesy. Avoid clichés like "dream day". Output ONLY valid JSON.
+    const prompt = `You are writing a warm, concise wedding-venue "Pricing & Availability Guide" for brides. Write in second person to the bride, friendly and confident, never generic or salesy. Output ONLY valid JSON.
+
+STYLE RULES (follow strictly):
+- NEVER use these banned words or any variant of them: "nestled", "timeless", "magical", "serene", "dream day", "backdrop". They are overused clichés.
+- NEVER use em dashes or en dashes (— or –). Use a period or a comma instead.
+- Write short, declarative, outcome-first sentences. No filler.
 
 Venue: ${venueName}${loc ? ` (${loc})` : ''}
 Existing description: ${description || '(none)'}
@@ -221,14 +250,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .filter(Boolean)
       .join('. '),
   };
-  const draft =
+  const draft = cleanDraft(
     (await aiDraft(
       venueName,
       (venue?.location_city as string) || '',
       (venue?.location_state as string) || '',
       (venue?.description as string) || '',
       aForAi,
-    )) ?? templateDraft(venueName, a);
+    )) ?? templateDraft(venueName, a),
+  );
 
   // ── Persist parent guide fields (guide-primary) ──────────────────────────────
   const guideId = await getOrCreatePricingGuideId(venueId);
