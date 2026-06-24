@@ -190,7 +190,7 @@ export default function PricingGuidePage() {
     | { kind: 'gallery' }
     | { kind: 'about-photo' }
     | { kind: 'accommodations-photo' }
-    | { kind: 'field'; field: 'accommodations_image_url' }
+    | { kind: 'field'; field: 'accommodations_image_url' | 'availability_image_url' }
     | { kind: 'space'; spaceId: string }
     | { kind: 'accommodation'; accommodationId: string }
     | null
@@ -1391,8 +1391,71 @@ export default function PricingGuidePage() {
       >
         {venueContact ? (
           <div className="space-y-4">
+            {/* Save the Date background image — owner can swap it */}
+            <div>
+              <label className={LABEL}>Save the Date image</label>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-[200px_1fr]">
+                <div className="aspect-[3/4] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                  {guide.availability_image_url ? (
+                    <img src={guide.availability_image_url} alt="Save the Date" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-xs text-gray-400">
+                      <ImageIcon size={28} className="text-gray-300" />
+                      <span>Uses cover photo</span>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600">
+                    The full-page closing image of your guide. Leave empty to reuse your cover photo, or pick a different one.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openMediaPicker({ kind: 'field', field: 'availability_image_url' })}
+                      className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Upload size={15} />
+                      {guide.availability_image_url ? 'Replace image' : 'Upload image'}
+                    </button>
+                    {guide.availability_image_url && (
+                      <button
+                        type="button"
+                        onClick={() => updateParent('availability_image_url', null)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={14} /> Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Save the Date subheadline — shown above "Save the Date" in the PDF */}
+            <div>
+              <label className={LABEL}>Subheadline</label>
+              <div className="relative">
+                <input
+                  className={`${INPUT} pr-16`}
+                  maxLength={90}
+                  placeholder="We would love to host you"
+                  value={guide.availability_text ?? ''}
+                  onChange={(e) => updateParent('availability_text', e.target.value)}
+                />
+                <div className={`absolute top-1/2 right-3 -translate-y-1/2 text-xs font-mono tabular-nums ${
+                  (guide.availability_text?.length ?? 0) >= 90 ? 'text-red-500'
+                  : (guide.availability_text?.length ?? 0) >= 75 ? 'text-amber-500'
+                  : 'text-gray-400'
+                }`}>
+                  {guide.availability_text?.length ?? 0}/90
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-gray-400">The small line shown above &ldquo;Save the Date&rdquo; on the final page.</p>
+            </div>
+
             <p className="flex items-center gap-1.5 text-xs text-emerald-600">
-              <CheckCircle2 size={12} /> Auto-synced with your venue listing
+              <CheckCircle2 size={12} /> Contact details below are auto-synced with your venue listing
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>

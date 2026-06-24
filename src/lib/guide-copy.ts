@@ -40,8 +40,20 @@ export function scrubBannedWords(s: string): string {
   return out.replace(/\s{2,}/g, ' ').trim();
 }
 
-/** Full cleanup: de-dash + banned-word scrub. Safe on empty strings. */
+/**
+ * Strip emoji, pictographs, and other glyphs the PDF's Latin fonts cannot
+ * render (they otherwise appear as garbled "tofu"). Keeps ASCII, Latin-1/
+ * Extended letters, and common typographic punctuation.
+ */
+export function stripUnsupportedGlyphs(s: string): string {
+  return s
+    .replace(/[^\t\n\r\x20-\x7E\u00A0-\u017F\u2010-\u2027\u2030-\u205E]/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+/** Full cleanup: strip unsupported glyphs + de-dash + banned-word scrub. */
 export function cleanCopy(s: string | null | undefined): string {
   if (!s) return '';
-  return scrubBannedWords(deDash(s));
+  return scrubBannedWords(deDash(stripUnsupportedGlyphs(s)));
 }

@@ -22,7 +22,7 @@ import {
 } from '@/lib/google-place-profile';
 import { scanWebsiteForSocials } from '@/lib/social-scrape';
 import { registerVenueMediaAsset } from '@/lib/venue-media-registry';
-import { cleanCopy } from '@/lib/guide-copy';
+import { cleanCopy, stripUnsupportedGlyphs } from '@/lib/guide-copy';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -217,9 +217,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const gReviews = Array.isArray(g.reviews) ? (g.reviews as unknown[]) : [];
   if (gReviews.length === 0 && reviewsCache?.reviews?.length) {
     guideUpdate.reviews = reviewsCache.reviews.slice(0, 6).map((r) => ({
-      author: r.author_name,
+      author: stripUnsupportedGlyphs(r.author_name ?? ''),
       location: profile.city && profile.state ? `${profile.city}, ${profile.state}` : '',
-      body: r.text,
+      body: stripUnsupportedGlyphs(r.text ?? ''),
       rating: r.rating,
     }));
   }

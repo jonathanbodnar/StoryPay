@@ -307,8 +307,39 @@ export async function generatePricingGuidePdfServer(
     const im = getImg(u);
     if (im) pool.push(im);
   }
-  let pc = 0;
-  const nextPhoto = (): Img | null => (pool.length ? pool[pc++ % pool.length] : null);
+
+  // Single-photo pages (Welcome, Pricing, Save the Date fillers) should each get
+  // their OWN photo and never duplicate the cover or the main-space building
+  // shot. Reserve those, then hand out unused photos first; only repeat once the
+  // distinct supply is exhausted.
+  const reserved = new Set<string>();
+  if (coverSrc) reserved.add(coverSrc);
+  const heroSpaceUrl = (guide.spaces ?? []).find((s) => s.image_url)?.image_url ?? null;
+  if (heroSpaceUrl) reserved.add(heroSpaceUrl);
+
+  const singlePool: Img[] = [];
+  const singleSeen = new Set<string>();
+  for (const u of decoUrls) {
+    if (reserved.has(u) || singleSeen.has(u)) continue;
+    singleSeen.add(u);
+    const im = getImg(u);
+    if (im) singlePool.push(im);
+  }
+  let spc = 0;
+  const usedSingle = new Set<Img>();
+  const nextPhoto = (): Img | null => {
+    // Prefer the next not-yet-used distinct photo.
+    for (let k = 0; k < singlePool.length; k++) {
+      const im = singlePool[(spc + k) % singlePool.length];
+      if (!usedSingle.has(im)) {
+        spc = (spc + k + 1) % singlePool.length;
+        usedSingle.add(im);
+        return im;
+      }
+    }
+    // Distinct supply exhausted: fall back to the full pool rotation.
+    return pool.length ? pool[spc++ % pool.length] : null;
+  };
 
   // ── Shared drawing helpers ───────────────────────────────────────────
   /** CSS object-fit:cover into a clip rect. Placeholder when im is null. */
@@ -389,7 +420,19 @@ export async function generatePricingGuidePdfServer(
   function wrap(text: string, w: number, size: number, font: string, style: 'normal' = 'normal'): string[] {
     doc.setFont(font, style);
     doc.setFontSize(size);
-    return doc.splitTextToSize(text, w) as string[];
+    return doc.splitTextToSize(sanitize(text), w) as string[];
+  }
+
+  /**
+   * Strip emoji, pictographs, and any glyphs the embedded Latin fonts cannot
+   * render (which otherwise show up as garbled "+Pþ" tofu). Keeps ASCII,
+   * Latin-1/Extended letters, and common typographic punctuation/quotes.
+   */
+  function sanitize(s: string): string {
+    return (s ?? '')
+      .replace(/[^\t\n\r\x20-\x7E\u00A0-\u017F\u2010-\u2027\u2030-\u205E]/g, '')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
   }
 
   /** Trim text to a hard cap, cleanly at a sentence boundary (never mid-word). */
@@ -660,7 +703,9 @@ export async function generatePricingGuidePdfServer(
     const shown = wrap(fitSentences(desc, CONTENT_W, T.body, F.body, maxLines), CONTENT_W, T.body, F.body);
     const descBlockH = shown.length * LH;
     const photoH = BOTTOM - 4 - y - descBlockH - gap; // photo fills the rest
-    imgCover(getImg(space?.image_url ?? null) ?? nextPhoto(), FRAME, y, W - 2 * FRAME, photoH);
+    // Always show the actual building when we can: the owner-chosen space photo
+    // first, then the cover/hero (almost always the building exterior).
+    imgCover(getImg(space?.image_url ?? null) ?? getImg(coverSrc) ?? nextPhoto(), FRAME, y, W - 2 * FRAME, photoH);
     doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.soft);
     doc.text(shown, MARGIN, y + photoH + gap);
     footer();
@@ -699,11 +744,7 @@ export async function generatePricingGuidePdfServer(
     });
     y += rows * rowH + 12;
 
-    // Soft CTA → contact details.
-    doc.setFont(F.italic, 'normal'); doc.setFontSize(13); tc(PAL.ink);
-    doc.text('Ready to talk dates? Reach out and we will help you plan.', CX, y, { align: 'center' }); y += 8;
-    const contact = [phoneStr, emailStr, websiteStr].filter(Boolean).join('   ·   ');
-    if (contact) { fitTracked(contact.toUpperCase(), CX, y, 8.5, 1.4, CONTENT_W, PAL.mute, F.bodySemi, 'center'); y += 12; }
+    // Fill the remaining space with a distinct photo (no CTA/contact line here).
     const ph = BOTTOM - 6 - y;
     if (ph > 45) imgCover(nextPhoto(), MARGIN, y, CONTENT_W, ph);
     footer();
@@ -724,7 +765,7 @@ export async function generatePricingGuidePdfServer(
 
       // Measure every block so the page distributes them evenly top to bottom.
       const blocks = stories.map((rv) => {
-        const quote = `\u201C${trimToSentence(rv.body ?? '', perCap)}\u201D`;
+        const quote = `\u201C${trimToSentence(sanitize(rv.body ?? ''), perCap)}\u201D`;
         const qLines = wrapNoWidow(quote, CONTENT_W - 30, qSize, F.italic);
         const h = 6 /*stars*/ + 4 + qLines.length * qLH + 7 /*name*/ + (rv.location ? 5 : 0);
         return { rv, qLines, h };
@@ -740,12 +781,14 @@ export async function generatePricingGuidePdfServer(
         doc.setFont(F.italic, 'normal'); doc.setFontSize(qSize); tc(PAL.ink);
         doc.text(qLines, CX, sy, { align: 'center' });
         sy += qLines.length * qLH + 5;
-        if (rv.author) {
+        const author = sanitize(rv.author ?? '');
+        if (author) {
           doc.setFont(F.serif, 'normal'); doc.setFontSize(12.5); tc(PAL.soft);
-          doc.text(rv.author, CX, sy, { align: 'center' }); sy += 6;
+          doc.text(author, CX, sy, { align: 'center' }); sy += 6;
         }
-        if (rv.location) {
-          tracked(rv.location.toUpperCase(), CX, sy, 8, 1.6, PAL.mute, F.bodySemi, 'normal', 'center');
+        const loc = sanitize(rv.location ?? '');
+        if (loc) {
+          tracked(loc.toUpperCase(), CX, sy, 8, 1.6, PAL.mute, F.bodySemi, 'normal', 'center');
           sy += 5;
         }
         sy += lead;
@@ -779,18 +822,26 @@ export async function generatePricingGuidePdfServer(
   // ── Save the Date (full-bleed hero with overlaid text) ───────────────
   addSection('Save the Date', () => {
     page();
-    imgCover(nextPhoto() ?? getImg(coverSrc), 0, 0, W, H);
+    // Owner-chosen Save the Date image first, then a distinct filler, then cover.
+    imgCover(getImg(guide.availability_image_url ?? null) ?? nextPhoto() ?? getImg(coverSrc), 0, 0, W, H);
     overlay(0, 0, W, H, 0.42);
     frame();
 
-    doc.setFont(F.italic, 'normal'); doc.setFontSize(15); tc(PAL.white);
-    doc.text('We would love to host you', CX, H * 0.42, { align: 'center' });
+    // Editable subheadline (guide.availability_text); wraps to at most 2 lines.
+    const sub = (guide.availability_text?.trim()) || 'We would love to host you';
+    const subLines = wrap(sub, CONTENT_W - 36, 14, F.italic).slice(0, 2);
+    let ty = H * 0.40;
+    doc.setFont(F.italic, 'normal'); doc.setFontSize(14); tc(PAL.white);
+    doc.text(subLines, CX, ty, { align: 'center' });
+    ty += subLines.length * 7 + 6;
+
     doc.setFont(F.serif, 'normal'); doc.setFontSize(34); tc(PAL.white);
-    doc.text('Save the Date', CX, H * 0.42 + 16, { align: 'center' });
+    doc.text('Save the Date', CX, ty, { align: 'center' });
+    ty += 14;
 
     doc.setFont(F.body, 'normal'); doc.setFontSize(T.lead); tc(PAL.white);
     const invite = wrap(`Reach out to check your date and book a tour of ${name}.`, CONTENT_W - 30, T.lead, F.body);
-    doc.text(invite, CX, H * 0.42 + 30, { align: 'center' });
+    doc.text(invite, CX, ty, { align: 'center' });
 
     let cy = H - 52;
     [phoneStr, emailStr, websiteStr].filter(Boolean).forEach((line) => {

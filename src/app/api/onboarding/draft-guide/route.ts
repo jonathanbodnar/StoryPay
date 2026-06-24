@@ -350,9 +350,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // (no render-time-only evergreen text the owner cannot see or change).
       description: draft.space_description,
       capacity: draft.capacity_label,
-      // Seed the space photo from the gallery so the section stores its own
-      // image reference (editor + PDF resolve the same value).
-      image_url: galleryUrls[1] ?? galleryUrls[0] ?? null,
+      // Seed the space photo with the hero/building shot (gallery[0], the same
+      // image used for the cover) so the main event space always shows the
+      // actual building. The owner can swap it in the editor.
+      image_url: galleryUrls[0] ?? null,
       position: 0,
     });
   }
