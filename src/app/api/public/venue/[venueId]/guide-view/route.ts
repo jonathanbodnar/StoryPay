@@ -79,13 +79,15 @@ export async function POST(
       .maybeSingle();
     if (recentView) return NextResponse.json({ ok: true }); // already logged recently
 
+    // This is an internal tracking note (the bride opened the guide), not an
+    // outbound email. Logging it as 'internal' keeps it out of the email-send
+    // path so it never renders a misleading "failed to send" status.
     await supabaseAdmin.from('conversation_messages').insert({
       thread_id:            threadId,
-      visibility:           'external',
+      visibility:           'internal',
       channel:              'email',
       body:                 `👁 Guide viewed — ${fn} opened the pricing guide preview.`,
       sender_kind:          'system',
-      external_email_sent:  false,
     });
 
     // Update thread preview

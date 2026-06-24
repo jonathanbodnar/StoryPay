@@ -2104,7 +2104,10 @@ export default function ConversationsPage() {
                                   fromUs && m.visibility === 'external'
                                     ? m.external_email_sent === true
                                       ? 'sent'
-                                      : m.external_email_sent === false
+                                      // Only a real send failure (has an error) counts as failed.
+                                      // System tracking notes (e.g. "Guide viewed") have
+                                      // external_email_sent=false with no error and must not show failed.
+                                      : m.external_email_sent === false && m.send_error
                                         ? 'failed'
                                         : 'unknown'
                                     : undefined
