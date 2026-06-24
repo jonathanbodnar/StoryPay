@@ -19,6 +19,12 @@ export default function OnboardingLauncher() {
     let cancelled = false;
     (async () => {
       try {
+        // If the wizard was explicitly restarted (?onboarding=1 in URL), always
+        // show the launcher — the restart action clears `completed` but the venue
+        // may still be published+guide_enabled, which would otherwise hide us.
+        const forced = new URLSearchParams(window.location.search).get('onboarding') === '1';
+        if (forced) { setShow(true); return; }
+
         const res = await fetch('/api/onboarding/state', { cache: 'no-store' });
         if (!res.ok) return;
         const s = await res.json();

@@ -236,8 +236,11 @@ export function VenueReviewsTabs({
   google: GoogleReviewsBundle | null;
   compact?: boolean;
 }) {
-  const hasGoogle = google != null;
-  const [tab, setTab] = useState<'story' | 'google'>('story');
+  const hasGoogle = google != null && (google.count > 0);
+  // Default to Google tab when Google has reviews and StoryVenue has none.
+  const [tab, setTab] = useState<'story' | 'google'>(
+    () => (hasGoogle && storyVenue.count === 0) ? 'google' : 'story',
+  );
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<SortKey>('top');
   const [ratingFilter, setRatingFilter] = useState<number | 'all'>('all');
@@ -326,7 +329,7 @@ export function VenueReviewsTabs({
         )}
       </div>
 
-      {hasGoogle && (
+      {google != null && (
         <div className="mb-6 border-b border-gray-200">
           <div className="flex gap-0">
             <button

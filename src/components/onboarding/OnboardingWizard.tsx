@@ -109,6 +109,7 @@ export default function OnboardingWizard() {
 
         if (forced) {
           setStep(0);
+          setComplete(false); // override so render guard doesn't block a restarted wizard
           setOpen(true);
         } else if (!isComplete) {
           // Auto-open once per session; after that the bubble re-summons it.
