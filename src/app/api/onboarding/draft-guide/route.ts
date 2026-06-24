@@ -21,6 +21,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getOrCreatePricingGuideId } from '@/lib/pricing-guide';
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
+import { cleanCopy } from '@/lib/guide-copy';
+import { loadEditedFields, markGuideFieldsEdited } from '@/lib/pricing-guide-edits';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -65,26 +67,17 @@ function capacityLabel(cap: string): string {
   return `Up to ${parseInt(digits, 10).toLocaleString('en-US')} guests`;
 }
 
-// Models routinely ignore "no em dashes", so strip them deterministically.
-function deDash(s: string): string {
-  return s
-    .replace(/\s*[—–]\s*/g, ', ')
-    .replace(/\s+,/g, ',')
-    .replace(/,\s*,/g, ',')
-    .trim();
-}
-
 function cleanDraft(d: DraftedGuide): DraftedGuide {
   return {
-    congratulatory_message: deDash(d.congratulatory_message),
-    about_venue: deDash(d.about_venue),
-    pricing_intro: deDash(d.pricing_intro),
-    availability_text: deDash(d.availability_text),
-    cta_headline: deDash(d.cta_headline),
-    cta_body: deDash(d.cta_body),
+    congratulatory_message: cleanCopy(d.congratulatory_message),
+    about_venue: cleanCopy(d.about_venue),
+    pricing_intro: cleanCopy(d.pricing_intro),
+    availability_text: cleanCopy(d.availability_text),
+    cta_headline: cleanCopy(d.cta_headline),
+    cta_body: cleanCopy(d.cta_body),
     cta_button_label: d.cta_button_label,
     package_name: d.package_name,
-    package_description: deDash(d.package_description),
+    package_description: cleanCopy(d.package_description),
     capacity_label: d.capacity_label,
   };
 }
@@ -263,18 +256,41 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // ── Persist parent guide fields (guide-primary) ──────────────────────────────
   const guideId = await getOrCreatePricingGuideId(venueId);
 
+  // Manual content always wins: only (re)populate fields the owner has not
+  // manually edited. Auto-filled fields (never user-edited) may be refreshed.
+  const edited = await loadEditedFields(venueId);
+  const { data: existingGuide } = await supabaseAdmin
+    .from('venue_pricing_guides')
+    .select('gallery, about_photos')
+    .eq('id', guideId)
+    .maybeSingle();
+
+  const guideUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const setIfAllowed = (field: string, value: unknown) => {
+    if (!edited[field]) guideUpdate[field] = value;
+  };
+  setIfAllowed('congratulatory_message', draft.congratulatory_message);
+  setIfAllowed('about_venue', draft.about_venue);
+  setIfAllowed('pricing_intro', draft.pricing_intro);
+  setIfAllowed('availability_text', draft.availability_text);
+  setIfAllowed('cta_headline', draft.cta_headline);
+  setIfAllowed('cta_body', draft.cta_body);
+  // cta_button_label has no manual-override flag; always keep it current.
+  guideUpdate.cta_button_label = draft.cta_button_label;
+
+  // Image source-of-truth: seed the About 2x2 grid from the gallery (which the
+  // Google import already populated + registered in the media library) so the
+  // editor and the PDF read the same photos. Fill-empty + respect manual edits.
+  const gallery = Array.isArray(existingGuide?.gallery) ? (existingGuide!.gallery as { url?: string }[]) : [];
+  const aboutPhotos = Array.isArray(existingGuide?.about_photos) ? (existingGuide!.about_photos as unknown[]) : [];
+  const galleryUrls = gallery.map((g) => g?.url).filter((u): u is string => !!u);
+  if (!edited['about_photos'] && aboutPhotos.length === 0 && galleryUrls.length > 0) {
+    guideUpdate.about_photos = galleryUrls.slice(0, 4).map((url) => ({ url }));
+  }
+
   const { error: guideErr } = await supabaseAdmin
     .from('venue_pricing_guides')
-    .update({
-      congratulatory_message: draft.congratulatory_message,
-      about_venue: draft.about_venue,
-      pricing_intro: draft.pricing_intro,
-      availability_text: draft.availability_text,
-      cta_headline: draft.cta_headline,
-      cta_body: draft.cta_body,
-      cta_button_label: draft.cta_button_label,
-      updated_at: new Date().toISOString(),
-    })
+    .update(guideUpdate)
     .eq('id', guideId);
   if (guideErr) console.warn('[draft-guide] guide update', guideErr.message);
 
@@ -310,6 +326,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       name: 'Main Event Space',
       description: a.inclusivity === 'all_inclusive' ? 'All-inclusive event space' : null,
       capacity: draft.capacity_label,
+      // Seed the space photo from the gallery so the section stores its own
+      // image reference (editor + PDF resolve the same value).
+      image_url: galleryUrls[1] ?? galleryUrls[0] ?? null,
       position: 0,
     });
   }
@@ -352,7 +371,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
 
   const guideUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const k of ['about_venue', 'pricing_intro', 'congratulatory_message', 'availability_text'] as const) {
-    if (typeof body[k] === 'string') guideUpdate[k] = body[k];
+    if (typeof body[k] === 'string') guideUpdate[k] = cleanCopy(body[k] as string);
   }
   if (Object.keys(guideUpdate).length > 1) {
     const { error } = await supabaseAdmin
@@ -360,6 +379,12 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       .update(guideUpdate)
       .eq('id', guideId);
     if (error) console.warn('[draft-guide PATCH] guide update', error.message);
+    // The review step is a deliberate confirm/override — flag these as edited
+    // so a later modal re-run never overwrites them.
+    void markGuideFieldsEdited(
+      venueId,
+      Object.keys(guideUpdate).filter((k) => k !== 'updated_at'),
+    ).catch(() => { /* non-fatal */ });
   }
 
   // Pricing — accept either a finished label or a raw number.

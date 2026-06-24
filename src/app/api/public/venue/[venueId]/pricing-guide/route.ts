@@ -40,7 +40,7 @@ export async function GET(
   // below picks whichever is populated.
   const { data: venue, error: venueErr } = await supabaseAdmin
     .from('venues')
-    .select('name, location_city, location_state, location_full, lat, lng, brand_phone, brand_email, logo_url, brand_logo_url, social_links, features')
+    .select('name, location_city, location_state, location_full, lat, lng, brand_phone, brand_email, logo_url, brand_logo_url, social_links, features, owner_first_name, owner_last_name')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -135,6 +135,10 @@ export async function GET(
           (f): f is string => typeof f === 'string',
         ))
       : [],
+    owner_name: [
+      (venue as { owner_first_name?: string | null }).owner_first_name,
+      (venue as { owner_last_name?: string | null }).owner_last_name,
+    ].filter(Boolean).join(' ').trim() || null,
   };
 
   // ── Generate PDF ───────────────────────────────────────────────────────

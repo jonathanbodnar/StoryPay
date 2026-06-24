@@ -601,12 +601,14 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
       <div className="mt-4 space-y-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Welcome message</label>
-          <textarea value={congrats} onChange={(e) => setCongrats(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={congrats} maxLength={500} onChange={(e) => setCongrats(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <div className={`mt-1 text-right text-xs font-mono tabular-nums ${congrats.length >= 500 ? 'text-red-500' : 'text-gray-400'}`}>{congrats.length}/500</div>
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">About your venue</label>
-          <textarea value={about} onChange={(e) => setAbout(e.target.value)} rows={4} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={about} maxLength={700} onChange={(e) => setAbout(e.target.value)} rows={4} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <div className={`mt-1 text-right text-xs font-mono tabular-nums ${about.length >= 700 ? 'text-red-500' : 'text-gray-400'}`}>{about.length}/700</div>
         </div>
 
         <div className="rounded-xl border-2 p-3" style={{ borderColor: `${BRAND}66`, backgroundColor: `${BRAND}0d` }}>
@@ -619,12 +621,14 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Pricing intro</label>
-          <textarea value={pricingIntro} onChange={(e) => setPricingIntro(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={pricingIntro} maxLength={400} onChange={(e) => setPricingIntro(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <div className={`mt-1 text-right text-xs font-mono tabular-nums ${pricingIntro.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{pricingIntro.length}/400</div>
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Availability</label>
-          <textarea value={availability} onChange={(e) => setAvailability(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={availability} maxLength={400} onChange={(e) => setAvailability(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <div className={`mt-1 text-right text-xs font-mono tabular-nums ${availability.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{availability.length}/400</div>
         </div>
       </div>
 

@@ -190,6 +190,12 @@ export async function PATCH(req: Request) {
     );
   }
 
+  // Manual-override tracking: any content field the owner saves here is a
+  // deliberate edit, so flag it and never let auto-fill clobber it later.
+  void import('@/lib/pricing-guide-edits')
+    .then(({ markGuideFieldsEdited }) => markGuideFieldsEdited(venueId, Object.keys(update)))
+    .catch(() => { /* non-fatal */ });
+
   // Analytics: funnel milestones — first time this venue saves a guide
   // (guide_created) and first time it's published (guide_published).
   void import('@/lib/analytics')

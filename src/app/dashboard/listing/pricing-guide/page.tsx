@@ -786,13 +786,25 @@ export default function PricingGuidePage() {
           value={guide.congratulatory_message ?? ''}
           onChange={(v) => updateParent('congratulatory_message', v)}
           render={({ value, onChange }) => (
-            <textarea
-              rows={5}
-              className={`${TEXTAREA} pr-28`}
-              placeholder={`Congratulations on your engagement! We're so excited to share what makes our venue special…`}
-              value={value}
-              onChange={onChange}
-            />
+            <div className="relative">
+              <textarea
+                rows={5}
+                maxLength={500}
+                className={`${TEXTAREA} pr-28`}
+                placeholder={`Congratulations on your engagement! We're so excited to share what makes our venue special…`}
+                value={value}
+                onChange={onChange}
+              />
+              <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
+                (value?.length ?? 0) >= 500
+                  ? 'text-red-500'
+                  : (value?.length ?? 0) >= 430
+                  ? 'text-amber-500'
+                  : 'text-gray-400'
+              }`}>
+                {value?.length ?? 0}/500
+              </div>
+            </div>
           )}
         />
       </Section>
@@ -1110,13 +1122,25 @@ export default function PricingGuidePage() {
             value={guide.pricing_intro ?? ''}
             onChange={(v) => updateParent('pricing_intro', v)}
             render={({ value, onChange }) => (
-              <textarea
-                rows={3}
-                className={`${TEXTAREA} pr-28`}
-                placeholder="Our packages are designed to make it easy to plan with confidence…"
-                value={value}
-                onChange={onChange}
-              />
+              <div className="relative">
+                <textarea
+                  rows={3}
+                  maxLength={400}
+                  className={`${TEXTAREA} pr-28`}
+                  placeholder="Our packages are designed to make it easy to plan with confidence…"
+                  value={value}
+                  onChange={onChange}
+                />
+                <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
+                  (value?.length ?? 0) >= 400
+                    ? 'text-red-500'
+                    : (value?.length ?? 0) >= 340
+                    ? 'text-amber-500'
+                    : 'text-gray-400'
+                }`}>
+                  {value?.length ?? 0}/400
+                </div>
+              </div>
             )}
           />
         </div>
@@ -1414,13 +1438,25 @@ function PackageEditor({
           onChange={(v) => onChange({ description: v })}
           extras={{ package_name: pkg.name ?? '', price_label: pkg.price_label ?? '' }}
           render={({ value, onChange: onChangeText }) => (
-            <textarea
-              rows={3}
-              className={`${TEXTAREA} pr-28`}
-              placeholder="A one-paragraph description of this package."
-              value={value}
-              onChange={onChangeText}
-            />
+            <div className="relative">
+              <textarea
+                rows={3}
+                maxLength={400}
+                className={`${TEXTAREA} pr-28`}
+                placeholder="A one-paragraph description of this package."
+                value={value}
+                onChange={onChangeText}
+              />
+              <div className={`absolute bottom-3 right-3 text-xs font-mono tabular-nums ${
+                (value?.length ?? 0) >= 400
+                  ? 'text-red-500'
+                  : (value?.length ?? 0) >= 340
+                  ? 'text-amber-500'
+                  : 'text-gray-400'
+              }`}>
+                {value?.length ?? 0}/400
+              </div>
+            </div>
           )}
         />
       </div>

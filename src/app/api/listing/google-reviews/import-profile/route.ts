@@ -21,6 +21,8 @@ import {
   resolveGooglePhotoUri,
 } from '@/lib/google-place-profile';
 import { scanWebsiteForSocials } from '@/lib/social-scrape';
+import { registerVenueMediaAsset } from '@/lib/venue-media-registry';
+import { cleanCopy } from '@/lib/guide-copy';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -65,7 +67,22 @@ async function rehostPhoto(
       return null;
     }
     const { data: pub } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(objectKey);
-    return pub.publicUrl ?? null;
+    const publicUrl = pub.publicUrl ?? null;
+    if (!publicUrl) return null;
+
+    // Register in the shared media library immediately so Google-pulled photos
+    // show up alongside uploads and can be viewed, reused, and swapped.
+    await registerVenueMediaAsset({
+      venueId,
+      path: objectKey,
+      publicUrl,
+      fileName: objectKey.split('/').pop() ?? `google-${index}.${ext}`,
+      contentType,
+      sizeBytes: buffer.byteLength,
+      displayName: `Google photo ${index + 1}`,
+    }).catch(() => { /* non-fatal */ });
+
+    return publicUrl;
   } catch (e) {
     console.warn('[import-profile] rehostPhoto error', e);
     return null;
@@ -131,7 +148,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const isEmpty = (x: unknown) =>
     x === null || x === undefined || (typeof x === 'string' && x.trim() === '');
 
-  if (isEmpty(v.description) && profile.description) venueUpdate.description = profile.description;
+  if (isEmpty(v.description) && profile.description) venueUpdate.description = cleanCopy(profile.description);
   if (isEmpty(v.location_city) && profile.city) venueUpdate.location_city = profile.city;
   if (isEmpty(v.location_state) && profile.state) venueUpdate.location_state = profile.state;
   if (isEmpty(v.location_full) && profile.formatted_address)
@@ -179,7 +196,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // google reviews → guide.reviews. Fill empties only.
   const { data: guideRow } = await supabaseAdmin
     .from('venue_pricing_guides')
-    .select('id, gallery, about_venue, cover_image_url, reviews')
+    .select('id, gallery, about_photos, about_venue, cover_image_url, reviews')
     .eq('venue_id', venueId)
     .maybeSingle();
 
@@ -189,7 +206,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (gGallery.length === 0 && rehosted.length > 0) {
     guideUpdate.gallery = rehosted.map((url) => ({ url }));
   }
-  if (isEmpty(g.about_venue) && profile.description) guideUpdate.about_venue = profile.description;
+  // Seed the About 2x2 grid so the editor shows the same photos the PDF renders.
+  const gAbout = Array.isArray(g.about_photos) ? (g.about_photos as unknown[]) : [];
+  if (gAbout.length === 0 && rehosted.length > 0) {
+    guideUpdate.about_photos = rehosted.slice(0, 4).map((url) => ({ url }));
+  }
+  if (isEmpty(g.about_venue) && profile.description) guideUpdate.about_venue = cleanCopy(profile.description);
   if (isEmpty(g.cover_image_url) && rehosted[0]) guideUpdate.cover_image_url = rehosted[0];
 
   const gReviews = Array.isArray(g.reviews) ? (g.reviews as unknown[]) : [];
