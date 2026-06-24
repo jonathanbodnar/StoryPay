@@ -389,8 +389,10 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
 
 /* ── Step 1: The 5 questions ────────────────────────────────────────────── */
 function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
-  const [maxCapacity, setMaxCapacity] = useState('');
-  const [startingPrice, setStartingPrice] = useState('');
+  const [minGuests, setMinGuests] = useState('');
+  const [maxGuests, setMaxGuests] = useState('');
+  const [priceFrom, setPriceFrom] = useState('');
+  const [priceTo, setPriceTo] = useState('');
   const [seasonality, setSeasonality] = useState('');
   const [differentiators, setDifferentiators] = useState('');
   const [features, setFeatures] = useState<string[]>([]);
@@ -410,6 +412,11 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
         if (Array.isArray(d.features)) setFeatures(d.features.filter((f: unknown): f is string => typeof f === 'string'));
         if (typeof d.venue_type === 'string') setVenueType(d.venue_type);
         if (typeof d.indoor_outdoor === 'string') setIndoorOutdoor(d.indoor_outdoor);
+        // Capacity & price range share one source of truth with the listing.
+        if (d.capacity_min != null) setMinGuests(String(d.capacity_min));
+        if (d.capacity_max != null) setMaxGuests(String(d.capacity_max));
+        if (d.price_min != null) setPriceFrom(String(d.price_min));
+        if (d.price_max != null) setPriceTo(String(d.price_max));
         if (d.social_links && typeof d.social_links === 'object' && !Array.isArray(d.social_links)) {
           const s: Record<string, string> = {};
           for (const { key } of SOCIAL_FIELDS) {
@@ -431,8 +438,14 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
       const res = await fetch('/api/onboarding/draft-guide', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          max_capacity: maxCapacity,
-          starting_price: startingPrice,
+          // Guide labels read the upper/lower bounds…
+          max_capacity: maxGuests,
+          starting_price: priceFrom,
+          // …and the raw range is persisted to the venue (single source of truth).
+          capacity_min: minGuests,
+          capacity_max: maxGuests,
+          price_min: priceFrom,
+          price_max: priceTo,
           seasonality,
           differentiators,
           features,
@@ -453,14 +466,23 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
       <p className="mt-1 text-sm text-gray-500">Just the essentials — we&apos;ll write the rest for you.</p>
 
       <div className="mt-5 space-y-4">
-        <Field label="Max guest capacity">
-          <input value={maxCapacity} onChange={(e) => setMaxCapacity(e.target.value)} type="number" placeholder="e.g. 200" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+        <Field label="Guest capacity">
+          <div className="grid grid-cols-2 gap-3">
+            <input value={minGuests} onChange={(e) => setMinGuests(e.target.value)} type="number" min={0} placeholder="Min — e.g. 50" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+            <input value={maxGuests} onChange={(e) => setMaxGuests(e.target.value)} type="number" min={0} placeholder="Max — e.g. 200" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          </div>
         </Field>
 
-        <Field label="Starting price (per event)">
-          <div className="flex items-center rounded-lg border border-gray-200 px-3 focus-within:border-gray-400">
-            <span className="text-gray-400">$</span>
-            <input value={startingPrice} onChange={(e) => setStartingPrice(e.target.value)} type="number" placeholder="e.g. 5000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
+        <Field label="Price range (per event)">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center rounded-lg border border-gray-200 px-3 focus-within:border-gray-400">
+              <span className="text-gray-400">$</span>
+              <input value={priceFrom} onChange={(e) => setPriceFrom(e.target.value)} type="number" min={0} placeholder="From — 5000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
+            </div>
+            <div className="flex items-center rounded-lg border border-gray-200 px-3 focus-within:border-gray-400">
+              <span className="text-gray-400">$</span>
+              <input value={priceTo} onChange={(e) => setPriceTo(e.target.value)} type="number" min={0} placeholder="To — 12000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
+            </div>
           </div>
         </Field>
 
@@ -503,7 +525,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
         </Field>
 
         <Field label="What makes you special? (top 2–3)">
-          <textarea value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} rows={2} placeholder="e.g. waterfront ceremony site, on-site suites, in-house catering" className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} rows={2} placeholder="e.g. waterfront ceremony site, on-site suites, in-house catering" className="w-full resize-y min-h-[64px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
         </Field>
 
         <Field label="Social & website links (optional)">
@@ -601,13 +623,13 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
       <div className="mt-4 space-y-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Welcome message</label>
-          <textarea value={congrats} maxLength={500} onChange={(e) => setCongrats(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={congrats} maxLength={500} onChange={(e) => setCongrats(e.target.value)} rows={2} className="w-full resize-y min-h-[64px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${congrats.length >= 500 ? 'text-red-500' : 'text-gray-400'}`}>{congrats.length}/500</div>
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">About your venue</label>
-          <textarea value={about} maxLength={700} onChange={(e) => setAbout(e.target.value)} rows={4} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={about} maxLength={700} onChange={(e) => setAbout(e.target.value)} rows={4} className="w-full resize-y min-h-[64px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${about.length >= 700 ? 'text-red-500' : 'text-gray-400'}`}>{about.length}/700</div>
         </div>
 
@@ -621,13 +643,13 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Pricing intro</label>
-          <textarea value={pricingIntro} maxLength={400} onChange={(e) => setPricingIntro(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={pricingIntro} maxLength={400} onChange={(e) => setPricingIntro(e.target.value)} rows={2} className="w-full resize-y min-h-[64px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${pricingIntro.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{pricingIntro.length}/400</div>
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Availability</label>
-          <textarea value={availability} maxLength={400} onChange={(e) => setAvailability(e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <textarea value={availability} maxLength={400} onChange={(e) => setAvailability(e.target.value)} rows={2} className="w-full resize-y min-h-[64px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${availability.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{availability.length}/400</div>
         </div>
       </div>

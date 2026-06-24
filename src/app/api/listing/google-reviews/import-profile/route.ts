@@ -215,8 +215,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (isEmpty(g.cover_image_url) && rehosted[0]) guideUpdate.cover_image_url = rehosted[0];
 
   const gReviews = Array.isArray(g.reviews) ? (g.reviews as unknown[]) : [];
-  if (gReviews.length === 0 && reviewsCache?.reviews?.length) {
-    guideUpdate.reviews = reviewsCache.reviews.slice(0, 6).map((r) => ({
+  // Only 5-star reviews are ever seeded into the guide — never anything lower.
+  const fiveStar = (reviewsCache?.reviews ?? []).filter((r) => Number(r.rating) >= 5);
+  if (gReviews.length === 0 && fiveStar.length) {
+    guideUpdate.reviews = fiveStar.slice(0, 6).map((r) => ({
       author: stripUnsupportedGlyphs(r.author_name ?? ''),
       location: profile.city && profile.state ? `${profile.city}, ${profile.state}` : '',
       body: stripUnsupportedGlyphs(r.text ?? ''),

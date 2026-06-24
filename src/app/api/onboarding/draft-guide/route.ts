@@ -223,6 +223,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     socialLinks = cleaned;
   }
 
+  // Capacity & price range → venue columns (single source of truth shared with
+  // the listing's "Capacity & pricing" section). Parse to non-negative ints.
+  const toInt = (v: unknown): number | null => {
+    const n = Math.round(parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')));
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const capacityMin = toInt(body.capacity_min);
+  const capacityMax = toInt(body.capacity_max);
+  const priceMin = toInt(body.price_min);
+  const priceMax = toInt(body.price_max);
+
   // Persist listing fields entered in the wizard onto the venue (single source
   // of truth — the public listing reads these).
   const venueFields: Record<string, unknown> = {};
@@ -230,6 +241,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (venueType) venueFields.venue_type = venueType;
   if (indoorOutdoor) venueFields.indoor_outdoor = indoorOutdoor;
   if (socialLinks) venueFields.social_links = socialLinks;
+  if (capacityMin != null) venueFields.capacity_min = capacityMin;
+  if (capacityMax != null) venueFields.capacity_max = capacityMax;
+  if (priceMin != null) venueFields.price_min = priceMin;
+  if (priceMax != null) venueFields.price_max = priceMax;
   if (Object.keys(venueFields).length > 0) {
     await supabaseAdmin
       .from('venues')
@@ -270,7 +285,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const edited = await loadEditedFields(venueId);
   const { data: existingGuide } = await supabaseAdmin
     .from('venue_pricing_guides')
-    .select('gallery, about_photos')
+    .select('gallery, about_photos, availability_image_url')
     .eq('id', guideId)
     .maybeSingle();
 
@@ -295,6 +310,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const galleryUrls = gallery.map((g) => g?.url).filter((u): u is string => !!u);
   if (!edited['about_photos'] && aboutPhotos.length === 0 && galleryUrls.length > 0) {
     guideUpdate.about_photos = galleryUrls.slice(0, 4).map((url) => ({ url }));
+  }
+
+  // Seed the Save the Date image so the section is populated after onboarding
+  // (the editor + PDF both read guide.availability_image_url). Pick a photo
+  // distinct from the cover/space hero (gallery[0]) when possible.
+  const existingStdImage = (existingGuide as { availability_image_url?: string | null } | null)?.availability_image_url;
+  if (!edited['availability_image_url'] && !existingStdImage && galleryUrls.length > 0) {
+    guideUpdate.availability_image_url =
+      galleryUrls[galleryUrls.length - 1] !== galleryUrls[0]
+        ? galleryUrls[galleryUrls.length - 1]
+        : galleryUrls[0];
   }
 
   const { error: guideErr } = await supabaseAdmin

@@ -20,6 +20,7 @@ export const TRACKABLE_GUIDE_FIELDS = [
   'gallery',
   'about_photos',
   'cover_image_url',
+  'availability_image_url',
   'reviews',
 ] as const;
 
