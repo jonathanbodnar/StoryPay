@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getOrCreatePricingGuideId } from '@/lib/pricing-guide';
 import { slugify } from '@/lib/directory';
+import { DEFAULT_GUIDE_EMAIL_BODY, DEFAULT_GUIDE_SMS_BODY } from '@/lib/marketing-email-worker';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -123,13 +124,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     //    without it there's no public URL (the success screen needs one).
     const { data: current } = await supabaseAdmin
       .from('venues')
-      .select('slug, name')
+      .select('slug, name, booking_guide_email_body, booking_guide_sms_body')
       .eq('id', venueId)
       .maybeSingle();
 
     let slug = (current?.slug as string | null) ?? null;
     if (!slug) {
       slug = await ensureVenueSlug(venueId, (current?.name as string) ?? null);
+    }
+
+    // Turn the Speed-to-Lead Booking System on by default and pre-fill the
+    // welcome email/SMS with default copy (so the owner edits, not builds).
+    // Best-effort: ignore column errors on pre-migration schemas.
+    const bookingDefaults: Record<string, unknown> = {
+      booking_system_enabled: true,
+      booking_guide_email_enabled: true,
+      booking_guide_sms_enabled: true,
+    };
+    if (!((current as { booking_guide_email_body?: string | null })?.booking_guide_email_body ?? '').trim()) {
+      bookingDefaults.booking_guide_email_body = DEFAULT_GUIDE_EMAIL_BODY;
+    }
+    if (!((current as { booking_guide_sms_body?: string | null })?.booking_guide_sms_body ?? '').trim()) {
+      bookingDefaults.booking_guide_sms_body = DEFAULT_GUIDE_SMS_BODY;
+    }
+    const { error: bookingErr } = await supabaseAdmin
+      .from('venues')
+      .update(bookingDefaults)
+      .eq('id', venueId);
+    if (bookingErr && !/column/i.test(bookingErr.message)) {
+      console.warn('[onboarding/publish] booking defaults', bookingErr.message);
     }
 
     // 3. Publish the listing + stamp activation.

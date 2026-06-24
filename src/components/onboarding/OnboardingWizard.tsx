@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, Link2, Check, Copy, Share2, Sparkles, Loader2, X,
   ArrowRight, ArrowLeft, MapPin, Star, PartyPopper, ImageIcon, RotateCcw,
+  Mail, Send,
 } from 'lucide-react';
 
 const SKIP_KEY = 'sv_onboarding_skipped';
@@ -336,7 +337,7 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
           <Sparkles size={24} style={{ color: BRAND }} />
         </div>
         <h2 className="text-xl font-semibold text-gray-900">Let&apos;s Build Your Bride Booking System&trade;</h2>
-        <p className="mt-1 text-sm text-gray-500">Connect Google and we&apos;ll auto-fill your venue — name, photos, reviews and more. No typing.</p>
+        <p className="mt-1 text-sm text-gray-500">Connect Google and we&apos;ll auto-fill your venue with your name, photos, reviews and more. No typing.</p>
       </div>
 
       <div className="mt-5 flex gap-2">
@@ -367,7 +368,7 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
         )}
       </div>
       {mode === 'search' && input.trim().length >= 3 && !loading && candidates.length === 0 && !error && (
-        <p className="mt-2 text-sm text-gray-400">No matches yet — keep typing, add your city, or paste your Google link.</p>
+        <p className="mt-2 text-sm text-gray-400">No matches yet. Keep typing, add your city, or paste your Google link.</p>
       )}
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
@@ -472,13 +473,13 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   return (
     <div>
       <h2 className="text-xl font-semibold text-gray-900">A few things Google can&apos;t tell us</h2>
-      <p className="mt-1 text-sm text-gray-500">Just the essentials — we&apos;ll write the rest for you.</p>
+      <p className="mt-1 text-sm text-gray-500">Just the essentials. We&apos;ll write the rest for you.</p>
 
       <div className="mt-5 space-y-4">
         <Field label="Guest capacity">
           <div className="grid grid-cols-2 gap-3">
-            <input value={withCommas(minGuests)} onChange={(e) => setMinGuests(onlyDigits(e.target.value))} inputMode="numeric" placeholder="Min — e.g. 50" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-            <input value={withCommas(maxGuests)} onChange={(e) => setMaxGuests(onlyDigits(e.target.value))} inputMode="numeric" placeholder="Max — e.g. 200" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+            <input value={withCommas(minGuests)} onChange={(e) => setMinGuests(onlyDigits(e.target.value))} inputMode="numeric" placeholder="Min, e.g. 50" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+            <input value={withCommas(maxGuests)} onChange={(e) => setMaxGuests(onlyDigits(e.target.value))} inputMode="numeric" placeholder="Max, e.g. 200" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           </div>
         </Field>
 
@@ -486,11 +487,11 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           <div className="grid grid-cols-2 gap-3">
             <div className="flex items-center rounded-lg border border-gray-200 px-3 focus-within:border-gray-400">
               <span className="text-gray-400">$</span>
-              <input value={withCommas(priceFrom)} onChange={(e) => setPriceFrom(onlyDigits(e.target.value))} inputMode="numeric" placeholder="From — 5,000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
+              <input value={withCommas(priceFrom)} onChange={(e) => setPriceFrom(onlyDigits(e.target.value))} inputMode="numeric" placeholder="From, e.g. 5,000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
             </div>
             <div className="flex items-center rounded-lg border border-gray-200 px-3 focus-within:border-gray-400">
               <span className="text-gray-400">$</span>
-              <input value={withCommas(priceTo)} onChange={(e) => setPriceTo(onlyDigits(e.target.value))} inputMode="numeric" placeholder="To — 12,000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
+              <input value={withCommas(priceTo)} onChange={(e) => setPriceTo(onlyDigits(e.target.value))} inputMode="numeric" placeholder="To, e.g. 12,000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
             </div>
           </div>
         </Field>
@@ -540,7 +541,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
                 key={key}
                 value={socials[key] ?? ''}
                 onChange={(e) => setSocials((prev) => ({ ...prev, [key]: e.target.value }))}
-                placeholder={`${label} — ${placeholder}`}
+                placeholder={`${label}: ${placeholder}`}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400"
               />
             ))}
@@ -588,11 +589,13 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
         const d = await res.json();
         const g = d.guide ?? {};
         const firstPkg = (g.packages ?? [])[0];
-        setCongrats(g.congratulatory_message ?? '');
-        setAbout(g.about_venue ?? '');
+        // Clamp to each field's limit on load so an over-length AI draft never
+        // shows a red over-limit counter or gets published past the cap.
+        setCongrats((g.congratulatory_message ?? '').slice(0, 500));
+        setAbout((g.about_venue ?? '').slice(0, 700));
         setPrice(firstPkg?.price_label ?? '');
-        setPricingIntro(g.pricing_intro ?? '');
-        setAvailability(g.availability_text ?? '');
+        setPricingIntro((g.pricing_intro ?? '').slice(0, 400));
+        setAvailability((g.availability_text ?? '').slice(0, 400));
       } catch { setError('Could not load your draft.'); }
       finally { setLoading(false); }
     })();
@@ -601,13 +604,15 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
   const save = async () => {
     setSaving(true); setError(null);
     try {
+      // Hard-clamp to each field's limit. AI/Google-sourced drafts can exceed the
+      // maxLength (which only constrains typing), so trim before publishing.
       await fetch('/api/onboarding/draft-guide', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          congratulatory_message: congrats,
-          about_venue: about,
-          pricing_intro: pricingIntro,
-          availability_text: availability,
+          congratulatory_message: congrats.slice(0, 500),
+          about_venue: about.slice(0, 700),
+          pricing_intro: pricingIntro.slice(0, 400),
+          availability_text: availability.slice(0, 400),
           price_label: price,
         }),
       });
@@ -623,7 +628,7 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
   return (
     <div>
       <h2 className="text-xl font-semibold text-gray-900">This becomes your Pricing &amp; Availability guide</h2>
-      <p className="mt-1 text-sm text-gray-500">We turned your answers into the pages brides see in your guide. Tweak anything now, or leave it as-is — you can always edit every page later on your Pricing Guide page. Just <strong>double-check your price</strong>; that&apos;s the promise to the bride.</p>
+      <p className="mt-1 text-sm text-gray-500">We turned your answers into the pages brides see in your guide. Tweak anything now, or leave it as-is. You can always edit every page later on your Pricing Guide page. Just <strong>double-check your price</strong>; that&apos;s the promise to the bride.</p>
 
       <div className="mt-4 space-y-4">
         <div>
@@ -672,11 +677,31 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
 }
 
 /* ── Step 3: Publish ────────────────────────────────────────────────────── */
+type TestLead = { id: string; name: string; email: string; phone: string | null; message: string; booking_timeline: string | null };
+
 function PublishStep({ onDone }: { onDone: () => void }) {
   const [publishing, setPublishing] = useState(false);
   const [liveUrl, setLiveUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The activation moment: fire a test lead through their own live page.
+  const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'done'>('idle');
+  const [testLead, setTestLead] = useState<TestLead | null>(null);
+  const [testEmailTo, setTestEmailTo] = useState('');
+  const [testError, setTestError] = useState<string | null>(null);
+
+  const sendTest = async () => {
+    setTestStatus('sending'); setTestError(null);
+    try {
+      const res = await fetch('/api/onboarding/test-inquiry', { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) { setTestError(d.error || 'Could not send the test inquiry. Try again.'); setTestStatus('idle'); return; }
+      setTestLead(d.lead ?? null);
+      setTestEmailTo(d.email_to || '');
+      setTestStatus('done');
+    } catch { setTestError('Something went wrong. Try again.'); setTestStatus('idle'); }
+  };
 
   const publish = async () => {
     setPublishing(true); setError(null);
@@ -712,22 +737,62 @@ function PublishStep({ onDone }: { onDone: () => void }) {
           <PartyPopper size={28} style={{ color: BRAND }} />
         </div>
         <h2 className="text-2xl font-bold text-gray-900">You&apos;re live!</h2>
-        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System&trade; is live. Drop this link in your Instagram &amp; TikTok bio, your email signature, and your website — every bride who taps it gets your guide and turns into a booked lead.</p>
+        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System&trade; is on. Don&apos;t just take our word for it, watch it work: send yourself a test inquiry and see a lead hit your inbox.</p>
 
-        <div className="mt-5 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-2">
-          <span className="flex-1 truncate px-2 text-sm text-gray-700">{liveUrl}</span>
-          <button onClick={copy} className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: BRAND }}>
-            {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
-          </button>
-        </div>
+        {/* ── The activation moment (primary) ───────────────────────────── */}
+        {testStatus === 'done' && testLead ? (
+          <div className="mt-5">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> New lead
+                </span>
+                <span className="text-xs text-gray-400">just now</span>
+              </div>
+              <p className="mt-2 font-medium text-gray-900">{testLead.name}</p>
+              <p className="text-sm text-gray-500">{testLead.email}{testLead.phone ? ` · ${testLead.phone}` : ''}</p>
+              <p className="mt-2 text-sm text-gray-600">&ldquo;{testLead.message}&rdquo;</p>
+            </div>
+            {testEmailTo && (
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-sm font-medium text-emerald-600">
+                <Mail size={14} /> Welcome email sent to {testEmailTo}
+              </p>
+            )}
+            <p className="mt-2 text-sm text-gray-500">That&apos;s your Bride Booking System&trade; working. Every real bride who taps your link does this automatically.</p>
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={sendTest}
+              disabled={testStatus === 'sending'}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: BRAND }}
+            >
+              {testStatus === 'sending'
+                ? <><Loader2 size={18} className="animate-spin" /> Sending your test inquiry…</>
+                : <><Send size={18} /> Send yourself a test inquiry</>}
+            </button>
+            {testError && <p className="mt-2 text-sm text-red-500">{testError}</p>}
+          </>
+        )}
 
-        <div className="mt-3 flex gap-2">
-          <a href={liveUrl} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            View my page <ArrowRight size={14} />
-          </a>
-          <button onClick={share} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            <Share2 size={14} /> Share
-          </button>
+        {/* ── Share your link (secondary, below the proof) ──────────────── */}
+        <div className="mt-7 border-t border-gray-100 pt-5">
+          <p className="text-sm text-gray-500">Your machine is on. Now point brides at it, paste this link in your Instagram &amp; TikTok bio, your email signature, and your website.</p>
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-2">
+            <span className="flex-1 truncate px-2 text-sm text-gray-700">{liveUrl}</span>
+            <button onClick={copy} className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: BRAND }}>
+              {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
+            </button>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <a href={liveUrl} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              View my page <ArrowRight size={14} />
+            </a>
+            <button onClick={share} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <Share2 size={14} /> Share
+            </button>
+          </div>
         </div>
 
         <button onClick={onDone} className="mt-6 text-sm text-gray-400 hover:text-gray-600">Go to my dashboard</button>
@@ -741,7 +806,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
         <Sparkles size={24} style={{ color: BRAND }} />
       </div>
       <h2 className="text-xl font-semibold text-gray-900">One click from going live</h2>
-      <p className="mt-1 text-sm text-gray-500">Publish to turn on your Bride Booking System&trade;. Every bride who opens your link gets your pricing instantly and books a tour — so a single click becomes a booked lead, even while you sleep.</p>
+      <p className="mt-1 text-sm text-gray-500">Publish to turn on your Bride Booking System&trade;. Every bride who opens your link gets your pricing instantly and books a tour, so a single click becomes a booked lead, even while you sleep.</p>
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
