@@ -354,9 +354,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       name: draft.package_name,
       price_label: label,
       description: draft.package_description,
-      // Seed editable "What's included" items from the chosen amenities so the
-      // owner can refine them and the PDF mirrors the package.
-      included_items: features && features.length ? features.slice(0, 8) : [],
+      // The package's "what's included" is a separate, package-specific concept
+      // from the venue amenity chips (venues.features). Start it empty so the
+      // owner fills in what this package actually includes.
+      included_items: [],
       position: 0,
     });
   }

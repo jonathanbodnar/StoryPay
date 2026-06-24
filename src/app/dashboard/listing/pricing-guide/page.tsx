@@ -84,17 +84,19 @@ const CARD = 'rounded-3xl border border-gray-200 bg-white p-6 sm:p-8';
 // ─── Section wrapper (collapsible) ──────────────────────────────────────
 
 function Section({
-  title, hint, icon, defaultOpen = true, children,
+  title, hint, icon, defaultOpen = true, alwaysOpen = false, children,
 }: {
-  title: string; hint: string; icon: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode;
+  title: string; hint: string; icon: React.ReactNode; defaultOpen?: boolean; alwaysOpen?: boolean; children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const isOpen = alwaysOpen || open;
   return (
     <div className={CARD}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start justify-between text-left"
+        onClick={() => { if (!alwaysOpen) setOpen((v) => !v); }}
+        className={`flex w-full items-start justify-between text-left ${alwaysOpen ? 'cursor-default' : ''}`}
+        aria-expanded={isOpen}
       >
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">
@@ -105,11 +107,13 @@ function Section({
             <p className="mt-0.5 text-sm text-gray-500">{hint}</p>
           </div>
         </div>
-        <div className="ml-3 flex-shrink-0 text-gray-400">
-          {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-        </div>
+        {!alwaysOpen && (
+          <div className="ml-3 flex-shrink-0 text-gray-400">
+            {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+          </div>
+        )}
       </button>
-      {open && <div className="mt-6">{children}</div>}
+      {isOpen && <div className="mt-6">{children}</div>}
     </div>
   );
 }
@@ -142,8 +146,19 @@ type VenueContact = {
   location_city: string | null;
   location_state: string | null;
   description: string | null;
+  features: string[];
   faq: FaqRow[];
 };
+
+// Venue amenity chips — single source of truth (venues.features), shared with
+// the venue listing editor and the public listing. Mirror of FEATURE_OPTIONS in
+// src/app/dashboard/listing/venue-listing/page.tsx.
+const FEATURE_OPTIONS = [
+  'Ceremony site', 'Reception site', 'Bridal suite', 'Groom\'s suite',
+  'On-site parking', 'Wheelchair accessible', 'In-house catering',
+  'BYO catering allowed', 'Bar service', 'Dance floor', 'Overnight accommodations',
+  'Pet friendly', 'Outdoor ceremony', 'Tented options',
+];
 
 export default function PricingGuidePage() {
   const [guide, setGuide] = useState<Guide | null>(null);
@@ -271,6 +286,7 @@ export default function PricingGuidePage() {
             setVenueContact({
               ...contactJson.listing,
               faq: Array.isArray(contactJson.listing.faq) ? contactJson.listing.faq : [],
+              features: Array.isArray(contactJson.listing.features) ? contactJson.listing.features : [],
               // Seed the About text from the listing description (the shared
               // source of truth); fall back to any legacy guide about_venue.
               description: (contactJson.listing.description?.trim()
@@ -1183,6 +1199,45 @@ export default function PricingGuidePage() {
         </div>
       </Section>
 
+      {/* ── Venue features (chips) — synced with venue listing ───────── */}
+      <Section
+        title="Venue features"
+        hint="Your venue's amenity chips. These are the single source of truth — they show on your public listing and on the guide's Venue Features page. Edit here or on your venue listing; they stay in sync."
+        icon={<Sparkles size={18} />}
+      >
+        {venueContact ? (
+          <div className="space-y-3">
+            <p className="flex items-center gap-1.5 text-xs text-emerald-600">
+              <CheckCircle2 size={12} /> Auto-synced with your venue listing
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {FEATURE_OPTIONS.map((feat) => {
+                const active = (venueContact.features ?? []).includes(feat);
+                return (
+                  <button
+                    key={feat}
+                    type="button"
+                    onClick={() => {
+                      const cur = venueContact.features ?? [];
+                      const next = cur.includes(feat) ? cur.filter((f) => f !== feat) : [...cur, feat];
+                      updateContact('features', next);
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      active ? 'border-transparent text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                    style={active ? { backgroundColor: '#1b1b1b' } : undefined}
+                  >
+                    {feat}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">Loading your venue features…</p>
+        )}
+      </Section>
+
       {/* ── Reviews ────────────────────────────────────────────────── */}
       <Section
         title="Stories"
@@ -1301,7 +1356,7 @@ export default function PricingGuidePage() {
         title="Questions"
         hint="Optional. These are the same FAQs shown on your public venue listing — edit here or there and they stay in sync. The FAQ page only appears in your guide when at least one question is filled in."
         icon={<HelpCircle size={18} />}
-        defaultOpen={false}
+        alwaysOpen
       >
         {venueContact ? (
           <div className="space-y-4">
@@ -1644,6 +1699,9 @@ function PackageEditor({
             Suggest with AI
           </button>
         </div>
+        <p className="mb-2 text-xs text-gray-400">
+          What this specific package includes (e.g. 8-hour access, coordinator). This is separate from your venue&apos;s amenity chips below.
+        </p>
         <ul className="space-y-2">
           {pkg.included_items.map((item, idx) => (
             <li key={idx} className="flex items-center gap-2">

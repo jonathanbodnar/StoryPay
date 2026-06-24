@@ -502,7 +502,14 @@ export async function generatePricingGuidePdfServer(
   // ── Contact line values ──────────────────────────────────────────────
   const phoneStr   = fmtPhone(venue.phone);
   const emailStr   = (venue.email ?? '').trim();
-  const websiteStr = (venue.website ?? '').replace(/^https?:\/\//, '').replace(/\/$/, '').trim();
+  // Display the bare domain only — strip protocol, www, and any path/query
+  // (e.g. UTM tracking params) so long tracked URLs never overflow the page.
+  const websiteStr = (venue.website ?? '')
+    .replace(/^https?:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/[/?#].*$/, '')
+    .replace(/\/$/, '')
+    .trim();
   const cityState  = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
   const ownerName  = (venue.owner_name ?? '').trim();
 
@@ -582,12 +589,12 @@ export async function generatePricingGuidePdfServer(
     .filter(([q, a]) => q.length > 0 && a.length > 0)
     .slice(0, 6);
 
-  // "Venue Features" prefers the package's editable items so the PDF mirrors
-  // what the owner can change in the editor; then venue features; then evergreen.
+  // "Venue Features" is the venue's amenity chips (venues.features) — the single
+  // source of truth shared with the listing. It is NOT the package's editable
+  // "what's included" list, which is a separate, package-specific concept.
   const includedItems: string[] = (() => {
-    const pkgItems = (guide.packages[0]?.included_items ?? []).filter((s) => !!s && s.trim());
-    if (pkgItems.length) return pkgItems.slice(0, 8);
-    if (venue.features && venue.features.length) return venue.features.slice(0, 8);
+    const feats = (venue.features ?? []).filter((s) => !!s && s.trim());
+    if (feats.length) return feats.slice(0, 8);
     return [
       'Exclusive venue access', 'Tables and chairs', 'On-site parking',
       'Getting-ready space', 'Event coordination', 'Setup and cleanup',
@@ -845,7 +852,7 @@ export async function generatePricingGuidePdfServer(
 
     let cy = H - 52;
     [phoneStr, emailStr, websiteStr].filter(Boolean).forEach((line) => {
-      tracked(line.toUpperCase(), CX, cy, 9, 1.6, PAL.white, F.bodySemi, 'normal', 'center');
+      fitTracked(line.toUpperCase(), CX, cy, 9, 1.6, CONTENT_W, PAL.white, F.bodySemi, 'center');
       cy += 9;
     });
   });
