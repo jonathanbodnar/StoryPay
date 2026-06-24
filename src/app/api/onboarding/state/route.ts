@@ -166,5 +166,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true });
   }
 
+  if (action === 'dev_reset') {
+    // DEV-ONLY: wipe the pricing guide + un-publish so the next run of the
+    // onboarding modal repopulates everything from scratch (lets us practice
+    // the draft-guide flow end to end without making a new account each time).
+    // Hard-guarded: never runs in production.
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'dev_reset is disabled in production' }, { status: 403 });
+    }
+    // Deleting the parent guide row cascades to spaces/packages/accommodations.
+    await supabaseAdmin.from('venue_pricing_guides').delete().eq('venue_id', venueId);
+    await supabaseAdmin
+      .from('venues')
+      .update({ onboarding_completed_at: null, onboarding_last_step: 0, is_published: false })
+      .eq('id', venueId);
+    return NextResponse.json({ ok: true, reset: true });
+  }
+
   return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
 }

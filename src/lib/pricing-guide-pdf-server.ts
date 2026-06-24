@@ -1,19 +1,16 @@
 /**
- * Server-side pricing guide PDF generator.
+ * Server-side pricing guide PDF generator — premium magazine layout.
  *
- * Identical output to pricing-guide-pdf.ts (the browser version) but
- * replaces the two DOM-only helpers:
+ * jsPDF v4.2.1, unit mm, A4. Runs in any Node.js environment (no browser
+ * globals). The two server-safe image helpers (fetchImageWithDims +
+ * readImageDimensions) and the runtime TTF font loaders are kept; the page
+ * drawing has been rewritten into a magazine-style "Pricing & Planning Guide".
  *
- *   fetchImageAsDataUrl  →  fetch + Buffer.from(arrayBuffer).toString('base64')
- *   loadImageDimensions  →  PNG header reader | JPEG SOF parser | 4:3 fallback
- *
- * Returns a Buffer containing the raw PDF bytes. The caller is responsible
- * for setting the correct Content-Type / Content-Disposition headers.
- *
- * Runs in any Node.js environment — no browser globals required.
+ * Returns a Buffer of raw PDF bytes. The caller sets Content-Type /
+ * Content-Disposition headers.
  */
 
-// ─── Shared types (mirrors pricing-guide-pdf.ts) ─────────────────────────
+// ─── Shared types ────────────────────────────────────────────────────────
 
 type GalleryItem  = { url: string; caption?: string };
 type ReviewItem   = { author?: string; location?: string; body?: string; rating?: number };
@@ -41,6 +38,12 @@ export interface GuideData {
   spaces:                   Space[];
   accommodations:           Accommodation[];
   packages:                 Package[];
+  // Optional editorial extras — guides always read as complete even before
+  // customization. Populated later when the owner edits; until then the
+  // renderer falls back to evergreen, venue-named copy.
+  why_points?:              string[];
+  journey?:                 [string, string][];   // [title, body]
+  faqs?:                    [string, string][];   // [question, answer]
 }
 
 export interface VenueInfo {
@@ -53,40 +56,16 @@ export interface VenueInfo {
   lat:            number | null;
   lng:            number | null;
   logo_url:       string | null;
+  website?:       string | null;   // from venues.social_links.website
+  features?:      string[];        // from venues.features
 }
-
-// ─── Constants ──────────────────────────────────────────────────────────
-
-const PAGE_W    = 210;
-const PAGE_H    = 297;
-const MARGIN    = 20;
-const CONTENT_W = PAGE_W - MARGIN * 2;
-const DARK      = '#1b1b1b';
 
 // ─── Server-safe image helpers ──────────────────────────────────────────
 
 /**
- * Fetch a remote image and return a base64 data-URL string.
- * Returns null if the request fails or the URL is empty.
- */
-async function fetchImageAsDataUrlServer(url: string): Promise<string | null> {
-  if (!url) return null;
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return null;
-    const contentType = res.headers.get('content-type') || 'image/jpeg';
-    const buf = Buffer.from(await res.arrayBuffer());
-    const mime = contentType.split(';')[0].trim();
-    return `data:${mime};base64,${buf.toString('base64')}`;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Fetch a remote image and return both the data-URL and the detected
- * pixel dimensions.  Falls back to a 4:3 aspect ratio when dimensions
- * cannot be read from the image header.
+ * Fetch a remote image and return both the data-URL and the detected pixel
+ * dimensions. Falls back to a 4:3 aspect ratio when dimensions cannot be read
+ * from the image header.
  */
 async function fetchImageWithDims(
   url: string,
@@ -109,28 +88,22 @@ async function fetchImageWithDims(
 
 /**
  * Read pixel dimensions from PNG or JPEG header bytes.
- * Returns { w: number; h: number } — falls back to 4:3 (1200×900) on failure.
+ * Returns { w, h } — falls back to 4:3 (1200×900) on failure.
  */
 function readImageDimensions(buf: Buffer, mime: string): { w: number; h: number } {
   try {
     if (mime.includes('png') && buf.length >= 24) {
-      // PNG: 8-byte signature + 4-byte length + "IHDR" + 4-byte width + 4-byte height
       const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
       if (PNG_SIG.every((b, i) => buf[i] === b)) {
-        return {
-          w: buf.readUInt32BE(16),
-          h: buf.readUInt32BE(20),
-        };
+        return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
       }
     }
     if ((mime.includes('jpeg') || mime.includes('jpg')) && buf.length >= 4) {
-      // JPEG: find SOF0/SOF2 marker (0xFFC0 or 0xFFC2), read height/width from it
       let i = 2;
       while (i < buf.length - 9) {
         if (buf[i] !== 0xff) break;
         const marker = buf[i + 1];
         if (marker === 0xc0 || marker === 0xc2) {
-          // SOF: 2-byte length, 1-byte precision, 2-byte height, 2-byte width
           const h = buf.readUInt16BE(i + 5);
           const w = buf.readUInt16BE(i + 7);
           if (w > 0 && h > 0) return { w, h };
@@ -140,172 +113,89 @@ function readImageDimensions(buf: Buffer, mime: string): { w: number; h: number 
       }
     }
   } catch { /* fall through */ }
-  // Fallback: assume 4:3 landscape
   return { w: 1200, h: 900 };
 }
 
-// ─── jsPDF helpers ───────────────────────────────────────────────────────
+// ─── Font loaders (jsPDF only parses TTF; pull static TTFs at runtime) ────
 
 type JsPDF = import('jspdf').jsPDF;
 
-function wrapText(doc: JsPDF, text: string, maxWidth: number, fontSize: number): string[] {
-  doc.setFontSize(fontSize);
-  return doc.splitTextToSize(text, maxWidth) as string[];
-}
+const FONT_BASE = 'https://cdn.jsdelivr.net/gh/google/fonts@main';
 
-// Solid white "magazine" frame applied to every page. Width is a touch under
-// 1 mm — at A4/72 dpi this reads as roughly 2 px on screen, which is what the
-// design ask was for.
-const PAGE_BORDER = 0.8; // mm
-
-/**
- * Draw n filled 5-pointed stars at position (x, y), where y is the star centre.
- * Uses raw PDF operators so any fill color set with doc.setFillColor() applies.
- */
-function drawStars(doc: JsPDF, x: number, y: number, count: number, r = 2.2) {
-  const innerR = r * 0.382;
-  const gap    = r * 0.7;                       // gap between stars
-  const k   = (doc as unknown as { internal: { scaleFactor: number } }).internal.scaleFactor;
-  const pgH = PAGE_H * k;
-  const out = (doc as unknown as { internal: { out: (s: string) => void } }).internal.out;
-
-  for (let s = 0; s < count; s++) {
-    const cx = x + s * (r * 2 + gap) + r;
-    out('q');
-    let first = true;
-    for (let i = 0; i < 10; i++) {
-      const angle  = (i * Math.PI / 5) - Math.PI / 2;
-      const radius = i % 2 === 0 ? r : innerR;
-      const px = (cx + radius * Math.cos(angle)) * k;
-      const py = pgH - (y + radius * Math.sin(angle)) * k;
-      out(first ? `${px.toFixed(3)} ${py.toFixed(3)} m` : `${px.toFixed(3)} ${py.toFixed(3)} l`);
-      first = false;
-    }
-    out('h f Q');
-  }
-}
-
-function drawPageBorder(doc: JsPDF) {
-  doc.setFillColor(255, 255, 255);
-  // Top, bottom, left, right strips drawn over whatever is on the page.
-  doc.rect(0, 0, PAGE_W, PAGE_BORDER, 'F');
-  doc.rect(0, PAGE_H - PAGE_BORDER, PAGE_W, PAGE_BORDER, 'F');
-  doc.rect(0, 0, PAGE_BORDER, PAGE_H, 'F');
-  doc.rect(PAGE_W - PAGE_BORDER, 0, PAGE_BORDER, PAGE_H, 'F');
-}
-
-/**
- * Embed Playfair Display Regular into a jsPDF document (server-side).
- *
- * jsPDF can ONLY parse TTF (not WOFF/WOFF2), so we pull the static TTF
- * directly from the official Google Fonts repo via jsDelivr's GitHub mirror.
- * Falls back to the built-in "times" font on any failure (network, parse,
- * or text-rendering test).
- */
-async function loadPlayfairDisplayServer(doc: JsPDF): Promise<string> {
-  const TTF_URL =
-    'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/playfairdisplay/static/PlayfairDisplay-Regular.ttf';
+async function registerTtf(
+  doc: JsPDF, url: string, file: string, family: string, fallback: string,
+): Promise<string> {
   try {
-    const res = await fetch(TTF_URL, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) {
-      console.warn('[pricing-guide-pdf] Playfair TTF fetch returned', res.status);
-      return 'times';
-    }
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return fallback;
     const buf = Buffer.from(await res.arrayBuffer());
-    const b64 = buf.toString('base64');
-    (doc as unknown as { addFileToVFS: (n: string, d: string) => void }).addFileToVFS(
-      'PlayfairDisplay-Regular.ttf',
-      b64,
-    );
-    (doc as unknown as { addFont: (f: string, n: string, s: string) => void }).addFont(
-      'PlayfairDisplay-Regular.ttf',
-      'PlayfairDisplay',
-      'normal',
-    );
-    // Smoke-test: jsPDF only fails on a bad font when text() is actually called,
-    // so do a no-op render to verify the font is usable. Any throw here forces
-    // us to fall back to the safe built-in "times".
+    (doc as unknown as { addFileToVFS: (n: string, d: string) => void })
+      .addFileToVFS(file, buf.toString('base64'));
+    (doc as unknown as { addFont: (f: string, n: string, s: string) => void })
+      .addFont(file, family, 'normal');
     try {
-      doc.setFont('PlayfairDisplay', 'normal');
-      doc.setFontSize(12);
-      doc.getTextWidth('test');
-    } catch (testErr) {
-      console.warn('[pricing-guide-pdf] Playfair font failed validation', testErr);
-      return 'times';
-    }
-    return 'PlayfairDisplay';
-  } catch (err) {
-    console.warn('[pricing-guide-pdf] Playfair font load failed', err);
-    return 'times';
-  }
-}
-
-/** Embed Open Sans Regular for body text. Falls back to 'helvetica'. */
-async function loadOpenSansServer(doc: JsPDF): Promise<string> {
-  const TTF_URL =
-    'https://cdn.jsdelivr.net/gh/google/fonts@main/apache/opensans/static/OpenSans-Regular.ttf';
-  try {
-    const res = await fetch(TTF_URL, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return 'helvetica';
-    const buf = Buffer.from(await res.arrayBuffer());
-    const b64 = buf.toString('base64');
-    (doc as unknown as { addFileToVFS: (n: string, d: string) => void }).addFileToVFS(
-      'OpenSans-Regular.ttf', b64,
-    );
-    (doc as unknown as { addFont: (f: string, n: string, s: string) => void }).addFont(
-      'OpenSans-Regular.ttf', 'OpenSans', 'normal',
-    );
-    try {
-      doc.setFont('OpenSans', 'normal');
+      doc.setFont(family, 'normal');
       doc.setFontSize(12);
       doc.getTextWidth('test');
     } catch {
-      return 'helvetica';
+      return fallback;
     }
-    return 'OpenSans';
+    return family;
   } catch {
-    return 'helvetica';
+    return fallback;
   }
 }
 
+/** Playfair Display Regular — the editorial serif. Falls back to "times". */
+async function loadPlayfairDisplayServer(doc: JsPDF): Promise<string> {
+  return registerTtf(
+    doc,
+    `${FONT_BASE}/ofl/playfairdisplay/static/PlayfairDisplay-Regular.ttf`,
+    'PlayfairDisplay-Regular.ttf',
+    'PlayfairDisplay',
+    'times',
+  );
+}
+
+/** Open Sans Regular — body copy. Falls back to "helvetica". */
+async function loadOpenSansServer(doc: JsPDF): Promise<string> {
+  return registerTtf(
+    doc,
+    `${FONT_BASE}/apache/opensans/static/OpenSans-Regular.ttf`,
+    'OpenSans-Regular.ttf',
+    'OpenSans',
+    'helvetica',
+  );
+}
+
+/** Open Sans SemiBold — tracked labels / emphasis. Falls back to body family. */
+async function loadOpenSansSemiServer(doc: JsPDF, fallback: string): Promise<string> {
+  return registerTtf(
+    doc,
+    `${FONT_BASE}/apache/opensans/static/OpenSans-SemiBold.ttf`,
+    'OpenSans-SemiBold.ttf',
+    'OpenSansSemi',
+    fallback,
+  );
+}
+
 /**
- * Draw an image cropped to fill a cell exactly (CSS object-fit: cover).
- * Uses a raw PDF clipping rectangle so nothing bleeds outside the cell.
+ * Pinyon Script — formal calligraphy for drop-caps, "Welcome", "Thank You",
+ * package names and script subtitles. Falls back to the serif family.
  */
-function drawClippedImage(
-  doc: JsPDF,
-  dataUrl: string,
-  cellX: number, cellY: number, cellW: number, cellH: number,
-  imgW: number, imgH: number,
-) {
-  // Cover-scale: enlarge until both dimensions fill the cell, then centre.
-  const scale = Math.max(cellW / imgW, cellH / imgH);
-  const drawW = imgW * scale;
-  const drawH = imgH * scale;
-  const dx    = cellX - (drawW - cellW) / 2;
-  const dy    = cellY - (drawH - cellH) / 2;
-
-  // Raw PDF clipping rect.  jsPDF works in mm but internal PDF uses pt
-  // with a bottom-up y-axis, so we convert manually.
-  const k   = (doc as unknown as { internal: { scaleFactor: number } }).internal.scaleFactor;
-  const pgH = PAGE_H * k;
-  const xp  = (cellX * k).toFixed(3);
-  const yp  = (pgH - (cellY + cellH) * k).toFixed(3);
-  const wp  = (cellW * k).toFixed(3);
-  const hp  = (cellH * k).toFixed(3);
-
-  const out = (doc as unknown as { internal: { out: (s: string) => void } }).internal.out;
-  out(`q ${xp} ${yp} ${wp} ${hp} re W n`);
-
-  const fmt = dataUrl.startsWith('data:image/png') ? 'PNG'
-            : dataUrl.startsWith('data:image/webp') ? 'WEBP'
-            : 'JPEG';
-  try { doc.addImage(dataUrl, fmt, dx, dy, drawW, drawH); } catch { /* skip */ }
-
-  out('Q');
+async function loadPinyonScriptServer(doc: JsPDF, fallback: string): Promise<string> {
+  return registerTtf(
+    doc,
+    `${FONT_BASE}/ofl/pinyonscript/PinyonScript-Regular.ttf`,
+    'PinyonScript-Regular.ttf',
+    'PinyonScript',
+    fallback,
+  );
 }
 
 // ─── Main server generator ───────────────────────────────────────────────
+
+type Img = { dataUrl: string; w: number; h: number };
 
 export async function generatePricingGuidePdfServer(
   guide: GuideData,
@@ -314,644 +204,722 @@ export async function generatePricingGuidePdfServer(
   const { default: jsPDF } = await import('jspdf');
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  const venueName     = venue.name ?? 'Our Venue';
-  const centerX       = PAGE_W / 2;
-
-  // ── Embed fonts in parallel (Playfair + Open Sans) ───────────────────
-  const [playfairFamily, openSansFamily] = await Promise.all([
+  // ── Resolve the four font families up front ──────────────────────────
+  const [serifFam, bodyFam] = await Promise.all([
     loadPlayfairDisplayServer(doc),
     loadOpenSansServer(doc),
   ]);
-
-  // ── Pre-fetch all images ──────────────────────────────────────────────
-  const imageCache = new Map<string, { dataUrl: string; w: number; h: number } | null>();
-
-  async function getImage(url: string | null) {
-    if (!url) return null;
-    if (imageCache.has(url)) return imageCache.get(url)!;
-    const result = await fetchImageWithDims(url);
-    imageCache.set(url, result);
-    return result;
-  }
-
-  async function getImageDataUrl(url: string | null): Promise<string | null> {
-    if (!url) return null;
-    const r = await getImage(url);
-    return r?.dataUrl ?? null;
-  }
-
-  const coverSrc = guide.cover_image_url ?? guide.cover_source_image_url ?? guide.gallery[0]?.url ?? null;
-  const [coverResult, logoDataUrl] = await Promise.all([
-    getImage(coverSrc),
-    getImageDataUrl(venue.logo_url),
+  const [bodySemiFam, scriptFam] = await Promise.all([
+    loadOpenSansSemiServer(doc, bodyFam),
+    loadPinyonScriptServer(doc, serifFam),
   ]);
+  const F = {
+    serif:     serifFam,
+    serifBold: serifFam,
+    script:    scriptFam,
+    body:      bodyFam,
+    bodySemi:  bodySemiFam,
+  };
 
-  const galleryResults = await Promise.all(guide.gallery.slice(0, 9).map(g => getImage(g.url)));
-  const galleryItems   = galleryResults.filter((r): r is NonNullable<typeof r> => r !== null);
+  // ── Geometry & palette (exact) ───────────────────────────────────────
+  const W = 210, H = 297, MARGIN = 22, CONTENT_W = 166, CX = 105, FRAME = 0.8;
+  const PAL = {
+    paper: [239, 237, 232],
+    ink:   [26, 26, 26],
+    soft:  [74, 74, 74],
+    mute:  [120, 118, 112],
+    faint: [165, 162, 155],
+    rule:  [196, 192, 184],
+    box:   [231, 228, 221],
+    white: [255, 255, 255],
+  } as const;
 
-  const spaceResults = new Map<string, { dataUrl: string; w: number; h: number }>();
-  const accommodationResults = new Map<string, { dataUrl: string; w: number; h: number }>();
-  await Promise.all([
-    ...guide.spaces.map(async (s) => {
-      if (s.image_url) {
-        const r = await getImage(s.image_url);
-        if (r) spaceResults.set(s.id, r);
-      }
-    }),
-    ...(guide.accommodations ?? []).map(async (a) => {
-      if (a.image_url) {
-        const r = await getImage(a.image_url);
-        if (r) accommodationResults.set(a.id, r);
-      }
-    }),
-  ]);
+  // ── Low-level jsPDF access ───────────────────────────────────────────
+  const internal = doc as unknown as { internal: { scaleFactor: number; out: (s: string) => void } };
+  const K   = () => internal.internal.scaleFactor;
+  const out = (s: string) => internal.internal.out(s);
+  const tc = (c: readonly number[]) => doc.setTextColor(c[0], c[1], c[2]);
+  const fc = (c: readonly number[]) => doc.setFillColor(c[0], c[1], c[2]);
+  const dc = (c: readonly number[]) => doc.setDrawColor(c[0], c[1], c[2]);
+  const setG = (op: number) =>
+    (doc as unknown as { setGState?: (g: unknown) => void }).setGState?.(
+      new (doc as unknown as { GState: new (o: unknown) => unknown }).GState({ opacity: op }),
+    );
 
-  const [accommodationsResult, availabilityResult] = await Promise.all([
-    getImage(guide.accommodations_image_url),
-    getImage(guide.availability_image_url),
-  ]);
+  // ── Image prefetch → synchronous getter ──────────────────────────────
+  const name = (venue.name ?? 'Our Venue').trim() || 'Our Venue';
+  const coverSrc =
+    guide.cover_image_url ?? guide.cover_source_image_url ?? guide.gallery[0]?.url ?? null;
 
-  // Fetch about-page photos (separate from gallery, max 4)
-  const aboutPhotoResults = await Promise.all(
-    (guide.about_photos ?? []).slice(0, 4).map(g => getImage(g.url))
+  const urls = new Set<string>();
+  const add = (u?: string | null) => { if (u) urls.add(u); };
+  add(coverSrc);
+  (guide.gallery ?? []).forEach((g) => add(g.url));
+  (guide.about_photos ?? []).forEach((g) => add(g.url));
+  (guide.accommodations_photos ?? []).forEach((g) => add(g.url));
+  (guide.spaces ?? []).forEach((s) => add(s.image_url));
+  (guide.accommodations ?? []).forEach((a) => add(a.image_url));
+  add(guide.accommodations_image_url);
+  add(guide.availability_image_url);
+
+  const cache = new Map<string, Img | null>();
+  await Promise.all(
+    [...urls].map(async (u) => { cache.set(u, await fetchImageWithDims(u)); }),
   );
-  const aboutPhotoItems = aboutPhotoResults.filter((r): r is NonNullable<typeof r> => r !== null);
+  const getImg = (u: string | null): Img | null => {
+    if (!u) return null;
+    return cache.get(u) ?? null;
+  };
 
-  // ── Page 1: Cover ─────────────────────────────────────────────────────
-  // Full-bleed photo, uniform dark overlay, refined 2px-style border,
-  // then centered: logo → title → rule → venue name.
+  // Decorative photo pool (gallery → about → spaces → cover), deduped, loaded.
+  const decoUrls = [
+    ...(guide.gallery ?? []).map((g) => g.url),
+    ...(guide.about_photos ?? []).map((g) => g.url),
+    ...(guide.spaces ?? []).map((s) => s.image_url),
+    coverSrc,
+  ].filter((u): u is string => !!u);
+  const seen = new Set<string>();
+  const pool: Img[] = [];
+  for (const u of decoUrls) {
+    if (seen.has(u)) continue;
+    seen.add(u);
+    const im = getImg(u);
+    if (im) pool.push(im);
+  }
+  let pc = 0;
+  const nextPhoto = (): Img | null => (pool.length ? pool[pc++ % pool.length] : null);
 
-  // Photo fills the whole page.
-  if (coverResult) {
-    const { dataUrl, w, h } = coverResult;
-    const imgRatio  = w / h;
-    const pageRatio = PAGE_W / PAGE_H;
-    let sw = PAGE_W, sh = PAGE_H, sx = 0, sy = 0;
-    if (imgRatio > pageRatio) {
-      sh = PAGE_H; sw = PAGE_H * imgRatio; sx = (PAGE_W - sw) / 2;
-    } else {
-      sw = PAGE_W; sh = PAGE_W / imgRatio; sy = (PAGE_H - sh) / 2;
+  // ── Shared drawing helpers ───────────────────────────────────────────
+  function imgCover(im: Img | null, x: number, y: number, w: number, h: number) {
+    if (!im) { fc(PAL.box); doc.rect(x, y, w, h, 'F'); return; }
+    const scale = Math.max(w / im.w, h / im.h);
+    const dw = im.w * scale, dh = im.h * scale;
+    const dx = x - (dw - w) / 2, dy = y - (dh - h) / 2;
+    const k = K(), pgH = H * k;
+    out(`q ${(x * k).toFixed(3)} ${(pgH - (y + h) * k).toFixed(3)} ${(w * k).toFixed(3)} ${(h * k).toFixed(3)} re W n`);
+    const fmt = im.dataUrl.startsWith('data:image/png') ? 'PNG'
+              : im.dataUrl.startsWith('data:image/webp') ? 'WEBP' : 'JPEG';
+    try { doc.addImage(im.dataUrl, fmt, dx, dy, dw, dh); } catch { /* skip */ }
+    out('Q');
+  }
+
+  function overlay(x: number, y: number, w: number, h: number, op: number) {
+    fc([0, 0, 0]);
+    setG(op);
+    doc.rect(x, y, w, h, 'F');
+    setG(1);
+  }
+
+  function frame() {
+    fc(PAL.white);
+    doc.rect(0, 0, W, FRAME, 'F');
+    doc.rect(0, H - FRAME, W, FRAME, 'F');
+    doc.rect(0, 0, FRAME, H, 'F');
+    doc.rect(W - FRAME, 0, FRAME, H, 'F');
+  }
+
+  /** Letter-spaced caps drawn char-by-char. align: left | center | right. */
+  function tracked(
+    text: string, x: number, y: number, size: number, gap: number,
+    color: readonly number[], font: string, style: 'normal' = 'normal',
+    align: 'left' | 'center' | 'right' = 'left',
+  ) {
+    doc.setFont(font, style);
+    doc.setFontSize(size);
+    tc(color);
+    const chars = [...text];
+    const widths = chars.map((ch) => doc.getTextWidth(ch));
+    const total = widths.reduce((a, b) => a + b, 0) + gap * Math.max(0, chars.length - 1);
+    let cx = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
+    chars.forEach((ch, i) => { doc.text(ch, cx, y); cx += widths[i] + gap; });
+  }
+
+  /** Tracked caps that auto-shrink size + gap to fit within maxW. */
+  function fitTracked(
+    text: string, x: number, y: number, size: number, gap: number, maxW: number,
+    color: readonly number[], font: string, align: 'left' | 'center' | 'right' = 'center',
+  ) {
+    let s = size, g = gap;
+    for (let i = 0; i < 8; i++) {
+      doc.setFont(font, 'normal');
+      doc.setFontSize(s);
+      const chars = [...text];
+      const total = chars.reduce((a, ch) => a + doc.getTextWidth(ch), 0) + g * Math.max(0, chars.length - 1);
+      if (total <= maxW) break;
+      s *= 0.92; g *= 0.85;
     }
-    try { doc.addImage(dataUrl, 'JPEG', sx, sy, sw, sh); } catch { /* skip */ }
-  } else {
-    doc.setFillColor(245, 243, 240);
-    doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
+    tracked(text, x, y, s, g, color, font, 'normal', align);
   }
 
-  // Uniform semi-transparent overlay.
-  doc.setFillColor(0, 0, 0);
-  (doc as unknown as { setGState?: (g: unknown) => void }).setGState?.(
-    new (doc as unknown as { GState: new (o: unknown) => unknown }).GState({ opacity: 0.28 }),
-  );
-  doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
-  (doc as unknown as { setGState?: (g: unknown) => void }).setGState?.(
-    new (doc as unknown as { GState: new (o: unknown) => unknown }).GState({ opacity: 1 }),
-  );
-
-  // Refined thin border (same weight as inner pages) drawn on top.
-  drawPageBorder(doc);
-
-  // ── Cover text block: logo → heading (nothing else) ──────────────────
-  doc.setFont(playfairFamily, 'normal');
-  doc.setFontSize(26);
-  const titleLines = wrapText(doc, 'Pricing & Availability Guide', PAGE_W - 50, 26);
-  const titleLineH = 10;
-
-  const LOGO_H = 13; // mm — ≈ half the visual height of the 26pt heading
-  const LOGO_GAP = 16; // mm gap between logo bottom and title baseline
-
-  const logoResult = logoDataUrl ? await getImage(venue.logo_url) : null;
-  const hasLogo = !!(logoDataUrl && logoResult);
-
-  // Vertical centre the entire block (logo + gap + title).
-  const blockH = (hasLogo ? LOGO_H + LOGO_GAP : 0) + titleLines.length * titleLineH;
-  let ty = PAGE_H / 2 - blockH / 2 + (hasLogo ? LOGO_H : titleLineH);
-
-  // ── Logo ──────────────────────────────────────────────────────────────
-  if (hasLogo && logoDataUrl && logoResult) {
-    const logoW = (logoResult.w / logoResult.h) * LOGO_H;
-    const formatMatch = logoDataUrl.match(/^data:image\/(png|jpeg|jpg|webp)/i);
-    const formats = formatMatch ? [formatMatch[1].toUpperCase()] : ['PNG', 'JPEG'];
-    let drawn = false;
-    for (const fmt of formats) {
-      try {
-        doc.addImage(logoDataUrl, fmt, centerX - logoW / 2, ty - LOGO_H, logoW, LOGO_H);
-        drawn = true;
-        break;
-      } catch (err) {
-        console.warn('[pricing-guide-pdf] logo addImage failed', fmt, err);
-      }
-    }
-    ty += drawn ? LOGO_GAP : -LOGO_H + LOGO_GAP; // collapse if logo failed
+  function shortRule(x: number, y: number, w = 14) {
+    dc(PAL.rule);
+    doc.setLineWidth(0.4);
+    doc.line(x, y, x + w, y);
   }
 
-  // ── Title ─────────────────────────────────────────────────────────────
-  doc.setFont(playfairFamily, 'normal');
-  doc.setFontSize(26);
-  doc.setTextColor(255, 255, 255);
-  doc.text(titleLines, centerX, ty, { align: 'center' });
-
-  // ── Page 2: Welcome ───────────────────────────────────────────────────
-  if (guide.congratulatory_message?.trim()) {
-    doc.addPage(); drawPageBorder(doc);
-
-    // Heading: "Congratulations on your engagement." — Playfair Display
-    const HEADING_FONT_SIZE = 24;
-    const HEADING_LINE_H    = 9;  // mm per line at 24pt
-    const BODY_FONT_SIZE    = 11;
-    const BODY_LINE_H       = 6;  // mm per line at 11pt
-    const GAP               = 10; // mm between heading and body
-    const TEXT_W            = CONTENT_W - 20; // comfortable reading width
-
-    doc.setFont(playfairFamily, 'normal');
-    doc.setFontSize(HEADING_FONT_SIZE);
-    const headingLines = wrapText(doc, 'Congratulations on your engagement.', TEXT_W, HEADING_FONT_SIZE);
-
-    doc.setFont(openSansFamily, 'normal');
-    doc.setFontSize(BODY_FONT_SIZE);
-    const bodyLines = wrapText(doc, guide.congratulatory_message, TEXT_W, BODY_FONT_SIZE);
-
-    // Calculate total block height and centre it vertically.
-    const blockH = headingLines.length * HEADING_LINE_H + GAP + bodyLines.length * BODY_LINE_H;
-    let y = PAGE_H / 2 - blockH / 2 + HEADING_LINE_H;
-
-    // Heading
-    doc.setFont(playfairFamily, 'normal');
-    doc.setFontSize(HEADING_FONT_SIZE);
-    doc.setTextColor(27, 27, 27);
-    doc.text(headingLines, centerX, y, { align: 'center' });
-    y += (headingLines.length - 1) * HEADING_LINE_H + GAP;
-
-    // Body text
-    doc.setFont(openSansFamily, 'normal');
-    doc.setFontSize(BODY_FONT_SIZE);
-    doc.setTextColor(80, 80, 80);
-    doc.text(bodyLines, centerX, y, { align: 'center', maxWidth: TEXT_W });
-
-    drawPageBorder(doc);
+  function fmtPhone(raw: string | null): string {
+    const d = (raw ?? '').replace(/\D+/g, '');
+    if (d.length === 11 && d[0] === '1') return `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
+    if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+    return raw ?? '';
   }
 
-  // ── Page 3: Gallery (pinterest grid — no title, no footer) ───────────
-  // Ideal photo count: 9. Layout: 4 rows, mixed wide/narrow columns.
-  // Row 1: [2/3 wide | 1/3]   Row 2: [1/3 | 2/3 wide]
-  // Row 3: [1/3 | 1/3 | 1/3] Row 4: [1/2 | 1/2]
-  let galleryPageNum = -1;
-  if (galleryItems.length > 0) {
-    doc.addPage();
-    galleryPageNum = doc.getNumberOfPages();
-
-    const GM  = PAGE_BORDER;            // images bleed to the border edge
-    const G   = PAGE_BORDER;           // gutter = border width so all gaps look identical (~2px)
-    const uW  = PAGE_W - 2 * GM;       // usable width
-    const uH  = PAGE_H - 2 * GM;       // usable height
-    const TW  = (uW - 2 * G) / 3;     // 1/3-column width
-    const FW  = 2 * TW + G;            // 2/3-column width (incl. one gutter)
-    const HW  = (uW - G) / 2;         // half-column width
-    const RH  = (uH - 3 * G) / 4;     // row height (equal for all 4 rows)
-
-    // 9 predefined cells: [x, y, w, h]
-    const cells: Array<[number, number, number, number]> = [
-      // Row 1
-      [GM,              GM,                  FW, RH],
-      [GM + FW + G,     GM,                  TW, RH],
-      // Row 2
-      [GM,              GM + RH + G,         TW, RH],
-      [GM + TW + G,     GM + RH + G,         FW, RH],
-      // Row 3
-      [GM,              GM + 2*(RH+G),       TW, RH],
-      [GM + TW + G,     GM + 2*(RH+G),       TW, RH],
-      [GM + 2*(TW+G),   GM + 2*(RH+G),       TW, RH],
-      // Row 4
-      [GM,              GM + 3*(RH+G),       HW, RH],
-      [GM + HW + G,     GM + 3*(RH+G),       HW, RH],
-    ];
-
-    cells.forEach(([cx, cy, cw, ch], idx) => {
-      const item = galleryItems[idx];
-      if (!item) return;
-      drawClippedImage(doc, item.dataUrl, cx, cy, cw, ch, item.w, item.h);
-    });
-
-    // Thin white border on top of photos
-    drawPageBorder(doc);
+  function wrap(text: string, w: number, size: number, font: string): string[] {
+    doc.setFont(font, 'normal');
+    doc.setFontSize(size);
+    return doc.splitTextToSize(text, w) as string[];
   }
 
-  // ── Page 4: About ─────────────────────────────────────────────────────
-  // Photo grid: full-bleed (PAGE_BORDER gap on all sides + between cells)
-  // → visually matches the gallery page style guide-wide.
-  const APG           = PAGE_BORDER;
-  const ABOUT_PHOTO_W = (PAGE_W - 2 * APG - APG) / 2; // border-to-border, split 2 cols
-  const ABOUT_PHOTO_H = ABOUT_PHOTO_W * 0.75;          // 4:3
+  // ── Contact line values ──────────────────────────────────────────────
+  const phoneStr   = fmtPhone(venue.phone);
+  const emailStr   = (venue.email ?? '').trim();
+  const websiteStr = (venue.website ?? '').replace(/^https?:\/\//, '').replace(/\/$/, '').trim();
+  const cityState  = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
 
-  if (guide.about_venue?.trim()) {
-    doc.addPage(); drawPageBorder(doc);
-    let y = MARGIN + 10;
-
-    // "ABOUT" label — unchanged
-    doc.setTextColor(160, 160, 160);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text('ABOUT', MARGIN, y); y += 10;
-
-    // Venue name — Playfair Display (thin look)
-    doc.setTextColor(DARK);
-    doc.setFont(playfairFamily, 'normal');
-    doc.setFontSize(26);
-    doc.text(venueName, MARGIN, y); y += 8;
-
-    // Thin rule
-    doc.setDrawColor(200, 200, 200);
+  // ── Page bookkeeping ─────────────────────────────────────────────────
+  let PP = 1; // the cover sits on jsPDF's initial page
+  const paper = () => { fc(PAL.paper); doc.rect(0, 0, W, H, 'F'); };
+  const page  = () => { doc.addPage(); paper(); PP += 1; };
+  const footer = () => {
+    dc(PAL.rule);
     doc.setLineWidth(0.3);
-    doc.line(MARGIN, y, MARGIN + 16, y); y += 12;
+    doc.line(MARGIN, H - 16, W - MARGIN, H - 16);
+    doc.setFont(F.body, 'normal');
+    doc.setFontSize(8);
+    tc(PAL.mute);
+    doc.text(String(PP).padStart(2, '0'), W - MARGIN, H - 11, { align: 'right' });
+    tracked(name.toUpperCase(), MARGIN, H - 11.3, 7, 1.1, PAL.mute, F.body, 'normal', 'left');
+  };
 
-    // Body text — Open Sans
-    doc.setTextColor(55, 65, 81);
-    doc.setFont(openSansFamily, 'normal');
-    doc.setFontSize(11);
-    const aboutLines = wrapText(doc, guide.about_venue, CONTENT_W, 11);
-    doc.text(aboutLines, MARGIN, y);
+  // ── Section presence (drives both the TOC predictor and the render) ──
+  const hasAbout   = !!(guide.about_venue && guide.about_venue.trim());
+  const pkgs       = (guide.packages ?? []).slice(0, 3);
+  const hasPkgs    = pkgs.length > 0;
+  const spaceList  = guide.spaces ?? [];
+  const galleryAll = (guide.gallery ?? []).map((g) => getImg(g.url)).filter((x): x is Img => !!x);
+  const hasGallery = galleryAll.length >= 3;
+  const hasReviews = (guide.reviews ?? []).length > 0;
+  const accList    = guide.accommodations ?? [];
 
-    // Approximate how many mm the text block occupies (≈4.7mm per line at 11pt)
-    const textBlockH = aboutLines.length * 4.7;
-    const photoGridH = 2 * ABOUT_PHOTO_H + APG;
-    const gridStartY = y + textBlockH + 10; // 10mm breathing gap after text
+  // ── TOC predictor — mirrors render order EXACTLY ─────────────────────
+  let p = 2; // cover = 1, TOC = 2; first content section starts at 3
+  const toc: [string, number][] = [];
+  const consume = (n: number) => { const s = p + 1; p += n; return s; };
+  const entry   = (label: string, n: number) => { const s = consume(n); toc.push([label, s]); return s; };
 
-    // Only render the 2×2 photo grid if it fits on this page
-    const gridEndY = gridStartY + photoGridH;
-    const pageBottom = PAGE_H - MARGIN - 10; // leave room for footer
+  entry('Welcome', 1);
+  if (hasAbout) entry('Our Story', 1);
+  entry('Why Book With Us', 1);
+  entry('Your Journey', 1);
+  consume(1); // statement spread (not in TOC)
+  if (hasPkgs) entry('Packages', 1);
+  if (spaceList.length) entry('The Spaces', spaceList.length);
+  if (hasGallery) entry('Gallery', 1);
+  if (hasReviews) entry('Kind Words', 1);
+  entry("What's Included", 1);
+  entry('Planning Checklist', 1);
+  if (accList.length) entry('Accommodations', accList.length);
+  entry('Questions & Answers', 1);
+  entry('Get In Touch', 1);
+  // thank-you consumes 1 more but isn't listed
 
-    if (gridEndY <= pageBottom && aboutPhotoItems.length >= 1) {
-      const photos = aboutPhotoItems.slice(0, 4);
-      const positions: Array<[number, number]> = [
-        [APG,                    gridStartY],
-        [APG + ABOUT_PHOTO_W + APG, gridStartY],
-        [APG,                    gridStartY + ABOUT_PHOTO_H + APG],
-        [APG + ABOUT_PHOTO_W + APG, gridStartY + ABOUT_PHOTO_H + APG],
+  // ── Evergreen fallbacks ──────────────────────────────────────────────
+  const whyPoints: string[] = (guide.why_points && guide.why_points.length)
+    ? guide.why_points.slice(0, 2)
+    : [
+        `The day is yours. ${name} gives you the space, the setting, and the privacy to host a celebration that feels like you.`,
+        `One team handles the details. Clear pricing, honest answers, and people who know this venue better than anyone.`,
       ];
-      photos.forEach((item, i) => {
-        const [px, py] = positions[i];
-        drawClippedImage(doc, item.dataUrl, px, py, ABOUT_PHOTO_W, ABOUT_PHOTO_H, item.w, item.h);
-      });
-    }
-  }
 
-  // ── Page 5+: Spaces — one dedicated page per space ───────────────────
-  // Layout: space name (Playfair) → full-bleed image → paragraph (Open Sans)
-  // Text is clamped so the bottom whitespace mirrors the top (~MARGIN mm).
-  const SPACE_IMG_H = 120; // mm — full-bleed, cover-cropped
-  const DESC_LINE_H = 5.1; // mm per line at 11pt Open Sans
+  const journey: [string, string][] = (guide.journey && guide.journey.length)
+    ? guide.journey.slice(0, 4)
+    : [
+        ['Tour the venue', `Walk the space in person. We show you every corner and answer your questions.`],
+        ['Reserve your date', `Found the one? We hold your date and keep the booking simple.`],
+        ['Plan together', `We help map timing, layout, and the details that make the day yours.`],
+        ['Celebrate', `Arrive, relax, and be present. We handle the venue so you can enjoy it.`],
+      ];
 
-  for (const space of guide.spaces) {
-    doc.addPage(); // fresh page — border drawn LAST so it sits on top of image
+  const faqs: [string, string][] = (guide.faqs && guide.faqs.length)
+    ? guide.faqs.slice(0, 4)
+    : [
+        ['How many guests can you host?',
+          spaceList[0]?.capacity
+            ? `Our main space seats ${spaceList[0].capacity.replace(/^up to\s*/i, 'up to ')}.`
+            : `Tell us your guest count and we will confirm the right space for your celebration.`],
+        ['What dates are available?',
+          guide.availability_text?.trim() || `Dates book quickly. Send us your season and we will check availability.`],
+        ["What's included?",
+          `Your booking includes exclusive use of the space for your event. Ask us for the full list of what comes with your package.`],
+        ['How do we book a tour?',
+          `Use the contact details in this guide. We will set up a time that works for you.`],
+      ];
 
-    let y = MARGIN;
+  const includedItems: string[] = (venue.features && venue.features.length)
+    ? venue.features.slice(0, 9)
+    : [
+        'Exclusive venue access', 'Tables and chairs', 'On-site parking',
+        'Getting-ready space', 'Event coordination', 'Setup and cleanup',
+        'Flexible vendor policy', 'Scenic photo spots', 'Ample guest parking',
+      ];
 
-    // Space name — Playfair Display
-    doc.setTextColor(DARK);
-    doc.setFont(playfairFamily, 'normal');
-    doc.setFontSize(26);
-    doc.text(space.name ?? 'Untitled Space', MARGIN, y + 9); y += 15;
+  // ════════════════════════════════════════════════════════════════════
+  // 1. COVER
+  // ════════════════════════════════════════════════════════════════════
+  imgCover(getImg(coverSrc), 0, 0, W, H);
+  overlay(0, 0, W, H, 0.34);
+  frame();
 
-    // Capacity — small grey label beneath name
-    if (space.capacity) {
-      doc.setTextColor(160, 160, 160);
-      doc.setFont(openSansFamily, 'normal');
-      doc.setFontSize(8);
-      doc.text(space.capacity.toUpperCase(), MARGIN, y); y += 7;
-    }
+  tracked(name.toUpperCase(), CX, 42, 13, 2.4, PAL.white, F.serif, 'normal', 'center');
 
-    // Full-bleed image (bleeds left/right to border, border drawn on top)
-    const spaceImg = spaceResults.get(space.id);
-    if (spaceImg) {
-      drawClippedImage(
-        doc, spaceImg.dataUrl,
-        PAGE_BORDER, y,
-        PAGE_W - 2 * PAGE_BORDER, SPACE_IMG_H,
-        spaceImg.w, spaceImg.h,
-      );
-    }
-    y += SPACE_IMG_H + 10;
-
-    // Description paragraph — clamped so bottom air ≈ top air (MARGIN)
-    if (space.description) {
-      doc.setTextColor(55, 65, 81);
-      doc.setFont(openSansFamily, 'normal');
-      doc.setFontSize(11);
-      const allLines  = wrapText(doc, space.description, CONTENT_W, 11);
-      const maxLines  = Math.floor((PAGE_H - MARGIN - y) / DESC_LINE_H);
-      doc.text(allLines.slice(0, maxLines), MARGIN, y);
-    }
-
-    // Border drawn last so it overlays the full-bleed image edges
-    drawPageBorder(doc);
-  }
-
-  // ── Accommodations — one dedicated page per entry (same layout as Spaces) ─
-  const ACC_IMG_H = 120; // mm, full-bleed cover-cropped
-
-  for (const acc of (guide.accommodations ?? [])) {
-    doc.addPage();
-    let y = MARGIN;
-
-    // Name — Playfair Display
-    doc.setTextColor(DARK);
-    doc.setFont(playfairFamily, 'normal');
-    doc.setFontSize(26);
-    doc.text(acc.name ?? 'Accommodations', MARGIN, y + 9); y += 15;
-
-    // Full-bleed image (border drawn on top)
-    const accImg = accommodationResults.get(acc.id);
-    if (accImg) {
-      drawClippedImage(
-        doc, accImg.dataUrl,
-        PAGE_BORDER, y,
-        PAGE_W - 2 * PAGE_BORDER, ACC_IMG_H,
-        accImg.w, accImg.h,
-      );
-    }
-    y += ACC_IMG_H + 10;
-
-    // Description — clamped so bottom air ≈ top air (MARGIN)
-    if (acc.description) {
-      doc.setTextColor(55, 65, 81);
-      doc.setFont(openSansFamily, 'normal');
-      doc.setFontSize(11);
-      const allLines = wrapText(doc, acc.description, CONTENT_W, 11);
-      const maxLines = Math.floor((PAGE_H - MARGIN - y) / DESC_LINE_H);
-      doc.text(allLines.slice(0, maxLines), MARGIN, y);
-    }
-
-    drawPageBorder(doc);
-  }
-
-  // ── Page 7: Pricing & Packages ────────────────────────────────────────
-  if (guide.pricing_intro?.trim() || guide.packages.length > 0) {
-    doc.addPage(); drawPageBorder(doc);
-    let y = MARGIN;
-
-    doc.setTextColor(DARK);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(20);
-    doc.text('Pricing & Packages', MARGIN, y + 6); y += 16;
-
-    if (guide.pricing_intro) {
-      doc.setTextColor(107, 114, 128);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      const introLines = wrapText(doc, guide.pricing_intro, CONTENT_W, 10);
-      doc.text(introLines, MARGIN, y); y += introLines.length * 4.5 + 8;
-    }
-
-    for (const pkg of guide.packages) {
-      if (y > PAGE_H - MARGIN - 50) { doc.addPage(); drawPageBorder(doc); y = MARGIN; }
-      y += 8;
-
-      doc.setTextColor(DARK);
-      doc.setFont('times', 'bold');
-      doc.setFontSize(14);
-      doc.text(pkg.name ?? 'Untitled package', MARGIN + 6, y);
-
-      if (pkg.price_label) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
-        const priceW = doc.getTextWidth(pkg.price_label);
-        doc.text(pkg.price_label, PAGE_W - MARGIN - 6 - priceW, y);
-      }
-      y += 8;
-
-      if (pkg.description) {
-        doc.setTextColor(107, 114, 128);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        const descLines = wrapText(doc, pkg.description, CONTENT_W - 12, 10);
-        doc.text(descLines, MARGIN + 6, y); y += descLines.length * 4.5 + 3;
-      }
-
-      for (const item of pkg.included_items) {
-        if (y > PAGE_H - MARGIN - 10) { doc.addPage(); drawPageBorder(doc); y = MARGIN; }
-        doc.setFillColor(27, 27, 27);
-        doc.circle(MARGIN + 9, y - 1.2, 0.8, 'F');
-        doc.setTextColor(55, 65, 81);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        doc.text(item, MARGIN + 14, y); y += 5;
-      }
-
-      y += 4;
-      doc.setDrawColor(229, 229, 229);
-      doc.setLineWidth(0.3);
-      doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 6;
-    }
-  }
-
-  // ── Stories (Reviews) — max 6, vertically centered, single page ─────
-  // Per-review body is capped at MAX_BODY chars so block height is predictable.
-  // Heights are pre-measured so the entire block (heading + reviews) is
-  // positioned with equal whitespace above and below → looks identical
-  // whether there are 4, 5, or 6 reviews.
-  let storiesPageNum = -1;
-  const storiesReviews = guide.reviews.slice(0, 6);
-  if (storiesReviews.length > 0) {
-    doc.addPage(); drawPageBorder(doc);
-    storiesPageNum = doc.getNumberOfPages();
-
-    const MAX_BODY_CHARS = 220;  // truncate long reviews here
-    const BODY_FS        = 11;
-    const BODY_LH        = 5.1; // mm per line at 11pt
-    const STAR_SLOT      = 8;   // mm for the star row
-    const AUTHOR_SLOT    = 7;   // mm for attribution line
-    const DIVIDER_SLOT   = 9;   // mm for separator + gap between reviews
-    const HEADING_H      = 22;  // "Stories" block height
-
-    // ── Pass 1: measure every review block (font must be set before wrapText)
-    type Block = {
-      stars: number;
-      starsH: number;
-      bodyText: string;
-      bodyLines: string[];
-      bodyH: number;
-      authorLine: string;
-      authorH: number;
-      totalH: number;
-    };
-
-    const blocks: Block[] = storiesReviews.map((review) => {
-      const stars  = Math.max(0, Math.min(5, review.rating ?? 0));
-      const starsH = stars > 0 ? STAR_SLOT : 0;
-
-      let bodyText  = '';
-      let bodyLines: string[] = [];
-      let bodyH = 0;
-      if (review.body) {
-        const raw     = review.body.length > MAX_BODY_CHARS
-          ? review.body.slice(0, MAX_BODY_CHARS).trimEnd() + '\u2026'
-          : review.body;
-        bodyText  = `\u201C${raw}\u201D`;
-        doc.setFont(openSansFamily, 'normal');
-        doc.setFontSize(BODY_FS);
-        bodyLines = wrapText(doc, bodyText, CONTENT_W, BODY_FS);
-        bodyH = bodyLines.length * BODY_LH + 3;
-      }
-
-      const authorLine = [
-        review.author,
-        review.author && review.location ? ' \u00B7 ' : '',
-        review.location,
-      ].filter(Boolean).join('');
-
-      const authorH = authorLine ? AUTHOR_SLOT : 0;
-      return {
-        stars, starsH, bodyText, bodyLines, bodyH,
-        authorLine, authorH,
-        totalH: starsH + bodyH + authorH,
-      };
-    });
-
-    // ── Pass 2: total content height → center on page
-    const totalReviewsH =
-      blocks.reduce((sum, b) => sum + b.totalH, 0) +
-      (blocks.length - 1) * DIVIDER_SLOT;
-    const totalH   = HEADING_H + totalReviewsH;
-    const yStart   = Math.max(MARGIN, (PAGE_H - totalH) / 2);
-    let y          = yStart;
-
-    // ── Heading
-    doc.setTextColor(DARK);
-    doc.setFont(playfairFamily, 'normal');
-    doc.setFontSize(26);
-    doc.text('Stories', MARGIN, y + 9); y += HEADING_H;
-
-    // ── Render each review
-    blocks.forEach((block, idx) => {
-      if (block.stars > 0) {
-        doc.setFillColor(217, 169, 26);
-        drawStars(doc, MARGIN, y + block.starsH / 2 - 2, block.stars);
-        y += block.starsH;
-      }
-
-      if (block.bodyText) {
-        doc.setTextColor(31, 41, 55);
-        doc.setFont(openSansFamily, 'normal');
-        doc.setFontSize(BODY_FS);
-        doc.text(block.bodyLines, MARGIN, y); y += block.bodyH;
-      }
-
-      if (block.authorLine) {
-        doc.setTextColor(107, 114, 128);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.text(block.authorLine.toUpperCase(), MARGIN, y); y += block.authorH;
-      }
-
-      // Divider between reviews (skip after last)
-      if (idx < blocks.length - 1) {
-        doc.setDrawColor(229, 229, 229);
-        doc.setLineWidth(0.2);
-        doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += DIVIDER_SLOT;
-      }
-    });
-  }
-
-  // ── Save the Date (always shown — venue contact info + map) ──────────
   {
-    // Format phone: +1xxxxxxxxxx → (xxx) xxx-xxxx
-    const rawPhone = venue.phone ?? '';
-    const digits   = rawPhone.replace(/\D+/g, '');
-    const phoneStr = digits.length === 11 && digits[0] === '1'
-      ? `(${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`
-      : digits.length === 10
-        ? `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`
-        : rawPhone;
+    const baseY = H * 0.52;
+    doc.setFont(F.script, 'normal'); doc.setFontSize(150);
+    const pW = doc.getTextWidth('P');
+    const rest = 'RICING GUIDE'; const gap = 1.4;
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(45);
+    let restW = 0; for (const ch of rest) restW += doc.getTextWidth(ch) + gap; restW -= gap;
+    const startX = CX - (pW * 0.55 + restW) / 2;
+    tc(PAL.white);
+    doc.setFont(F.script, 'normal'); doc.setFontSize(150);
+    doc.text('P', startX, baseY);
+    tracked(rest, startX + pW * 0.55, baseY, 45, gap, PAL.white, F.serif, 'normal', 'left');
+    doc.setFont(F.script, 'normal'); doc.setFontSize(30); tc(PAL.white);
+    doc.text('Pricing & Planning', CX, baseY + 18, { align: 'center' });
+  }
 
-    const emailStr   = venue.email          ?? '';
-    const addressStr = venue.address_full   ?? [venue.location_city, venue.location_state].filter(Boolean).join(', ');
-
-    // Try to fetch a Google Maps static image (optional — skipped if no API key or lat/lng)
-    const mapsApiKey = process.env.GOOGLE_MAPS_API_KEY ?? '';
-    let mapImgResult: { dataUrl: string; w: number; h: number } | null = null;
-    if (mapsApiKey && venue.lat && venue.lng) {
-      const staticUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${venue.lat},${venue.lng}&zoom=14&size=640x320&scale=2&markers=color:0x1b1b1b|${venue.lat},${venue.lng}&style=feature:poi|visibility:off&key=${mapsApiKey}`;
-      mapImgResult = await getImage(staticUrl);
-    }
-
-    // Pre-measure the content block for vertical centering
-    const MAP_H   = 60;  // mm height for the map image slot
-    const LABEL_H = 10;
-    const NAME_H  = 20;  // Playfair 32pt
-    const RULE_H  = 10;
-    const LINE_H  = 8;
-    const lineCount = [phoneStr, emailStr, addressStr].filter(Boolean).length;
-    const INFO_H  = lineCount * LINE_H;
-    const MAP_GAP = mapImgResult ? 12 : 0;
-    const MAP_SLOT = mapImgResult ? MAP_H + MAP_GAP : 0;
-    const TOTAL_H = LABEL_H + NAME_H + RULE_H + INFO_H + MAP_SLOT;
-    let y = Math.max(MARGIN, (PAGE_H - TOTAL_H) / 2);
-
-    doc.addPage(); drawPageBorder(doc);
-
-    // "SAVE THE DATE" label
-    doc.setTextColor(160, 160, 160);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text('SAVE THE DATE', centerX, y + 4, { align: 'center' }); y += LABEL_H;
-
-    // Venue name — Playfair Display, centered
-    doc.setTextColor(DARK);
-    doc.setFont(playfairFamily, 'normal');
-    doc.setFontSize(32);
-    doc.text(venueName, centerX, y + 9, { align: 'center' }); y += NAME_H;
-
-    // Thin rule centered
-    const ruleW = Math.min(60, doc.getTextWidth(venueName) + 10);
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.3);
-    doc.line(centerX - ruleW / 2, y, centerX + ruleW / 2, y); y += RULE_H;
-
-    // Contact info lines — centered, Open Sans
-    doc.setFont(openSansFamily, 'normal');
-    doc.setFontSize(11);
-    for (const line of [phoneStr, emailStr, addressStr].filter(Boolean)) {
-      doc.setTextColor(55, 65, 81);
-      doc.text(line, centerX, y, { align: 'center' }); y += LINE_H;
-    }
-
-    // Map image (full-width, 2px border edge, clickable to Google Maps)
-    if (mapImgResult) {
-      y += 6;
-      const imgX = PAGE_BORDER;
-      const imgW = PAGE_W - 2 * PAGE_BORDER;
-      drawClippedImage(doc, mapImgResult.dataUrl, imgX, y, imgW, MAP_H, mapImgResult.w, mapImgResult.h);
-      // Invisible click-area → opens Google Maps
-      const mapsUrl = `https://www.google.com/maps?q=${venue.lat},${venue.lng}`;
-      doc.link(imgX, y, imgW, MAP_H, { url: mapsUrl });
-      y += MAP_H;
-    } else if (addressStr) {
-      // Fallback: styled address link
-      y += 6;
-      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressStr)}`;
-      doc.setFillColor(245, 245, 245);
-      doc.roundedRect(MARGIN, y, CONTENT_W, 12, 2, 2, 'F');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 100, 100);
-      doc.text('Get directions \u2197', centerX, y + 7, { align: 'center' });
-      doc.link(MARGIN, y, CONTENT_W, 12, { url: mapsUrl });
+  {
+    const contact = [phoneStr, emailStr, websiteStr].filter(Boolean).join('   ·   ');
+    if (contact) {
+      fitTracked(contact.toUpperCase(), CX, H - 26, 8.5, 1.4, CONTENT_W, PAL.white, F.body, 'center');
     }
   }
 
-  // ── Footer on every page except cover and gallery ────────────────────
-  const totalPages = doc.getNumberOfPages();
-  for (let i = 2; i <= totalPages; i++) {
-    if (i === galleryPageNum) continue;  // gallery: images only, no footer
-    if (i === storiesPageNum) continue;  // stories: clean layout, no footer
-    doc.setPage(i);
-    doc.setTextColor(180, 180, 180);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text(`${venueName} · Pricing & Availability Guide`, centerX, PAGE_H - 8, { align: 'center' });
+  // ════════════════════════════════════════════════════════════════════
+  // 2. TABLE OF CONTENTS
+  // ════════════════════════════════════════════════════════════════════
+  page();
+  imgCover(getImg(coverSrc) ?? nextPhoto(), 0, 0, 86, H);
+  frame();
+  {
+    const rx = 86 + 14;
+    let y = MARGIN + 26;
+    doc.setFont(F.script, 'normal'); doc.setFontSize(32); tc(PAL.ink);
+    doc.text('Table of', rx, y); y += 15;
+    tracked('CONTENTS', rx, y, 24, 1.6, PAL.ink, F.serif, 'normal', 'left'); y += 12;
+    dc(PAL.rule); doc.setLineWidth(0.4); doc.line(rx, y, W - MARGIN, y); y += 11;
+    toc.forEach(([label, pg]) => {
+      doc.setFont(F.serif, 'normal'); doc.setFontSize(12.5); tc(PAL.soft);
+      doc.text(label, rx, y);
+      doc.setFont(F.bodySemi, 'normal'); doc.setFontSize(9); tc(PAL.mute);
+      doc.text(String(pg).padStart(2, '0'), W - MARGIN, y, { align: 'right' });
+      y += 9.5;
+    });
+  }
+  footer();
+
+  // ════════════════════════════════════════════════════════════════════
+  // 3. WELCOME
+  // ════════════════════════════════════════════════════════════════════
+  page();
+  {
+    let y = MARGIN + 22;
+    doc.setFont(F.script, 'normal'); doc.setFontSize(74); tc(PAL.ink);
+    const wW = doc.getTextWidth('W');
+    doc.text('W', MARGIN, y);
+    tracked('ELCOME', MARGIN + wW * 0.62, y - 6, 38, 1.4, PAL.ink, F.serif, 'normal', 'left');
+    y += 12;
+    tracked('OUR DOORS, YOUR STORY', MARGIN, y, 9, 2.2, PAL.mute, F.bodySemi, 'normal', 'left'); y += 14;
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(15); tc(PAL.soft);
+    doc.text('Where your celebration becomes a memory', CX, y, { align: 'center' }); y += 7;
+    shortRule(CX - 7, y, 14); y += 10;
+
+    const msg = guide.congratulatory_message?.trim()
+      || `Welcome to ${name}. We are so glad you found us. This guide walks you through the spaces, the pricing, and the small details that make your day feel effortless.`;
+    doc.setFont(F.body, 'normal'); doc.setFontSize(10.5); tc(PAL.soft);
+    if (msg.length > 260) {
+      const colW = (CONTENT_W - 12) / 2;
+      const lines = wrap(msg, colW, 10.5, F.body);
+      const half = Math.ceil(lines.length / 2);
+      doc.text(lines.slice(0, half), MARGIN, y);
+      doc.text(lines.slice(half), MARGIN + colW + 12, y);
+      y += half * 5.1 + 10;
+    } else {
+      const lines = wrap(msg, CONTENT_W - 36, 10.5, F.body);
+      doc.text(lines, CX, y, { align: 'center' }); y += lines.length * 5.1 + 10;
+    }
+
+    const ph = H - 24 - y;
+    if (ph > 36) { imgCover(nextPhoto(), MARGIN, y, CONTENT_W, ph); }
+  }
+  footer();
+
+  // ════════════════════════════════════════════════════════════════════
+  // 4. ABOUT (only if about_venue)
+  // ════════════════════════════════════════════════════════════════════
+  if (hasAbout) {
+    page();
+    const aboutImg = getImg(guide.about_photos?.[0]?.url ?? null) ?? nextPhoto();
+    imgCover(aboutImg, 0, 0, W, 150);
+    frame();
+    let y = 150 + 22;
+    tracked(`ABOUT ${name.toUpperCase()}`, MARGIN, y, 11, 1.8, PAL.ink, F.serif, 'normal', 'left');
+    doc.setFont(F.script, 'normal'); doc.setFontSize(22); tc(PAL.mute);
+    doc.text('our story', MARGIN, y + 11); y += 20;
+
+    const body = (guide.about_venue ?? '').trim();
+    const initial = body.charAt(0).toUpperCase() || 'A';
+    const rest = body.slice(1);
+    doc.setFont(F.script, 'normal'); doc.setFontSize(50); tc(PAL.ink);
+    doc.text(initial, MARGIN, y + 9);
+    const dropW = doc.getTextWidth(initial) + 3;
+    const colW = (CONTENT_W - dropW - 10) / 2;
+    const lines = wrap(rest, colW, 10, F.body);
+    const half = Math.ceil(lines.length / 2);
+    doc.setFont(F.body, 'normal'); doc.setFontSize(10); tc(PAL.soft);
+    doc.text(lines.slice(0, half), MARGIN + dropW, y);
+    doc.text(lines.slice(half), MARGIN + dropW + colW + 10, y);
+    footer();
   }
 
-  // ── Return raw bytes ──────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  // 5. WHY BOOK WITH US
+  // ════════════════════════════════════════════════════════════════════
+  page();
+  {
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(40); tc(PAL.ink);
+    doc.text('WHY BOOK', MARGIN + 6, H - MARGIN - 70, { angle: 90 });
+    doc.text('WITH US',  MARGIN + 22, H - MARGIN - 70, { angle: 90 });
+
+    imgCover(nextPhoto(), 86, MARGIN, W - 86 - FRAME, 96);
+
+    let y = 150;
+    whyPoints.slice(0, 2).forEach((pt, i) => {
+      tracked(`0${i + 1}`, 86, y, 11, 1.5, PAL.faint, F.bodySemi, 'normal', 'left');
+      const lines = wrap(pt, W - 86 - MARGIN, 11, F.serif);
+      doc.setFont(F.serif, 'normal'); doc.setFontSize(11); tc(PAL.soft);
+      doc.text(lines, 86, y + 8);
+      y += 8 + lines.length * 6 + 12;
+    });
+  }
+  footer();
+
+  // ════════════════════════════════════════════════════════════════════
+  // 6. YOUR JOURNEY
+  // ════════════════════════════════════════════════════════════════════
+  page();
+  {
+    let y = MARGIN + 16;
+    tracked('YOUR JOURNEY', MARGIN, y, 22, 1.6, PAL.ink, F.serif, 'normal', 'left'); y += 6;
+    shortRule(MARGIN, y, 16); y += 14;
+
+    const colW = W - 86 - MARGIN;
+    imgCover(nextPhoto(), 86, y, colW, H - y - 24);
+
+    journey.slice(0, 4).forEach(([title, bodyTxt], i) => {
+      tracked(`0${i + 1}`, MARGIN, y + 1, 13, 1.5, PAL.faint, F.bodySemi, 'normal', 'left');
+      doc.setFont(F.serif, 'normal'); doc.setFontSize(14); tc(PAL.ink);
+      doc.text(title, MARGIN, y + 9);
+      const lines = wrap(bodyTxt, 58, 9, F.body);
+      doc.setFont(F.body, 'normal'); doc.setFontSize(9); tc(PAL.soft);
+      doc.text(lines, MARGIN, y + 15);
+      y += 15 + lines.length * 4.6 + 9;
+    });
+  }
+  footer();
+
+  // ════════════════════════════════════════════════════════════════════
+  // 7. STATEMENT SPREAD
+  // ════════════════════════════════════════════════════════════════════
+  page();
+  {
+    imgCover(nextPhoto(), 0, 0, W, 168);
+    overlay(0, 0, W, 168, 0.28);
+    frame();
+    let y = 168 + 26;
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(13); tc(PAL.soft);
+    doc.text('Transform your celebration into', CX, y, { align: 'center' }); y += 22;
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(48); tc(PAL.ink);
+    doc.text('TIMELESS', CX, y, { align: 'center' }); y += 19;
+    doc.text('MEMORIES', CX, y, { align: 'center' });
+  }
+  footer();
+
+  // ════════════════════════════════════════════════════════════════════
+  // 8. PACKAGES (if any)
+  // ════════════════════════════════════════════════════════════════════
+  if (hasPkgs) {
+    page();
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(34); tc(PAL.ink);
+    doc.text('PACKAGES', MARGIN + 6, H - MARGIN - 30, { angle: 90 });
+
+    const cardX = 64;
+    const cardW = W - cardX - MARGIN;
+    const gapY  = 6;
+    const cardH = (H - MARGIN * 2 - gapY * (pkgs.length - 1)) / pkgs.length;
+    let y = MARGIN;
+    pkgs.forEach((pkg) => {
+      const ph = Math.min(cardH, 64);
+      imgCover(nextPhoto(), cardX, y, 52, ph);
+      const tx = cardX + 60;
+      let ty = y + 8;
+      doc.setFont(F.script, 'normal'); doc.setFontSize(22); tc(PAL.ink);
+      doc.text(pkg.name ?? 'Package', tx, ty); ty += 9;
+      if (pkg.price_label) {
+        doc.setFont(F.serif, 'normal'); doc.setFontSize(12); tc(PAL.soft);
+        doc.text(pkg.price_label, tx, ty); ty += 8;
+      }
+      doc.setFont(F.body, 'normal'); doc.setFontSize(8); tc(PAL.mute);
+      (pkg.included_items ?? []).slice(0, 6).forEach((it) => {
+        tracked(it.toUpperCase(), tx, ty, 7.5, 0.6, PAL.mute, F.body, 'normal', 'left');
+        ty += 5.4;
+      });
+      y += cardH + gapY;
+    });
+    footer();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // 9. SPACES (one page per space)
+  // ════════════════════════════════════════════════════════════════════
+  for (const space of spaceList) {
+    page();
+    let y = MARGIN + 8;
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(28); tc(PAL.ink);
+    doc.text(space.name ?? 'The Space', MARGIN, y); y += 8;
+    if (space.capacity) {
+      tracked(space.capacity.toUpperCase(), MARGIN, y, 8.5, 1.6, PAL.mute, F.bodySemi, 'normal', 'left');
+      y += 9;
+    }
+    imgCover(getImg(space.image_url) ?? nextPhoto(), FRAME, y, W - 2 * FRAME, 132);
+    y += 132 + 12;
+    if (space.description) {
+      const lines = wrap(space.description, CONTENT_W, 11, F.body);
+      const maxLines = Math.floor((H - 24 - y) / 5.4);
+      doc.setFont(F.body, 'normal'); doc.setFontSize(11); tc(PAL.soft);
+      doc.text(lines.slice(0, maxLines), MARGIN, y);
+    }
+    footer();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // 10. GALLERY COLLAGE (if ≥3 photos) — no footer
+  // ════════════════════════════════════════════════════════════════════
+  if (hasGallery) {
+    page();
+    const GM = FRAME, G = FRAME;
+    const uW = W - 2 * GM, uH = H - 2 * GM;
+    const TW = (uW - 2 * G) / 3;
+    const FW = 2 * TW + G;
+    const HW = (uW - G) / 2;
+    const RH = (uH - 3 * G) / 4;
+    const cells: Array<[number, number, number, number]> = [
+      [GM, GM, FW, RH],
+      [GM + FW + G, GM, TW, RH],
+      [GM, GM + RH + G, TW, RH],
+      [GM + TW + G, GM + RH + G, FW, RH],
+      [GM, GM + 2 * (RH + G), TW, RH],
+      [GM + TW + G, GM + 2 * (RH + G), TW, RH],
+      [GM + 2 * (TW + G), GM + 2 * (RH + G), TW, RH],
+      [GM, GM + 3 * (RH + G), HW, RH],
+      [GM + HW + G, GM + 3 * (RH + G), HW, RH],
+    ];
+    cells.forEach(([cx, cy, cw, ch], idx) => {
+      const im = galleryAll[idx % galleryAll.length];
+      if (im) imgCover(im, cx, cy, cw, ch);
+    });
+    frame();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // 11. KIND WORDS (if reviews)
+  // ════════════════════════════════════════════════════════════════════
+  if (hasReviews) {
+    page();
+    const stripH = 70;
+    const cw = (W - 2 * FRAME - 2 * FRAME) / 3;
+    [0, 1, 2].forEach((i) => {
+      imgCover(nextPhoto(), FRAME + i * (cw + FRAME), MARGIN, cw, stripH);
+    });
+    const review = guide.reviews[0];
+    let y = MARGIN + stripH + 26;
+    tracked('KIND WORDS', CX, y, 9, 2.2, PAL.mute, F.bodySemi, 'normal', 'center'); y += 16;
+    const quote = `\u201C${(review.body ?? 'An unforgettable place to celebrate.').slice(0, 280)}\u201D`;
+    const lines = wrap(quote, CONTENT_W - 20, 16, F.serif);
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(16); tc(PAL.ink);
+    doc.text(lines, CX, y, { align: 'center' }); y += lines.length * 7.5 + 12;
+    if (review.author) {
+      doc.setFont(F.script, 'normal'); doc.setFontSize(22); tc(PAL.soft);
+      doc.text(review.author, CX, y, { align: 'center' }); y += 8;
+    }
+    if (review.location) {
+      tracked(review.location.toUpperCase(), CX, y, 8, 1.6, PAL.mute, F.body, 'normal', 'center');
+    }
+    footer();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // 12. WHAT'S INCLUDED
+  // ════════════════════════════════════════════════════════════════════
+  page();
+  {
+    let y = MARGIN + 16;
+    tracked("WHAT'S INCLUDED", MARGIN, y, 22, 1.4, PAL.ink, F.serif, 'normal', 'left'); y += 8;
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(12); tc(PAL.soft);
+    doc.text('Everything you need to host with ease.', MARGIN, y); y += 16;
+
+    const cols = 3;
+    const colW = CONTENT_W / cols;
+    const rowH = 30;
+    includedItems.slice(0, 9).forEach((item, i) => {
+      const cxi = MARGIN + (i % cols) * colW;
+      const cyi = y + Math.floor(i / cols) * rowH;
+      dc(PAL.rule); doc.setLineWidth(0.5);
+      doc.circle(cxi + 3, cyi, 3, 'S');
+      const lines = wrap(item, colW - 12, 11, F.serif);
+      doc.setFont(F.serif, 'normal'); doc.setFontSize(11); tc(PAL.ink);
+      doc.text(lines, cxi + 10, cyi + 1);
+      shortRule(cxi, cyi + 8 + (lines.length - 1) * 5, 12);
+    });
+  }
+  footer();
+
+  // ════════════════════════════════════════════════════════════════════
+  // 13. PLANNING CHECKLIST
+  // ════════════════════════════════════════════════════════════════════
+  page();
+  {
+    let y = MARGIN + 16;
+    tracked('CHECKLIST', MARGIN, y, 22, 1.6, PAL.ink, F.serif, 'normal', 'left'); y += 6;
+    shortRule(MARGIN, y, 16); y += 12;
+
+    const boxes: [string, string[]][] = [
+      ['As you plan', ['Set your budget', 'Pick your date', 'Book your venue', 'Choose your vibe', 'Build your guest list', 'Find your vendors']],
+      ['Closer to the day', ['Finalize headcount', 'Confirm the timeline', 'Plan the layout', 'Order rentals', 'Confirm vendors', 'Send final details']],
+    ];
+    const boxW = CONTENT_W;
+    const boxH = 78;
+    boxes.forEach(([title, items]) => {
+      fc(PAL.box); doc.rect(MARGIN, y, boxW, boxH, 'F');
+      let iy = y + 14;
+      doc.setFont(F.script, 'normal'); doc.setFontSize(22); tc(PAL.ink);
+      doc.text(title, MARGIN + 8, iy); iy += 10;
+      const colW = (boxW - 16) / 2;
+      items.forEach((it, i) => {
+        const ix = MARGIN + 8 + (i % 2) * colW;
+        const cyy = iy + Math.floor(i / 2) * 12;
+        dc(PAL.mute); doc.setLineWidth(0.4);
+        doc.rect(ix, cyy - 3, 3.4, 3.4, 'S');
+        doc.setFont(F.body, 'normal'); doc.setFontSize(9.5); tc(PAL.soft);
+        doc.text(it, ix + 6, cyy);
+      });
+      y += boxH + 10;
+    });
+  }
+  footer();
+
+  // ════════════════════════════════════════════════════════════════════
+  // 14. ACCOMMODATIONS (one page per entry)
+  // ════════════════════════════════════════════════════════════════════
+  for (const acc of accList) {
+    page();
+    let y = MARGIN + 8;
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(28); tc(PAL.ink);
+    doc.text(acc.name ?? 'Accommodations', MARGIN, y); y += 12;
+    imgCover(getImg(acc.image_url) ?? nextPhoto(), FRAME, y, W - 2 * FRAME, 140);
+    y += 140 + 12;
+    if (acc.description) {
+      const lines = wrap(acc.description, CONTENT_W, 11, F.body);
+      const maxLines = Math.floor((H - 24 - y) / 5.4);
+      doc.setFont(F.body, 'normal'); doc.setFontSize(11); tc(PAL.soft);
+      doc.text(lines.slice(0, maxLines), MARGIN, y);
+    }
+    footer();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // 15. FAQ
+  // ════════════════════════════════════════════════════════════════════
+  page();
+  {
+    let y = MARGIN + 22;
+    doc.setFont(F.script, 'normal'); doc.setFontSize(72); tc(PAL.ink);
+    const fW = doc.getTextWidth('F');
+    doc.text('F', MARGIN, y);
+    tracked('REQUENTLY', MARGIN + fW * 0.6, y - 14, 22, 1.2, PAL.ink, F.serif, 'normal', 'left');
+    tracked('ASKED QUESTIONS', MARGIN + fW * 0.6, y - 2, 22, 1.2, PAL.ink, F.serif, 'normal', 'left');
+    y += 14;
+    dc(PAL.rule); doc.setLineWidth(0.4); doc.line(MARGIN, y, W - MARGIN, y); y += 12;
+
+    faqs.slice(0, 4).forEach(([q, a], i) => {
+      tracked(`0${i + 1}`, MARGIN, y, 12, 1.5, PAL.faint, F.bodySemi, 'normal', 'left');
+      doc.setFont(F.serif, 'normal'); doc.setFontSize(13); tc(PAL.ink);
+      const qLines = wrap(q, CONTENT_W - 14, 13, F.serif);
+      doc.text(qLines, MARGIN + 14, y);
+      let yy = y + qLines.length * 6 + 2;
+      doc.setFont(F.body, 'normal'); doc.setFontSize(10); tc(PAL.soft);
+      const aLines = wrap(a, CONTENT_W - 14, 10, F.body);
+      doc.text(aLines, MARGIN + 14, yy);
+      yy += aLines.length * 5;
+      y = yy + 10;
+    });
+  }
+  footer();
+
+  // ════════════════════════════════════════════════════════════════════
+  // 16. GET IN TOUCH
+  // ════════════════════════════════════════════════════════════════════
+  page();
+  {
+    let y = MARGIN + 18;
+    tracked('GET IN TOUCH', MARGIN, y, 22, 1.5, PAL.ink, F.serif, 'normal', 'left'); y += 12;
+    doc.setFont(F.serif, 'normal'); doc.setFontSize(20); tc(PAL.ink);
+    doc.text(name, MARGIN, y); y += 9;
+    doc.setFont(F.script, 'normal'); doc.setFontSize(24); tc(PAL.mute);
+    doc.text('Wedding Venue', MARGIN, y); y += 12;
+
+    doc.setFont(F.body, 'normal'); doc.setFontSize(10.5); tc(PAL.soft);
+    const blurb = wrap(
+      `We would love to host your celebration. Reach out and we will help you picture the day, check your date, and book a tour.`,
+      CONTENT_W, 10.5, F.body,
+    );
+    doc.text(blurb, MARGIN, y); y += blurb.length * 5.2 + 8;
+
+    imgCover(nextPhoto(), MARGIN, y, CONTENT_W, 90); y += 90 + 14;
+
+    [phoneStr, emailStr, websiteStr].filter(Boolean).forEach((line) => {
+      tracked(line.toUpperCase(), MARGIN, y, 9, 1.4, PAL.ink, F.bodySemi, 'normal', 'left');
+      y += 8;
+    });
+  }
+  footer();
+  // overwrite the default footer text with a custom connect line for this page
+  {
+    doc.setFont(F.script, 'normal'); doc.setFontSize(16); tc(PAL.mute);
+    doc.text("Let's connect", CX, H - 12, { align: 'center' });
+    if (cityState) {
+      tracked(`BASED IN ${cityState.toUpperCase()}`, CX, H - 6, 6.5, 1.2, PAL.faint, F.body, 'normal', 'center');
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // 17. THANK YOU — no page-number footer
+  // ════════════════════════════════════════════════════════════════════
+  page();
+  {
+    imgCover(nextPhoto() ?? getImg(coverSrc), 0, 0, W, H);
+    overlay(0, 0, W, H, 0.4);
+    frame();
+    doc.setFont(F.script, 'normal'); doc.setFontSize(72); tc(PAL.white);
+    doc.text('Thank You', CX, H * 0.46, { align: 'center' });
+    tracked(name.toUpperCase(), CX, H * 0.46 + 16, 11, 2.2, PAL.white, F.serif, 'normal', 'center');
+    const contact = [phoneStr, emailStr, websiteStr].filter(Boolean).join('   ·   ');
+    if (contact) {
+      fitTracked(contact.toUpperCase(), CX, H - 24, 8, 1.3, CONTENT_W, PAL.white, F.body, 'center');
+    }
+  }
+
+  // ── Return raw bytes ─────────────────────────────────────────────────
   const arrayBuffer = doc.output('arraybuffer');
   return Buffer.from(arrayBuffer);
 }

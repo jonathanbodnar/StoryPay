@@ -224,12 +224,31 @@ export default function SettingsPage() {
        headers: { 'Content-Type': 'application/json' },
        body: JSON.stringify({ action: 'restart' }),
      });
-     try { sessionStorage.removeItem('sv_onboarding_skipped'); } catch { /* ignore */ }
-     window.location.href = '/dashboard/listing?onboarding=1';
-   } catch {
-     setRestarting(false);
-   }
- }
+    try { sessionStorage.removeItem('sv_onboarding_skipped'); } catch { /* ignore */ }
+    window.location.href = '/dashboard/listing?onboarding=1';
+  } catch {
+    setRestarting(false);
+  }
+}
+
+// DEV-ONLY: wipe the guide + un-publish, then re-run the wizard from scratch.
+// The button is only rendered outside production; the API also hard-guards it.
+const isDev = process.env.NODE_ENV !== 'production';
+const [devResetting, setDevResetting] = useState(false);
+async function devResetOnboarding() {
+  setDevResetting(true);
+  try {
+    await fetch('/api/onboarding/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dev_reset' }),
+    });
+    try { sessionStorage.removeItem('sv_onboarding_skipped'); } catch { /* ignore */ }
+    window.location.href = '/dashboard/listing?onboarding=1';
+  } catch {
+    setDevResetting(false);
+  }
+}
 
   async function loadVenue() {
  try {
@@ -393,6 +412,22 @@ try {
  {restarting ? 'Starting…' : 'Restart setup wizard'}
  </button>
  </div>
+ {isDev && (
+ <div className="flex flex-wrap items-center justify-between gap-4 border-t border-dashed border-amber-200 bg-amber-50/40 px-6 py-4">
+ <div className="min-w-0">
+ <p className="text-sm font-medium text-amber-800">Reset &amp; start fresh (dev only)</p>
+ <p className="mt-0.5 text-sm text-amber-700/80">Wipes this venue&apos;s pricing guide and un-publishes, then reopens the wizard so you can practice the whole flow from scratch. Disabled in production.</p>
+ </div>
+ <button
+ onClick={() => void devResetOnboarding()}
+ disabled={devResetting}
+ className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-amber-300 bg-white px-4 py-2 text-xs font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50 transition-colors"
+ >
+ {devResetting ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+ {devResetting ? 'Resetting…' : 'Reset onboarding (dev)'}
+ </button>
+ </div>
+ )}
  </section>
 
  {/* StoryVenue Legacy (Messaging) Integration */}
