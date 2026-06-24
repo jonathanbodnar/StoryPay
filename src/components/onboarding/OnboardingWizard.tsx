@@ -186,7 +186,7 @@ export default function OnboardingWizard() {
         <StepDots step={step} />
 
         <div className="px-6 pb-8 pt-7 sm:px-10">
-          {step === 0 && <ConnectStep onNext={() => go(1)} onSkip={dismiss} />}
+          {step === 0 && <ConnectStep onNext={() => go(1)} />}
           {step === 1 && <QuestionsStep onBack={() => go(0)} onNext={() => go(2)} />}
           {step === 2 && <ReviewStep onBack={() => go(1)} onNext={() => go(3)} />}
           {step === 3 && <PublishStep onDone={() => {
@@ -224,7 +224,7 @@ function StepDots({ step }: { step: number }) {
 }
 
 /* ── Step 0: Connect Google ─────────────────────────────────────────────── */
-function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+function ConnectStep({ onNext }: { onNext: () => void }) {
   const [mode, setMode] = useState<'search' | 'link'>('search');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -303,7 +303,7 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
           <Check size={24} style={{ color: BRAND }} />
         </div>
         <h2 className="text-xl font-semibold text-gray-900">Imported from Google</h2>
-        <p className="mt-1 text-sm text-gray-500">We pulled your details so you don&apos;t have to type them.</p>
+        <p className="mt-1 text-sm text-gray-500">We pulled your details so you don&apos;t have to.</p>
 
         <div className="mt-5 rounded-xl border border-gray-200 p-4 text-left">
           <p className="font-medium text-gray-900">{p.name}</p>
@@ -337,7 +337,7 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
           <Sparkles size={24} style={{ color: BRAND }} />
         </div>
         <h2 className="text-xl font-semibold text-gray-900">Let&apos;s Build Your Bride Booking System&trade;</h2>
-        <p className="mt-1 text-sm text-gray-500">Connect Google and we&apos;ll auto-fill your venue with your name, photos, reviews and more. No typing.</p>
+        <p className="mt-1 text-sm text-gray-500">Connect Google and we&apos;ll auto-fill your venue. Name, photos, reviews, and more.</p>
       </div>
 
       <div className="mt-5 flex gap-2">
@@ -391,8 +391,7 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
         </div>
       )}
 
-      <div className="mt-6 flex items-center justify-between">
-        <button onClick={onSkip} className="text-sm text-gray-400 hover:text-gray-600">I&apos;ll do this later</button>
+      <div className="mt-6 flex items-center justify-end">
         <button onClick={onNext} className="text-sm font-medium text-gray-500 hover:text-gray-800">Enter manually →</button>
       </div>
     </div>
@@ -472,8 +471,8 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900">A few things Google can&apos;t tell us</h2>
-      <p className="mt-1 text-sm text-gray-500">Just the essentials. We&apos;ll write the rest for you.</p>
+      <h2 className="text-xl font-semibold text-gray-900">A few things Google doesn&apos;t know</h2>
+      <p className="mt-1 text-sm text-gray-500">Answer these and we&apos;ll write your guide for you.</p>
 
       <div className="mt-5 space-y-4">
         <Field label="Guest capacity">
@@ -627,8 +626,8 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900">This becomes your Pricing &amp; Availability guide</h2>
-      <p className="mt-1 text-sm text-gray-500">We turned your answers into the pages brides see in your guide. Tweak anything now, or leave it as-is. You can always edit every page later on your Pricing Guide page. Just <strong>double-check your price</strong>; that&apos;s the promise to the bride.</p>
+      <h2 className="text-xl font-semibold text-gray-900">This becomes the guide brides see</h2>
+      <p className="mt-1 text-sm text-gray-500">We wrote it from your answers. Edit anything now or later. Just <strong>double-check your price</strong>.</p>
 
       <div className="mt-4 space-y-4">
         <div>
@@ -737,7 +736,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
           <PartyPopper size={28} style={{ color: BRAND }} />
         </div>
         <h2 className="text-2xl font-bold text-gray-900">You&apos;re live!</h2>
-        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System&trade; is on. Don&apos;t just take our word for it, watch it work: send yourself a test inquiry and see a lead hit your inbox.</p>
+        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System&trade; is on. Add this link to your Instagram bio, TikTok bio, email signature, and website. The second a bride requests your pricing, she&apos;s in your inbox. Call her first.</p>
 
         {/* ── The activation moment (primary) ───────────────────────────── */}
         {testStatus === 'done' && testLead ? (
@@ -806,7 +805,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
         <Sparkles size={24} style={{ color: BRAND }} />
       </div>
       <h2 className="text-xl font-semibold text-gray-900">One click from going live</h2>
-      <p className="mt-1 text-sm text-gray-500">Publish to turn on your Bride Booking System&trade;. Every bride who opens your link gets your pricing instantly and books a tour, so a single click becomes a booked lead, even while you sleep.</p>
+      <p className="mt-1 text-sm text-gray-500">Publish to switch on your Bride Booking System&trade;. The second a bride requests your pricing, she&apos;s in your inbox. Call her first.</p>
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
