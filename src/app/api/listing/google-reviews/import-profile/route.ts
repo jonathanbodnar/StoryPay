@@ -26,7 +26,10 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const BUCKET = 'venue-images';
-const MAX_PHOTOS = 20;
+// Google's Places API (New) returns at most 10 photo references per place in
+// the Place Details response — that's a hard API ceiling, not our choice — so
+// importing "20" simply yields however many Google exposes (up to 10).
+const MAX_PHOTOS = 10;
 
 async function getVenueId(): Promise<string | null> {
   const c = await cookies();

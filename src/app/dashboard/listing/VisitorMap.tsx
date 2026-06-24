@@ -203,6 +203,12 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
           /* CartoDB Positron water tone — shown before tiles load so the
              map doesn't flash white on first render. */
           background: #d4dadc;
+          /* Confine Leaflet's internal panes/controls (which use z-index up to
+             ~1000) into their own stacking context so they can't render above
+             overlays/modals on the page. */
+          position: relative;
+          z-index: 0;
+          isolation: isolate;
         }
         /* Google-ish zoom control: rounded square, subtle shadow, no hard border. */
         .leaflet-control-zoom {

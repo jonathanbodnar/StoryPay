@@ -129,12 +129,17 @@ export default function OnboardingWizard() {
   }, []);
 
   // Lock background scroll while the modal is open so the page (and the live
-  // map behind it) doesn't scroll/shift.
+  // map behind it) doesn't scroll/shift. The dashboard scrolls on the document
+  // element, so lock both <html> and <body> to be safe.
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => { html.style.overflow = prevHtml; body.style.overflow = prevBody; };
   }, [open]);
 
   const saveStep = useCallback((n: number) => {
@@ -158,8 +163,8 @@ export default function OnboardingWizard() {
   if (checking || complete || !open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center overscroll-contain bg-gray-900/60 backdrop-blur-sm p-4">
+      <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl">
         {step > 0 && step < 3 && (
           <button
             onClick={() => go(0)}
