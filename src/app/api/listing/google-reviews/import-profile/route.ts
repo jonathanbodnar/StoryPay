@@ -20,6 +20,7 @@ import {
   fetchGooglePlaceProfile,
   resolveGooglePhotoUri,
 } from '@/lib/google-place-profile';
+import { scanWebsiteForSocials } from '@/lib/social-scrape';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -142,13 +143,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     venueUpdate.gallery_images = rehosted;
   }
 
-  // Carry Google's website link into the venue's social links (fill empty only).
+  // Carry Google's website into social links, and auto-scan that website for
+  // Facebook/Instagram/TikTok/Pinterest profile links (fill empties only).
   const existingSocials =
     v.social_links && typeof v.social_links === 'object' && !Array.isArray(v.social_links)
       ? (v.social_links as Record<string, unknown>)
       : {};
-  if (isEmpty(existingSocials.website) && profile.website) {
-    venueUpdate.social_links = { ...existingSocials, website: profile.website };
+  if (profile.website) {
+    const merged: Record<string, unknown> = { ...existingSocials };
+    let socialsChanged = false;
+    if (isEmpty(merged.website)) { merged.website = profile.website; socialsChanged = true; }
+
+    const scanned = await scanWebsiteForSocials(profile.website).catch(() => ({}));
+    for (const [k, val] of Object.entries(scanned)) {
+      if (val && isEmpty(merged[k])) { merged[k] = val; socialsChanged = true; }
+    }
+
+    if (socialsChanged) venueUpdate.social_links = merged;
   }
 
   const { error: venueErr } = await supabaseAdmin

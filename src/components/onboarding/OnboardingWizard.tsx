@@ -396,7 +396,6 @@ function ConnectStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => voi
 function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const [maxCapacity, setMaxCapacity] = useState('');
   const [startingPrice, setStartingPrice] = useState('');
-  const [inclusivity, setInclusivity] = useState('');
   const [seasonality, setSeasonality] = useState('');
   const [differentiators, setDifferentiators] = useState('');
   const [features, setFeatures] = useState<string[]>([]);
@@ -439,7 +438,6 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
         body: JSON.stringify({
           max_capacity: maxCapacity,
           starting_price: startingPrice,
-          inclusivity,
           seasonality,
           differentiators,
           features,
@@ -468,16 +466,6 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           <div className="flex items-center rounded-lg border border-gray-200 px-3 focus-within:border-gray-400">
             <span className="text-gray-400">$</span>
             <input value={startingPrice} onChange={(e) => setStartingPrice(e.target.value)} type="number" placeholder="e.g. 5000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
-          </div>
-        </Field>
-
-        <Field label="What do you offer?">
-          <div className="flex gap-2">
-            {[['venue_only', 'Venue only'], ['all_inclusive', 'All-inclusive']].map(([val, label]) => (
-              <button key={val} onClick={() => setInclusivity(val)} className={`flex-1 rounded-lg border py-2 text-sm font-medium ${inclusivity === val ? 'border-transparent text-white' : 'border-gray-200 text-gray-600'}`} style={inclusivity === val ? { backgroundColor: BRAND } : {}}>
-                {label}
-              </button>
-            ))}
           </div>
         </Field>
 
