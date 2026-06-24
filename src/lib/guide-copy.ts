@@ -15,6 +15,10 @@ const BANNED: [RegExp, string][] = [
   [/\bserene\b/gi, 'peaceful'],
   [/\bdream day\b/gi, 'wedding day'],
   [/\bbackdrops?\b/gi, 'setting'],
+  // Salesy filler — drop entirely; the copy should simply read as warm/congratulatory.
+  [/\blet'?s get started\b[!.…]*/gi, ''],
+  [/\blet us get started\b[!.…]*/gi, ''],
+  [/\blet'?s get planning\b[!.…]*/gi, ''],
 ];
 
 /** Replace em/en dashes with a comma and tidy the surrounding whitespace. */

@@ -125,6 +125,7 @@ async function aiDraft(
 
 STYLE RULES (follow strictly):
 - NEVER use these banned words or any variant of them: "nestled", "timeless", "magical", "serene", "dream day", "backdrop". They are overused clichés.
+- NEVER use salesy filler phrases like "Let's get started", "Let's get planning", or any call-to-action sign-off. Keep the welcome warm and congratulatory and let the bride simply move on.
 - NEVER use em dashes or en dashes (— or –). Use a period or a comma instead.
 - Write short, declarative, outcome-first sentences. No filler.
 

@@ -31,6 +31,14 @@ const FEATURE_OPTIONS = [
   'BYO catering allowed', 'Bar service', 'Dance floor', 'Overnight accommodations',
   'Pet friendly', 'Outdoor ceremony', 'Tented options',
 ];
+// Numeric inputs (capacity, price) store digits only but display with thousands
+// separators (e.g. 10000 -> "10,000") so large numbers stay readable.
+const onlyDigits = (s: string) => s.replace(/[^0-9]/g, '');
+const withCommas = (s: string) => {
+  const d = onlyDigits(s);
+  return d ? Number(d).toLocaleString('en-US') : '';
+};
+
 const VENUE_TYPES = ['barn', 'ballroom', 'garden', 'winery', 'beach', 'estate', 'rustic', 'modern', 'historic', 'other'];
 const INDOOR_OUTDOOR = ['indoor', 'outdoor', 'both'];
 const SOCIAL_FIELDS: { key: string; label: string; placeholder: string }[] = [
@@ -176,7 +184,7 @@ export default function OnboardingWizard() {
 
         <StepDots step={step} />
 
-        <div className="px-6 pb-8 pt-2 sm:px-10">
+        <div className="px-6 pb-8 pt-7 sm:px-10">
           {step === 0 && <ConnectStep onNext={() => go(1)} onSkip={dismiss} />}
           {step === 1 && <QuestionsStep onBack={() => go(0)} onNext={() => go(2)} />}
           {step === 2 && <ReviewStep onBack={() => go(1)} onNext={() => go(3)} />}
@@ -469,8 +477,8 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
       <div className="mt-5 space-y-4">
         <Field label="Guest capacity">
           <div className="grid grid-cols-2 gap-3">
-            <input value={minGuests} onChange={(e) => setMinGuests(e.target.value)} type="number" min={0} placeholder="Min — e.g. 50" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-            <input value={maxGuests} onChange={(e) => setMaxGuests(e.target.value)} type="number" min={0} placeholder="Max — e.g. 200" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+            <input value={withCommas(minGuests)} onChange={(e) => setMinGuests(onlyDigits(e.target.value))} inputMode="numeric" placeholder="Min — e.g. 50" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+            <input value={withCommas(maxGuests)} onChange={(e) => setMaxGuests(onlyDigits(e.target.value))} inputMode="numeric" placeholder="Max — e.g. 200" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           </div>
         </Field>
 
@@ -478,11 +486,11 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           <div className="grid grid-cols-2 gap-3">
             <div className="flex items-center rounded-lg border border-gray-200 px-3 focus-within:border-gray-400">
               <span className="text-gray-400">$</span>
-              <input value={priceFrom} onChange={(e) => setPriceFrom(e.target.value)} type="number" min={0} placeholder="From — 5000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
+              <input value={withCommas(priceFrom)} onChange={(e) => setPriceFrom(onlyDigits(e.target.value))} inputMode="numeric" placeholder="From — 5,000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
             </div>
             <div className="flex items-center rounded-lg border border-gray-200 px-3 focus-within:border-gray-400">
               <span className="text-gray-400">$</span>
-              <input value={priceTo} onChange={(e) => setPriceTo(e.target.value)} type="number" min={0} placeholder="To — 12000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
+              <input value={withCommas(priceTo)} onChange={(e) => setPriceTo(onlyDigits(e.target.value))} inputMode="numeric" placeholder="To — 12,000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
             </div>
           </div>
         </Field>
