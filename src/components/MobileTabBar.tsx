@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Home, MessageCircle, Inbox, Calendar, CreditCard } from 'lucide-react';
+import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
 
 /**
  * Bottom navigation bar — visible on mobile + tablet (below `lg`) across
@@ -21,6 +22,7 @@ const TABS = [
 export default function MobileTabBar() {
   const pathname = usePathname();
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadLeads, setUnreadLeads] = useState(0);
 
   // Poll the conversations unread count — same endpoint as the desktop sidebar
   useEffect(() => {
@@ -41,6 +43,50 @@ export default function MobileTabBar() {
     };
   }, []);
 
+  // New-leads badge — mirrors the desktop sidebar (shared localStorage baseline,
+  // cleared when the Lead Inbox is opened).
+  useEffect(() => {
+    const load = () => {
+      if (typeof window === 'undefined') return;
+      if (window.location.pathname.startsWith('/dashboard/leads')) {
+        try { localStorage.setItem(LEADS_SEEN_KEY, new Date().toISOString()); } catch {}
+        setUnreadLeads(0);
+        return;
+      }
+      let since: string | null = null;
+      try { since = localStorage.getItem(LEADS_SEEN_KEY); } catch {}
+      const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+      fetch(`/api/leads/unread-count${qs}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { count?: number; latest?: string | null } | null) => {
+          if (!d) return;
+          if (!since) {
+            try { localStorage.setItem(LEADS_SEEN_KEY, d.latest ?? new Date().toISOString()); } catch {}
+            setUnreadLeads(0);
+            return;
+          }
+          if (typeof d.count === 'number') setUnreadLeads(d.count);
+        })
+        .catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 45_000);
+    const onEvt = () => load();
+    window.addEventListener('storypay:leads-unread', onEvt);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('storypay:leads-unread', onEvt);
+    };
+  }, []);
+
+  // Opening the Lead Inbox acknowledges everything so far.
+  useEffect(() => {
+    if (pathname.startsWith('/dashboard/leads')) {
+      try { localStorage.setItem(LEADS_SEEN_KEY, new Date().toISOString()); } catch {}
+      setUnreadLeads(0);
+    }
+  }, [pathname]);
+
   return (
     <nav
       className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white"
@@ -57,7 +103,12 @@ export default function MobileTabBar() {
           const active = match.some((m) =>
             m === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(m),
           );
-          const showBadge = label === 'Messages' && unreadMessages > 0;
+          const badgeCount = label === 'Messages'
+            ? unreadMessages
+            : label === 'Lead Inbox'
+              ? unreadLeads
+              : 0;
+          const showBadge = badgeCount > 0;
           return (
             <li key={label}>
               <Link
@@ -70,7 +121,7 @@ export default function MobileTabBar() {
                   <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
                   {showBadge && (
                     <span className="absolute -right-1.5 -top-1 min-w-[16px] rounded-full bg-red-600 px-1 text-center text-[9px] font-bold leading-4 text-white">
-                      {unreadMessages > 99 ? '99+' : unreadMessages}
+                      {badgeCount > 99 ? '99+' : badgeCount}
                     </span>
                   )}
                 </span>

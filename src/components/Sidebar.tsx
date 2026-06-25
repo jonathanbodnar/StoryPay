@@ -27,6 +27,7 @@ import {
   Gem,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
+import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
 import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
 import { LockedFeatureModal } from '@/components/LockedFeatureView';
 
@@ -174,6 +175,7 @@ export default function Sidebar({
   const [flyoutPos, setFlyoutPos] = useState<{ top: number; left: number } | null>(null);
   const [mounted, setMounted] = useState(false);
   const [convUnread, setConvUnread] = useState(0);
+  const [leadsUnread, setLeadsUnread] = useState(0);
   const [updatesUnread, setUpdatesUnread] = useState(0);
   const [conciergeUnread, setConciergeUnread] = useState(0);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null); // null = loading
@@ -193,6 +195,38 @@ export default function Sidebar({
       })
       .catch(() => {});
   }, []);
+
+  // New-leads badge on the Lead Inbox item. We track the last time the owner
+  // acknowledged the inbox (opened /dashboard/leads) in localStorage, then ask
+  // the server how many real leads have arrived since. Opening the inbox clears
+  // the badge. Shared key so the desktop sidebar and mobile tab bar agree.
+  const leadsSeenKey = LEADS_SEEN_KEY;
+  const refreshLeadsUnread = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    // On the inbox itself everything is considered seen.
+    if (window.location.pathname.startsWith('/dashboard/leads')) {
+      try { localStorage.setItem(leadsSeenKey, new Date().toISOString()); } catch {}
+      setLeadsUnread(0);
+      return;
+    }
+    let since: string | null = null;
+    try { since = localStorage.getItem(leadsSeenKey); } catch {}
+    const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+    void fetch(`/api/leads/unread-count${qs}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { count?: number; latest?: string | null } | null) => {
+        if (!d) return;
+        if (!since) {
+          // First run on this device: baseline to the latest existing lead so
+          // we only ever alert on genuinely new arrivals, not the backlog.
+          try { localStorage.setItem(leadsSeenKey, d.latest ?? new Date().toISOString()); } catch {}
+          setLeadsUnread(0);
+          return;
+        }
+        if (typeof d.count === 'number') setLeadsUnread(d.count);
+      })
+      .catch(() => {});
+  }, [leadsSeenKey]);
 
   const refreshUpdatesUnread = useCallback(() => {
     void fetch('/api/changelog/unread-count')
@@ -237,6 +271,25 @@ export default function Sidebar({
   useEffect(() => {
     if (pathname.startsWith('/dashboard/conversations')) refreshConvUnread();
   }, [pathname, refreshConvUnread]);
+
+  useEffect(() => {
+    refreshLeadsUnread();
+    const t = setInterval(refreshLeadsUnread, 45000);
+    const onEvt = () => refreshLeadsUnread();
+    window.addEventListener('storypay:leads-unread', onEvt);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('storypay:leads-unread', onEvt);
+    };
+  }, [refreshLeadsUnread]);
+
+  // Opening the Lead Inbox acknowledges every lead so far and clears the badge.
+  useEffect(() => {
+    if (pathname.startsWith('/dashboard/leads')) {
+      try { localStorage.setItem(leadsSeenKey, new Date().toISOString()); } catch {}
+      setLeadsUnread(0);
+    }
+  }, [pathname, leadsSeenKey]);
 
   useEffect(() => {
     if (pathname.startsWith('/dashboard/updates')) setUpdatesUnread(0);
@@ -523,17 +576,21 @@ export default function Sidebar({
       const isConversations = item.href === '/dashboard/conversations';
       const isUpdates = item.href === '/dashboard/updates';
       const isConcierge = item.href === '/dashboard/concierge';
+      const isLeads = item.href === '/dashboard/leads';
       const showConvBadge = isConversations && convUnread > 0;
       const showUpdatesBadge = isUpdates && updatesUnread > 0;
       const showConciergeBadge = isConcierge && conciergeUnread > 0;
+      const showLeadsBadge = isLeads && leadsUnread > 0;
       const badgeCount = showConvBadge
         ? convUnread
         : showUpdatesBadge
           ? updatesUnread
           : showConciergeBadge
             ? conciergeUnread
-            : 0;
-      const showBadge = showConvBadge || showUpdatesBadge || showConciergeBadge;
+            : showLeadsBadge
+              ? leadsUnread
+              : 0;
+      const showBadge = showConvBadge || showUpdatesBadge || showConciergeBadge || showLeadsBadge;
       const locked = !navOk(item.navId);
       // Locked items can't be active; their grey style overrides the
       // selected highlight even on the route they "would" match.
@@ -569,7 +626,7 @@ export default function Sidebar({
           aria-disabled={locked}
           className={classNames(
             navItem(active && !isAI, rail),
-            !rail && (isConversations || isUpdates) ? 'w-full' : '',
+            !rail && (isConversations || isUpdates || isLeads) ? 'w-full' : '',
           )}
           style={navItemStyle(active && !isAI)}
         >
