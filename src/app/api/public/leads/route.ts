@@ -275,6 +275,12 @@ export async function POST(request: NextRequest) {
     source:   payload.source || 'directory',
   });
 
+  // Instant Lead Inbox badge update (sidebar + mobile tab bar).
+  void import('@/lib/realtime/broadcast')
+    .then(({ broadcastNewLead }) =>
+      broadcastNewLead({ venueId: venue.id, leadId: lr.id, source: payload.source || 'directory', createdAt: lr.created_at }))
+    .catch(() => {});
+
   // Fan out to Zapier / external integrations subscribed to lead.created
   void dispatchIntegrationEvent(venue.id, 'lead.created', {
     lead: {

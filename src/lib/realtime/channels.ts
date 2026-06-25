@@ -40,7 +40,18 @@ export const supportChannels = {
   /** Fired whenever a new error is logged platform-wide so the super-admin
    *  Error Log tab + sidebar badge update live (no refresh). */
   adminErrors:      () => 'admin:error-feed',
+  /** Fired whenever a new lead is created for a venue so the Lead Inbox badge
+   *  (sidebar + mobile tab bar) updates instantly instead of polling. */
+  venueLeads:       (venueId: string) => `venue:${venueId}:leads`,
 } as const;
+
+/** Fired when a new lead is created so the Lead Inbox badge updates live. */
+export interface NewLeadEvent {
+  venueId:   string;
+  leadId:    string;
+  source:    string;
+  createdAt: string;
+}
 
 // ─── Bride conversation events ──────────────────────────────────────────────
 

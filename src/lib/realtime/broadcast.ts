@@ -25,6 +25,7 @@ import {
   type TagsChangedEvent,
   type VenueDirectInboxEvent,
   type ErrorLoggedEvent,
+  type NewLeadEvent,
 } from './channels';
 
 // ─── HTTP broadcast ─────────────────────────────────────────────────────────
@@ -143,6 +144,12 @@ export async function broadcastVenueDirectInboxUpdate(evt: VenueDirectInboxEvent
  *  badge update live without a page refresh. */
 export async function broadcastErrorLogged(evt: ErrorLoggedEvent): Promise<void> {
   await send(supportChannels.adminErrors(), 'error', evt);
+}
+
+/** Broadcast a new lead so the Lead Inbox badge (sidebar + mobile tab bar)
+ *  updates instantly instead of waiting for the poll cycle. */
+export async function broadcastNewLead(evt: NewLeadEvent): Promise<void> {
+  await send(supportChannels.venueLeads(evt.venueId), 'new_lead', evt);
 }
 
 /** Broadcast a tag change so the admin context sidebar reflects it without a refresh. */

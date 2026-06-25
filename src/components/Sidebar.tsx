@@ -28,6 +28,8 @@ import {
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels } from '@/lib/realtime/channels';
 import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
 import { LockedFeatureModal } from '@/components/LockedFeatureView';
 
@@ -290,6 +292,13 @@ export default function Sidebar({
       setLeadsUnread(0);
     }
   }, [pathname, leadsSeenKey]);
+
+  // Instant badge: a new lead for this venue fires a realtime broadcast.
+  useBroadcastChannel(
+    _venue?.id ? supportChannels.venueLeads(_venue.id) : null,
+    ['new_lead'],
+    () => { refreshLeadsUnread(); },
+  );
 
   useEffect(() => {
     if (pathname.startsWith('/dashboard/updates')) setUpdatesUnread(0);

@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Home, MessageCircle, Inbox, Calendar, CreditCard } from 'lucide-react';
 import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels } from '@/lib/realtime/channels';
 
 /**
  * Bottom navigation bar — visible on mobile + tablet (below `lg`) across
@@ -19,7 +21,7 @@ const TABS = [
   { label: 'Payments',    href: '/dashboard/payments/new',  icon: CreditCard,    match: ['/dashboard/payments', '/dashboard/transactions', '/dashboard/proposals', '/dashboard/offerings'] },
 ];
 
-export default function MobileTabBar() {
+export default function MobileTabBar({ venueId }: { venueId?: string | null }) {
   const pathname = usePathname();
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadLeads, setUnreadLeads] = useState(0);
@@ -45,39 +47,47 @@ export default function MobileTabBar() {
 
   // New-leads badge — mirrors the desktop sidebar (shared localStorage baseline,
   // cleared when the Lead Inbox is opened).
+  const refreshLeads = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.pathname.startsWith('/dashboard/leads')) {
+      try { localStorage.setItem(LEADS_SEEN_KEY, new Date().toISOString()); } catch {}
+      setUnreadLeads(0);
+      return;
+    }
+    let since: string | null = null;
+    try { since = localStorage.getItem(LEADS_SEEN_KEY); } catch {}
+    const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+    fetch(`/api/leads/unread-count${qs}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { count?: number; latest?: string | null } | null) => {
+        if (!d) return;
+        if (!since) {
+          try { localStorage.setItem(LEADS_SEEN_KEY, d.latest ?? new Date().toISOString()); } catch {}
+          setUnreadLeads(0);
+          return;
+        }
+        if (typeof d.count === 'number') setUnreadLeads(d.count);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
-    const load = () => {
-      if (typeof window === 'undefined') return;
-      if (window.location.pathname.startsWith('/dashboard/leads')) {
-        try { localStorage.setItem(LEADS_SEEN_KEY, new Date().toISOString()); } catch {}
-        setUnreadLeads(0);
-        return;
-      }
-      let since: string | null = null;
-      try { since = localStorage.getItem(LEADS_SEEN_KEY); } catch {}
-      const qs = since ? `?since=${encodeURIComponent(since)}` : '';
-      fetch(`/api/leads/unread-count${qs}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d: { count?: number; latest?: string | null } | null) => {
-          if (!d) return;
-          if (!since) {
-            try { localStorage.setItem(LEADS_SEEN_KEY, d.latest ?? new Date().toISOString()); } catch {}
-            setUnreadLeads(0);
-            return;
-          }
-          if (typeof d.count === 'number') setUnreadLeads(d.count);
-        })
-        .catch(() => {});
-    };
-    load();
-    const t = setInterval(load, 45_000);
-    const onEvt = () => load();
+    refreshLeads();
+    const t = setInterval(refreshLeads, 45_000);
+    const onEvt = () => refreshLeads();
     window.addEventListener('storypay:leads-unread', onEvt);
     return () => {
       clearInterval(t);
       window.removeEventListener('storypay:leads-unread', onEvt);
     };
-  }, []);
+  }, [refreshLeads]);
+
+  // Instant badge: a new lead for this venue fires a realtime broadcast.
+  useBroadcastChannel(
+    venueId ? supportChannels.venueLeads(venueId) : null,
+    ['new_lead'],
+    () => { refreshLeads(); },
+  );
 
   // Opening the Lead Inbox acknowledges everything so far.
   useEffect(() => {

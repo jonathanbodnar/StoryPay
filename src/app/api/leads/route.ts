@@ -680,6 +680,17 @@ export async function POST(request: NextRequest) {
     source: (data as LeadRow).source,
   });
 
+  // Instant Lead Inbox badge update (sidebar + mobile tab bar).
+  void import('@/lib/realtime/broadcast')
+    .then(({ broadcastNewLead }) =>
+      broadcastNewLead({
+        venueId,
+        leadId: newId,
+        source: (data as LeadRow).source,
+        createdAt: String((data as LeadRow).created_at ?? new Date().toISOString()),
+      }))
+    .catch(() => {});
+
   // Analytics: funnel milestone — first lead this venue ever captures.
   void import('@/lib/analytics')
     .then(({ trackMilestone }) => trackMilestone('first_lead', {

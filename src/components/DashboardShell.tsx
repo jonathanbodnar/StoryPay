@@ -276,7 +276,7 @@ export default function DashboardShell({
 
       {/* Mobile-only chrome (hidden ≥ lg) */}
       <MobileFab />
-      <MobileTabBar />
+      <MobileTabBar venueId={venue.id} />
     </div>
   );
 }

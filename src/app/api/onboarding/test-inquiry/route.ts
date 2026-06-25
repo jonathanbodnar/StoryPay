@@ -175,6 +175,12 @@ export async function POST(): Promise<NextResponse> {
   // 3. Seed the chat thread (lands in the Lead Inbox in real time).
   await logNewLeadOpportunity(venueId, lr.id, lr.created_at);
 
+  // Instant Lead Inbox badge update (sidebar + mobile tab bar).
+  void import('@/lib/realtime/broadcast')
+    .then(({ broadcastNewLead }) =>
+      broadcastNewLead({ venueId, leadId: lr.id, source: 'test_inquiry', createdAt: lr.created_at }))
+    .catch(() => {});
+
   // 4. Fire the welcome email/SMS (Phase 1 guide delivery). Awaited so the
   //    success screen can truthfully say it was sent.
   await sendBookingSystemGuide(venueId, lr.id).catch((e) =>
