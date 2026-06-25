@@ -11,6 +11,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getOrCreatePricingGuideId } from '@/lib/pricing-guide';
+import { loadDirectoryNavAccess } from '@/lib/directory-plans-venue';
 import { slugify } from '@/lib/directory';
 import { DEFAULT_GUIDE_EMAIL_BODY, DEFAULT_GUIDE_SMS_BODY } from '@/lib/marketing-email-worker';
 
@@ -62,7 +63,7 @@ export async function GET(): Promise<NextResponse> {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('slug, is_published, onboarding_completed_at, onboarding_last_step')
+    .select('slug, is_published, onboarding_completed_at, onboarding_last_step, directory_plan_id')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -73,11 +74,21 @@ export async function GET(): Promise<NextResponse> {
     .maybeSingle();
 
   const v = (venue ?? {}) as Record<string, unknown>;
+
+  // Legacy / grandfathered venues are NOT subject to the card-gated onboarding
+  // block — the hard gate only applies to venues on the new (paid) plans.
+  let isLegacy = false;
+  try {
+    const access = await loadDirectoryNavAccess(venueId, (v.directory_plan_id as string | null) ?? null);
+    isLegacy = access.isLegacyPlan;
+  } catch { /* default: not legacy → gated */ }
+
   return NextResponse.json({
     completed: Boolean(v.onboarding_completed_at),
     last_step: typeof v.onboarding_last_step === 'number' ? v.onboarding_last_step : 0,
     is_published: Boolean(v.is_published),
     guide_enabled: Boolean((guide as { enabled?: boolean } | null)?.enabled),
+    is_legacy: isLegacy,
     slug: (v.slug as string) ?? null,
     live_url: liveUrl((v.slug as string) ?? null),
   });

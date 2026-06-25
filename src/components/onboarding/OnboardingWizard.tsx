@@ -24,6 +24,7 @@ import {
 import InlineTrialCardForm from '@/components/billing/InlineTrialCardForm';
 import { trackClient } from '@/lib/analytics-client';
 
+const SKIP_KEY = 'sv_onboarding_skipped';
 const BRAND = '#1b1b1b';
 // Manual (no-Google) venues must add at least this many photos so the guide
 // and public listing render full, not sparse.
@@ -87,6 +88,7 @@ export default function OnboardingWizard() {
   const [open, setOpen] = useState(false);          // modal open
   const [step, setStep] = useState(0);
   const [live, setLive] = useState(false);          // listing is published (all pills green)
+  const [isLegacy, setIsLegacy] = useState(false);  // legacy/grandfathered → not card-gated
 
   // Gate on onboarding state. "Complete" = they published via the wizard, OR
   // they manually finished both the listing (is_published) and the pricing
@@ -95,12 +97,13 @@ export default function OnboardingWizard() {
     let cancelled = false;
     (async () => {
       // Forced re-open (from the "Restart setup" button) — open immediately,
-      // regardless of completion.
+      // regardless of completion or the per-session skip flag.
       let forced = false;
       try {
         const params = new URLSearchParams(window.location.search);
         if (params.get('onboarding') === '1') {
           forced = true;
+          try { sessionStorage.removeItem(SKIP_KEY); } catch {}
           params.delete('onboarding');
           const qs = params.toString();
           window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
@@ -115,7 +118,9 @@ export default function OnboardingWizard() {
         // Hide the wizard/pill once they've completed onboarding OR published
         // their listing manually — a live listing means they're done here.
         const isComplete = Boolean(s.completed) || Boolean(s.is_published);
+        const legacy = Boolean(s.is_legacy);
         setComplete(isComplete);
+        setIsLegacy(legacy);
         setStep(typeof s.last_step === 'number' ? Math.min(s.last_step, 2) : 0);
 
         if (forced) {
@@ -123,10 +128,18 @@ export default function OnboardingWizard() {
           setComplete(false); // override so render guard doesn't block a restarted wizard
           setOpen(true);
         } else if (!isComplete) {
-          // Hard gate: an unpublished venue is held here. The modal always opens
-          // (resuming at last_step) on every load/return until they go live —
-          // which requires a card. There is no dismiss-to-dashboard path.
-          setOpen(true);
+          if (legacy) {
+            // Legacy / grandfathered venues are NOT card-gated. Keep the old
+            // optional behavior: auto-open once per session, dismissible, and the
+            // launcher bubble re-summons it.
+            const skipped = (() => { try { return sessionStorage.getItem(SKIP_KEY) === '1'; } catch { return false; } })();
+            setOpen(!skipped);
+          } else {
+            // Hard gate (new plans): an unpublished venue is held here. The modal
+            // always opens (resuming at last_step) on every load/return until they
+            // go live — which requires a card. No dismiss-to-dashboard path.
+            setOpen(true);
+          }
         }
       } catch { /* ignore */ }
       finally { if (!cancelled) setChecking(false); }
@@ -175,6 +188,15 @@ export default function OnboardingWizard() {
     scrollTimer.current = setTimeout(() => setScrolling(false), 700);
   }, []);
 
+  // Dismiss (legacy venues only — non-legacy is hard-gated, see below). Closing
+  // saves progress so they resume exactly where they left off, and the launcher
+  // bubble reopens at last_step.
+  const dismiss = useCallback(() => {
+    try { sessionStorage.setItem(SKIP_KEY, '1'); } catch {}
+    saveStep(step);
+    setOpen(false);
+  }, [saveStep, step]);
+
   // The modal is the only thing this component renders; the persistent
   // launcher lives in <main> (OnboardingLauncher) so it aligns with the page.
   if (checking || complete || !open) return null;
@@ -199,10 +221,20 @@ export default function OnboardingWizard() {
         onScroll={handleScroll}
         className={`sv-modal-scroll ${scrolling ? 'is-scrolling' : ''} relative w-full max-w-2xl sm:max-w-[52rem] max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl`}
       >
-        {/* No dismiss control: onboarding is a hard gate. The owner cannot reach
-            the dashboard until they go live (which requires a card). Progress is
-            saved on every step, so leaving and returning resumes where they left
-            off. The only exit from this modal is publishing successfully. */}
+        {/* Dismiss control only for legacy/grandfathered venues. For everyone
+            else onboarding is a hard card-gate: no dismiss, the modal reopens on
+            every load (resuming at last_step) until they go live. Progress is
+            saved on every step, so leaving and returning never loses work. */}
+        {isLegacy && (
+          <button
+            onClick={dismiss}
+            className="absolute right-4 top-4 z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Save and finish later"
+            title="Save and finish later"
+          >
+            Save &amp; close <X size={15} />
+          </button>
+        )}
 
         <StepDots step={step} live={live} />
 
