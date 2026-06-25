@@ -7,33 +7,35 @@ import {
   Clock, Send, Users, ExternalLink, SkipForward, X as XIcon,
   RefreshCw, Image as ImageIcon, Link as LinkIcon, Lock, CalendarClock,
 } from 'lucide-react';
-
-const DEMO_URL = process.env.NEXT_PUBLIC_DEMO_URL || '/dashboard/directory-billing';
+import ScheduleDemoModal from '@/components/ScheduleDemoModal';
 
 /** Greyed-out, locked control for tier-gated phases (e.g. AI Concierge). Shows
- *  a hover tooltip prompting the owner to schedule a demo. */
+ *  a hover tooltip and opens the schedule-a-demo modal when clicked. */
 function LockedPhaseControl({ tooltip }: { tooltip: string }) {
-  const external = /^https?:\/\//i.test(DEMO_URL);
+  const [demoOpen, setDemoOpen] = useState(false);
   return (
-    <a
-      href={DEMO_URL}
-      {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-      className="group relative flex shrink-0 items-center gap-2"
-    >
-      <span className="flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-600">
-        <Lock size={10} /> All-Inclusive
-      </span>
-      {/* Greyed, non-functional toggle */}
-      <span className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-gray-200 opacity-50">
-        <span className="inline-block h-4 w-4 translate-x-1 transform rounded-full bg-white shadow" />
-      </span>
-      <span className="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-left text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
-        <span className="flex items-center gap-1 font-semibold">
-          <CalendarClock size={11} /> Schedule a demo
+    <>
+      <button
+        type="button"
+        onClick={() => setDemoOpen(true)}
+        className="group relative flex shrink-0 items-center gap-2"
+      >
+        <span className="flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-600">
+          <Lock size={10} /> All-Inclusive
         </span>
-        <span className="mt-0.5 block text-gray-300">{tooltip}</span>
-      </span>
-    </a>
+        {/* Greyed, non-functional toggle */}
+        <span className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-gray-200 opacity-50">
+          <span className="inline-block h-4 w-4 translate-x-1 transform rounded-full bg-white shadow" />
+        </span>
+        <span className="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-left text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+          <span className="flex items-center gap-1 font-semibold">
+            <CalendarClock size={11} /> Schedule a demo
+          </span>
+          <span className="mt-0.5 block text-gray-300">{tooltip}</span>
+        </span>
+      </button>
+      <ScheduleDemoModal open={demoOpen} onClose={() => setDemoOpen(false)} featureName="AI Concierge" />
+    </>
   );
 }
 import type { BookingSystemConfig, StepConfig } from '@/app/api/listing/booking-system/route';

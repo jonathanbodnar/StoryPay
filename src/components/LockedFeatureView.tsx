@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock, X, ArrowRight, Sparkles } from 'lucide-react';
+import { Lock, X, ArrowRight, Sparkles, CalendarClock } from 'lucide-react';
+import ScheduleDemoModal from '@/components/ScheduleDemoModal';
 
 /**
  * Visual + copy primitives for "this feature isn't included in your current
@@ -131,7 +132,7 @@ const FEATURE_OUTCOMES: Record<string, FeatureOutcome> = {
   nav_payments_settings: {
     headline: 'Total control over how you get paid',
     outcome:
-      'Enable ACH, set processing fee pass-through, and manage your StoryPay merchant account. Keep more of every booking.',
+      'Enable ACH, set processing fee pass-through, and manage your StoryVenue merchant account. Keep more of every booking.',
   },
   nav_marketing_analytics: {
     headline: 'Know what\'s actually filling your calendar',
@@ -231,6 +232,10 @@ export interface LockedFeatureBodyProps {
 
 function LockedFeatureBody({ featureName, navId, onNavigate }: LockedFeatureBodyProps) {
   const copy = getOutcome(navId);
+  const [demoOpen, setDemoOpen] = useState(false);
+  // AI Concierge is a demo-led, higher-tier feature — funnel to "schedule a
+  // demo" rather than a self-serve upgrade.
+  const isDemoLed = navId === 'nav_marketing_ai_concierge';
 
   return (
     <div className="text-center">
@@ -257,16 +262,30 @@ function LockedFeatureBody({ featureName, navId, onNavigate }: LockedFeatureBody
       )}
 
       <div className="mt-6 flex flex-col items-center justify-center gap-3">
-        <Link
-          href="/dashboard/directory-billing"
-          onClick={onNavigate}
-          className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
-        >
-          <Sparkles size={14} />
-          View plans &amp; upgrade
-          <ArrowRight size={14} />
-        </Link>
+        {isDemoLed ? (
+          <button
+            type="button"
+            onClick={() => setDemoOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
+          >
+            <CalendarClock size={14} />
+            Schedule a demo
+            <ArrowRight size={14} />
+          </button>
+        ) : (
+          <Link
+            href="/dashboard/directory-billing"
+            onClick={onNavigate}
+            className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
+          >
+            <Sparkles size={14} />
+            View plans &amp; upgrade
+            <ArrowRight size={14} />
+          </Link>
+        )}
       </div>
+
+      {isDemoLed && <ScheduleDemoModal open={demoOpen} onClose={() => setDemoOpen(false)} featureName="AI Concierge" />}
     </div>
   );
 }
