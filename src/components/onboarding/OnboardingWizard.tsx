@@ -210,14 +210,19 @@ export default function OnboardingWizard() {
         onScroll={handleScroll}
         className={`sv-modal-scroll ${scrolling ? 'is-scrolling' : ''} relative w-full max-w-2xl sm:max-w-[52rem] max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl`}
       >
-        <button
-          onClick={dismiss}
-          className="absolute right-4 top-4 z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          aria-label="Save and finish later"
-          title="Save and finish later"
-        >
-          Save &amp; close <X size={15} />
-        </button>
+        {/* Card gate: on the Go-live step the card is required, so we remove the
+            "Save & close" escape until the venue has actually gone live. Earlier
+            steps stay dismissible so owners can step away before committing. */}
+        {(step < 2 || live) && (
+          <button
+            onClick={dismiss}
+            className="absolute right-4 top-4 z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Save and finish later"
+            title="Save and finish later"
+          >
+            Save &amp; close <X size={15} />
+          </button>
+        )}
 
         <StepDots step={step} live={live} />
 
