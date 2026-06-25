@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, Link2, Check, Copy, Share2, Sparkles, Loader2, X,
-  ArrowRight, ArrowLeft, MapPin, Star, PartyPopper, ImageIcon, RotateCcw,
+  ArrowRight, ArrowLeft, MapPin, Star, PartyPopper, ImageIcon, RefreshCw,
   Mail, Send,
 } from 'lucide-react';
 
@@ -39,6 +39,16 @@ const withCommas = (s: string) => {
   const d = onlyDigits(s);
   return d ? Number(d).toLocaleString('en-US') : '';
 };
+
+// Tappable seeds for the "what makes you special" box — lowers the blank-page
+// cost on the one field the AI leans on most.
+const SPECIAL_CHIPS = [
+  'Waterfront ceremony', 'On-site suites', 'Sunset views', 'Indoor & outdoor space',
+  'In-house catering', 'Exclusive single-event venue', 'Vineyard backdrop',
+  'Historic property', 'Mountain views', 'Get-ready suites',
+];
+// Persists in-progress Details answers so closing mid-step resumes them.
+const DETAILS_DRAFT_KEY = 'sv_onboarding_details_draft';
 
 const VENUE_TYPES = ['barn', 'ballroom', 'garden', 'winery', 'beach', 'estate', 'rustic', 'modern', 'historic', 'other'];
 const INDOOR_OUTDOOR = ['indoor', 'outdoor', 'both'];
@@ -154,10 +164,14 @@ export default function OnboardingWizard() {
   const go = useCallback((n: number) => { setStep(n); saveStep(n); }, [saveStep]);
 
   // Close the modal but keep the launcher bubble (until truly complete).
+  // Closing saves progress so they resume exactly where they left off: the
+  // current step is persisted on every advance, and we re-save on close to
+  // cover a mid-step exit. The launcher reopens at last_step.
   const dismiss = useCallback(() => {
     try { sessionStorage.setItem(SKIP_KEY, '1'); } catch {}
+    saveStep(step);
     setOpen(false);
-  }, []);
+  }, [saveStep, step]);
 
   // The modal is the only thing this component renders; the persistent
   // launcher lives in <main> (OnboardingLauncher) so it aligns with the page.
@@ -166,21 +180,13 @@ export default function OnboardingWizard() {
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center overscroll-contain bg-gray-900/60 backdrop-blur-sm p-4">
       <div className="relative w-full max-w-2xl sm:max-w-[52rem] max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl">
-        {step > 0 && step < 3 && (
-          <button
-            onClick={() => go(0)}
-            className="absolute left-4 top-4 z-10 flex items-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-            aria-label="Start over"
-          >
-            <RotateCcw size={13} /> Start over
-          </button>
-        )}
         <button
           onClick={dismiss}
-          className="absolute right-4 top-4 z-10 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          aria-label="Close"
+          className="absolute right-4 top-4 z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          aria-label="Save and finish later"
+          title="Save and finish later"
         >
-          <X size={18} />
+          Save &amp; close <X size={15} />
         </button>
 
         <StepDots step={step} />
@@ -333,42 +339,57 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
   return (
     <div>
       <div className="text-center">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${BRAND}1a` }}>
+        <span className="inline-block rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide" style={{ backgroundColor: `${BRAND}0d`, color: BRAND }}>
+          Start Booking More Brides in 5 minutes
+        </span>
+        <div className="mx-auto mt-4 mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${BRAND}1a` }}>
           <Sparkles size={24} style={{ color: BRAND }} />
         </div>
         <h2 className="text-xl font-semibold text-gray-900">Let&apos;s Build Your Bride Booking System&trade;</h2>
         <p className="mt-1 text-sm text-gray-500">Connect Google and we&apos;ll auto-fill your venue. Name, photos, reviews, and more.</p>
       </div>
 
-      <div className="mt-5 flex gap-2">
-        <button onClick={() => { setMode('search'); setCandidates([]); setError(null); }} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium ${mode === 'search' ? 'border-transparent text-white' : 'border-gray-200 text-gray-600'}`} style={mode === 'search' ? { backgroundColor: BRAND } : {}}>
-          <Search size={14} /> Search by name
-        </button>
-        <button onClick={() => { setMode('link'); setCandidates([]); setError(null); }} className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium ${mode === 'link' ? 'border-transparent text-white' : 'border-gray-200 text-gray-600'}`} style={mode === 'link' ? { backgroundColor: BRAND } : {}}>
-          <Link2 size={14} /> Paste Google link
-        </button>
-      </div>
-
-      <div className="mt-3 flex gap-2">
-        <div className="relative flex-1">
-          {mode === 'search' && <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />}
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && mode === 'link' && input.trim()) resolveLink(); }}
-            placeholder={mode === 'search' ? 'Start typing your venue name…' : 'Paste your Google Maps link'}
-            className={`w-full rounded-lg border border-gray-200 py-2.5 pr-9 text-sm outline-none focus:border-gray-400 ${mode === 'search' ? 'pl-9' : 'pl-3'}`}
-          />
-          {loading && <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />}
+      {/* Search by name is the obvious default; the Google-link path is tucked
+          behind a small toggle since most owners won't know what a link is. */}
+      {mode === 'search' ? (
+        <div className="mt-5">
+          <div className="relative">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Start typing your venue name…"
+              className="w-full rounded-lg border border-gray-200 py-2.5 pl-9 pr-9 text-sm outline-none focus:border-gray-400"
+            />
+            {loading && <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />}
+          </div>
+          {loading && (
+            <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-400"><Loader2 size={13} className="animate-spin" /> Searching Google…</p>
+          )}
         </div>
-        {mode === 'link' && (
-          <button onClick={resolveLink} disabled={loading || !input.trim()} className="rounded-lg px-4 text-sm font-medium text-white disabled:opacity-40" style={{ backgroundColor: BRAND }}>
-            {loading ? <Loader2 size={16} className="animate-spin" /> : 'Find'}
+      ) : (
+        <div className="mt-5">
+          <button onClick={() => { setMode('search'); setCandidates([]); setError(null); setInput(''); }} className="mb-2 flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-600">
+            <ArrowLeft size={12} /> Back to search by name
           </button>
-        )}
-      </div>
-      {mode === 'search' && input.trim().length >= 3 && !loading && candidates.length === 0 && !error && (
-        <p className="mt-2 text-sm text-gray-400">No matches yet. Keep typing, add your city, or paste your Google link.</p>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Link2 size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && input.trim()) resolveLink(); }}
+                placeholder="Paste your Google Maps link"
+                className="w-full rounded-lg border border-gray-200 py-2.5 pl-9 pr-9 text-sm outline-none focus:border-gray-400"
+              />
+              {loading && <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />}
+            </div>
+            <button onClick={resolveLink} disabled={loading || !input.trim()} className="rounded-lg px-4 text-sm font-medium text-white disabled:opacity-40" style={{ backgroundColor: BRAND }}>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : 'Find'}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-gray-400">Open your venue in Google Maps, tap Share, and copy the link.</p>
+        </div>
       )}
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
@@ -388,6 +409,24 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
               </div>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Empty-result fallback, surfaced right by the list. Newer venues that
+          aren't on Google yet can't search their way in, so make the manual
+          path and the link path obvious here instead of buried at the bottom. */}
+      {mode === 'search' && input.trim().length >= 3 && !loading && candidates.length === 0 && !error && (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-center">
+          <p className="text-sm font-medium text-gray-700">Can&apos;t find your venue?</p>
+          <p className="mt-0.5 text-xs text-gray-500">Add your city to narrow it down, or if you&apos;re not on Google yet, enter your details by hand.</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <button onClick={onNext} className="rounded-lg px-4 py-2 text-sm font-medium text-white" style={{ backgroundColor: BRAND }}>
+              Enter details manually
+            </button>
+            <button onClick={() => { setMode('link'); setCandidates([]); setError(null); setInput(''); }} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-white">
+              Paste a Google link instead
+            </button>
+          </div>
         </div>
       )}
 
@@ -412,35 +451,75 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Preload anything already set on the listing so it stays in sync.
+  // Preload from the listing (single source of truth), then overlay any
+  // in-progress local draft so a mid-step close resumes exactly where they
+  // left off. The local draft wins because it reflects their latest typing.
+  const hydrated = useRef(false);
   useEffect(() => {
     (async () => {
+      const server: Record<string, unknown> = {};
       try {
         const res = await fetch('/api/venues/me', { cache: 'no-store' });
-        if (!res.ok) return;
-        const d = await res.json();
-        if (Array.isArray(d.features)) setFeatures(d.features.filter((f: unknown): f is string => typeof f === 'string'));
-        if (typeof d.venue_type === 'string') setVenueType(d.venue_type);
-        if (typeof d.indoor_outdoor === 'string') setIndoorOutdoor(d.indoor_outdoor);
-        // Capacity & price range share one source of truth with the listing.
-        if (d.capacity_min != null) setMinGuests(String(d.capacity_min));
-        if (d.capacity_max != null) setMaxGuests(String(d.capacity_max));
-        if (d.price_min != null) setPriceFrom(String(d.price_min));
-        if (d.price_max != null) setPriceTo(String(d.price_max));
-        if (d.social_links && typeof d.social_links === 'object' && !Array.isArray(d.social_links)) {
-          const s: Record<string, string> = {};
-          for (const { key } of SOCIAL_FIELDS) {
-            const v = (d.social_links as Record<string, unknown>)[key];
-            if (typeof v === 'string') s[key] = v;
+        if (res.ok) {
+          const d = await res.json();
+          if (Array.isArray(d.features)) server.features = d.features.filter((f: unknown): f is string => typeof f === 'string');
+          if (typeof d.venue_type === 'string') server.venueType = d.venue_type;
+          if (typeof d.indoor_outdoor === 'string') server.indoorOutdoor = d.indoor_outdoor;
+          if (d.capacity_min != null) server.minGuests = String(d.capacity_min);
+          if (d.capacity_max != null) server.maxGuests = String(d.capacity_max);
+          if (d.price_min != null) server.priceFrom = String(d.price_min);
+          if (d.price_max != null) server.priceTo = String(d.price_max);
+          if (d.social_links && typeof d.social_links === 'object' && !Array.isArray(d.social_links)) {
+            const s: Record<string, string> = {};
+            for (const { key } of SOCIAL_FIELDS) {
+              const v = (d.social_links as Record<string, unknown>)[key];
+              if (typeof v === 'string') s[key] = v;
+            }
+            server.socials = s;
           }
-          setSocials(s);
         }
       } catch { /* ignore */ }
+
+      let draft: Record<string, unknown> = {};
+      try { const raw = localStorage.getItem(DETAILS_DRAFT_KEY); if (raw) draft = JSON.parse(raw); } catch { /* ignore */ }
+      const pick = (k: string) => (draft[k] !== undefined ? draft[k] : server[k]);
+
+      const mg = pick('minGuests'); if (typeof mg === 'string') setMinGuests(mg);
+      const xg = pick('maxGuests'); if (typeof xg === 'string') setMaxGuests(xg);
+      const pf = pick('priceFrom'); if (typeof pf === 'string') setPriceFrom(pf);
+      const pt = pick('priceTo'); if (typeof pt === 'string') setPriceTo(pt);
+      const df = pick('differentiators'); if (typeof df === 'string') setDifferentiators(df);
+      const ft = pick('features'); if (Array.isArray(ft)) setFeatures(ft.filter((f): f is string => typeof f === 'string'));
+      const vt = pick('venueType'); if (typeof vt === 'string') setVenueType(vt);
+      const io = pick('indoorOutdoor'); if (typeof io === 'string') setIndoorOutdoor(io);
+      const sc = pick('socials'); if (sc && typeof sc === 'object') setSocials(sc as Record<string, string>);
+
+      hydrated.current = true;
     })();
   }, []);
 
+  // Persist the in-progress draft on every change (after first hydration so we
+  // never overwrite the saved draft with empty initial state).
+  useEffect(() => {
+    if (!hydrated.current) return;
+    try {
+      localStorage.setItem(DETAILS_DRAFT_KEY, JSON.stringify({
+        minGuests, maxGuests, priceFrom, priceTo, differentiators, features, venueType, indoorOutdoor, socials,
+      }));
+    } catch { /* ignore */ }
+  }, [minGuests, maxGuests, priceFrom, priceTo, differentiators, features, venueType, indoorOutdoor, socials]);
+
   const toggleFeature = (f: string) =>
     setFeatures((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
+
+  // Tapping an example chip seeds the differentiators box (comma-separated,
+  // no duplicates) so owners aren't staring at a blank field.
+  const addChip = (chip: string) =>
+    setDifferentiators((prev) => {
+      const parts = prev.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.some((p) => p.toLowerCase() === chip.toLowerCase())) return prev;
+      return [...parts, chip].join(', ');
+    });
 
   const submit = async () => {
     setSaving(true); setError(null);
@@ -464,6 +543,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
         }),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not draft your guide.'); return; }
+      try { localStorage.removeItem(DETAILS_DRAFT_KEY); } catch { /* ignore */ }
       onNext();
     } catch { setError('Something went wrong. Try again.'); }
     finally { setSaving(false); }
@@ -493,6 +573,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
               <input value={withCommas(priceTo)} onChange={(e) => setPriceTo(onlyDigits(e.target.value))} inputMode="numeric" placeholder="To, e.g. 12,000" className="w-full bg-transparent px-2 py-2.5 text-sm outline-none" />
             </div>
           </div>
+          <p className="mt-1.5 text-xs text-gray-500">Brides skip venues with no price. A range builds trust.</p>
         </Field>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -531,6 +612,19 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
 
         <Field label="Describe 3–4 things that make your venue special?">
           <textarea value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} rows={4} placeholder="e.g. waterfront ceremony site, on-site suites, in-house catering" className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <p className="mt-2 mb-1.5 text-xs text-gray-500">This is what our AI uses most. Tap to add, then edit:</p>
+          <div className="flex flex-wrap gap-2">
+            {SPECIAL_CHIPS.map((chip) => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => addChip(chip)}
+                className="rounded-full border border-dashed border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-gray-400 hover:bg-gray-50"
+              >
+                + {chip}
+              </button>
+            ))}
+          </div>
         </Field>
 
         <Field label="Social & website links (optional)">
@@ -580,6 +674,8 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
   const [availability, setAvailability] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Which AI field is currently being regenerated (one-tap rewrite).
+  const [regenField, setRegenField] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -591,7 +687,7 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
         // Clamp to each field's limit on load so an over-length AI draft never
         // shows a red over-limit counter or gets published past the cap.
         setCongrats((g.congratulatory_message ?? '').slice(0, 500));
-        setAbout((g.about_venue ?? '').slice(0, 700));
+        setAbout((g.about_venue ?? '').slice(0, 900));
         setPrice(firstPkg?.price_label ?? '');
         setPricingIntro((g.pricing_intro ?? '').slice(0, 400));
         setAvailability((g.availability_text ?? '').slice(0, 400));
@@ -599,6 +695,25 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
       finally { setLoading(false); }
     })();
   }, []);
+
+  // One-tap "give me a new version" for an AI-written field. Regenerating beats
+  // editing a wall of text — returns fresh copy the owner can keep or tweak.
+  const regenerate = async (field: 'congratulatory_message' | 'about_venue' | 'pricing_intro' | 'availability_text') => {
+    setRegenField(field); setError(null);
+    try {
+      const res = await fetch('/api/onboarding/regenerate-field', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field }),
+      });
+      const d = await res.json();
+      if (!res.ok || typeof d.text !== 'string') { setError(d.error || 'Could not rewrite that. Try again.'); return; }
+      if (field === 'congratulatory_message') setCongrats(d.text);
+      else if (field === 'about_venue') setAbout(d.text);
+      else if (field === 'pricing_intro') setPricingIntro(d.text);
+      else if (field === 'availability_text') setAvailability(d.text);
+    } catch { setError('Could not rewrite that. Try again.'); }
+    finally { setRegenField(null); }
+  };
 
   const save = async () => {
     setSaving(true); setError(null);
@@ -609,7 +724,7 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           congratulatory_message: congrats.slice(0, 500),
-          about_venue: about.slice(0, 700),
+          about_venue: about.slice(0, 900),
           pricing_intro: pricingIntro.slice(0, 400),
           availability_text: availability.slice(0, 400),
           price_label: price,
@@ -627,10 +742,21 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
   // Block publishing while any field exceeds its limit. maxLength caps typing,
   // but AI/Google drafts loaded in can exceed it, so guard the continue button.
   const overCongrats = congrats.length > 500;
-  const overAbout = about.length > 700;
+  const overAbout = about.length > 900;
   const overPricingIntro = pricingIntro.length > 400;
   const overAvailability = availability.length > 400;
   const anyOver = overCongrats || overAbout || overPricingIntro || overAvailability;
+
+  const RegenBtn = ({ field }: { field: 'congratulatory_message' | 'about_venue' | 'pricing_intro' | 'availability_text' }) => (
+    <button
+      type="button"
+      onClick={() => regenerate(field)}
+      disabled={regenField !== null}
+      className="flex items-center gap-1 text-xs font-medium text-gray-400 transition-colors hover:text-gray-700 disabled:opacity-50"
+    >
+      {regenField === field ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Regenerate
+    </button>
+  );
 
   return (
     <div>
@@ -639,7 +765,10 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
 
       <div className="mt-4 space-y-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">Welcome message</label>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Welcome message</label>
+            <RegenBtn field="congratulatory_message" />
+          </div>
           <textarea value={congrats} maxLength={500} onChange={(e) => setCongrats(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${congrats.length >= 500 ? 'text-red-500' : 'text-gray-400'}`}>{congrats.length}/500</div>
           {overCongrats && <p className="mt-1 text-xs font-medium text-red-500">Trim to 500 characters to continue.</p>}
@@ -655,21 +784,30 @@ function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">About your venue</label>
-          <textarea value={about} maxLength={700} onChange={(e) => setAbout(e.target.value)} rows={6} className="w-full resize-y min-h-[136px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-          <div className={`mt-1 text-right text-xs font-mono tabular-nums ${about.length >= 700 ? 'text-red-500' : 'text-gray-400'}`}>{about.length}/700</div>
-          {overAbout && <p className="mt-1 text-xs font-medium text-red-500">Trim to 700 characters to continue.</p>}
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">About your venue</label>
+            <RegenBtn field="about_venue" />
+          </div>
+          <textarea value={about} maxLength={900} onChange={(e) => setAbout(e.target.value)} rows={6} className="w-full resize-y min-h-[136px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+          <div className={`mt-1 text-right text-xs font-mono tabular-nums ${about.length >= 900 ? 'text-red-500' : 'text-gray-400'}`}>{about.length}/900</div>
+          {overAbout && <p className="mt-1 text-xs font-medium text-red-500">Trim to 900 characters to continue.</p>}
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">Pricing intro</label>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Pricing intro</label>
+            <RegenBtn field="pricing_intro" />
+          </div>
           <textarea value={pricingIntro} maxLength={400} onChange={(e) => setPricingIntro(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${pricingIntro.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{pricingIntro.length}/400</div>
           {overPricingIntro && <p className="mt-1 text-xs font-medium text-red-500">Trim to 400 characters to continue.</p>}
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">Availability</label>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="text-sm font-medium text-gray-700">Availability</label>
+            <RegenBtn field="availability_text" />
+          </div>
           <textarea value={availability} maxLength={400} onChange={(e) => setAvailability(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           <div className={`mt-1 text-right text-xs font-mono tabular-nums ${availability.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{availability.length}/400</div>
           {overAvailability && <p className="mt-1 text-xs font-medium text-red-500">Trim to 400 characters to continue.</p>}
@@ -824,6 +962,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
       <button onClick={publish} disabled={publishing} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
         {publishing ? <><Loader2 size={18} className="animate-spin" /> Publishing…</> : <>Publish &amp; go live <ArrowRight size={18} /></>}
       </button>
+      <p className="mt-2 text-xs text-gray-400">You can edit everything later.</p>
     </div>
   );
 }

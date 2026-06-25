@@ -142,7 +142,7 @@ Write generously so each page of the printed guide feels full and warm. Do NOT w
 Return JSON with EXACTLY these string keys:
 {
   "congratulatory_message": "3-4 warm sentences congratulating the bride, welcoming her, and previewing what this guide covers (about 350-450 characters)",
-  "about_venue": "5-6 vivid sentences describing the venue, weaving in the differentiators and why couples love getting married here (about 550-700 characters)",
+  "about_venue": "4-5 vivid sentences describing the venue, weaving in the differentiators and why couples love getting married here (about 450-650 characters, and NEVER exceed 680 characters)",
   "pricing_intro": "2-3 reassuring sentences introducing the pricing section, transparent and confident (about 250-350 characters)",
   "availability_text": "1-2 sentences about availability/seasonality and gentle urgency to book",
   "cta_headline": "short punchy headline inviting a tour",
