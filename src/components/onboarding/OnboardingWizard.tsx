@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, Link2, Check, Copy, Share2, Sparkles, Loader2, X,
-  ArrowRight, ArrowLeft, MapPin, Star, PartyPopper, ImageIcon,
+  ArrowRight, ArrowLeft, MapPin, Star, CheckCircle2, ImageIcon,
   Mail, Send,
 } from 'lucide-react';
 
@@ -733,8 +733,8 @@ function PublishStep({ onDone }: { onDone: () => void }) {
   if (liveUrl) {
     return (
       <div className="text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full" style={{ backgroundColor: `${BRAND}1a` }}>
-          <PartyPopper size={28} style={{ color: BRAND }} />
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+          <CheckCircle2 size={30} className="text-green-600" />
         </div>
         <h2 className="text-2xl font-bold text-gray-900">You&apos;re live!</h2>
         <p className="mt-1 text-sm text-gray-500">Your Bride Booking System is on. Add the link below to your Instagram bio, your TikTok bio, your email signature, and your website. From now on, the moment a bride asks for your pricing, she lands in your inbox. Call her first.</p>
