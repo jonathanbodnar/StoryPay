@@ -749,7 +749,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
           <PartyPopper size={28} style={{ color: BRAND }} />
         </div>
         <h2 className="text-2xl font-bold text-gray-900">You&apos;re live!</h2>
-        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System is on. Add this link to your Instagram bio, TikTok bio, email signature, and website. The second a bride requests your pricing, she&apos;s in your inbox. Call her first.</p>
+        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System is on. Add the link below to your Instagram bio, TikTok bio, email signature, and website. The second a bride requests your pricing, she&apos;s in your inbox. Call her first.</p>
 
         {/* ── The activation moment (primary) ───────────────────────────── */}
         {testStatus === 'done' && testLead ? (
@@ -790,8 +790,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
 
         {/* ── Share your link (secondary, below the proof) ──────────────── */}
         <div className="mt-7 border-t border-gray-100 pt-5">
-          <p className="text-sm text-gray-500">Your machine is on. Now point brides at it, paste this link in your Instagram &amp; TikTok bio, your email signature, and your website.</p>
-          <div className="mt-3 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-2">
+          <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-2">
             <span className="flex-1 truncate px-2 text-sm text-gray-700">{liveUrl}</span>
             <button onClick={copy} className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: BRAND }}>
               {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
