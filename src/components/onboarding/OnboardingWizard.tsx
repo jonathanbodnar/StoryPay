@@ -78,6 +78,7 @@ export default function OnboardingWizard() {
   const [complete, setComplete] = useState(false); // listing published + guide live, or onboarded
   const [open, setOpen] = useState(false);          // modal open
   const [step, setStep] = useState(0);
+  const [live, setLive] = useState(false);          // listing is published (all pills green)
 
   // Gate on onboarding state. "Complete" = they published via the wizard, OR
   // they manually finished both the listing (is_published) and the pricing
@@ -189,6 +190,12 @@ export default function OnboardingWizard() {
         .sv-modal-scroll.is-scrolling::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 9999px; }
         .sv-modal-scroll.is-scrolling::-webkit-scrollbar-track { background: transparent; }
         .sv-modal-scroll.is-scrolling { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transparent; }
+        @keyframes svTestPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(27,27,27,0.18); }
+          50%      { box-shadow: 0 0 0 6px rgba(27,27,27,0); }
+        }
+        .sv-test-pulse { animation: svTestPulse 2.4s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .sv-test-pulse { animation: none; } }
       `}</style>
       <div
         onScroll={handleScroll}
@@ -203,12 +210,12 @@ export default function OnboardingWizard() {
           Save &amp; close <X size={15} />
         </button>
 
-        <StepDots step={step} />
+        <StepDots step={step} live={live} />
 
         <div className="px-6 pb-8 pt-7 sm:px-10">
           {step === 0 && <ConnectStep onNext={() => go(1)} />}
           {step === 1 && <QuestionsStep onBack={() => go(0)} onNext={() => go(2)} />}
-          {step === 2 && <PublishStep onDone={() => {
+          {step === 2 && <PublishStep onLive={() => setLive(true)} onDone={() => {
             setComplete(true);
             setOpen(false);
             try { window.dispatchEvent(new CustomEvent('storyvenue:setup-complete')); } catch { /* ignore */ }
@@ -219,13 +226,14 @@ export default function OnboardingWizard() {
   );
 }
 
-function StepDots({ step }: { step: number }) {
+function StepDots({ step, live = false }: { step: number; live?: boolean }) {
   const labels = ['Connect', 'Details', 'Go live'];
   return (
     <div className="flex items-center justify-center gap-2 px-6 pt-7">
       {labels.map((l, i) => {
-        const done = i < step;
-        const current = i === step;
+        // Once live, every pill (including "Go live") reads as complete/green.
+        const done = i < step || (live && i <= step);
+        const current = i === step && !live;
         return (
           <div key={l} className="flex items-center gap-2">
             <div
@@ -661,7 +669,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /* ── Step 2: Publish ────────────────────────────────────────────────────── */
 type TestLead = { id: string; name: string; email: string; phone: string | null; message: string; booking_timeline: string | null };
 
-function PublishStep({ onDone }: { onDone: () => void }) {
+function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void }) {
   const [publishing, setPublishing] = useState(false);
   const [liveUrl, setLiveUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -690,6 +698,9 @@ function PublishStep({ onDone }: { onDone: () => void }) {
       finally { setHydrating(false); }
     })();
   }, []);
+
+  // Tell the wizard shell we're live so the "Go live" pill turns green.
+  useEffect(() => { if (liveUrl) onLive?.(); }, [liveUrl, onLive]);
 
   const sendTest = async () => {
     setTestStatus('sending'); setTestError(null);
@@ -769,7 +780,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
             <button
               onClick={sendTest}
               disabled={testStatus === 'sending'}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="sv-test-pulse mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: BRAND }}
             >
               {testStatus === 'sending'
