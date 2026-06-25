@@ -24,6 +24,9 @@ import {
 
 const SKIP_KEY = 'sv_onboarding_skipped';
 const BRAND = '#1b1b1b';
+// Manual (no-Google) venues must add at least this many photos so the guide
+// and public listing render full, not sparse.
+const MIN_PHOTOS = 10;
 
 // Mirrors the venue-listing editor so selections carry over to the listing.
 const FEATURE_OPTIONS = [
@@ -502,6 +505,9 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  // True when the venue already has imported (Google) photos — then the
+  // in-modal uploader is optional. Manual venues must add at least MIN_PHOTOS.
+  const [hasImportedPhotos, setHasImportedPhotos] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -560,6 +566,10 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           if (d.capacity_max != null) server.maxGuests = String(d.capacity_max);
           if (d.price_min != null) server.priceFrom = String(d.price_min);
           if (d.price_max != null) server.priceTo = String(d.price_max);
+          const importedGallery = Array.isArray(d.gallery_images) ? d.gallery_images.filter(Boolean) : [];
+          if (importedGallery.length > 0 || (typeof d.cover_image_url === 'string' && d.cover_image_url.trim())) {
+            setHasImportedPhotos(true);
+          }
           if (d.social_links && typeof d.social_links === 'object' && !Array.isArray(d.social_links)) {
             const s: Record<string, string> = {};
             for (const { key } of SOCIAL_FIELDS) {
@@ -604,7 +614,14 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   const toggleFeature = (f: string) =>
     setFeatures((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
 
+  const photosRequired = !hasImportedPhotos;
+  const photosOk = !photosRequired || photos.length >= MIN_PHOTOS;
+
   const submit = async () => {
+    if (!photosOk) {
+      setPhotoError(`Please add at least ${MIN_PHOTOS} photos so your guide and listing look full.`);
+      return;
+    }
     setSaving(true); setError(null);
     try {
       const res = await fetch('/api/onboarding/draft-guide', {
@@ -698,8 +715,12 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           <textarea value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} rows={4} placeholder="e.g. waterfront ceremony site, on-site suites, in-house catering" className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
         </Field>
 
-        <Field label="Photos of your venue">
-          <p className="-mt-0.5 mb-2 text-xs text-gray-500">Add a few photos and we&apos;ll build your cover and gallery from them. If you imported from Google we already have these, so this is optional.</p>
+        <Field label={photosRequired ? `Photos of your venue (at least ${MIN_PHOTOS})` : 'Photos of your venue'}>
+          <p className="-mt-0.5 mb-2 text-xs text-gray-500">
+            {photosRequired
+              ? `Add at least ${MIN_PHOTOS} photos and we'll build your cover and gallery from them. ${photos.length}/${MIN_PHOTOS} added.`
+              : "Add a few photos and we'll build your cover and gallery from them. If you imported from Google we already have these, so this is optional."}
+          </p>
           <div className="flex flex-wrap gap-2">
             {photos.map((url) => (
               <div key={url} className="relative h-20 w-20 overflow-hidden rounded-lg border border-gray-200">
@@ -742,7 +763,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
 
       <div className="mt-6 flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"><ArrowLeft size={14} /> Back</button>
-        <button onClick={submit} disabled={saving} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
+        <button onClick={submit} disabled={saving || !photosOk} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: BRAND }}>
           {saving ? <><Loader2 size={16} className="animate-spin" /> Creating your guide…</> : <>Create my guide <Sparkles size={16} /></>}
         </button>
       </div>
