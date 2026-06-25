@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock, X, ArrowRight, Sparkles, CalendarClock } from 'lucide-react';
-import ScheduleDemoModal from '@/components/ScheduleDemoModal';
+import DashboardBookingModal from '@/components/DashboardBookingModal';
 
 /**
  * Visual + copy primitives for "this feature isn't included in your current
@@ -285,7 +285,7 @@ function LockedFeatureBody({ featureName, navId, onNavigate }: LockedFeatureBody
         )}
       </div>
 
-      {isDemoLed && <ScheduleDemoModal open={demoOpen} onClose={() => setDemoOpen(false)} featureName="AI Concierge" />}
+      {isDemoLed && <DashboardBookingModal open={demoOpen} onClose={() => setDemoOpen(false)} />}
     </div>
   );
 }

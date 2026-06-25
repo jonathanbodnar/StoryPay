@@ -7,7 +7,7 @@ import {
   Clock, Send, Users, ExternalLink, SkipForward, X as XIcon,
   RefreshCw, Image as ImageIcon, Link as LinkIcon, Lock, CalendarClock,
 } from 'lucide-react';
-import ScheduleDemoModal from '@/components/ScheduleDemoModal';
+import DashboardBookingModal from '@/components/DashboardBookingModal';
 
 /** Greyed-out, locked control for tier-gated phases (e.g. AI Concierge). Shows
  *  a hover tooltip and opens the schedule-a-demo modal when clicked. */
@@ -34,7 +34,7 @@ function LockedPhaseControl({ tooltip }: { tooltip: string }) {
           <span className="mt-0.5 block text-gray-300">{tooltip}</span>
         </span>
       </button>
-      <ScheduleDemoModal open={demoOpen} onClose={() => setDemoOpen(false)} featureName="AI Concierge" />
+      <DashboardBookingModal open={demoOpen} onClose={() => setDemoOpen(false)} />
     </>
   );
 }
