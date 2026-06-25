@@ -21,6 +21,7 @@ import {
   ArrowRight, ArrowLeft, MapPin, Star, CheckCircle2, ImageIcon,
   Mail, Send, Inbox,
 } from 'lucide-react';
+import InlineTrialCardForm from '@/components/billing/InlineTrialCardForm';
 
 const SKIP_KEY = 'sv_onboarding_skipped';
 const BRAND = '#1b1b1b';
@@ -808,6 +809,13 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
   const [testEmailTo, setTestEmailTo] = useState('');
   const [testError, setTestError] = useState<string | null>(null);
 
+  // Card capture on publish: switching on the Bride Booking System requires a
+  // card (14-day free trial). We only show the inline form when billing says a
+  // card is needed (no card on file yet).
+  const [cardStage, setCardStage] = useState(false);
+  const [cardIntent, setCardIntent] = useState<{ clientToken: string; environment: string } | null>(null);
+  const [billing, setBilling] = useState<{ planName: string; amountCents: number; trialEndsAt: string } | null>(null);
+
   // Already live? Jump to the success screen instead of asking them to publish
   // again — going live is a one-time action.
   useEffect(() => {
@@ -838,7 +846,8 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
     } catch { setTestError('Something went wrong. Try again.'); setTestStatus('idle'); }
   };
 
-  const publish = async () => {
+  // The actual publish — flips the listing/guide live.
+  const doPublish = async () => {
     setPublishing(true); setError(null);
     try {
       const res = await fetch('/api/onboarding/state', {
@@ -847,9 +856,39 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
       });
       const d = await res.json();
       if (!res.ok) { setError(d.error || 'Publish failed.'); return; }
+      setCardStage(false);
       setLiveUrl(d.live_url || null);
     } catch { setError('Publish failed. Try again.'); }
     finally { setPublishing(false); }
+  };
+
+  // "Publish & go live" entry point: gate on a card first. If a card is already
+  // on file (or billing isn't configured), publish straight away; otherwise
+  // load the inline card form and require it before going live.
+  const startPublish = async () => {
+    setPublishing(true); setError(null);
+    try {
+      const bRes = await fetch('/api/onboarding/billing', { method: 'POST' });
+      const b = await bRes.json();
+      if (bRes.ok && b.needsCard) {
+        const piRes = await fetch('/api/venue-billing/payment-intent', { method: 'POST' });
+        const pi = await piRes.json();
+        if (!piRes.ok || !pi.clientToken) {
+          setError(pi.error || 'Could not load the payment form. Please try again.');
+          return;
+        }
+        setBilling({ planName: b.planName, amountCents: b.amountCents, trialEndsAt: b.trialEndsAt });
+        setCardIntent({ clientToken: pi.clientToken, environment: pi.environment || 'production' });
+        setCardStage(true);
+        return;
+      }
+      // No card required → publish immediately.
+      await doPublish();
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const copy = () => {
@@ -944,6 +983,55 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
     );
   }
 
+  // ── Card capture stage (required before going live) ──────────────────────
+  if (cardStage && cardIntent) {
+    const trialDate = billing?.trialEndsAt
+      ? new Date(billing.trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : '';
+    const monthly = billing ? `$${(billing.amountCents / 100).toFixed(0)}` : '';
+    return (
+      <div>
+        <div className="text-center">
+          <p className="text-sm font-medium text-emerald-600">No charge today</p>
+          <h2 className="mt-1 text-xl font-semibold text-gray-900">Switch on your Bride Booking System</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Add a card to go live. You won&apos;t be charged{trialDate ? ` until ${trialDate}` : ' during your free trial'}, and you can cancel anytime.
+          </p>
+        </div>
+
+        {billing && (
+          <div className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">{billing.planName || 'Bride Booking System'}</span>
+              <span className="font-semibold text-gray-900">{monthly}/mo</span>
+            </div>
+            <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
+              <Sparkles size={11} /> 14-day free trial{trialDate ? ` · First charge ${trialDate}` : ''}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+          {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
+          <InlineTrialCardForm
+            clientToken={cardIntent.clientToken}
+            environment={cardIntent.environment}
+            onSuccess={() => { void doPublish(); }}
+            onError={(msg) => setError(msg)}
+          />
+        </div>
+
+        <button
+          onClick={() => { setCardStage(false); setError(null); setCardIntent(null); }}
+          className="mt-4 flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"
+        >
+          <ArrowLeft size={14} /> Back
+        </button>
+        <p className="mt-2 text-center text-[11px] text-gray-400">Secured &amp; encrypted. Cancel anytime{trialDate ? ` before ${trialDate}` : ''}.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="text-center">
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${BRAND}1a` }}>
@@ -954,10 +1042,10 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
-      <button onClick={publish} disabled={publishing} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
+      <button onClick={startPublish} disabled={publishing} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
         {publishing ? <><Loader2 size={18} className="animate-spin" /> Publishing…</> : <>Publish &amp; go live <ArrowRight size={18} /></>}
       </button>
-      <p className="mt-2 text-xs text-gray-400">You can edit everything later.</p>
+      <p className="mt-2 text-xs text-gray-400">14-day free trial. You can edit everything later.</p>
     </div>
   );
 }
