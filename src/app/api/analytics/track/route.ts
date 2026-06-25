@@ -43,7 +43,6 @@ const ALLOWED_CLIENT_EVENTS = new Set([
   'onboarding_started',
   'onboarding_details_done',
   'card_shown',
-  'card_consent_accepted',
   'card_entered',
 ]);
 

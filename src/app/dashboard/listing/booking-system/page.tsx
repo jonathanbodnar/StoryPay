@@ -5,8 +5,37 @@ import {
   Zap, Mail, MessageSquare, Bot, ChevronDown, ChevronUp,
   Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, GripVertical,
   Clock, Send, Users, ExternalLink, SkipForward, X as XIcon,
-  RefreshCw, Image as ImageIcon, Link as LinkIcon,
+  RefreshCw, Image as ImageIcon, Link as LinkIcon, Lock, CalendarClock,
 } from 'lucide-react';
+
+const DEMO_URL = process.env.NEXT_PUBLIC_DEMO_URL || '/dashboard/directory-billing';
+
+/** Greyed-out, locked control for tier-gated phases (e.g. AI Concierge). Shows
+ *  a hover tooltip prompting the owner to schedule a demo. */
+function LockedPhaseControl({ tooltip }: { tooltip: string }) {
+  const external = /^https?:\/\//i.test(DEMO_URL);
+  return (
+    <a
+      href={DEMO_URL}
+      {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      className="group relative flex shrink-0 items-center gap-2"
+    >
+      <span className="flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-600">
+        <Lock size={10} /> All-Inclusive
+      </span>
+      {/* Greyed, non-functional toggle */}
+      <span className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-gray-200 opacity-50">
+        <span className="inline-block h-4 w-4 translate-x-1 transform rounded-full bg-white shadow" />
+      </span>
+      <span className="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-left text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+        <span className="flex items-center gap-1 font-semibold">
+          <CalendarClock size={11} /> Schedule a demo
+        </span>
+        <span className="mt-0.5 block text-gray-300">{tooltip}</span>
+      </span>
+    </a>
+  );
+}
 import type { BookingSystemConfig, StepConfig } from '@/app/api/listing/booking-system/route';
 import type { StepLeadsPayload, StepLeadInfo } from '@/app/api/listing/booking-system/step-leads/route';
 import RichTextEditor from '@/components/RichTextEditor';
@@ -37,34 +66,39 @@ function Toggle({
 
 function PhaseCard({
   number, title, subtitle, icon, enabled, onToggle, disabled, children, accent, noPadding, defaultOpen,
+  locked, lockTooltip,
 }: {
   number: number; title: string; subtitle: string;
   icon: React.ReactNode; enabled: boolean; onToggle: (v: boolean) => void;
   disabled?: boolean; children?: React.ReactNode; accent: string; noPadding?: boolean; defaultOpen?: boolean;
+  locked?: boolean; lockTooltip?: string;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen ?? true);
+  const effectiveEnabled = locked ? false : enabled;
 
   return (
-    <div className={`rounded-2xl border bg-white transition-shadow overflow-hidden ${enabled ? 'shadow-sm border-gray-200' : 'border-gray-100 opacity-60'}`}>
+    <div className={`rounded-2xl border bg-white transition-shadow overflow-hidden ${effectiveEnabled ? 'shadow-sm border-gray-200' : 'border-gray-100 opacity-60'}`}>
       <div className="flex items-start gap-4 p-5">
         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent}`}>
           {icon}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-3">
-            <div className="cursor-pointer flex-1" onClick={() => setIsOpen(!isOpen)}>
+            <div className={`flex-1 ${locked ? '' : 'cursor-pointer'}`} onClick={() => { if (!locked) setIsOpen(!isOpen); }}>
               <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase flex items-center gap-1">
                 Phase {number}
-                {isOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {locked ? <Lock size={11} className="text-violet-400" /> : (isOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
               </span>
               <h3 className="text-[15px] font-semibold text-gray-900 leading-tight">{title}</h3>
               <p className="mt-0.5 text-[12px] text-gray-500">{subtitle}</p>
             </div>
-            <Toggle checked={enabled} onChange={onToggle} disabled={disabled} />
+            {locked
+              ? <LockedPhaseControl tooltip={lockTooltip ?? 'This is an upgraded plan tier. Schedule a demo to learn more.'} />
+              : <Toggle checked={enabled} onChange={onToggle} disabled={disabled} />}
           </div>
         </div>
       </div>
-      {enabled && isOpen && children && (
+      {!locked && effectiveEnabled && isOpen && children && (
         <div className={`border-t border-gray-100 ${noPadding ? '' : 'px-5 pb-5 pt-4'}`}>
           {children}
         </div>
@@ -891,7 +925,7 @@ export default function BookingSystemPage() {
           />
         </PhaseCard>
 
-        {/* Phase 6 — AI Concierge Settings */}
+        {/* Phase 6 — AI Concierge Settings (All-Inclusive tier only) */}
         <PhaseCard
           number={6}
           title="AI Concierge"
@@ -900,6 +934,8 @@ export default function BookingSystemPage() {
           accent="bg-emerald-50"
           enabled={cfg.aiEnabled}
           onToggle={(v) => void save({ aiEnabled: v })}
+          locked={!cfg.aiConciergeAllowed}
+          lockTooltip="AI Concierge is on our All-Inclusive plan, not Free or the Bride Booking System. Schedule a demo to learn more."
           noPadding
         >
           <AiConciergeSettingsPage />

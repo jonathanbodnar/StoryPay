@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { DEFAULT_GUIDE_EMAIL_BODY, DEFAULT_GUIDE_SMS_BODY } from '@/lib/marketing-email-worker';
+import { loadDirectoryNavAccess } from '@/lib/directory-plans-venue';
 
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
@@ -79,6 +80,24 @@ export interface BookingSystemConfig {
   // Eligibility
   a2pVerified:            boolean;
   ghlConnected:           boolean;
+  /** Whether the venue's plan tier includes the AI Concierge (All-Inclusive). */
+  aiConciergeAllowed:     boolean;
+}
+
+/**
+ * AI Concierge is a higher-tier (All-Inclusive) feature. Allowed when the
+ * venue's plan grants the `nav_marketing_ai_concierge` nav permission, or for
+ * legacy/no-plan venues (full access). Free + Bride Booking System plans do not
+ * include it.
+ */
+async function venueAllowsAiConcierge(venueId: string): Promise<boolean> {
+  try {
+    const nav = await loadDirectoryNavAccess(venueId);
+    if (nav.mode === 'full') return true;
+    return (nav.allowedNavIds ?? []).includes('nav_marketing_ai_concierge');
+  } catch {
+    return true; // fail open — don't lock a paying venue out on a transient error
+  }
 }
 
 // ─── GET ────────────────────────────────────────────────────────────────────
@@ -176,6 +195,7 @@ export async function GET() {
     aiNotifyEmails:     (v.ai_concierge_notify_emails as string[] | null) ?? [],
     a2pVerified:        (v.a2p_verified  as boolean | null) ?? false,
     ghlConnected:       (v.ghl_connected as boolean | null) ?? false,
+    aiConciergeAllowed: await venueAllowsAiConcierge(venueId),
   };
 
   return NextResponse.json(cfg);

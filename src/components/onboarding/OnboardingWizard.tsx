@@ -816,9 +816,6 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
   const [cardStage, setCardStage] = useState(false);
   const [cardIntent, setCardIntent] = useState<{ clientToken: string; environment: string } | null>(null);
   const [billing, setBilling] = useState<{ planName: string; amountCents: number; trialEndsAt: string } | null>(null);
-  // Explicit consent to the trial-then-charge terms — a hard precondition for
-  // the card form (chargeback defense). The card form only mounts once checked.
-  const [trialConsent, setTrialConsent] = useState(false);
 
   // Already live? Jump to the success screen instead of asking them to publish
   // again — going live is a one-time action.
@@ -1016,58 +1013,32 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
           </div>
         )}
 
-        <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl border border-gray-200 bg-gray-50 p-3.5">
-          <input
-            type="checkbox"
-            checked={trialConsent}
-            onChange={(e) => {
-              const v = e.target.checked;
-              setTrialConsent(v);
-              if (v) {
-                try {
-                  trackClient('card_consent_accepted', {
-                    label: 'Trial terms accepted',
-                  });
-                } catch { /* non-fatal */ }
-              }
-            }}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-[#1b1b1b] focus:ring-[#1b1b1b]"
-          />
-          <span className="text-xs leading-relaxed text-gray-600">
-            I understand my 14-day free trial starts today.{' '}
-            {trialDate
-              ? <>On <strong className="text-gray-800">{trialDate}</strong> my card will be charged <strong className="text-gray-800">{monthly}/mo</strong> unless I switch to the Free plan before then.</>
-              : <>After my trial my card will be charged <strong className="text-gray-800">{monthly}/mo</strong> unless I switch to the Free plan before then.</>}
-            {' '}I can cancel anytime.
-          </span>
-        </label>
-
-        <div className="mt-3 rounded-xl border border-gray-200 bg-white p-4">
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
           {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
-          {trialConsent ? (
-            <InlineTrialCardForm
-              clientToken={cardIntent.clientToken}
-              environment={cardIntent.environment}
-              onSuccess={() => {
-                try { trackClient('card_entered', { label: 'Card vaulted, trial started' }); } catch { /* non-fatal */ }
-                void doPublish();
-              }}
-              onError={(msg) => setError(msg)}
-            />
-          ) : (
-            <p className="py-6 text-center text-xs text-gray-400">
-              Check the box above to enter your card details.
-            </p>
-          )}
+          <InlineTrialCardForm
+            clientToken={cardIntent.clientToken}
+            environment={cardIntent.environment}
+            onSuccess={() => {
+              try { trackClient('card_entered', { label: 'Card vaulted, trial started' }); } catch { /* non-fatal */ }
+              void doPublish();
+            }}
+            onError={(msg) => setError(msg)}
+          />
         </div>
 
+        <p className="mt-3 text-center text-[11px] leading-relaxed text-gray-500">
+          {trialDate
+            ? <>Your card is charged <strong className="text-gray-700">{monthly}/mo</strong> on <strong className="text-gray-700">{trialDate}</strong> unless you switch to Free before then.</>
+            : <>Your card is charged <strong className="text-gray-700">{monthly}/mo</strong> after your trial unless you switch to Free before then.</>}
+        </p>
+
         <button
-          onClick={() => { setCardStage(false); setError(null); setCardIntent(null); setTrialConsent(false); }}
-          className="mt-4 flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"
+          onClick={() => { setCardStage(false); setError(null); setCardIntent(null); }}
+          className="mt-3 flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"
         >
           <ArrowLeft size={14} /> Back
         </button>
-        <p className="mt-2 text-center text-[11px] text-gray-400">Secured &amp; encrypted. Billed as &ldquo;StoryPay&rdquo;. Cancel anytime{trialDate ? ` before ${trialDate}` : ''}.</p>
+        <p className="mt-2 text-center text-[11px] text-gray-400">Secured &amp; encrypted. Billed as &ldquo;StoryVenue&rdquo;. Cancel anytime{trialDate ? ` before ${trialDate}` : ''}.</p>
       </div>
     );
   }
