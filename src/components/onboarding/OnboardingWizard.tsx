@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, Link2, Check, Copy, Share2, Sparkles, Loader2, X,
-  ArrowRight, ArrowLeft, MapPin, Star, PartyPopper, ImageIcon, RefreshCw,
+  ArrowRight, ArrowLeft, MapPin, Star, PartyPopper, ImageIcon,
   Mail, Send,
 } from 'lucide-react';
 
@@ -108,7 +108,7 @@ export default function OnboardingWizard() {
         // their listing manually — a live listing means they're done here.
         const isComplete = Boolean(s.completed) || Boolean(s.is_published);
         setComplete(isComplete);
-        setStep(typeof s.last_step === 'number' ? Math.min(s.last_step, 3) : 0);
+        setStep(typeof s.last_step === 'number' ? Math.min(s.last_step, 2) : 0);
 
         if (forced) {
           setStep(0);
@@ -156,6 +156,16 @@ export default function OnboardingWizard() {
 
   const go = useCallback((n: number) => { setStep(n); saveStep(n); }, [saveStep]);
 
+  // Cleaner modal: the scrollbar stays hidden and only appears while the user is
+  // actively scrolling, then fades back out after a beat of inactivity.
+  const [scrolling, setScrolling] = useState(false);
+  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleScroll = useCallback(() => {
+    setScrolling(true);
+    if (scrollTimer.current) clearTimeout(scrollTimer.current);
+    scrollTimer.current = setTimeout(() => setScrolling(false), 700);
+  }, []);
+
   // Close the modal but keep the launcher bubble (until truly complete).
   // Closing saves progress so they resume exactly where they left off: the
   // current step is persisted on every advance, and we re-save on close to
@@ -172,7 +182,18 @@ export default function OnboardingWizard() {
 
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center overscroll-contain bg-gray-900/60 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-2xl sm:max-w-[52rem] max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl">
+      <style>{`
+        .sv-modal-scroll::-webkit-scrollbar { width: 0; height: 0; }
+        .sv-modal-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .sv-modal-scroll.is-scrolling::-webkit-scrollbar { width: 8px; height: 8px; }
+        .sv-modal-scroll.is-scrolling::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 9999px; }
+        .sv-modal-scroll.is-scrolling::-webkit-scrollbar-track { background: transparent; }
+        .sv-modal-scroll.is-scrolling { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transparent; }
+      `}</style>
+      <div
+        onScroll={handleScroll}
+        className={`sv-modal-scroll ${scrolling ? 'is-scrolling' : ''} relative w-full max-w-2xl sm:max-w-[52rem] max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl`}
+      >
         <button
           onClick={dismiss}
           className="absolute right-4 top-4 z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
@@ -187,8 +208,7 @@ export default function OnboardingWizard() {
         <div className="px-6 pb-8 pt-7 sm:px-10">
           {step === 0 && <ConnectStep onNext={() => go(1)} />}
           {step === 1 && <QuestionsStep onBack={() => go(0)} onNext={() => go(2)} />}
-          {step === 2 && <ReviewStep onBack={() => go(1)} onNext={() => go(3)} />}
-          {step === 3 && <PublishStep onDone={() => {
+          {step === 2 && <PublishStep onDone={() => {
             setComplete(true);
             setOpen(false);
             try { window.dispatchEvent(new CustomEvent('storyvenue:setup-complete')); } catch { /* ignore */ }
@@ -200,7 +220,7 @@ export default function OnboardingWizard() {
 }
 
 function StepDots({ step }: { step: number }) {
-  const labels = ['Connect', 'Details', 'Review', 'Go live'];
+  const labels = ['Connect', 'Details', 'Go live'];
   return (
     <div className="flex items-center justify-center gap-2 px-6 pt-7">
       {labels.map((l, i) => (
@@ -634,170 +654,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/* ── Step 2: Review the draft ───────────────────────────────────────────── */
-function ReviewStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
-  const [loading, setLoading] = useState(true);
-  // Every field is editable so the owner can override or simply confirm.
-  const [congrats, setCongrats] = useState('');
-  const [about, setAbout] = useState('');
-  const [price, setPrice] = useState('');
-  const [pricingIntro, setPricingIntro] = useState('');
-  const [availability, setAvailability] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Which AI field is currently being regenerated (one-tap rewrite).
-  const [regenField, setRegenField] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/listing/pricing-guide', { cache: 'no-store' });
-        const d = await res.json();
-        const g = d.guide ?? {};
-        const firstPkg = (g.packages ?? [])[0];
-        // Clamp to each field's limit on load so an over-length AI draft never
-        // shows a red over-limit counter or gets published past the cap.
-        setCongrats((g.congratulatory_message ?? '').slice(0, 500));
-        setAbout((g.about_venue ?? '').slice(0, 900));
-        setPrice(firstPkg?.price_label ?? '');
-        setPricingIntro((g.pricing_intro ?? '').slice(0, 400));
-        setAvailability((g.availability_text ?? '').slice(0, 400));
-      } catch { setError('Could not load your draft.'); }
-      finally { setLoading(false); }
-    })();
-  }, []);
-
-  // One-tap "give me a new version" for an AI-written field. Regenerating beats
-  // editing a wall of text — returns fresh copy the owner can keep or tweak.
-  const regenerate = async (field: 'congratulatory_message' | 'about_venue' | 'pricing_intro' | 'availability_text') => {
-    setRegenField(field); setError(null);
-    try {
-      const res = await fetch('/api/onboarding/regenerate-field', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field }),
-      });
-      const d = await res.json();
-      if (!res.ok || typeof d.text !== 'string') { setError(d.error || 'Could not rewrite that. Try again.'); return; }
-      if (field === 'congratulatory_message') setCongrats(d.text);
-      else if (field === 'about_venue') setAbout(d.text);
-      else if (field === 'pricing_intro') setPricingIntro(d.text);
-      else if (field === 'availability_text') setAvailability(d.text);
-    } catch { setError('Could not rewrite that. Try again.'); }
-    finally { setRegenField(null); }
-  };
-
-  const save = async () => {
-    setSaving(true); setError(null);
-    try {
-      // Hard-clamp to each field's limit. AI/Google-sourced drafts can exceed the
-      // maxLength (which only constrains typing), so trim before publishing.
-      await fetch('/api/onboarding/draft-guide', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          congratulatory_message: congrats.slice(0, 500),
-          about_venue: about.slice(0, 900),
-          pricing_intro: pricingIntro.slice(0, 400),
-          availability_text: availability.slice(0, 400),
-          price_label: price,
-        }),
-      });
-      onNext();
-    } catch { setError('Could not save. Try again.'); }
-    finally { setSaving(false); }
-  };
-
-  if (loading) {
-    return <div className="flex h-48 items-center justify-center text-gray-400"><Loader2 size={24} className="animate-spin" /></div>;
-  }
-
-  // Block publishing while any field exceeds its limit. maxLength caps typing,
-  // but AI/Google drafts loaded in can exceed it, so guard the continue button.
-  const overCongrats = congrats.length > 500;
-  const overAbout = about.length > 900;
-  const overPricingIntro = pricingIntro.length > 400;
-  const overAvailability = availability.length > 400;
-  const anyOver = overCongrats || overAbout || overPricingIntro || overAvailability;
-
-  const RegenBtn = ({ field }: { field: 'congratulatory_message' | 'about_venue' | 'pricing_intro' | 'availability_text' }) => (
-    <button
-      type="button"
-      onClick={() => regenerate(field)}
-      disabled={regenField !== null}
-      className="flex items-center gap-1 text-xs font-medium text-gray-400 transition-colors hover:text-gray-700 disabled:opacity-50"
-    >
-      {regenField === field ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Regenerate
-    </button>
-  );
-
-  return (
-    <div>
-      <h2 className="text-xl font-semibold text-gray-900">This becomes the guide brides see</h2>
-      <p className="mt-1 text-sm text-gray-500">We wrote it from your answers. Edit anything now or later. Just <strong>double-check your price</strong>.</p>
-
-      <div className="mt-4 space-y-4">
-        <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Welcome message</label>
-            <RegenBtn field="congratulatory_message" />
-          </div>
-          <textarea value={congrats} maxLength={500} onChange={(e) => setCongrats(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-          <div className={`mt-1 text-right text-xs font-mono tabular-nums ${congrats.length >= 500 ? 'text-red-500' : 'text-gray-400'}`}>{congrats.length}/500</div>
-          {overCongrats && <p className="mt-1 text-xs font-medium text-red-500">Trim to 500 characters to continue.</p>}
-        </div>
-
-        {/* Most important input on the screen: the price brides see first. */}
-        <div className="rounded-xl border-2 p-4 shadow-sm" style={{ borderColor: BRAND, backgroundColor: `${BRAND}0d` }}>
-          <label className="mb-2 flex items-center gap-1.5 text-base font-semibold" style={{ color: BRAND }}>
-            <Star size={16} /> Verify your pricing
-          </label>
-          <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Starting at $5,000" className="w-full rounded-lg border border-gray-300 bg-white px-3 py-3 text-base font-medium outline-none focus:border-gray-400" />
-          <p className="mt-2 text-xs text-gray-500">This is what brides see first. Make sure it&apos;s accurate.</p>
-        </div>
-
-        <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">About your venue</label>
-            <RegenBtn field="about_venue" />
-          </div>
-          <textarea value={about} maxLength={900} onChange={(e) => setAbout(e.target.value)} rows={6} className="w-full resize-y min-h-[136px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-          <div className={`mt-1 text-right text-xs font-mono tabular-nums ${about.length >= 900 ? 'text-red-500' : 'text-gray-400'}`}>{about.length}/900</div>
-          {overAbout && <p className="mt-1 text-xs font-medium text-red-500">Trim to 900 characters to continue.</p>}
-        </div>
-
-        <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Pricing intro</label>
-            <RegenBtn field="pricing_intro" />
-          </div>
-          <textarea value={pricingIntro} maxLength={400} onChange={(e) => setPricingIntro(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-          <div className={`mt-1 text-right text-xs font-mono tabular-nums ${pricingIntro.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{pricingIntro.length}/400</div>
-          {overPricingIntro && <p className="mt-1 text-xs font-medium text-red-500">Trim to 400 characters to continue.</p>}
-        </div>
-
-        <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Availability</label>
-            <RegenBtn field="availability_text" />
-          </div>
-          <textarea value={availability} maxLength={400} onChange={(e) => setAvailability(e.target.value)} rows={4} className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-          <div className={`mt-1 text-right text-xs font-mono tabular-nums ${availability.length >= 400 ? 'text-red-500' : 'text-gray-400'}`}>{availability.length}/400</div>
-          {overAvailability && <p className="mt-1 text-xs font-medium text-red-500">Trim to 400 characters to continue.</p>}
-        </div>
-      </div>
-
-      {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
-
-      <div className="mt-6 flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"><ArrowLeft size={14} /> Back</button>
-        <button onClick={save} disabled={saving || anyOver} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <>Looks good <ArrowRight size={16} /></>}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ── Step 3: Publish ────────────────────────────────────────────────────── */
+/* ── Step 2: Publish ────────────────────────────────────────────────────── */
 type TestLead = { id: string; name: string; email: string; phone: string | null; message: string; booking_timeline: string | null };
 
 function PublishStep({ onDone }: { onDone: () => void }) {
@@ -805,12 +662,30 @@ function PublishStep({ onDone }: { onDone: () => void }) {
   const [liveUrl, setLiveUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // While we check whether they already published (so a saved-and-resumed
+  // session lands straight on the "You're live" screen, not the publish button).
+  const [hydrating, setHydrating] = useState(true);
 
   // The activation moment: fire a test lead through their own live page.
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'done'>('idle');
   const [testLead, setTestLead] = useState<TestLead | null>(null);
   const [testEmailTo, setTestEmailTo] = useState('');
   const [testError, setTestError] = useState<string | null>(null);
+
+  // Already live? Jump to the success screen instead of asking them to publish
+  // again — going live is a one-time action.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/onboarding/state', { cache: 'no-store' });
+        if (res.ok) {
+          const s = await res.json();
+          if (s.is_published && s.live_url) setLiveUrl(s.live_url);
+        }
+      } catch { /* ignore */ }
+      finally { setHydrating(false); }
+    })();
+  }, []);
 
   const sendTest = async () => {
     setTestStatus('sending'); setTestError(null);
@@ -851,6 +726,10 @@ function PublishStep({ onDone }: { onDone: () => void }) {
     else copy();
   };
 
+  if (hydrating) {
+    return <div className="flex h-48 items-center justify-center text-gray-400"><Loader2 size={24} className="animate-spin" /></div>;
+  }
+
   if (liveUrl) {
     return (
       <div className="text-center">
@@ -858,7 +737,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
           <PartyPopper size={28} style={{ color: BRAND }} />
         </div>
         <h2 className="text-2xl font-bold text-gray-900">You&apos;re live!</h2>
-        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System is on. Add the link below to your Instagram bio, TikTok bio, email signature, and website. The second a bride requests your pricing, she&apos;s in your inbox. Call her first.</p>
+        <p className="mt-1 text-sm text-gray-500">Your Bride Booking System is on. Add the link below to your Instagram bio, your TikTok bio, your email signature, and your website. From now on, the moment a bride asks for your pricing, she lands in your inbox. Call her first.</p>
 
         {/* ── The activation moment (primary) ───────────────────────────── */}
         {testStatus === 'done' && testLead ? (
@@ -926,7 +805,7 @@ function PublishStep({ onDone }: { onDone: () => void }) {
         <Sparkles size={24} style={{ color: BRAND }} />
       </div>
       <h2 className="text-xl font-semibold text-gray-900">One click from going live</h2>
-      <p className="mt-1 text-sm text-gray-500">Publish to switch on your Bride Booking System. The second a bride requests your pricing, she&apos;s in your inbox. Call her first.</p>
+      <p className="mt-1 text-sm text-gray-500">Publishing switches on your Bride Booking System. From that moment, every bride who asks for your pricing lands right in your inbox. You just call her first.</p>
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
