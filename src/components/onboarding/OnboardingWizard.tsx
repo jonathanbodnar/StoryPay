@@ -40,13 +40,6 @@ const withCommas = (s: string) => {
   return d ? Number(d).toLocaleString('en-US') : '';
 };
 
-// Tappable seeds for the "what makes you special" box — lowers the blank-page
-// cost on the one field the AI leans on most.
-const SPECIAL_CHIPS = [
-  'Waterfront ceremony', 'On-site suites', 'Sunset views', 'Indoor & outdoor space',
-  'In-house catering', 'Exclusive single-event venue', 'Vineyard backdrop',
-  'Historic property', 'Mountain views', 'Get-ready suites',
-];
 // Persists in-progress Details answers so closing mid-step resumes them.
 const DETAILS_DRAFT_KEY = 'sv_onboarding_details_draft';
 
@@ -512,15 +505,6 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   const toggleFeature = (f: string) =>
     setFeatures((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
 
-  // Tapping an example chip seeds the differentiators box (comma-separated,
-  // no duplicates) so owners aren't staring at a blank field.
-  const addChip = (chip: string) =>
-    setDifferentiators((prev) => {
-      const parts = prev.split(',').map((s) => s.trim()).filter(Boolean);
-      if (parts.some((p) => p.toLowerCase() === chip.toLowerCase())) return prev;
-      return [...parts, chip].join(', ');
-    });
-
   const submit = async () => {
     setSaving(true); setError(null);
     try {
@@ -612,19 +596,6 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
 
         <Field label="Describe 3–4 things that make your venue special?">
           <textarea value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} rows={4} placeholder="e.g. waterfront ceremony site, on-site suites, in-house catering" className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
-          <p className="mt-2 mb-1.5 text-xs text-gray-500">This is what our AI uses most. Tap to add, then edit:</p>
-          <div className="flex flex-wrap gap-2">
-            {SPECIAL_CHIPS.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => addChip(chip)}
-                className="rounded-full border border-dashed border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-gray-400 hover:bg-gray-50"
-              >
-                + {chip}
-              </button>
-            ))}
-          </div>
         </Field>
 
         <Field label="Social & website links (optional)">
