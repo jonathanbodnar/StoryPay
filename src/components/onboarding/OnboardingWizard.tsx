@@ -45,6 +45,10 @@ const withCommas = (s: string) => {
 
 // Persists in-progress Details answers so closing mid-step resumes them.
 const DETAILS_DRAFT_KEY = 'sv_onboarding_details_draft';
+// '1' when the owner chose manual entry (no Google import) this session. Drives
+// the required 10-photo uploader on the Details step regardless of any stale
+// venue data left over from a prior import.
+const MANUAL_KEY = 'sv_onboarding_manual';
 
 const VENUE_TYPES = ['barn', 'ballroom', 'garden', 'winery', 'beach', 'estate', 'rustic', 'modern', 'historic', 'other'];
 const INDOOR_OUTDOOR = ['indoor', 'outdoor', 'both'];
@@ -379,7 +383,7 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
           )}
         </div>
 
-        <button onClick={onNext} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3 font-medium text-white transition-opacity hover:opacity-90" style={{ backgroundColor: BRAND }}>
+        <button onClick={() => { try { localStorage.setItem(MANUAL_KEY, '0'); } catch {} onNext(); }} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3 font-medium text-white transition-opacity hover:opacity-90" style={{ backgroundColor: BRAND }}>
           Continue <ArrowRight size={16} />
         </button>
         <button
@@ -477,7 +481,7 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
           <p className="text-sm font-medium text-gray-700">Can&apos;t find your venue?</p>
           <p className="mt-0.5 text-xs text-gray-500">Add your city to narrow it down, or if you&apos;re not on Google yet, enter your details by hand.</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <button onClick={onNext} className="rounded-lg px-4 py-2 text-sm font-medium text-white" style={{ backgroundColor: BRAND }}>
+            <button onClick={() => { try { localStorage.setItem(MANUAL_KEY, '1'); } catch {} onNext(); }} className="rounded-lg px-4 py-2 text-sm font-medium text-white" style={{ backgroundColor: BRAND }}>
               Enter details manually
             </button>
             <button onClick={() => { setMode('link'); setCandidates([]); setError(null); setInput(''); }} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-white">
@@ -488,7 +492,7 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
       )}
 
       <div className="mt-6 flex items-center justify-end">
-        <button onClick={onNext} className="text-sm font-medium text-gray-500 hover:text-gray-800">Enter manually →</button>
+        <button onClick={() => { try { localStorage.setItem(MANUAL_KEY, '1'); } catch {} onNext(); }} className="text-sm font-medium text-gray-500 hover:text-gray-800">Enter manually →</button>
       </div>
     </div>
   );
@@ -511,6 +515,9 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   // True when the venue already has imported (Google) photos — then the
   // in-modal uploader is optional. Manual venues must add at least MIN_PHOTOS.
   const [hasImportedPhotos, setHasImportedPhotos] = useState(false);
+  // True when the owner explicitly chose manual entry (no Google import) this
+  // session. This forces the photo uploader even if stale venue data exists.
+  const [manualEntry, setManualEntry] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -556,6 +563,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   // left off. The local draft wins because it reflects their latest typing.
   const hydrated = useRef(false);
   useEffect(() => {
+    try { setManualEntry(localStorage.getItem(MANUAL_KEY) === '1'); } catch { /* ignore */ }
     (async () => {
       const server: Record<string, unknown> = {};
       try {
@@ -617,7 +625,9 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   const toggleFeature = (f: string) =>
     setFeatures((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
 
-  const photosRequired = !hasImportedPhotos;
+  // Show the required uploader whenever they chose manual entry, or whenever no
+  // imported photos exist (manual venues never have Google imagery).
+  const photosRequired = manualEntry || !hasImportedPhotos;
   const photosOk = !photosRequired || photos.length >= MIN_PHOTOS;
 
   const submit = async () => {
@@ -647,7 +657,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
         }),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not draft your guide.'); return; }
-      try { localStorage.removeItem(DETAILS_DRAFT_KEY); } catch { /* ignore */ }
+      try { localStorage.removeItem(DETAILS_DRAFT_KEY); localStorage.removeItem(MANUAL_KEY); } catch { /* ignore */ }
       onNext();
     } catch { setError('Something went wrong. Try again.'); }
     finally { setSaving(false); }
