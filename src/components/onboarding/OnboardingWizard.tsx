@@ -24,7 +24,6 @@ import {
 import InlineTrialCardForm from '@/components/billing/InlineTrialCardForm';
 import { trackClient } from '@/lib/analytics-client';
 
-const SKIP_KEY = 'sv_onboarding_skipped';
 const BRAND = '#1b1b1b';
 // Manual (no-Google) venues must add at least this many photos so the guide
 // and public listing render full, not sparse.
@@ -96,13 +95,12 @@ export default function OnboardingWizard() {
     let cancelled = false;
     (async () => {
       // Forced re-open (from the "Restart setup" button) — open immediately,
-      // regardless of completion or the per-session skip flag.
+      // regardless of completion.
       let forced = false;
       try {
         const params = new URLSearchParams(window.location.search);
         if (params.get('onboarding') === '1') {
           forced = true;
-          sessionStorage.removeItem(SKIP_KEY);
           params.delete('onboarding');
           const qs = params.toString();
           window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
@@ -125,9 +123,10 @@ export default function OnboardingWizard() {
           setComplete(false); // override so render guard doesn't block a restarted wizard
           setOpen(true);
         } else if (!isComplete) {
-          // Auto-open once per session; after that the bubble re-summons it.
-          const skipped = (() => { try { return sessionStorage.getItem(SKIP_KEY) === '1'; } catch { return false; } })();
-          setOpen(!skipped);
+          // Hard gate: an unpublished venue is held here. The modal always opens
+          // (resuming at last_step) on every load/return until they go live —
+          // which requires a card. There is no dismiss-to-dashboard path.
+          setOpen(true);
         }
       } catch { /* ignore */ }
       finally { if (!cancelled) setChecking(false); }
@@ -176,16 +175,6 @@ export default function OnboardingWizard() {
     scrollTimer.current = setTimeout(() => setScrolling(false), 700);
   }, []);
 
-  // Close the modal but keep the launcher bubble (until truly complete).
-  // Closing saves progress so they resume exactly where they left off: the
-  // current step is persisted on every advance, and we re-save on close to
-  // cover a mid-step exit. The launcher reopens at last_step.
-  const dismiss = useCallback(() => {
-    try { sessionStorage.setItem(SKIP_KEY, '1'); } catch {}
-    saveStep(step);
-    setOpen(false);
-  }, [saveStep, step]);
-
   // The modal is the only thing this component renders; the persistent
   // launcher lives in <main> (OnboardingLauncher) so it aligns with the page.
   if (checking || complete || !open) return null;
@@ -210,19 +199,10 @@ export default function OnboardingWizard() {
         onScroll={handleScroll}
         className={`sv-modal-scroll ${scrolling ? 'is-scrolling' : ''} relative w-full max-w-2xl sm:max-w-[52rem] max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl`}
       >
-        {/* Card gate: on the Go-live step the card is required, so we remove the
-            "Save & close" escape until the venue has actually gone live. Earlier
-            steps stay dismissible so owners can step away before committing. */}
-        {(step < 2 || live) && (
-          <button
-            onClick={dismiss}
-            className="absolute right-4 top-4 z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-            aria-label="Save and finish later"
-            title="Save and finish later"
-          >
-            Save &amp; close <X size={15} />
-          </button>
-        )}
+        {/* No dismiss control: onboarding is a hard gate. The owner cannot reach
+            the dashboard until they go live (which requires a card). Progress is
+            saved on every step, so leaving and returning resumes where they left
+            off. The only exit from this modal is publishing successfully. */}
 
         <StepDots step={step} live={live} />
 
