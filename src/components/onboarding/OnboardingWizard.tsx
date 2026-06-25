@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, Link2, Check, Copy, Share2, Sparkles, Loader2, X,
   ArrowRight, ArrowLeft, MapPin, Star, CheckCircle2, ImageIcon,
-  Mail, Send,
+  Mail, Send, Inbox,
 } from 'lucide-react';
 
 const SKIP_KEY = 'sv_onboarding_skipped';
@@ -898,6 +898,12 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
               </p>
             )}
             <p className="mt-2 text-sm text-gray-500">That&apos;s your Bride Booking System working. Every real bride who taps your link does this automatically.</p>
+            <a
+              href="/dashboard/leads"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-green-50 border border-green-200 px-4 py-2.5 text-sm font-semibold text-green-700 hover:bg-green-100 transition-colors"
+            >
+              <Inbox size={15} /> Check your Lead Inbox to see it →
+            </a>
           </div>
         ) : (
           <>
