@@ -194,10 +194,13 @@ export default function OnboardingWizard() {
         .sv-modal-scroll.is-scrolling::-webkit-scrollbar-track { background: transparent; }
         .sv-modal-scroll.is-scrolling { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transparent; }
         @keyframes svTestPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(27,27,27,0.18); }
-          50%      { box-shadow: 0 0 0 6px rgba(27,27,27,0); }
+          0%, 100% { transform: scale(0.97); }
+          15%      { transform: scale(1); }
+          30%      { transform: scale(0.98); }
+          45%      { transform: scale(1); }
+          60%      { transform: scale(0.97); }
         }
-        .sv-test-pulse { animation: svTestPulse 2.4s ease-in-out infinite; }
+        .sv-test-pulse { animation: svTestPulse 1.8s ease-in-out infinite; will-change: transform; }
         @media (prefers-reduced-motion: reduce) { .sv-test-pulse { animation: none; } }
       `}</style>
       <div
