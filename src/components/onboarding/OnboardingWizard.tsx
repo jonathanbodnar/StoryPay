@@ -223,21 +223,25 @@ function StepDots({ step }: { step: number }) {
   const labels = ['Connect', 'Details', 'Go live'];
   return (
     <div className="flex items-center justify-center gap-2 px-6 pt-7">
-      {labels.map((l, i) => (
-        <div key={l} className="flex items-center gap-2">
-          <div
-            className="flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors"
-            style={{
-              backgroundColor: i <= step ? `${BRAND}1a` : '#f3f4f6',
-              color: i <= step ? BRAND : '#9ca3af',
-            }}
-          >
-            {i < step ? <Check size={13} /> : <span className="font-semibold">{i + 1}</span>}
-            <span className="hidden sm:inline">{l}</span>
+      {labels.map((l, i) => {
+        const done = i < step;
+        const current = i === step;
+        return (
+          <div key={l} className="flex items-center gap-2">
+            <div
+              className="flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors"
+              style={{
+                backgroundColor: done ? '#dcfce7' : current ? `${BRAND}1a` : '#f3f4f6',
+                color: done ? '#16a34a' : current ? BRAND : '#9ca3af',
+              }}
+            >
+              {done ? <Check size={13} /> : <span className="font-semibold">{i + 1}</span>}
+              <span className="hidden sm:inline">{l}</span>
+            </div>
+            {i < labels.length - 1 && <div className="h-px w-3 bg-gray-200 sm:w-5" />}
           </div>
-          {i < labels.length - 1 && <div className="h-px w-3 bg-gray-200 sm:w-5" />}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -318,8 +322,8 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
     const p = imported.profile;
     return (
       <div className="text-center">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${BRAND}1a` }}>
-          <Check size={24} style={{ color: BRAND }} />
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+          <Check size={24} className="text-green-600" />
         </div>
         <h2 className="text-xl font-semibold text-gray-900">Imported from Google</h2>
         <p className="mt-1 text-sm text-gray-500">We pulled your details so you don&apos;t have to.</p>
@@ -352,7 +356,7 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
   return (
     <div>
       <div className="text-center">
-        <span className="inline-block rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide" style={{ backgroundColor: `${BRAND}0d`, color: BRAND }}>
+        <span className="inline-block rounded-full bg-green-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-green-700">
           Start Booking More Brides in 5 minutes
         </span>
         <div className="mx-auto mt-4 mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${BRAND}1a` }}>
@@ -638,7 +642,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
       <div className="mt-6 flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"><ArrowLeft size={14} /> Back</button>
         <button onClick={submit} disabled={saving} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
-          {saving ? <><Loader2 size={16} className="animate-spin" /> Writing your guide…</> : <>Write my guide <Sparkles size={16} /></>}
+          {saving ? <><Loader2 size={16} className="animate-spin" /> Creating your guide…</> : <>Create my guide <Sparkles size={16} /></>}
         </button>
       </div>
     </div>
