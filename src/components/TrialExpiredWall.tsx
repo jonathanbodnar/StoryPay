@@ -17,6 +17,9 @@ import { trackClient } from '@/lib/analytics-client';
 export default function TrialExpiredWall({ venueName }: { venueName: string }) {
   const [busy, setBusy] = useState<'add_card' | 'downgrade' | null>(null);
   const [error, setError] = useState('');
+  // Downsell: the first "Downgrade" click shows a save offer instead of
+  // immediately dropping the booking system.
+  const [confirmDowngrade, setConfirmDowngrade] = useState(false);
 
   // Analytics: conversion blocker — venue hit the expired-trial paywall.
   useEffect(() => { trackClient('trial_wall_hit', { label: 'Trial expired wall' }); }, []);
@@ -83,27 +86,60 @@ export default function TrialExpiredWall({ venueName }: { venueName: string }) {
           </div>
         ) : null}
 
-        <div className="mt-7 space-y-3">
-          <button
-            type="button"
-            onClick={addCard}
-            disabled={disabled}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
-          >
-            {busy === 'add_card' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            Add a card &amp; keep Venue Pro
-          </button>
+        {confirmDowngrade ? (
+          <div className="mt-7">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <p className="font-semibold">Switch to Free and you turn off what books brides:</p>
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[13px]">
+                <li>Instant pricing guide auto-sent to every lead</li>
+                <li>Speed-to-lead follow-up that replies in seconds</li>
+              </ul>
+              <p className="mt-1.5 text-[13px]">Your listing and payment processing stay on. You can turn it back on anytime.</p>
+            </div>
+            <div className="mt-4 space-y-3">
+              <button
+                type="button"
+                onClick={addCard}
+                disabled={disabled}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
+              >
+                {busy === 'add_card' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                Keep my Bride Booking System
+              </button>
+              <button
+                type="button"
+                onClick={downgrade}
+                disabled={disabled}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-5 py-3.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-60"
+              >
+                {busy === 'downgrade' ? <Loader2 size={16} className="animate-spin" /> : <ArrowDownToLine size={16} />}
+                Switch to Free anyway
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-7 space-y-3">
+            <button
+              type="button"
+              onClick={addCard}
+              disabled={disabled}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
+            >
+              {busy === 'add_card' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              Add a card &amp; keep Venue Pro
+            </button>
 
-          <button
-            type="button"
-            onClick={downgrade}
-            disabled={disabled}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-5 py-3.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
-          >
-            {busy === 'downgrade' ? <Loader2 size={16} className="animate-spin" /> : <ArrowDownToLine size={16} />}
-            Downgrade to Free
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => setConfirmDowngrade(true)}
+              disabled={disabled}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-5 py-3.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
+            >
+              <ArrowDownToLine size={16} />
+              Downgrade to Free
+            </button>
+          </div>
+        )}
 
         <p className="mt-6 text-center text-xs text-gray-400">
           You can upgrade back to Venue Pro anytime from your billing settings.

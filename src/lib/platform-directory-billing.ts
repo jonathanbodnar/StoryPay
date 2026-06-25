@@ -1,6 +1,7 @@
 import { createCheckoutSession, getCheckoutSession } from '@/lib/lunarpay';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getPlatformFortisMerchantId } from '@/lib/platform-billing';
+import { notifyVenueSubscriptionCharged, notifyVenueCardDeclined } from '@/lib/saas-billing-notifications';
 
 /** Checkout + subscription metadata so webhooks can attribute revenue to a venue. */
 export const STORYPAY_PLATFORM_DIRECTORY_META_KEY = 'storypay_platform_directory';
@@ -375,13 +376,23 @@ export async function handleLunarPayWebhookForPlatformLedger(raw: Record<string,
   if (subId) {
     const { data: v } = await supabaseAdmin
       .from('venues')
-      .select('id, directory_plan_id')
+      .select('id, directory_plan_id, directory_subscription_status')
       .eq('directory_subscription_external_id', subId)
       .maybeSingle();
 
     if (v) {
       const event = String(raw.event || '');
       const amount = pickAmountCents(raw);
+      const prevStatus = String((v as Record<string, unknown>).directory_subscription_status ?? '').toLowerCase();
+      const isFailure = /payment\.failed|charge\.failed|subscription\.past_due/i.test(event);
+      const isCancel = /subscription\.(canceled|cancelled)/i.test(event);
+      // A successful money movement (a renewal/trial-conversion charge) — either
+      // an explicit success event, or any positive-amount event that isn't a
+      // failure/cancel.
+      const isSuccessCharge =
+        !isFailure && !isCancel &&
+        (amount > 0 || /payment\.(succeeded|success)|charge\.(succeeded|success)|subscription\.(charged|renewed|payment_succeeded)/i.test(event));
+
       if (amount > 0) {
         await insertPlatformBillingEventFromWebhook({
           venueId: v.id as string,
@@ -393,13 +404,31 @@ export async function handleLunarPayWebhookForPlatformLedger(raw: Record<string,
           metadata: { subscription_id: subId },
         });
       }
-      if (/payment\.failed|charge\.failed|subscription\.(past_due|canceled|cancelled)/i.test(event)) {
+
+      if (isFailure || isCancel) {
+        // Mark status only. We NEVER auto-downgrade to Free — Free is reachable
+        // only by the owner's explicit choice. A declined renewal sits in
+        // 'past_due' (automations pause via entitlement) until they fix the card
+        // or choose to downgrade; a LunarPay-side cancel sits in 'canceled'.
         await supabaseAdmin
           .from('venues')
-          .update({
-            directory_subscription_status: /canceled|cancelled/i.test(event) ? 'canceled' : 'past_due',
-          })
+          .update({ directory_subscription_status: isCancel ? 'canceled' : 'past_due' })
           .eq('id', v.id as string);
+        // Fire the "card declined" nudge once, on first transition to past_due.
+        if (isFailure && prevStatus !== 'past_due') {
+          void notifyVenueCardDeclined(v.id as string).catch(() => {});
+        }
+      } else if (isSuccessCharge) {
+        // First successful charge flips a trial (or a recovered past_due) to a
+        // paying subscription. Idempotent — safe to re-apply on every renewal.
+        await supabaseAdmin
+          .from('venues')
+          .update({ directory_subscription_status: 'active', directory_downgrade_at: null })
+          .eq('id', v.id as string);
+        // Trial → paid conversion: fire the receipt/welcome comm once.
+        if (prevStatus === 'trialing' || prevStatus === 'past_due') {
+          void notifyVenueSubscriptionCharged(v.id as string, amount).catch(() => {});
+        }
       }
       return true;
     }

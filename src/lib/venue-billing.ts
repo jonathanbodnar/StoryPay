@@ -1230,6 +1230,127 @@ export async function cancelVenueSubscription(venueId: string): Promise<void> {
   );
 }
 
+// ── Downgrade to Free (card-gated trial model) ─────────────────────────────
+
+export type ScheduleDowngradeResult =
+  | { kind: 'scheduled'; downgradeAt: string }
+  | { kind: 'downgraded' };
+
+/**
+ * Cancel the paid subscription but KEEP access until the end of the current
+ * paid/trial period, then drop to Free. This is the "cancel during trial so I'm
+ * not charged, but let me finish my trial" path the owner expects.
+ *
+ *   • Cancels the LunarPay subscription NOW so no future charge fires
+ *     (critical: stops the day-14 auto-charge for trial cancellations).
+ *   • If the trial/period still has time left, stamps `directory_downgrade_at`
+ *     and lets the trial-sweep cron flip to Free at that moment. Access (and the
+ *     Bride Booking System) stays on until then.
+ *   • If there's no remaining period, downgrades to Free immediately.
+ */
+export async function scheduleVenueDowngradeToFree(venueId: string): Promise<ScheduleDowngradeResult> {
+  const { data: row } = await supabaseAdmin
+    .from('venues')
+    .select(
+      'directory_subscription_external_id, directory_subscription_status, directory_trial_ends_at, directory_trial_is_forever',
+    )
+    .eq('id', venueId)
+    .maybeSingle();
+  const v = (row ?? {}) as Record<string, unknown>;
+
+  const subId = (v.directory_subscription_external_id as string | null) || null;
+  const status = String(v.directory_subscription_status ?? '').toLowerCase();
+  const isForever = Boolean(v.directory_trial_is_forever);
+  const trialEndsRaw = (v.directory_trial_ends_at as string | null) || null;
+  const trialEnds = trialEndsRaw ? new Date(trialEndsRaw) : null;
+  const now = new Date();
+
+  // Stop any future charge immediately.
+  if (subId) {
+    const secret = getPlatformLunarPaySecretKey();
+    if (secret) {
+      try { await cancelSubscription(secret, subId); } catch { /* best-effort — proceed to schedule */ }
+    }
+  }
+
+  // Determine remaining period. Only trials carry a known future end date here.
+  const periodEnd =
+    !isForever && status === 'trialing' && trialEnds && trialEnds.getTime() > now.getTime()
+      ? trialEnds
+      : null;
+
+  if (periodEnd) {
+    await supabaseAdmin
+      .from('venues')
+      .update({
+        directory_downgrade_at: periodEnd.toISOString(),
+        directory_subscription_external_id: null, // sub canceled; access until downgrade_at
+      })
+      .eq('id', venueId);
+    await recordBillingEvent(
+      venueId,
+      null,
+      0,
+      'subscription_cancel',
+      `downgrade_scheduled:${venueId}:${Date.now()}`,
+      { reason: 'user_downgrade_scheduled', downgrade_at: periodEnd.toISOString(), previous_subscription_id: subId },
+    );
+    return { kind: 'scheduled', downgradeAt: periodEnd.toISOString() };
+  }
+
+  await applyFreeDowngrade(venueId);
+  return { kind: 'downgraded' };
+}
+
+/**
+ * Move a venue to the Free plan NOW. Clears paid add-ons first so the Free plan
+ * computes to $0 (fully cancelling any lingering subscription via changeVenuePlan),
+ * clears the deferred-downgrade marker, and notifies the owner. Used by both the
+ * downgrade-free route and the trial-sweep cron so the end state is identical.
+ */
+export async function applyFreeDowngrade(venueId: string): Promise<void> {
+  const { resolveFreePlan } = await import('@/lib/trial-plans');
+  const freePlan = await resolveFreePlan();
+
+  // Clear paid add-ons so the Free plan's billable total is $0.
+  await supabaseAdmin
+    .from('venues')
+    .update({
+      directory_addon_verified: false,
+      directory_addon_sponsored: false,
+      directory_addon_concierge: false,
+    })
+    .eq('id', venueId);
+
+  if (freePlan) {
+    try {
+      await changeVenuePlan(venueId, freePlan.id);
+    } catch {
+      // Fall back to a bare status reset if the plan switch fails.
+      await supabaseAdmin
+        .from('venues')
+        .update({ directory_subscription_status: 'none', directory_subscription_external_id: null })
+        .eq('id', venueId);
+    }
+  } else {
+    // No Free plan configured — at least drop the subscription state.
+    await supabaseAdmin
+      .from('venues')
+      .update({ directory_subscription_status: 'none', directory_subscription_external_id: null })
+      .eq('id', venueId);
+  }
+
+  await supabaseAdmin
+    .from('venues')
+    .update({ directory_downgrade_at: null })
+    .eq('id', venueId);
+
+  try {
+    const { notifyVenueDowngradedToFree } = await import('@/lib/saas-billing-notifications');
+    await notifyVenueDowngradedToFree(venueId);
+  } catch { /* best-effort */ }
+}
+
 // ── Update payment method ──────────────────────────────────────────────────
 
 /**

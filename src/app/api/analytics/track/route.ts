@@ -39,6 +39,12 @@ const ALLOWED_CLIENT_EVENTS = new Set([
   'pricing_guide_inserted',
   'form_error',
   'signup_started',
+  // Onboarding → card → publish conversion funnel.
+  'onboarding_started',
+  'onboarding_details_done',
+  'card_shown',
+  'card_consent_accepted',
+  'card_entered',
 ]);
 
 export async function POST(req: NextRequest) {

@@ -23,6 +23,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart, Pie, Cell,
 } from 'recharts';
+import ConversionFunnel from '@/components/admin/ConversionFunnel';
 
 const BRAND = '#1b1b1b';
 const PIE_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#84cc16', '#a855f7', '#14b8a6', '#f97316', '#3b82f6'];
@@ -167,6 +168,9 @@ export default function AnalyticsPanel() {
             <MetricCard icon={<Eye size={14} />}                 label="Pageviews"      value={data.totals.pageviews.toLocaleString()} />
             <MetricCard icon={<MousePointerClick size={14} />}   label="Clicks"         value={data.totals.clicks.toLocaleString()} />
           </div>
+
+          {/* Card-gated conversion funnel → $97/mo */}
+          <ConversionFunnel />
 
           {/* Funnel + time series */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

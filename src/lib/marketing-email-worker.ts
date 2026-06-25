@@ -13,6 +13,7 @@ import { signMarketingOpenToken, signMarketingUnsubscribeToken } from '@/lib/mar
 import { addCalendarDaysYmd, resolveVenueTimezone, formatLeadOpportunityStamp } from '@/lib/venue-timezone';
 import { formatInTimeZone } from 'date-fns-tz';
 import { logStepExecution } from '@/lib/workflow-execution-logs';
+import { canRunBookingSystem, venueCanRunBookingSystem, VENUE_ENTITLEMENT_COLUMNS, type VenueBillingState } from '@/lib/venue-entitlements';
 
 const BATCH = 25;
 
@@ -214,6 +215,10 @@ export async function onMarketingFormSubmitted(
   formId: string,
 ): Promise<void> {
   if (!leadId || !formId) return;
+  // Subscription gate: marketing/speed-to-lead automations are part of the paid
+  // booking system. Free-tier (downgraded) venues capture the lead but don't
+  // enroll it into automated follow-up.
+  if (!(await venueCanRunBookingSystem(venueId))) return;
   const autos = await loadVenueActiveAutomations(venueId);
   for (const row of autos) {
     const matched = flatTriggersFor(row).some((t) => {
@@ -296,7 +301,7 @@ export async function sendBookingSystemGuide(
   try {
     const { data: vr } = await supabaseAdmin
       .from('venues')
-      .select('booking_system_enabled, booking_guide_email_enabled, booking_guide_sms_enabled, booking_guide_email_body, booking_guide_sms_body, name, notification_email, email')
+      .select(`booking_system_enabled, booking_guide_email_enabled, booking_guide_sms_enabled, booking_guide_email_body, booking_guide_sms_body, name, notification_email, email, ${VENUE_ENTITLEMENT_COLUMNS}`)
       .eq('id', venueId)
       .maybeSingle();
 
@@ -304,6 +309,17 @@ export async function sendBookingSystemGuide(
     if (!v) {
       await logGuideIssue('error', venueId, leadId, 'Pricing guide not sent: venue not found', {});
       return;
+    }
+
+    // Subscription gate: the paid Bride Booking System only fires for entitled
+    // venues (active/trialing/legacy). Downgraded-to-Free venues still capture
+    // the lead in the inbox, but the automated guide does not send — instead we
+    // nudge the owner (throttled) to win them back.
+    if (!canRunBookingSystem(v as unknown as VenueBillingState)) {
+      void import('@/lib/saas-billing-notifications')
+        .then(({ maybeSendWinbackNudge }) => maybeSendWinbackNudge(venueId))
+        .catch(() => {});
+      return; // not entitled — Free tier
     }
 
     const systemOn = (v.booking_system_enabled as boolean | null) ?? true;
