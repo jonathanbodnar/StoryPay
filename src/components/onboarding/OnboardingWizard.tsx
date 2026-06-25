@@ -264,7 +264,26 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [imported, setImported] = useState<{ profile: ImportedProfile; photos: string[]; review_count: number } | null>(null);
+  const [redoing, setRedoing] = useState(false);
   const reqIdRef = useRef(0);
+
+  // "Not your venue?" — wipe the just-imported (wrong) data so a fresh import
+  // isn't blocked by the fill-empties-only logic, then return to search.
+  const pickDifferent = async () => {
+    setRedoing(true);
+    try {
+      await fetch('/api/onboarding/state', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start_over' }),
+      });
+    } catch { /* non-fatal — still let them re-search */ }
+    setImported(null);
+    setCandidates([]);
+    setInput('');
+    setError(null);
+    setMode('search');
+    setRedoing(false);
+  };
 
   const looksLikeUrl = (s: string) => /https?:\/\/|maps\.|goo\.gl/i.test(s);
 
@@ -356,6 +375,13 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
 
         <button onClick={onNext} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3 font-medium text-white transition-opacity hover:opacity-90" style={{ backgroundColor: BRAND }}>
           Continue <ArrowRight size={16} />
+        </button>
+        <button
+          onClick={() => void pickDifferent()}
+          disabled={redoing}
+          className="mt-3 inline-flex items-center justify-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-800 disabled:opacity-50"
+        >
+          {redoing ? <><Loader2 size={14} className="animate-spin" /> Clearing…</> : 'Not your venue? Pick a different one'}
         </button>
       </div>
     );
@@ -473,8 +499,48 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
   const [venueType, setVenueType] = useState('');
   const [indoorOutdoor, setIndoorOutdoor] = useState('');
   const [socials, setSocials] = useState<Record<string, string>>({});
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Upload venue photos straight into the shared media library (single source
+  // of truth) using the standard presigned flow: sign → PUT to storage →
+  // register in venue_media_assets. The returned public URLs are threaded into
+  // draft-guide so manual (no-Google) venues still get a cover + gallery.
+  const uploadPhotos = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploadingPhotos(true); setPhotoError(null);
+    const added: string[] = [];
+    try {
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith('image/')) continue;
+        const signRes = await fetch('/api/venue-media/sign', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size }),
+        });
+        const sign = await signRes.json();
+        if (!signRes.ok) { setPhotoError(sign.error || 'Upload failed.'); continue; }
+        const putRes = await fetch(sign.signedUrl, {
+          method: 'PUT', headers: { 'Content-Type': file.type }, body: file,
+        });
+        if (!putRes.ok) { setPhotoError('Upload failed. Try again.'); continue; }
+        const regRes = await fetch('/api/venue-media', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: sign.path, publicUrl: sign.publicUrl, fileName: file.name,
+            contentType: file.type, sizeBytes: file.size,
+          }),
+        });
+        if (regRes.ok) added.push(sign.publicUrl as string);
+      }
+      if (added.length) setPhotos((prev) => [...prev, ...added]);
+    } catch { setPhotoError('Something went wrong uploading. Try again.'); }
+    finally { setUploadingPhotos(false); }
+  };
+
+  const removePhoto = (url: string) => setPhotos((prev) => prev.filter((u) => u !== url));
 
   // Preload from the listing (single source of truth), then overlay any
   // in-progress local draft so a mid-step close resumes exactly where they
@@ -518,6 +584,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
       const vt = pick('venueType'); if (typeof vt === 'string') setVenueType(vt);
       const io = pick('indoorOutdoor'); if (typeof io === 'string') setIndoorOutdoor(io);
       const sc = pick('socials'); if (sc && typeof sc === 'object') setSocials(sc as Record<string, string>);
+      const ph = pick('photos'); if (Array.isArray(ph)) setPhotos(ph.filter((u): u is string => typeof u === 'string'));
 
       hydrated.current = true;
     })();
@@ -529,10 +596,10 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
     if (!hydrated.current) return;
     try {
       localStorage.setItem(DETAILS_DRAFT_KEY, JSON.stringify({
-        minGuests, maxGuests, priceFrom, priceTo, differentiators, features, venueType, indoorOutdoor, socials,
+        minGuests, maxGuests, priceFrom, priceTo, differentiators, features, venueType, indoorOutdoor, socials, photos,
       }));
     } catch { /* ignore */ }
-  }, [minGuests, maxGuests, priceFrom, priceTo, differentiators, features, venueType, indoorOutdoor, socials]);
+  }, [minGuests, maxGuests, priceFrom, priceTo, differentiators, features, venueType, indoorOutdoor, socials, photos]);
 
   const toggleFeature = (f: string) =>
     setFeatures((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
@@ -556,6 +623,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
           venue_type: venueType || undefined,
           indoor_outdoor: indoorOutdoor || undefined,
           social_links: socials,
+          photos,
         }),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not draft your guide.'); return; }
@@ -628,6 +696,31 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
 
         <Field label="Describe 3–4 things that make your venue special?">
           <textarea value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} rows={4} placeholder="e.g. waterfront ceremony site, on-site suites, in-house catering" className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
+        </Field>
+
+        <Field label="Photos of your venue">
+          <p className="-mt-0.5 mb-2 text-xs text-gray-500">Add a few photos and we&apos;ll build your cover and gallery from them. If you imported from Google we already have these, so this is optional.</p>
+          <div className="flex flex-wrap gap-2">
+            {photos.map((url) => (
+              <div key={url} className="relative h-20 w-20 overflow-hidden rounded-lg border border-gray-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removePhoto(url)}
+                  className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black"
+                  aria-label="Remove photo"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            <label className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 ${uploadingPhotos ? 'pointer-events-none opacity-60' : ''}`}>
+              {uploadingPhotos ? <Loader2 size={18} className="animate-spin" /> : <><ImageIcon size={18} /><span className="text-[10px] font-medium">Add</span></>}
+              <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { void uploadPhotos(e.target.files); e.target.value = ''; }} />
+            </label>
+          </div>
+          {photoError && <p className="mt-1.5 text-xs text-red-500">{photoError}</p>}
         </Field>
 
         <Field label="Social & website links (optional)">

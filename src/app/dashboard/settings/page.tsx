@@ -231,6 +231,30 @@ export default function SettingsPage() {
   }
 }
 
+// Full start-over: wipe the imported guide/media/copy, unpublish, and re-run
+// the wizard from a clean slate so they can pick a DIFFERENT Google listing
+// (e.g. they imported the wrong venue). Production-safe and irreversible, so
+// we confirm first.
+const [startingOver, setStartingOver] = useState(false);
+async function startOverOnboarding() {
+  const ok = window.confirm(
+    'Start over? This permanently removes your imported guide, photos, and copy, and unpublishes your page so you can re-import a different Google listing from scratch. This cannot be undone.',
+  );
+  if (!ok) return;
+  setStartingOver(true);
+  try {
+    await fetch('/api/onboarding/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'start_over' }),
+    });
+    try { sessionStorage.removeItem('sv_onboarding_skipped'); } catch { /* ignore */ }
+    window.location.href = '/dashboard/listing?onboarding=1';
+  } catch {
+    setStartingOver(false);
+  }
+}
+
 // DEV-ONLY: wipe the guide + un-publish, then re-run the wizard from scratch.
 // The button is only rendered outside production; the API also hard-guards it.
 const isDev = process.env.NODE_ENV !== 'production';
@@ -410,6 +434,20 @@ try {
  >
  {restarting ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
  {restarting ? 'Starting…' : 'Restart setup wizard'}
+ </button>
+ </div>
+ <div className="flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 px-6 py-5">
+ <div className="min-w-0">
+ <p className="text-sm font-medium text-gray-900">Picked the wrong venue? Start over</p>
+ <p className="mt-0.5 text-sm text-gray-500">Removes your imported guide, photos, and copy and unpublishes your page, so you can re-import a different Google listing from scratch. This can&apos;t be undone.</p>
+ </div>
+ <button
+ onClick={() => void startOverOnboarding()}
+ disabled={startingOver}
+ className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-red-200 bg-white px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+ >
+ {startingOver ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+ {startingOver ? 'Starting over…' : 'Start over & re-import'}
  </button>
  </div>
  {isDev && (

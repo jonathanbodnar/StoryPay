@@ -189,6 +189,70 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true });
   }
 
+  if (action === 'start_over') {
+    // Full, production-safe reset so the owner can re-run onboarding from a
+    // DIFFERENT Google listing (e.g. they picked the wrong venue). Because the
+    // Google import "fills empties only", we must clear the imported copy, media
+    // and guide first — otherwise a fresh import silently no-ops on the stale
+    // (wrong) data. After this the wizard reopens at step 0 with a clean slate.
+    const BUCKET = 'venue-images';
+
+    // 1. Delete the pricing guide (cascades to spaces/packages/accommodations).
+    await supabaseAdmin.from('venue_pricing_guides').delete().eq('venue_id', venueId);
+
+    // 2. Wipe the media library + the underlying storage objects so nothing from
+    //    the wrong venue lingers. Best-effort: storage residue is invisible to
+    //    the user (the library reads venue_media_assets), so never block on it.
+    await supabaseAdmin.from('venue_media_assets').delete().eq('venue_id', venueId);
+    for (const prefix of ['google-import', 'media']) {
+      try {
+        const { data: files } = await supabaseAdmin.storage
+          .from(BUCKET)
+          .list(`${venueId}/${prefix}`, { limit: 1000 });
+        if (files && files.length) {
+          await supabaseAdmin.storage
+            .from(BUCKET)
+            .remove(files.map((f) => `${venueId}/${prefix}/${f.name}`));
+        }
+      } catch { /* non-fatal */ }
+    }
+
+    // 3. Clear the imported copy/location/media references on the venue and
+    //    unpublish, then reset the onboarding flags so the wizard starts fresh.
+    const { error: vErr } = await supabaseAdmin
+      .from('venues')
+      .update({
+        google_place_id: null,
+        google_reviews_cache: null,
+        description: null,
+        venue_type: null,
+        indoor_outdoor: null,
+        cover_image_url: null,
+        gallery_images: null,
+        social_links: null,
+        features: null,
+        location_city: null,
+        location_state: null,
+        location_full: null,
+        lat: null,
+        lng: null,
+        capacity_min: null,
+        capacity_max: null,
+        price_min: null,
+        price_max: null,
+        is_published: false,
+        onboarding_completed_at: null,
+        onboarding_last_step: 0,
+      })
+      .eq('id', venueId);
+    if (vErr) {
+      console.error('[onboarding/start_over] venue reset', vErr.message);
+      return NextResponse.json({ error: vErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, reset: true });
+  }
+
   if (action === 'dev_reset') {
     // DEV-ONLY: wipe the pricing guide + un-publish so the next run of the
     // onboarding modal repopulates everything from scratch (lets us practice

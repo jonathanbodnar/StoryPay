@@ -206,6 +206,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     ? (body.features as unknown[]).filter((f): f is string => typeof f === 'string').slice(0, 30)
     : null;
 
+  // Photos uploaded in the modal (manual / no-Google path). They're already in
+  // the media library; here we seed the venue cover/gallery + guide gallery from
+  // them (fill-empties only) so the listing and guide have images.
+  const uploadedPhotos = Array.isArray(body.photos)
+    ? (body.photos as unknown[]).filter((u): u is string => typeof u === 'string' && /^https?:\/\//.test(u)).slice(0, 20)
+    : [];
+
   const VENUE_TYPES = ['barn', 'ballroom', 'garden', 'winery', 'beach', 'estate', 'rustic', 'modern', 'historic', 'other'];
   const INDOOR_OUTDOOR = ['indoor', 'outdoor', 'both'];
   const venueType = typeof body.venue_type === 'string' && VENUE_TYPES.includes(body.venue_type) ? body.venue_type : null;
@@ -280,6 +287,37 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // ── Persist parent guide fields (guide-primary) ──────────────────────────────
   const guideId = await getOrCreatePricingGuideId(venueId);
+
+  // Seed cover/gallery from photos uploaded in the modal (manual path). Mirrors
+  // the Google import: fill-empties only so we never clobber existing imagery.
+  if (uploadedPhotos.length > 0) {
+    const { data: vRow } = await supabaseAdmin
+      .from('venues')
+      .select('cover_image_url, gallery_images')
+      .eq('id', venueId)
+      .maybeSingle();
+    const vUpd: Record<string, unknown> = {};
+    if (!((vRow?.cover_image_url as string | null) ?? '').trim()) vUpd.cover_image_url = uploadedPhotos[0];
+    const existingVGallery = Array.isArray(vRow?.gallery_images) ? (vRow!.gallery_images as unknown[]) : [];
+    if (existingVGallery.length === 0) vUpd.gallery_images = uploadedPhotos;
+    if (Object.keys(vUpd).length > 0) {
+      await supabaseAdmin.from('venues').update(vUpd).eq('id', venueId).then(undefined, () => {});
+    }
+
+    const { data: gRow } = await supabaseAdmin
+      .from('venue_pricing_guides')
+      .select('gallery, cover_image_url')
+      .eq('id', guideId)
+      .maybeSingle();
+    const gUpd: Record<string, unknown> = {};
+    const gExistingGallery = Array.isArray(gRow?.gallery) ? (gRow!.gallery as unknown[]) : [];
+    if (gExistingGallery.length === 0) gUpd.gallery = uploadedPhotos.map((url) => ({ url }));
+    if (!((gRow?.cover_image_url as string | null) ?? '').trim()) gUpd.cover_image_url = uploadedPhotos[0];
+    if (Object.keys(gUpd).length > 0) {
+      gUpd.updated_at = new Date().toISOString();
+      await supabaseAdmin.from('venue_pricing_guides').update(gUpd).eq('id', guideId).then(undefined, () => {});
+    }
+  }
 
   // Manual content always wins: only (re)populate fields the owner has not
   // manually edited. Auto-filled fields (never user-edited) may be refreshed.
