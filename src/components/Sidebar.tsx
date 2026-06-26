@@ -480,13 +480,14 @@ export default function Sidebar({
 
   // Role-based visibility (these items are completely hidden from members,
   // not just locked — different concern from plan gating).
-  // Billing is also completely hidden (not just locked) when the plan doesn't
-  // include it — there's no reason to show a locked billing link.
+  // Billing lives under Settings and is always shown to owners (legacy plans are
+  // already filtered out above) — it must stay reachable so owners can manage,
+  // upgrade, downgrade, or cancel their subscription regardless of plan flags.
   const settingsFiltered = visibleSettingsItems.filter((sub) => {
     if (!isOwner && sub.label === 'General') return false;
     if (!isOwner && sub.label === 'Team') return false;
     if (!isOwner && sub.label === 'Integrations') return false;
-    if (sub.navId === 'nav_settings_billing' && !navOk(sub.navId)) return false;
+    if (sub.navId === 'nav_settings_billing' && !isOwner) return false;
     return true;
   });
 
