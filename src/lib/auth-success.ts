@@ -33,13 +33,7 @@ export async function buildVenueAuthSuccessResponse(opts: {
     subStatus = String(data?.directory_subscription_status ?? 'none');
   }
 
-  // Null plan = existing free-listing venue (grandfathered) or pre-migration
-  // account. Never send them to /signup/plan — they should land in the
-  // dashboard and use the soft optional onboarding modal at their own pace.
-  // Only venues with an explicit NON-legacy paid plan in pending/none status
-  // get redirected to pick a plan (i.e. new signups that somehow lost their
-  // trial assignment).
-  let isLegacy = !planId; // no plan assigned = free listing = not gated
+  let isLegacy = false;
   if (planId) {
     const { data: planRow } = await supabaseAdmin
       .from('directory_plans')
@@ -54,7 +48,7 @@ export async function buildVenueAuthSuccessResponse(opts: {
   }
 
   const needsPlan =
-    !isLegacy && Boolean(planId) && (subStatus === 'none' || subStatus === 'pending');
+    !isLegacy && (!planId || subStatus === 'none' || subStatus === 'pending');
   const redirect = needsPlan ? '/signup/plan' : '/dashboard';
 
   const response = NextResponse.json({ redirect });
