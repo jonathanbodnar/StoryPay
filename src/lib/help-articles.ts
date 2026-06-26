@@ -2548,7 +2548,7 @@ The public submission endpoint and the existing embed code are unchanged — the
       {
         id: 'me-workflows',
         title: 'Workflows — visual automation builder with 60+ smart triggers and 60+ merge variables',
-        tags: ['workflow', 'workflows', 'automation', 'speed to lead', 'follow up', 'sequence', 'drip', 'funnel', 'auto-reply', 'reply halt', 'form submitted', 'trigger', 'cron', 'smart triggers', 'merge variables', 'notify owner', 'notify venue owner', 'system tags'],
+        tags: ['workflow', 'workflows', 'automation', 'speed to lead', 'follow up', 'sequence', 'drip', 'funnel', 'auto-reply', 'reply halt', 'form submitted', 'trigger', 'smart triggers', 'merge variables', 'notify owner', 'notify venue owner', 'system tags'],
         body: `Marketing → Workflows is the visual builder for fully automated, multi-step contact journeys. It powers everything from the first auto-reply to long-term anniversary touches — and as of the May 2026 update, it has tight, two-way integration with the platform's 65 sitewide system tags and 60+ canonical merge variables.
 
 What you can build today
@@ -2586,11 +2586,11 @@ Building a "form-to-funnel" sequence (the most common use case)
 2. Marketing → Workflows → New workflow → trigger picker → search "form" or pick the Forms category → "Any form submitted". Pick the form(s) to listen to (or leave empty to enroll on any form).
 3. On the canvas, click "+" to add steps. Example: Send email (welcome) → Wait 2 days → Send SMS "Hi {{contact.first_name}}, just checking in!" → Wait 3 days → Notify Venue Owner "Lead {{contact.name}} hasn't responded — time to reach out" → Send email (testimonials).
 4. Set the workflow Status to Active and click Save.
-5. Submit the form yourself to test. The contact is dropped into the sequence within ~1 minute.
+5. Submit the form yourself to test. The contact is enrolled in the sequence and the first step fires within a short time.
 
 Reply detection — the drip stops when the contact replies
 - When a contact replies to any drip email through the platform's reply routing, the platform automatically halts every active marketing automation enrollment for that contact (status → halted_by_reply, completed_at stamped).
-- The venue owner gets a transactional email titled "Reply received: <Contact name> — <Venue>" with a preview of their reply and how many sequences were stopped. (Honors Settings → Notifications email-toggle and uses your venues.notification_email — falling back to your account email — as the destination.)
+- You receive an email notification with a preview of the reply and how many sequences were stopped. The notification goes to the email address in Settings → Notifications.
 - Halted enrollments don't auto-restart. The contact stays in the conversation thread; the team picks it up from there.
 
 Suppression — sequences respect every existing opt-out
@@ -2607,11 +2607,7 @@ Editing a workflow that's already running
 
 Where to delete
 - Workflows list page → ... → Delete (or open the workflow → Settings tab → Delete workflow).
-- Deleting a workflow also deletes its enrollments (CASCADE).
-
-Behind the scenes
-- A 1-minute cron worker (controlled by the MARKETING_CRON_ENABLED environment variable) advances every active enrollment one step. Drafts and paused workflows are skipped.
-- Enrollment statuses: active (running), completed (finished all steps), cancelled (manually stopped), failed (an error left it stuck), halted_by_reply (the contact replied — see above).
+- Deleting a workflow also removes all active enrollments for that workflow.
 
 Tip — keep your first sequence short and useful (3-5 emails over 14 days), make sure the first email arrives within minutes of the form submission, and trust the reply-halt to do its job. The fastest follow-up wins.`,
       },

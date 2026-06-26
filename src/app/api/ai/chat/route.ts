@@ -907,7 +907,7 @@ Where to find variable pickers:
 - The Speed to Lead System fires the moment a bride submits your public listing inquiry form on storyvenue.com. It is completely independent of GHL; GHL is only used for A2P SMS delivery.
 - **6 phases** — each has its own toggle so you enable only what you need:
   1. **Guide Delivery** (instant) — sends an email and/or SMS with a direct link to the Pricing & Availability Guide PDF. The PDF is generated live on every click — always the current version. Toggle email and SMS independently.
-  2. **Follow-up Sequence** — customizable sequence of Send Email, Send SMS, Wait, and Activate AI Concierge steps. Fires on a cron. Stops the moment a bride replies. No fixed length — add as many steps as you want.
+  2. **Follow-up Sequence** — customizable sequence of Send Email, Send SMS, Wait, and Activate AI Concierge steps. Stops the moment a bride replies. No fixed length — add as many steps as you want.
   3. **Nurture Sequence** — a 5-email educational sequence about picking and touring venues. No AI Concierge handoff.
   4. **Booked Tour** — a 5-email sequence that fires when a lead books a tour; sets expectations for the visit. No AI Concierge handoff.
   5. **Booked Wedding** — a 5-email sequence that fires when a lead books a wedding; celebrates the win. No AI Concierge handoff.
