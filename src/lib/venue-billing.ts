@@ -780,8 +780,16 @@ export async function changeVenuePlan(
       if (secret) {
         try {
           await cancelSubscription(secret, subId);
-        } catch {
-          throw new Error('Could not cancel current subscription. Try again or contact support.');
+        } catch (e) {
+          // A 404 / "not found" means the subscription is already gone in
+          // LunarPay — treat that as success and proceed with the local
+          // downgrade. Any other error is surfaced with detail so it's
+          // diagnosable instead of a generic failure.
+          const msg = e instanceof Error ? e.message : 'unknown error';
+          if (!/404|not found|no such|does not exist/i.test(msg)) {
+            throw new Error(`Could not cancel current subscription: ${msg}`);
+          }
+          console.warn('[changeVenuePlan] cancel returned not-found, proceeding with downgrade:', msg);
         }
       }
       await recordBillingEvent(

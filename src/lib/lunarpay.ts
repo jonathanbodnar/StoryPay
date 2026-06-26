@@ -92,7 +92,17 @@ export async function lpFetch(path: string, { method = 'GET', body, key }: LPReq
     throw new Error(`LunarPay API error ${res.status}: ${errorText}`);
   }
 
-  return res.json();
+  // Some endpoints (notably DELETE /subscriptions/:id) return 204 No Content or
+  // an empty body on success. Calling res.json() on an empty body throws, which
+  // would make a SUCCESSFUL cancel look like a failure. Read as text first and
+  // only parse when there's actually a body.
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
 }
 
 // ── Agency endpoints (use LP_AGENCY_KEY) ────────────────────────────
