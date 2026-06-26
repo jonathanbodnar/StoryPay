@@ -52,6 +52,7 @@ const BOOKING_SYSTEM_FEATURES: PlanFeature[] = [
   { label: 'Conversations',        outcome: 'Unified inbox for all client messages and inquiries',         minTier: 1 },
   { label: 'Booking Calendar',     outcome: 'Block dates, track bookings, and sync availability',          minTier: 1 },
   { label: 'Proposals & Payments', outcome: 'Send proposals, collect deposits, and track payments',        minTier: 0 },
+  { label: 'Contact Management',   outcome: 'Manage every lead and client in one place',                   minTier: 0 },
   { label: 'Analytics',            outcome: 'Revenue insights, booking trends, and performance data',      minTier: 1 },
 ];
 
