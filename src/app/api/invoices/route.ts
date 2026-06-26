@@ -27,7 +27,10 @@ export async function POST(request: NextRequest) {
     price, lineItems: lineItemsRaw, paymentType, paymentConfig,
     asDraft,
     appliedCouponId: appliedCouponIdRaw,
+    collectManually,
   } = body;
+
+  const collectManuallyFlag = collectManually === true;
 
   const appliedCouponId =
     typeof appliedCouponIdRaw === 'string' && appliedCouponIdRaw.length > 0
@@ -140,27 +143,41 @@ export async function POST(request: NextRequest) {
   // route (which requires status='signed') accepts them without any
   // changes to the LunarPay checkout flow.
   const nowIso = new Date().toISOString();
-  const { data: proposal, error } = await supabaseAdmin
+  const invoiceRow: Record<string, unknown> = {
+    venue_id: venueId,
+    customer_name: customerName || null,
+    customer_email: customerEmail || null,
+    customer_phone: customerPhone || null,
+    customer_lunarpay_id: customerLunarpayId,
+    price: price || 0,
+    payment_type: paymentType || 'full',
+    payment_config: paymentConfig || {},
+    content: invoiceContent,
+    status: asDraft ? 'draft' : 'signed',
+    sent_at: asDraft ? null : nowIso,
+    signed_at: asDraft ? null : nowIso,
+    public_token: publicToken,
+    line_items: lineItemsPayload,
+    applied_coupon_id: appliedCouponPayload,
+    collect_manually: collectManuallyFlag,
+  };
+
+  // Tolerant of installs where migration 154 hasn't run: retry without the
+  // collect_manually column if it doesn't exist yet.
+  let { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .insert({
-      venue_id: venueId,
-      customer_name: customerName || null,
-      customer_email: customerEmail || null,
-      customer_phone: customerPhone || null,
-      customer_lunarpay_id: customerLunarpayId,
-      price: price || 0,
-      payment_type: paymentType || 'full',
-      payment_config: paymentConfig || {},
-      content: invoiceContent,
-      status: asDraft ? 'draft' : 'signed',
-      sent_at: asDraft ? null : nowIso,
-      signed_at: asDraft ? null : nowIso,
-      public_token: publicToken,
-      line_items: lineItemsPayload,
-      applied_coupon_id: appliedCouponPayload,
-    })
+    .insert(invoiceRow)
     .select()
     .single();
+  if (error && (error.code === '42703' || error.code === 'PGRST204')) {
+    const { collect_manually: _cm, ...fallback } = invoiceRow;
+    void _cm;
+    ({ data: proposal, error } = await supabaseAdmin
+      .from('proposals')
+      .insert(fallback)
+      .select()
+      .single());
+  }
 
   if (error || !proposal) {
     console.error('Invoice creation failed:', error);

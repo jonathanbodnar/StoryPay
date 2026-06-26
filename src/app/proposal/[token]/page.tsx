@@ -53,6 +53,10 @@ interface ProposalData {
   paid_at: string | null;
   /** True when this record was created via /api/invoices — no signing flow. */
   is_invoice?: boolean;
+  /** Owner collects cash/check directly — suppress the online payment form. */
+  collect_manually?: boolean;
+  /** When false, the client signs in person — skip the e-signature step. */
+  require_signature?: boolean;
   venue_name: string;
   venue_logo_url: string | null;
   venue_brand: VenueBrand | null;
@@ -372,6 +376,7 @@ function StatusBadge({ status }: { status: string }) {
     opened: 'bg-amber-50 text-amber-700 border-amber-200',
     signed: 'bg-violet-50 text-violet-700 border-violet-200',
     paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    partially_paid: 'bg-amber-50 text-amber-700 border-amber-200',
   };
   return (
     <span className={`inline-flex items-center rounded-full border px-3.5 py-1 text-xs font-semibold capitalize ${styles[status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
@@ -514,12 +519,19 @@ export default function ProposalPage() {
   // Invoices skip the signing flow entirely — they go straight to payment
   // once the customer opens the link.
   const isInvoice = proposal.is_invoice === true;
-  const canSign = !isInvoice && (proposal.status === 'sent' || proposal.status === 'opened');
-  const needsPayment = isInvoice
+  // Manual-collection records are paid in cash/check directly to the venue, so
+  // we never show the online payment form.
+  const collectManually = proposal.collect_manually === true;
+  const requireSignature = proposal.require_signature !== false;
+  const canSign = !isInvoice && requireSignature && (proposal.status === 'sent' || proposal.status === 'opened');
+  const needsPayment = !collectManually && (isInvoice
     ? (proposal.status === 'sent' || proposal.status === 'opened' || proposal.status === 'signed')
-    : proposal.status === 'signed';
+    : (requireSignature ? proposal.status === 'signed' : (proposal.status === 'sent' || proposal.status === 'opened' || proposal.status === 'signed')));
   const isPaid = proposal.status === 'paid';
-  const currentStep = isPaid ? 4 : needsPayment ? 3 : canSign ? 2 : 1;
+  // Manual deals are "complete" from the client's side once they've reviewed
+  // (and signed, if required) — there's nothing left for them to do online.
+  const manualComplete = collectManually && !isPaid && !canSign;
+  const currentStep = isPaid ? 4 : needsPayment ? 3 : canSign ? 2 : manualComplete ? 4 : 1;
   const fields: SigningField[] = proposal.signature_fields?.length
     ? proposal.signature_fields
     : [
@@ -569,19 +581,13 @@ export default function ProposalPage() {
       })()}
 
       <div className="mx-auto max-w-3xl px-4 py-8">
-        {/* Progress Steps — invoices skip the signing step */}
+        {/* Progress Steps — invoices skip Sign; manual deals skip the online Pay step */}
         <div className="mb-8 flex items-center justify-center gap-0">
-          {(isInvoice
-            ? [
-                { step: 1, label: 'Review' },
-                { step: 3, label: 'Pay' },
-              ]
-            : [
-                { step: 1, label: 'Review' },
-                { step: 2, label: 'Sign' },
-                { step: 3, label: 'Pay' },
-              ]
-          ).map((s, i) => (
+          {([
+            { step: 1, label: 'Review' },
+            ...(!isInvoice && requireSignature ? [{ step: 2, label: 'Sign' }] : []),
+            ...(collectManually ? [{ step: 4, label: 'Done' }] : [{ step: 3, label: 'Pay' }]),
+          ]).map((s, i) => (
             <div key={s.step} className="flex items-center">
               {i > 0 && <div className={`w-16 h-0.5 mx-1 ${currentStep > s.step ? 'bg-emerald-400' : currentStep === s.step ? 'bg-brand-400' : 'bg-gray-200'}`} />}
               <div className="flex flex-col items-center gap-1.5">
@@ -812,6 +818,25 @@ export default function ProposalPage() {
                   } catch { /* keep optimistic state */ }
                 }}
               />
+            </div>
+          )}
+
+          {/* Manual collection — no online payment, venue collects cash/check */}
+          {manualComplete && (
+            <div className="border-t border-gray-100 px-8 py-12 text-center">
+              <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
+                <svg className="w-8 h-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                {proposal.status === 'partially_paid' ? 'Partial payment received' : proposal.signed_at ? "You're all set" : 'Thank you'}
+              </h2>
+              <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
+                {proposal.venue_name} collects payment directly. You&apos;ll arrange your
+                payment (cash or check) with them — no online payment is needed here.
+                {proposal.signed_at ? ` Signed on ${formatDate(proposal.signed_at)}.` : ''}
+              </p>
             </div>
           )}
 

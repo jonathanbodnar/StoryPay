@@ -31,32 +31,56 @@ export async function GET(request: NextRequest) {
   // payment_config) for what is typically a 5–20 row table widget.
   // Sticks to the original public schema; fields like proposal_type,
   // deposit_pct, override_conflict don't exist on every install.
-  let query = supabaseAdmin
-    .from('proposals')
-    .select(
-      'id, public_token, customer_name, customer_email, customer_lunarpay_id, ' +
-      'status, price, payment_type, sent_at, paid_at, signed_at, ' +
-      'created_at, updated_at, template_id',
-    )
-    .eq('venue_id', venueId)
-    .order('created_at', { ascending: false });
+  const BASE_COLS =
+    'id, public_token, customer_name, customer_email, customer_lunarpay_id, ' +
+    'status, price, payment_type, sent_at, paid_at, signed_at, ' +
+    'created_at, updated_at, template_id';
 
-  if (status) {
-    query = query.eq('status', status);
+  async function runQuery(cols: string) {
+    let q = supabaseAdmin
+      .from('proposals')
+      .select(cols)
+      .eq('venue_id', venueId)
+      .order('created_at', { ascending: false });
+    if (status) q = q.eq('status', status);
+    if (limit) q = q.limit(parseInt(limit, 10));
+    return q;
   }
 
-  if (limit) {
-    query = query.limit(parseInt(limit, 10));
+  // Prefer to include collect_manually; fall back to the legacy column set if
+  // migration 154 hasn't been applied yet.
+  let { data, error } = await runQuery(BASE_COLS + ', collect_manually');
+  if (error && (error.code === '42703' || error.code === 'PGRST204')) {
+    ({ data, error } = await runQuery(BASE_COLS));
   }
-
-  const { data, error } = await query;
 
   if (error) {
     console.error('[proposals GET] supabase error', { venueId, code: error.code, message: error.message, details: error.details });
     return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
   }
 
-  return NextResponse.json(data ?? []);
+  const rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
+
+  // Merge in manual-payment totals so the list can show paid/balance. Tolerant
+  // of the proposal_payments table not existing yet.
+  try {
+    const { data: pays } = await supabaseAdmin
+      .from('proposal_payments')
+      .select('proposal_id, amount_cents')
+      .eq('venue_id', venueId);
+    if (pays && pays.length) {
+      const totals = new Map<string, number>();
+      for (const p of pays) {
+        const pid = String(p.proposal_id);
+        totals.set(pid, (totals.get(pid) ?? 0) + (Number(p.amount_cents) || 0));
+      }
+      for (const r of rows) {
+        r.total_paid_cents = totals.get(String(r.id)) ?? 0;
+      }
+    }
+  } catch { /* proposal_payments not available yet — skip totals */ }
+
+  return NextResponse.json(rows);
 }
 
 export async function POST(request: NextRequest) {
@@ -77,7 +101,14 @@ export async function POST(request: NextRequest) {
     lineItems: lineItemsRaw,
     appliedCouponId: appliedCouponIdRaw,
     overrideContent,
+    collectManually,
+    requireSignature,
   } = body;
+
+  // Manual-collection proposals suppress the online payment form; the owner
+  // records cash/check payments from the dashboard instead.
+  const collectManuallyFlag = collectManually === true;
+  const requireSignatureFlag = requireSignature !== false;
 
   // templateId is optional when overrideContent is provided (AI-generated or freeform contract)
   if (!templateId && !body.overrideContent) {
@@ -170,28 +201,38 @@ export async function POST(request: NextRequest) {
   const lineItemsPayload = shouldValidateLineItems ? lineItems : null;
   const appliedCouponPayload = shouldValidateLineItems ? appliedCouponId : null;
 
+  // Insert tolerant of installs where migration 154 (manual payment columns)
+  // hasn't run yet: retry once without collect_manually/require_signature.
+  async function insertProposalRow(row: Record<string, unknown>) {
+    let res = await supabaseAdmin.from('proposals').insert(row).select().single();
+    if (res.error && (res.error.code === '42703' || res.error.code === 'PGRST204')) {
+      const { collect_manually: _cm, require_signature: _rs, ...fallback } = row;
+      void _cm; void _rs;
+      res = await supabaseAdmin.from('proposals').insert(fallback).select().single();
+    }
+    return res;
+  }
+
   if (isDraft) {
-    const { data: proposal, error: insertError } = await supabaseAdmin
-      .from('proposals')
-      .insert({
-        venue_id: venueId,
-        template_id: templateId ?? null,
-        customer_name: customerName || null,
-        customer_email: customerEmail || null,
-        customer_phone: customerPhone || null,
-        content: resolvedContent,
-        price: price || 0,
-        payment_type: paymentType || 'full',
-        payment_config: paymentConfig || {},
-        accept_ach: acceptAch !== false,
-        signature_fields: sigFields ?? [],
-        public_token: publicToken,
-        status: 'draft',
-        line_items: lineItemsPayload,
-        applied_coupon_id: appliedCouponPayload,
-      })
-      .select()
-      .single();
+    const { data: proposal, error: insertError } = await insertProposalRow({
+      venue_id: venueId,
+      template_id: templateId ?? null,
+      customer_name: customerName || null,
+      customer_email: customerEmail || null,
+      customer_phone: customerPhone || null,
+      content: resolvedContent,
+      price: price || 0,
+      payment_type: paymentType || 'full',
+      payment_config: paymentConfig || {},
+      accept_ach: acceptAch !== false,
+      signature_fields: sigFields ?? [],
+      public_token: publicToken,
+      status: 'draft',
+      line_items: lineItemsPayload,
+      applied_coupon_id: appliedCouponPayload,
+      collect_manually: collectManuallyFlag,
+      require_signature: requireSignatureFlag,
+    });
 
     if (insertError) {
       console.error('[proposals POST draft] insert failed', { venueId, code: insertError.code, message: insertError.message, details: insertError.details, hint: insertError.hint });
@@ -223,29 +264,27 @@ export async function POST(request: NextRequest) {
   }
 
   // 2. Insert proposal
-  const { data: proposal, error: insertError } = await supabaseAdmin
-    .from('proposals')
-    .insert({
-      venue_id: venueId,
-      template_id: templateId ?? null,
-      customer_name: customerName,
-      customer_email: customerEmail,
-      customer_phone: customerPhone || null,
-      customer_lunarpay_id: customerLunarpayId,
-      content: resolvedContent,
-      price,
-      payment_type: paymentType || 'full',
-      payment_config: paymentConfig || {},
-      accept_ach: acceptAch !== false,
-      signature_fields: sigFields ?? [],
-      public_token: publicToken,
-      status: 'sent',
-      sent_at: new Date().toISOString(),
-      line_items: lineItemsPayload,
-      applied_coupon_id: appliedCouponPayload,
-    })
-    .select()
-    .single();
+  const { data: proposal, error: insertError } = await insertProposalRow({
+    venue_id: venueId,
+    template_id: templateId ?? null,
+    customer_name: customerName,
+    customer_email: customerEmail,
+    customer_phone: customerPhone || null,
+    customer_lunarpay_id: customerLunarpayId,
+    content: resolvedContent,
+    price,
+    payment_type: paymentType || 'full',
+    payment_config: paymentConfig || {},
+    accept_ach: acceptAch !== false,
+    signature_fields: sigFields ?? [],
+    public_token: publicToken,
+    status: 'sent',
+    sent_at: new Date().toISOString(),
+    line_items: lineItemsPayload,
+    applied_coupon_id: appliedCouponPayload,
+    collect_manually: collectManuallyFlag,
+    require_signature: requireSignatureFlag,
+  });
 
   if (insertError) {
     console.error('[proposals POST send] insert failed', { venueId, code: insertError.code, message: insertError.message, details: insertError.details, hint: insertError.hint });

@@ -310,6 +310,10 @@ function NewProposalInvoicePageInner() {
  const [subAmount, setSubAmount] = useState('');
  const [subFrequency, setSubFrequency] = useState('monthly');
  const [subStartDate, setSubStartDate] = useState('');
+ // Collection: 'online' = card/ACH via StoryPay, 'manual' = owner records cash/check.
+ const [collectMethod, setCollectMethod] = useState<'online' | 'manual'>('online');
+ // Manual proposals can skip the client e-signature (they sign in person).
+ const [requireSignature, setRequireSignature] = useState(true);
 
  // UI
  const [showPreview, setShowPreview] = useState(false);
@@ -622,6 +626,8 @@ function NewProposalInvoicePageInner() {
  lineItems: lineItemsPayload,
  appliedCouponId: appliedCouponId || undefined,
  price: totalCents, paymentType, paymentConfig, asDraft,
+ collectManually: collectMethod === 'manual',
+ requireSignature: collectMethod === 'manual' ? requireSignature : true,
  // Always send the current contract content so AI-generated / freeform
  // contracts are captured even when no template is selected from the dropdown.
  overrideContent: contractHtml || undefined,
@@ -638,6 +644,7 @@ function NewProposalInvoicePageInner() {
  lineItems: lineItemsPayload, price: totalCents,
  appliedCouponId: appliedCouponId || undefined,
  paymentType, paymentConfig, asDraft,
+ collectManually: collectMethod === 'manual',
  }),
  });
  if (!res.ok) { const d=await res.json(); setError(d.error||'Failed'); return; }
@@ -1191,6 +1198,41 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
  <div className="flex items-center gap-3 font-bold text-gray-900"><span>Total</span><span className="min-w-[70px]">{formatCents(totalCents)}</span></div>
  </div>
  </div>
+ </div>
+ </div>
+
+ {/* Collection method */}
+ <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+ <div className="px-5 py-4 border-b border-gray-200">
+ <p className="text-sm font-semibold text-gray-900">How will you collect payment?</p>
+ </div>
+ <div className="px-5 py-4 space-y-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+ {([
+ {key:'online', title:'Online', desc:'Client pays by card or bank online via StoryPay.'},
+ {key:'manual', title:'Manually (cash / check)', desc:'You collect in person and record it here.'},
+ ] as {key:'online'|'manual';title:string;desc:string}[]).map(opt=>(
+ <button key={opt.key} type="button" onClick={()=>setCollectMethod(opt.key)}
+ className={`text-left rounded-2xl border-2 px-4 py-3 transition-all ${collectMethod===opt.key?'border-gray-900 bg-gray-50':'border-gray-200 hover:border-gray-300'}`}>
+ <p className={`text-sm font-semibold ${collectMethod===opt.key?'text-gray-900':'text-gray-600'}`}>{opt.title}</p>
+ <p className="text-xs text-gray-400 mt-0.5">{opt.desc}</p>
+ </button>
+ ))}
+ </div>
+ {collectMethod==='manual' && (
+ <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-700 leading-relaxed">
+ The client won&apos;t see an online payment form. {mode==='proposal' ? 'They can review and sign, then you' : 'You'} record each cash or check payment from the {mode==='proposal' ? 'Proposals' : 'Invoices'} list — partial payments are supported, and a receipt is emailed automatically.
+ </div>
+ )}
+ {collectMethod==='manual' && mode==='proposal' && (
+ <label className="flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer hover:bg-gray-50 transition">
+ <input type="checkbox" checked={requireSignature} onChange={e=>setRequireSignature(e.target.checked)}
+ className="mt-0.5 h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-2 focus:ring-gray-900/20"/>
+ <span className="text-xs text-gray-600 leading-relaxed">
+ <span className="font-semibold text-gray-800">Require an online e-signature.</span> Leave unchecked if the client will sign a printed copy in person.
+ </span>
+ </label>
+ )}
  </div>
  </div>
 

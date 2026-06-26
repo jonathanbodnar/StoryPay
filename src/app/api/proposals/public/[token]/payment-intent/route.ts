@@ -12,12 +12,18 @@ export async function POST(
 
   const { data: proposal, error } = await supabaseAdmin
     .from('proposals')
-    .select('id, venue_id, status, price, accept_ach, payment_type, payment_config, template_id')
+    .select('*')
     .eq('public_token', token)
     .single();
 
   if (error || !proposal) {
     return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
+  }
+
+  // Manual-collection records are paid in cash/check directly to the venue —
+  // there is no online checkout for them.
+  if ((proposal as { collect_manually?: boolean }).collect_manually === true) {
+    return NextResponse.json({ error: 'This document is collected directly by the venue.' }, { status: 400 });
   }
 
   // Invoices have no template_id (same logic as the public proposals GET route)

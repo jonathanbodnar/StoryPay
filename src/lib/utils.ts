@@ -34,6 +34,7 @@ export function getStatusColor(status: string): { bg: string; text: string } {
     case 'opened': return { bg: 'bg-yellow-100', text: 'text-yellow-700' };
     case 'signed': return { bg: 'bg-purple-100', text: 'text-purple-700' };
     case 'paid': return { bg: 'bg-emerald-100', text: 'text-emerald-700' };
+    case 'partially_paid': return { bg: 'bg-amber-100', text: 'text-amber-700' };
     case 'active': return { bg: 'bg-emerald-100', text: 'text-emerald-700' };
     case 'pending': return { bg: 'bg-yellow-100', text: 'text-yellow-700' };
     case 'failed': return { bg: 'bg-red-100', text: 'text-red-700' };

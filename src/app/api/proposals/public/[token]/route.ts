@@ -83,6 +83,8 @@ export async function GET(
     signed_at: proposal.signed_at,
     paid_at: proposal.paid_at,
     is_invoice: isInvoice,
+    collect_manually: proposal.collect_manually === true,
+    require_signature: proposal.require_signature !== false,
     venue_name: venue?.name ?? '',
     venue_logo_url: venue?.brand_logo_url || venue?.logo_url || null,
     venue_brand: {
