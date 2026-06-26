@@ -760,7 +760,7 @@ export default function DirectoryBillingPage() {
                             label="Verified Listing"
                             description="Verified badge on your listing, in search, and in inquiries — builds trust with couples browsing."
                             priceCents={summary.addon_prices.verified_cents}
-                            isOn={summary.addons.verified}
+                            isOn={summary.addons.verifiedUser}
                             isFromPlan={inclusion.verified}
                             isUserOn={summary.addons.verifiedUser}
                             busy={busy === 'addon:verified'}
@@ -772,7 +772,7 @@ export default function DirectoryBillingPage() {
                             label="Sponsored Listing"
                             description="Top-of-results placement and 'Sponsored' label, with priority above non-sponsored venues."
                             priceCents={summary.addon_prices.sponsored_cents}
-                            isOn={summary.addons.sponsored}
+                            isOn={summary.addons.sponsoredUser}
                             isFromPlan={inclusion.sponsored}
                             isUserOn={summary.addons.sponsoredUser}
                             busy={busy === 'addon:sponsored'}
@@ -789,7 +789,7 @@ export default function DirectoryBillingPage() {
                               label="Venue Concierge"
                               description="A personal concierge + AI forever-follow-up so no lead is ever forgotten. Books more tours for you automatically."
                               priceCents={summary.addon_prices.concierge_cents ?? 49900}
-                              isOn={summary.addons.concierge}
+                              isOn={summary.addons.conciergeUser}
                               isFromPlan={conciergeIncluded}
                               isUserOn={summary.addons.conciergeUser}
                               busy={busy === 'addon:concierge'}
@@ -801,6 +801,20 @@ export default function DirectoryBillingPage() {
                       </div>
 
                       {/* ── Monthly total breakdown ── */}
+                      {/* Contact-sales plans hide all pricing so the only path
+                          forward is booking a demo. */}
+                      {isContactSales ? (
+                        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                            <Calendar size={14} className="text-gray-500" />
+                            Custom pricing — book a call
+                          </div>
+                          <p className="mt-1 text-[12px] leading-relaxed text-gray-500">
+                            This plan is tailored to your venue. Book a quick demo and we&apos;ll walk you
+                            through everything and put together pricing that fits.
+                          </p>
+                        </div>
+                      ) : (
                       <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
                         <div className="text-[11px] font-semibold uppercase tracking-wide mb-3 text-gray-500">
                           Monthly total
@@ -869,6 +883,7 @@ export default function DirectoryBillingPage() {
                           Pricing subject to change at any time. Subscribers receive at least 30 days&apos; advance notice before any price increase.
                         </p>
                       </div>
+                      )}
 
                       {/* ── Actions ── */}
                       {isCurrent ? (
@@ -1397,7 +1412,7 @@ function AddonsCard({
           label="Verified Listing"
           description="Verified badge on your listing, in search, and in inquiries — builds trust with brides browsing."
           priceCents={verifiedPriceCents}
-          isOn={addons.verified}
+          isOn={addons.verifiedUser}
           isFromPlan={addons.verifiedFromPlan}
           isUserOn={addons.verifiedUser}
           busy={busy === 'addon:verified'}
@@ -1409,7 +1424,7 @@ function AddonsCard({
           label="Sponsored Listing"
           description="Top-of-results placement and 'Sponsored' label, with priority above non-sponsored venues."
           priceCents={sponsoredPriceCents}
-          isOn={addons.sponsored}
+          isOn={addons.sponsoredUser}
           isFromPlan={addons.sponsoredFromPlan}
           isUserOn={addons.sponsoredUser}
           busy={busy === 'addon:sponsored'}
