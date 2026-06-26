@@ -166,13 +166,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       console.warn('[onboarding/publish] booking defaults', bookingErr.message);
     }
 
-    // 3. Publish the listing + stamp activation.
+    // 3. Publish the listing. NOTE: going live is no longer the end of
+    //    onboarding — the card step ("Access your Bride Booking System") comes
+    //    AFTER this, and only the `finish` action stamps onboarding_completed_at.
+    //    So a non-legacy venue that publishes but abandons the card stays
+    //    incomplete and the wizard reopens on the card step. Legacy venues have
+    //    no card step, so for them is_published alone counts as complete.
     const { error: vErr } = await supabaseAdmin
       .from('venues')
       .update({
         is_published: true,
-        onboarding_completed_at: new Date().toISOString(),
-        onboarding_last_step: 3,
+        onboarding_last_step: 2,
       })
       .eq('id', venueId);
     if (vErr) {
@@ -188,6 +192,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .catch(() => { /* non-fatal */ });
 
     return NextResponse.json({ ok: true, is_published: true, slug, live_url: liveUrl(slug) });
+  }
+
+  if (action === 'finish') {
+    // The true end of onboarding: stamped after the card step ("Access your
+    // Bride Booking System") succeeds, OR when no card is required (dev / already
+    // carded / no paid plan). This is the completion signal the wizard gates on
+    // for non-legacy venues — until it's set, the card-gated modal reopens.
+    const { error: fErr } = await supabaseAdmin
+      .from('venues')
+      .update({
+        onboarding_completed_at: new Date().toISOString(),
+        onboarding_last_step: 3,
+      })
+      .eq('id', venueId);
+    if (fErr) {
+      console.error('[onboarding/finish] stamp complete', fErr.message);
+      return NextResponse.json({ error: fErr.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
   }
 
   if (action === 'restart') {

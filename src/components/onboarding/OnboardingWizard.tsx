@@ -117,11 +117,18 @@ export default function OnboardingWizard() {
         if (cancelled) return;
         // Hide the wizard/pill once they've completed onboarding OR published
         // their listing manually — a live listing means they're done here.
-        const isComplete = Boolean(s.completed) || Boolean(s.is_published);
         const legacy = Boolean(s.is_legacy);
+        // Completion model: legacy venues have no card step, so going live
+        // (is_published) finishes them. Non-legacy venues must complete the card
+        // step — the `finish` action stamps onboarding_completed_at; until then
+        // they are NOT complete and the gate reopens (on the card step).
+        const isComplete = legacy
+          ? (Boolean(s.completed) || Boolean(s.is_published))
+          : Boolean(s.completed);
         setComplete(isComplete);
         setIsLegacy(legacy);
-        setStep(typeof s.last_step === 'number' ? Math.min(s.last_step, 2) : 0);
+        setLive(Boolean(s.is_published)); // keep the "Go live" pill green on resume
+        setStep(typeof s.last_step === 'number' ? Math.min(s.last_step, 3) : 0);
 
         if (forced) {
           setStep(0);
@@ -197,6 +204,13 @@ export default function OnboardingWizard() {
     setOpen(false);
   }, [saveStep, step]);
 
+  // Onboarding truly done — close for good and let the dashboard react.
+  const finishAndClose = useCallback(() => {
+    setComplete(true);
+    setOpen(false);
+    try { window.dispatchEvent(new CustomEvent('storyvenue:setup-complete')); } catch { /* ignore */ }
+  }, []);
+
   // The modal is the only thing this component renders; the persistent
   // launcher lives in <main> (OnboardingLauncher) so it aligns with the page.
   if (checking || complete || !open) return null;
@@ -236,24 +250,32 @@ export default function OnboardingWizard() {
           </button>
         )}
 
-        <StepDots step={step} live={live} />
+        <StepDots
+          step={step}
+          live={live}
+          labels={isLegacy ? ['Connect', 'Details', 'Go live'] : ['Connect', 'Details', 'Go live', 'Access']}
+        />
 
         <div className="px-6 pb-8 pt-7 sm:px-10">
           {step === 0 && <ConnectStep onNext={() => go(1)} />}
           {step === 1 && <QuestionsStep onBack={() => go(0)} onNext={() => go(2)} />}
-          {step === 2 && <PublishStep onLive={() => setLive(true)} onDone={() => {
-            setComplete(true);
-            setOpen(false);
-            try { window.dispatchEvent(new CustomEvent('storyvenue:setup-complete')); } catch { /* ignore */ }
-          }} />}
+          {step === 2 && (
+            <PublishStep
+              onLive={() => setLive(true)}
+              // Non-legacy: after going live + the test inquiry, continue to the
+              // card step (4) to unlock the dashboard. Legacy: just finish.
+              onContinue={isLegacy ? undefined : () => go(3)}
+              onDone={finishAndClose}
+            />
+          )}
+          {step === 3 && !isLegacy && <CardStep onDone={finishAndClose} />}
         </div>
       </div>
     </div>
   );
 }
 
-function StepDots({ step, live = false }: { step: number; live?: boolean }) {
-  const labels = ['Connect', 'Details', 'Go live'];
+function StepDots({ step, live = false, labels }: { step: number; live?: boolean; labels: string[] }) {
   return (
     <div className="flex items-center justify-center gap-2 px-6 pt-7">
       {labels.map((l, i) => {
@@ -812,7 +834,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /* ── Step 2: Publish ────────────────────────────────────────────────────── */
 type TestLead = { id: string; name: string; email: string; phone: string | null; message: string; booking_timeline: string | null };
 
-function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void }) {
+function PublishStep({ onDone, onLive, onContinue }: { onDone: () => void; onLive?: () => void; onContinue?: () => void }) {
   const [publishing, setPublishing] = useState(false);
   const [liveUrl, setLiveUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -826,13 +848,6 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
   const [testLead, setTestLead] = useState<TestLead | null>(null);
   const [testEmailTo, setTestEmailTo] = useState('');
   const [testError, setTestError] = useState<string | null>(null);
-
-  // Card capture on publish: switching on the Bride Booking System requires a
-  // card (14-day free trial). We only show the inline form when billing says a
-  // card is needed (no card on file yet).
-  const [cardStage, setCardStage] = useState(false);
-  const [cardIntent, setCardIntent] = useState<{ clientToken: string; environment: string } | null>(null);
-  const [billing, setBilling] = useState<{ planName: string; amountCents: number; trialEndsAt: string } | null>(null);
 
   // Already live? Jump to the success screen instead of asking them to publish
   // again — going live is a one-time action.
@@ -864,7 +879,10 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
     } catch { setTestError('Something went wrong. Try again.'); setTestStatus('idle'); }
   };
 
-  // The actual publish — flips the listing/guide live.
+  // Go live — flips the listing/guide live. No card here anymore: the card is a
+  // separate step AFTER this (Step 4, "Access your Bride Booking System"). This
+  // lets the owner see the test inquiry land first, then card to unlock the
+  // dashboard sitting (blurred) behind the modal.
   const doPublish = async () => {
     setPublishing(true); setError(null);
     try {
@@ -874,40 +892,9 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
       });
       const d = await res.json();
       if (!res.ok) { setError(d.error || 'Publish failed.'); return; }
-      setCardStage(false);
       setLiveUrl(d.live_url || null);
     } catch { setError('Publish failed. Try again.'); }
     finally { setPublishing(false); }
-  };
-
-  // "Publish & go live" entry point: gate on a card first. If a card is already
-  // on file (or billing isn't configured), publish straight away; otherwise
-  // load the inline card form and require it before going live.
-  const startPublish = async () => {
-    setPublishing(true); setError(null);
-    try {
-      const bRes = await fetch('/api/onboarding/billing', { method: 'POST' });
-      const b = await bRes.json();
-      if (bRes.ok && b.needsCard) {
-        const piRes = await fetch('/api/venue-billing/payment-intent', { method: 'POST' });
-        const pi = await piRes.json();
-        if (!piRes.ok || !pi.clientToken) {
-          setError(pi.error || 'Could not load the payment form. Please try again.');
-          return;
-        }
-        setBilling({ planName: b.planName, amountCents: b.amountCents, trialEndsAt: b.trialEndsAt });
-        setCardIntent({ clientToken: pi.clientToken, environment: pi.environment || 'production' });
-        setCardStage(true);
-        try { trackClient('card_shown', { label: 'Card capture shown', properties: { amountCents: b.amountCents } }); } catch { /* non-fatal */ }
-        return;
-      }
-      // No card required → publish immediately.
-      await doPublish();
-    } catch {
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setPublishing(false);
-    }
   };
 
   const copy = () => {
@@ -997,65 +984,17 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
           </div>
         </div>
 
-        <button onClick={onDone} className="mt-6 text-sm text-gray-400 hover:text-gray-600">Go to my dashboard</button>
-      </div>
-    );
-  }
-
-  // ── Card capture stage (required before going live) ──────────────────────
-  if (cardStage && cardIntent) {
-    const trialDate = billing?.trialEndsAt
-      ? new Date(billing.trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-      : '';
-    const monthly = billing ? `$${(billing.amountCents / 100).toFixed(0)}` : '';
-    return (
-      <div>
-        <div className="text-center">
-          <p className="text-sm font-medium text-emerald-600">No charge today</p>
-          <h2 className="mt-1 text-xl font-semibold text-gray-900">Switch on your Bride Booking System</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Add a card to go live. You won&apos;t be charged{trialDate ? ` until ${trialDate}` : ' during your free trial'}, and you can cancel anytime.
-          </p>
-        </div>
-
-        {billing && (
-          <div className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">{billing.planName || 'Bride Booking System'}</span>
-              <span className="font-semibold text-gray-900">{monthly}/mo</span>
-            </div>
-            <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
-              <Sparkles size={11} /> 14-day free trial{trialDate ? ` · First charge ${trialDate}` : ''}
-            </p>
-          </div>
+        {onContinue ? (
+          <button
+            onClick={onContinue}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: BRAND }}
+          >
+            Unlock my dashboard <ArrowRight size={18} />
+          </button>
+        ) : (
+          <button onClick={onDone} className="mt-6 text-sm text-gray-400 hover:text-gray-600">Go to my dashboard</button>
         )}
-
-        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-          {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
-          <InlineTrialCardForm
-            clientToken={cardIntent.clientToken}
-            environment={cardIntent.environment}
-            onSuccess={() => {
-              try { trackClient('card_entered', { label: 'Card vaulted, trial started' }); } catch { /* non-fatal */ }
-              void doPublish();
-            }}
-            onError={(msg) => setError(msg)}
-          />
-        </div>
-
-        <p className="mt-3 text-center text-[11px] leading-relaxed text-gray-500">
-          {trialDate
-            ? <>Your card is charged <strong className="text-gray-700">{monthly}/mo</strong> on <strong className="text-gray-700">{trialDate}</strong> unless you switch to Free before then.</>
-            : <>Your card is charged <strong className="text-gray-700">{monthly}/mo</strong> after your trial unless you switch to Free before then.</>}
-        </p>
-
-        <button
-          onClick={() => { setCardStage(false); setError(null); setCardIntent(null); }}
-          className="mt-3 flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"
-        >
-          <ArrowLeft size={14} /> Back
-        </button>
-        <p className="mt-2 text-center text-[11px] text-gray-400">Secured &amp; encrypted. Billed as &ldquo;StoryVenue&rdquo;. Cancel anytime{trialDate ? ` before ${trialDate}` : ''}.</p>
       </div>
     );
   }
@@ -1070,10 +1009,139 @@ function PublishStep({ onDone, onLive }: { onDone: () => void; onLive?: () => vo
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
-      <button onClick={startPublish} disabled={publishing} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
+      <button onClick={doPublish} disabled={publishing} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white disabled:opacity-50" style={{ backgroundColor: BRAND }}>
         {publishing ? <><Loader2 size={18} className="animate-spin" /> Publishing…</> : <>Publish &amp; go live <ArrowRight size={18} /></>}
       </button>
-      <p className="mt-2 text-xs text-gray-400">14-day free trial. You can edit everything later.</p>
+      <p className="mt-2 text-xs text-gray-400">Free to publish. You can edit everything later.</p>
+    </div>
+  );
+}
+
+/* ── Step 4: Access (card-gated unlock of the Bride Booking System) ───────── */
+function CardStep({ onDone }: { onDone: () => void }) {
+  const [phase, setPhase] = useState<'loading' | 'card' | 'finishing' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [cardIntent, setCardIntent] = useState<{ clientToken: string; environment: string } | null>(null);
+  const [billing, setBilling] = useState<{ planName: string; amountCents: number; trialEndsAt: string } | null>(null);
+
+  // Mark onboarding complete (stamps onboarding_completed_at) then close.
+  const finish = useCallback(async () => {
+    setPhase('finishing');
+    try {
+      await fetch('/api/onboarding/state', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'finish' }),
+      });
+    } catch { /* best-effort: gate falls back to reopening */ }
+    onDone();
+  }, [onDone]);
+
+  // On mount: figure out if a card is required, and if so load the inline form.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const bRes = await fetch('/api/onboarding/billing', { method: 'POST' });
+        const b = await bRes.json();
+        if (cancelled) return;
+        if (!bRes.ok) { setError(b.error || 'Could not load billing. Please try again.'); setPhase('error'); return; }
+        if (!b.needsCard) {
+          // Already carded / dev / no paid plan to sell → nothing to collect.
+          await finish();
+          return;
+        }
+        const piRes = await fetch('/api/venue-billing/payment-intent', { method: 'POST' });
+        const pi = await piRes.json();
+        if (cancelled) return;
+        if (!piRes.ok || !pi.clientToken) {
+          setError(pi.error || 'Could not load the payment form. Please try again.');
+          setPhase('error');
+          return;
+        }
+        setBilling({ planName: b.planName, amountCents: b.amountCents, trialEndsAt: b.trialEndsAt });
+        setCardIntent({ clientToken: pi.clientToken, environment: pi.environment || 'production' });
+        setPhase('card');
+        try { trackClient('card_shown', { label: 'Card capture shown', properties: { amountCents: b.amountCents } }); } catch { /* non-fatal */ }
+      } catch {
+        if (!cancelled) { setError('Something went wrong. Please try again.'); setPhase('error'); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [finish]);
+
+  if (phase === 'loading' || phase === 'finishing') {
+    return (
+      <div className="flex h-48 flex-col items-center justify-center gap-3 text-gray-400">
+        <Loader2 size={24} className="animate-spin" />
+        <p className="text-sm">{phase === 'finishing' ? 'Unlocking your dashboard…' : 'Loading…'}</p>
+      </div>
+    );
+  }
+
+  if (phase === 'error') {
+    return (
+      <div className="text-center">
+        <h2 className="text-xl font-semibold text-gray-900">Access your Bride Booking System</h2>
+        <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+        <button
+          onClick={() => { setError(null); setPhase('loading'); }}
+          className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white"
+          style={{ backgroundColor: BRAND }}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  const trialDate = billing?.trialEndsAt
+    ? new Date(billing.trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : '';
+  const monthly = billing ? `$${(billing.amountCents / 100).toFixed(0)}` : '';
+
+  return (
+    <div>
+      <div className="text-center">
+        <p className="text-sm font-medium text-emerald-600">No charge today</p>
+        <h2 className="mt-1 text-xl font-semibold text-gray-900">Access your Bride Booking System</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Your page is live and leads are landing. Add a card to unlock your dashboard and inbox. You won&apos;t be charged{trialDate ? ` until ${trialDate}` : ' during your free trial'}, and you can cancel anytime.
+        </p>
+      </div>
+
+      {billing && (
+        <div className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">{billing.planName || 'Bride Booking System'}</span>
+            <span className="font-semibold text-gray-900">{monthly}/mo</span>
+          </div>
+          <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
+            <Sparkles size={11} /> 14-day free trial{trialDate ? ` · First charge ${trialDate}` : ''}
+          </p>
+        </div>
+      )}
+
+      <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
+        {cardIntent && (
+          <InlineTrialCardForm
+            clientToken={cardIntent.clientToken}
+            environment={cardIntent.environment}
+            onSuccess={() => {
+              try { trackClient('card_entered', { label: 'Card vaulted, trial started' }); } catch { /* non-fatal */ }
+              void finish();
+            }}
+            onError={(msg) => setError(msg)}
+          />
+        )}
+      </div>
+
+      <p className="mt-3 text-center text-[11px] leading-relaxed text-gray-500">
+        {trialDate
+          ? <>Your card is charged <strong className="text-gray-700">{monthly}/mo</strong> on <strong className="text-gray-700">{trialDate}</strong> unless you switch to Free before then.</>
+          : <>Your card is charged <strong className="text-gray-700">{monthly}/mo</strong> after your trial unless you switch to Free before then.</>}
+      </p>
+      <p className="mt-2 text-center text-[11px] text-gray-400">Secured &amp; encrypted. Billed as &ldquo;StoryVenue&rdquo;. Cancel anytime{trialDate ? ` before ${trialDate}` : ''}.</p>
     </div>
   );
 }
