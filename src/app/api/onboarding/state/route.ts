@@ -76,12 +76,20 @@ export async function GET(): Promise<NextResponse> {
   const v = (venue ?? {}) as Record<string, unknown>;
 
   // Legacy / grandfathered venues are NOT subject to the card-gated onboarding
-  // block — the hard gate only applies to venues on the new (paid) plans.
-  let isLegacy = false;
-  try {
-    const access = await loadDirectoryNavAccess(venueId, (v.directory_plan_id as string | null) ?? null);
-    isLegacy = access.isLegacyPlan;
-  } catch { /* default: not legacy → gated */ }
+  // block. A venue is treated as legacy when:
+  //   a) it has NO plan assigned (null = existing free-listing account, or
+  //      a brand-new signup whose plan assignment failed / migrations not yet
+  //      applied) — these get the soft optional modal, never the hard gate, OR
+  //   b) it is explicitly on a plan marked is_legacy = true (grandfathered).
+  // Only venues that carry an explicitly non-legacy paid plan get the hard gate.
+  const planId = (v.directory_plan_id as string | null) ?? null;
+  let isLegacy = !planId; // no plan = free listing = not gated
+  if (planId) {
+    try {
+      const access = await loadDirectoryNavAccess(venueId, planId);
+      isLegacy = access.isLegacyPlan;
+    } catch { /* keep isLegacy = false for explicit plan that errors */ }
+  }
 
   return NextResponse.json({
     completed: Boolean(v.onboarding_completed_at),
