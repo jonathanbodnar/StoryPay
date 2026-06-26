@@ -14,12 +14,22 @@ async function verifyDashboardRead(): Promise<boolean> {
 /**
  * GET /api/admin/conversion-funnel
  *
- * The card-gated Bride Booking System conversion funnel: signup → onboarding →
- * card → publish → activate → paid. Authoritative counts come from venue STATE
- * (so non-returners are still counted correctly), with the in-modal micro-steps
- * (details written, card shown) sourced from analytics events. Returns ordered
- * stages with absolute counts, % of signups, and step-to-step conversion so you
- * can see exactly where venues fall off.
+ * The card-gated Bride Booking System conversion funnel, in the ACTUAL product
+ * order:
+ *   signup → started → wrote guide → sent test inquiry (Go live) → saw card →
+ *   added a card (page goes live here) → converted to paid.
+ *
+ * Going live now coincides with adding the card (the page publishes the instant
+ * the card succeeds), so there is no separate "published" stage — a standalone
+ * is_published count would be dominated by legacy venues that published under
+ * the OLD model with no card, which would misrepresent the new funnel.
+ *
+ * Authoritative counts come from venue STATE (so non-returners still count),
+ * with the in-modal micro-steps (details written, card shown) sourced from
+ * analytics events. "Added a card" is the real card-on-file signal
+ * (directory_subscription_external_id / a real subscription status) and "paid"
+ * is a genuinely active subscription — so a venue that merely viewed the form
+ * never inflates the conversion count.
  */
 export async function GET() {
   if (!(await verifyDashboardRead())) {
@@ -47,15 +57,17 @@ export async function GET() {
     if (r.venue_id && evSets[r.event]) evSets[r.event].add(r.venue_id);
   }
 
-  const ENTERED = new Set(['trialing', 'active', 'past_due', 'canceled']);
+  // A real card on file = a subscription was actually created (vaulted card),
+  // regardless of where it is in its lifecycle. This is the honest "added a
+  // card" signal — viewing the form is NOT enough.
+  const CARDED = new Set(['trialing', 'active', 'past_due', 'canceled', 'cancelled']);
 
   let signedUp = 0;
   let startedOnboarding = 0;
   let detailsDone = 0;
+  let activated = 0;
   let cardShown = 0;
   let cardEntered = 0;
-  let published = 0;
-  let activated = 0;
   let paid = 0;
 
   for (const vv of real) {
@@ -63,16 +75,21 @@ export async function GET() {
     const id = String(v.id);
     const step = typeof v.onboarding_last_step === 'number' ? (v.onboarding_last_step as number) : null;
     const status = String(v.directory_subscription_status ?? '').toLowerCase();
-    const hasSub = Boolean(v.directory_subscription_external_id) || ENTERED.has(status);
+    // Carded = a real subscription exists (external id) or the status proves a
+    // card was vaulted at some point.
+    const hasCard = Boolean(v.directory_subscription_external_id) || CARDED.has(status);
 
     signedUp += 1;
 
     if (evSets.onboarding_started.has(id) || step !== null || v.is_published || v.onboarding_completed_at) startedOnboarding += 1;
-    if (evSets.onboarding_details_done.has(id) || (step !== null && step >= 1) || v.is_published || hasSub) detailsDone += 1;
-    if (evSets.card_shown.has(id) || hasSub) cardShown += 1;
-    if (evSets.card_entered.has(id) || hasSub) cardEntered += 1;
-    if (v.is_published) published += 1;
+    if (evSets.onboarding_details_done.has(id) || (step !== null && step >= 1) || v.is_published || hasCard) detailsDone += 1;
+    // Sent the test inquiry (the "Go live" step) — page is not public yet.
     if (v.onboarding_activated_at) activated += 1;
+    // Reached the card step. Carded venues necessarily saw it.
+    if (evSets.card_shown.has(id) || hasCard) cardShown += 1;
+    // Actually added a card (card on file). NOT inflated by form views.
+    if (hasCard) cardEntered += 1;
+    // Genuinely paying (past the trial / active subscription).
     if (status === 'active') paid += 1;
   }
 
@@ -80,10 +97,9 @@ export async function GET() {
     { key: 'signed_up', label: 'Signed up', count: signedUp },
     { key: 'started', label: 'Started onboarding', count: startedOnboarding },
     { key: 'details', label: 'Wrote their guide', count: detailsDone },
+    { key: 'activated', label: 'Sent a test inquiry', count: activated },
     { key: 'card_shown', label: 'Saw the card step', count: cardShown },
-    { key: 'card_entered', label: 'Entered a card', count: cardEntered },
-    { key: 'published', label: 'Published & live', count: published },
-    { key: 'activated', label: 'Saw a lead land', count: activated },
+    { key: 'card_entered', label: 'Added a card (went live)', count: cardEntered },
     { key: 'paid', label: 'Converted to paid', count: paid },
   ];
 

@@ -10,7 +10,12 @@ function pctDelta(prev: number, curr: number): number {
 }
 
 async function countLeads(venueId: string, startIso: string | null, endIso: string | null): Promise<number> {
-  let q = supabaseAdmin.from('leads').select('*', { count: 'exact', head: true }).eq('venue_id', venueId);
+  // Exclude the onboarding test inquiry so it never inflates real lead metrics.
+  let q = supabaseAdmin
+    .from('leads')
+    .select('*', { count: 'exact', head: true })
+    .eq('venue_id', venueId)
+    .neq('source', 'test_inquiry');
   if (startIso) q = q.gte('created_at', startIso);
   if (endIso)   q = q.lte('created_at', endIso);
   const { count, error } = await q;

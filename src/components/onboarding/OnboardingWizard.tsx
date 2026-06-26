@@ -237,6 +237,20 @@ export default function OnboardingWizard() {
         onScroll={handleScroll}
         className={`sv-modal-scroll ${scrolling ? 'is-scrolling' : ''} relative w-full max-w-2xl sm:max-w-[52rem] max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl`}
       >
+        {/* Back: step navigation only. They can always go back to edit an
+            earlier step — but the card gate still stands (Back never exits the
+            modal). Hidden on the first step and once they're live. */}
+        {step > 0 && !live && (
+          <button
+            onClick={() => go(step - 1)}
+            className="absolute left-4 top-4 z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Back a step"
+            title="Back a step"
+          >
+            <ArrowLeft size={15} /> Back
+          </button>
+        )}
+
         {/* Dismiss control only for legacy/grandfathered venues. For everyone
             else onboarding is a hard card-gate: no dismiss, the modal reopens on
             every load (resuming at last_step) until they go live. Progress is
@@ -260,7 +274,7 @@ export default function OnboardingWizard() {
 
         <div className="px-6 pb-8 pt-7 sm:px-10">
           {step === 0 && <ConnectStep onNext={() => go(1)} />}
-          {step === 1 && <QuestionsStep onBack={() => go(0)} onNext={() => go(2)} />}
+          {step === 1 && <QuestionsStep onNext={() => go(2)} />}
           {step === 2 && (
             isLegacy ? (
               // Legacy venues have no card step: "Go live" publishes immediately.
@@ -543,7 +557,7 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
 }
 
 /* ── Step 1: The 5 questions ────────────────────────────────────────────── */
-function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+function QuestionsStep({ onNext }: { onNext: () => void }) {
   const [minGuests, setMinGuests] = useState('');
   const [maxGuests, setMaxGuests] = useState('');
   const [priceFrom, setPriceFrom] = useState('');
@@ -818,8 +832,7 @@ function QuestionsStep({ onBack, onNext }: { onBack: () => void; onNext: () => v
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
-      <div className="mt-6 flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600"><ArrowLeft size={14} /> Back</button>
+      <div className="mt-6 flex items-center justify-end">
         <button onClick={submit} disabled={saving || !photosOk} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: BRAND }}>
           {saving ? <><Loader2 size={16} className="animate-spin" /> Creating your guide…</> : <>Create my guide <Sparkles size={16} /></>}
         </button>
