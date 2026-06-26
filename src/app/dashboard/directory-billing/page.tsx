@@ -27,7 +27,7 @@ const BRAND = '#1b1b1b';
 /**
  * Plan feature checklist shown inside each plan's accordion body. The list is
  * cumulative: `minTier` is the lowest plan tier (0 = cheapest plan, ascending
- * by price) that unlocks the feature. A plan shows a check when its tier ≥
+ * by tier) that unlocks the feature. A plan shows a check when its tier ≥
  * minTier, otherwise a red lock. This mirrors the public pricing page where
  * each higher tier is "everything below, plus …".
  *
@@ -36,24 +36,71 @@ const BRAND = '#1b1b1b';
  *   Tier 2 → All-Inclusive
  *   Tier 3 → All-Inclusive Concierge
  */
-const PLAN_FEATURES: { label: string; outcome: string; minTier: number }[] = [
-  { label: 'Venue Listing',        outcome: 'Appear in the wedding directory so couples can find you',  minTier: 0 },
-  { label: 'Lead Capture',         outcome: 'Capture every inquiry from your listing and guide',         minTier: 0 },
-  { label: 'Proposals & Payments', outcome: 'Send proposals, collect deposits, and track payments',      minTier: 0 },
-  { label: 'Contact Management',   outcome: 'Manage every lead and client in one place',                 minTier: 0 },
-  { label: 'Reviews',              outcome: 'Collect and showcase reviews on your listing',              minTier: 1 },
+type PlanFeature = { label: string; outcome: string; minTier: number };
+
+/**
+ * The core product we sell — the "Bride Booking System". These features are
+ * bundled as one thing and rendered inside a bordered box so customers can see
+ * the product boundary at a glance, separate from premium services + add-ons.
+ */
+const BOOKING_SYSTEM_FEATURES: PlanFeature[] = [
+  { label: 'Venue Listing',        outcome: 'Appear in the wedding directory so couples can find you',     minTier: 0 },
+  { label: 'Reviews',              outcome: 'Collect and showcase reviews on your listing',                minTier: 1 },
   { label: 'Pricing Guide',        outcome: 'Share your pricing with couples in a polished branded guide', minTier: 1 },
-  { label: 'Speed to Lead System', outcome: 'Reply the instant a bride inquires',                        minTier: 1 },
-  { label: 'Lead Inbox',           outcome: 'Track, qualify, and convert every inquiry into a booking',  minTier: 1 },
-  { label: 'Conversations',        outcome: 'Unified inbox for all client messages and inquiries',       minTier: 1 },
-  { label: 'Booking Calendar',     outcome: 'Block dates, track bookings, and sync availability',        minTier: 1 },
-  { label: 'Analytics',            outcome: 'Revenue insights, booking trends, and performance data',    minTier: 1 },
-  { label: 'Full Venue Software',  outcome: 'The complete venue management platform',                    minTier: 1 },
-  { label: 'Managed Marketing',    outcome: 'We bring couples to you',                                   minTier: 2 },
-  { label: 'Verified Listing',     outcome: 'Build instant trust with a verified badge',                 minTier: 2 },
-  { label: 'Venue Concierge Team', outcome: 'Our team works your leads',                                 minTier: 3 },
-  { label: 'Sponsored Listing',    outcome: 'Show up first when brides book',                            minTier: 3 },
+  { label: 'Speed to Lead System', outcome: 'Reply the instant a bride inquires',                          minTier: 1 },
+  { label: 'Lead Inbox',           outcome: 'Track, qualify, and convert every inquiry into a booking',    minTier: 1 },
+  { label: 'Conversations',        outcome: 'Unified inbox for all client messages and inquiries',         minTier: 1 },
+  { label: 'Booking Calendar',     outcome: 'Block dates, track bookings, and sync availability',          minTier: 1 },
+  { label: 'Proposals & Payments', outcome: 'Send proposals, collect deposits, and track payments',        minTier: 0 },
+  { label: 'Analytics',            outcome: 'Revenue insights, booking trends, and performance data',      minTier: 1 },
 ];
+
+/**
+ * Premium services that layer on top of the Bride Booking System (higher tiers
+ * and paid add-ons). Shown outside the product box so it's clear they're extra.
+ */
+const PREMIUM_FEATURES: PlanFeature[] = [
+  { label: 'Managed Marketing',    outcome: 'We bring couples to you',                                     minTier: 2 },
+  { label: 'Verified Listing',     outcome: 'Build instant trust with a verified badge',                   minTier: 2 },
+  { label: 'Venue Concierge Team', outcome: 'Our team works your leads',                                   minTier: 3 },
+  { label: 'Sponsored Listing',    outcome: 'Show up first when brides book',                              minTier: 3 },
+];
+
+/**
+ * Display order for plan accordions and cumulative feature tiers. Plans aren't
+ * ordered by stored price (the All-Inclusive tiers hide their price and aren't
+ * reliably ordered by it) — we rank by what the plan *is*:
+ *   0 Free · 1 Bride Booking System · 2 All-Inclusive · 3 All-Inclusive Concierge
+ */
+function planRank(p: { name: string; price_monthly_cents: number | null; is_default?: boolean }): number {
+  const n = p.name.toLowerCase();
+  if (n.includes('concierge')) return 3;
+  if (n.includes('all-inclusive') || n.includes('all inclusive')) return 2;
+  if (p.is_default || (p.price_monthly_cents ?? 0) === 0 || n.includes('free')) return 0;
+  return 1;
+}
+
+/** Present plan names with a capital "I" in All-Inclusive. */
+function displayPlanName(name: string): string {
+  return name.replace(/all-inclusive/gi, 'All-Inclusive');
+}
+
+/** One feature row with an unlocked (check) or locked state. */
+function FeatureRow({ feature, on }: { feature: PlanFeature; on: boolean }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
+        on ? 'bg-emerald-100 text-emerald-600' : 'bg-red-50 text-red-400'
+      }`}>
+        {on ? <Check size={10} strokeWidth={3} /> : <Lock size={9} strokeWidth={3} />}
+      </span>
+      <div className="min-w-0">
+        <div className="text-xs font-semibold leading-tight text-gray-900">{feature.label}</div>
+        <div className="text-[11px] leading-snug text-gray-500">{feature.outcome}</div>
+      </div>
+    </div>
+  );
+}
 
 type Plan = {
   id: string;
@@ -444,10 +491,13 @@ export default function DirectoryBillingPage() {
 
   const plans = useMemo(() => {
     if (!summary) return [] as Plan[];
-    // Show every plan the venue is offered, ordered cheapest → priciest. (We no
-    // longer hide "Booking System" plans — the Free plan is now named
-    // "Bride Booking System Free" and must appear alongside the others.)
-    return [...summary.plans].sort((a, b) => (a.price_monthly_cents ?? 0) - (b.price_monthly_cents ?? 0));
+    // Explicit display order: Free → Bride Booking System → All-Inclusive →
+    // All-Inclusive Concierge. (The All-Inclusive tiers hide their price, so a
+    // raw price sort doesn't reliably put them in the right order.)
+    return [...summary.plans].sort((a, b) => {
+      const r = planRank(a) - planRank(b);
+      return r !== 0 ? r : (a.price_monthly_cents ?? 0) - (b.price_monthly_cents ?? 0);
+    });
   }, [summary]);
 
   // The cheapest *paid* plan is the only self-serve paid tier. Any plan priced
@@ -459,13 +509,11 @@ export default function DirectoryBillingPage() {
     return paid.length ? Math.min(...paid) : 0;
   }, [plans]);
 
-  // Ordinal tier of each plan (0 = cheapest) used to drive the cumulative
-  // feature checklist — higher tiers include everything below them.
+  // Tier of each plan (0 = Free) used to drive the cumulative feature
+  // checklist — higher tiers include everything below them.
   const tierIndexById = useMemo(() => {
     const m = new Map<string, number>();
-    [...plans]
-      .sort((a, b) => (a.price_monthly_cents ?? 0) - (b.price_monthly_cents ?? 0))
-      .forEach((p, i) => m.set(p.id, i));
+    plans.forEach((p) => m.set(p.id, planRank(p)));
     return m;
   }, [plans]);
 
@@ -660,7 +708,7 @@ export default function DirectoryBillingPage() {
                           {cents > 0 ? 'Paid' : 'Free'}{plan.is_default ? ' · default' : ''}
                         </div>
                         <div className="font-semibold text-sm leading-tight text-gray-900">
-                          {plan.name}
+                          {displayPlanName(plan.name)}
                         </div>
                       </div>
                       {isCurrent && (
@@ -736,30 +784,40 @@ export default function DirectoryBillingPage() {
                         <div className="text-[11px] font-semibold uppercase tracking-wide mb-3 text-gray-500">
                           What&apos;s included
                         </div>
-                        <div className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
-                          {PLAN_FEATURES.map((f) => {
-                            const tier = tierIndexById.get(plan.id) ?? 0;
-                            const on = tier >= f.minTier;
-                            return (
-                              <div key={f.label} className="flex items-start gap-2.5">
-                                <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
-                                  on ? 'bg-emerald-100 text-emerald-600' : 'bg-red-50 text-red-400'
-                                }`}>
-                                  {on
-                                    ? <Check size={10} strokeWidth={3} />
-                                    : <Lock size={9} strokeWidth={3} />}
-                                </span>
-                                <div className="min-w-0">
-                                  <div className="text-xs font-semibold leading-tight text-gray-900">
-                                    {f.label}
-                                  </div>
-                                  <div className="text-[11px] leading-snug text-gray-500">
-                                    {f.outcome}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
+
+                        {/* The Bride Booking System — our core product, boxed off
+                            so it reads as one distinct thing customers are buying. */}
+                        <div className="rounded-xl border border-gray-300 bg-white p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#1b1b1b] text-white">
+                              <Sparkles size={11} />
+                            </span>
+                            <span className="text-[13px] font-bold tracking-tight text-gray-900">
+                              The Bride Booking System
+                            </span>
+                          </div>
+                          <div className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+                            {BOOKING_SYSTEM_FEATURES.map((f) => {
+                              const tier = tierIndexById.get(plan.id) ?? 0;
+                              const on = tier >= f.minTier;
+                              return <FeatureRow key={f.label} feature={f} on={on} />;
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Premium services — everything layered on top of the
+                            booking system (higher tiers + paid add-ons). */}
+                        <div className="mt-4">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide mb-3 text-gray-400">
+                            Premium services
+                          </div>
+                          <div className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+                            {PREMIUM_FEATURES.map((f) => {
+                              const tier = tierIndexById.get(plan.id) ?? 0;
+                              const on = tier >= f.minTier;
+                              return <FeatureRow key={f.label} feature={f} on={on} />;
+                            })}
+                          </div>
                         </div>
                       </div>
 
@@ -835,7 +893,7 @@ export default function DirectoryBillingPage() {
                         </div>
                         <div className="space-y-1.5 text-sm">
                           <div className="flex justify-between text-gray-700">
-                            <span>{plan.name}</span>
+                            <span>{displayPlanName(plan.name)}</span>
                             <span className="font-mono">{cents > 0 ? formatCents(cents) : 'Free'}</span>
                           </div>
                           <div className="flex justify-between text-gray-700">
@@ -1687,13 +1745,13 @@ function UpgradePlanModal({
               <div className="flex-1">
                 <h3 className="font-heading text-lg text-gray-900">
                   {isDowngradeToFree
-                    ? `Switch to ${plan.name}`
+                    ? `Switch to ${displayPlanName(plan.name)}`
                     : willPatch
-                      ? `Upgrade to ${plan.name}`
-                      : `Subscribe to ${plan.name}`}
+                      ? `Upgrade to ${displayPlanName(plan.name)}`
+                      : `Subscribe to ${displayPlanName(plan.name)}`}
                 </h3>
                 <p className="mt-0.5 text-sm text-gray-500">
-                  {currentPlan ? `Currently on ${currentPlan.name}` : 'No plan currently assigned'}
+                  {currentPlan ? `Currently on ${displayPlanName(currentPlan.name)}` : 'No plan currently assigned'}
                 </p>
               </div>
             </div>
@@ -1705,7 +1763,7 @@ function UpgradePlanModal({
               <div className="flex items-baseline justify-between">
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    {plan.name}
+                    {displayPlanName(plan.name)}
                   </div>
                   {plan.description ? (
                     <p className="mt-0.5 text-xs text-gray-600">{plan.description}</p>
@@ -1779,7 +1837,7 @@ function UpgradePlanModal({
                   <Sparkles size={14} /> Start your {trialDuration || 'free trial'}
                 </p>
                 <p className="text-xs">
-                  You won&apos;t be charged today. Your trial unlocks <strong>{plan.name}</strong>{' '}
+                  You won&apos;t be charged today. Your trial unlocks <strong>{displayPlanName(plan.name)}</strong>{' '}
                   immediately. {plan.trial_period_unit === 'forever'
                     ? 'No future charges — ever.'
                     : <>Your first <strong>{formatCents(newTotalCents)}/mo</strong> charge fires when the trial ends — you can add a card any time before then.</>}
@@ -1788,7 +1846,7 @@ function UpgradePlanModal({
             ) : isDowngradeToFree ? (
               <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
                 <p>
-                  You&apos;ll be moved to the <strong>{plan.name}</strong> plan immediately. Your
+                  You&apos;ll be moved to the <strong>{displayPlanName(plan.name)}</strong> plan immediately. Your
                   current paid subscription will be canceled and you won&apos;t be charged again.
                 </p>
               </div>
