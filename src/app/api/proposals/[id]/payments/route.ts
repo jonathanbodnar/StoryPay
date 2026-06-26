@@ -125,6 +125,7 @@ export async function POST(
   if (sendReceipt && proposal.customer_email) {
     await sendManualPaymentReceipt({
       venueId,
+      proposalId: proposal.id,
       customerEmail: proposal.customer_email,
       customerName: proposal.customer_name,
       publicToken: proposal.public_token,

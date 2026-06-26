@@ -73,8 +73,11 @@ type BundleRow = {
   minimum_subtotal_cents: number;
   sort_order: number;
   active: boolean;
+  template_id: string | null;
   venue_package_lines: BundleLine[];
 };
+
+type TemplateOption = { id: string; name: string };
 
 function bundleLineProduct(line: BundleLine): EmbeddedProduct | null {
   const v = line.venue_products;
@@ -826,6 +829,7 @@ type BundleFormState = {
   valid_to: string;
   minimum_dollars: string;
   active: boolean;
+  template_id: string;
   lines: BundleLineState[];
 };
 
@@ -838,6 +842,7 @@ function emptyBundleForm(): BundleFormState {
     valid_to: '',
     minimum_dollars: '0',
     active: true,
+    template_id: '',
     lines: [{ product_id: '', quantity: '1', override_dollars: '' }],
   };
 }
@@ -865,6 +870,7 @@ function BundleForm({
           valid_to: editing.valid_to || '',
           minimum_dollars: (editing.minimum_subtotal_cents / 100).toFixed(2),
           active: editing.active,
+          template_id: editing.template_id || '',
           lines:
             editing.venue_package_lines?.length
               ? editing.venue_package_lines.map((L) => ({
@@ -879,6 +885,23 @@ function BundleForm({
   );
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+
+  // Contract templates the owner can attach as this bundle's default contract.
+  const [templateOptions, setTemplateOptions] = useState<TemplateOption[]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/templates')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => {
+        if (!alive) return;
+        const opts = Array.isArray(rows)
+          ? rows.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name }))
+          : [];
+        setTemplateOptions(opts);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   // Inline "quick add item" sub-form, tied to a specific line index.
   const [quickAddIdx, setQuickAddIdx] = useState<number | null>(null);
@@ -965,6 +988,7 @@ function BundleForm({
         valid_from: form.valid_from || null,
         valid_to: form.valid_to || null,
         minimum_subtotal_cents: minCents,
+        template_id: form.template_id || null,
         lines,
       };
       if (editing) body.active = form.active;
@@ -1066,6 +1090,23 @@ function BundleForm({
             onChange={(e) => setForm((f) => ({ ...f, valid_to: e.target.value }))}
           />
         </div>
+      </div>
+
+      <div>
+        <label className={LABEL}>Default contract template (optional)</label>
+        <select
+          className={SELECT}
+          value={form.template_id}
+          onChange={(e) => setForm((f) => ({ ...f, template_id: e.target.value }))}
+        >
+          <option value="">No contract — line items only</option>
+          {templateOptions.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-gray-500">
+          When you pick this package while building a proposal, its line items and this contract load automatically.
+        </p>
       </div>
 
       <div>

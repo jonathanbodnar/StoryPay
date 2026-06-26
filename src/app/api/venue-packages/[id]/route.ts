@@ -52,8 +52,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
   if (body.sort_order !== undefined) updates.sort_order = parseInt(String(body.sort_order), 10) || 0;
   if (body.active !== undefined) updates.active = Boolean(body.active);
+  if (body.template_id !== undefined) updates.template_id = body.template_id || null;
 
-  const { error: ue } = await supabaseAdmin.from('venue_packages').update(updates).eq('id', id).eq('venue_id', venueId);
+  let { error: ue } = await supabaseAdmin.from('venue_packages').update(updates).eq('id', id).eq('venue_id', venueId);
+  // Tolerant of pre-migration-156 DBs that lack template_id.
+  if (ue && (ue.code === '42703' || ue.code === 'PGRST204')) {
+    const { template_id: _t, ...rest } = updates;
+    void _t;
+    ({ error: ue } = await supabaseAdmin.from('venue_packages').update(rest).eq('id', id).eq('venue_id', venueId));
+  }
   if (ue) return NextResponse.json({ error: ue.message }, { status: 500 });
 
   if (Array.isArray(body.lines)) {

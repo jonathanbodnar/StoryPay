@@ -41,8 +41,8 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
   payment_confirmation: {
     subject:     'Payment receipt from {{organization}} — {{amount}}',
     heading:     'Payment Successful',
-    body:        'Hi {{customer_name}},\n\nYour payment of {{amount}} to {{organization}} on {{date}} has been processed successfully.\n\nThank you for your payment!',
-    button_text: null,
+    body:        'Hi {{customer_name}},\n\nYour payment of {{amount}} to {{organization}} on {{date}} has been processed successfully.\n\n{{balance_line}}\n\nThank you for your payment!',
+    button_text: 'View all payments',
     footer:      null,
   },
   payment_notification: {

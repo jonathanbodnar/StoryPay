@@ -16,7 +16,7 @@ import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { notifyOwner, formatAmount, HIGH_VALUE_THRESHOLD_CENTS } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
-import { recordOnlinePaymentLedger } from '@/lib/proposal-payments';
+import { recordOnlinePaymentLedger, buildBalanceLine } from '@/lib/proposal-payments';
 
 /** Pull a numeric id out of common LP response shapes. */
 function extractId(raw: unknown): number {
@@ -269,18 +269,21 @@ export async function POST(
         if (proposal.customer_email && venue?.id) {
           const brandColor = ((venue as Record<string, unknown>).brand_color as string) || '#1b1b1b';
           const logoUrl    = ((venue as Record<string, unknown>).brand_logo_url as string | null) ?? undefined;
-          const invoiceUrl = `${appUrl}/proposal/${proposal.public_token}`;
+          const invoiceUrl = `${appUrl}/invoice/${proposal.id}`;
           const venueName  = (venue.name as string) || 'Your Venue';
 
           const tmpl = await getVenueEmailTemplate(venue.id as string, 'payment_confirmation');
           if (tmpl) {
             const amtFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(finalChargeCents / 100);
+            const balanceCents = Math.max((Number(proposal.price) || 0) - finalChargeCents, 0);
             const vars = {
               organization:   venueName,
               customer_name:  customerName,
               amount:         amtFmt,
               date:           new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
               payment_method: paymentMethod,
+              balance_due:    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(balanceCents / 100),
+              balance_line:   buildBalanceLine(balanceCents),
             };
             await directSendEmail({
               to:      proposal.customer_email as string,

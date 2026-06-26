@@ -74,6 +74,7 @@ export async function GET(
   return NextResponse.json({
     customer_name: proposal.customer_name,
     customer_email: proposal.customer_email,
+    proposal_number: proposal.proposal_number ?? null,
     content: proposal.content,
     price: proposal.price,
     payment_type: proposal.payment_type,

@@ -17,8 +17,20 @@ interface VenueBrand {
   footer_note: string | null;
 }
 
+interface LedgerPayment {
+  id: string;
+  payment_number: number | null;
+  amount_cents: number;
+  method: string;
+  source: string | null;
+  check_number: string | null;
+  note: string | null;
+  paid_at: string;
+}
+
 interface InvoiceData {
   proposal_id: string;
+  proposal_number: number | null;
   customer_name: string;
   customer_email: string;
   content: string;
@@ -29,6 +41,9 @@ interface InvoiceData {
   paid_at: string | null;
   signed_at: string | null;
   created_at: string;
+  payments: LedgerPayment[];
+  total_paid_cents: number;
+  balance_cents: number;
   venue_name: string;
   venue_logo_url: string | null;
   venue_brand: VenueBrand | null;
@@ -91,7 +106,9 @@ export default function InvoicePage() {
     );
   }
 
-  const invoiceNumber = invoice.proposal_id.slice(0, 8).toUpperCase();
+  const invoiceNumber = invoice.proposal_number != null
+    ? String(invoice.proposal_number)
+    : invoice.proposal_id.slice(0, 8).toUpperCase();
   const payments =
     invoice.payment_type === 'installment' && invoice.payment_config
       ? ((invoice.payment_config as { payments: Array<{ amount: number; date: string }> }).payments ?? [])
@@ -102,11 +119,131 @@ export default function InvoicePage() {
   const feeCents = hasFee ? Math.round(invoice.price * feeRate / 100) : 0;
   const totalWithFee = invoice.price + feeCents;
 
+  const ledger = invoice.payments ?? [];
+  const totalPaid = invoice.total_paid_cents ?? 0;
+  const balance = invoice.balance_cents ?? Math.max(invoice.price - totalPaid, 0);
+  // A receipt-style status that reflects the actual ledger, not just the
+  // proposal's stored status string.
+  const payState: 'paid' | 'partial' | 'due' =
+    balance <= 0 && (totalPaid > 0 || invoice.status === 'paid')
+      ? 'paid'
+      : totalPaid > 0
+        ? 'partial'
+        : 'due';
+  const statusLabel = payState === 'paid' ? 'Paid in full' : payState === 'partial' ? 'Partially paid' : 'Balance due';
+  const statusClasses = payState === 'paid'
+    ? 'bg-emerald-100 text-emerald-700'
+    : payState === 'partial'
+      ? 'bg-amber-100 text-amber-700'
+      : 'bg-gray-100 text-gray-600';
+
+  const fmtMethod = (p: LedgerPayment) => {
+    const base = p.method === 'cc' ? 'Card'
+      : p.method === 'ach' ? 'Bank transfer'
+      : p.method === 'check' ? `Check${p.check_number ? ` #${p.check_number}` : ''}`
+      : p.method === 'cash' ? 'Cash'
+      : 'Payment';
+    return base;
+  };
+
+  async function downloadPdf() {
+    if (!invoice) return;
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const brandColor = invoice.venue_brand?.color || '#1b1b1b';
+    const rgb = hexToRgb(brandColor);
+    const pageW = doc.internal.pageSize.getWidth();
+    const M = 40;
+
+    // Header band
+    doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+    doc.rect(0, 0, pageW, 90, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text(invoice.venue_name || 'Invoice', M, 40);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const brandLines = [
+      invoice.venue_brand?.tagline,
+      [invoice.venue_brand?.address, invoice.venue_brand?.city, invoice.venue_brand?.state, invoice.venue_brand?.zip].filter(Boolean).join(', ') || null,
+      invoice.venue_brand?.email,
+      invoice.venue_brand?.phone,
+    ].filter(Boolean) as string[];
+    brandLines.slice(0, 3).forEach((l, i) => doc.text(l, M, 56 + i * 12));
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.text('INVOICE', pageW - M, 40, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`#${invoiceNumber}`, pageW - M, 56, { align: 'right' });
+
+    // Bill to + meta
+    doc.setTextColor(60, 60, 60);
+    let y = 130;
+    doc.setFont('helvetica', 'bold');
+    doc.text('BILL TO', M, y);
+    doc.text('STATUS', pageW - M - 160, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(invoice.customer_name || '', M, y + 16);
+    doc.text(invoice.customer_email || '', M, y + 30);
+    doc.text(statusLabel, pageW - M - 160, y + 16);
+    doc.text(formatDate(invoice.paid_at || invoice.created_at), pageW - M - 160, y + 30);
+
+    // Totals table
+    autoTable(doc, {
+      startY: y + 60,
+      head: [['Description', 'Amount']],
+      body: [[`Proposal — ${invoice.customer_name || ''}`, formatCents(invoice.price)]],
+      foot: [
+        ['Total', formatCents(totalWithFee)],
+        ['Paid', formatCents(totalPaid)],
+        ['Balance', formatCents(balance)],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [rgb[0], rgb[1], rgb[2]] },
+      footStyles: { fillColor: [245, 245, 245], textColor: [20, 20, 20], fontStyle: 'bold' },
+      columnStyles: { 1: { halign: 'right' } },
+      margin: { left: M, right: M },
+    });
+
+    // Payment ledger
+    if (ledger.length) {
+      autoTable(doc, {
+        // @ts-expect-error lastAutoTable is attached by the plugin at runtime
+        startY: (doc.lastAutoTable?.finalY ?? y + 120) + 24,
+        head: [['#', 'Date', 'Method', 'Amount']],
+        body: ledger.map((p) => [
+          p.payment_number != null ? `#${p.payment_number}` : '—',
+          formatDate(p.paid_at),
+          fmtMethod(p),
+          formatCents(p.amount_cents),
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [rgb[0], rgb[1], rgb[2]] },
+        columnStyles: { 3: { halign: 'right' } },
+        margin: { left: M, right: M },
+      });
+    }
+
+    doc.save(`invoice-${invoiceNumber}.pdf`);
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 print:bg-white print:py-0">
       <div className="mx-auto max-w-2xl">
-        {/* Print button */}
-        <div className="flex justify-end mb-4 print:hidden">
+        {/* Actions */}
+        <div className="flex justify-end gap-2 mb-4 print:hidden">
+          <button
+            onClick={downloadPdf}
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Download PDF
+          </button>
           <button
             onClick={() => window.print()}
             className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
@@ -181,8 +318,8 @@ export default function InvoicePage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">
                   Status
                 </p>
-                <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 uppercase">
-                  Paid
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase ${statusClasses}`}>
+                  {statusLabel}
                 </span>
               </div>
             </div>
@@ -243,7 +380,53 @@ export default function InvoicePage() {
                 <span className="text-2xl font-bold text-gray-900">{formatCents(invoice.price)}</span>
               </div>
             )}
+            {ledger.length > 0 && (
+              <div className="mt-3 space-y-2 border-t border-gray-200 pt-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Paid to date</span>
+                  <span className="font-medium text-emerald-700">{formatCents(totalPaid)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm font-semibold ${balance > 0 ? 'text-gray-900' : 'text-gray-500'}`}>
+                    {balance > 0 ? 'Balance due' : 'Balance'}
+                  </span>
+                  <span className={`text-lg font-bold ${balance > 0 ? 'text-amber-600' : 'text-gray-900'}`}>
+                    {formatCents(balance)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Payment ledger — "view all my payments" */}
+          {ledger.length > 0 && (
+            <div className="px-8 py-6 border-b border-gray-100">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4">
+                Payments
+              </h3>
+              <div className="space-y-2">
+                {ledger.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-gray-100 px-2 text-xs font-semibold text-gray-600">
+                        {p.payment_number != null ? `#${p.payment_number}` : '—'}
+                      </span>
+                      <div>
+                        <p className="text-sm text-gray-700">{fmtMethod(p)}</p>
+                        <p className="text-xs text-gray-400">{formatDate(p.paid_at)}</p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">
+                      {formatCents(p.amount_cents)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Payment schedule breakdown */}
           {invoice.payment_type === 'installment' && (payments.length > 0 || schedulePayments.length > 0) && (
@@ -339,6 +522,12 @@ export default function InvoicePage() {
       </div>
     </div>
   );
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
+  if (!m) return [27, 27, 27];
+  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
 }
 
 function PaymentStatusBadge({ status }: { status: string }) {

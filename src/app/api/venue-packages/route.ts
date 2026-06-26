@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
     valid_to,
     minimum_subtotal_cents,
     sort_order,
+    template_id,
     lines,
   } = body;
 
@@ -67,21 +68,34 @@ export async function POST(request: NextRequest) {
   const minCents = Math.max(0, parseInt(String(minimum_subtotal_cents ?? '0'), 10) || 0);
   const lineRows = Array.isArray(lines) ? lines : [];
 
-  const { data: pkg, error: pe } = await supabaseAdmin
+  const insertRow: Record<string, unknown> = {
+    venue_id: venueId,
+    name: name.trim(),
+    description: description?.trim() || null,
+    season_label: season_label?.trim() || null,
+    valid_from: valid_from || null,
+    valid_to: valid_to || null,
+    minimum_subtotal_cents: minCents,
+    sort_order: sort_order != null ? parseInt(String(sort_order), 10) || 0 : 0,
+    active: true,
+    template_id: template_id || null,
+  };
+
+  // Tolerant of pre-migration-156 DBs that lack template_id.
+  let { data: pkg, error: pe } = await supabaseAdmin
     .from('venue_packages')
-    .insert({
-      venue_id: venueId,
-      name: name.trim(),
-      description: description?.trim() || null,
-      season_label: season_label?.trim() || null,
-      valid_from: valid_from || null,
-      valid_to: valid_to || null,
-      minimum_subtotal_cents: minCents,
-      sort_order: sort_order != null ? parseInt(String(sort_order), 10) || 0 : 0,
-      active: true,
-    })
+    .insert(insertRow)
     .select()
     .single();
+  if (pe && (pe.code === '42703' || pe.code === 'PGRST204')) {
+    const { template_id: _t, ...fallback } = insertRow;
+    void _t;
+    ({ data: pkg, error: pe } = await supabaseAdmin
+      .from('venue_packages')
+      .insert(fallback)
+      .select()
+      .single());
+  }
 
   if (pe) return NextResponse.json({ error: pe.message }, { status: 500 });
 

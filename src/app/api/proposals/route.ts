@@ -47,11 +47,19 @@ export async function GET(request: NextRequest) {
     return q;
   }
 
-  // Prefer to include collect_manually; fall back to the legacy column set if
-  // migration 154 hasn't been applied yet.
-  let { data, error } = await runQuery(BASE_COLS + ', collect_manually');
-  if (error && (error.code === '42703' || error.code === 'PGRST204')) {
-    ({ data, error } = await runQuery(BASE_COLS));
+  // Prefer to include the newer columns; degrade gracefully if a migration
+  // (154 collect_manually / 156 proposal_number) hasn't been applied yet.
+  const colVariants = [
+    BASE_COLS + ', collect_manually, proposal_number',
+    BASE_COLS + ', collect_manually',
+    BASE_COLS,
+  ];
+  let data: unknown[] | null = null;
+  let error: { code?: string; message?: string; details?: string } | null = null;
+  for (const cols of colVariants) {
+    ({ data, error } = await runQuery(cols));
+    if (!error) break;
+    if (error.code !== '42703' && error.code !== 'PGRST204') break;
   }
 
   if (error) {

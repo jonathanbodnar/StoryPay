@@ -43,6 +43,7 @@ interface VenueBrand {
 interface ProposalData {
   customer_name: string;
   customer_email: string;
+  proposal_number?: number | null;
   content: string;
   price: number;
   payment_type: string;
@@ -612,6 +613,11 @@ export default function ProposalPage() {
             <p className="text-gray-500">
               Prepared for <span className="font-medium text-gray-700">{proposal.customer_name}</span>
             </p>
+            {proposal.proposal_number != null && (
+              <p className="mt-1 text-xs font-mono text-gray-400">
+                {proposal.is_invoice ? 'Invoice' : 'Proposal'} #{proposal.proposal_number}
+              </p>
+            )}
           </div>
 
           {/* Contract content — renders WYSIWYG HTML */}

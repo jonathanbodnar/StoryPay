@@ -39,11 +39,11 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'Payment Confirmation',
     description: 'Receipt sent to customers after payment',
     icon: 'CreditCard',
-    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{payment.amount}}', '{{payment.date}}', '{{payment.method}}', '{{venue.name}}'],
+    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{payment.amount}}', '{{payment.date}}', '{{payment.method}}', '{{balance_line}}', '{{balance_due}}', '{{venue.name}}'],
     defaults: {
       subject: 'Payment receipt from {{organization}} - {{amount}}',
       heading: 'Payment Successful',
-      body: 'Hi {{customer_name}},\n\nYour payment of {{amount}} to {{organization}} has been processed successfully.\n\nThank you for your payment!',
+      body: 'Hi {{customer_name}},\n\nYour payment of {{amount}} to {{organization}} has been processed successfully.\n\n{{balance_line}}\n\nThank you for your payment!',
     },
   },
   payment_notification: {

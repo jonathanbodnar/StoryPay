@@ -69,6 +69,7 @@ type VenuePackageRow = {
   valid_from: string | null;
   valid_to: string | null;
   minimum_subtotal_cents: number;
+  template_id?: string | null;
   venue_package_lines: VenuePackageLine[];
 };
 
@@ -560,6 +561,7 @@ function NewProposalInvoicePageInner() {
      minimum_subtotal_cents: pkg.minimum_subtotal_cents ?? 0,
    });
    setLineItems(withDerivedFromCore(core, hasSurchargeRow, appliedCouponId, venueCoupons));
+   applyPackageContract(pkg);
    setError('');
  }
 
@@ -575,6 +577,15 @@ function NewProposalInvoicePageInner() {
  function selectTemplate(t: Template) {
  setSelectedTemplate(t);
  setContractHtml(t.content||'');
+ }
+
+ // When a package with a linked contract template is applied, auto-load that
+ // contract — but never clobber a contract the owner has already written.
+ function applyPackageContract(pkg: VenuePackageRow) {
+   if (!pkg.template_id) return;
+   if (selectedTemplate || contractHtml.trim()) return;
+   const t = templates.find((tt) => tt.id === pkg.template_id);
+   if (t) selectTemplate(t);
  }
 
  // ── Submit ─────────────────────────────────────────────────────────────────
@@ -1117,6 +1128,7 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
                    if (!core.length) { setError('This package has no active products.'); setItemPickerId(null); return; }
                    setAppliedPackage({ id: pkg.id, name: pkg.name, minimum_subtotal_cents: pkg.minimum_subtotal_cents ?? 0 });
                    setLineItems(withDerivedFromCore(core, hasSurchargeRow, appliedCouponId, venueCoupons));
+                   applyPackageContract(pkg);
                    setError('');
                    setItemPickerId(null);
                    setItemPickerMode('menu');

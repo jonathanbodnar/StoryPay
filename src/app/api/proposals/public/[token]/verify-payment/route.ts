@@ -11,7 +11,7 @@ import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { notifyOwner, formatAmount, HIGH_VALUE_THRESHOLD_CENTS } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
-import { recordOnlinePaymentLedger } from '@/lib/proposal-payments';
+import { recordOnlinePaymentLedger, buildBalanceLine } from '@/lib/proposal-payments';
 
 function applyFee(cents: number, ratePercent: number): number {
   if (ratePercent <= 0) return cents;
@@ -419,7 +419,7 @@ export async function POST(
 
         const appUrl      = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
         const venueName   = venue.name || 'Your Venue';
-        const invoiceUrl  = `${appUrl}/proposal/${fullProposal.public_token}`;
+        const invoiceUrl  = `${appUrl}/invoice/${proposal.id}`;
         const brandColor  = brandData?.brand_color   || '#1b1b1b';
         const logoUrl     = brandData?.brand_logo_url || undefined;
         const amountFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
@@ -464,12 +464,18 @@ export async function POST(
           // ── Standard payment confirmation to customer ──────────────────────
           const tmpl = await getVenueEmailTemplate(venue.id, 'payment_confirmation');
           if (tmpl) {
+            const paidNowCents = proposal.payment_type === 'installment'
+              ? ((proposal.payment_config as InstallmentConfig | null)?.installments?.[0]?.amount ?? (fullProposal.price || 0))
+              : (fullProposal.price || 0);
+            const balanceCents = Math.max((fullProposal.price || 0) - paidNowCents, 0);
             const vars: Record<string, string> = {
               organization:   venueName,
               customer_name:  fullProposal.customer_name || 'there',
               amount:         amountFormatted,
               date:           new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
               payment_method: '',
+              balance_due:    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(balanceCents / 100),
+              balance_line:   buildBalanceLine(balanceCents),
             };
             await directSendEmail({
               to:      fullProposal.customer_email,

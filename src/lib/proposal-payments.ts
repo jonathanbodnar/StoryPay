@@ -98,6 +98,7 @@ export async function recomputeProposalPaymentStatus(proposalId: string): Promis
 
 interface ReceiptArgs {
   venueId: string;
+  proposalId?: string | null;
   customerEmail: string;
   customerName: string | null;
   publicToken: string | null;
@@ -106,6 +107,18 @@ interface ReceiptArgs {
   checkNumber?: string | null;
   balanceCents: number;
   paymentNumber?: number | null;
+}
+
+/**
+ * Build the prominent balance line shown on receipts. Couples (and the parents
+ * they forward the receipt to) should see at a glance whether anything is still
+ * owed.
+ */
+export function buildBalanceLine(balanceCents: number): string {
+  const fmt = (c: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c / 100);
+  return balanceCents > 0
+    ? `Remaining balance after this payment: ${fmt(balanceCents)}.`
+    : 'Your balance is now paid in full. Thank you!';
 }
 
 /**
@@ -165,7 +178,7 @@ export async function recordOnlinePaymentLedger(args: {
  * fail because the email bounced.
  */
 export async function sendManualPaymentReceipt(args: ReceiptArgs): Promise<void> {
-  const { venueId, customerEmail, customerName, publicToken, amountCents, method, checkNumber, balanceCents, paymentNumber } = args;
+  const { venueId, proposalId, customerEmail, customerName, publicToken, amountCents, method, checkNumber, balanceCents, paymentNumber } = args;
   if (!customerEmail) return;
 
   try {
@@ -180,7 +193,11 @@ export async function sendManualPaymentReceipt(args: ReceiptArgs): Promise<void>
 
     const venueName = venue?.name || 'Your Venue';
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
-    const actionUrl = publicToken ? `${appUrl}/proposal/${publicToken}` : undefined;
+    // Point the "view all payments" button at the branded, downloadable
+    // invoice/receipt page (all payments + running balance) when we have an id.
+    const actionUrl = proposalId
+      ? `${appUrl}/invoice/${proposalId}`
+      : publicToken ? `${appUrl}/proposal/${publicToken}` : undefined;
     const amountStr = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountCents / 100);
     const balanceStr = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(balanceCents / 100);
 
@@ -191,6 +208,7 @@ export async function sendManualPaymentReceipt(args: ReceiptArgs): Promise<void>
       date:           new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
       payment_method: methodLabel(method, checkNumber),
       balance_due:    balanceStr,
+      balance_line:   buildBalanceLine(balanceCents),
       payment_number: paymentNumber ? `#${paymentNumber}` : '',
     };
 

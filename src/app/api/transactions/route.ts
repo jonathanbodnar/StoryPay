@@ -50,6 +50,21 @@ export async function GET(request: NextRequest) {
         .in('status', ['paid', 'refunded', 'partial_refund'])
         .order('paid_at', { ascending: false });
 
+      // Map id -> sequential proposal_number (tolerant of pre-migration-156 DBs).
+      const numberById = new Map<string, number>();
+      try {
+        const ids = (proposals ?? []).map((p) => p.id);
+        if (ids.length) {
+          const { data: nums } = await supabaseAdmin
+            .from('proposals')
+            .select('id, proposal_number')
+            .in('id', ids);
+          for (const n of nums ?? []) {
+            if (n.proposal_number != null) numberById.set(n.id, Number(n.proposal_number));
+          }
+        }
+      } catch { /* proposal_number column unavailable — fall back to token slice */ }
+
       const resolved = await Promise.all(
         (proposals ?? []).map(async (p) => {
           let customerId = p.customer_lunarpay_id ?? null;
@@ -72,10 +87,14 @@ export async function GET(request: NextRequest) {
 
           const paidAmount = actualPaidAmountCents(p);
 
+          const num = numberById.get(p.id);
+          const invNum = num != null
+            ? String(num)
+            : (p.public_token ? p.public_token.slice(0, 8).toUpperCase() : p.id.slice(0, 8));
           return {
             id: p.id,
-            invoiceNumber: p.public_token ? p.public_token.slice(0, 8).toUpperCase() : null,
-            description: `Invoice #${p.public_token ? p.public_token.slice(0, 8).toUpperCase() : p.id.slice(0, 8)} - ${p.customer_name}`,
+            invoiceNumber: invNum,
+            description: `Invoice #${invNum} - ${p.customer_name}`,
             amount: paidAmount,
             fullInvoiceAmount: p.price,
             paymentType: p.payment_type,

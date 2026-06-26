@@ -19,6 +19,23 @@ export async function GET(
   }
 
   const venue = proposal.venues as { name: string; logo_url: string | null; service_fee_rate: number; brand_logo_url?: string; brand_tagline?: string; brand_email?: string; brand_phone?: string; brand_website?: string; brand_color?: string; brand_address?: string; brand_city?: string; brand_state?: string; brand_zip?: string; brand_footer_note?: string } | null;
+
+  // Pull the recorded payment ledger (manual + online) so the couple can see
+  // "all my payments" with a running balance. Tolerant of the table not
+  // existing yet (pre-migration 155).
+  let ledger: Array<Record<string, unknown>> = [];
+  try {
+    const { data: pays } = await supabaseAdmin
+      .from('proposal_payments')
+      .select('id, payment_number, amount_cents, method, source, check_number, note, paid_at')
+      .eq('proposal_id', proposalId)
+      .order('paid_at', { ascending: true });
+    if (pays) ledger = pays as Array<Record<string, unknown>>;
+  } catch { /* ledger unavailable — ignore */ }
+
+  const priceCents = Number(proposal.price) || 0;
+  const totalPaidCents = ledger.reduce((acc, p) => acc + (Number(p.amount_cents) || 0), 0);
+  const balanceCents = Math.max(priceCents - totalPaidCents, 0);
   let scheduleData = null;
   let subscriptionData = null;
 
@@ -51,6 +68,7 @@ export async function GET(
 
   return NextResponse.json({
     proposal_id: proposal.id,
+    proposal_number: proposal.proposal_number ?? null,
     customer_name: proposal.customer_name,
     customer_email: proposal.customer_email,
     content: proposal.content,
@@ -61,6 +79,9 @@ export async function GET(
     paid_at: proposal.paid_at,
     signed_at: proposal.signed_at,
     created_at: proposal.created_at,
+    payments: ledger,
+    total_paid_cents: totalPaidCents,
+    balance_cents: balanceCents,
     venue_name: venue?.name ?? '',
     venue_logo_url: venue?.brand_logo_url || venue?.logo_url || null,
     venue_brand: {

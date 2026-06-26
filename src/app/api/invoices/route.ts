@@ -184,6 +184,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
   }
 
+  // Once the DB has assigned a sequential proposal_number, swap the temporary
+  // token-slice invoice number in the stored content for the real "#1042".
+  if (proposal.proposal_number != null) {
+    const realNo = String(proposal.proposal_number);
+    const patched = invoiceContent.replace(`#${invoiceNumber}`, `#${realNo}`);
+    if (patched !== invoiceContent) {
+      await supabaseAdmin.from('proposals').update({ content: patched }).eq('id', proposal.id);
+      proposal.content = patched;
+    }
+  }
+
   if (!asDraft && appliedCouponPayload && proposal.id) {
     const redeem = await recordCouponRedemption({
       venueId,

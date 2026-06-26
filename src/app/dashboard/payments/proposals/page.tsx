@@ -9,6 +9,7 @@ import RecordPaymentModal from '@/components/RecordPaymentModal';
 
 interface Proposal {
  id: string;
+ proposal_number?: number | null;
  customer_name: string | null;
  customer_email: string | null;
  customer_lunarpay_id: number | string | null;
@@ -21,6 +22,10 @@ interface Proposal {
  template_id?: string | null;
  collect_manually?: boolean;
  total_paid_cents?: number;
+}
+
+function docNo(p: Proposal): string {
+ return p.proposal_number != null ? `#${p.proposal_number}` : `#${p.id.slice(0, 8).toUpperCase()}`;
 }
 
 function statusLabel(status: string): string {
@@ -103,6 +108,8 @@ function PaymentsProposalsPageInner() {
  p.status?.toLowerCase().includes(q) ||
  p.payment_type?.toLowerCase().includes(q) ||
  String(p.price/100).includes(q) ||
+ docNo(p).toLowerCase().includes(q) ||
+ (p.proposal_number != null && String(p.proposal_number).includes(q)) ||
  (p.sent_at && formatDate(p.sent_at).toLowerCase().includes(q))
  );
  }, [proposals, search]);
@@ -128,7 +135,7 @@ function PaymentsProposalsPageInner() {
  <div className="relative mb-5 max-w-lg">
  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"/>
  <input type="text"value={search} onChange={e=>setSearch(e.target.value)}
- placeholder="Search by client, status, amount, date..."
+ placeholder="Search by #number, client, status, amount, date..."
  className="w-full rounded-2xl border border-gray-200 bg-white pl-9 pr-10 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors"
  style={{ fontSize: 16 }} />
  {search && <button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={14}/></button>}
@@ -261,7 +268,8 @@ function PaymentsProposalsPageInner() {
  <div className="sm:hidden px-4 py-4 space-y-2">
  <div className="flex items-start justify-between gap-3">
  <div className="min-w-0 flex-1">
- <Link href={`/dashboard/proposals/${p.id}/edit`} className="text-sm font-semibold text-gray-900 hover:underline block truncate">{p.customer_name||'Unknown'}</Link>
+ <Link href={`/dashboard/proposals/${p.id}`} className="text-sm font-semibold text-gray-900 hover:underline block truncate">{p.customer_name||'Unknown'}</Link>
+ <p className="text-[11px] font-mono text-gray-400">{docNo(p)}</p>
  {p.customer_email && <p className="text-xs text-gray-400 truncate">{p.customer_email}</p>}
  </div>
  <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize flex-shrink-0', color.bg, color.text)}>{statusLabel(p.status)}</span>
@@ -283,8 +291,8 @@ function PaymentsProposalsPageInner() {
  {/* Desktop row */}
  <div className="hidden sm:grid grid-cols-[1fr_100px_120px_100px_100px_130px] gap-4 px-6 py-4 items-center">
  <div>
- <Link href={`/dashboard/proposals/${p.id}/edit`} className="text-sm font-semibold text-gray-900 hover:underline truncate block">{p.customer_name||'Unknown'}</Link>
- {p.customer_email && <p className="text-xs text-gray-400 truncate">{p.customer_email}</p>}
+ <Link href={`/dashboard/proposals/${p.id}`} className="text-sm font-semibold text-gray-900 hover:underline truncate block">{p.customer_name||'Unknown'}</Link>
+ <p className="text-[11px] font-mono text-gray-400">{docNo(p)} {p.customer_email ? `· ${p.customer_email}` : ''}</p>
  </div>
  <span className={classNames('inline-block self-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize w-fit', color.bg, color.text)}>{statusLabel(p.status)}</span>
  <div className="self-center">

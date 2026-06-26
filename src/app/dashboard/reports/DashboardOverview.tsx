@@ -617,7 +617,7 @@ export function DashboardOverview() {
  <td className="px-6 py-3.5 font-semibold"style={{ color: B.primary }}>{formatCents(p.price)}</td>
  <td className="hidden sm:table-cell px-6 py-3.5 text-xs text-gray-400">{formatDate(p.sent_at ?? p.created_at)}</td>
  <td className="px-6 py-3.5 text-right">
- <Link href={`/dashboard/proposals/${p.id}/edit`}
+ <Link href={`/dashboard/proposals/${p.id}`}
  className="invisible group-hover:visible inline-flex items-center gap-1 text-xs font-medium transition-colors"
  style={{ color: B.muted }}
  onMouseEnter={e => (e.currentTarget.style.color = B.primary)}
