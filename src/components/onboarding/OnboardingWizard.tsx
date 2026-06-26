@@ -218,7 +218,7 @@ export default function OnboardingWizard() {
   if (checking || complete || !open) return null;
 
   return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center overscroll-contain bg-gray-900/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center overscroll-contain bg-gray-900/40 backdrop-blur-[2px] p-4">
       <style>{`
         .sv-modal-scroll::-webkit-scrollbar { width: 0; height: 0; }
         .sv-modal-scroll { scrollbar-width: none; -ms-overflow-style: none; }
@@ -688,7 +688,21 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
   const photosRequired = manualEntry || !hasImportedPhotos;
   const photosOk = !photosRequired || photos.length >= MIN_PHOTOS;
 
+  // Every answer here feeds the AI-written guide, so they're all required (only
+  // social links are optional). Returns the first missing-field message, or null.
+  const requiredMissing = (): string | null => {
+    if (!minGuests || !maxGuests) return 'Add your guest capacity (min and max).';
+    if (!priceFrom || !priceTo) return 'Add your price range (from and to).';
+    if (!venueType) return 'Select your venue type.';
+    if (!indoorOutdoor) return 'Choose indoor, outdoor, or both.';
+    if (features.length === 0) return 'Select at least one feature.';
+    if (!differentiators.trim()) return 'Tell us what makes your venue special.';
+    return null;
+  };
+
   const submit = async () => {
+    const missing = requiredMissing();
+    if (missing) { setError(missing); return; }
     if (!photosOk) {
       setPhotoError(`Please add at least ${MIN_PHOTOS} photos so your guide and listing look full.`);
       return;
@@ -727,14 +741,14 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
       <p className="mt-1 text-sm text-gray-500">Answer these and we&apos;ll write your guide for you.</p>
 
       <div className="mt-5 space-y-4">
-        <Field label="Guest capacity">
+        <Field label="Guest capacity" required>
           <div className="grid grid-cols-2 gap-3">
             <input value={withCommas(minGuests)} onChange={(e) => setMinGuests(onlyDigits(e.target.value))} inputMode="numeric" placeholder="Min, e.g. 50" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
             <input value={withCommas(maxGuests)} onChange={(e) => setMaxGuests(onlyDigits(e.target.value))} inputMode="numeric" placeholder="Max, e.g. 200" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
           </div>
         </Field>
 
-        <Field label="Price range (per event)">
+        <Field label="Price range (per event)" required>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex items-center rounded-lg border border-gray-200 px-3 focus-within:border-gray-400">
               <span className="text-gray-400">$</span>
@@ -749,13 +763,13 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
         </Field>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Venue type">
+          <Field label="Venue type" required>
             <select value={venueType} onChange={(e) => setVenueType(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-400">
               <option value="">Select</option>
               {VENUE_TYPES.map((t) => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}
             </select>
           </Field>
-          <Field label="Indoor / outdoor">
+          <Field label="Indoor / outdoor" required>
             <select value={indoorOutdoor} onChange={(e) => setIndoorOutdoor(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-400">
               <option value="">Select</option>
               {INDOOR_OUTDOOR.map((t) => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}
@@ -763,7 +777,7 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
           </Field>
         </div>
 
-        <Field label="Features (select all that apply)">
+        <Field label="Features (select at least 1)" required>
           <div className="flex flex-wrap gap-2">
             {FEATURE_OPTIONS.map((f) => {
               const active = features.includes(f);
@@ -782,7 +796,7 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
           </div>
         </Field>
 
-        <Field label="Describe 3–4 things that make your venue special?">
+        <Field label="Describe 3 to 4 things that make your venue special" required>
           <textarea value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} rows={4} placeholder="e.g. waterfront ceremony site, on-site suites, in-house catering" className="w-full resize-y min-h-[96px] rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400" />
         </Field>
 
@@ -833,7 +847,7 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
       <div className="mt-6 flex items-center justify-end">
-        <button onClick={submit} disabled={saving || !photosOk} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: BRAND }}>
+        <button onClick={submit} disabled={saving} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: BRAND }}>
           {saving ? <><Loader2 size={16} className="animate-spin" /> Creating your guide…</> : <>Create my guide <Sparkles size={16} /></>}
         </button>
       </div>
@@ -841,10 +855,12 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+      <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        {label}{required && <span className="text-red-500"> *</span>}
+      </label>
       {children}
     </div>
   );
@@ -1061,8 +1077,9 @@ function ActivateStep({ onContinue, alreadyActivated = false }: { onContinue: ()
         <Sparkles size={24} style={{ color: BRAND }} />
       </div>
       <h2 className="text-xl font-semibold text-gray-900">See your Bride Booking System work</h2>
-      <p className="mt-1 text-sm text-gray-500">
-        Send yourself a test inquiry. Watch it land in your inbox in real time — exactly what every bride who taps your link will trigger.
+      <p className="mt-1 text-pretty text-sm leading-relaxed text-gray-500">
+        Send yourself a test inquiry and watch it land in your inbox in real time.
+        It&apos;s exactly what happens the moment a bride taps your link.
       </p>
 
       {status === 'done' ? (
@@ -1084,7 +1101,7 @@ function ActivateStep({ onContinue, alreadyActivated = false }: { onContinue: ()
               <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Test inquiry in your inbox
               </span>
-              <p className="mt-2 text-sm text-gray-600">Your test lead is waiting in your Lead Inbox — unlock your dashboard to open it.</p>
+              <p className="mt-2 text-sm text-gray-600">Your test lead is waiting in your Lead Inbox. Unlock your dashboard to open it.</p>
             </div>
           )}
           {emailTo && (
@@ -1114,7 +1131,7 @@ function ActivateStep({ onContinue, alreadyActivated = false }: { onContinue: ()
               : <><Send size={18} /> Send yourself a test inquiry</>}
           </button>
           {err && <p className="mt-2 text-sm text-red-500">{err}</p>}
-          <button onClick={onContinue} className="mt-3 text-sm text-gray-400 hover:text-gray-600">Skip — add a card to unlock my dashboard</button>
+          <button onClick={onContinue} className="mt-3 text-sm text-gray-400 hover:text-gray-600">Skip and add a card to unlock my dashboard</button>
         </>
       )}
     </div>
@@ -1277,7 +1294,7 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
         <p className="text-sm font-medium text-emerald-600">No charge today</p>
         <h2 className="mt-1 text-xl font-semibold text-gray-900">Access your Bride Booking System</h2>
         <p className="mt-1 text-sm text-gray-500">
-          A bride is already waiting in your inbox. Add a card to publish your page and unlock your dashboard. You won&apos;t be charged{trialDate ? ` until ${trialDate}` : ' during your free trial'}, and you can cancel anytime.
+          Add a card to publish your page and unlock your dashboard. You won&apos;t be charged{trialDate ? ` until ${trialDate}` : ' during your free trial'}, and you can cancel anytime.
         </p>
       </div>
 
