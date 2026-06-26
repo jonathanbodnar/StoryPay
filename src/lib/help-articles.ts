@@ -76,7 +76,7 @@ The browser tab uses the StoryVenue icon (favicon), not the full logo. Hosting p
 The signup is a 3-step flow:
 1. Plan picker — choose a directory plan (Free, Pro, Premium, All-Inclusive, etc.). Plan cards display all features with green checkmarks for items included in each plan. Only public plans are shown. Highlight badges appear on plans that have them configured.
 2. Upgrades — select optional upgrades like Verified ($19/mo), Sponsored ($99/mo), or Venue Concierge ($499/mo). Each upgrade shows its value proposition. Free plans can skip paid upgrades. On the All-Inclusive plan, Venue Concierge is already included — it shows as "Included" and is not an additional charge. Venue Concierge is unavailable on plans that don't support it.
-3. Payment — enter your card or bank details in the secure inline payment form embedded directly on the page (powered by Fortis Elements). You never leave the signup page to pay. Free plans skip this step entirely. If a trial period is configured for your plan, the card is validated but the first charge is deferred until the trial ends.
+3. Payment — enter your card or bank details in the secure inline payment form embedded directly on the page. You never leave the signup page to pay. Free plans skip this step entirely. If a trial period is configured for your plan, the card is validated but the first charge is deferred until the trial ends.
 
 After completing signup (or selecting a free plan), you are logged straight into a brand-new dashboard with a blank directory listing ready to fill in.
 
@@ -877,70 +877,42 @@ When a new Venue Direct message arrives
         id: 'conversations-inbound',
         title: 'iMessage-style two-way replies — email & SMS land in the thread instantly',
         tags: ['inbound', 'reply', 'email reply', 'sms reply', 'resend', 'ghl', 'webhook', 'two way', 'threading', 'realtime', 'imessage', 'instant', 'sent badge'],
-        body: `Conversations is two-way and iMessage-style fast. Replies — email or SMS — land back in the same thread within a second or two of arriving. No page refresh, no checking two inboxes.
+        body: `Conversations is two-way. Replies — email or SMS — land back in the same thread within a second or two of arriving. No page refresh, no checking two inboxes.
 
 How fast is "instant"?
-- **Primary path (webhook)**: when the bride replies, the upstream provider (Resend for email, StoryVenue Legacy / GHL for SMS) fires a webhook into StoryVenue. The webhook handler inserts the message in the database and broadcasts it over Supabase Realtime. Your open thread is subscribed and renders the message immediately.
-- **Fallback path (polling)**: while a thread is open, the page polls for new messages every 3 seconds. The server-side GHL pull for SMS also runs each tick (deduped, so duplicates can't appear). So even if the webhook isn't configured yet, replies still arrive within 3 seconds.
-- **Catch-up polls (SMS)**: after a successful outbound SMS, three delayed inbound pulls fire at 5s, 15s, and 45s so the bride's first reply lands automatically even if you've navigated away.
+- **Primary**: when a contact replies, the message appears in the thread immediately.
+- **Fallback**: while a thread is open, new messages are checked automatically every few seconds — so even if instant delivery isn't configured, replies still arrive quickly.
 
 Send confirmation badges
-- Every outbound message shows a green "Sent" check next to the bubble once the upstream API confirms delivery, or a red "Failed" badge with the underlying error if the send was rejected.
-- The email card UI also shows "Sent to: …" using the actual address the message was delivered to (column conversation_messages.email_to). Robust to later email-address changes on the contact.
+- Every outbound message shows a green "Sent" check once delivery is confirmed, or a red "Failed" badge with an error if the send was rejected.
+- The email card shows "Sent to: …" with the actual address the message was delivered to.
 
 Per-message channel — one thread can carry both
-- The composer's external mode has a Send via Email / Send via SMS toggle on each message. A thread can carry both at once — switching channels per message doesn't "convert" the thread. The inbound handlers also don't gate on thread channel, so an SMS reply lands in an email-started thread (and vice versa) without losing the conversation.
-
-Email replies (Resend inbound)
-- Every outbound email gets a Reply-To address on the inbound subdomain (e.g. \`reply+<threadId>+<sig>@<CONVERSATIONS_INBOUND_DOMAIN>\`). The HMAC sig is keyed by CONVERSATIONS_INBOUND_SECRET so we can verify a reply belongs to a real thread before ingesting.
-- When the couple hits Reply, their mail client sends to that signed address. Resend receives it via MX, parses, and POSTs \`email.received\` to \`/api/webhooks/inbound-email\`.
-- The handler verifies Svix signature → extracts threadId + HMAC sig → verifies → inserts the row → broadcasts → your thread updates in real time.
-- Quoted history is stripped so you only see what they typed in this reply.
-
-SMS replies (StoryVenue Legacy / GHL inbound)
-- Outbound SMS goes through your connected Legacy sub-account's A2P-approved number. Inbound replies arrive via the GHL webhook (POST /api/webhooks/ghl, event \`InboundMessage\`) and are threaded by GHL contact id back into the same thread.
-- The 3-second poll also pulls the latest messages from GHL's /conversations/{id}/messages endpoint. The filter recognizes both \`SMS\`/\`TEXT\` strings AND GHL's numeric \`type: 2\` enum.
+- The composer has a Send via Email / Send via SMS toggle on each message. A single thread can carry both email and SMS at once without converting or splitting.
 
 Default sending domain — works out of the box
-- Every venue can send email immediately using StoryVenue's verified default domain — no DNS work required. Outbound goes From: StoryVenue's domain with the venue's brand email as Reply-To, so replies still route to the venue. To send From: your own domain, verify it in Resend and the system uses it automatically.
+- Every venue can send email immediately — no DNS setup required. Your venue email is always set as Reply-To so replies still route back to you. Contact StoryVenue support if you'd like to send from your own domain.
 
 If a reply doesn't show up
-- **Email replies missing**: open Settings → Inbound Email Replies. The status panel shows a green "Configured" or amber "Needs setup" badge with a per-item checklist for the four required env vars (RESEND_API_KEY, CONVERSATIONS_INBOUND_DOMAIN, CONVERSATIONS_INBOUND_SECRET, RESEND_WEBHOOK_SECRET / INBOUND_EMAIL_WEBHOOK_TOKEN). It also shows the webhook URL to paste into Resend's "email.received" subscription, plus the DNS MX records that need to point at Resend's inbound servers.
-- **SMS replies missing**: confirm the venue's Legacy messaging is connected (Settings → Integrations). Optional: paste the StoryVenue webhook URL into GHL → Settings → Integrations → Webhooks for true instant delivery (subscribe to \`InboundMessage\`, \`ContactCreate\`, \`ContactUpdate\`, \`ContactDndUpdate\`). Without this the 3-second poll still catches the reply within a few seconds.`,
+- **Email replies missing**: open Settings → Inbound Email Replies. The status panel shows a green "Configured" or amber "Needs setup" badge for each required item with instructions on how to fix it.
+- **SMS replies missing**: confirm your StoryVenue Legacy integration is connected (Settings → Integrations). The Integrations page shows a webhook URL you can optionally paste into your GHL sub-account for true instant delivery — without this, replies still arrive within a few seconds automatically.`,
       },
       {
         id: 'conversations-sms-troubleshooting',
         title: 'SMS won\'t send — diagnose and fix',
         tags: ['sms', 'sms not sending', 'missing phone number', 'ghl', 'storyvenue legacy', 'troubleshooting', '422', 'phone number', 'diagnose'],
-        body: `If outbound SMS fails with "Missing phone number" or "GHL has no phone on file" — even when you JUST added the phone in the SaaS — read this. We've made it self-healing in most cases, plus there's a diagnostic endpoint that pinpoints the exact problem.
+        body: `If outbound SMS fails with "Missing phone number" or "GHL has no phone on file" — even when you just added the phone — here's how to fix it.
 
 The most common cause
-GHL has no phone stored on the contact record, even though StoryVenue does. The GHL CRM is the source of the phone for the SMS-send endpoint, so if their record is blank the send fails.
+The phone number in StoryVenue wasn't synced to your connected GHL sub-account yet.
 
-The automatic fix
-Three things now happen automatically so this should usually heal itself:
-1. **On every contact save in StoryVenue** (phone, name, or email change), we PATCH back to GHL via a safe GET-then-merge-then-PUT. The push runs in the background so the save UI is instant.
-2. **Right before every outbound SMS send**, we ALSO run the push synchronously — so even if you saved the phone three seconds ago and the async push is still in flight, the pre-send push completes first and the SMS succeeds.
-3. **Duplicate phone numbers across contacts** are detected. If GHL refuses the push because another contact in that sub-account already owns the phone (GHL's allowDuplicatePhone=false constraint), we search GHL by phone, find the owning contact, and re-link your SaaS contact's ghl_contact_id to that owner. Both SaaS contacts effectively share one GHL twin. SMS still works.
+The fastest fix
+Open the contact profile in StoryVenue → make sure the phone number is entered → click Save. This syncs the phone to your connected sub-account automatically. Then retry the SMS.
 
-Manual fix — open the contact, hit Save
-If something gets out of sync, the fastest fix is: open the contact profile in StoryVenue → click Save. That re-triggers the push. Then try the SMS again.
-
-Run the diagnostic
-GET /api/integrations/ghl/diagnose-sms?contactId=<venue_customers.id> returns a JSON blob with these checks:
-- venue: GHL connected? location_id set?
-- token: which kind (PIT / v1 / v2 OAuth)?
-- sub_account_phone_numbers: does the sub-account actually have a provisioned FROM number? (No number = no send, regardless of any contact state.)
-- contact_local: phone (raw + E.164 normalized), email, DND flags
-- contact_ghl: GHL's stored phone, comparison with local, sync status
-
-If sub_account_phone_numbers shows zero numbers, open the sub-account in GHL → Settings → Phone Numbers and buy or assign a Twilio number. SMS cannot send from a sub-account that has no FROM number, regardless of any contact state.
-
-Railway logs to look for
-- \`[ghl-push:pre_sms_send] PUT /contacts/<id> ok\` — push succeeded
-- \`[ghl-push:pre_sms_send] verify phone got=… expected=… match=true\` — write took
-- \`[ghl-push:pre_sms_send] found existing GHL contact <id> owning phone <#>\` — duplicate detected and re-linked
-- \`[ghl] SMS sent via …\` — the actual SMS request succeeded`,
+If that doesn't work
+1. Confirm your StoryVenue Legacy (GHL) integration is connected at Settings → Integrations — look for the green "Connected" badge.
+2. Make sure your GHL sub-account has an active A2P-approved phone number assigned to it. Without a phone number provisioned in your sub-account, SMS cannot be sent. Open your GHL sub-account → Settings → Phone Numbers to verify or assign one.
+3. If the issue persists, contact StoryVenue support.`,
       },
     ],
   },
@@ -1152,10 +1124,8 @@ Statuses:
 On storyvenue.com, published reviews appear in a single-column list on your venue page. Up to 4 are shown with a "Show all" button to expand the rest.
 
 Showing reviews outside storyvenue.com:
-- Paste the iframe snippet from the Reviews page — it points to app.storyvenue.com/embed/listing-reviews/<your-slug>.
-- Or call the public JSON endpoint: GET https://app.storyvenue.com/api/public/venues/<slug> — returns published reviews only (your listing must be published).
-
-Database: reviews live in listing_reviews (migration 024). An optional read-only view listing_reviews_public (migration 025) exposes published rows safely to Supabase anon for external sites that query Postgres directly.`,
+- Paste the iframe snippet from the Reviews page — it's a ready-to-use embed for your own website. Only published reviews are shown.
+- Your listing must be published for reviews to appear publicly.`,
       },
       {
         id: 'listing-google-reviews',
@@ -1183,7 +1153,7 @@ On storyvenue.com:
 - A "See all Google reviews" button links directly to your full Google Business listing on Google Maps so couples can read all your reviews.
 - The footer shows "Showing X of Y Google reviews" so couples know more exist.
 
-Requires GOOGLE_PLACES_API_KEY to be configured on the server. If it's missing, a fallback message appears instead of the search.`,
+If Google Business search isn't working, contact StoryVenue support.`,
       },
       {
         id: 'listing-analytics-realtime',
@@ -1256,14 +1226,14 @@ An AI-powered SMS follow-up system that contacts quiet leads on a 1–2 day cade
 Stop on reply (all phases)
 The moment a bride replies (email or SMS) during any active sequence, all enrollments stop and the venue is notified. The lead moves to "Conversation Started" in the pipeline.
 
-GHL (GoHighLevel) note
-The Speed to Lead System email delivery is completely independent of GHL. GHL is used only for A2P SMS delivery. All email and merge variables are handled natively by StoryVenue.`,
+SMS delivery note
+The Speed to Lead System email delivery does not require a StoryVenue Legacy (GHL) connection. GHL is only needed for SMS steps. All email delivery and merge variables are handled natively by StoryVenue — you can use email-only phases even without a Legacy connection.`,
       },
       {
         id: 'listing-analytics-retention',
         title: 'Daily views & analytics retention — does StoryVenue save historical traffic?',
         tags: ['analytics', 'history', 'historical', 'retention', 'daily views', 'data retention', 'page views', 'unique visitors', '30 days', '90 days', '365 days', 'archive', 'old data', 'last 30 days'],
-        body: `Yes — every event on your storyvenue.com listing is saved permanently in the listing_events table. There is no auto-prune, no TTL, no cron job that deletes old rows. The Analytics dashboard's date-range picker (1 / 7 / 14 / 30 / 60 / 90 days) is purely a query window, not a retention boundary.
+        body: `Yes — every event on your storyvenue.com listing is saved permanently. There is no expiration or auto-deletion. The Analytics dashboard's date-range picker (1 / 7 / 14 / 30 / 60 / 90 days) is a query window, not a retention boundary.
 
 What's tracked
 - Page views (every visit to your public listing)
@@ -1275,8 +1245,7 @@ What's tracked
 - Device type, referrer / UTM source, country / region / city / lat-lng (resolved from IP, never personal data)
 
 How long we keep it
-- Forever. There is no deletion policy. A 365-day lookback is supported today, and longer is technically possible — we just haven't added the UI for it yet.
-- The only way historical data is ever removed is if the venue itself is deleted (ON DELETE CASCADE on the listing_events table).
+- Visitor data is stored permanently — there is no expiration or auto-deletion. A 365-day lookback is available today.
 
 Why the "Daily views" chart sometimes looks sparse
 - The chart shows the full requested window (e.g. all 30 days for a 30-day query) with zeros backfilled for days that had no traffic. So a quiet venue will see a flat line at zero with a couple of spikes — that's NOT missing data, it's a faithful picture of "no one visited that day."
@@ -1289,7 +1258,7 @@ Test that tracking is working
 If you're convinced data should be there but isn't
 - Verify your listing is published (Venue listing → Dashboard → Published toggle). Tracking still records events for unpublished listings, but no real visitors can reach them.
 - Make sure your tracker isn't blocked by an ad-blocker on your test browser (the tracker is first-party so most ad-blockers don't touch it, but some aggressive ones do).
-- Open Ask AI and paste your venue slug — the assistant can pull your raw event count for the last 30 days from the database.`,
+- Ask AI can help you check your event counts — just describe what you're looking for.`,
       },
     ],
   },
@@ -1598,8 +1567,8 @@ Why it matters
 - Space is carried through to calendar events and proposals, so when you book a tour or send a quote the correct space is already attached.
 - Insights and reports can slice inquiry volume by space to help you see which areas are driving demand.
 
-If the field looks missing
-- This feature needs a one-time database migration (migrations/049_leads_space_id.sql). Until your workspace runs it, the API silently drops the space on new leads so nothing breaks — but the picker will look like it isn't saving. Apply the migration on Supabase and the field starts sticking.`,
+If the Space field isn't saving
+- Contact StoryVenue support — this may require a configuration update on our end.`,
       },
       {
         id: 'leads-to-proposal',
@@ -1715,7 +1684,7 @@ If a lead in your inbox shares the same email as this customer, the profile may 
 
 Referral source (how the couple found you) is separate from pipeline: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, or Other. Set it from the Overview tab / contact area.
 
-If pipeline or stage changes fail with a database-related error, your environment may need the latest database migration applied — contact whoever manages your StoryVenue database or support.`,
+If pipeline or stage changes aren't saving, contact StoryVenue support.`,
       },
       {
         id: 'cust-tasks',
@@ -2790,16 +2759,16 @@ Older variable names like {{first_name}}, {{customer_name}}, {{organization}}, {
       {
         id: 'mkt-ai-concierge',
         title: 'AI Concierge — automated SMS lead engagement',
-        tags: ['ai concierge', 'concierge', 'sms', 'automation', 'leads', 'ai', 'deepseek', 'text messages', 'outreach', 'handoff', 'a2p', 'spend cap'],
-        body: `The AI Concierge is an automated SMS-based lead engagement system powered by DeepSeek AI. It automatically contacts new leads with personalized text messages, handles inbound replies, and escalates to humans when needed — so no lead falls through the cracks.
+        tags: ['ai concierge', 'concierge', 'sms', 'automation', 'leads', 'ai', 'text messages', 'outreach', 'handoff', 'a2p', 'spend cap'],
+        body: `The AI Concierge is an automated SMS-based lead engagement system. It automatically contacts new leads with personalized text messages, handles inbound replies, and escalates to humans when needed — so no lead falls through the cracks.
 
 Path: Marketing → AI Concierge (sidebar flyout).
 
 Requirements (eligibility):
-- Venue Concierge add-on purchased on your plan ($499/month)
+- All-Inclusive Concierge plan (or a plan with AI Concierge specifically enabled by StoryVenue)
 - A2P 10-digit SMS verification completed (required for TCPA compliance)
-- Connected GHL / StoryVenue Legacy sub-account for SMS delivery
-If any requirement is missing, the settings page shows what you need to do.
+- Connected StoryVenue Legacy sub-account for SMS delivery
+If any requirement is missing, the settings page shows exactly what's needed.
 
 Getting started:
 1. Go to Marketing → AI Concierge
@@ -2811,7 +2780,7 @@ The system automatically scans for eligible leads and begins the 14-day outreach
 How the 14-day sequence works:
 - The AI sends personalized SMS messages on a configurable schedule over 14 days
 - Messages reference your venue's packages, pricing, and availability using merge variables
-- Each message is generated by DeepSeek using a configurable prompt template
+- Each message is generated using a configurable prompt template personalized to your venue
 - Messages are only sent during business hours (quiet hours enforcement for TCPA compliance)
 
 Inbound reply handling:
@@ -3047,74 +3016,52 @@ If you want StoryVenue events written to Google Calendar AND Google events visib
 Connect your sub-account
 1. Open Settings → Integrations → StoryVenue Legacy.
 2. Paste your **Sub-account Location ID** (the GHL location ID for your venue's sub-account).
-3. Paste either a **Private Integration Token** (\`pit-…\`) or a **Location API Key**. The form auto-detects which kind it is.
+3. Paste your **Private Integration Token** or **Location API Key**. The form detects the type automatically.
 4. Save. A green "Connected" badge appears.
 
 If SMS or contact sync still fails after step 4, you may also need to paste your sub-account's **Legacy API Key** in the API Key field that appears below the token field. GHL stopped exposing sub-account API keys via its agency endpoint, so some venues need to supply it manually. To find it: in GHL go to Settings → Business Profile → scroll to the API Keys section → copy the Location API Key value and paste it into the StoryVenue Legacy API Key field → Save.
 
 Initial contact sync
 - Click "Sync from StoryVenue Legacy". A progress bar shows fetched vs total contacts.
-- The sync runs in the background — there's no Cloudflare 524 timeout even for big lists. If the 75-second wall-clock budget is hit on the first call, the hourly cron job finishes the rest.
-- The sync is **idempotent**: it matches by ghl_contact_id first, then by email, then inserts. **Re-running it can never create duplicates.** Hit it any time you've added contacts in GHL and want them in StoryVenue.
+- The sync runs in the background even for large contact lists. It's safe to run multiple times — it won't create duplicates.
+- Run it again any time you've added contacts directly in GHL and want them to appear in StoryVenue.
 
-After the initial sync — StoryVenue is the system of record
-- Edit a contact in StoryVenue → the change auto-pushes back to GHL in the background. You don't need to make the same edit twice.
+After the initial sync — StoryVenue is the source of truth
+- Edit a contact in StoryVenue → the change syncs back to GHL automatically in the background.
 - Create a new contact in StoryVenue → it's created in GHL too.
-- Send an SMS from StoryVenue → right before the GHL API call, we do a synchronous pre-send push of the contact's current state to GHL. So even a phone number you added 2 seconds ago lands in GHL before the SMS request — no "Missing phone number" error.
-- All push attempts log \`[ghl-push:<reason>]\` lines in Railway with sent fields + verify-GET result, so you can audit exactly what made it to GHL.
+- Send an SMS from StoryVenue → the contact's current info is synced to GHL right before sending, so even a phone number you just added will work immediately.
 
-Duplicate phone numbers across SaaS contacts
-GHL refuses to store the same phone on two contacts in one sub-account (its allowDuplicatePhone defaults to false). If you have two SaaS contacts that share a phone number — e.g. test accounts, or one person with two profiles — StoryVenue detects the silent rejection, searches GHL by phone to find the owning contact, and re-links the SaaS contact's ghl_contact_id to that owner. Both SaaS contacts effectively share one GHL twin. SMS sending still works because we use the GHL contact that actually owns the phone.
+Duplicate phone numbers
+If two contacts in your account share the same phone number, SMS still works. StoryVenue handles this automatically.
 
 Inbound webhook URL — for instant (truly real-time) replies
 - Settings → Integrations → StoryVenue Legacy shows an **Inbound Webhook (optional)** card with the URL to paste into GHL.
-- In GHL: Settings → Integrations → Webhooks → paste \`https://app.storyvenue.com/api/webhooks/ghl\` → subscribe to **InboundMessage**, **ContactCreate**, **ContactUpdate**, **ContactDndUpdate**.
-- Without the webhook, replies still land in your thread via the 3-second polling fallback. The webhook just makes it instant and works even when no one has the thread open.
+- In GHL: Settings → Integrations → Webhooks → paste the webhook URL → subscribe to **InboundMessage**, **ContactCreate**, **ContactUpdate**, **ContactDndUpdate**.
+- Without the webhook, replies still land in your thread within a few seconds automatically. The webhook just makes it instant.
 
-DND mirroring
-- GHL's ContactDndUpdate webhooks mirror automatically into StoryVenue's sms_dnd / conversation_dnd_* flags. STOP / START SMS keywords also bidirectionally sync between StoryVenue and GHL. You don't need to manage DND in two places.
+Do Not Contact (DNC) sync
+- When a contact opts out of SMS (replies STOP), the opt-out is automatically synced between StoryVenue and GHL. You don't need to manage DNC status in two places.
 
-Diagnose SMS issues
-- GET \`/api/integrations/ghl/diagnose-sms?contactId=<venue_customers.id>\` returns a JSON blob with per-step checks: venue connection, token kind (PIT / v1 / v2 OAuth), sub-account provisioned phone numbers (you need at least one FROM number), local vs GHL phone comparison, DND flags.
-- 99% of "SMS won't send" issues fall into one of two buckets: (1) the sub-account has no FROM number provisioned in GHL → buy/assign a Twilio number in GHL → Settings → Phone Numbers. (2) The contact's phone got out of sync → just hit Save on the contact in StoryVenue and the push will write it back to GHL.
+SMS troubleshooting
+- "SMS won't send" is almost always one of two causes: (1) no phone number provisioned in your GHL sub-account — go to your GHL sub-account → Settings → Phone Numbers and assign one. (2) The contact's phone is out of sync — open the contact in StoryVenue and click Save to re-sync it.
 
 Disconnecting
-To disconnect, clear the Sub-account ID and access token fields and Save. The "Connected" badge turns gray. SMS sending stops; contacts already synced into StoryVenue remain — they're now living entirely in the SaaS database.`,
+To disconnect, clear the Sub-account ID and access token fields and Save. The "Connected" badge turns gray. SMS sending stops; contacts already synced into StoryVenue remain.`,
       },
       {
         id: 'int-inbound-email-status',
-        title: 'Inbound Email Replies — Settings diagnostic for the email reply pipeline',
-        tags: ['inbound email', 'email reply', 'resend', 'inbound webhook', 'mx records', 'verified domain', 'resend webhook secret', 'conversations_inbound_domain', 'reply not appearing', 'troubleshoot email', 'settings panel'],
-        body: `Inbound email replies require a small infrastructure stack to work. StoryVenue surfaces a live status panel on Settings to tell you exactly which piece is missing if replies aren't landing in your chat thread.
+        title: 'Inbound Email Replies — status and troubleshooting',
+        tags: ['inbound email', 'email reply', 'inbound webhook', 'reply not appearing', 'troubleshoot email', 'settings panel'],
+        body: `When a contact replies to a Conversations email, the reply appears in your Conversations thread automatically. StoryVenue shows a live status panel in Settings so you can see if everything is properly configured.
 
-What it shows
+Where to find it
 Settings → scroll past Integrations → "Inbound Email Replies" card.
-- Green "Configured" badge: every required piece is in place.
-- Amber "Needs setup" badge: at least one piece is missing.
+- Green "Configured" badge: everything is in place and email replies will land in your threads.
+- Amber "Needs setup" badge: at least one required item is missing. Each item shows a description and what to do.
 
-Per-item checklist (live status)
-1. **Resend API key** (\`RESEND_API_KEY\`) — needed to fetch the parsed body when a reply arrives.
-2. **Inbound domain** (\`CONVERSATIONS_INBOUND_DOMAIN\`) — the domain used in the Reply-To header (e.g. \`reply.storypay.io\`). Without this, outbound emails are sent without a tracked Reply-To, so replies route to your brand email and are never imported into the chat thread.
-3. **Inbound HMAC secret** (\`CONVERSATIONS_INBOUND_SECRET\`) — signs the per-thread reply token so replies are matched to the right thread.
-4. **Webhook signing secret** (\`RESEND_WEBHOOK_SECRET\` or \`INBOUND_EMAIL_WEBHOOK_TOKEN\`) — verifies the Resend webhook actually came from Resend. In production at least one MUST be set or the webhook rejects calls as Unauthorized.
-
-The webhook URL with a Copy button
-The panel also surfaces \`https://<your-app-host>/api/webhooks/inbound-email\` with a Copy button. Paste this into your Resend dashboard under Webhooks → email.received.
-
-Two pieces the panel can't verify automatically
-- **DNS MX records** on the inbound domain must point at Resend's MX servers. Add the MX records shown in Resend → Domains → Inbound. If you skip this, the email never reaches Resend.
-- **Resend webhook subscription** for the \`email.received\` event must be active and pointed at the webhook URL above.
-
-What "ready to receive" looks like
-- Outbound email from Conversations carries a \`Reply-To: reply+<threadId>+<sig>@<inbound-domain>\` header.
-- Bride's mail client sends her reply to that signed address.
-- Resend's MX receives it → fires \`email.received\` webhook → \`/api/webhooks/inbound-email\` verifies the Svix signature → fetches the parsed body → verifies the per-thread HMAC sig → inserts the row → broadcasts to Supabase Realtime.
-- Your open thread renders the reply within ~1 second of Resend receiving it. No refresh required.
-
-If replies still don't appear after the panel says Configured
-- The 3-second polling fallback always runs while a thread is open — so even if the webhook isn't firing, replies arrive within 3 seconds.
-- Check Railway logs for \`[inbound-email] webhook received\` — confirms Resend hit our endpoint.
-- Look for \`[inbound-email] skipped\` lines — they'll tell you if the signature verification, signed token verification, or the From-vs-contact-email match check is failing.`,
+If replies still don't appear after the panel shows Configured
+- Replies also arrive automatically within a few seconds via polling — so even if instant delivery isn't working, you'll still see the reply shortly.
+- If replies are completely missing, contact StoryVenue support. This typically requires a configuration step that our team handles.`,
       },
       {
         id: 'int-quickbooks',
@@ -3289,13 +3236,13 @@ Check that your StoryPay merchant onboarding shows as approved in Payments → S
       },
       {
         id: 'storypay-inline-checkout',
-        title: 'How the client payment form works (inline Fortis Elements)',
-        tags: ['storypay', 'checkout', 'payment form', 'fortis', 'elements', 'inline', 'pay now', 'client pays', 'credit card form', 'card form', 'pay button', 'lunarpay'],
+        title: 'How the client payment form works',
+        tags: ['storypay', 'checkout', 'payment form', 'inline', 'pay now', 'client pays', 'credit card form', 'card form', 'pay button'],
         body: `When a client clicks the Pay button on a proposal or invoice, the payment form appears inline on the same page — they never leave your proposal or get redirected to a separate checkout site.
 
 How the inline payment form works
-- The payment form is embedded directly inside the proposal/invoice page using Fortis Elements (StoryPay's secure payment widget).
-- The form renders inside a secure iframe — card numbers go straight to the PCI-certified processor without ever touching StoryVenue's servers.
+- The payment form is embedded securely inside the proposal/invoice page.
+- Card numbers go straight to our PCI-certified processor without ever touching StoryVenue's servers.
 - If both card and ACH are enabled on your merchant account, clients see two tabs: "Card" (credit/debit) and "Bank account" (eCheck/ACH). They pick the method they prefer.
 - After the client fills in their payment details and clicks the Pay button in the form, the payment processes in real time. A success screen appears on the same page once confirmed.
 
