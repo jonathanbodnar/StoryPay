@@ -541,6 +541,7 @@ export default function EditTemplatePage({
 
  {showAI && (
  <AIProposalGenerator
+ isTemplate
  onGenerated={(html) => { setContent(html); setShowAI(false); }}
  onClose={() => setShowAI(false)}
  />

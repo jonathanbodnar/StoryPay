@@ -263,6 +263,7 @@ export default function NewTemplatePage() {
 
  {showAI && (
  <AIProposalGenerator
+ isTemplate
  onGenerated={(html) => { setContent(html); setShowAI(false); }}
  onClose={() => setShowAI(false)}
  />
