@@ -169,13 +169,31 @@ Use the date range picker (top-right of the dashboard) to change the period. Pre
       },
       {
         id: 'dash-chart',
-        title: 'Revenue chart and proposal status breakdown',
-        tags: ['chart', 'graph', 'revenue', 'status', 'pipeline'],
+        title: 'Revenue chart, proposal breakdown, and wedding trends',
+        tags: ['chart', 'graph', 'revenue', 'status', 'pipeline', 'weddings', 'trends', 'mom', 'yoy', 'month over month', 'year over year', 'income trends', 'booking trends', 'prior year'],
         body: `Below the KPI cards is an area chart showing daily or monthly revenue over the selected period.
 
 Beneath the chart you'll see a status breakdown showing how many proposals are in each stage: Draft, Sent, Viewed, Signed, Paid, Refunded, and Cancelled.
 
-The two tables at the bottom show your 5 most recent proposals (with links to view or edit) and your 5 most recent charges (with customer names and amounts).`,
+The two tables below the status breakdown show your 5 most recent proposals (with a link to each detail page) and your 5 most recent charges (customer names and amounts).
+
+Weddings & Income Trends section
+Further down the home dashboard is a "Weddings & Income Trends" section that shows how your booking and revenue metrics track month over month and year over year.
+
+Three summary KPI tiles at the top:
+- This month — weddings booked + revenue this month with a MoM% chip and a YoY% chip
+- Last month — same metrics for the prior month
+- Year to date — running totals vs. same period in the prior year
+
+The chart below the tiles is a combo chart (bars + line):
+- Pink bars — weddings booked this year per month
+- Light pink bars — same month in the prior year (so you can see seasonality)
+- Green line — revenue this year
+- Dashed green line — revenue prior year
+
+Below the chart is a full data table with columns: Month, Events booked, MoM%, YoY%, Prior-yr events, Income, MoM%, YoY%, Prior-yr income. All changes are color-coded (green = up, red = down).
+
+This section is great for spotting seasonal patterns and understanding how this year's bookings compare to last year's.`,
       },
       {
         id: 'dash-announcement-ticker',
@@ -1197,39 +1215,49 @@ Privacy: only approximate location data (city-level) is captured. No names, emai
       },
       {
         id: 'listing-booking-system',
-        title: 'Speed to Lead System — automated guide delivery and follow-up sequence',
-        tags: ['booking system', 'speed to lead', 'guide delivery', 'pricing guide', 'pdf', 'sms guide', 'email guide', 'follow-up sequence', 'automation', 'bride', 'lead form', 'public listing', 'pricing_guide_url', 'merge variable', 'ai concierge trigger'],
-        body: `The Speed to Lead System (Venue listing → Booking System) automates everything that happens the moment a bride submits the inquiry form on your public storyvenue.com listing.
+        title: 'Speed to Lead System — 6-phase automated follow-up',
+        tags: ['booking system', 'speed to lead', 'guide delivery', 'pricing guide', 'pdf', 'sms guide', 'email guide', 'follow-up sequence', 'nurture', 'booked tour', 'booked wedding', 'automation', 'bride', 'lead form', 'public listing', 'pricing_guide_url', 'merge variable', 'ai concierge trigger', 'phase'],
+        body: `The Speed to Lead System (Venue listing → Speed to Lead System) automates everything from the moment a bride submits your listing inquiry form to when she books her wedding.
 
-Overview
-The system has two phases:
-1. Guide Delivery (instant) — sends the bride an email and/or SMS the moment she submits the form, with a direct download link to your Pricing and Availability Guide as a PDF.
-2. 14-Day Follow-up Sequence — a customizable sequence of Send Email, Send SMS, and Wait steps that runs in the background on a schedule.
+Path: Venue listing → Speed to Lead System (sidebar)
 
-The Booking System is completely independent of GHL (GoHighLevel). GHL is used only for A2P SMS delivery. All email and all template variables are handled natively by StoryVenue.
+The system has 6 phases, each with its own toggle so you can enable only what you need:
 
-Guide Delivery (Phase 1)
-- Toggle "Send email guide" and/or "Send SMS guide" on.
-- Write the email body and SMS body. Use the {{venue.pricing_guide_url}} merge variable (or its alias {{pricing_guide_url}}) to insert the PDF download link.
-- The PDF link is live — every click generates the current version of your pricing guide in real time. If you update your Pricing Guide page, the next time someone clicks the link they get the new version. No stale PDFs.
+Phase 1 — Guide Delivery (instant)
+Triggered immediately when a bride submits your inquiry form. Sends her an email and/or SMS with a direct link to your Pricing & Availability Guide PDF.
+- Toggle "Email" and/or "SMS" on independently.
+- Write the message body. Use {{pricing_guide_url}} to insert the guide link, {{first_name}} for her name, {{venue_name}} for your venue.
+- The PDF link is always live — every click generates the current version of your guide. Edit your Pricing Guide and the next click delivers the updated version automatically. No re-upload needed.
 
-14-Day Follow-up Sequence (Phase 2)
-- Add steps using the "+" button: Send Email, Send SMS, or Wait.
-- Wait steps allow 1, 2, or 3 days only.
-- Drag and drop to reorder steps.
-- Add an "Activate AI Concierge" block to hand the lead off to the AI Concierge automatically at any point in the sequence.
+Phase 2 — Follow-up Sequence
+A multi-step sequence of emails, SMS messages, and Wait blocks that fires after guide delivery until the bride replies.
+- Add steps with the "+" button: Send Email, Send SMS, Wait (1/2/3 days), or Activate AI Concierge.
+- Drag steps to reorder.
+- The sequence stops automatically the moment a bride replies to any message.
+- You can see how many leads are currently active in this sequence in the phase subtitle.
+- "Activate AI Concierge" block: hands the lead off to the AI Concierge at that point in the sequence. Once added, the AI takes over follow-up from there.
 
-Stop on reply
-If the bride replies to any message (email or SMS) before the sequence finishes, the enrollment stops automatically so a human can take over. The venue is notified.
+Phase 3 — Nurture Sequence
+A 5-email educational sequence about picking and touring venues. Runs concurrently or after the follow-up sequence. No AI Concierge handoff available in this phase.
 
-Activate AI Concierge block
-Adding this block to your sequence triggers the AI Concierge for the lead at that step. Leads activated this way are excluded from the 14-day AI cron timer so there is no double-activation.
+Phase 4 — Booked Tour
+A 5-email sequence triggered when a lead books a tour — sets expectations about what to expect during the visit. No AI Concierge handoff.
 
-Showing / hiding the menu item
-A checkbox on your directory plan controls whether the Booking System menu item is visible. Contact your account manager if you cannot see it.
+Phase 5 — Booked Wedding
+A 5-email sequence triggered when a lead books a wedding — celebrates the win and sets next steps. No AI Concierge handoff.
 
-Pricing guide PDF
-The PDF is generated from your current Venue listing → Pricing Guide page content every time the link is clicked. Edit your pricing guide page and the updated version is what brides receive — no publish step or re-upload required.`,
+Phase 6 — AI Concierge (All-Inclusive plan only)
+An AI-powered SMS follow-up system that contacts quiet leads on a 1–2 day cadence until they reply or 60 days pass.
+- Phase 6 is locked on the Bride Booking System™ Free and Bride Booking System™ plans. The toggle is greyed out with an "All-Inclusive" badge.
+- Hovering the locked toggle shows a tooltip: "AI Concierge is on our All-Inclusive plan, not Free or the Bride Booking System™. Schedule a demo to learn more."
+- Clicking the greyed toggle opens the demo scheduling calendar.
+- Once on an eligible plan, enabling Phase 6 embeds the full AI Concierge settings inline — persona name, concierge notification email, and eligibility status.
+
+Stop on reply (all phases)
+The moment a bride replies (email or SMS) during any active sequence, all enrollments stop and the venue is notified. The lead moves to "Conversation Started" in the pipeline.
+
+GHL (GoHighLevel) note
+The Speed to Lead System email delivery is completely independent of GHL. GHL is used only for A2P SMS delivery. All email and merge variables are handled natively by StoryVenue.`,
       },
       {
         id: 'listing-analytics-retention',
@@ -1358,36 +1386,43 @@ If a lead has no stage assigned (e.g. a brand-new inquiry from the directory tha
       {
         id: 'leads-edit-pipelines',
         title: 'Editing and creating pipelines',
-        tags: ['edit pipeline', 'rename stage', 'add stage', 'delete stage', 'multiple pipelines', 'custom pipeline'],
-        body: `Every account starts with a default pipeline: "Sales Pipeline" with 8 stages (Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested). You can customize it or create additional pipelines for different brands, properties, or sales processes.
+        tags: ['edit pipeline', 'rename stage', 'add stage', 'delete stage', 'multiple pipelines', 'custom pipeline', 'default pipeline', 'locked pipeline', 'protected pipeline'],
+        body: `Every account has a default pipeline (the "Bride Booking System™" pipeline) that comes pre-built with 8 stages: Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can also create additional custom pipelines for different brands, properties, or sales processes.
 
 Open the editor:
 - Top-right of the Leads page, pipeline dropdown → Edit button
 - A modal opens with your pipelines listed on the left, stages on the right.
 
-Editing stages (right panel):
+Default pipeline — locked (read-only)
+The default pipeline and its stages are locked and cannot be edited or deleted. This protects the platform's built-in automations and CRM setup that depend on the default stages.
+- You cannot rename, recolor, reorder, add, or delete stages in the default pipeline.
+- You cannot delete the default pipeline itself.
+- A lock badge appears on locked stage rows. If you try to edit them you'll see a message explaining they are protected.
+- If you need a different stage structure, create a new custom pipeline — you can make it the active view without making it the default.
+
+Editing stages in custom pipelines (right panel):
 - Rename — click a stage name and type a new one; it saves when you tab/click away.
-- Change color — click the color swatch next to the stage name to open a color picker popover. Inside the popover you get the native color wheel, a Hex code field (type any color like #1b1b1b), and a grid of preset swatches. Press Enter or click outside to commit. The same popover is available when adding a new stage.
-- Stage kind — each stage is classified as Active (open), Won, or Lost. Won stages count as booked revenue in stats; Lost stages are excluded. Change the dropdown next to each stage.
-- Win probability — used for weighted pipeline totals on the board and in insights. Advanced accounts may set a 0–100% value per stage (API); otherwise defaults apply from the stage kind.
+- Change color — click the color swatch to open a color picker popover with the color wheel, a hex code field, and preset swatches.
+- Stage kind — Active (open), Won, or Lost. Won stages count as booked revenue in stats.
+- Win probability — 0–100% per stage for weighted pipeline totals.
 - Reorder — use the up/down arrow buttons.
-- Delete — trash icon. Any leads in that stage become unassigned and show in the first column.
-- Add — type a name in the "New stage" box, pick a color from the same popover, and click Add stage.
+- Delete — trash icon. Any leads in that stage become unassigned.
+- Add — type a name in the "New stage" box and click Add stage.
 
 Creating a new pipeline:
 - Type a name in the "New pipeline name" box on the left panel → Add pipeline
 - New pipelines start with the default 8-stage template — edit freely from there.
 
 The "None" stage
-- Both the New Lead and New Contact forms include a "None" option in the Stage dropdown. Choosing None saves the contact without placing them in any pipeline column — they appear on the Contacts page but not on the Kanban board. Useful for contacts you want to track without actively working as a pipeline lead.
+- Both the New Lead and New Contact forms include a "None" option. Choosing None saves the contact without placing them in any pipeline column — they appear on Contacts but not on Kanban.
 
-Making a pipeline default:
-- The default pipeline is what new leads land in. Pick any pipeline → Make default.
+Making a pipeline the default:
+- The default pipeline is where new leads land. You can make any custom pipeline the default; once you do, the old default pipeline can be deleted.
 
 Deleting a pipeline:
-- You can't delete the default pipeline. Make another pipeline the default first, then delete the old one. Leads in the deleted pipeline aren't deleted — they just become unassigned.
+- You can't delete the default pipeline. Make another pipeline the default first, then delete the original.
 
-Use "Use this pipeline" to make a pipeline the one you're viewing on the Leads page and close the editor in one click.`,
+Use "Use this pipeline" to make a pipeline the active view on the Leads page and close the editor in one click.`,
       },
       {
         id: 'leads-detail-notes',
@@ -1767,6 +1802,39 @@ These tags can be used in workflows to trigger follow-up sequences or remove the
     iconName: 'CreditCard',
     color: '#3b82f6',
     articles: [
+      {
+        id: 'offerings-overview',
+        title: 'Packages & Items (Offerings catalog)',
+        tags: ['offerings', 'packages', 'items', 'products', 'bundles', 'catalog', 'line items', 'price list', 'venue packages', 'venue products', 'contract template link', 'season', 'inventory', 'portal'],
+        body: `Path: Payments → Packages (or sidebar → Offerings) at /dashboard/offerings.
+
+The Offerings page is your product and package catalog — everything you sell. It has two types:
+
+Items
+Individual products or services you sell (e.g. "Rehearsal Dinner Add-on," "Upgraded Florals," "Videography Package").
+- Name and description
+- Price (USD)
+- Unit — "per person," "per event," "per hour," custom, or none
+- Recurrence — One-time, Monthly, or Weekly (for subscription-style charges)
+- Inventory mode — Unlimited or Limited quantity (set a cap; the item becomes unavailable once sold out)
+- Show on customer portal — toggle to control whether couples can see and select this item in the client portal
+- Active toggle — deactivated items don't appear in the proposal line-item picker
+
+Bundles (Packages)
+Pre-built line-item collections — great for your named packages ("Intimate Package," "All-Day Ballroom," "Grand Estate").
+- Name, description, and an optional season label (e.g. "Spring/Summer 2026")
+- Valid from / Valid to dates — bundles outside their validity window are filtered out in the proposal builder
+- Minimum subtotal — a floor price for the package
+- Line items — select items from your catalog plus per-line quantity and optional price override
+- Default contract template (optional) — link this bundle to a proposal template. When you pick this package while building a proposal, the line items AND the linked contract body both load automatically in one step (only if no contract is already written)
+- Active toggle
+
+How line items work in proposals
+When you create a proposal or invoice (Payments → New), type in the line item box or click the package icon to browse your bundles and items. Selecting a bundle applies all its line items at once. If the bundle has a linked contract template and the contract field is currently empty, the template loads automatically.
+
+Quick-add item from inside a bundle
+While editing a bundle, if you need an item that doesn't exist yet, there's an inline "Quick add item" shortcut — create a new backing item without leaving the bundle editor.`,
+      },
       {
         id: 'pay-new',
         title: 'Creating a new proposal or invoice',
@@ -4006,8 +4074,10 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/listing/images': ['listing-photos', 'listing-media-library', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/reviews': ['listing-reviews', 'listing-google-reviews', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/analytics': ['listing-analytics-realtime', 'listing-analytics-retention', 'listing-overview', 'listing-publish'],
-  '/dashboard/listing/booking-system': ['listing-booking-system', 'mkt-system-vars', 'billing-pricing-guide', 'mkt-ai-concierge'],
-  '/dashboard/listing':        ['listing-overview', 'listing-media-library', 'listing-reviews', 'listing-google-reviews', 'listing-analytics-realtime', 'listing-autosave', 'listing-photos', 'listing-publish', 'listing-slug'],
+  '/dashboard/listing/booking-system': ['listing-booking-system', 'billing-verified-sponsored', 'mkt-system-vars', 'billing-pricing-guide', 'mkt-ai-concierge'],
+  // /dashboard/listing IS the Bride Booking System™ analytics page (not the listing editor)
+  '/dashboard/listing':        ['listing-analytics-realtime', 'listing-analytics-retention', 'billing-plans-overview', 'billing-trial', 'listing-overview'],
+  '/dashboard/listing/venue-listing': ['listing-overview', 'listing-autosave', 'listing-publish', 'listing-slug'],
 
   // Leads
   '/dashboard/leads': ['leads-overview', 'leads-space', 'leads-edit-pipelines', 'leads-crm-intelligence', 'leads-kanban', 'leads-filter-search', 'leads-notifications', 'leads-to-proposal'],
@@ -4025,13 +4095,17 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/marketing/workflows':        ['me-workflows', 'me-form-builder', 'me-templates-vs-campaigns', 'me-compliance', 'me-overview'],
   '/dashboard/marketing/ai-concierge':    ['mkt-ai-concierge', 'mkt-system-vars', 'me-workflows', 'conversations-overview'],
 
+  // Offerings / Packages catalog
+  '/dashboard/offerings': ['offerings-overview', 'pay-templates', 'pay-new'],
+
   // Payments — new proposal / invoice
-  '/dashboard/payments/new':        ['pay-new', 'pay-templates', 'pay-manual', 'pay-installments'],
-  '/dashboard/invoices/new':        ['pay-new', 'pay-manual', 'pay-installments', 'pay-subscriptions'],
+  '/dashboard/payments/new':        ['pay-new', 'pay-manual', 'offerings-overview', 'pay-templates', 'pay-installments'],
+  '/dashboard/invoices/new':        ['pay-new', 'pay-manual', 'offerings-overview', 'pay-installments', 'pay-subscriptions'],
 
   // Proposals list + edit + detail
   '/dashboard/payments/proposals':  ['pay-status', 'pay-numbers', 'pay-manual', 'pay-new', 'pay-detail'],
-  '/dashboard/proposals/templates': ['pay-templates', 'pay-new'],
+  '/dashboard/payments/invoices':   ['pay-status', 'pay-numbers', 'pay-new', 'pay-manual'],
+  '/dashboard/proposals/templates': ['pay-templates', 'pay-new', 'offerings-overview'],
   '/dashboard/proposals':           ['pay-detail', 'pay-templates', 'pay-manual', 'pay-numbers', 'pay-status'],
 
   // Payment schedules
@@ -4040,6 +4114,13 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // Transactions
   '/dashboard/transactions': ['pay-transactions', 'pay-numbers', 'pay-status'],
+
+  // Other payment sub-pages
+  '/dashboard/payments/payment-links': ['pay-new', 'pay-transactions'],
+  '/dashboard/payments/payouts':       ['pay-transactions', 'rep-overview'],
+  '/dashboard/payments/accounting':    ['rep-overview', 'rep-download', 'pay-transactions'],
+  '/dashboard/payments/coupons':       ['pay-new', 'offerings-overview'],
+  '/dashboard/payments/settings':      ['gs-overview', 'gs-onboarding'],
 
   // Reports
   '/dashboard/reports': ['rep-overview', 'rep-download'],

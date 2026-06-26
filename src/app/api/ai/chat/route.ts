@@ -12,12 +12,12 @@ const PLATFORM_DOCS = `
 StoryVenue is an all-in-one platform for wedding venues to manage proposals, invoices, payments, a booking calendar, contact CRM profiles, email templates, branding, integrations, and team members — all from one place.
 
 ## Navigation / Sections
-- Home (Dashboard): Revenue overview, KPI cards, recent proposals and transactions, date range filter.
+- Home (Dashboard): Revenue overview, KPI cards (Total Revenue, New Proposals, Signed Proposals, Pending Amount, Refunds, Avg. Proposal Value), area revenue chart, proposal status breakdown, recent proposals table (links to detail pages), recent transactions table, and a **Weddings & Income Trends** section — a ComposedChart showing weddings booked and revenue by month with MoM%, YoY%, and prior-year overlays for the trailing 12 months.
 - Ask AI: Sidebar entry plus floating sparkle (bottom-right) — answers questions using live account data and this documentation (updated for Venue listing, Media library, Reviews, Conversations, public API/embed, and Help Center).
 - Contacts: Full CRM — contact profiles with Overview, Notes, Activity timeline, Payments, Tasks, Documents; configurable sales pipeline and stages in the profile header (aligned with Leads when email matches).
 - Conversations: Unified inbox per contact — **Team only** internal notes (optional @mentions to teammates) vs **External** outbound messages with a channel toggle for **Email** or **SMS** per message. Threads use venue customers. Path: /dashboard/conversations. Related DB: conversation_threads, conversation_messages (migration 022). **Two-way** by design and **iMessage-style instant**: every outbound message has a "Sent" green check or red "Failed" badge once the upstream API confirms; inbound replies arrive in real time via Supabase Realtime broadcast (webhook path) with a 3-second polling fallback so replies always land within a few seconds even when the webhook isn't configured. Outbound email goes via Resend with a per-thread signed Reply-To on the inbound subdomain (e.g. reply.storypay.io); Resend's email.received webhook at /api/webhooks/inbound-email appends the bride's reply to the same thread. Outbound SMS goes through the connected StoryVenue Legacy (GHL) sub-account's A2P number; inbound SMS arrives via the GHL webhook (POST /api/webhooks/ghl) with a polling fallback that scans the GHL conversation messages list every 3 seconds while the thread is open. Threads can carry both SMS AND email at once — the inbound handlers do not gate on thread channel.
 - Calendar: Book and track all venue events (tours, weddings, receptions, tastings, meetings, rehearsals, holds, blocked dates). Syncs with Calendly, Google Calendar, Outlook, and Apple Calendar. Event chips take their color from the assigned **venue space** (the old per-event-type color legend was removed). The New/Edit Event modal supports **inline Space management** (add/edit/remove without leaving the form), a **contact search** field that attaches the event to a venue customer, and an **Assigned team member** picker when team members are present.
-- Venue listing (sidebar flyout, Store icon): **Dashboard** — edit how the venue appears on storyvenue.com (description, slug, capacity, publish toggle); autosaves. **Photos** — cover + gallery for the directory listing (upload directly or pick from Media). **Analytics** — (1) GA4 Measurement ID for full Google Analytics integration; (2) **Real-time visitor map** — interactive Leaflet world map showing live and recent visitors to your listing with pulsing markers, hover tooltips (city/region), and zoom controls. **Reviews** — (1) StoryVenue reviews: star ratings and testimonials; statuses published / pending / hidden; published reviews feed the public directory via API and embed; (2) **Google Reviews tab**: connect your Google Business Profile via auto-search or by pasting a Google Maps link to display your Google reviews on your storyvenue.com listing. Paths: /dashboard/listing, /dashboard/listing/media, /dashboard/listing/images, /dashboard/listing/analytics, /dashboard/listing/reviews.
+- Venue listing (sidebar flyout, Store icon): **Bride Booking System™ Analytics** (/dashboard/listing) — the primary analytics hub showing the live visitor map, booking funnel (Leads → Conversations → Tours → Weddings), KPI cards, daily views chart, traffic sources, geography, lead insights, UTM builder, and QR code. **Free-plan users see this page blurred with an upgrade overlay.** **Venue Listing Editor** (/dashboard/listing/venue-listing) — edit how the venue appears on storyvenue.com (description, slug, capacity, publish toggle). **Photos** — cover + gallery for the directory listing. **Reviews** — StoryVenue reviews + Google reviews. **Speed to Lead System** — 6-phase automation. Paths: /dashboard/listing (analytics), /dashboard/listing/venue-listing (editor), /dashboard/listing/media, /dashboard/listing/images, /dashboard/listing/analytics, /dashboard/listing/reviews, /dashboard/listing/booking-system.
 - Leads: Kanban and list views for inquiries — same configurable sales pipelines and stages as contact profiles. Includes pipeline intelligence (open pipeline vs weighted forecast, rough referral/directory revenue vs listing spend), per-lead opportunity value on cards, assignable owners, marketing tags, trigger links, an audit trail (stage/value/owner changes and logged calls), and mobile-friendly actions (drag cards, log call, quick note). **Every contact shows up in the pipeline**: the server reconciles leads and venue_customers on load so any contact with a real email has a lead snapped to its contact-profile pipeline/stage (contact stage is the source of truth), and broken references heal to the default pipeline's first stage instead of disappearing. The **+ Add Lead** modal includes a **Space** picker with inline add/edit/remove (same UX as the calendar event modal). Pipeline stage colors use a popover color picker with a **hex code** input, the native color wheel, and preset swatches.
   **Lead card quick actions** — each Kanban card shows a row of icon buttons for the most common actions without opening the drawer:
   - **Call** — log a call directly from the card (opens the quick log-call input).
@@ -28,7 +28,7 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
   - **Calendar** — schedule an appointment for this contact directly from the card (opens the New Event modal pre-filled with their info).
   These buttons appear on hover so the card stays compact; tap on mobile to reveal them.
 - Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
-- Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions.
+- Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions. **Packages / Offerings** (/dashboard/offerings) — the unified Items + Bundles catalog for all products and packages you sell. Bundles can have a linked contract template that auto-loads in the proposal builder.
 - Marketing (sidebar flyout): Analytics, Emails (campaigns), Audiences, Forms, Workflows, Trigger links & tags. All three email surfaces (Templates / Campaigns / Automations) use the Flodesk-style drag-and-drop builder — see "Marketing email builder" section below.
 - Help Center: Searchable categories and articles (including Venue listing, Reviews, Conversations, Ask AI, Leads); contextual suggestions by page; voice search; article ratings.
 - What's New: Changelog and Feature Requests board. The sidebar menu item shows a **red dot with unread count** whenever there are entries a user hasn't reviewed; visiting the page marks everything read for that user (per-user read state). Feature Requests submitted by venues can be **approved, edited, or removed** by super admins. When a super admin approves a request it's automatically converted into a **What's New** changelog entry with an outcome-based auto-generated headline + description, and the request is removed from the venue's own feature-request list.
@@ -263,6 +263,14 @@ Five tabs covering every aspect of how your calendar works:
 - Payment Schedules tab: Installment plans.
 - Subscriptions tab: Recurring payments.
 - Transaction descriptions and invoice numbers now use the sequential proposal number (#1042) instead of a random token slice.
+
+## Offerings / Packages Catalog
+- Path: Payments → Packages (/dashboard/offerings) — your product and package catalog.
+- **Items** (venue_products): individual products/services. Each has a name, description, price, unit (per person / per event / per hour / custom / none), recurrence (one-time / monthly / weekly), inventory mode (unlimited / limited quantity), customer portal visibility, and active toggle.
+- **Bundles** (venue_packages): pre-built line-item collections representing your named packages (e.g. "Intimate Package," "Grand Estate"). Each bundle has a name, description, optional season label, valid from/to date range, minimum subtotal, line items (items + qty + optional price override), and a **Default contract template** dropdown.
+- **Package → template linking**: the "Default contract template" dropdown on a bundle lets you select a proposal template. When a venue owner picks that bundle while building a proposal, both the line items AND the linked contract body auto-load in one step (only if no contract has been written yet — it never overwrites existing work).
+- Quick-add item: while editing a bundle, use the inline quick-add shortcut to create a new product without leaving the bundle editor.
+- Bundles outside their valid-from/to window are filtered out in the proposal line-item picker so expired packages don't appear.
 
 ## Reports
 - 7 report types: Revenue, Proposals, Customer Summary, AR Aging, Payment Method Breakdown, Refunds, Bank Reconciliation.
@@ -1013,19 +1021,28 @@ Where to find variable pickers:
 - Notifications page: variable pills below each template editor, click to copy
 - Calendar settings → Notifications: merge tag reference in each channel editor
 
-## Speed to Lead System
-- Path: Venue listing → Booking System (/dashboard/listing/booking-system). Visibility is controlled by a checkbox on the venue's directory plan — if hidden, the menu item does not appear.
-- The Booking System is a venue-specific speed-to-lead automation that fires the moment a bride submits the public listing inquiry form on storyvenue.com. It is completely independent of GHL (GoHighLevel); GHL is only used for A2P SMS delivery to legacy clients.
-- Two phases covered by the Booking System page:
-  1. Guide Delivery (Phase 1): When enabled, an email and/or SMS is sent immediately to the bride with a link to download the venue's Pricing & Availability Guide PDF. The PDF is generated on-demand from the venue's current Pricing Guide page content — it always reflects whatever the venue owner last saved, so updates to the pricing guide page automatically show up in the next send.
-  2. Follow-up Sequence (Phase 2): A fully customizable sequence of steps (Send Email, Send SMS, Wait, Activate AI Concierge) that runs on a cron in the background. There is no fixed 14-day length — venues build it however they want: 3 steps or 20 steps. Each Wait step can be set to minutes, hours, or days. Steps can be drag-and-drop reordered.
-- Activate AI Concierge block: the sequence can end with an "Activate AI Concierge" block. When the marketing cron reaches this step, it immediately activates the AI Concierge for that lead (sets ai_state to ai_active, stamps ai_next_send_at = NOW()) and marks the enrollment complete. The AI send cron (running every 10 minutes via GitHub Actions) then picks up the lead for its first outbound SMS. This is the ONLY way AI activates — there is no automatic 14-day timer that activates AI independently of the sequence.
-- Stop on reply: if the bride replies to any message (SMS or email) before the sequence completes, the enrollment is halted automatically. The venue owner is notified.
-- Guide PDF link: the merge variable {{venue.pricing_guide_url}} (alias {{pricing_guide_url}}) resolves to a direct-download PDF URL unique to the venue. This link is live — clicking it generates the current version of the pricing guide every time, so there is no stale PDF problem.
-- GHL role: GHL's A2P number is used only to send SMS. All email delivery uses Resend (the platform's native email service). All merge variables and template personalization are handled by StoryVenue independently of GHL.
-- Master toggle: a top-level "Booking System enabled" toggle disables the entire system for the venue if turned off.
-- Where to configure: Venue listing → Booking System. Guide Delivery settings (email on/off, SMS on/off, email body, SMS body) are at the top; the Follow-up Sequence builder is below.
-- Common question — "will editing my pricing guide page change what brides receive?": Yes. The PDF is generated in real time from the database on every link click, so the bride always gets whatever the venue owner last saved.
+## Speed to Lead System (6-Phase Automation)
+- Path: Venue listing → Speed to Lead System (/dashboard/listing/booking-system). Visibility is controlled by a checkbox on the venue's directory plan.
+- The Speed to Lead System fires the moment a bride submits your public listing inquiry form on storyvenue.com. It is completely independent of GHL; GHL is only used for A2P SMS delivery.
+- **6 phases** — each has its own toggle so you enable only what you need:
+  1. **Guide Delivery** (instant) — sends an email and/or SMS with a direct link to the Pricing & Availability Guide PDF. The PDF is generated live on every click — always the current version. Toggle email and SMS independently.
+  2. **Follow-up Sequence** — customizable sequence of Send Email, Send SMS, Wait, and Activate AI Concierge steps. Fires on a cron. Stops the moment a bride replies. No fixed length — add as many steps as you want.
+  3. **Nurture Sequence** — a 5-email educational sequence about picking and touring venues. No AI Concierge handoff.
+  4. **Booked Tour** — a 5-email sequence that fires when a lead books a tour; sets expectations for the visit. No AI Concierge handoff.
+  5. **Booked Wedding** — a 5-email sequence that fires when a lead books a wedding; celebrates the win. No AI Concierge handoff.
+  6. **AI Concierge** — plan-gated (All-Inclusive only). An AI SMS follow-up for quiet leads. Locked on Bride Booking System Free and Bride Booking System™ plans; greyed toggle with tooltip and demo scheduling modal. See AI Concierge section for full details.
+- Activate AI Concierge block (Phase 2 only): adding this block to the Follow-up Sequence hands the lead to the AI Concierge at that step. This is the ONLY way AI activates — no automatic timer.
+- Stop on reply: if the bride replies to any message during any phase, the enrollment halts automatically and the venue is notified.
+- Guide PDF merge variable: {{pricing_guide_url}} (alias {{venue.pricing_guide_url}}) — live link, always generates the current guide version.
+- GHL is only used for A2P SMS. All email uses Resend and all templates/variables are native to StoryVenue.
+- Common question — "will editing my pricing guide change what brides receive?" Yes — the PDF is generated live on each click from your current saved Pricing Guide content.
+
+## Default Sales Pipeline (Locked)
+- Every venue has a default pipeline (the "Bride Booking System™" pipeline) whose stages are locked and cannot be renamed, reordered, added to, or deleted.
+- The pipeline itself cannot be deleted either.
+- This protects the platform's built-in automations which reference these specific stage names.
+- Venue owners can create additional custom pipelines freely. Only the default pipeline is read-only.
+- When a venue owner tries to edit a default pipeline stage, they see a lock message.
 
 ## Venue Direct (Concierge-to-Venue Messaging)
 - Venue Direct is a two-way messaging channel between the StoryVenue Concierge team and venue owners/subaccounts.
