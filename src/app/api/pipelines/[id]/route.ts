@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { loadPipelinesWithStages } from '@/lib/pipelines';
+import { loadPipelinesWithStages, isDefaultPipeline, DEFAULT_PIPELINE_LOCKED_MESSAGE } from '@/lib/pipelines';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -33,6 +33,13 @@ export async function PATCH(
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  // The default pipeline is locked — block any rename. (Toggling which
+  // pipeline is default via `is_default` is still allowed below, which is the
+  // only supported way to "replace" the locked default.)
+  if (typeof body.name === 'string' && (await isDefaultPipeline(venueId, id))) {
+    return NextResponse.json({ error: DEFAULT_PIPELINE_LOCKED_MESSAGE }, { status: 403 });
   }
 
   const updates: Record<string, unknown> = {};

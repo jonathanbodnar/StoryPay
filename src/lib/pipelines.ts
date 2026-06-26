@@ -203,6 +203,25 @@ export async function ensureDefaultPipeline(venueId: string): Promise<string> {
 }
 
 /**
+ * The default pipeline is locked: its name, stages, and structure power every
+ * venue's out-of-the-box automations, so customers can't rename, reorder,
+ * add/remove stages, or delete it. They must create a *new* pipeline to
+ * customize. Returns true when the given pipeline is the venue's default.
+ */
+export async function isDefaultPipeline(venueId: string, pipelineId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from('lead_pipelines')
+    .select('is_default')
+    .eq('id', pipelineId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  return Boolean(data?.is_default);
+}
+
+export const DEFAULT_PIPELINE_LOCKED_MESSAGE =
+  'The default pipeline is locked because it powers your automations. Create a new pipeline to customize stages.';
+
+/**
  * Build the "full shape" response a pipeline picker cares about: each
  * pipeline with its stages, already sorted by position.
  */

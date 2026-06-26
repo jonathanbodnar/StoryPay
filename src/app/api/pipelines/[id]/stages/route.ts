@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { loadPipelinesWithStages } from '@/lib/pipelines';
+import { loadPipelinesWithStages, isDefaultPipeline, DEFAULT_PIPELINE_LOCKED_MESSAGE } from '@/lib/pipelines';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -44,11 +44,14 @@ export async function POST(
   // Confirm pipeline belongs to this venue before mutating.
   const { data: pipeline } = await supabaseAdmin
     .from('lead_pipelines')
-    .select('id')
+    .select('id, is_default')
     .eq('id', pipelineId)
     .eq('venue_id', venueId)
     .maybeSingle();
   if (!pipeline) return NextResponse.json({ error: 'Pipeline not found' }, { status: 404 });
+  if (pipeline.is_default) {
+    return NextResponse.json({ error: DEFAULT_PIPELINE_LOCKED_MESSAGE }, { status: 403 });
+  }
 
   const { data: last } = await supabaseAdmin
     .from('lead_pipeline_stages')
@@ -105,11 +108,14 @@ export async function PATCH(
   // Confirm the pipeline belongs to this venue.
   const { data: pipeline } = await supabaseAdmin
     .from('lead_pipelines')
-    .select('id')
+    .select('id, is_default')
     .eq('id', pipelineId)
     .eq('venue_id', venueId)
     .maybeSingle();
   if (!pipeline) return NextResponse.json({ error: 'Pipeline not found' }, { status: 404 });
+  if (pipeline.is_default) {
+    return NextResponse.json({ error: DEFAULT_PIPELINE_LOCKED_MESSAGE }, { status: 403 });
+  }
 
   for (let i = 0; i < body.order.length; i++) {
     const stageId = body.order[i];

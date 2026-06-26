@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { loadPipelinesWithStages } from '@/lib/pipelines';
+import { loadPipelinesWithStages, isDefaultPipeline, DEFAULT_PIPELINE_LOCKED_MESSAGE } from '@/lib/pipelines';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -52,6 +52,10 @@ export async function PATCH(
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
 
+  if (await isDefaultPipeline(venueId, pipelineId)) {
+    return NextResponse.json({ error: DEFAULT_PIPELINE_LOCKED_MESSAGE }, { status: 403 });
+  }
+
   const { error } = await supabaseAdmin
     .from('lead_pipeline_stages')
     .update(updates)
@@ -80,6 +84,10 @@ export async function DELETE(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id: pipelineId, stageId } = await context.params;
+
+  if (await isDefaultPipeline(venueId, pipelineId)) {
+    return NextResponse.json({ error: DEFAULT_PIPELINE_LOCKED_MESSAGE }, { status: 403 });
+  }
 
   const { count } = await supabaseAdmin
     .from('lead_pipeline_stages')

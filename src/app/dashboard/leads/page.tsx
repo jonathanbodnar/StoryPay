@@ -13,6 +13,7 @@ import {
   Globe, CalendarPlus, Clock, GripVertical, ArrowLeft, ArrowRight,
   ChevronDown, Filter, Link2, Copy, Tags,
   History, ListTodo, CheckSquare, Square, Send, Activity, StickyNote,
+  Lock,
 } from 'lucide-react';
 import LeadInsightsStrip, { type LeadInsightsPayload } from '@/components/leads/LeadInsightsStrip';
 import AddLeadModal, { NO_PIPELINE_STAGE } from '@/components/leads/AddLeadModal';
@@ -3173,11 +3174,25 @@ function PipelineEditor({
                 <>
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex-1 min-w-0">
-                      <Field
-                        label="Pipeline name"
-                        value={editing.name}
-                        onSave={(v) => renamePipeline(editing.id, v)}
-                      />
+                      {editing.is_default ? (
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                            Pipeline name
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{editing.name}</span>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                              <Lock className="w-3 h-3" /> Locked
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <Field
+                          label="Pipeline name"
+                          value={editing.name}
+                          onSave={(v) => renamePipeline(editing.id, v)}
+                        />
+                      )}
                     </div>
                     <div className="flex items-center gap-2 pt-4">
                       {!editing.is_default && (
@@ -3209,6 +3224,16 @@ function PipelineEditor({
                     </div>
                   </div>
 
+                  {editing.is_default && (
+                    <div className="mb-3 flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
+                      <Lock className="mt-0.5 w-3.5 h-3.5 shrink-0 text-gray-400" />
+                      <span>
+                        This is your default pipeline. Its stages power your automations and
+                        can&apos;t be edited. To customize your stages, create a new pipeline.
+                      </span>
+                    </div>
+                  )}
+
                   <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">
                     Stages ({editing.stages.length})
                   </h4>
@@ -3218,6 +3243,7 @@ function PipelineEditor({
                       <StageRow
                         key={s.id}
                         stage={s}
+                        locked={editing.is_default}
                         canMoveUp={i > 0}
                         canMoveDown={i < editing.stages.length - 1}
                         onRename={(name) => renameStage(s.id, name)}
@@ -3230,6 +3256,7 @@ function PipelineEditor({
                     ))}
                   </ul>
 
+                  {!editing.is_default && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <HexColorField
                       value={newStageColor}
@@ -3251,6 +3278,7 @@ function PipelineEditor({
                       <Plus className="w-3.5 h-3.5" /> Add stage
                     </button>
                   </div>
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-gray-500">No pipeline selected.</p>
@@ -3473,7 +3501,7 @@ function HexColorField({
 
 function StageRow({
   stage, canMoveUp, canMoveDown, onRename, onChangeColor, onChangeKind,
-  onDelete, onMoveUp, onMoveDown,
+  onDelete, onMoveUp, onMoveDown, locked = false,
 }: {
   stage: Stage;
   canMoveUp: boolean;
@@ -3484,10 +3512,28 @@ function StageRow({
   onDelete: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  locked?: boolean;
 }) {
   const [name, setName] = useState(stage.name);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setName(stage.name); }, [stage.name]);
+
+  // Read-only row for the locked default pipeline — no rename, recolor,
+  // re-kind, reorder, or delete.
+  if (locked) {
+    const kindLabel = stage.kind === 'won' ? 'Won' : stage.kind === 'lost' ? 'Lost' : 'Active';
+    return (
+      <li className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-2">
+        <span
+          className="block h-5 w-5 shrink-0 rounded-[5px] border border-black/5"
+          style={{ backgroundColor: stage.color }}
+        />
+        <span className="flex-1 truncate px-1 text-sm text-gray-700">{stage.name}</span>
+        <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">{kindLabel}</span>
+        <Lock className="w-3.5 h-3.5 text-gray-400" />
+      </li>
+    );
+  }
 
   return (
     <li className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
