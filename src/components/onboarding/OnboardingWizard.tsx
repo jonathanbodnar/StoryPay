@@ -738,7 +738,7 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
   return (
     <div>
       <h2 className="text-xl font-semibold text-gray-900">A few things Google doesn&apos;t know</h2>
-      <p className="mt-1 text-sm text-gray-500">Answer these and we&apos;ll write your guide for you.</p>
+      <p className="mt-1 text-sm text-gray-500">Answer these and we&apos;ll build your listing and pricing guide for you.</p>
 
       <div className="mt-5 space-y-4">
         <Field label="Guest capacity" required>
@@ -848,7 +848,7 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
 
       <div className="mt-6 flex items-center justify-end">
         <button onClick={submit} disabled={saving} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: BRAND }}>
-          {saving ? <><Loader2 size={16} className="animate-spin" /> Creating your guide…</> : <>Create my guide <Sparkles size={16} /></>}
+          {saving ? <><Loader2 size={16} className="animate-spin" /> Building your Bride Booking System…</> : <>Build my Bride Booking System <Sparkles size={16} /></>}
         </button>
       </div>
     </div>
