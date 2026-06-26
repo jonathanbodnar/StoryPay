@@ -63,7 +63,7 @@ export async function GET(): Promise<NextResponse> {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('slug, is_published, onboarding_completed_at, onboarding_last_step, directory_plan_id')
+    .select('slug, is_published, onboarding_completed_at, onboarding_last_step, onboarding_activated_at, directory_plan_id')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -87,6 +87,7 @@ export async function GET(): Promise<NextResponse> {
     completed: Boolean(v.onboarding_completed_at),
     last_step: typeof v.onboarding_last_step === 'number' ? v.onboarding_last_step : 0,
     is_published: Boolean(v.is_published),
+    activated: Boolean(v.onboarding_activated_at), // they've fired a test inquiry
     guide_enabled: Boolean((guide as { enabled?: boolean } | null)?.enabled),
     is_legacy: isLegacy,
     slug: (v.slug as string) ?? null,
@@ -166,18 +167,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       console.warn('[onboarding/publish] booking defaults', bookingErr.message);
     }
 
-    // 3. Publish the listing. NOTE: going live is no longer the end of
-    //    onboarding — the card step ("Access your Bride Booking System") comes
-    //    AFTER this, and only the `finish` action stamps onboarding_completed_at.
-    //    So a non-legacy venue that publishes but abandons the card stays
-    //    incomplete and the wizard reopens on the card step. Legacy venues have
-    //    no card step, so for them is_published alone counts as complete.
+    // 3. Publish the listing (make the public page live). For NON-legacy venues
+    //    this is deferred until the card step — the page is NOT live during the
+    //    "test inquiry" step, only the owner's own test lead exists. Only the
+    //    `finish` action stamps onboarding_completed_at, so a venue that never
+    //    cards stays incomplete and the gate reopens. Legacy venues have no card
+    //    step, so they call this at "Go live" and complete via is_published.
+    //    We deliberately do NOT touch onboarding_last_step here so a card-time
+    //    publish doesn't rewind the resumed step.
     const { error: vErr } = await supabaseAdmin
       .from('venues')
-      .update({
-        is_published: true,
-        onboarding_last_step: 2,
-      })
+      .update({ is_published: true })
       .eq('id', venueId);
     if (vErr) {
       console.error('[onboarding/publish] venue publish', vErr.message);

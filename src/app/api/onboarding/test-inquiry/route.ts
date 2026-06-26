@@ -182,15 +182,17 @@ export async function POST(): Promise<NextResponse> {
     .catch(() => {});
 
   // 4. Fire the welcome email/SMS (Phase 1 guide delivery). Awaited so the
-  //    success screen can truthfully say it was sent.
-  await sendBookingSystemGuide(venueId, lr.id).catch((e) =>
+  //    success screen can truthfully say it was sent. bypassEntitlement: this is
+  //    the owner's own onboarding demo, which runs BEFORE the card is added, so
+  //    it must fire regardless of subscription state (and never win-back nudge).
+  await sendBookingSystemGuide(venueId, lr.id, { bypassEntitlement: true }).catch((e) =>
     console.error('[test-inquiry] sendBookingSystemGuide error:', e),
   );
 
   // 5. Fire the Speed-to-Lead form-submitted automation, exactly like a bride.
   try {
     const formId = await ensureListingForm(venueId);
-    if (formId) await onMarketingFormSubmitted(venueId, lr.id, formId);
+    if (formId) await onMarketingFormSubmitted(venueId, lr.id, formId, { bypassEntitlement: true });
   } catch (e) {
     console.error('[test-inquiry] workflow trigger', e);
   }

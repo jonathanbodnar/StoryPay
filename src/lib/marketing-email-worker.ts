@@ -213,12 +213,14 @@ export async function onMarketingFormSubmitted(
   venueId: string,
   leadId: string,
   formId: string,
+  opts?: { bypassEntitlement?: boolean },
 ): Promise<void> {
   if (!leadId || !formId) return;
   // Subscription gate: marketing/speed-to-lead automations are part of the paid
   // booking system. Free-tier (downgraded) venues capture the lead but don't
-  // enroll it into automated follow-up.
-  if (!(await venueCanRunBookingSystem(venueId))) return;
+  // enroll it into automated follow-up. `bypassEntitlement` is for the owner's
+  // own onboarding test inquiry, which must always run (it predates the card).
+  if (!opts?.bypassEntitlement && !(await venueCanRunBookingSystem(venueId))) return;
   const autos = await loadVenueActiveAutomations(venueId);
   for (const row of autos) {
     const matched = flatTriggersFor(row).some((t) => {
@@ -297,6 +299,7 @@ async function logGuideIssue(
 export async function sendBookingSystemGuide(
   venueId: string,
   leadId: string,
+  opts?: { bypassEntitlement?: boolean },
 ): Promise<void> {
   try {
     const { data: vr } = await supabaseAdmin
@@ -314,8 +317,9 @@ export async function sendBookingSystemGuide(
     // Subscription gate: the paid Bride Booking System only fires for entitled
     // venues (active/trialing/legacy). Downgraded-to-Free venues still capture
     // the lead in the inbox, but the automated guide does not send — instead we
-    // nudge the owner (throttled) to win them back.
-    if (!canRunBookingSystem(v as unknown as VenueBillingState)) {
+    // nudge the owner (throttled) to win them back. `bypassEntitlement` is for
+    // the owner's own onboarding test inquiry (runs before the card is added).
+    if (!opts?.bypassEntitlement && !canRunBookingSystem(v as unknown as VenueBillingState)) {
       void import('@/lib/saas-billing-notifications')
         .then(({ maybeSendWinbackNudge }) => maybeSendWinbackNudge(venueId))
         .catch(() => {});

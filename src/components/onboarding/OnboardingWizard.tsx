@@ -89,6 +89,7 @@ export default function OnboardingWizard() {
   const [step, setStep] = useState(0);
   const [live, setLive] = useState(false);          // listing is published (all pills green)
   const [isLegacy, setIsLegacy] = useState(false);  // legacy/grandfathered → not card-gated
+  const [activated, setActivated] = useState(false); // already fired a test inquiry
 
   // Gate on onboarding state. "Complete" = they published via the wizard, OR
   // they manually finished both the listing (is_published) and the pricing
@@ -127,6 +128,7 @@ export default function OnboardingWizard() {
           : Boolean(s.completed);
         setComplete(isComplete);
         setIsLegacy(legacy);
+        setActivated(Boolean(s.activated));
         setLive(Boolean(s.is_published)); // keep the "Go live" pill green on resume
         setStep(typeof s.last_step === 'number' ? Math.min(s.last_step, 3) : 0);
 
@@ -260,15 +262,19 @@ export default function OnboardingWizard() {
           {step === 0 && <ConnectStep onNext={() => go(1)} />}
           {step === 1 && <QuestionsStep onBack={() => go(0)} onNext={() => go(2)} />}
           {step === 2 && (
-            <PublishStep
-              onLive={() => setLive(true)}
-              // Non-legacy: after going live + the test inquiry, continue to the
-              // card step (4) to unlock the dashboard. Legacy: just finish.
-              onContinue={isLegacy ? undefined : () => go(3)}
-              onDone={finishAndClose}
-            />
+            isLegacy ? (
+              // Legacy venues have no card step: "Go live" publishes immediately.
+              <PublishStep onLive={() => setLive(true)} onDone={finishAndClose} />
+            ) : (
+              // Non-legacy: this step only fires the test inquiry (the page is NOT
+              // live yet). The owner sees the lead + red alert behind the modal.
+              // The public page goes live on the card step.
+              <ActivateStep alreadyActivated={activated} onContinue={() => go(3)} />
+            )
           )}
-          {step === 3 && !isLegacy && <CardStep onDone={finishAndClose} />}
+          {step === 3 && !isLegacy && (
+            <CardStep onLive={() => setLive(true)} onDone={finishAndClose} />
+          )}
         </div>
       </div>
     </div>
@@ -1017,24 +1023,124 @@ function PublishStep({ onDone, onLive, onContinue }: { onDone: () => void; onLiv
   );
 }
 
-/* ── Step 4: Access (card-gated unlock of the Bride Booking System) ───────── */
-function CardStep({ onDone }: { onDone: () => void }) {
-  const [phase, setPhase] = useState<'loading' | 'card' | 'finishing' | 'error'>('loading');
+/* ── Step 3: Go live (fire the test inquiry — the page is NOT public yet) ──── */
+function ActivateStep({ onContinue, alreadyActivated = false }: { onContinue: () => void; alreadyActivated?: boolean }) {
+  const [status, setStatus] = useState<'idle' | 'sending' | 'done'>(alreadyActivated ? 'done' : 'idle');
+  const [lead, setLead] = useState<TestLead | null>(null);
+  const [emailTo, setEmailTo] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+
+  const send = async () => {
+    setStatus('sending'); setErr(null);
+    try {
+      const res = await fetch('/api/onboarding/test-inquiry', { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) { setErr(d.error || 'Could not send the test inquiry. Try again.'); setStatus('idle'); return; }
+      setLead(d.lead ?? null);
+      setEmailTo(d.email_to || '');
+      setStatus('done');
+    } catch { setErr('Something went wrong. Try again.'); setStatus('idle'); }
+  };
+
+  return (
+    <div className="text-center">
+      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${BRAND}1a` }}>
+        <Sparkles size={24} style={{ color: BRAND }} />
+      </div>
+      <h2 className="text-xl font-semibold text-gray-900">See your Bride Booking System work</h2>
+      <p className="mt-1 text-sm text-gray-500">
+        Send yourself a test inquiry. Watch it land in your inbox in real time — exactly what every bride who taps your link will trigger.
+      </p>
+
+      {status === 'done' ? (
+        <div className="mt-5">
+          {lead ? (
+            <div className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> New lead
+                </span>
+                <span className="text-xs text-gray-400">just now</span>
+              </div>
+              <p className="mt-2 font-medium text-gray-900">{lead.name}</p>
+              <p className="text-sm text-gray-500">{lead.email}{lead.phone ? ` · ${lead.phone}` : ''}</p>
+              <p className="mt-2 text-sm text-gray-600">&ldquo;{lead.message}&rdquo;</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Test inquiry in your inbox
+              </span>
+              <p className="mt-2 text-sm text-gray-600">Your test lead is waiting in your Lead Inbox — unlock your dashboard to open it.</p>
+            </div>
+          )}
+          {emailTo && (
+            <p className="mt-3 flex items-center justify-center gap-1.5 text-sm font-medium text-emerald-600">
+              <Mail size={14} /> Welcome email sent to {emailTo}
+            </p>
+          )}
+          <p className="mt-2 text-sm text-gray-500">See the red alert behind this window? That&apos;s your lead. Add a card to open your dashboard and reply.</p>
+          <button
+            onClick={onContinue}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: BRAND }}
+          >
+            Unlock my dashboard <ArrowRight size={18} />
+          </button>
+        </div>
+      ) : (
+        <>
+          <button
+            onClick={send}
+            disabled={status === 'sending'}
+            className="sv-test-pulse mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: BRAND }}
+          >
+            {status === 'sending'
+              ? <><Loader2 size={18} className="animate-spin" /> Sending your test inquiry…</>
+              : <><Send size={18} /> Send yourself a test inquiry</>}
+          </button>
+          {err && <p className="mt-2 text-sm text-red-500">{err}</p>}
+          <button onClick={onContinue} className="mt-3 text-sm text-gray-400 hover:text-gray-600">Skip — add a card to unlock my dashboard</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Step 4: Access (card → page goes live → unlock the dashboard) ────────── */
+function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void }) {
+  const [phase, setPhase] = useState<'loading' | 'card' | 'finishing' | 'live' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [cardIntent, setCardIntent] = useState<{ clientToken: string; environment: string } | null>(null);
   const [billing, setBilling] = useState<{ planName: string; amountCents: number; trialEndsAt: string } | null>(null);
+  const [liveUrl, setLiveUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  // Mark onboarding complete (stamps onboarding_completed_at) then close.
-  const finish = useCallback(async () => {
+  // Card succeeded (or none required): NOW publish the public page and stamp
+  // onboarding complete, then show the live/share screen. This is the moment the
+  // listing actually goes live — not before.
+  const goLiveAndFinish = useCallback(async () => {
     setPhase('finishing');
+    let url: string | null = null;
+    try {
+      const pubRes = await fetch('/api/onboarding/state', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'publish' }),
+      });
+      const pd = await pubRes.json().catch(() => ({}));
+      url = pd?.live_url ?? null;
+    } catch { /* non-fatal: page publish can be retried from the dashboard */ }
     try {
       await fetch('/api/onboarding/state', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'finish' }),
       });
     } catch { /* best-effort: gate falls back to reopening */ }
-    onDone();
-  }, [onDone]);
+    setLiveUrl(url);
+    onLive?.();
+    setPhase('live');
+  }, [onLive]);
 
   // On mount: figure out if a card is required, and if so load the inline form.
   useEffect(() => {
@@ -1046,8 +1152,8 @@ function CardStep({ onDone }: { onDone: () => void }) {
         if (cancelled) return;
         if (!bRes.ok) { setError(b.error || 'Could not load billing. Please try again.'); setPhase('error'); return; }
         if (!b.needsCard) {
-          // Already carded / dev / no paid plan to sell → nothing to collect.
-          await finish();
+          // Already carded / dev / no paid plan to sell → go live + finish.
+          await goLiveAndFinish();
           return;
         }
         const piRes = await fetch('/api/venue-billing/payment-intent', { method: 'POST' });
@@ -1067,13 +1173,66 @@ function CardStep({ onDone }: { onDone: () => void }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [finish]);
+  }, [goLiveAndFinish]);
+
+  const copy = () => {
+    if (!liveUrl) return;
+    navigator.clipboard.writeText(liveUrl).then(() => {
+      setCopied(true); setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+  const share = () => {
+    if (!liveUrl) return;
+    if (navigator.share) navigator.share({ title: 'My venue', url: liveUrl }).catch(() => {});
+    else copy();
+  };
 
   if (phase === 'loading' || phase === 'finishing') {
     return (
       <div className="flex h-48 flex-col items-center justify-center gap-3 text-gray-400">
         <Loader2 size={24} className="animate-spin" />
-        <p className="text-sm">{phase === 'finishing' ? 'Unlocking your dashboard…' : 'Loading…'}</p>
+        <p className="text-sm">{phase === 'finishing' ? 'Going live & unlocking your dashboard…' : 'Loading…'}</p>
+      </div>
+    );
+  }
+
+  if (phase === 'live') {
+    return (
+      <div className="text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+          <CheckCircle2 size={30} className="text-green-600" />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900">You&apos;re live!</h2>
+        <p className="mt-1 text-sm text-gray-500">Your page is public and your Bride Booking System is on. Add the link to your Instagram bio, TikTok bio, email signature, and website. The moment a bride asks for pricing, she lands in your inbox.</p>
+
+        {liveUrl && (
+          <div className="mt-6 border-t border-gray-100 pt-5">
+            <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-2">
+              <span className="flex-1 truncate px-2 text-sm text-gray-700">{liveUrl}</span>
+              <button onClick={copy} className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: BRAND }}>
+                {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
+              </button>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <a href={liveUrl} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                View my page <ArrowRight size={14} />
+              </a>
+              <button onClick={share} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                <Share2 size={14} /> Share
+              </button>
+            </div>
+          </div>
+        )}
+
+        <a
+          href="/dashboard/leads"
+          onClick={onDone}
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-90"
+          style={{ backgroundColor: BRAND }}
+        >
+          <Inbox size={17} /> Open my Lead Inbox
+        </a>
+        <button onClick={onDone} className="mt-3 text-sm text-gray-400 hover:text-gray-600">Go to my dashboard</button>
       </div>
     );
   }
@@ -1105,7 +1264,7 @@ function CardStep({ onDone }: { onDone: () => void }) {
         <p className="text-sm font-medium text-emerald-600">No charge today</p>
         <h2 className="mt-1 text-xl font-semibold text-gray-900">Access your Bride Booking System</h2>
         <p className="mt-1 text-sm text-gray-500">
-          Your page is live and leads are landing. Add a card to unlock your dashboard and inbox. You won&apos;t be charged{trialDate ? ` until ${trialDate}` : ' during your free trial'}, and you can cancel anytime.
+          A bride is already waiting in your inbox. Add a card to publish your page and unlock your dashboard. You won&apos;t be charged{trialDate ? ` until ${trialDate}` : ' during your free trial'}, and you can cancel anytime.
         </p>
       </div>
 
@@ -1129,7 +1288,7 @@ function CardStep({ onDone }: { onDone: () => void }) {
             environment={cardIntent.environment}
             onSuccess={() => {
               try { trackClient('card_entered', { label: 'Card vaulted, trial started' }); } catch { /* non-fatal */ }
-              void finish();
+              void goLiveAndFinish();
             }}
             onError={(msg) => setError(msg)}
           />
