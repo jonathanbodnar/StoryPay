@@ -11,6 +11,7 @@ import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { notifyOwner, formatAmount, HIGH_VALUE_THRESHOLD_CENTS } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
+import { recordOnlinePaymentLedger } from '@/lib/proposal-payments';
 
 function applyFee(cents: number, ratePercent: number): number {
   if (ratePercent <= 0) return cents;
@@ -337,6 +338,25 @@ export async function POST(
       .from('proposals')
       .update(updateData)
       .eq('id', proposal.id);
+
+    // Record the charge in the unified payment ledger so card/ACH payments get
+    // a sequential payment number too. Base amount applied to the balance:
+    // full → price; installment → first installment. Non-blocking.
+    {
+      let baseAmount = Number(proposal.price) || 0;
+      if (proposal.payment_type === 'installment') {
+        const ic = proposal.payment_config as InstallmentConfig | null;
+        baseAmount = ic?.installments?.[0]?.amount ?? baseAmount;
+      }
+      void recordOnlinePaymentLedger({
+        proposalId: proposal.id as string,
+        venueId: proposal.venue_id as string,
+        amountCents: baseAmount,
+        method: 'cc',
+        reference: (transactionId != null ? String(transactionId) : null)
+          ?? (chargeIdFromSession != null ? String(chargeIdFromSession) : null),
+      });
+    }
 
     void syncPaymentRemindersForProposal(proposal.id);
     void onMarketingProposalPaid(proposal.venue_id as string, proposal.customer_email as string | null);

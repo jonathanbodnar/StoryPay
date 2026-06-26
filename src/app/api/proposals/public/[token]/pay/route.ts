@@ -16,6 +16,7 @@ import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { notifyOwner, formatAmount, HIGH_VALUE_THRESHOLD_CENTS } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
+import { recordOnlinePaymentLedger } from '@/lib/proposal-payments';
 
 /** Pull a numeric id out of common LP response shapes. */
 function extractId(raw: unknown): number {
@@ -202,6 +203,16 @@ export async function POST(
       console.error('[pay] Supabase update failed:', dbErr);
       throw new Error(`Failed to record payment: ${dbErr.message}`);
     }
+
+    // Record the charge in the unified payment ledger so it gets a sequential
+    // payment number alongside manual cash/check payments. Non-blocking.
+    void recordOnlinePaymentLedger({
+      proposalId: proposal.id,
+      venueId: proposal.venue_id as string,
+      amountCents: finalChargeCents,
+      method: paymentMethod === 'ach' ? 'ach' : 'cc',
+      reference: (updateData.transaction_id as string | null) ?? (updateData.charge_id != null ? String(updateData.charge_id) : null),
+    });
 
     // ── Side effects ───────────────────────────────────────────────────────
     void syncPaymentRemindersForProposal(proposal.id);

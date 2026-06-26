@@ -132,6 +132,7 @@ export async function POST(
       method,
       checkNumber,
       balanceCents,
+      paymentNumber: (payment as { payment_number?: number | null })?.payment_number ?? null,
     });
   }
 

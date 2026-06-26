@@ -3,13 +3,17 @@ import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 
 export type ManualPaymentMethod = 'cash' | 'check' | 'other';
+export type PaymentMethod = ManualPaymentMethod | 'cc' | 'ach';
 
 export interface ProposalPaymentRow {
   id: string;
   proposal_id: string;
   venue_id: string;
+  payment_number: number | null;
   amount_cents: number;
-  method: ManualPaymentMethod;
+  method: PaymentMethod;
+  source: 'manual' | 'online';
+  reference: string | null;
   check_number: string | null;
   note: string | null;
   recorded_by: string | null;
@@ -17,11 +21,13 @@ export interface ProposalPaymentRow {
   created_at: string;
 }
 
-/** Human-readable label for a manual payment method, e.g. "Check #1042". */
+/** Human-readable label for a payment method, e.g. "Check #1042" or "Card". */
 export function methodLabel(method: string, checkNumber?: string | null): string {
   if (method === 'check') return checkNumber ? `Check #${checkNumber}` : 'Check';
   if (method === 'cash') return 'Cash';
-  return 'Manual payment';
+  if (method === 'cc') return 'Card';
+  if (method === 'ach') return 'Bank (ACH)';
+  return 'Other';
 }
 
 /** Sum of all manual payments recorded against a proposal/invoice (in cents). */
@@ -99,6 +105,57 @@ interface ReceiptArgs {
   method: string;
   checkNumber?: string | null;
   balanceCents: number;
+  paymentNumber?: number | null;
+}
+
+/**
+ * Record an online (card / ACH) charge in the unified payment ledger so it gets
+ * a sequential payment number like manual cash/check payments. Deduped by
+ * (proposal_id, reference) and fully non-throwing — it must never break the
+ * checkout path. Returns the assigned payment number when available.
+ */
+export async function recordOnlinePaymentLedger(args: {
+  proposalId: string;
+  venueId: string;
+  amountCents: number;
+  method: 'cc' | 'ach';
+  reference: string | null;
+}): Promise<number | null> {
+  const { proposalId, venueId, amountCents, method, reference } = args;
+  if (!amountCents || amountCents <= 0) return null;
+  try {
+    // Skip if we've already logged this exact charge.
+    if (reference) {
+      const { data: existing } = await supabaseAdmin
+        .from('proposal_payments')
+        .select('payment_number')
+        .eq('proposal_id', proposalId)
+        .eq('reference', reference)
+        .maybeSingle();
+      if (existing) return (existing.payment_number as number) ?? null;
+    }
+    const { data, error } = await supabaseAdmin
+      .from('proposal_payments')
+      .insert({
+        proposal_id: proposalId,
+        venue_id: venueId,
+        amount_cents: amountCents,
+        method,
+        source: 'online',
+        reference: reference ?? null,
+        paid_at: new Date().toISOString(),
+      })
+      .select('payment_number')
+      .single();
+    if (error) {
+      // Table/columns may predate migration 155 — that's fine, online payments
+      // still record on the proposal row as before.
+      return null;
+    }
+    return (data?.payment_number as number) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -108,7 +165,7 @@ interface ReceiptArgs {
  * fail because the email bounced.
  */
 export async function sendManualPaymentReceipt(args: ReceiptArgs): Promise<void> {
-  const { venueId, customerEmail, customerName, publicToken, amountCents, method, checkNumber, balanceCents } = args;
+  const { venueId, customerEmail, customerName, publicToken, amountCents, method, checkNumber, balanceCents, paymentNumber } = args;
   if (!customerEmail) return;
 
   try {
@@ -134,6 +191,7 @@ export async function sendManualPaymentReceipt(args: ReceiptArgs): Promise<void>
       date:           new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
       payment_method: methodLabel(method, checkNumber),
       balance_due:    balanceStr,
+      payment_number: paymentNumber ? `#${paymentNumber}` : '',
     };
 
     await directSendEmail({

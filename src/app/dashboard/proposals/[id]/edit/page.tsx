@@ -3,8 +3,9 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Send, Save, Trash2, Plus, ArrowLeft, ExternalLink, Copy, RefreshCw, FileText, Receipt } from 'lucide-react';
+import { Send, Save, Trash2, Plus, ArrowLeft, ExternalLink, Copy, RefreshCw, Receipt, Wallet } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
+import RecordPaymentModal, { paymentMethodLabel } from '@/components/RecordPaymentModal';
 
 interface Installment {
  id: string;
@@ -31,6 +32,18 @@ interface Proposal {
  content: string | null;
  checkout_session_id: string | null;
  transaction_id: string | null;
+ collect_manually?: boolean;
+}
+
+interface LedgerPayment {
+ id: string;
+ payment_number: number | null;
+ amount_cents: number;
+ method: 'cash' | 'check' | 'other' | 'cc' | 'ach';
+ source?: 'manual' | 'online';
+ check_number: string | null;
+ note: string | null;
+ paid_at: string;
 }
 
 function uid() {
@@ -58,6 +71,9 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  const [deleting, setDeleting] = useState(false);
  const [error, setError] = useState('');
  const [copied, setCopied] = useState(false);
+ const [recording, setRecording] = useState(false);
+ const [ledger, setLedger] = useState<LedgerPayment[]>([]);
+ const [ledgerBalance, setLedgerBalance] = useState<number | null>(null);
 
  const [customerName, setCustomerName] = useState('');
  const [customerEmail, setCustomerEmail] = useState('');
@@ -73,6 +89,17 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  const [subStartDate, setSubStartDate] = useState('');
  const [acceptAch, setAcceptAch] = useState(true);
 
+ async function loadPayments() {
+ try {
+ const res = await fetch(`/api/proposals/${id}/payments`, { cache: 'no-store' });
+ const data = await res.json().catch(() => null);
+ if (res.ok && data) {
+ setLedger(Array.isArray(data.payments) ? data.payments : []);
+ setLedgerBalance(typeof data.balance_cents === 'number' ? data.balance_cents : null);
+ }
+ } catch { /* ledger unavailable — ignore */ }
+ }
+
  useEffect(() => {
  async function load() {
  try {
@@ -81,6 +108,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  const data: Proposal = await res.json();
 
  setProposal(data);
+ void loadPayments();
  setCustomerName(data.customer_name || '');
  setCustomerEmail(data.customer_email || '');
  setCustomerPhone(data.customer_phone || '');
@@ -322,6 +350,16 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  {submitting ? 'Resending...' : 'Resend'}
  </button>
  )}
+ {/* Manual collection only — record cash/check payments against this proposal */}
+ {proposal.collect_manually && !isPaid && (
+ <button
+ onClick={() => setRecording(true)}
+ className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-800"
+ >
+ <Wallet size={14} />
+ Record payment
+ </button>
+ )}
  </div>
 
  {/* Timeline */}
@@ -330,6 +368,34 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  {proposal.sent_at && <span>Sent: {formatDate(proposal.sent_at)}</span>}
  {proposal.signed_at && <span>Signed: {formatDate(proposal.signed_at)}</span>}
  {proposal.paid_at && <span>Paid: {formatDate(proposal.paid_at)}</span>}
+ </div>
+ </div>
+ )}
+
+ {/* Payment history — every payment carries a sequential number (manual + card/ACH) */}
+ {!isDraft && ledger.length > 0 && (
+ <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4">
+ <div className="flex items-center justify-between mb-3">
+ <h3 className="text-sm font-semibold text-gray-900">Payments</h3>
+ {ledgerBalance != null && ledgerBalance > 0 && (
+ <span className="text-xs font-medium text-amber-600">Balance {formatCents(ledgerBalance)}</span>
+ )}
+ </div>
+ <div className="divide-y divide-gray-100">
+ {ledger.map((p) => (
+ <div key={p.id} className="flex items-center justify-between py-2 text-sm">
+ <div className="min-w-0">
+ <p className="font-medium text-gray-800">
+ <span className="text-gray-400 font-normal mr-1.5">#{p.payment_number ?? '—'}</span>
+ {formatCents(p.amount_cents)}
+ <span className="text-gray-400 font-normal"> · {paymentMethodLabel(p.method, p.check_number)}</span>
+ </p>
+ <p className="text-xs text-gray-400 truncate">
+ {formatDate(p.paid_at)}{p.source === 'online' ? ' · Online' : ''}{p.note ? ` · ${p.note}` : ''}
+ </p>
+ </div>
+ </div>
+ ))}
  </div>
  </div>
  )}
@@ -601,6 +667,14 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  )}
  </div>
  </div>
+
+ {recording && (
+ <RecordPaymentModal
+ proposal={{ id: proposal.id, customer_name: proposal.customer_name, customer_email: proposal.customer_email, price: proposal.price }}
+ onClose={() => setRecording(false)}
+ onSaved={() => { void loadPayments(); fetch(`/api/proposals/${id}`).then(r => r.ok ? r.json() : null).then(d => { if (d) setProposal(d); }).catch(() => {}); }}
+ />
+ )}
  </div>
  );
 }
