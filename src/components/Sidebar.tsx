@@ -167,7 +167,12 @@ export default function Sidebar({
    * still render in the sidebar; this just controls whether the click
    * navigates or opens the upgrade modal.
    */
-  const navOk = (navId: string) => allowedNavIds === null || allowedNavIds.includes(navId);
+  // Billing is exempt from plan gating (mirrors the route guard) — it must stay
+  // unlocked so owners can manage/upgrade/downgrade/cancel. It's only rendered
+  // for owners on non-legacy plans (filtered earlier), so it's safe to always
+  // mark it accessible here and avoid the lock icon + upgrade modal.
+  const navOk = (navId: string) =>
+    navId === 'nav_settings_billing' || allowedNavIds === null || allowedNavIds.includes(navId);
   // "Lead Inbox" lives at /dashboard/leads but belongs to the Bride Booking
   // System group, so treat it as part of the listing section too — otherwise
   // navigating to it would collapse the group.
