@@ -67,10 +67,14 @@ export default async function DashboardLayout({
    directory_trial_consumed: Boolean(vr.directory_trial_consumed),
  };
  const trialStatus = deriveTrialStatus(trialState);
- const onSelfServeTrial =
-   subStatus === 'trialing' && !hasExternalSub && !trialState.directory_trial_is_forever;
- const trialExpiredWall = onSelfServeTrial && trialStatus === 'expired';
- const showTrialCountdown = onSelfServeTrial && trialStatus === 'active';
+ const inTrial = subStatus === 'trialing' && !trialState.directory_trial_is_forever;
+ // The countdown ribbon shows during an active trial whether or not a card is
+ // on file. Card-on-file venues still need to see when they'll be charged (and
+ // how to switch to Free before then); pre-card venues see the "add a card"
+ // prompt. Only the hard wall stays gated to the no-card path — a card-on-file
+ // venue auto-charges at trial end rather than getting locked out.
+ const showTrialCountdown = inTrial && trialStatus === 'active';
+ const trialExpiredWall = inTrial && !hasExternalSub && trialStatus === 'expired';
  const trialDaysRemaining = showTrialCountdown ? daysRemainingInTrial(trialState) : 0;
  const trialEndsAt = (vr.directory_trial_ends_at as string | null) ?? null;
 
@@ -98,6 +102,7 @@ export default async function DashboardLayout({
  trialCountdown={showTrialCountdown}
  trialDaysRemaining={trialDaysRemaining}
  trialEndsAt={trialEndsAt}
+ trialHasCard={hasExternalSub}
  >
  {children}
  </DashboardShell>

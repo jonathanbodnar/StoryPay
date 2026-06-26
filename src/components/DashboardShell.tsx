@@ -38,6 +38,7 @@ export default function DashboardShell({
   trialCountdown = false,
   trialDaysRemaining = 0,
   trialEndsAt = null,
+  trialHasCard = false,
   children,
 }: {
   venue: Venue;
@@ -60,6 +61,8 @@ export default function DashboardShell({
   trialDaysRemaining?: number;
   /** ISO trial end date (for the countdown banner copy). */
   trialEndsAt?: string | null;
+  /** True when a card is already on file — the trial will auto-charge at the end. */
+  trialHasCard?: boolean;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -187,29 +190,51 @@ export default function DashboardShell({
         <main className={`mx-auto flex w-full flex-1 flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
           <OnboardingLauncher />
           {trialCountdown ? (
-            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex-1">
-                <span className="font-semibold">
-                  Venue Pro trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
-                </span>
-                {' '}
-                <span className="text-gray-500">
-                  {startEarlyError
-                    ? startEarlyError
-                    : trialEndsAt
-                      ? `Add a card to keep full access — you won't be charged until ${new Date(trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
-                      : "Add a card to keep full access when your trial ends."}
-                </span>
+            trialHasCard ? (
+              <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex-1">
+                  <span className="font-semibold">
+                    Bride Booking System trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
+                  </span>
+                  {' '}
+                  <span className="text-gray-500">
+                    {trialEndsAt
+                      ? `Your card will be charged $97/mo on ${new Date(trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}. Switch to Free anytime before then.`
+                      : 'Your card will be charged $97/mo when your trial ends. Switch to Free anytime before then.'}
+                  </span>
+                </div>
+                <Link
+                  href="/dashboard/directory-billing"
+                  className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
+                >
+                  Manage subscription
+                </Link>
               </div>
-              <button
-                type="button"
-                onClick={startTrialEarly}
-                disabled={startEarlyBusy}
-                className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black disabled:opacity-60"
-              >
-                {startEarlyBusy ? 'Starting…' : 'Start Venue Pro early'}
-              </button>
-            </div>
+            ) : (
+              <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex-1">
+                  <span className="font-semibold">
+                    Venue Pro trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
+                  </span>
+                  {' '}
+                  <span className="text-gray-500">
+                    {startEarlyError
+                      ? startEarlyError
+                      : trialEndsAt
+                        ? `Add a card to keep full access — you won't be charged until ${new Date(trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
+                        : "Add a card to keep full access when your trial ends."}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={startTrialEarly}
+                  disabled={startEarlyBusy}
+                  className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black disabled:opacity-60"
+                >
+                  {startEarlyBusy ? 'Starting…' : 'Start Venue Pro early'}
+                </button>
+              </div>
+            )
           ) : null}
 
           {directoryBillingPending ? (

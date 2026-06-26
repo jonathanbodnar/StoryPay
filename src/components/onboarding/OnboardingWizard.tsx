@@ -1077,9 +1077,9 @@ function ActivateStep({ onContinue, alreadyActivated = false }: { onContinue: ()
         <Sparkles size={24} style={{ color: BRAND }} />
       </div>
       <h2 className="text-xl font-semibold text-gray-900">See your Bride Booking System work</h2>
-      <p className="mt-1 text-pretty text-sm leading-relaxed text-gray-500">
-        Send yourself a test inquiry and watch it land in your inbox in real time.
-        It&apos;s exactly what happens the moment a bride taps your link.
+      <p className="mt-1 text-sm leading-relaxed text-gray-500">
+        <span className="block">Send yourself a test inquiry and watch it land in your inbox in real time.</span>
+        <span className="block">It&apos;s exactly what happens the moment a bride downloads your venue pricing and availability guide.</span>
       </p>
 
       {status === 'done' ? (
@@ -1294,7 +1294,8 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
         <p className="text-sm font-medium text-emerald-600">No charge today</p>
         <h2 className="mt-1 text-xl font-semibold text-gray-900">Access your Bride Booking System</h2>
         <p className="mt-1 text-sm text-gray-500">
-          Add a card to publish your page and unlock your dashboard. You won&apos;t be charged{trialDate ? ` until ${trialDate}` : ' during your free trial'}, and you can cancel anytime.
+          <span className="block">Add a card to publish your page and unlock your dashboard.</span>
+          <span className="block">You won&apos;t be charged{trialDate ? ` until ${trialDate}` : ' during your free trial'}, and you can cancel anytime.</span>
         </p>
       </div>
 
