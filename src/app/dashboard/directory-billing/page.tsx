@@ -16,6 +16,7 @@ import {
   Megaphone,
   Receipt,
   ShieldCheck,
+  Gem,
   Sparkles,
   X,
   AlertTriangle,
@@ -791,10 +792,10 @@ export default function DirectoryBillingPage() {
                         <div className="rounded-xl border border-gray-300 bg-white p-4">
                           <div className="flex items-center gap-2 mb-3">
                             <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#1b1b1b] text-white">
-                              <Sparkles size={11} />
+                              <Gem size={11} />
                             </span>
                             <span className="text-[13px] font-bold tracking-tight text-gray-900">
-                              The Bride Booking System
+                              The Bride Booking System™
                             </span>
                           </div>
                           <div className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
