@@ -786,10 +786,13 @@ export async function changeVenuePlan(
           // downgrade. Any other error is surfaced with detail so it's
           // diagnosable instead of a generic failure.
           const msg = e instanceof Error ? e.message : 'unknown error';
-          if (!/404|not found|no such|does not exist/i.test(msg)) {
+          // A subscription that's already gone (404 / not found) or already
+          // cancelled in LunarPay is effectively the state we want — proceed
+          // with the local downgrade rather than blocking the user.
+          if (!/404|not found|no such|does not exist|already cancel/i.test(msg)) {
             throw new Error(`Could not cancel current subscription: ${msg}`);
           }
-          console.warn('[changeVenuePlan] cancel returned not-found, proceeding with downgrade:', msg);
+          console.warn('[changeVenuePlan] cancel reported already-gone, proceeding with downgrade:', msg);
         }
       }
       await recordBillingEvent(
@@ -1213,9 +1216,12 @@ export async function cancelVenueSubscription(venueId: string): Promise<void> {
       try {
         await cancelSubscription(secret, subId);
       } catch (e) {
-        throw new Error(
-          `Could not cancel subscription with LunarPay: ${e instanceof Error ? e.message : 'unknown error'}`,
-        );
+        const msg = e instanceof Error ? e.message : 'unknown error';
+        // Already-gone / already-cancelled is the desired end state — proceed.
+        if (!/404|not found|no such|does not exist|already cancel/i.test(msg)) {
+          throw new Error(`Could not cancel subscription with LunarPay: ${msg}`);
+        }
+        console.warn('[cancelVenueSubscription] cancel reported already-gone, proceeding:', msg);
       }
     }
   }
