@@ -19,7 +19,9 @@ import {
   Radio, DollarSign, CalendarDays, UserCheck,
   Link2, Mail, Bell, Copy, Download, Check, X,
   Send, Zap, TrendingDown, Inbox, MessageCircle, CalendarCheck, Heart,
+  Gem, Lock,
 } from 'lucide-react';
+import NextLink from 'next/link';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, Cell,
@@ -64,6 +66,7 @@ type AnalyticsPayload = {
   social_clicks: Record<string, number>;
   funnel: FunnelStep[];
   prior: PriorMetrics;
+  is_free_plan?: boolean;
   _migration_pending?: boolean;
 };
 
@@ -519,8 +522,13 @@ export default function ListingAnalyticsPage() {
 
   const d = data;
 
+  const isFreePlan = Boolean(data?.is_free_plan);
+
   return (
-    <div className="px-4 py-8 space-y-8">
+    <div className={`relative px-4 py-8 space-y-8${isFreePlan ? ' select-none' : ''}`}>
+
+      {/* ── Page body (greyed out on free plan — overlay sits above) ────── */}
+      <div className={isFreePlan ? 'pointer-events-none opacity-30 blur-[1px]' : undefined}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -1116,6 +1124,41 @@ export default function ListingAnalyticsPage() {
           <Radio size={10} className="inline" /> Live panel refreshes every 30 seconds.
         </p>
       </div>
+
+      </div>{/* end greyed-out body */}
+
+      {/* ── Free-plan upgrade overlay ───────────────────────────────────── */}
+      {isFreePlan && (
+        <div className="absolute inset-0 z-20 flex items-start justify-center pt-32 px-4">
+          {/* Blurred backdrop over the content */}
+          <div className="absolute inset-0 bg-white/60 backdrop-blur-sm rounded-none" />
+          {/* Upgrade card */}
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl p-8 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#1b1b1b]">
+              <Gem size={22} className="text-white" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">
+              Bride Booking System™ Analytics
+            </h2>
+            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+              Analytics, lead insights, real-time visitors, and your booking funnel are included in the{' '}
+              <span className="font-semibold text-gray-800">Bride Booking System</span> plan.
+              Upgrade to unlock the full dashboard.
+            </p>
+            <div className="flex flex-col gap-3">
+              <NextLink
+                href="/dashboard/directory-billing"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-6 py-3 text-sm font-semibold text-white hover:bg-black transition-colors"
+              >
+                <Lock size={14} /> Upgrade to unlock
+              </NextLink>
+              <p className="text-[11px] text-gray-400">
+                14-day free trial · Cancel anytime
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

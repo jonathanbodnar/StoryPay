@@ -24,10 +24,29 @@ export async function GET(req: Request) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, slug, gallery_images, cover_image_url')
+    .select('id, name, slug, gallery_images, cover_image_url, directory_plan_id')
     .eq('id', venueId)
     .maybeSingle();
   if (!venue) return NextResponse.json({ error: 'No venue' }, { status: 404 });
+
+  // Determine whether this venue is on the free plan so the analytics page
+  // can show an upgrade overlay instead of live data.
+  const planId = (venue as Record<string, unknown>).directory_plan_id as string | null;
+  let isFreePlan = false;
+  if (planId) {
+    const { data: plan } = await supabaseAdmin
+      .from('directory_plans')
+      .select('price_monthly_cents, is_legacy, slug')
+      .eq('id', planId)
+      .maybeSingle();
+    if (plan) {
+      const p = plan as Record<string, unknown>;
+      const cents = Number(p.price_monthly_cents ?? 0);
+      const slug  = String(p.slug ?? '').toLowerCase();
+      const legacy = Boolean(p.is_legacy);
+      isFreePlan = !legacy && cents === 0 && !slug.includes('legacy');
+    }
+  }
 
   const url = new URL(req.url);
   const fromParam = url.searchParams.get('from');
@@ -119,6 +138,7 @@ export async function GET(req: Request) {
     venue_name: String((venue as Record<string,unknown>).name ?? ''),
     venue_slug: String((venue as Record<string,unknown>).slug ?? ''),
     gallery_images: galleryImages,
+    is_free_plan: isFreePlan,
     ...buildMetrics(current, leads ?? [], days, until),
     prior: buildPriorMetrics(prior, priorLeads ?? []),
   });
