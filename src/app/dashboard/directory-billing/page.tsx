@@ -25,30 +25,35 @@ import DashboardBookingModal from '@/components/DashboardBookingModal';
 const BRAND = '#1b1b1b';
 
 /**
- * Curated plan feature list shown as check/X rows inside each plan's
- * accordion body. `key` maps to a feature_flags JSONB key on directory_plans.
+ * Plan feature checklist shown inside each plan's accordion body. The list is
+ * cumulative: `minTier` is the lowest plan tier (0 = cheapest plan, ascending
+ * by price) that unlocks the feature. A plan shows a check when its tier ≥
+ * minTier, otherwise a red lock. This mirrors the public pricing page where
+ * each higher tier is "everything below, plus …".
+ *
+ *   Tier 0 → Bride Booking System Free
+ *   Tier 1 → Bride Booking System ($/mo)
+ *   Tier 2 → All-Inclusive
+ *   Tier 3 → All-Inclusive Concierge
  */
-const PLAN_FEATURES: { key: string; label: string; outcome: string }[] = [
-  { key: 'dashboard_home',           label: 'Dashboard',                    outcome: 'Central hub for your venue activity and metrics' },
-  { key: 'contacts',                 label: 'Contacts & CRM',               outcome: 'Manage every lead and client in one place' },
-  { key: 'conversations',            label: 'Conversations inbox',          outcome: 'Unified inbox for all client messages and inquiries' },
-  { key: 'leads',                    label: 'Lead management',              outcome: 'Track, qualify, and convert every inquiry into a booking' },
-  { key: 'calendar',                 label: 'Calendar & scheduling',        outcome: 'Block dates, track bookings, and sync availability' },
-  { key: 'payments',                 label: 'Payments & proposals',         outcome: 'Send proposals, collect deposits, and track payments' },
-  { key: 'marketing',                label: 'Email marketing',              outcome: 'Campaigns, automations, and audience management' },
-  { key: 'listing',                  label: 'Venue directory listing',      outcome: 'Appear in the wedding directory so couples can find you' },
-  { key: 'nav_listing_pricing_guide',label: 'Pricing & availability guide', outcome: 'Share your pricing with couples in a polished branded guide' },
-  { key: 'ai_assistant',             label: 'Ask AI assistant',             outcome: 'Draft emails, respond to leads, and generate content instantly' },
-  { key: 'reports',                  label: 'Analytics & reports',          outcome: 'Revenue insights, booking trends, and performance data' },
+const PLAN_FEATURES: { label: string; outcome: string; minTier: number }[] = [
+  { label: 'Venue Listing',        outcome: 'Appear in the wedding directory so couples can find you',  minTier: 0 },
+  { label: 'Lead Capture',         outcome: 'Capture every inquiry from your listing and guide',         minTier: 0 },
+  { label: 'Proposals & Payments', outcome: 'Send proposals, collect deposits, and track payments',      minTier: 0 },
+  { label: 'Contact Management',   outcome: 'Manage every lead and client in one place',                 minTier: 0 },
+  { label: 'Reviews',              outcome: 'Collect and showcase reviews on your listing',              minTier: 1 },
+  { label: 'Pricing Guide',        outcome: 'Share your pricing with couples in a polished branded guide', minTier: 1 },
+  { label: 'Speed to Lead System', outcome: 'Reply the instant a bride inquires',                        minTier: 1 },
+  { label: 'Lead Inbox',           outcome: 'Track, qualify, and convert every inquiry into a booking',  minTier: 1 },
+  { label: 'Conversations',        outcome: 'Unified inbox for all client messages and inquiries',       minTier: 1 },
+  { label: 'Booking Calendar',     outcome: 'Block dates, track bookings, and sync availability',        minTier: 1 },
+  { label: 'Analytics',            outcome: 'Revenue insights, booking trends, and performance data',    minTier: 1 },
+  { label: 'Full Venue Software',  outcome: 'The complete venue management platform',                    minTier: 1 },
+  { label: 'Managed Marketing',    outcome: 'We bring couples to you',                                   minTier: 2 },
+  { label: 'Verified Listing',     outcome: 'Build instant trust with a verified badge',                 minTier: 2 },
+  { label: 'Venue Concierge Team', outcome: 'Our team works your leads',                                 minTier: 3 },
+  { label: 'Sponsored Listing',    outcome: 'Show up first when brides book',                            minTier: 3 },
 ];
-
-/** Returns true if a plan's feature_flags includes the given feature key. */
-function planIncludesFeature(featureFlags: Record<string, unknown>, key: string): boolean {
-  if (Boolean(featureFlags[key])) return true;
-  // 'nav_listing_pricing_guide' is implicitly included when the entire 'listing' group is on.
-  if (key === 'nav_listing_pricing_guide' && Boolean(featureFlags.listing)) return true;
-  return false;
-}
 
 type Plan = {
   id: string;
@@ -439,22 +444,29 @@ export default function DirectoryBillingPage() {
 
   const plans = useMemo(() => {
     if (!summary) return [] as Plan[];
-    const currentPlanId = summary.current_plan?.id ?? null;
-    const sorted = [...summary.plans]
-      .filter((p) => {
-        // Hide the Booking System plan unless the venue is currently on it
-        const isBookingSystem = /booking.?system/i.test(p.slug ?? '') || /booking.?system/i.test(p.name);
-        return !isBookingSystem || p.id === currentPlanId;
-      })
-      .sort((a, b) => (a.price_monthly_cents ?? 0) - (b.price_monthly_cents ?? 0));
-    return sorted;
+    // Show every plan the venue is offered, ordered cheapest → priciest. (We no
+    // longer hide "Booking System" plans — the Free plan is now named
+    // "Bride Booking System Free" and must appear alongside the others.)
+    return [...summary.plans].sort((a, b) => (a.price_monthly_cents ?? 0) - (b.price_monthly_cents ?? 0));
   }, [summary]);
 
-  // The highest-priced plan is always treated as contact_sales (demo call)
-  // regardless of the DB flag — no manual migration step required.
-  const topPlanId = useMemo(() => {
-    if (plans.length === 0) return null;
-    return [...plans].sort((a, b) => (b.price_monthly_cents ?? 0) - (a.price_monthly_cents ?? 0))[0]?.id ?? null;
+  // The cheapest *paid* plan is the only self-serve paid tier. Any plan priced
+  // above it (e.g. the All-Inclusive tiers) is contact-sales: price hidden,
+  // upgrade replaced with "Book a Demo Call". This keeps premium pricing off
+  // the page entirely — it's only ever shared on a demo call.
+  const basePaidCents = useMemo(() => {
+    const paid = plans.map((p) => p.price_monthly_cents ?? 0).filter((c) => c > 0);
+    return paid.length ? Math.min(...paid) : 0;
+  }, [plans]);
+
+  // Ordinal tier of each plan (0 = cheapest) used to drive the cumulative
+  // feature checklist — higher tiers include everything below them.
+  const tierIndexById = useMemo(() => {
+    const m = new Map<string, number>();
+    [...plans]
+      .sort((a, b) => (a.price_monthly_cents ?? 0) - (b.price_monthly_cents ?? 0))
+      .forEach((p, i) => m.set(p.id, i));
+    return m;
   }, [plans]);
 
   if (loading && !summary) {
@@ -619,9 +631,10 @@ export default function DirectoryBillingPage() {
               const cents = plan.price_monthly_cents ?? 0;
               // contact_sales: hide price + show "Book a call" only for non-subscribers.
               // Current subscribers always see full self-serve controls.
-              // Treat as contact_sales if the DB flag is set OR if this is
-              // the highest-priced plan and the venue isn't already on it.
-              const isContactSales = (Boolean(plan.contact_sales) || plan.id === topPlanId) && !isCurrent;
+              // Treat as contact_sales if the DB flag is set OR if the plan is
+              // priced above the base paid tier (the All-Inclusive tiers).
+              const isContactSales =
+                (Boolean(plan.contact_sales) || (cents > 0 && cents > basePaidCents)) && !isCurrent;
               const inclusion = summary.plan_addon_inclusion[plan.id] || { verified: false, sponsored: false };
               const planFF = (plan.feature_flags ?? {}) as Record<string, unknown>;
               const conciergeAvailable = Boolean(planFF.addon_concierge_available);
@@ -725,15 +738,16 @@ export default function DirectoryBillingPage() {
                         </div>
                         <div className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
                           {PLAN_FEATURES.map((f) => {
-                            const on = planIncludesFeature(plan.feature_flags, f.key);
+                            const tier = tierIndexById.get(plan.id) ?? 0;
+                            const on = tier >= f.minTier;
                             return (
-                              <div key={f.key} className="flex items-start gap-2.5">
+                              <div key={f.label} className="flex items-start gap-2.5">
                                 <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
                                   on ? 'bg-emerald-100 text-emerald-600' : 'bg-red-50 text-red-400'
                                 }`}>
                                   {on
                                     ? <Check size={10} strokeWidth={3} />
-                                    : <X size={10} strokeWidth={3} />}
+                                    : <Lock size={9} strokeWidth={3} />}
                                 </span>
                                 <div className="min-w-0">
                                   <div className="text-xs font-semibold leading-tight text-gray-900">
