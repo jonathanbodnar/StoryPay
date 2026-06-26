@@ -1770,30 +1770,34 @@ These tags can be used in workflows to trigger follow-up sequences or remove the
       {
         id: 'pay-new',
         title: 'Creating a new proposal or invoice',
-        tags: ['new proposal', 'new invoice', 'create', 'send', 'draft'],
+        tags: ['new proposal', 'new invoice', 'create', 'send', 'draft', 'manual payment', 'cash', 'check', 'collect'],
         body: `Go to Payments → New in the sidebar.
 
 Step 1 — Choose mode: Proposal (includes a signable contract) or Invoice (line items only, no contract).
 
-Step 2 — Find or create the customer. Type their name or email in the customer search box. If they don't exist yet, fill in the manual fields.
+Step 2 — Find or create the customer. Type their name or email in the search box. If they're new, fill in the manual fields.
 
-Step 3 — For proposals, choose a template (or start from scratch) and edit the contract text. The AI Proposal Generator can draft contract language for you — click the "Generate with AI" button and describe your event.
+Step 3 — For proposals, choose a template (or start from scratch) and edit the contract text. The AI Proposal Generator can draft contract language for you — click "Generate with AI". If you pick a package that has a default contract template linked, the line items AND the contract load automatically.
 
-Step 4 — Add line items. Type a product name (autocompletes from your saved products) or enter a custom item. Each line has a description, quantity, and price. A processing fee line is added automatically.
+Step 4 — Add line items. Type a product name (autocompletes from saved products) or enter a custom item.
 
 Step 5 — Choose a payment type:
 - Full payment — customer pays the full amount at once
-- Installment plan — set a deposit, a second payment, and a final balance with due dates
-- Subscription — recurring charges on a weekly/monthly schedule
+- Installment plan — deposit, second payment, final balance with due dates
+- Subscription — recurring weekly/monthly charges
 
-Step 6 — Click Send to email the proposal/invoice to the customer, or Save Draft to keep it for later.
+Step 6 — Choose how you'll collect payment:
+- Online — client pays by card or bank transfer (ACH) through the secure StoryPay link
+- Manually — you collect cash or check directly. The client-facing page shows a "venue collects directly" message instead of a payment form. For manual proposals, you can also uncheck "Require client e-signature" if you'll get a wet signature in person.
 
-The customer receives a branded email with a link to view, sign (if proposal), and pay online.`,
+Step 7 — Click Send to email the proposal/invoice to the customer, or Save Draft to keep it for later.
+
+The customer receives a branded email with a link to view, sign (if required), and pay.`,
       },
       {
         id: 'pay-templates',
         title: 'Proposal templates',
-        tags: ['template', 'contract', 'reuse', 'edit template'],
+        tags: ['template', 'contract', 'reuse', 'edit template', 'package', 'auto-fill', 'auto load'],
         body: `Templates save your standard contract text so you don't re-type it every time.
 
 To create a template: Payments → Proposal Templates → New Template.
@@ -1805,12 +1809,14 @@ To create a template: Payments → Proposal Templates → New Template.
 
 To use a template: when creating a new proposal, choose the template from the dropdown. All the text and signing fields load automatically.
 
-To edit an existing template: Payments → Proposal Templates → click Edit on any template card.`,
+To edit an existing template: Payments → Proposal Templates → click Edit on any template card.
+
+Linking a template to a package: go to Offerings → edit a bundle/package → "Default contract template" dropdown. Now when a venue owner picks that package while building a proposal, it auto-fills both the line items AND the contract body in one step — no manual template selection needed.`,
       },
       {
         id: 'pay-status',
         title: 'Proposal statuses explained',
-        tags: ['status', 'draft', 'sent', 'signed', 'paid', 'cancelled', 'refunded', 'partial_refund', 'expired', 'declined', 'opened'],
+        tags: ['status', 'draft', 'sent', 'signed', 'paid', 'partially paid', 'cancelled', 'refunded', 'partial_refund', 'expired', 'declined', 'opened'],
         body: `Each proposal moves through these statuses:
 
 - Draft — saved but not yet sent to the customer
@@ -1818,15 +1824,99 @@ To edit an existing template: Payments → Proposal Templates → click Edit on 
 - Opened — the customer has opened the proposal link
 - Signed — the customer completed the e-signature
 - Paid — the full payment has been received
+- Partially Paid — one or more manual payments have been recorded but the full balance is not yet paid (manual collection only)
 - Refunded — a full refund has been processed
 - Partial Refund — a partial refund has been issued (some payment retained)
 - Expired — the proposal passed its due date without being signed
 - Cancelled — manually cancelled by the venue
 - Declined — the customer declined the proposal
 
-You can resend the proposal email at any status by clicking Resend on the proposals list or on the customer profile.
+You can resend the proposal email at any status by clicking Resend on the proposals list, the detail page, or the contact profile.
 
-Refund tracking: when a proposal is refunded (full or partial), the refund date is recorded and appears in your Reports so you can sort and filter by refund date.`,
+Refund tracking: when a proposal is refunded (full or partial), the refund date is recorded in Reports.`,
+      },
+      {
+        id: 'pay-numbers',
+        title: 'Proposal and invoice numbers',
+        tags: ['invoice number', 'proposal number', '#1042', 'sequential', 'number', 'search by number', 'reference'],
+        body: `Every proposal and invoice gets an auto-incrementing sequential number (like #1042) so owners and couples can reference a specific booking without using an ID or token.
+
+Where numbers appear:
+- Proposals list — displayed under each client name
+- Proposal detail page — shown in the header next to the client name
+- Client-facing proposal page — shown as "Proposal #1042" or "Invoice #1042"
+- Invoice & receipt page — shown in the header and in the PDF
+- Receipt emails — included in the subject line and body
+- Transactions page — used as the invoice number instead of a random token slice
+
+Searching by number: on the Proposals list, type a number (e.g. "1042" or "#1042") in the search box to jump to that booking instantly.
+
+Numbers are sequential starting from 1001 and are assigned in the order proposals are created. Existing proposals were backfilled with numbers in creation order when the feature was activated.`,
+      },
+      {
+        id: 'pay-manual',
+        title: 'Recording cash and check payments manually',
+        tags: ['cash', 'check', 'manual payment', 'record payment', 'partial payment', 'payment ledger', 'collect manually', 'receipt'],
+        body: `When creating a proposal or invoice, choose "Manually" for how you'll collect payment. This is ideal for couples paying by cash or check.
+
+How the client experience works:
+- The client's proposal page shows contract text and (optionally) a signature step, but no online payment form.
+- Instead it shows a message that the venue will collect payment directly.
+
+Recording a payment:
+1. Go to Payments → Proposals and find the booking.
+2. Click "Record payment" (visible on manual proposals in the Actions column, or at the top of the proposal detail page).
+3. Enter the amount, choose Cash / Check / Other, optionally enter a check number and a note.
+4. Click Save.
+
+You can record multiple partial payments — each one updates the running total and the proposal status (Partially Paid → Paid once the balance reaches zero).
+
+Every recorded payment gets a sequential payment number (#2001, #2002…) so it's easy to reference in conversations or receipt emails.
+
+After each payment, a branded receipt email is automatically sent to the client. The receipt shows the payment amount, method, and remaining balance prominently. If the balance is fully paid, it says "Your balance is now paid in full." The receipt includes a "View all payments" button that links to the downloadable invoice page.
+
+To delete a mistaken payment: open the Record Payment modal and click the trash icon on that payment row.`,
+      },
+      {
+        id: 'pay-detail',
+        title: 'Proposal detail page (booking overview)',
+        tags: ['detail page', 'booking', 'timeline', 'ledger', 'payment history', 'proposal overview', 'all actions'],
+        body: `Every proposal and invoice has a dedicated detail page at /dashboard/proposals/[id].
+
+To open it: click any client name in the Payments → Proposals list. (The pencil/edit icon still goes to the edit form.)
+
+What the detail page shows:
+- Header: client name, sequential #number (e.g. #1042), status badge
+- Money summary: Total / Paid to date / Balance — three cards at a glance
+- Booking timeline: a horizontal step-by-step view showing Created → Sent → Viewed → Signed → Deposit/Paid → Balance, with checkmarks and dates as each step completes
+- Payment ledger: every payment recorded against this booking — numbered (#2001, #2002…), with method, date, and amount
+- Document: the full contract/invoice body
+- Quick actions: Copy link, View proposal, Invoice & receipt, Resend, Record payment (manual proposals), Edit
+
+The timeline gives you a bird's-eye view of where in the process a couple is. Instead of opening the edit form to check if someone has signed, you can open the detail page and see the full history at once.`,
+      },
+      {
+        id: 'pay-pdf',
+        title: 'Downloading a branded invoice or receipt PDF',
+        tags: ['PDF', 'download', 'invoice PDF', 'receipt PDF', 'print', 'branded', 'parents', 'forward'],
+        body: `Every proposal and invoice has a public receipt page at /invoice/[proposalId]. The "Invoice & receipt" button on the proposal detail page and the link in receipt emails both point here.
+
+What the page shows:
+- Venue logo, brand color, and contact info
+- Invoice/proposal number (e.g. #1042)
+- Bill-to details (client name and email)
+- Line items and total
+- Status badge: Paid in full / Partially paid / Balance due
+- Paid to date and remaining balance if applicable
+- Full payment ledger — every payment with its number, method, and date
+
+Downloading the PDF:
+Click the "Download PDF" button at the top of the page. The PDF is generated instantly in the browser using your venue's brand color and includes the full payment ledger and balance summary.
+
+Printing:
+Click the "Print" button to use the browser's native print dialog. The page is print-optimized (white background, no navigation chrome).
+
+This page is public and shareable — couples can forward the link to parents or anyone helping pay. No login is required to view it.`,
       },
       {
         id: 'pay-installments',
@@ -3476,84 +3566,116 @@ Tip: write the description as an outcome — "I want to be able to X so that Y" 
       {
         id: 'billing-plans-overview',
         title: 'Understanding your subscription plans',
-        tags: ['plans', 'billing', 'subscription', 'upgrade', 'downgrade', 'free', 'paid', 'directory billing', 'pricing', 'accordion', 'rollover', 'self-serve', 'payment method', 'card', 'cancel', 'refund'],
-        body: `Your storyvenue.com directory subscription is managed at /dashboard/directory-billing.
+        tags: ['plans', 'billing', 'subscription', 'upgrade', 'downgrade', 'free', 'paid', 'directory billing', 'pricing', 'trial', '14 day', '$97', 'bride booking system', 'all-inclusive', 'self-serve', 'payment method', 'card', 'cancel', 'refund', 'settings billing'],
+        body: `Your StoryVenue subscription is managed at Settings → Billing (/dashboard/directory-billing).
 
-The page shows your available plans as accordion rows. Click any row to expand it and see the full feature comparison: green checkmarks show what's included, red X marks show what isn't.
+The four plans (shown in this order):
+1. Bride Booking System™ Free — free forever. Includes: Venue Listing, Reviews, Pricing Guide, Speed to Lead System, Lead Inbox, Conversations, Booking Calendar, Proposals & Payments, Contact Management. Does NOT include Analytics.
+2. Bride Booking System™ — $97/month. Everything in Free plus the Analytics dashboard.
+3. All-Inclusive — higher tier with additional features. Price is only shown during a demo call (no price listed on the page).
+4. All-Inclusive Concierge — includes AI Concierge. Price shown on demo call only.
 
-Your active plan is identified with a colored "Active plan" pill. All other plans are collapsed by default.
+Your active plan is identified with an "Active plan" badge.
 
-If you are on a legacy (grandfathered) plan, the billing page shows a locked screen with your plan name, a "Billing managed directly" banner, and a full list of all included features and add-ons. Contact your account manager for any changes.
+The Bride Booking System™ features are grouped together in a bordered box on the billing page so you can clearly see what the core product covers.
 
 Upgrading or downgrading:
-- Click any plan row to expand it and review its features
-- Look for the upgrade/downgrade button inside the expanded plan
-- Plan changes take effect at your next renewal date — you keep access to current features until then (subscription rollover)
-- Add-on changes (Verified, Sponsored, Venue Concierge) also follow the rollover model
+- Bride Booking System™ ↔ Free: self-serve — use the upgrade/downgrade button on the billing page
+- All-Inclusive and All-Inclusive Concierge: click the button to schedule a demo call — these plans require speaking with the StoryVenue team first
+
+14-day free trial (new accounts):
+- When you complete onboarding and enter your card, a 14-day free trial of Bride Booking System™ begins automatically
+- A countdown ribbon appears at the top of your dashboard showing days remaining
+- After 14 days, if you haven't downgraded to Free, your card is charged $97/month — there is NO automatic downgrade
+- You can downgrade to Free at any time from the billing page before the trial ends
+
+Feature gating:
+- Features not in your plan show a lock icon in the sidebar
+- The Bride Booking System™ analytics page is greyed out (blurred) on the Free plan with an upgrade prompt
+- AI Concierge is only available on plans where StoryVenue has enabled the AI Concierge checkbox — the toggle is greyed out on unsupported plans
 
 Managing your payment method:
-- Update your card or payment method at any time from the billing page
-- The Add/Update Card option is always available
+- Update your card at any time from the billing page
 - When swapping payment methods, existing trial periods and renewal dates are preserved
 
-Feature gating (locked menu items):
-- If a feature isn't in your plan, its sidebar menu item shows a lock icon
-- Clicking a locked item opens an upgrade prompt — the feature stays inaccessible until you upgrade
-- You can see every available feature listed (nothing is hidden) so you always know what's on higher plans
-- Going directly to a locked page's URL shows an inline locked screen
-
-Trial periods:
-- If a plan has an active trial, the trial details appear on that plan's card
-- Trials can be days, weeks, months, years, or "forever"
-- Only new signups during the trial window receive the trial — existing accounts are not affected
+Billing descriptor: charges appear on your statement as "StoryVenue."
 
 Cancellation:
 - Cancel from the billing page at any time
 - Access continues until the end of the current billing cycle
-- Free and legacy plans do not require cancellation
 
-Refunds:
-- Subscription refunds are processed through your StoryPay merchant account
-- Contact your account manager for refund requests
-- ACH refunds take 3–5 business days to settle (same as card refunds)`,
+Legacy plans:
+- If you are on a Legacy Plan, the billing page shows a "Billing managed directly" banner
+- Legacy plans include all add-ons at no extra charge and are fully managed by the StoryVenue team
+- Contact your account manager for any changes to a legacy plan`,
       },
       {
         id: 'billing-verified-sponsored',
         title: 'Verified, Sponsored, and Concierge add-ons',
-        tags: ['verified', 'sponsored', 'concierge', 'badge', 'listing', 'add-on', 'addon', '$19', '$99', '$499', 'promote', 'visibility', 'ai', 'sms', 'automation'],
-        body: `StoryVenue offers three optional add-ons that enhance your venue's presence and capabilities.
+        tags: ['verified', 'sponsored', 'concierge', 'badge', 'listing', 'add-on', 'addon', '$19', '$99', '$499', 'promote', 'visibility', 'ai', 'sms', 'automation', 'greyed out', 'demo', 'all-inclusive concierge'],
+        body: `StoryVenue offers add-ons that enhance your listing and capabilities.
 
 Verified ($19/month):
 - Displays a verified badge on your storyvenue.com listing
-- Signals to couples that your venue is confirmed legitimate
-- Price may change; the current price is always shown on the /dashboard/listing/directory page
+- Signals to couples your venue is confirmed legitimate
+- Available on all plans (included on some higher plans at no extra cost)
 
 Sponsored ($99/month):
 - Promotes your listing more prominently in directory search results
 - Increases discovery by couples browsing storyvenue.com
-- Price may change; current price is shown on the page
+- Available on all plans (included on some higher plans)
 
-Venue Concierge ($499/month):
+Venue Concierge (AI Concierge):
 - Enables the AI Concierge system — automated SMS-based lead engagement powered by AI
-- Automatically contacts new leads with personalized text messages over a 14-day sequence
-- Handles inbound replies, classifies intent, and escalates to humans when needed
-- Only available on plans that support it (plan-restricted availability)
-- Unlocks the Marketing → AI Concierge settings page
-- See the AI Concierge article for full details
+- Only available on the All-Inclusive Concierge plan (and any plan where the StoryVenue admin has specifically enabled it)
+- On plans without access, the AI Concierge toggle on the Bride Booking System settings page is greyed out and unclickable
+- Hovering the greyed-out toggle shows a tooltip: "Schedule a demo to learn more about this plan"
+- Clicking it opens a demo scheduling calendar (GHL calendar embed) — not an upgrade button
+- See the AI Concierge article for full system details
 
 Plan inclusion:
-- Highest paid plan: Verified and Sponsored are included automatically at no extra cost
-- Second-highest paid plan: Verified is included; Sponsored is an optional add-on
-- Free plan and first paid plan: neither is included, but both are available to purchase as add-ons
-- Venue Concierge: available as an add-on on plans that support it
-- Legacy (grandfathered) plans: all three add-ons are included automatically at no extra charge
+- All-Inclusive Concierge: Verified, Sponsored, and AI Concierge are all included
+- All-Inclusive: Verified and Sponsored included; AI Concierge not included
+- Bride Booking System™: Verified available as add-on; Sponsored as add-on; AI Concierge not available
+- Bride Booking System™ Free: both available as add-ons; AI Concierge not available
+- Legacy plans: all add-ons included automatically at no extra charge
 
 Managing your add-ons:
 - Go to sidebar → Verified & Sponsored (or /dashboard/listing/directory)
 - Toggle add-ons on or off
-- Pricing and your current status are shown clearly on the page
-- All add-ons can be changed at any time regardless of your base plan
+- Pricing and your current status are shown on the page
 - Add-on changes follow the subscription rollover model — changes take effect at your next renewal`,
+      },
+      {
+        id: 'billing-trial',
+        title: '14-day free trial and credit card requirement',
+        tags: ['trial', '14 day', 'credit card', 'cc gate', 'hard gate', 'onboarding', 'go live', 'access', '$97', 'auto charge', 'downgrade', 'cancel trial', 'ribbon'],
+        body: `All new StoryVenue accounts (signed up after June 25, 2026) must complete a 4-step onboarding to go live.
+
+The 4 onboarding steps:
+1. Connect — set up your StoryPay merchant account for payment processing
+2. Details — fill in your listing information
+3. Go live — publish your listing (a test lead is sent to your inbox so you can see how it works)
+4. Access — enter your credit card to start your 14-day free trial of Bride Booking System™
+
+The credit card is required to proceed. There is no way to skip or close the modal until the card step is complete.
+
+After entering your card:
+- Your 14-day free trial begins immediately
+- A countdown ribbon appears at the top of your dashboard
+- You have full access to Bride Booking System™ features during the trial
+- If you take no action, your card is automatically charged $97/month when the trial ends
+
+To stay on the free plan:
+- Go to Settings → Billing before the trial ends
+- Click the downgrade button on the Bride Booking System™ Free plan
+- Your listing and payments stay active; automations switch off
+
+Important:
+- There is NO automatic downgrade at trial end — you must actively choose to downgrade
+- Existing accounts (signed up before June 25, 2026) are NOT subject to the CC gate — they can use the onboarding checklist at their own pace
+- Legacy Plan accounts are fully exempt from the trial and CC gate
+- Billing statements read as "StoryVenue"`,
       },
       {
         id: 'billing-pricing-guide',
@@ -3904,20 +4026,20 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/marketing/ai-concierge':    ['mkt-ai-concierge', 'mkt-system-vars', 'me-workflows', 'conversations-overview'],
 
   // Payments — new proposal / invoice
-  '/dashboard/payments/new':        ['pay-new', 'pay-templates', 'pay-installments'],
-  '/dashboard/invoices/new':        ['pay-new', 'pay-installments', 'pay-subscriptions'],
+  '/dashboard/payments/new':        ['pay-new', 'pay-templates', 'pay-manual', 'pay-installments'],
+  '/dashboard/invoices/new':        ['pay-new', 'pay-manual', 'pay-installments', 'pay-subscriptions'],
 
-  // Proposals list + edit
-  '/dashboard/payments/proposals':  ['pay-status', 'pay-new', 'pay-templates'],
+  // Proposals list + edit + detail
+  '/dashboard/payments/proposals':  ['pay-status', 'pay-numbers', 'pay-manual', 'pay-new', 'pay-detail'],
   '/dashboard/proposals/templates': ['pay-templates', 'pay-new'],
-  '/dashboard/proposals':           ['pay-templates', 'pay-new', 'pay-status'],
+  '/dashboard/proposals':           ['pay-detail', 'pay-templates', 'pay-manual', 'pay-numbers', 'pay-status'],
 
   // Payment schedules
   '/dashboard/payments/installments':  ['pay-installments', 'pay-new'],
   '/dashboard/payments/subscriptions': ['pay-subscriptions', 'pay-new'],
 
   // Transactions
-  '/dashboard/transactions': ['pay-transactions', 'pay-status'],
+  '/dashboard/transactions': ['pay-transactions', 'pay-numbers', 'pay-status'],
 
   // Reports
   '/dashboard/reports': ['rep-overview', 'rep-download'],
@@ -3930,8 +4052,9 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
   '/dashboard/settings/notifications':   ['notif-settings', 'email-types', 'email-variables', 'sms-notifications', 'merge-vars-overview'],
   '/dashboard/settings/push':            ['push-settings', 'push-overview', 'push-install-app'],
-  '/dashboard/directory-billing':        ['billing-plans-overview', 'billing-verified-sponsored', 'gs-overview'],
-  '/dashboard/listing/directory':        ['billing-verified-sponsored', 'billing-plans-overview', 'listing-overview'],
+  '/dashboard/directory-billing':        ['billing-plans-overview', 'billing-trial', 'billing-verified-sponsored', 'gs-overview'],
+  '/dashboard/settings/billing':         ['billing-plans-overview', 'billing-trial', 'billing-verified-sponsored'],
+  '/dashboard/listing/directory':        ['billing-verified-sponsored', 'billing-plans-overview', 'billing-trial', 'listing-overview'],
   '/dashboard/listing/pricing-guide':    ['billing-pricing-guide', 'listing-overview', 'listing-photos'],
   '/dashboard/settings':                 ['gs-overview', 'gs-onboarding', 'int-legacy', 'int-inbound-email-status'],
 

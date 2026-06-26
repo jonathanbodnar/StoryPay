@@ -214,29 +214,55 @@ Five tabs covering every aspect of how your calendar works:
 - Connect at Settings → Integrations → FreshBooks card → Connect.
 - Redirects to FreshBooks for authorization. Charges sync as invoices automatically.
 
-## Proposals
+## Proposals & Invoices
 - Go to Payments → New to create a proposal or invoice.
-- Proposals require a template and include an e-signature step. Invoices do not.
+- Proposals include an e-signature step and a contract body; invoices are line-item-only (no contract, pre-signed).
 - Payment types: Full Payment, Installment Plan, Subscription.
-- Clients receive an email/SMS with a link to review, sign (if proposal), and pay.
-- Proposal statuses: Draft, Sent, Opened, Signed, Paid, Refunded, Partial Refund, Expired, Cancelled, Declined.
-- Resend a proposal from the Proposals list or contact profile using the refresh icon.
+- **How will you collect payment?** When creating a proposal or invoice you choose Online (StoryPay card/ACH) or Manually (cash or check). Manual proposals suppress the online payment form on the client-facing page and show a "venue collects directly" message instead.
+- **E-signature**: for manual proposals you can optionally uncheck "Require client e-signature" to skip the signing step when you'll get a wet signature in person.
+- Clients receive a branded email/SMS with a link to review, sign (if required), and pay.
+- **Proposal statuses**: Draft, Sent, Opened, Signed, Paid, Partially Paid, Refunded, Partial Refund, Expired, Cancelled, Declined. "Partially Paid" is set automatically when one or more manual payments cover part of the total but not all of it.
+- **Sequential proposal/invoice numbers** (#1042 style): every proposal and invoice gets an auto-incrementing sequential number visible on the proposals list, the detail page, the client-facing page, invoices, and receipt emails. Numbers start at 1001 for new accounts and backfill existing records in creation order. The proposals list is searchable by number (type "#1042" or just "1042" in the search box).
+- Resend a proposal from the Proposals list, the detail page, or the contact profile using the Resend button.
+
+## Recording Manual Payments (Cash / Check)
+- For proposals and invoices where you chose Manual collection, a "Record payment" button appears on the proposals list and on the proposal detail page.
+- Click it to open the payment modal: enter the amount, choose Cash / Check / Other, optionally enter a check number and a note, then Save.
+- Multiple partial payments are supported — click Record payment again for each installment.
+- Every payment (manual or online) is assigned a sequential payment number (#2001, #2002 …).
+- After each payment a branded receipt email is sent to the client. The receipt prominently states the remaining balance if any, or confirms "Your balance is now paid in full." The receipt includes a "View all payments" button linking to the downloadable invoice page.
+- The proposal status auto-updates to Partially Paid or Paid based on the running total vs the proposal price.
+- To delete a mistaken payment, open the Record Payment modal and click the trash icon on that row.
 
 ## Proposal Templates
 - Go to Payments → Proposal Templates to create and manage templates.
-- Use the WYSIWYG editor to write contract content.
-- Click Generate with AI to have AI draft a complete template.
-- Add signature fields (Signature, Printed Name, Date) at the bottom.
+- Use the WYSIWYG editor to write contract content. Click Generate with AI to draft a template.
+- Add signing fields (Signature, Printed Name, Date) at the bottom.
+- **Linking a template to a package**: in Offerings → edit a package → "Default contract template" dropdown. When you apply that package in the proposal builder the line items AND the contract body load automatically in one step. The contract is only auto-loaded if you haven't already written one — it never overwrites work you've already done.
+
+## Proposal Detail Page
+- Path: /dashboard/proposals/[id] — dedicated booking management page for each proposal/invoice.
+- Click any client name in the Proposals list to open their detail page (not the edit form).
+- Shows: sequential #number, money summary (Total / Paid / Balance), booking timeline (Created → Sent → Viewed → Signed → Deposit → Balance), numbered payment ledger, the full contract document, and all quick actions (copy link, view proposal, invoice & receipt, resend, record payment, edit).
+- The "Edit" button on the detail page still goes to the edit form for drafts or updates.
 
 ## Invoices
-- Go to Payments → New → Create Invoice for a one-off invoice without a template.
+- Go to Payments → New → Create Invoice for a one-off invoice without a contract.
 - Add multiple line items; total auto-calculates.
-- Clients receive it via email/SMS and pay online.
+- Clients receive it via email/SMS and pay online (or arrange manual payment if you chose Manual collection).
+
+## Invoice & Receipt PDF (Downloadable)
+- Path: /invoice/[proposalId] — public branded receipt page, shareable with clients.
+- Shows: venue logo/colors, invoice/proposal number, bill-to details, line items, totals, Paid/Partially Paid/Balance Due status, and the full payment ledger with every numbered payment (method, date, amount).
+- **Download PDF button** generates a branded PDF using your brand color — couples can download and forward to parents or keep for their records.
+- **Print button** opens the browser's native print dialog.
+- Receipt emails include a "View all payments" button that links here so clients always have access to the full history.
 
 ## Transactions
 - Charges tab: All paid transactions. Click Refund to issue a refund.
 - Payment Schedules tab: Installment plans.
 - Subscriptions tab: Recurring payments.
+- Transaction descriptions and invoice numbers now use the sequential proposal number (#1042) instead of a random token slice.
 
 ## Reports
 - 7 report types: Revenue, Proposals, Customer Summary, AR Aging, Payment Method Breakdown, Refunds, Bank Reconciliation.
@@ -683,9 +709,10 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 - How do I set up payment overdue reminders? Settings → Notifications → click "Payment Reminder" → configure up to 3 offsets (e.g. 1 day after due, 3 days after, 7 days after) in the Reminder schedule panel.
 - What are Verified and Sponsored listings? Add-ons you can enable for your storyvenue.com listing. Verified ($19/month) adds a trust badge; Sponsored ($99/month) boosts prominence in search results. Manage at Sidebar → Verified & Sponsored (or /dashboard/listing/directory).
 - What plans include Verified or Sponsored? Highest paid plan: both included. Second-highest: Verified included. Free and first paid plan: available as add-ons.
-- How do I see my subscription plan and upgrade? Go to /dashboard/directory-billing. Plans show as accordion rows with full feature comparisons. Click any plan to expand it and see what's included. Add-ons have checkboxes with live total updates.
-- What is a trial period on a plan? If the StoryVenue team has enabled a trial for a plan, new signups get that period free before billing starts. Trial details show on the plan card at /dashboard/directory-billing.
-- Why is a menu item locked or greyed out? That feature isn't included in your current plan. Click the locked item to see an upgrade prompt. Upgrade at /dashboard/directory-billing.
+- How do I see my subscription plan and upgrade? Go to Settings → Billing (/dashboard/directory-billing). Plans show as cards with full feature breakdowns. Bride Booking System Free and Bride Booking System™ have self-serve upgrade/downgrade buttons. All-Inclusive and All-Inclusive Concierge require scheduling a demo call.
+- What is the 14-day free trial? New accounts that enter a credit card during onboarding get 14 days free on Bride Booking System™. If you don't downgrade to Free before the trial ends, you're automatically charged $97/month. You can downgrade at any time from Settings → Billing.
+- Why is a menu item locked or greyed out? That feature isn't included in your current plan. Click the locked item to see an upgrade prompt. Upgrade at /dashboard/directory-billing. The Bride Booking System™ analytics page is blurred/overlaid for free-plan users.
+- Why is AI Concierge greyed out? AI Concierge is only available on the All-Inclusive Concierge plan (and any plan the StoryVenue admin has specifically enabled it on). Click the greyed-out toggle to open the demo scheduling calendar.
 - What is the Pricing & Availability Guide? A shareable guide for couples featuring your venue packages and pricing. Available on plans that include the pricing guide feature. Find it under Venue listing → Pricing Guide. AI can generate the copy for you.
 - How do I use merge variables in my emails? Use {{contact.first_name}}, {{venue.name}}, {{payment.amount}}, etc. Full reference at Marketing → Trigger Links & Tags page. Variable pickers are available in the Workflow builder, email builder sidebar, and Notifications page (click any pill to copy).
 - How do I upload images / files once and reuse them? Sidebar → **Media** — upload images or files (PDF, Word, Excel, PowerPoint, CSV, TXT — up to 25 MB each), copy the public URL, or pick from the library on Photos, email templates, forms, and Branding. Each row shows a "Used in" indicator so you know which pages a file is referenced from.
@@ -785,13 +812,28 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 - If your plan does not include the Pricing Guide, the lead form modal that allows couples to request the guide will be hidden from your public listing automatically — no broken links or placeholders.
 
 ## Subscription Plans, Add-ons & Trials (Directory Billing)
-- Path: /dashboard/directory-billing — your storyvenue.com directory subscription plan and billing management.
-- Four plans: Free, plus three paid tiers. Each plan is shown as an accordion row — click to expand and see a full feature comparison with green checkmarks (included) and red X marks (not included).
-- Active plan is identified with a colored "Active plan" pill; all plans are collapsed by default.
-- Feature gating and locked menu items: if a feature is not included in your current plan, its sidebar menu item appears with a lock icon. Clicking a locked item opens an upgrade prompt — the feature is not accessible until you upgrade. Direct URL access to a gated feature renders an inline locked screen. Menu items are never hidden completely — every venue can see what's available on higher plans.
-- Add-ons (Verified & Sponsored): available on all plans either as part of the plan or as monthly add-ons — see Verified & Sponsored Listings section below.
-- Trial periods: if a plan has an active trial configured by the StoryVenue team, it's shown on that plan's card. Trial periods can be days, weeks, months, years, or "forever" (permanent free access). Trials only apply to new signups during the period — existing accounts are unaffected.
-- Upgrading / downgrading: change plans at any time from /dashboard/directory-billing. Add-ons can also be toggled independently regardless of plan. The monthly total auto-updates as you select plan + add-ons.
+- Path: Settings → Billing (/dashboard/directory-billing) — manage your storyvenue.com directory subscription.
+- **Four plans** (displayed in this order on the billing page):
+  1. **Bride Booking System™ Free** — free tier; includes Venue Listing, Reviews, Pricing Guide, Speed to Lead System, Lead Inbox, Conversations, Booking Calendar, Proposals & Payments, Contact Management. Does NOT include Analytics.
+  2. **Bride Booking System™** — $97/month; everything in Free plus Analytics dashboard.
+  3. **All-Inclusive** — higher tier with additional features; price shown on demo call only (no price shown on billing page — contact sales).
+  4. **All-Inclusive Concierge** — highest tier including AI Concierge; price shown on demo call only.
+- Each plan is shown as a card with its included features. The Bride Booking System™ features are visually grouped together in a bordered box so venues can clearly see what the core product is.
+- **Active plan** is identified with a colored "Active plan" pill.
+- **Feature gating**: if a feature isn't in your current plan, its sidebar menu item shows a lock icon. Clicking it shows an upgrade prompt. Direct URL access to a gated feature shows an inline locked screen. The Bride Booking System™ analytics dashboard page is greyed out (blurred with an upgrade overlay) for free-plan users — they see it exists but need to upgrade to access it.
+- **Add-ons** (Verified & Sponsored): available as monthly add-ons or included on higher plans — see Verified & Sponsored Listings section below.
+- **Upgrading / downgrading**: change plans from Settings → Billing at any time. The All-Inclusive and All-Inclusive Concierge plans require scheduling a demo call — clicking their upgrade button opens the demo scheduling calendar.
+- **AI Concierge gating**: AI Concierge is only available on plans where the admin has enabled a checkbox in the directory plan settings. If your plan doesn't include it, the AI Concierge toggle is greyed out with a tooltip directing you to schedule a demo. You cannot enable AI Concierge without being on an eligible plan.
+
+## 14-Day Free Trial & CC Gate (New Account Onboarding)
+- New venue accounts must complete a 4-step onboarding modal to go live: **Connect** (StoryPay merchant account) → **Details** (listing info) → **Go live** (publish listing + send test lead) → **Access** (enter credit card).
+- **The credit card step is a hard gate** — you cannot access the full dashboard until a card is on file. The onboarding modal always re-opens until the card step is completed. There is no way to skip it.
+- After entering a card, a **14-day free trial** begins. The venue's listing goes live, the test lead lands in the inbox, and full dashboard access is granted.
+- **If the trial expires and the venue has not downgraded to Free**, the $97/month Bride Booking System™ charge is automatically applied. There is no auto-downgrade — venues must actively choose to downgrade before their trial ends if they want the free tier.
+- A trial countdown ribbon appears at the top of the dashboard throughout the trial period, showing days remaining and an option to downgrade.
+- **Grandfathered / pre-existing accounts** (signed up before June 25, 2026) are exempt from the CC gate. They can use the onboarding modal to build their listing/pricing guide without being forced to enter a card. If they are on a Legacy Plan, the modal popup is not shown at all.
+- **Legacy Plan accounts** are fully exempt — no modal gate, no trial, no auto-charge. Billing is managed directly by StoryVenue.
+- Billing statements read as "StoryVenue" (not StoryPay).
 
 ## Verified & Sponsored Listings
 - Path: /dashboard/listing/directory — manage your Verified and Sponsored listing status.
@@ -807,7 +849,8 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 ## AI Concierge (Automated SMS Lead Engagement)
 - Path: Marketing → AI Concierge (sidebar flyout).
 - AI Concierge is a venue-level, outbound-only SMS follow-up system powered by DeepSeek. It never auto-replies to messages — it only sends scheduled outbound messages and notifies human concierge when a lead replies.
-- **Eligibility**: requires (1) the Venue Concierge add-on purchased on your plan, (2) A2P 10-digit SMS verification completed, and (3) a connected GHL/StoryVenue Legacy sub-account for SMS delivery. If any blocker exists, the settings page shows what's missing.
+- **Plan gating**: AI Concierge is only available on plans where the StoryVenue admin has enabled an "AI Concierge" checkbox in the directory plan configuration. On plans without this checkbox enabled, the AI Concierge toggle is greyed out and unclickable. Hovering shows a tooltip directing the user to schedule a demo call. Clicking the greyed-out toggle opens the demo scheduling calendar (GHL embed). Venues on the Bride Booking System Free or Bride Booking System™ plans cannot access AI Concierge — it is only available on All-Inclusive Concierge (and any plan explicitly enabled by admins).
+- **Eligibility** (once the plan allows it): requires (1) a plan with AI Concierge checkbox enabled, (2) A2P 10-digit SMS verification completed, and (3) a connected GHL/StoryVenue Legacy sub-account for SMS delivery. If any blocker exists, the settings page shows what's missing.
 - **How AI activates — workflow-only**: AI Concierge is NOT auto-activated on any lead. It activates ONLY when the "Activate AI Concierge" block in the Booking System sequence fires for that specific lead. This gives venues complete control over when AI takes over — you decide by placing the block in your sequence (e.g., after 3 days of no reply). Once activated, ai_state flips to ai_active and the send cron picks up the lead within 10 minutes.
 - **Lead states**: dormant → ai_active → paused → exhausted → handoff → opted_out. The AI sends outbound messages only when a lead is in "ai_active" state. All state transitions are logged to an audit trail (ai_state_transitions table).
 - **Outbound schedule**: once active, the AI sends personalized SMS messages on a randomized 1–2 day cadence. Messages are generated by DeepSeek using a configurable prompt template with all merge variables (contact name, venue name, wedding date, lead notes, inquiry date, etc.). A 60-day global expiry cap prevents indefinite outreach.
@@ -844,12 +887,33 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 
 ## Multi-Step Venue Onboarding (Signup Flow)
 - New venue signup at app.storyvenue.com/signup follows a 3-step flow:
-  1. **Plan picker**: choose from available directory plans (Free, Pro, Premium, or equivalent). Plan cards show all features with a featured/highlighted middle card. Plans with a configurable highlight badge show a badge label on their card. Only public plans are shown (admin-only plans are hidden).
-  2. **Add-ons**: select optional add-ons (Verified, Sponsored, Venue Concierge). Add-on prices are admin-configurable and displayed per-month. Each add-on shows its value proposition. Venue Concierge is restricted to plans that support it.
+  1. **Plan picker**: choose from available directory plans. Plan cards show all features with a featured/highlighted middle card. Only public plans are shown (admin-only plans are hidden).
+  2. **Add-ons**: select optional add-ons (Verified, Sponsored). Venue Concierge is restricted to plans that support it.
   3. **Payment**: enter card or bank details in a secure inline payment form (Fortis Elements) embedded directly on the signup page — no redirect to an external checkout. Free plans skip this step entirely. If a trial period is configured, the card is validated but the first charge is deferred until the trial ends.
-- The signup flow uses Suspense boundaries for search params and supports back-navigation between steps.
-- After successful payment (or free plan selection), the venue is created and the owner lands in the dashboard with the Get Started checklist.
-- If the venue already exists and is logged in, the venue is saved in-place without redirecting.
+- After signup, the venue is created and the owner lands in the dashboard where a **4-step onboarding modal** guides them to go live.
+
+## Dashboard Onboarding Modal (4-Step Hard Gate)
+- After signup, all new venues see a 4-step onboarding modal that must be completed to gain full dashboard access:
+  1. **Connect** — complete StoryPay merchant account setup (payment processing).
+  2. **Details** — fill in listing info (name, description, photos, etc.).
+  3. **Go live** — publish the listing. A test inquiry is sent so the venue can see a lead land in their inbox in real time. The test lead is tagged with a "test" label so it's visible in the inbox but excluded from lead metrics.
+  4. **Access** — enter credit card details to start the 14-day free trial of Bride Booking System™ ($97/mo). This is the hard gate.
+- The modal always re-opens on login until all 4 steps are complete. There is no way to close or skip it.
+- A "Back" button on every step lets users go back and edit previous steps before proceeding.
+- **Grandfathered venues** (signed up before June 25, 2026) who are on the Free plan or an active trial are NOT shown the modal popup gate. They can still use the onboarding checklist / pill to complete setup at their own pace.
+- **Legacy Plan venues** never see the modal gate.
+
+## Default Sales Pipeline (Locked)
+- Every venue has a default sales pipeline called "Bride Booking System™" (or equivalent) that cannot be edited or deleted.
+- The default pipeline's stages are locked — they cannot be renamed, reordered, added to, or removed. This protects the platform's default automations and CRM setup.
+- Venue owners can create additional custom pipelines and stages freely, but the default pipeline is read-only.
+- Attempting to edit or delete default pipeline stages shows a lock message explaining that the default pipeline is protected.
+
+## Test Leads (From Onboarding)
+- During onboarding Step 3 (Go live), a test inquiry is automatically sent to the venue.
+- Test leads are tagged with a "test" badge in the inbox and leads list so they are clearly identifiable.
+- Test leads are excluded from lead count metrics and analytics — they don't inflate your lead numbers.
+- Test leads appear in the inbox so you can see exactly what a real inquiry looks like when it lands.
 
 ## Legacy Plans
 - Legacy plans are grandfathered subscription tiers that bypass all platform billing.
@@ -860,15 +924,18 @@ When an event is created or updated, StoryVenue automatically schedules one remi
 - If a venue needs to change from a legacy plan, they contact their account manager — self-serve switching is not available for legacy plans.
 
 ## Subscription Management & Self-Serve Billing
-- Path: /dashboard/directory-billing — manage your StoryVenue subscription.
-- **Self-serve plan switching**: upgrade or downgrade at any time. Plan changes take effect immediately. When switching plans, subscription rollover applies — if you have time remaining on your current billing cycle, the new plan starts at your next renewal date and you keep access to current features until then.
-- **Add-on management**: toggle Verified, Sponsored, and Venue Concierge add-ons independently of your plan. Add-on changes also follow the rollover model.
-- **Payment method**: update your card or payment method at any time from the billing page. The "Add/Update Card" option is always available. When swapping payment methods, existing trial periods and renewal dates are preserved.
-- **Free trials**: some plans offer free trials (days, weeks, months, years, or forever). Trials are for new signups only — existing accounts are not retroactively enrolled. During a trial, all plan features are fully accessible.
-- **Refunds**: subscription refunds are processed through your StoryPay merchant account. Contact your account manager for refund requests. ACH refunds take 3–5 business days to settle (same as card refunds).
-- **Cancellation**: cancel from the billing page. Access continues until the end of the current billing cycle. For free or legacy plans, no cancellation is needed.
+- Path: Settings → Billing (/dashboard/directory-billing) — manage your StoryVenue subscription.
+- **Plan order on billing page**: Bride Booking System™ Free → Bride Booking System™ → All-Inclusive → All-Inclusive Concierge.
+- **Self-serve plan switching**: Bride Booking System Free and Bride Booking System™ have self-serve upgrade/downgrade buttons. All-Inclusive and All-Inclusive Concierge require a demo — their upgrade button opens the demo scheduling calendar.
+- **Downgrading to Free**: you can downgrade to Bride Booking System™ Free at any time from the billing page. If you are in an active trial, the trial countdown ribbon stays visible after downgrading to Free until the trial period ends; after that the ribbon disappears. Automations switch off on the free plan.
+- **No auto-downgrade after trial**: if your trial expires and you haven't downgraded, you are automatically charged $97/month. The system does not auto-downgrade to Free.
+- **Add-on management**: toggle Verified and Sponsored add-ons independently. Add-on changes follow the rollover model.
+- **Payment method**: update your card at any time from the billing page. The "Add/Update Card" option is always available.
+- **Billing descriptor**: charges appear on bank/card statements as "StoryVenue."
+- **Refunds**: subscription refunds are processed through StoryVenue. Contact your account manager. ACH refunds take 3–5 business days.
+- **Cancellation**: cancel from the billing page. Access continues until the end of the current billing cycle.
 - **Admin extend trial**: StoryVenue admins can extend trial periods for individual venues from the admin dashboard.
-- **Plan visibility**: some plans may be hidden from public pickers (admin-only). Plans can also have a configurable highlight badge that appears on the plan card during signup.
+- **Trial ribbon / overlay behavior**: during an active free trial on the free plan, both the trial countdown ribbon AND the Bride Booking System™ analytics upgrade overlay are shown. Once the trial expires and the venue remains on free, only the greyed-out analytics overlay persists (no ribbon).
 
 ## Venue Concierge Add-on
 - Price: $499/month (admin-configurable).
