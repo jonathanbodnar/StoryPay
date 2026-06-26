@@ -68,12 +68,24 @@ export default async function DashboardLayout({
  };
  const trialStatus = deriveTrialStatus(trialState);
  const inTrial = subStatus === 'trialing' && !trialState.directory_trial_is_forever;
+ // A venue that downgraded to Free *during* its 14-day trial window keeps an
+ // informational countdown until the original trial-end date passes, then it
+ // disappears. They have no subscription on file so they won't be charged — the
+ // ribbon is an upgrade nudge, not a billing notice.
+ const onFreeDuringTrialWindow =
+   subStatus === 'none' &&
+   !hasExternalSub &&
+   !navAccess.isLegacyPlan &&
+   !trialState.directory_trial_is_forever &&
+   Boolean(trialState.directory_trial_ends_at) &&
+   trialStatus === 'active';
  // The countdown ribbon shows during an active trial whether or not a card is
  // on file. Card-on-file venues still need to see when they'll be charged (and
  // how to switch to Free before then); pre-card venues see the "add a card"
- // prompt. Only the hard wall stays gated to the no-card path — a card-on-file
- // venue auto-charges at trial end rather than getting locked out.
- const showTrialCountdown = inTrial && trialStatus === 'active';
+ // prompt; downgraded-to-Free venues see an upgrade nudge. Only the hard wall
+ // stays gated to the no-card trialing path — a card-on-file venue auto-charges
+ // at trial end rather than getting locked out.
+ const showTrialCountdown = (inTrial && trialStatus === 'active') || onFreeDuringTrialWindow;
  const trialExpiredWall = inTrial && !hasExternalSub && trialStatus === 'expired';
  const trialDaysRemaining = showTrialCountdown ? daysRemainingInTrial(trialState) : 0;
  const trialEndsAt = (vr.directory_trial_ends_at as string | null) ?? null;
@@ -103,6 +115,7 @@ export default async function DashboardLayout({
  trialDaysRemaining={trialDaysRemaining}
  trialEndsAt={trialEndsAt}
  trialHasCard={hasExternalSub}
+ trialFreePlan={onFreeDuringTrialWindow}
  >
  {children}
  </DashboardShell>

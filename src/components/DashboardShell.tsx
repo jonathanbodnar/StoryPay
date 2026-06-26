@@ -39,6 +39,7 @@ export default function DashboardShell({
   trialDaysRemaining = 0,
   trialEndsAt = null,
   trialHasCard = false,
+  trialFreePlan = false,
   children,
 }: {
   venue: Venue;
@@ -63,6 +64,8 @@ export default function DashboardShell({
   trialEndsAt?: string | null;
   /** True when a card is already on file — the trial will auto-charge at the end. */
   trialHasCard?: boolean;
+  /** True when the venue downgraded to Free but is still inside the trial window. */
+  trialFreePlan?: boolean;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -190,7 +193,25 @@ export default function DashboardShell({
         <main className={`mx-auto flex w-full flex-1 flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
           <OnboardingLauncher />
           {trialCountdown ? (
-            trialHasCard ? (
+            trialFreePlan ? (
+              <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex-1">
+                  <span className="font-semibold">
+                    Bride Booking System trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
+                  </span>
+                  {' '}
+                  <span className="text-gray-500">
+                    You&apos;re on the Free plan — you won&apos;t be charged. Upgrade anytime to keep your full Bride Booking System.
+                  </span>
+                </div>
+                <Link
+                  href="/dashboard/directory-billing"
+                  className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
+                >
+                  Upgrade
+                </Link>
+              </div>
+            ) : trialHasCard ? (
               <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex-1">
                   <span className="font-semibold">
