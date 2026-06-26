@@ -67,6 +67,8 @@ type AnalyticsPayload = {
   funnel: FunnelStep[];
   prior: PriorMetrics;
   is_free_plan?: boolean;
+  trial_window_active?: boolean;
+  trial_ends_at?: string | null;
   _migration_pending?: boolean;
 };
 
@@ -522,7 +524,12 @@ export default function ListingAnalyticsPage() {
 
   const d = data;
 
-  const isFreePlan = Boolean(data?.is_free_plan);
+  const isFreePlan       = Boolean(data?.is_free_plan);
+  const trialStillActive = Boolean(data?.trial_window_active);
+  const trialEndsAt      = data?.trial_ends_at ?? null;
+  const trialEndLabel    = trialEndsAt
+    ? new Date(trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+    : null;
 
   return (
     <div className={`relative px-4 py-8 space-y-8${isFreePlan ? ' select-none' : ''}`}>
@@ -1140,21 +1147,35 @@ export default function ListingAnalyticsPage() {
             <h2 className="text-lg font-bold text-gray-900 mb-2">
               Bride Booking System™ Analytics
             </h2>
-            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-              Analytics, lead insights, real-time visitors, and your booking funnel are included in the{' '}
-              <span className="font-semibold text-gray-800">Bride Booking System™</span> plan.
-              Upgrade to unlock the full dashboard.
-            </p>
+
+            {trialStillActive ? (
+              /* Active trial — remind them the ribbon countdown above is ticking */
+              <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                You&apos;re on the Free plan during your trial window
+                {trialEndLabel ? <> (ends <span className="font-semibold text-gray-700">{trialEndLabel}</span>)</> : ''}.
+                Upgrade before it ends to unlock analytics, lead insights, real-time visitors, and your full booking funnel.
+              </p>
+            ) : (
+              /* Post-trial or no trial — plain upgrade prompt */
+              <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                Analytics, lead insights, real-time visitors, and your booking funnel are included in the{' '}
+                <span className="font-semibold text-gray-800">Bride Booking System™</span> plan.
+                Upgrade to unlock the full dashboard.
+              </p>
+            )}
+
             <div className="flex flex-col gap-3">
               <NextLink
                 href="/dashboard/directory-billing"
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-6 py-3 text-sm font-semibold text-white hover:bg-black transition-colors"
               >
-                <Lock size={14} /> Upgrade to unlock
+                <Lock size={14} /> {trialStillActive ? 'Upgrade now' : 'Upgrade to unlock'}
               </NextLink>
-              <p className="text-[11px] text-gray-400">
-                14-day free trial · Cancel anytime
-              </p>
+              {!trialStillActive && (
+                <p className="text-[11px] text-gray-400">
+                  14-day free trial · Cancel anytime
+                </p>
+              )}
             </div>
           </div>
         </div>

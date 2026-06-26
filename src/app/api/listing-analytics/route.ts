@@ -24,16 +24,25 @@ export async function GET(req: Request) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, slug, gallery_images, cover_image_url, directory_plan_id')
+    .select('id, name, slug, gallery_images, cover_image_url, directory_plan_id, directory_subscription_status, directory_trial_ends_at')
     .eq('id', venueId)
     .maybeSingle();
   if (!venue) return NextResponse.json({ error: 'No venue' }, { status: 404 });
 
-  // Determine whether this venue is on the free plan so the analytics page
-  // can show an upgrade overlay instead of live data.
-  const planId = (venue as Record<string, unknown>).directory_plan_id as string | null;
+  const v = venue as Record<string, unknown>;
+  const planId    = v.directory_plan_id as string | null;
+  const subStatus = String(v.directory_subscription_status ?? 'none');
+  const trialEndsAtRaw = v.directory_trial_ends_at as string | null;
+
+  // A venue with an active paid trial should NEVER see the upgrade overlay —
+  // they're trialing the paid plan and analytics is included.
+  const isActivePaidTrial = subStatus === 'trialing';
+
+  // Whether the free-plan trial window is still open (drives the overlay copy).
+  const trialWindowActive = Boolean(trialEndsAtRaw) && new Date(trialEndsAtRaw!) > new Date();
+
   let isFreePlan = false;
-  if (planId) {
+  if (planId && !isActivePaidTrial) {
     const { data: plan } = await supabaseAdmin
       .from('directory_plans')
       .select('price_monthly_cents, is_legacy, slug')
@@ -41,8 +50,8 @@ export async function GET(req: Request) {
       .maybeSingle();
     if (plan) {
       const p = plan as Record<string, unknown>;
-      const cents = Number(p.price_monthly_cents ?? 0);
-      const slug  = String(p.slug ?? '').toLowerCase();
+      const cents  = Number(p.price_monthly_cents ?? 0);
+      const slug   = String(p.slug ?? '').toLowerCase();
       const legacy = Boolean(p.is_legacy);
       isFreePlan = !legacy && cents === 0 && !slug.includes('legacy');
     }
@@ -135,10 +144,12 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     days,
-    venue_name: String((venue as Record<string,unknown>).name ?? ''),
-    venue_slug: String((venue as Record<string,unknown>).slug ?? ''),
+    venue_name: String(v.name ?? ''),
+    venue_slug: String(v.slug ?? ''),
     gallery_images: galleryImages,
     is_free_plan: isFreePlan,
+    trial_window_active: isFreePlan && trialWindowActive,
+    trial_ends_at: isFreePlan ? (trialEndsAtRaw ?? null) : null,
     ...buildMetrics(current, leads ?? [], days, until),
     prior: buildPriorMetrics(prior, priorLeads ?? []),
   });
