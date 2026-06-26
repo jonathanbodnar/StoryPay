@@ -1142,7 +1142,7 @@ export default function ListingAnalyticsPage() {
             </h2>
             <p className="text-sm text-gray-500 mb-6 leading-relaxed">
               Analytics, lead insights, real-time visitors, and your booking funnel are included in the{' '}
-              <span className="font-semibold text-gray-800">Bride Booking System</span> plan.
+              <span className="font-semibold text-gray-800">Bride Booking System™</span> plan.
               Upgrade to unlock the full dashboard.
             </p>
             <div className="flex flex-col gap-3">

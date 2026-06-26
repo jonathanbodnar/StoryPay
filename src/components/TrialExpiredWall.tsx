@@ -104,7 +104,7 @@ export default function TrialExpiredWall({ venueName }: { venueName: string }) {
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
               >
                 {busy === 'add_card' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                Keep my Bride Booking System
+                Keep my Bride Booking System™
               </button>
               <button
                 type="button"

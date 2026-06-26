@@ -197,11 +197,11 @@ export default function DashboardShell({
               <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex-1">
                   <span className="font-semibold">
-                    Bride Booking System trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
+                    Bride Booking System™ trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
                   </span>
                   {' '}
                   <span className="text-gray-500">
-                    You&apos;re on the Free plan — you won&apos;t be charged. Upgrade anytime to keep your full Bride Booking System.
+                    You&apos;re on the Free plan — you won&apos;t be charged. Upgrade anytime to keep your full Bride Booking System™.
                   </span>
                 </div>
                 <Link
@@ -215,7 +215,7 @@ export default function DashboardShell({
               <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex-1">
                   <span className="font-semibold">
-                    Bride Booking System trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
+                    Bride Booking System™ trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
                   </span>
                   {' '}
                   <span className="text-gray-500">

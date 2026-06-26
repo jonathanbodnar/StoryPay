@@ -102,7 +102,7 @@ export async function POST(): Promise<NextResponse> {
     .then(({ error }) => { if (error && !/column/i.test(error.message)) console.warn('[test-inquiry] enable booking', error.message); });
 
   // 1. Insert the test lead (same shape as a real directory inquiry).
-  const message = 'Hi! I found your venue and would love to check availability and pricing for my wedding. (This is a sample inquiry from your own Bride Booking System.)';
+  const message = 'Hi! I found your venue and would love to check availability and pricing for my wedding. (This is a sample inquiry from your own Bride Booking System™.)';
   const insertPayload: Record<string, unknown> = {
     venue_id: venueId,
     first_name: firstName,

@@ -91,16 +91,16 @@ export async function notifyVenueTrialEndingSoon(
   const amt = dollars(opts.amountCents);
   const subject = `Your free trial ends ${when} — ${amt}/mo after`;
   const html = wrapHtml(
-    `Your Bride Booking System trial ends in ${opts.daysLeft} day${opts.daysLeft === 1 ? '' : 's'}`,
+    `Your Bride Booking System™ trial ends in ${opts.daysLeft} day${opts.daysLeft === 1 ? '' : 's'}`,
     `<p>Heads up — your 14-day free trial for <strong>${owner.venueName}</strong> ends on <strong>${when}</strong>.</p>
-     <p>On that date your card will be charged <strong>${amt}/mo</strong> and your Bride Booking System keeps running. No action needed to continue.</p>
+     <p>On that date your card will be charged <strong>${amt}/mo</strong> and your Bride Booking System™ keeps running. No action needed to continue.</p>
      <p>Not ready to keep it? You can switch to the Free plan anytime before then and you won't be charged — your listing and payment processing stay on.</p>`,
     { label: 'Manage subscription', url: BILLING_URL },
   );
   await sendEmail({ to: owner.email, subject, html }).catch(() => {});
   await sendOwnerSms(
     owner,
-    `${owner.venueName}: your StoryPay free trial ends ${when}. We'll charge ${amt}/mo to keep your Bride Booking System on. Manage or switch to Free: ${BILLING_URL}`,
+    `${owner.venueName}: your StoryPay free trial ends ${when}. We'll charge ${amt}/mo to keep your Bride Booking System™ on. Manage or switch to Free: ${BILLING_URL}`,
   );
 }
 
@@ -109,10 +109,10 @@ export async function notifyVenueSubscriptionCharged(venueId: string, amountCent
   const owner = await loadOwner(venueId);
   if (!owner?.email) return;
   const amt = dollars(amountCents);
-  const subject = `Payment received — ${amt} for your Bride Booking System`;
+  const subject = `Payment received — ${amt} for your Bride Booking System™`;
   const html = wrapHtml(
     `You're all set — ${amt} received`,
-    `<p>Thanks! We charged <strong>${amt}</strong> for your Bride Booking System subscription for <strong>${owner.venueName}</strong>.</p>
+    `<p>Thanks! We charged <strong>${amt}</strong> for your Bride Booking System™ subscription for <strong>${owner.venueName}</strong>.</p>
      <p>Every bride who taps your link gets your pricing instantly and lands in your inbox. Keep the link in your bio, email signature, and website.</p>`,
     { label: 'Open your dashboard', url: `${APP_URL}/dashboard` },
   );
@@ -123,17 +123,17 @@ export async function notifyVenueSubscriptionCharged(venueId: string, amountCent
 export async function notifyVenueCardDeclined(venueId: string): Promise<void> {
   const owner = await loadOwner(venueId);
   if (!owner?.email) return;
-  const subject = `Your card was declined — update it to keep your Bride Booking System`;
+  const subject = `Your card was declined — update it to keep your Bride Booking System™`;
   const html = wrapHtml(
     `We couldn't process your payment`,
-    `<p>The card on file for <strong>${owner.venueName}</strong> was declined, so your Bride Booking System subscription didn't renew.</p>
+    `<p>The card on file for <strong>${owner.venueName}</strong> was declined, so your Bride Booking System™ subscription didn't renew.</p>
      <p>Update your card in the next few days to keep your automated guide and follow-ups running. If it's not updated, your account will move to the Free plan (your listing and payment processing stay on).</p>`,
     { label: 'Update card', url: BILLING_URL },
   );
   await sendEmail({ to: owner.email, subject, html }).catch(() => {});
   await sendOwnerSms(
     owner,
-    `${owner.venueName}: your card was declined and your Bride Booking System didn't renew. Update it to keep it on: ${BILLING_URL}`,
+    `${owner.venueName}: your card was declined and your Bride Booking System™ didn't renew. Update it to keep it on: ${BILLING_URL}`,
   );
 }
 
@@ -163,7 +163,7 @@ export async function maybeSendWinbackNudge(venueId: string): Promise<void> {
   const html = wrapHtml(
     `You just got a lead, but your Booking System is paused`,
     `<p>A bride just requested pricing from <strong>${owner.venueName}</strong>. Because you're on the Free plan, the instant guide and speed-to-lead follow-up didn't send. The lead is in your inbox, but the automatic reply that books brides is off.</p>
-     <p>Turn your Bride Booking System back on so the next one gets your pricing in seconds.</p>`,
+     <p>Turn your Bride Booking System™ back on so the next one gets your pricing in seconds.</p>`,
     { label: 'Turn it back on', url: BILLING_URL },
   );
   await sendEmail({ to: owner.email, subject, html }).catch(() => {});
@@ -181,7 +181,7 @@ export async function notifyVenueDowngradedToFree(venueId: string): Promise<void
   const html = wrapHtml(
     `Your account moved to Free`,
     `<p><strong>${owner.venueName}</strong> is now on the Free plan. Your directory listing and payment processing stay on, so couples can still find you and pay you.</p>
-     <p>The automated Bride Booking System (instant guide delivery and speed-to-lead follow-up) is paused. Turn it back on anytime — it takes one click.</p>`,
+     <p>The automated Bride Booking System™ (instant guide delivery and speed-to-lead follow-up) is paused. Turn it back on anytime — it takes one click.</p>`,
     { label: 'Turn the Booking System back on', url: BILLING_URL },
   );
   await sendEmail({ to: owner.email, subject, html }).catch(() => {});
