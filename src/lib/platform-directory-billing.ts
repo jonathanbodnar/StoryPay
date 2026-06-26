@@ -107,10 +107,13 @@ export type VenuePlanRow = {
 };
 
 export async function loadVenueDirectoryPlanContext(venueId: string): Promise<VenuePlanRow | null> {
-  const { data: venue, error: vErr } = await supabaseAdmin
-    .from('venues')
-    .select(
-      `id, name, email,
+  // Columns that always exist. The add-on columns (migrations 092/096) may not
+  // be applied yet on some environments — if the full SELECT errors because of
+  // them, we retry without and default the add-on flags to false. Without this
+  // fallback a missing add-on column would make this loader return null, which
+  // silently breaks BOTH the add-on toggle AND plan changes (incl. Switch to
+  // Free) for the venue.
+  const baseColumns = `id, name, email,
        directory_plan_id,
        directory_subscription_status,
        directory_subscription_external_id,
@@ -119,22 +122,40 @@ export async function loadVenueDirectoryPlanContext(venueId: string): Promise<Ve
        directory_trial_ends_at,
        directory_trial_plan_id,
        directory_trial_consumed,
-       directory_trial_is_forever,
-       directory_addon_verified,
-       directory_addon_sponsored,
-       directory_addon_concierge`,
-    )
+       directory_trial_is_forever`;
+
+  let venue: Record<string, unknown> | null = null;
+  const full = await supabaseAdmin
+    .from('venues')
+    .select(`${baseColumns}, directory_addon_verified, directory_addon_sponsored, directory_addon_concierge`)
     .eq('id', venueId)
     .maybeSingle();
 
-  if (vErr || !venue) return null;
+  if (full.error) {
+    const slim = await supabaseAdmin
+      .from('venues')
+      .select(baseColumns)
+      .eq('id', venueId)
+      .maybeSingle();
+    if (slim.error || !slim.data) return null;
+    venue = {
+      ...(slim.data as Record<string, unknown>),
+      directory_addon_verified: false,
+      directory_addon_sponsored: false,
+      directory_addon_concierge: false,
+    };
+  } else {
+    venue = (full.data ?? null) as Record<string, unknown> | null;
+  }
+
+  if (!venue) return null;
 
   let plan: VenuePlanRow['plan'] = null;
   if (venue.directory_plan_id) {
     const { data: p } = await supabaseAdmin
       .from('directory_plans')
       .select('id, name, price_monthly_cents, fortis_merchant_id')
-      .eq('id', venue.directory_plan_id)
+      .eq('id', venue.directory_plan_id as string)
       .maybeSingle();
     if (p) plan = p as VenuePlanRow['plan'];
   }
