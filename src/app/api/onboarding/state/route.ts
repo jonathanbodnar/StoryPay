@@ -191,6 +191,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       })
       .catch(() => { /* non-fatal */ });
 
+    // The listing just went public — purge the separate directory deployment's
+    // cache so the new venue surfaces on the homepage promptly.
+    void import('@/lib/directory-revalidate')
+      .then(({ revalidateDirectory }) => revalidateDirectory({ slug }))
+      .catch(() => { /* non-fatal */ });
+
     return NextResponse.json({ ok: true, is_published: true, slug, live_url: liveUrl(slug) });
   }
 

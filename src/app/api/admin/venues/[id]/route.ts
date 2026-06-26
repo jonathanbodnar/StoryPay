@@ -5,6 +5,7 @@ import { isDirectoryBadgeStatus } from '@/lib/directory-badges';
 import { cancelVenueSubscription, changeVenuePlan } from '@/lib/venue-billing';
 import { cancelSubscription } from '@/lib/lunarpay';
 import { requirePlatformLunarPaySecretKey } from '@/lib/platform-directory-billing';
+import { revalidateDirectory } from '@/lib/directory-revalidate';
 import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
@@ -162,9 +163,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if (!venueId) return NextResponse.json({ error: 'Missing venue id' }, { status: 400 });
 
   // Confirm the venue exists and grab owner_id + demo flag + subscription info
+  // (slug is needed so we can purge the public directory's cached pages).
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, owner_id, is_demo, directory_subscription_external_id, directory_subscription_status')
+    .select('id, name, slug, owner_id, is_demo, directory_subscription_external_id, directory_subscription_status')
     .eq('id', venueId)
     .maybeSingle();
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
@@ -212,6 +214,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   // Delete the venue — all related rows cascade automatically
   const { error } = await supabaseAdmin.from('venues').delete().eq('id', venueId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Purge the public directory's ISR cache so the deleted venue stops showing in
+  // "Featured Venues" / the homepage immediately (separate deployment — our own
+  // revalidatePath can't reach it).
+  void revalidateDirectory({ slug: (venue as { slug?: string | null }).slug ?? null });
 
   // Delete the Supabase Auth user + profile so the email is freed for re-registration
   const ownerId = (venue as { owner_id?: string | null }).owner_id;

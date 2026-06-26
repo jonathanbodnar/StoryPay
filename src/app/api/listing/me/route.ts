@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { LISTING_WRITABLE_FIELDS, slugify, type ListingWritableField } from '@/lib/directory';
 import { sanitizeListingUpdates } from '@/lib/listing-sanitize';
+import { revalidateDirectory } from '@/lib/directory-revalidate';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -197,6 +198,13 @@ export async function PATCH(request: NextRequest) {
     revalidatePath(`/api/public/venues/${slug}`);
   }
   revalidatePath('/api/public/directory/venues');
+
+  // Also purge the SEPARATE public directory deployment (storyvenue.com), whose
+  // homepage/listings our own revalidatePath can't reach. Especially important
+  // for publish/unpublish so the listing appears/disappears there promptly.
+  if ('is_published' in updates) {
+    void revalidateDirectory({ slug });
+  }
 
   // Analytics: funnel milestone — venue makes its directory listing live.
   if (updates.is_published === true) {
