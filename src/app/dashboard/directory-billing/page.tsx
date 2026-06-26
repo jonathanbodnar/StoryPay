@@ -64,8 +64,8 @@ const BOOKING_SYSTEM_FEATURES: PlanFeature[] = [
 const PREMIUM_FEATURES: PlanFeature[] = [
   { label: 'Managed Marketing',    outcome: 'We bring couples to you',                                     minTier: 2 },
   { label: 'Verified Listing',     outcome: 'Build instant trust with a verified badge',                   minTier: 2 },
-  { label: 'Venue Concierge Team', outcome: 'Our team works your leads',                                   minTier: 3 },
-  { label: 'Sponsored Listing',    outcome: 'Show up first when brides book',                              minTier: 3 },
+  { label: 'Venue Concierge Team', outcome: 'Our team follows up for you.',                                minTier: 3 },
+  { label: 'Sponsored Listing',    outcome: 'Show up first when brides are searching',                     minTier: 3 },
 ];
 
 /**
