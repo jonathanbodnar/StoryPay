@@ -144,7 +144,9 @@ const WINBACK_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
  * automated guide + speed-to-lead did NOT fire. Nudge the owner to upgrade so
  * they stop leaving leads on the table. Throttled to once per cooldown window.
  */
-export async function maybeSendWinbackNudge(venueId: string): Promise<void> {
+export async function maybeSendWinbackNudge(_venueId: string): Promise<void> {
+  // Disabled — win-back nudge turned off platform-wide
+  return;
   // Check cooldown first (DB read is cheap)
   const { data } = await supabaseAdmin
     .from('venues')
