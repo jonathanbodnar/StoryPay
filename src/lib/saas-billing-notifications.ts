@@ -144,65 +144,8 @@ const WINBACK_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
  * automated guide + speed-to-lead did NOT fire. Nudge the owner to upgrade so
  * they stop leaving leads on the table. Throttled to once per cooldown window.
  */
-export async function maybeSendWinbackNudge(_venueId: string): Promise<void> {
+export async function maybeSendWinbackNudge(_venueId?: string): Promise<void> {
   // Disabled — win-back nudge turned off platform-wide
-  return;
-  // Check cooldown first (DB read is cheap)
-  const { data } = await supabaseAdmin
-    .from('venues')
-    .select('directory_winback_nudged_at')
-    .eq('id', venueId)
-    .maybeSingle();
-  const last = (data as Record<string, unknown> | null)?.directory_winback_nudged_at as string | null;
-  if (last) {
-    const lastMs = new Date(last).getTime();
-    if (!Number.isNaN(lastMs) && Date.now() - lastMs < WINBACK_COOLDOWN_MS) return;
-  }
-
-  // Check the venue's platform notification preference
-  const { data: notifData } = await supabaseAdmin
-    .from('venue_notifications')
-    .select('settings')
-    .eq('venue_id', venueId)
-    .maybeSingle();
-  const notifSettings = ((notifData as { settings?: Record<string, boolean> } | null)?.settings ?? {}) as Record<string, boolean>;
-  // Default true (opt-out model) — if the key is explicitly false, skip
-  if (notifSettings.email_winback_nudge === false) return;
-
-  // Never send win-back nudge to venues on a legacy/grandfathered plan —
-  // they always have full booking-system access regardless of status field.
-  const { data: venueRow } = await supabaseAdmin
-    .from('venues')
-    .select('directory_plan_id')
-    .eq('id', venueId)
-    .maybeSingle();
-  const planId = (venueRow as { directory_plan_id?: string | null } | null)?.directory_plan_id;
-  if (planId) {
-    try {
-      const { data: planRow } = await supabaseAdmin
-        .from('directory_plans')
-        .select('is_legacy')
-        .eq('id', planId)
-        .maybeSingle();
-      if ((planRow as { is_legacy?: boolean } | null)?.is_legacy) return;
-    } catch { /* ignore — fail open */ }
-  }
-
-  const owner = await loadOwner(venueId);
-  if (!owner?.email) return;
-
-  const subject = `A bride just requested your pricing — your auto-reply is off`;
-  const html = wrapHtml(
-    `You just got a lead, but your Booking System is paused`,
-    `<p>A bride just requested pricing from <strong>${owner.venueName}</strong>. Because you're on the Free plan, the instant guide and speed-to-lead follow-up didn't send. The lead is in your inbox, but the automatic reply that books brides is off.</p>
-     <p>Turn your Bride Booking System™ back on so the next one gets your pricing in seconds.</p>`,
-    { label: 'Turn it back on', url: BILLING_URL },
-  );
-  await sendEmail({ to: owner.email, subject, html }).catch(() => {});
-  await supabaseAdmin
-    .from('venues')
-    .update({ directory_winback_nudged_at: new Date().toISOString() })
-    .eq('id', venueId);
 }
 
 /** Settled to Free (chose downgrade, or dunning exhausted). */

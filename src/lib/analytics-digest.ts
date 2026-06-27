@@ -276,27 +276,9 @@ export function buildDigestHtml(m: DigestMetrics): string {
 
 // ── Send for a single venue ───────────────────────────────────────────────────
 
-export async function sendAnalyticsDigest(_venueId: string): Promise<{ ok: boolean; reason?: string }> {
+export async function sendAnalyticsDigest(_venueId?: string): Promise<{ ok: boolean; reason?: string }> {
   // Disabled — analytics digest turned off platform-wide
   return { ok: false, reason: 'disabled' };
-
-  const metrics = await buildDigestMetrics(venueId);
-  if (!metrics) return { ok: false, reason: 'no_email' };
-
-  const html = buildDigestHtml(metrics);
-  const monthStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const subject = metrics.views > 0
-    ? `Your listing had ${metrics.views} view${metrics.views !== 1 ? 's' : ''} this month — ${monthStr}`
-    : `Your monthly StoryVenue report — ${monthStr}`;
-
-  const result = await sendEmail({
-    to: metrics.email,
-    subject,
-    html,
-    from: { name: 'StoryVenue Analytics' },
-  });
-
-  return { ok: result.success, reason: result.error };
 }
 
 // ── Batch: all venues with published listings ─────────────────────────────────
