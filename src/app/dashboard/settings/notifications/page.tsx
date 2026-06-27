@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   Bell, CreditCard, FileText, Loader2, Save, CheckCircle2, Eye, Send,
   X, PenLine, RefreshCw, XCircle, AlertTriangle, ChevronRight, FilePen,
+  BarChart2, Megaphone, ShieldCheck,
 } from 'lucide-react';
 import type { ReminderOffset } from '@/lib/appointment-reminders';
 import {
@@ -175,6 +176,36 @@ function PreviewModal({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+interface PlatformNotifToggle {
+  key: string;
+  label: string;
+  description: string;
+  icon: React.ElementType;
+  alwaysOn?: boolean;
+}
+
+const PLATFORM_NOTIFS: PlatformNotifToggle[] = [
+  {
+    key:         'email_winback_nudge',
+    label:       'Lead nudge (booking system paused)',
+    description: 'Sent when a bride requests your pricing but your automated follow-up is off because you\'re on the Free plan.',
+    icon:        Megaphone,
+  },
+  {
+    key:         'email_analytics_digest',
+    label:       'Monthly listing report',
+    description: 'A monthly summary of your listing views, unique visitors, and inquiry conversions.',
+    icon:        BarChart2,
+  },
+  {
+    key:         '_billing_info',
+    label:       'Billing & subscription updates',
+    description: 'Trial ending reminders, subscription charge receipts, card declined notices, and plan change confirmations. These cannot be turned off.',
+    icon:        ShieldCheck,
+    alwaysOn:    true,
+  },
+];
+
 export default function NotificationsPage() {
   // ── Email templates ──
   const [templates, setTemplates]     = useState<EmailTemplate[]>([]);
@@ -191,6 +222,14 @@ export default function NotificationsPage() {
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult]   = useState<'sent' | 'error' | null>(null);
 
+  // ── Platform notification toggles ──
+  const [platformSettings, setPlatformSettings] = useState<Record<string, boolean>>({
+    email_winback_nudge:    true,
+    email_analytics_digest: true,
+  });
+  const [platformSaving, setPlatformSaving] = useState(false);
+  const [platformSaved, setPlatformSaved]   = useState(false);
+
   // ── Payment reminder timing (shown inside payment_reminder editor) ──
   const [payLoading, setPayLoading]   = useState(true);
   const [payEnabled, setPayEnabled]   = useState(true);
@@ -203,15 +242,44 @@ export default function NotificationsPage() {
     Promise.all([
       fetch('/api/email-templates').then((r) => r.json()),
       fetch('/api/venues/me').then((r) => r.json()),
-    ]).then(([tmpl, venue]) => {
+      fetch('/api/notifications').then((r) => r.ok ? r.json() : {}),
+    ]).then(([tmpl, venue, notifs]) => {
       const list = Array.isArray(tmpl) ? tmpl as EmailTemplate[] : [];
       setTemplates(list);
       if (list.length > 0) setSelected(list[0].type);
       setVenueName((venue as { name?: string })?.name || '');
       setLogoUrl((venue as { brand_logo_url?: string })?.brand_logo_url || '');
       setBrandColor((venue as { brand_color?: string })?.brand_color || '#1b1b1b');
+      const n = notifs as Record<string, boolean>;
+      setPlatformSettings({
+        email_winback_nudge:    n.email_winback_nudge    !== false,
+        email_analytics_digest: n.email_analytics_digest !== false,
+      });
     }).finally(() => setLoading(false));
   }, []);
+
+  async function savePlatformSettings(updated: Record<string, boolean>) {
+    setPlatformSaving(true);
+    try {
+      // Fetch current settings and merge so we don't overwrite SMS/push toggles
+      const current = await fetch('/api/notifications').then((r) => r.ok ? r.json() : {});
+      await fetch('/api/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...(current as object), ...updated }),
+      });
+      setPlatformSaved(true);
+      setTimeout(() => setPlatformSaved(false), 2500);
+    } finally {
+      setPlatformSaving(false);
+    }
+  }
+
+  function togglePlatform(key: string, value: boolean) {
+    const updated = { ...platformSettings, [key]: value };
+    setPlatformSettings(updated);
+    void savePlatformSettings(updated);
+  }
 
   useEffect(() => {
     fetch('/api/venues/me', { cache: 'no-store' })
@@ -590,6 +658,44 @@ export default function NotificationsPage() {
             <p className="text-sm text-gray-400">Select a notification type to edit</p>
           </div>
         )}
+      </div>
+
+      {/* ── Platform Notifications ── */}
+      <div className="mt-8">
+        <div className="mb-4">
+          <h2 className="font-heading text-lg text-gray-900">Platform notifications</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Emails sent by StoryVenue directly to you — not triggered by a client action. Toggle each one on or off.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden divide-y divide-gray-50">
+          {PLATFORM_NOTIFS.map((n) => {
+            const Icon = n.icon;
+            const isOn = n.alwaysOn ? true : (platformSettings[n.key] !== false);
+            return (
+              <div key={n.key} className="flex items-center gap-4 px-5 py-4">
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100">
+                  <Icon size={15} className="text-gray-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold ${isOn ? 'text-gray-900' : 'text-gray-400'}`}>{n.label}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{n.description}</p>
+                </div>
+                {n.alwaysOn ? (
+                  <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">
+                    <ShieldCheck size={11} /> Always on
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {platformSaving && <Loader2 size={12} className="animate-spin text-gray-400" />}
+                    {platformSaved && !platformSaving && <CheckCircle2 size={12} className="text-emerald-500" />}
+                    <Toggle checked={isOn} size="sm" onChange={(v) => togglePlatform(n.key, v)} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Preview modal */}

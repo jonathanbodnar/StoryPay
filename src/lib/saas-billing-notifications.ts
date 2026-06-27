@@ -145,6 +145,7 @@ const WINBACK_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
  * they stop leaving leads on the table. Throttled to once per cooldown window.
  */
 export async function maybeSendWinbackNudge(venueId: string): Promise<void> {
+  // Check cooldown first (DB read is cheap)
   const { data } = await supabaseAdmin
     .from('venues')
     .select('directory_winback_nudged_at')
@@ -155,6 +156,16 @@ export async function maybeSendWinbackNudge(venueId: string): Promise<void> {
     const lastMs = new Date(last).getTime();
     if (!Number.isNaN(lastMs) && Date.now() - lastMs < WINBACK_COOLDOWN_MS) return;
   }
+
+  // Check the venue's platform notification preference
+  const { data: notifData } = await supabaseAdmin
+    .from('venue_notifications')
+    .select('settings')
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  const notifSettings = ((notifData as { settings?: Record<string, boolean> } | null)?.settings ?? {}) as Record<string, boolean>;
+  // Default true (opt-out model) — if the key is explicitly false, skip
+  if (notifSettings.email_winback_nudge === false) return;
 
   const owner = await loadOwner(venueId);
   if (!owner?.email) return;

@@ -277,6 +277,15 @@ export function buildDigestHtml(m: DigestMetrics): string {
 // ── Send for a single venue ───────────────────────────────────────────────────
 
 export async function sendAnalyticsDigest(venueId: string): Promise<{ ok: boolean; reason?: string }> {
+  // Check the venue's platform notification preference before sending
+  const { data: notifData } = await supabaseAdmin
+    .from('venue_notifications')
+    .select('settings')
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  const notifSettings = ((notifData as { settings?: Record<string, boolean> } | null)?.settings ?? {}) as Record<string, boolean>;
+  if (notifSettings.email_analytics_digest === false) return { ok: false, reason: 'opted_out' };
+
   const metrics = await buildDigestMetrics(venueId);
   if (!metrics) return { ok: false, reason: 'no_email' };
 
