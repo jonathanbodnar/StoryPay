@@ -167,6 +167,25 @@ export async function maybeSendWinbackNudge(venueId: string): Promise<void> {
   // Default true (opt-out model) — if the key is explicitly false, skip
   if (notifSettings.email_winback_nudge === false) return;
 
+  // Never send win-back nudge to venues on a legacy/grandfathered plan —
+  // they always have full booking-system access regardless of status field.
+  const { data: venueRow } = await supabaseAdmin
+    .from('venues')
+    .select('directory_plan_id')
+    .eq('id', venueId)
+    .maybeSingle();
+  const planId = (venueRow as { directory_plan_id?: string | null } | null)?.directory_plan_id;
+  if (planId) {
+    try {
+      const { data: planRow } = await supabaseAdmin
+        .from('directory_plans')
+        .select('is_legacy')
+        .eq('id', planId)
+        .maybeSingle();
+      if ((planRow as { is_legacy?: boolean } | null)?.is_legacy) return;
+    } catch { /* ignore — fail open */ }
+  }
+
   const owner = await loadOwner(venueId);
   if (!owner?.email) return;
 
