@@ -68,10 +68,17 @@ export async function GET(req: NextRequest) {
     if (r.venue_id && evSets[r.event]) evSets[r.event].add(r.venue_id);
   }
 
-  // A real card on file = a subscription was actually created (vaulted card),
-  // regardless of where it is in its lifecycle. This is the honest "added a
-  // card" signal — viewing the form is NOT enough.
-  const CARDED = new Set(['trialing', 'active', 'past_due', 'canceled', 'cancelled']);
+  // A real card on file = a LunarPay subscription was actually created (vaulted
+  // card). The authoritative signal is `directory_subscription_external_id`
+  // being non-null — that ID only exists once a card is successfully vaulted.
+  //
+  // IMPORTANT: 'trialing' is deliberately EXCLUDED from this status set. Signup
+  // grants every new venue a 14-day trial with status='trialing' and a NULL
+  // external_id and NO card. Treating 'trialing' as proof of a card made every
+  // signup instantly (and falsely) count as "Added a card (went live)". The
+  // remaining statuses genuinely imply a card was processed at some point
+  // (charged, dunning, or downgraded after a card was on file).
+  const CARDED = new Set(['active', 'past_due', 'canceled', 'cancelled']);
 
   let signedUp = 0;
   let startedOnboarding = 0;
