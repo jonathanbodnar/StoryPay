@@ -28,6 +28,7 @@ import {
   getLunarPayAdminSummary,
   type LunarPayAdminSummary,
 } from '@/lib/lunarpay-venue-admin';
+import { furthestStage } from '@/lib/funnel-stage';
 
 const BRAND = '#1b1b1b';
 
@@ -93,6 +94,39 @@ function LunarPayStatusCell({ venue, summary }: { venue: AdminVenueRow; summary:
           : sub ?? '—'}
       </div>
     </div>
+  );
+}
+
+/**
+ * Where this venue currently sits in the $97/mo conversion funnel. Computed
+ * from the same shared logic that powers the admin funnel + drill-down, so the
+ * profile card cross-references correctly.
+ */
+function FunnelStagePill({ venue }: { venue: AdminVenueRow }) {
+  const stage = furthestStage({
+    id: venue.id,
+    is_published: venue.is_published as boolean | null | undefined,
+    onboarding_last_step: venue.onboarding_last_step as number | null | undefined,
+    onboarding_completed_at: venue.onboarding_completed_at as string | null | undefined,
+    onboarding_activated_at: venue.onboarding_activated_at as string | null | undefined,
+    directory_subscription_status: venue.directory_subscription_status,
+    directory_subscription_external_id: venue.directory_subscription_external_id as string | null | undefined,
+  });
+  const tone =
+    stage.key === 'paid'
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      : stage.key === 'card_entered'
+        ? 'bg-violet-50 text-violet-700 border-violet-200'
+        : stage.index >= 3
+          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+          : 'bg-gray-100 text-gray-600 border-gray-200';
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none ${tone}`}
+      title="Current stage in the $97/mo conversion funnel"
+    >
+      Funnel: {stage.label}
+    </span>
   );
 }
 
@@ -1032,6 +1066,7 @@ export function VenueManagementPortal({
                     SaaS: <span className="text-gray-600">{String(venue.directory_subscription_status)}</span>
                   </span>
                 )}
+                <FunnelStagePill venue={venue} />
                 {(plans.find((p) => p.id === venue.directory_plan_id)?.price_monthly_cents ?? 0) > 0 && (
                   <button type="button" disabled={busy} onClick={() => void copyDirectoryBillingLink(venue.id)}
                     className="text-[10px] font-medium text-amber-700 hover:underline">
@@ -1761,6 +1796,7 @@ function DemoVenueCard({
                 SaaS: <span className="text-gray-600">{String(venue.directory_subscription_status)}</span>
               </span>
             )}
+            <FunnelStagePill venue={venue} />
             {(plans.find((p) => p.id === venue.directory_plan_id)?.price_monthly_cents ?? 0) > 0 && (
               <button type="button" disabled={busy} onClick={onCopyBillingLink}
                 className="text-[10px] font-medium text-amber-700 hover:underline">Copy billing link</button>

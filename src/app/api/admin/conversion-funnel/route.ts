@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
 import { getAdminIdentity } from '@/lib/admin-identity';
+import { loadFunnelData } from '@/lib/funnel-data';
+import { FUNNEL_STAGES, venueStageReached, type FunnelStageKey } from '@/lib/funnel-stage';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -42,85 +43,20 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const from = sp.get('from');
   const to = sp.get('to');
-  const toEnd = to ? `${to}T23:59:59.999Z` : undefined;
 
-  // Authoritative venue lifecycle state (exclude demos).
-  let venuesQuery = supabaseAdmin
-    .from('venues')
-    .select(
-      'id, is_demo, created_at, is_published, onboarding_last_step, onboarding_completed_at, onboarding_activated_at, directory_subscription_status, directory_subscription_external_id, directory_trial_consumed',
-    );
-  if (from) venuesQuery = venuesQuery.gte('created_at', from);
-  if (toEnd) venuesQuery = venuesQuery.lte('created_at', toEnd);
-  const { data: venues } = await venuesQuery;
+  const { venues, evSets } = await loadFunnelData(from, to);
 
-  const real = (venues ?? []).filter((v) => !(v as Record<string, unknown>).is_demo);
-
-  // Distinct-venue sets for the in-modal analytics micro-steps.
-  const wantedEvents = ['onboarding_started', 'onboarding_details_done', 'card_shown', 'card_entered'];
-  const evSets: Record<string, Set<string>> = Object.fromEntries(wantedEvents.map((e) => [e, new Set<string>()]));
-  const { data: evRows } = await supabaseAdmin
-    .from('analytics_events')
-    .select('event, venue_id')
-    .in('event', wantedEvents)
-    .not('venue_id', 'is', null);
-  for (const r of (evRows ?? []) as { event: string; venue_id: string | null }[]) {
-    if (r.venue_id && evSets[r.event]) evSets[r.event].add(r.venue_id);
+  // Per-stage counts via the shared stage logic (single source of truth).
+  const counts: Record<FunnelStageKey, number> = {
+    signed_up: 0, started: 0, details: 0, activated: 0, card_shown: 0, card_entered: 0, paid: 0,
+  };
+  for (const v of venues) {
+    const reached = venueStageReached(v, evSets);
+    for (const s of FUNNEL_STAGES) if (reached[s.key]) counts[s.key] += 1;
   }
 
-  // A real card on file = a LunarPay subscription was actually created (vaulted
-  // card). The authoritative signal is `directory_subscription_external_id`
-  // being non-null — that ID only exists once a card is successfully vaulted.
-  //
-  // IMPORTANT: 'trialing' is deliberately EXCLUDED from this status set. Signup
-  // grants every new venue a 14-day trial with status='trialing' and a NULL
-  // external_id and NO card. Treating 'trialing' as proof of a card made every
-  // signup instantly (and falsely) count as "Added a card (went live)". The
-  // remaining statuses genuinely imply a card was processed at some point
-  // (charged, dunning, or downgraded after a card was on file).
-  const CARDED = new Set(['active', 'past_due', 'canceled', 'cancelled']);
-
-  let signedUp = 0;
-  let startedOnboarding = 0;
-  let detailsDone = 0;
-  let activated = 0;
-  let cardShown = 0;
-  let cardEntered = 0;
-  let paid = 0;
-
-  for (const vv of real) {
-    const v = vv as Record<string, unknown>;
-    const id = String(v.id);
-    const step = typeof v.onboarding_last_step === 'number' ? (v.onboarding_last_step as number) : null;
-    const status = String(v.directory_subscription_status ?? '').toLowerCase();
-    // Carded = a real subscription exists (external id) or the status proves a
-    // card was vaulted at some point.
-    const hasCard = Boolean(v.directory_subscription_external_id) || CARDED.has(status);
-
-    signedUp += 1;
-
-    if (evSets.onboarding_started.has(id) || step !== null || v.is_published || v.onboarding_completed_at) startedOnboarding += 1;
-    if (evSets.onboarding_details_done.has(id) || (step !== null && step >= 1) || v.is_published || hasCard) detailsDone += 1;
-    // Sent the test inquiry (the "Go live" step) — page is not public yet.
-    if (v.onboarding_activated_at) activated += 1;
-    // Reached the card step. Carded venues necessarily saw it.
-    if (evSets.card_shown.has(id) || hasCard) cardShown += 1;
-    // Actually added a card (card on file). NOT inflated by form views.
-    if (hasCard) cardEntered += 1;
-    // Genuinely paying (past the trial / active subscription).
-    if (status === 'active') paid += 1;
-  }
-
-  const stages = [
-    { key: 'signed_up', label: 'Signed up', count: signedUp },
-    { key: 'started', label: 'Started onboarding', count: startedOnboarding },
-    { key: 'details', label: 'Wrote their guide', count: detailsDone },
-    { key: 'activated', label: 'Sent a test inquiry', count: activated },
-    { key: 'card_shown', label: 'Saw the card step', count: cardShown },
-    { key: 'card_entered', label: 'Added a card (went live)', count: cardEntered },
-    { key: 'paid', label: 'Converted to paid', count: paid },
-  ];
-
+  const stages = FUNNEL_STAGES.map((s) => ({ key: s.key, label: s.label, count: counts[s.key] }));
+  const signedUp = counts.signed_up;
   const top = signedUp || 1;
   const funnel = stages.map((s, i) => {
     const prev = i > 0 ? stages[i - 1].count : s.count;
