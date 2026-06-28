@@ -42,6 +42,7 @@ function startOf(unit: 'day' | 'week' | 'month' | 'quarter' | 'year', d = new Da
 
 export const PRESETS: { label: string; getRange: () => { from: string; to: string } }[] = [
  { label: 'Today', getRange: () => { const d = toDateStr(new Date()); return { from: d, to: d }; } },
+ { label: 'Yesterday', getRange: () => { const y = new Date(); y.setDate(y.getDate()-1); const d = toDateStr(y); return { from: d, to: d }; } },
  { label: 'Last 7 days', getRange: () => { const t = new Date(); const f = new Date(t); f.setDate(t.getDate()-6); return { from: toDateStr(f), to: toDateStr(t) }; } },
  { label: 'Last 14 days', getRange: () => { const t = new Date(); const f = new Date(t); f.setDate(t.getDate()-13); return { from: toDateStr(f), to: toDateStr(t) }; } },
  { label: 'Last 30 days', getRange: () => { const t = new Date(); const f = new Date(t); f.setDate(t.getDate()-29); return { from: toDateStr(f), to: toDateStr(t) }; } },

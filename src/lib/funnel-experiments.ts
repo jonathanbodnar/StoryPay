@@ -109,6 +109,48 @@ export function probabilityBest(variants: VariantRow[], draws = 4000): Record<st
   return result;
 }
 
+/* ---------------- Pages ---------------- */
+
+/** Seeded control page, always pinned to the top of the list. */
+export const PRIMARY_PAGE = 'bride-booking-system';
+
+export async function listPages(): Promise<PageSettings[]> {
+  const { data } = await supabaseAdmin
+    .from('funnel_pages')
+    .select('page_key, auto_pause, min_impressions');
+  const rows = (data ?? []) as PageSettings[];
+  // Ensure the primary page exists in the list even before any settings row.
+  if (!rows.some((r) => r.page_key === PRIMARY_PAGE)) {
+    rows.push({ page_key: PRIMARY_PAGE, auto_pause: false, min_impressions: 200 });
+  }
+  // Primary first, then alphabetical.
+  return rows.sort((a, b) => {
+    if (a.page_key === PRIMARY_PAGE) return -1;
+    if (b.page_key === PRIMARY_PAGE) return 1;
+    return a.page_key.localeCompare(b.page_key);
+  });
+}
+
+/** Slugify a page key so it's a safe, URL-style identifier. */
+export function normalizePageKey(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/[^a-z0-9/-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+export async function createPage(pageKey: string): Promise<boolean> {
+  const key = normalizePageKey(pageKey);
+  if (!key) return false;
+  const { error } = await supabaseAdmin
+    .from('funnel_pages')
+    .upsert({ page_key: key }, { onConflict: 'page_key', ignoreDuplicates: true });
+  return !error;
+}
+
 /* ---------------- Stats ---------------- */
 
 export async function getExperimentView(pageKey: string): Promise<ExperimentView | null> {

@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw, TrendingDown } from 'lucide-react';
+import type { DateRange } from '@/components/DateRangePicker';
 
 interface Stage {
   key: string;
@@ -23,7 +24,7 @@ interface Stage {
 
 const STAGE_COLORS = ['#1b1b1b', '#312e81', '#4338ca', '#6366f1', '#7c3aed', '#9333ea', '#c026d3', '#16a34a'];
 
-export default function ConversionFunnel() {
+export default function ConversionFunnel({ range }: { range?: DateRange }) {
   const [funnel, setFunnel] = useState<Stage[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +33,8 @@ export default function ConversionFunnel() {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch('/api/admin/conversion-funnel', { cache: 'no-store' });
+      const qs = range ? `?${new URLSearchParams({ from: range.from, to: range.to })}` : '';
+      const r = await fetch(`/api/admin/conversion-funnel${qs}`, { cache: 'no-store' });
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));
         throw new Error(d.error || `Failed (${r.status})`);
@@ -44,7 +46,7 @@ export default function ConversionFunnel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [range]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -66,7 +68,10 @@ export default function ConversionFunnel() {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-900">Conversion funnel → $97/mo</h3>
-          <p className="text-xs text-gray-500">Where venues fall off from signup to a paid plan.</p>
+          <p className="text-xs text-gray-500">
+            Where venues fall off from signup to a paid plan
+            {range ? ` · signups in ${range.label.toLowerCase()}` : ''}.
+          </p>
         </div>
         <button
           onClick={() => void load()}

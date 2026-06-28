@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getAdminIdentity } from '@/lib/admin-identity';
 
@@ -31,17 +31,28 @@ async function verifyDashboardRead(): Promise<boolean> {
  * is a genuinely active subscription — so a venue that merely viewed the form
  * never inflates the conversion count.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   if (!(await verifyDashboardRead())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Optional date window — counts only venues that SIGNED UP within the range.
+  // This lets the funnel "start tracking" from a campaign launch date instead of
+  // mixing in every legacy venue.
+  const sp = req.nextUrl.searchParams;
+  const from = sp.get('from');
+  const to = sp.get('to');
+  const toEnd = to ? `${to}T23:59:59.999Z` : undefined;
+
   // Authoritative venue lifecycle state (exclude demos).
-  const { data: venues } = await supabaseAdmin
+  let venuesQuery = supabaseAdmin
     .from('venues')
     .select(
-      'id, is_demo, is_published, onboarding_last_step, onboarding_completed_at, onboarding_activated_at, directory_subscription_status, directory_subscription_external_id, directory_trial_consumed',
+      'id, is_demo, created_at, is_published, onboarding_last_step, onboarding_completed_at, onboarding_activated_at, directory_subscription_status, directory_subscription_external_id, directory_trial_consumed',
     );
+  if (from) venuesQuery = venuesQuery.gte('created_at', from);
+  if (toEnd) venuesQuery = venuesQuery.lte('created_at', toEnd);
+  const { data: venues } = await venuesQuery;
 
   const real = (venues ?? []).filter((v) => !(v as Record<string, unknown>).is_demo);
 

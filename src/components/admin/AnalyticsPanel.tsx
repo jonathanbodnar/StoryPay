@@ -12,7 +12,7 @@
  * charts, and a live feed, per the simple-first brief.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Loader2, RefreshCw, TrendingUp, TrendingDown, Minus,
@@ -24,11 +24,11 @@ import {
   PieChart, Pie, Cell,
 } from 'recharts';
 import ConversionFunnel from '@/components/admin/ConversionFunnel';
+import DateRangePicker, { type DateRange, PRESETS } from '@/components/DateRangePicker';
 
 const BRAND = '#1b1b1b';
 const PIE_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#84cc16', '#a855f7', '#14b8a6', '#f97316', '#3b82f6'];
 
-interface FunnelStep { event: string; label: string; count: number; pct: number; }
 interface TrendItem { event: string; count: number; prev: number; delta: number; }
 interface RecentRow {
   id: string; created_at: string; event: string; kind: string;
@@ -36,9 +36,8 @@ interface RecentRow {
   path: string | null; label: string | null;
 }
 interface AnalyticsData {
-  window: { days: number; sinceIso: string };
+  window: { sinceIso: string; untilIso: string };
   totals: { events: number; pageviews: number; clicks: number; activeVenues: number; activeSessions: number; signups: number };
-  funnel: FunnelStep[];
   topPages: { path: string; count: number }[];
   topClicks: { label: string; count: number }[];
   trending: TrendItem[];
@@ -47,13 +46,10 @@ interface AnalyticsData {
   venueNames: Record<string, string>;
 }
 
-const DAY_OPTIONS = [
-  { label: '24h', days: 1 },
-  { label: '7d', days: 7 },
-  { label: '30d', days: 30 },
-  { label: '90d', days: 90 },
-  { label: 'All', days: 0 },
-];
+function getDefaultRange(): DateRange {
+  const p = PRESETS.find((x) => x.label === 'Last 30 days')!;
+  return { ...p.getRange(), label: p.label };
+}
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -86,14 +82,15 @@ export default function AnalyticsPanel() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState<DateRange>(getDefaultRange);
   const [activityModalOpen, setActivityModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch(`/api/admin/analytics?days=${days}`, { cache: 'no-store' });
+      const params = new URLSearchParams({ from: range.from, to: range.to });
+      const r = await fetch(`/api/admin/analytics?${params}`, { cache: 'no-store' });
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));
         throw new Error(d.error || `Failed (${r.status})`);
@@ -104,14 +101,9 @@ export default function AnalyticsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [range]);
 
   useEffect(() => { void load(); }, [load]);
-
-  const funnelMax = useMemo(
-    () => Math.max(1, ...(data?.funnel.map((f) => f.count) ?? [1])),
-    [data],
-  );
 
   return (
     <div className="space-y-5">
@@ -122,20 +114,7 @@ export default function AnalyticsPanel() {
           <p className="text-xs text-gray-500">What people are doing — clicks, pages, funnel & trends.</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-gray-200 bg-white p-0.5">
-            {DAY_OPTIONS.map((o) => (
-              <button
-                key={o.label}
-                type="button"
-                onClick={() => setDays(o.days)}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  days === o.days ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
+          <DateRangePicker value={range} onChange={setRange} />
           <button
             type="button"
             onClick={() => void load()}
@@ -161,8 +140,8 @@ export default function AnalyticsPanel() {
         <>
           {/* Metric cards */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <MetricCard icon={<UserPlus size={14} />}            label="Signups"        value={data.totals.signups.toLocaleString()} sub="all time" />
-            <MetricCard icon={<Building2 size={14} />}           label="Active venues"  value={data.totals.activeVenues.toLocaleString()} sub="in window" />
+            <MetricCard icon={<UserPlus size={14} />}            label="Signups"        value={data.totals.signups.toLocaleString()} sub="in range" />
+            <MetricCard icon={<Building2 size={14} />}           label="Active venues"  value={data.totals.activeVenues.toLocaleString()} sub="in range" />
             <MetricCard icon={<Users size={14} />}               label="Sessions"       value={data.totals.activeSessions.toLocaleString()} />
             <MetricCard icon={<Activity size={14} />}            label="Events"         value={data.totals.events.toLocaleString()} />
             <MetricCard icon={<Eye size={14} />}                 label="Pageviews"      value={data.totals.pageviews.toLocaleString()} />
@@ -170,36 +149,10 @@ export default function AnalyticsPanel() {
           </div>
 
           {/* Card-gated conversion funnel → $97/mo */}
-          <ConversionFunnel />
+          <ConversionFunnel range={range} />
 
-          {/* Funnel + time series */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <h3 className="mb-3 text-sm font-semibold text-gray-900">Signup → Activation funnel</h3>
-              <div className="space-y-2.5">
-                {data.funnel.map((f, i) => (
-                  <div key={f.event}>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="font-medium text-gray-700">{f.label}</span>
-                      <span className="text-gray-500">
-                        <strong className="text-gray-900">{f.count.toLocaleString()}</strong>
-                        {i > 0 && <span className="ml-1.5 text-gray-400">{f.pct}%</span>}
-                      </span>
-                    </div>
-                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{ width: `${Math.max(2, (f.count / funnelMax) * 100)}%`, backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
-                      />
-                    </div>
-                  </div>
-                ))}
-                {data.funnel.every((f) => f.count === 0) && (
-                  <p className="py-6 text-center text-xs text-gray-400">No funnel data yet — milestones appear as venues sign up and activate.</p>
-                )}
-              </div>
-            </div>
-
+          {/* Activity time series */}
+          <div className="grid grid-cols-1 gap-4">
             <div className="rounded-xl border border-gray-200 bg-white p-4">
               <h3 className="mb-3 text-sm font-semibold text-gray-900">Activity over time</h3>
               {data.timeseries.length > 0 ? (

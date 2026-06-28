@@ -7,8 +7,12 @@ import {
   deleteVariant,
   resetVariantStats,
   setPageSettings,
+  listPages,
+  createPage,
+  normalizePageKey,
   FUNNEL_ELEMENTS,
   type ElementKey,
+  type ExperimentView,
 } from '@/lib/funnel-experiments';
 
 export const runtime = 'nodejs';
@@ -16,19 +20,34 @@ export const dynamic = 'force-dynamic';
 
 const DEFAULT_PAGE = 'bride-booking-system';
 
-export async function GET(request: NextRequest) {
+/** Load every tracked landing page plus its live experiment view. */
+async function loadAll(): Promise<{
+  pages: Awaited<ReturnType<typeof listPages>>;
+  views: Record<string, ExperimentView>;
+}> {
+  const pages = await listPages();
+  const views: Record<string, ExperimentView> = {};
+  const results = await Promise.all(pages.map((p) => getExperimentView(p.page_key)));
+  pages.forEach((p, i) => {
+    const v = results[i];
+    if (v) views[p.page_key] = v;
+  });
+  return { pages, views };
+}
+
+export async function GET() {
   if (!(await verifyAdminCookie())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const page = request.nextUrl.searchParams.get('page') ?? DEFAULT_PAGE;
-  const view = await getExperimentView(page);
-  if (!view) {
+  try {
+    const { pages, views } = await loadAll();
+    return NextResponse.json({ pages, views });
+  } catch {
     return NextResponse.json(
       { error: 'Could not load experiments. Run db/funnel_ab_testing.sql in Supabase.' },
       { status: 500 },
     );
   }
-  return NextResponse.json({ view });
 }
 
 export async function POST(request: NextRequest) {
@@ -42,6 +61,14 @@ export async function POST(request: NextRequest) {
 
   let ok = false;
   switch (action) {
+    case 'add-page': {
+      const key = normalizePageKey((body.newPageKey as string) ?? '');
+      if (!key) {
+        return NextResponse.json({ error: 'Enter a valid landing page slug.' }, { status: 400 });
+      }
+      ok = await createPage(key);
+      break;
+    }
     case 'upsert': {
       const element = body.element as ElementKey;
       const content = (body.content as string)?.trim();
@@ -88,6 +115,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const view = await getExperimentView(page);
-  return NextResponse.json({ view });
+  const { pages, views } = await loadAll();
+  return NextResponse.json({ pages, views });
 }
