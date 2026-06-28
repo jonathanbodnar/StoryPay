@@ -530,8 +530,10 @@ function FeatureRequestsAdminTab({
 }
 
 const ADMIN_NAV_ITEMS = [
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { key: 'funnel-ab', label: 'Funnel A/B', icon: TrendingUp },
+  { key: 'analytics', label: 'Usage Analytics', icon: BarChart2 },
   { key: 'venues', label: 'Venue management', icon: Building2 },
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'couples', label: 'Couples', icon: Heart },
   { key: 'contacts', label: 'Contacts', icon: Users },
   { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
@@ -549,8 +551,6 @@ const ADMIN_NAV_ITEMS = [
   { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
   { key: 'search-analytics', label: 'Search Analytics', icon: BarChart2 },
   { key: 'article-ratings', label: 'Article Ratings', icon: Star },
-  { key: 'analytics', label: 'Usage Analytics', icon: BarChart2 },
-  { key: 'funnel-ab', label: 'Funnel A/B', icon: TrendingUp },
   { key: 'errors', label: 'Error Log', icon: AlertTriangle },
   { key: 'system', label: 'System / Migrations', icon: Settings },
   { key: 'team', label: 'Team', icon: Users },
