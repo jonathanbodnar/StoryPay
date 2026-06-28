@@ -363,7 +363,15 @@ function ElementCard({
 
       <div className="mt-4 space-y-3">
         {variants.map((v) => (
-          <VariantRow key={v.id} pageKey={pageKey} element={element} variant={v} busy={busy} onPost={onPost} />
+          <VariantRow
+            key={v.id}
+            pageKey={pageKey}
+            element={element}
+            variant={v}
+            hasSignal={totalClicks > 0}
+            busy={busy}
+            onPost={onPost}
+          />
         ))}
       </div>
 
@@ -403,12 +411,14 @@ function VariantRow({
   pageKey,
   element,
   variant,
+  hasSignal,
   busy,
   onPost,
 }: {
   pageKey: string;
   element: ElementKey;
   variant: VariantStat;
+  hasSignal: boolean;
   busy: boolean;
   onPost: (p: Record<string, unknown>) => Promise<boolean>;
 }) {
@@ -416,7 +426,10 @@ function VariantRow({
   const [content, setContent] = useState(variant.content);
   const dirty = content.trim() !== variant.content;
   const win = variant.probBest ?? 0;
-  const isWinner = variant.enabled && win >= 0.95;
+  // "Win %" (probability-of-best) is only meaningful once clicks exist. With zero
+  // clicks it just rewards the least-shown variant (Bayesian uncertainty), which
+  // misleads. Hide it until the element has real conversion signal.
+  const isWinner = variant.enabled && hasSignal && win >= 0.95;
 
   return (
     <div className={`rounded-lg border p-3 ${variant.enabled ? 'border-gray-200 bg-white' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
@@ -439,13 +452,16 @@ function VariantRow({
         <span>{variant.impressions.toLocaleString()} views</span>
         <span>{variant.clicks.toLocaleString()} clicks</span>
         <span className="font-medium text-gray-700">{(variant.ctr * 100).toFixed(2)}% CTR</span>
-        {variant.enabled && (
+        {variant.enabled && hasSignal && (
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block h-1.5 w-16 rounded-full bg-gray-200 overflow-hidden align-middle">
               <span className="block h-full bg-emerald-500" style={{ width: `${Math.round(win * 100)}%` }} />
             </span>
             {Math.round(win * 100)}% win
           </span>
+        )}
+        {variant.enabled && !hasSignal && (
+          <span className="italic text-gray-400">Gathering data — no clicks yet</span>
         )}
         {isWinner && (
           <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700">
