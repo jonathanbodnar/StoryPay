@@ -31,6 +31,7 @@ import { AdminTeamPanel } from '@/components/admin/AdminTeamPanel';
 import { AdminProfilePanel } from '@/components/admin/AdminProfilePanel';
 import ErrorLogPanel from '@/components/admin/ErrorLogPanel';
 import AnalyticsPanel from '@/components/admin/AnalyticsPanel';
+import { FunnelAbPanel } from '@/components/admin/FunnelAbPanel';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
 
@@ -68,6 +69,7 @@ type AdminTabKey =
   | 'seo-pages'
   | 'trends'
   | 'analytics'
+  | 'funnel-ab'
   | 'errors'
   | 'system'
   | 'team'
@@ -94,6 +96,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'seo-pages',
   'trends',
   'analytics',
+  'funnel-ab',
   'errors',
   'system',
   'team',
@@ -547,6 +550,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'search-analytics', label: 'Search Analytics', icon: BarChart2 },
   { key: 'article-ratings', label: 'Article Ratings', icon: Star },
   { key: 'analytics', label: 'Usage Analytics', icon: BarChart2 },
+  { key: 'funnel-ab', label: 'Funnel A/B', icon: TrendingUp },
   { key: 'errors', label: 'Error Log', icon: AlertTriangle },
   { key: 'system', label: 'System / Migrations', icon: Settings },
   { key: 'team', label: 'Team', icon: Users },
@@ -2000,6 +2004,8 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         {activeTab === 'canned-replies' && <CannedRepliesPanel />}
 
         {activeTab === 'directory-plans' && <DirectoryPlansAdminPanel />}
+
+        {activeTab === 'funnel-ab' && <FunnelAbPanel />}
 
         {/* ── Announcements Tab ── */}
         {activeTab === 'announcements' && (

@@ -30,6 +30,7 @@ export type AdminTabKey =
   | 'seo-pages'
   | 'trends'
   | 'analytics'
+  | 'funnel-ab'
   | 'errors'
   | 'system';
 
@@ -60,6 +61,7 @@ export const ADMIN_TABS: AdminTabDef[] = [
   { key: 'search-analytics',   label: 'Search Analytics',    category: 'content' },
   { key: 'article-ratings',    label: 'Article Ratings',     category: 'content' },
   { key: 'analytics',          label: 'Usage Analytics',     category: 'tools' },
+  { key: 'funnel-ab',          label: 'Funnel A/B',          category: 'tools' },
   { key: 'errors',             label: 'Error Log',           category: 'tools' },
   { key: 'system',             label: 'System / Migrations', category: 'tools' },
 ];
