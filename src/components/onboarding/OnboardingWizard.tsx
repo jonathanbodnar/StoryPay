@@ -1161,12 +1161,24 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
       const pd = await pubRes.json().catch(() => ({}));
       url = pd?.live_url ?? null;
     } catch { /* non-fatal: page publish can be retried from the dashboard */ }
-    try {
-      await fetch('/api/onboarding/state', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'finish' }),
-      });
-    } catch { /* best-effort: gate falls back to reopening */ }
+    // Stamp completion — RETRIED. If this never lands, the dashboard gate
+    // re-opens this modal on the next load, so the venue looks like it "never
+    // reached the dashboard" even though it paid/went live. Capture the failure
+    // so it's visible instead of silently bouncing them.
+    let finished = false;
+    for (let attempt = 0; attempt < 3 && !finished; attempt++) {
+      try {
+        const r = await fetch('/api/onboarding/state', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'finish' }),
+        });
+        if (r.ok) { finished = true; break; }
+      } catch { /* retry */ }
+      await new Promise((res) => setTimeout(res, 200 * (attempt + 1)));
+    }
+    if (!finished) {
+      try { trackClient('onboarding_finish_failed', { label: 'Go-live finish write failed after retries' }); } catch { /* non-fatal */ }
+    }
     setLiveUrl(url);
     onLive?.();
     setPhase('live');
@@ -1262,7 +1274,7 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
         >
           <Inbox size={17} /> Open my Lead Inbox
         </a>
-        <button onClick={onDone} className="mt-3 text-sm text-gray-400 hover:text-gray-600">Go to my dashboard</button>
+        <a href="/dashboard" onClick={onDone} className="mt-3 inline-block text-sm text-gray-400 hover:text-gray-600">Go to my dashboard</a>
       </div>
     );
   }

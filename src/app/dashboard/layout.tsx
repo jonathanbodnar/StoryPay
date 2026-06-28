@@ -94,7 +94,10 @@ export default async function DashboardLayout({
  // having finished LunarPay payment onboarding. If they want to take payments
  // they can opt into /setup from the dashboard itself.
 
- if (trialExpiredWall) {
+ // A super admin "viewing as venue" must never be trapped behind a full-screen
+ // gate — they need the dashboard + the exit ribbon. Show the wall only to the
+ // actual venue.
+ if (trialExpiredWall && !isImpersonating) {
    return <TrialExpiredWall venueName={user.venueName} />;
  }
 
@@ -120,7 +123,9 @@ export default async function DashboardLayout({
  {children}
  </DashboardShell>
  <AskAIWidget />
- {user.isAdmin && <OnboardingWizard />}
+ {/* Suppress the blocking go-live/card modal while a super admin is viewing as
+     this venue — otherwise it covers the exit ribbon and they can't get back. */}
+ {user.isAdmin && !isImpersonating && <OnboardingWizard />}
  </div>
  );
 }

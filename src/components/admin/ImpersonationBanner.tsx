@@ -33,7 +33,7 @@ export default function ImpersonationBanner({ venueName }: { venueName: string }
   }
 
   return (
-    <div className="fixed top-0 inset-x-0 z-[200] flex items-center justify-between gap-3 bg-gray-900 px-4 py-2 text-white shadow-lg">
+    <div className="fixed top-0 inset-x-0 z-[2147483647] flex items-center justify-between gap-3 bg-gray-900 px-4 py-2 text-white shadow-lg">
       <div className="flex items-center gap-2 text-sm font-medium">
         <ShieldCheck size={15} className="text-emerald-400 shrink-0" />
         <span className="text-gray-300">Viewing as</span>

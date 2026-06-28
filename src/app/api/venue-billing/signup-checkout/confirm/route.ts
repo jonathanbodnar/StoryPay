@@ -15,6 +15,7 @@ import {
 } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
+import { trackEvent } from '@/lib/analytics';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -162,29 +163,41 @@ export async function POST(req: NextRequest) {
 
     console.log('[signup-confirm] subscription created:', newSubId);
 
-    // ── Persist to venue row ─────────────────────────────────────────────────
-    await supabaseAdmin
-      .from('venues')
-      .update({
-        directory_subscription_status:      'trialing',
-        directory_subscription_external_id: newSubId,
-        platform_lunarpay_customer_id:      String(customerId),
-        directory_trial_started_at:         trialStartedAt,
-        directory_trial_ends_at:            trialEndsAt,
-        directory_trial_is_forever:         false,
-        directory_trial_plan_id:            planId,
-        directory_trial_consumed:           true,
-        directory_addon_verified:           addonVerified,
-        directory_addon_sponsored:          addonSponsored,
-        directory_addon_concierge:          addonConcierge,
-        // Mirror the addon selections into the directory badge status fields so
-        // the admin portal shows them correctly (it reads *_status, not *_addon_*).
-        ...(addonVerified  ? { directory_verified_status:  'approved' } : {}),
-        ...(addonSponsored ? { directory_sponsored_status: 'approved' } : {}),
-      })
-      .eq('id', venueId);
+    // ── Persist to venue row (authoritative — must reflect the live LP sub) ───
+    // The card is ALREADY vaulted and the subscription ALREADY created at
+    // LunarPay by this point. If we fail to mirror that onto the venue row, the
+    // venue is left "stuck" behind the go-live gate (their dashboard keeps
+    // re-opening the card modal) and the conversion funnel under-reports them as
+    // "no card". So retry the write, and if it still fails, capture it loudly
+    // rather than silently returning success.
+    const venueUpdate: Record<string, unknown> = {
+      directory_subscription_status:      'trialing',
+      directory_subscription_external_id: newSubId,
+      platform_lunarpay_customer_id:      String(customerId),
+      directory_trial_started_at:         trialStartedAt,
+      directory_trial_ends_at:            trialEndsAt,
+      directory_trial_is_forever:         false,
+      directory_trial_plan_id:            planId,
+      directory_trial_consumed:           true,
+      directory_addon_verified:           addonVerified,
+      directory_addon_sponsored:          addonSponsored,
+      directory_addon_concierge:          addonConcierge,
+      // Mirror the addon selections into the directory badge status fields so
+      // the admin portal shows them correctly (it reads *_status, not *_addon_*).
+      ...(addonVerified  ? { directory_verified_status:  'approved' } : {}),
+      ...(addonSponsored ? { directory_sponsored_status: 'approved' } : {}),
+    };
 
-    // ── Audit log ────────────────────────────────────────────────────────────
+    let persisted = false;
+    let persistError: string | null = null;
+    for (let attempt = 0; attempt < 3 && !persisted; attempt++) {
+      const { error: upErr } = await supabaseAdmin.from('venues').update(venueUpdate).eq('id', venueId);
+      if (!upErr) { persisted = true; break; }
+      persistError = upErr.message;
+      await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
+    }
+
+    // ── Audit log (durable reconciliation record — always written) ────────────
     await supabaseAdmin.from('platform_billing_events').insert({
       venue_id:          venueId,
       directory_plan_id: planId,
@@ -202,10 +215,30 @@ export async function POST(req: NextRequest) {
         monthly_cents:       charge.total_cents,
         flow:                'inline_elements',
         payment_method:      paymentMethod,
+        venue_row_persisted: persisted,
       },
     });
 
-    return NextResponse.json({ ok: true, subscription_id: newSubId, trial_ends_at: trialEndsAt });
+    // ── Funnel tracking (authoritative, server-side) ──────────────────────────
+    // Fires from the server the moment the card is genuinely on file, so the
+    // funnel can't be fooled by an optimistic client beacon. On a persist
+    // failure we record a distinct, loud signal so stuck venues are visible.
+    if (persisted) {
+      await trackEvent({
+        event: 'card_on_file', kind: 'milestone', venueId, role: 'owner',
+        label: 'Card vaulted + trial subscription created',
+        properties: { subId: newSubId, monthlyCents: charge.total_cents },
+      });
+    } else {
+      console.error('[signup-confirm] venue row update FAILED after retries:', persistError, { venueId, newSubId });
+      await trackEvent({
+        event: 'go_live_persist_failed', kind: 'milestone', venueId, role: 'owner',
+        label: 'Card vaulted but venue row write failed — venue may be stuck behind go-live gate',
+        properties: { subId: newSubId, customerId: String(customerId), error: persistError },
+      });
+    }
+
+    return NextResponse.json({ ok: true, persisted, subscription_id: newSubId, trial_ends_at: trialEndsAt });
   } catch (err) {
     console.error('[signup-confirm] UNCAUGHT:', err);
     return NextResponse.json(
