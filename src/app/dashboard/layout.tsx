@@ -123,9 +123,12 @@ export default async function DashboardLayout({
  {children}
  </DashboardShell>
  <AskAIWidget />
- {/* Suppress the blocking go-live/card modal while a super admin is viewing as
-     this venue — otherwise it covers the exit ribbon and they can't get back. */}
- {user.isAdmin && !isImpersonating && <OnboardingWizard />}
+ {/* Onboarding wizard:
+     • Regular venue owners (isAdmin, not impersonating): hard card-gate, no dismiss.
+     • Super-admin impersonating: opens at the venue's current step, dismissible via X
+       so the admin has full control of the subaccount. Venue owner's own experience
+       is completely unchanged. */}
+ {(user.isAdmin || isImpersonating) && <OnboardingWizard adminView={isImpersonating} />}
  </div>
  );
 }

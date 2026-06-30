@@ -82,7 +82,15 @@ type ImportedProfile = {
   venue_type: string | null;
 };
 
-export default function OnboardingWizard() {
+/**
+ * Props:
+ *   adminView — true when a super-admin is viewing as this venue via impersonation.
+ *               The modal still opens at the venue's current step so the admin can
+ *               inspect/continue setup, but an X button is always shown so they can
+ *               dismiss without completing the gate. The venue owner's own experience
+ *               (hard card gate) is completely unchanged.
+ */
+export default function OnboardingWizard({ adminView = false }: { adminView?: boolean }) {
   const [checking, setChecking] = useState(true);
   const [complete, setComplete] = useState(false); // listing published + guide live, or onboarded
   const [open, setOpen] = useState(false);          // modal open
@@ -137,7 +145,14 @@ export default function OnboardingWizard() {
           setComplete(false); // override so render guard doesn't block a restarted wizard
           setOpen(true);
         } else if (!isComplete) {
-          if (legacy) {
+          if (adminView) {
+            // Super-admin impersonation view: auto-open at the venue's current step
+            // so the admin can see exactly where they left off. The admin can dismiss
+            // via the X button without completing the gate — their view, their rules.
+            // We don't write to sessionStorage so the admin dismissal is ephemeral
+            // (refreshing re-opens at current step, matching the venue's real state).
+            setOpen(true);
+          } else if (legacy) {
             // Legacy / grandfathered venues are NOT card-gated. Keep the old
             // optional behavior: auto-open once per session, dismissible, and the
             // launcher bubble re-summons it.
@@ -197,14 +212,17 @@ export default function OnboardingWizard() {
     scrollTimer.current = setTimeout(() => setScrolling(false), 700);
   }, []);
 
-  // Dismiss (legacy venues only — non-legacy is hard-gated, see below). Closing
-  // saves progress so they resume exactly where they left off, and the launcher
-  // bubble reopens at last_step.
+  // Dismiss: legacy venues + super-admin impersonation view. Non-legacy venue
+  // owners are hard-gated (no dismiss path). Admin dismissal is ephemeral —
+  // we don't write SKIP_KEY so the next page load re-opens at current step,
+  // faithfully reflecting what the venue owner will see.
   const dismiss = useCallback(() => {
-    try { sessionStorage.setItem(SKIP_KEY, '1'); } catch {}
+    if (!adminView) {
+      try { sessionStorage.setItem(SKIP_KEY, '1'); } catch {}
+    }
     saveStep(step);
     setOpen(false);
-  }, [saveStep, step]);
+  }, [adminView, saveStep, step]);
 
   // Onboarding truly done — close for good and let the dashboard react.
   const finishAndClose = useCallback(() => {
@@ -251,18 +269,20 @@ export default function OnboardingWizard() {
           </button>
         )}
 
-        {/* Dismiss control only for legacy/grandfathered venues. For everyone
-            else onboarding is a hard card-gate: no dismiss, the modal reopens on
-            every load (resuming at last_step) until they go live. Progress is
-            saved on every step, so leaving and returning never loses work. */}
-        {isLegacy && (
+        {/* Dismiss control:
+            • Legacy/grandfathered venues — always dismissible (optional flow).
+            • Super-admin impersonation — always dismissible so admins are never
+              trapped; dismiss is ephemeral (no SKIP_KEY) so the next page load
+              re-opens at the same step, showing the admin what the venue sees.
+            • Non-legacy venue owners — hard-gated, no dismiss path. */}
+        {(isLegacy || adminView) && (
           <button
             onClick={dismiss}
             className="absolute right-4 top-4 z-10 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-            aria-label="Save and finish later"
-            title="Save and finish later"
+            aria-label={adminView ? 'Close (admin view)' : 'Save and finish later'}
+            title={adminView ? 'Close — you are viewing as this venue' : 'Save and finish later'}
           >
-            Save &amp; close <X size={15} />
+            {adminView ? <X size={15} /> : <><span>Save &amp; close</span><X size={15} /></>}
           </button>
         )}
 
