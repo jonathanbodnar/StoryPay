@@ -16,10 +16,25 @@
  *   active                — approved + API keys on file (can charge)
  *   denied                — Fortis rejected the application
  *
- * LunarPay's Agency API returns its own raw status strings (ACTIVE, PENDING,
- * IN_REVIEW, DOCUMENTATION_REQUIRED, …). `normalizeLunarPayStatus()` maps
- * anything we receive into the canonical set above so we never persist an
- * unknown value that the UI can't render.
+ * LunarPay's Agency API (`GET /agency/merchants/:id`) already canonicalizes
+ * Fortis's internal states to a small set: PENDING, BANK_INFORMATION_SENT,
+ * PENDING_REVIEW, ACTIVE, DENIED. It does NOT leak raw Fortis strings like
+ * DOCUMENTATION_REQUIRED — the extra synonym branches in
+ * `normalizeLunarPayStatus()` below are defensive (older StoryPay code paths
+ * and manual DB edits over time), not something the live API currently sends.
+ *
+ * The one real ambiguity confirmed with LunarPay: their PENDING value is
+ * returned BOTH for "merchant exists, no onboarding record at all" and for
+ * "merchant registered, banking form not yet submitted" — it's their status
+ * fallback when there's nothing else to report, not a Fortis status. We
+ * disambiguate the "never started" case by never calling the merchant-fetch
+ * endpoint unless `lunarpay_merchant_id` is already set (see the two status
+ * routes) — so a bare PENDING from LunarPay always means "registered" here,
+ * never "not_started". LunarPay has confirmed a future patch will return
+ * `null` instead of PENDING for the no-onboarding-record case; our fallback
+ * logic already handles that (an empty/null raw value falls through to the
+ * caller-provided `fallback`), so no changes will be needed on our side when
+ * that ships.
  */
 
 export const LUNARPAY_STATUSES = [

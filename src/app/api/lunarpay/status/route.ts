@@ -87,11 +87,13 @@ export async function GET() {
     const lpStatus = (data?.onboarding?.status ?? data?.status ?? '').toUpperCase();
     const isActive = data?.isActive === true || lpStatus === 'ACTIVE';
 
-    // CRITICAL: never write a raw LunarPay status (DOCUMENTATION_REQUIRED,
-    // IN_REVIEW, etc.) into the DB column — the wizard can't render unknown
-    // values and the venue ends up shown the wrong step. Map everything into
-    // the canonical set. We use the venue's CURRENT status as the fallback so
-    // an unrecognized response can't regress the state backward.
+    // Normalize before persisting — LunarPay's own PENDING value is
+    // overloaded (returned both for "no onboarding record" and "registered,
+    // banking not yet submitted"); since we only ever reach this branch when
+    // v.lunarpay_merchant_id is already set (see the guard above), a bare
+    // PENDING here always means "registered", never "not_started". We pass
+    // the venue's CURRENT status as the fallback too, so an unrecognized or
+    // empty response can't regress state backward through the wizard.
     const fallbackStatus = normalizeLunarPayStatus(v.onboarding_status, 'registered');
     const normalized = normalizeLunarPayStatus(lpStatus.toLowerCase(), fallbackStatus);
 
