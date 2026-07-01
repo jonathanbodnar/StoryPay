@@ -280,7 +280,7 @@ export default function ListingPage() {
   // open; closes when the user picks a suggestion or clicks outside.
   useEffect(() => {
     const q = (listing.location_full ?? '').trim();
-    if (!addrOpen || q.length < 4) {
+    if (!addrOpen || q.length < 3) {
       setAddrSuggestions([]);
       setAddrLoading(false);
       return;
@@ -341,12 +341,27 @@ export default function ListingPage() {
           return [street, cityLine].filter(Boolean).join(', ');
         }
 
+        /**
+         * Last-resort cleanup of a raw Nominatim display_name: strips country,
+         * county, township & co., and abbreviates the state — so noise never
+         * gets saved into location_full even when structured details are missing.
+         */
+        function cleanDisplayName(name: string): string {
+          const NOISE = /\b(county|township|borough|parish|district|municipality)\b/i;
+          return name
+            .split(',')
+            .map((p) => p.trim())
+            .filter((p) => p && !/^(united states|usa?)$/i.test(p) && !NOISE.test(p))
+            .map((p) => US_STATE_ABBR[p.toLowerCase()] ?? p)
+            .join(', ');
+        }
+
         const mapped: AddressSuggestion[] = rows.map((r) => {
           const a = r.address ?? {};
           const stateRaw = a.state ?? '';
           return {
             place_id: String(r.place_id),
-            display_name: buildCleanAddress(a) || r.display_name,
+            display_name: buildCleanAddress(a) || cleanDisplayName(r.display_name),
             lat: parseFloat(r.lat),
             lng: parseFloat(r.lon),
             city: resolveCity(a),
@@ -683,7 +698,7 @@ export default function ListingPage() {
               placeholder="Start typing — we'll find your location on the map"
               autoComplete="off"
             />
-            {addrOpen && (listing.location_full ?? '').trim().length >= 4 && (
+            {addrOpen && (listing.location_full ?? '').trim().length >= 3 && (
               <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
                 {addrLoading && addrSuggestions.length === 0 ? (
                   <div className="px-4 py-3 text-xs text-gray-400">Searching…</div>
