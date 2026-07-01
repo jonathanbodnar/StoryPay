@@ -21,7 +21,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
 
-  if (venue.onboarding_status && venue.onboarding_status !== 'pending') {
+  if (venue.onboarding_status &&
+      venue.onboarding_status !== 'not_started' &&
+      venue.onboarding_status !== 'registered' &&
+      venue.onboarding_status !== 'pending') {
+    // Allow legacy 'pending' to pass through (see lunarpay-status.ts) so we
+    // don't block a venue whose row predates the canonical status rename.
     return NextResponse.json(
       { error: 'Application has already been submitted' },
       { status: 409 }
@@ -75,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     // Update venue with onboarding status and business name
     const updateData: Record<string, unknown> = {
-      onboarding_status: (data.status || 'bank_information_sent').toLowerCase(),
+      onboarding_status: 'bank_information_sent',
       onboarding_mpa_url: data.mpaEmbedUrl || data.mpaLink || null,
     };
 
@@ -96,7 +101,7 @@ export async function POST(request: NextRequest) {
       .eq('id', venueId);
 
     return NextResponse.json({
-      status: (data.status || 'bank_information_sent').toLowerCase(),
+      status: 'bank_information_sent',
       mpaEmbedUrl: data.mpaEmbedUrl || null,
       mpaLink: data.mpaLink || null,
       message: data.message || 'Onboarding submitted',

@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
+import { normalizeLunarPayStatus } from '@/lib/lunarpay-status';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -40,7 +41,7 @@ export async function GET() {
   const v = venue as VenueRow | null;
 
   if (!v?.lunarpay_merchant_id) {
-    return NextResponse.json({ status: 'not_registered', isActive: false });
+    return NextResponse.json({ status: 'not_started', isActive: false });
   }
 
   // If already active we can skip the live poll
@@ -58,7 +59,7 @@ export async function GET() {
 
   if (!AGENCY_KEY) {
     return NextResponse.json({
-      status: v.onboarding_status ?? 'registered',
+      status: normalizeLunarPayStatus(v.onboarding_status, 'registered'),
       isActive: false,
       merchantId: v.lunarpay_merchant_id,
     });
@@ -86,7 +87,15 @@ export async function GET() {
     const lpStatus = (data?.onboarding?.status ?? data?.status ?? '').toUpperCase();
     const isActive = data?.isActive === true || lpStatus === 'ACTIVE';
 
-    const updates: Record<string, unknown> = { onboarding_status: lpStatus.toLowerCase() || v.onboarding_status };
+    // CRITICAL: never write a raw LunarPay status (DOCUMENTATION_REQUIRED,
+    // IN_REVIEW, etc.) into the DB column — the wizard can't render unknown
+    // values and the venue ends up shown the wrong step. Map everything into
+    // the canonical set. We use the venue's CURRENT status as the fallback so
+    // an unrecognized response can't regress the state backward.
+    const fallbackStatus = normalizeLunarPayStatus(v.onboarding_status, 'registered');
+    const normalized = normalizeLunarPayStatus(lpStatus.toLowerCase(), fallbackStatus);
+
+    const updates: Record<string, unknown> = { onboarding_status: normalized };
 
     if (isActive && data?.secretKey && data?.publishableKey) {
       updates.lunarpay_secret_key = data.secretKey;
@@ -100,7 +109,7 @@ export async function GET() {
     await supabaseAdmin.from('venues').update(updates).eq('id', venueId);
 
     return NextResponse.json({
-      status: (updates.onboarding_status as string) ?? v.onboarding_status,
+      status: (updates.onboarding_status as string) ?? normalized,
       isActive,
       merchantId: v.lunarpay_merchant_id,
       orgToken: data?.orgToken ?? v.lunarpay_org_token,
@@ -111,7 +120,7 @@ export async function GET() {
     console.error('[lunarpay/status]', err);
     // Return cached status on network error
     return NextResponse.json({
-      status: v.onboarding_status ?? 'registered',
+      status: normalizeLunarPayStatus(v.onboarding_status, 'registered'),
       isActive: false,
       merchantId: v.lunarpay_merchant_id,
       orgToken: v.lunarpay_org_token,

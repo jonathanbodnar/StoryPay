@@ -67,7 +67,9 @@ export function getLunarPayAdminSummary(venue: Record<string, unknown>): LunarPa
   }
 
   const labelMap: Record<string, string> = {
-    pending: 'Pending onboarding',
+    not_started: 'Not started',
+    registered: 'Registered',
+    pending: 'Registered',
     bank_information_sent: 'Bank information sent',
     under_review: 'Under review',
   };

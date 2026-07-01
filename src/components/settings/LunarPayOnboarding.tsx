@@ -160,15 +160,22 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
         setStep(5);
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
         onActivatedRef.current?.();
-      } else if (data.status === 'not_registered') {
+      } else if (data.status === 'not_started' || data.status === 'not_registered') {
+        // No LunarPay merchant on file — show the welcome screen.
         setStep(0);
       } else if (data.status === 'registered') {
-        setStep(2); // already registered, go to banking step
+        // Merchant created, but Step 2 (banking/MPA) hasn't been submitted.
+        setStep(2);
         if (data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
-      } else if (['bank_information_sent','pending_review','pending'].includes(data.status ?? '')) {
+      } else if (['bank_information_sent','under_review','pending_review','pending'].includes(data.status ?? '')) {
+        // Application is in flight — Fortis has the paperwork.
         setStep(4);
         if (data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
-      } else if (['active'].includes(data.status ?? '')) {
+      } else if (data.status === 'denied') {
+        // Keep them on the welcome screen; the support team handles denials
+        // manually. (We don't expose a denial UI in the wizard.)
+        setStep(0);
+      } else if (data.status === 'active') {
         setStep(5);
       }
     } finally {

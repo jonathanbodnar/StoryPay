@@ -26,5 +26,8 @@ export async function GET() {
   const status = (data as { onboarding_status?: string | null } | null)?.onboarding_status ?? null;
   const active = status === 'active';
 
-  return NextResponse.json({ active, status: status ?? 'not_registered' });
+  return NextResponse.json({
+    active,
+    status: status ?? (active ? 'active' : 'not_started'),
+  });
 }

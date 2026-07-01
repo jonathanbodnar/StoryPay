@@ -134,10 +134,14 @@ export async function POST(request: NextRequest) {
       .limit(1);
     const venueId = (venues as { id: string }[] | null)?.[0]?.id;
     if (venueId) {
+      // Persist the canonical 'denied' status. (We previously stored a
+      // 'denied_<reason>' string, which violated the CHECK constraint on
+      // venues.onboarding_status and broke the wizard's status mapper.)
       await supabaseAdmin
         .from('venues')
-        .update({ onboarding_status: `denied_${onboarding.status.toLowerCase()}` })
+        .update({ onboarding_status: 'denied' })
         .eq('id', venueId);
+      console.log('[webhooks/lunarpay] venue denied', venueId, 'reason:', onboarding.status);
     }
   }
 

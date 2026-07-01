@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { agencyCreateMerchant } from '@/lib/lunarpay';
 import { getLunarPayAdminSummary } from '@/lib/lunarpay-venue-admin';
+import { normalizeLunarPayStatus } from '@/lib/lunarpay-status';
 import { sendEmail } from '@/lib/email';
 import { normalizePhone } from '@/lib/ghl';
 import { getAdminIdentity } from '@/lib/admin-identity';
@@ -151,7 +152,14 @@ export async function POST(request: Request) {
           lunarpay_secret_key: merchant.secretKey,
           lunarpay_publishable_key: merchant.publishableKey,
           lunarpay_org_token: merchant.orgToken,
-          onboarding_status: (merchant.onboardingStatus || 'pending').toLowerCase(),
+          // Merchant created at LunarPay but no onboarding form submitted
+          // yet — "registered", NOT "pending". The two used to be conflated,
+          // which made the admin UI show "Pending onboarding" for venues
+          // that had in fact finished registration.
+          onboarding_status: normalizeLunarPayStatus(
+            (merchant.onboardingStatus as string | undefined) ?? 'registered',
+            'registered',
+          ),
           onboarding_mpa_url: merchant.mpaEmbedUrl || null,
         };
       } catch (lpErr) {
@@ -186,7 +194,10 @@ export async function POST(request: Request) {
       owner_last_name:     trimmedLast,
       setup_completed:     true,
       ghl_location_id:     ghlLocationId || null,
-      onboarding_status:   'pending',
+      // Venue row created before any LunarPay merchant exists — this is the
+      // canonical "hasn't started" state. If merchant provisioning succeeded,
+      // the spread of `merchantData` below overrides this to "registered".
+      onboarding_status:   'not_started',
       ...merchantData,
     };
 

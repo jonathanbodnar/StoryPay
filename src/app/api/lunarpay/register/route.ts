@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
     .update({
       lunarpay_merchant_id: data.merchantId,
       lunarpay_org_token:   data.orgToken,
+      // Merchant created at LunarPay but no banking/MPA form submitted yet.
       onboarding_status:    'registered',
     })
     .eq('id', venueId);

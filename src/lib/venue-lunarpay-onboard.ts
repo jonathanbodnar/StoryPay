@@ -15,6 +15,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { agencyCreateMerchant } from '@/lib/lunarpay';
+import { normalizeLunarPayStatus } from '@/lib/lunarpay-status';
 
 interface OnboardArgs {
   venueId:      string;
@@ -64,9 +65,10 @@ export async function provisionVenueLunarPayMerchant(args: OnboardArgs): Promise
     const merchant = (lpResult as { data?: Record<string, unknown> }).data
       || (lpResult as Record<string, unknown>);
 
-    const onboardStatus = String(
-      (merchant.onboardingStatus as string | undefined) ?? 'pending',
-    ).toLowerCase();
+    const onboardStatus = normalizeLunarPayStatus(
+      (merchant.onboardingStatus as string | undefined) ?? 'registered',
+      'registered',
+    );
 
     await supabaseAdmin
       .from('venues')

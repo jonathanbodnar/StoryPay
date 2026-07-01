@@ -8,7 +8,7 @@ async function provisionVenue(locationId: string) {
     .insert({
       name: 'New Venue',
       ghl_location_id: locationId,
-      onboarding_status: 'pending',
+      onboarding_status: 'not_started',
       setup_completed: false,
     })
     .select()

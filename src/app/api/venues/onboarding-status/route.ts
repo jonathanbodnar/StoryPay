@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { agencyGetMerchant } from '@/lib/lunarpay';
+import { normalizeLunarPayStatus, type LunarPayStatus as LunarPayCanonical } from '@/lib/lunarpay-status';
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -18,10 +19,14 @@ export async function GET() {
     .single();
 
   if (venueError || !venue?.lunarpay_merchant_id) {
-    return NextResponse.json(
-      { error: 'Venue not found or missing merchant account' },
-      { status: 404 }
-    );
+    // No merchant on file yet — return the canonical "hasn't started" status
+    // so the wizard shows the welcome screen instead of erroring. The previous
+    // behaviour (404 "missing merchant account") made the venue think the
+    // system was broken when in fact they just hadn't registered yet.
+    return NextResponse.json({
+      status: 'not_started',
+      isActive: false,
+    });
   }
 
   try {
@@ -36,7 +41,15 @@ export async function GET() {
       merchant.onboardingStatus === 'ACTIVE' ||
       onboarding.status === 'ACTIVE';
 
-    let status: string;
+    // Use the venue's CURRENT persisted status as the normalization fallback
+    // so a malformed / unrecognized LunarPay response can never regress the
+    // owner backward through the wizard.
+    const previousStatus = normalizeLunarPayStatus(
+      venue.onboarding_status,
+      venue.lunarpay_merchant_id ? 'registered' : 'not_started',
+    );
+
+    let status: LunarPayCanonical;
     if (isActive) {
       status = 'active';
     } else {
@@ -45,14 +58,8 @@ export async function GET() {
         merchant.onboardingStatus ||
         merchant.status ||
         venue.onboarding_status ||
-        'pending';
-      status = rawStatus.toLowerCase().replace(/\s+/g, '_');
-    }
-
-    const allowedStatuses = ['pending', 'bank_information_sent', 'under_review', 'active', 'denied'];
-    if (!allowedStatuses.includes(status)) {
-      // Normalize unknown statuses: if it was previously submitted, keep it as under_review
-      status = venue.onboarding_status === 'pending' ? 'pending' : 'under_review';
+        'registered';
+      status = normalizeLunarPayStatus(String(rawStatus), previousStatus);
     }
 
     const mpaUrl =
