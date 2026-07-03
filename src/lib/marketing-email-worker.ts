@@ -808,9 +808,10 @@ export async function buildMergeVars(
     // Pricing guide — short branded link (/g/{code}) that redirects to the
     // full guide page. The short code is unique per venue and never changes,
     // so any SMS/email containing this link stays valid indefinitely.
-    // ?l={leadId} is forwarded through the redirect for view tracking.
-    pricing_guide_url:         buildGuideShortUrl(base, venueId, leadId, (venue as { guide_short_code?: string | null } | null)?.guide_short_code),
-    'venue.pricing_guide_url': buildGuideShortUrl(base, venueId, leadId, (venue as { guide_short_code?: string | null } | null)?.guide_short_code),
+    // For SMS we omit ?l= so the link stays as short as possible (character
+    // limits matter). Email keeps the lead param for per-lead view tracking.
+    pricing_guide_url:         buildGuideShortUrl(base, venueId, forSms ? '' : leadId, (venue as { guide_short_code?: string | null } | null)?.guide_short_code),
+    'venue.pricing_guide_url': buildGuideShortUrl(base, venueId, forSms ? '' : leadId, (venue as { guide_short_code?: string | null } | null)?.guide_short_code),
   };
 }
 
