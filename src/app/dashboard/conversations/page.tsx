@@ -2262,14 +2262,15 @@ export default function ConversationsPage() {
                                 fromName={
                                   fromUs
                                     ? m.author_label || 'You'
-                                    : m.contact_from_name ||
-                                      [
-                                        threadDetail?.venue_customers?.first_name,
-                                        threadDetail?.venue_customers?.last_name,
-                                      ]
-                                        .filter(Boolean)
-                                        .join(' ') ||
-                                      'Contact'
+                                    : toTitleCase(
+                                        m.contact_from_name ||
+                                        [
+                                          threadDetail?.venue_customers?.first_name,
+                                          threadDetail?.venue_customers?.last_name,
+                                        ]
+                                          .filter(Boolean)
+                                          .join(' '),
+                                      ) || 'Contact'
                                 }
                                 fromEmail={
                                   fromUs
@@ -2280,12 +2281,12 @@ export default function ConversationsPage() {
                                 }
                                 toName={
                                   fromUs
-                                    ? [
+                                    ? toTitleCase([
                                         threadDetail?.venue_customers?.first_name,
                                         threadDetail?.venue_customers?.last_name,
                                       ]
                                         .filter(Boolean)
-                                        .join(' ') || null
+                                        .join(' ')) || null
                                     : 'You'
                                 }
                                 toEmail={
@@ -2591,7 +2592,7 @@ export default function ConversationsPage() {
                         Notify
                       </span>
                       {team.map((mem) => {
-                        const label = [mem.first_name, mem.last_name].filter(Boolean).join(' ') || mem.email || 'Member';
+                        const label = toTitleCase([mem.first_name, mem.last_name].filter(Boolean).join(' ')) || mem.email || 'Member';
                         const on = mentionedIds.includes(mem.id);
                         return (
                           <button
@@ -2696,7 +2697,7 @@ export default function ConversationsPage() {
                           return (
                             <div className="mx-2 mb-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
                               {filtered.map((m, i) => {
-                                const label = [m.first_name, m.last_name].filter(Boolean).join(' ') || m.email || 'Member';
+                                const label = toTitleCase([m.first_name, m.last_name].filter(Boolean).join(' ')) || m.email || 'Member';
                                 return (
                                   <button
                                     key={m.id}
@@ -3133,7 +3134,7 @@ export default function ConversationsPage() {
               </div>
               <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-100">
                 {contactResults.map((c) => {
-                  const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || c.customer_email;
+                  const name = toTitleCase([c.first_name, c.last_name].filter(Boolean).join(' ')) || c.customer_email;
                   return (
                     <button
                       key={c.id}
