@@ -43,6 +43,13 @@ export const supportChannels = {
   /** Fired whenever a new lead is created for a venue so the Lead Inbox badge
    *  (sidebar + mobile tab bar) updates instantly instead of polling. */
   venueLeads:       (venueId: string) => `venue:${venueId}:leads`,
+  /**
+   * Venue-wide conversations channel — fired on every new message across ALL
+   * threads for the venue. The conversations page subscribes here so the
+   * sidebar thread list updates (unread badge, preview, timestamp, sort order)
+   * even when the message arrived in a thread other than the one currently open.
+   */
+  venueConversations: (venueId: string) => `venue:${venueId}:conversations`,
 } as const;
 
 /** Fired when a new lead is created so the Lead Inbox badge updates live. */

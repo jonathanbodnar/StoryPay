@@ -87,11 +87,16 @@ async function send(channelName: string, event: string, payload: unknown): Promi
 // ─── Bride conversations ───────────────────────────────────────────────────
 
 export async function broadcastBrideMessage(evt: BrideMessageEvent): Promise<void> {
-  // Fan out to admin inbox + active thread + venue's conversations view.
+  // Fan out to:
+  //   1. admin inbox (all venues' bride replies)
+  //   2. admin per-thread channel
+  //   3. venue per-thread channel (message appears live in open chat)
+  //   4. venue-wide conversations channel (sidebar card updates for any thread)
   await Promise.allSettled([
-    send(supportChannels.brideInbox(),                                'message', evt),
-    send(supportChannels.brideThread(evt.threadId),                   'message', evt),
-    send(supportChannels.venueThread(evt.venueId, evt.threadId),      'message', evt),
+    send(supportChannels.brideInbox(),                                    'message', evt),
+    send(supportChannels.brideThread(evt.threadId),                       'message', evt),
+    send(supportChannels.venueThread(evt.venueId, evt.threadId),          'message', evt),
+    send(supportChannels.venueConversations(evt.venueId),                 'message', evt),
   ]);
 }
 

@@ -54,6 +54,7 @@ import { trackClient } from '@/lib/analytics-client';
 
 interface ThreadRow {
   thread_id: string;
+  venue_id?: string;
   subject: string;
   last_message_at: string;
   last_message_preview: string | null;
@@ -684,6 +685,74 @@ export default function ConversationsPage() {
       stuckToBottomRef.current = true;
       scrollToBottomNow();
     }, [scrollToBottomNow]),
+  );
+
+  // Derive venue ID from the loaded thread list (or fall back to the open thread).
+  // This drives the venue-wide conversations subscription below.
+  const pageVenueId = useMemo(
+    () => threads.find((t) => t.venue_id)?.venue_id ?? threadDetail?.venue_id ?? null,
+    [threads, threadDetail],
+  );
+
+  // Keep a ref so the venue-wide handler below can read the current selectedId
+  // without needing to be in its dependency list (avoids re-subscribing on every
+  // selection change while still reading the freshest value).
+  const selectedIdRef = useRef(selectedId);
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+
+  // ── Venue-wide realtime: sidebar updates for ALL threads ───────────────────
+  // The per-thread subscription above only fires when a message lands in the
+  // currently open thread. This venue-wide channel fires for EVERY thread so
+  // we can update unread badges, previews, and sort order without a refresh —
+  // exactly like iMessage does when a message arrives in a closed conversation.
+  useBroadcastChannel(
+    pageVenueId ? supportChannels.venueConversations(pageVenueId) : null,
+    ['message'],
+    useCallback((_evt, payload) => {
+      const evt = payload as BrideMessageEvent;
+      if (!evt?.threadId || evt.supportOnly || evt.venueDirectMessage) return;
+
+      const isContact = evt.senderKind === 'contact';
+
+      setThreads((prev) => {
+        const idx = prev.findIndex((t) => t.thread_id === evt.threadId);
+        if (idx === -1) {
+          // Thread not yet in the list — reload silently to surface it.
+          void loadThreads({ silent: true });
+          return prev;
+        }
+
+        const updated = prev.map((t) => {
+          if (t.thread_id !== evt.threadId) return t;
+          return {
+            ...t,
+            last_message_preview: evt.body.slice(0, 120),
+            last_message_at: evt.createdAt,
+            // Increment unread for any contact (bride) reply.
+            // We intentionally keep it unread even if this thread is open,
+            // because our policy is "bride messages stay unread until replied to".
+            unread_count: isContact
+              ? (Number(t.unread_count) || 0) + 1
+              : t.unread_count,
+          };
+        });
+
+        // Re-sort: pinned threads stay anchored at the top; then newest first.
+        return [...updated].sort((a, b) => {
+          if (a.has_pinned && !b.has_pinned) return -1;
+          if (!a.has_pinned && b.has_pinned) return 1;
+          const at = new Date(a.last_message_at ?? 0).getTime();
+          const bt = new Date(b.last_message_at ?? 0).getTime();
+          return bt - at;
+        });
+      });
+
+      // Tell the nav badge to refresh so the sidebar "Conversations" count
+      // updates immediately alongside the card.
+      if (isContact && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('storypay:conversations-unread'));
+      }
+    }, [loadThreads]),
   );
 
   // Re-fetch the thread detail + threads list (incl. latest stages) when the user
