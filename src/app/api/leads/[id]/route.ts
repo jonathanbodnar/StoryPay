@@ -289,7 +289,7 @@ export async function PATCH(
   {
     const nextStageId = (leadRow.stage_id as string | null) ?? null;
     if (nextStageId !== previousStageId) {
-      void onMarketingStageChanged(venueId, id, nextStageId);
+      void onMarketingStageChanged(venueId, id, nextStageId, previousStageId);
     }
   }
 

@@ -14,6 +14,8 @@ import { addCalendarDaysYmd, resolveVenueTimezone, formatLeadOpportunityStamp } 
 import { formatInTimeZone } from 'date-fns-tz';
 import { logStepExecution } from '@/lib/workflow-execution-logs';
 import { canRunBookingSystem, venueCanRunBookingSystem, VENUE_ENTITLEMENT_COLUMNS, type VenueBillingState } from '@/lib/venue-entitlements';
+import { setLeadAiState } from '@/lib/ai-concierge/state-control';
+import type { AiState, AiVenueResources } from '@/lib/ai-concierge/types';
 
 const BATCH = 25;
 
@@ -110,7 +112,12 @@ export async function onMarketingStageChanged(
   venueId: string,
   leadId: string,
   newStageId: string | null,
+  previousStageId?: string | null,
 ): Promise<void> {
+  // ── AI Concierge: auto-activate when entering Followup, pause when leaving ──
+  void handleAiConciergeOnStageChange(venueId, leadId, newStageId, previousStageId);
+
+  // ── Marketing automation enrollment (existing logic) ──────────────────────
   if (!newStageId) return;
   const autos = await loadVenueActiveAutomations(venueId);
   for (const row of autos) {
@@ -120,6 +127,99 @@ export async function onMarketingStageChanged(
       return stages.length > 0 && stages.includes(newStageId);
     });
     if (matched) await enrollIfNew(row.id, venueId, leadId);
+  }
+}
+
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * When a lead is moved into the AI "Followup" pipeline stage, automatically
+ * activate AI Concierge (first message 24 h later).  When a lead is moved
+ * OUT of that stage, pause AI so messages stop immediately.
+ *
+ * Rules:
+ *   • Venue must have ai_concierge_enabled = true for the auto-activate path.
+ *   • TCPA hard opt-outs (ai_state = 'opted_out') are never re-activated by
+ *     a stage move — a human must intervene explicitly.
+ *   • Moving out only pauses leads that are currently ai_active or handoff;
+ *     dormant / exhausted / opted_out stays untouched.
+ */
+async function handleAiConciergeOnStageChange(
+  venueId: string,
+  leadId: string,
+  newStageId: string | null,
+  previousStageId?: string | null,
+): Promise<void> {
+  try {
+    // Load venue: need ai_concierge_enabled flag and the cached resources for
+    // the Followup stage UUID.
+    const { data: venue } = await supabaseAdmin
+      .from('venues')
+      .select('ai_concierge_enabled, ai_concierge_resources')
+      .eq('id', venueId)
+      .maybeSingle();
+
+    if (!venue) return;
+
+    const resources = ((venue as { ai_concierge_resources?: AiVenueResources }).ai_concierge_resources) ?? {};
+    const followupStageId = resources.stages?.followup;
+
+    // If AI resources haven't been initialized for this venue yet there's
+    // nothing to key off — bail gracefully.
+    if (!followupStageId) return;
+
+    const movingIn  = newStageId      === followupStageId;
+    const movingOut = previousStageId === followupStageId && !movingIn;
+
+    if (movingIn) {
+      // Venue must have AI concierge feature enabled before we auto-activate.
+      if (!venue.ai_concierge_enabled) return;
+
+      // Read current ai_state to skip TCPA opt-outs.
+      const { data: lead } = await supabaseAdmin
+        .from('leads')
+        .select('ai_state')
+        .eq('id', leadId)
+        .maybeSingle();
+
+      const currentState = ((lead as { ai_state?: AiState | null } | null)?.ai_state) ?? null;
+      if (currentState === 'opted_out') {
+        console.log(`[ai-concierge] stage→followup skipped — lead ${leadId} has opted out`);
+        return;
+      }
+
+      await setLeadAiState({
+        leadId,
+        venueId,
+        newState:         'ai_active',
+        reason:           'stage_moved_to_followup',
+        triggeredBy:      'pipeline:stage_change',
+        firstSendDelayMs: TWENTY_FOUR_HOURS_MS,
+      });
+
+    } else if (movingOut) {
+      // Read current state — only pause leads that are actively running or in
+      // handoff; leave dormant / exhausted / opted_out alone.
+      const { data: lead } = await supabaseAdmin
+        .from('leads')
+        .select('ai_state')
+        .eq('id', leadId)
+        .maybeSingle();
+
+      const currentState = ((lead as { ai_state?: AiState | null } | null)?.ai_state) ?? null;
+      if (currentState === 'ai_active' || currentState === 'handoff') {
+        await setLeadAiState({
+          leadId,
+          venueId,
+          newState:    'paused',
+          reason:      'stage_moved_out_of_followup',
+          triggeredBy: 'pipeline:stage_change',
+        });
+      }
+    }
+  } catch (e) {
+    // Never let AI side-effects break the stage-change response.
+    console.warn('[ai-concierge] handleAiConciergeOnStageChange failed:', e instanceof Error ? e.message : e);
   }
 }
 

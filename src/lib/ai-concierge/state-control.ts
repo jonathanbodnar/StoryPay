@@ -32,6 +32,13 @@ export interface SetLeadAiStateInput {
   triggeredBy: string;
   /** Pass true if you already loaded `leads.ai_state` so we skip a round-trip. */
   knownFromState?: AiState | null;
+  /**
+   * Override the delay (ms) before the first AI message is sent on activation.
+   * Defaults to 1 minute (a brief window to abort an accidental activation).
+   * Pass e.g. 24 * 60 * 60 * 1000 when triggering from a pipeline stage move
+   * so the first send happens 24 h after the stage change.
+   */
+  firstSendDelayMs?: number;
 }
 
 export interface SetLeadAiStateResult {
@@ -57,7 +64,7 @@ const SOFT_PAUSE_MIN_FUTURE_MS = 49 * 60 * 60 * 1000;
 export async function setLeadAiState(
   input: SetLeadAiStateInput,
 ): Promise<SetLeadAiStateResult> {
-  const { leadId, venueId, newState, reason, triggeredBy } = input;
+  const { leadId, venueId, newState, reason, triggeredBy, firstSendDelayMs } = input;
 
   // 1. Read current state and next-send-at (unless caller already has the state)
   let fromState: AiState | null = input.knownFromState ?? null;
@@ -107,18 +114,22 @@ export async function setLeadAiState(
   };
 
   if (newState === 'ai_active') {
-    // Always schedule the first send 1 minute out so there's a brief window to
-    // turn AI off if it was enabled by accident before the first message fires.
-    const oneMinuteFromNow = new Date(now.getTime() + 60_000).toISOString();
+    // Default 1-minute delay gives a brief abort window; callers can override
+    // (e.g. pipeline stage-change trigger uses a 24 h delay).
+    const delayMs      = firstSendDelayMs ?? 60_000;
+    const firstSendAt  = new Date(now.getTime() + delayMs).toISOString();
+
     if (fromState === 'paused' || isSoftPaused) {
-      // Resume — schedule in 1 minute so the operator can abort if needed
-      update.ai_next_send_at = oneMinuteFromNow;
+      update.ai_next_send_at = firstSendAt;
     } else if (fromState === null || fromState === 'dormant') {
-      // First-time activation — start the 60-day clock and queue first send in 1 minute
+      // First-time activation — start the 60-day clock
       update.ai_first_activated_at      = now.toISOString();
       update.ai_expires_at              = new Date(now.getTime() + SIXTY_DAYS_MS).toISOString();
-      update.ai_next_send_at            = oneMinuteFromNow;
+      update.ai_next_send_at            = firstSendAt;
       update.ai_booking_system_activated = true;
+    } else {
+      // Reactivating from handoff or any other state — use configured delay
+      update.ai_next_send_at = firstSendAt;
     }
   } else if (newState === 'paused' || newState === 'handoff') {
     // Stop the next scheduled send
