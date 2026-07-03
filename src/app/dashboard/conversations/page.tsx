@@ -159,6 +159,25 @@ interface TeamContact {
   sort_order: number;
 }
 
+/** Compact relative/absolute timestamp for the conversation sidebar card. */
+function fmtThreadTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const diffMs = Date.now() - d.getTime();
+    const diffMin = Math.floor(diffMs / 60_000);
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return `${diffH}h ago`;
+    const diffD = Math.floor(diffH / 24);
+    if (diffD === 1) return 'yesterday';
+    if (diffD < 7) return `${diffD}d ago`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } catch { return ''; }
+}
+
 // ── TeamContactButton ──────────────────────────────────────────────────────────
 // Small helper: opens/creates a conversation thread for a team contact and
 // sets the appropriate composer tab (email | sms).
@@ -532,13 +551,29 @@ export default function ConversationsPage() {
         setThreadDetail(null);
         setSendError(typeof err?.error === 'string' ? err.error : 'Could not load conversation');
       }
-      if (mRes.ok) setMessages(await mRes.json());
-      else setMessages([]);
+      // Load messages before deciding whether to mark read.
+      let loadedMsgs: { sender_kind?: string; visibility?: string; audience?: string }[] = [];
+      if (mRes.ok) {
+        loadedMsgs = await mRes.json();
+        setMessages(loadedMsgs as Parameters<typeof setMessages>[0]);
+      } else {
+        setMessages([]);
+      }
       // Force re-pin to bottom after messages render (handles late layout).
       stuckToBottomRef.current = true;
       scrollToBottomNow();
       if (tRes.ok) {
-        await fetch(`/api/conversations/threads/${id}/read`, { method: 'POST' });
+        // Only auto-mark read if the last external message was sent by the venue/team.
+        // If the bride (contact) sent the last message, keep the thread unread so
+        // the owner knows it still needs a reply. Manual mark-read + sending a reply
+        // are the only ways to clear the unread state for inbound messages.
+        const lastExternal = [...loadedMsgs]
+          .reverse()
+          .find((m) => m.visibility !== 'internal' && m.audience !== 'venue_direct');
+        const lastSenderIsBride = lastExternal?.sender_kind === 'contact';
+        if (!lastSenderIsBride) {
+          await fetch(`/api/conversations/threads/${id}/read`, { method: 'POST' });
+        }
         await loadThreads({ silent: true });
       }
     } finally {
@@ -1545,6 +1580,12 @@ export default function ConversationsPage() {
                           <Lock size={10} /> Team
                         </span>
                       )}
+                      {/* Last-message timestamp — right-aligned in the metadata row */}
+                      {t.last_message_at ? (
+                        <span className="ml-auto shrink-0 tabular-nums" title={new Date(t.last_message_at).toLocaleString()}>
+                          {fmtThreadTime(t.last_message_at)}
+                        </span>
+                      ) : null}
                       {(() => {
                         const tc = teamContacts.find(
                           (c) => c.email.toLowerCase() === (t.contact_email || '').toLowerCase(),

@@ -466,8 +466,17 @@ export function SupportInboxPanel() {
         throw new Error(d.error || `Failed (${r.status})`);
       }
       const d = (await r.json()) as ThreadDetail;
-      // Mark read with accurate message count so the unread badge computes correctly
-      markThreadRead(threadId, d.messages.filter(m => !m.support_only && m.audience !== 'venue_direct').length);
+      // Only mark read if the last external (bride-visible) message was sent by
+      // the venue or concierge — NOT by the bride. If the bride sent the last
+      // message, keep the thread unread so the inbox continues to surface it as
+      // needing a reply. A reply or explicit "mark unread" toggle are the only
+      // ways to clear the badge for inbound messages.
+      const visibleMsgs = d.messages.filter(m => !m.support_only && m.audience !== 'venue_direct');
+      const lastExternal = [...visibleMsgs].reverse().find(m => m.visibility !== 'internal');
+      const lastSenderIsBride = lastExternal?.sender_kind === 'contact';
+      if (!lastSenderIsBride) {
+        markThreadRead(threadId, visibleMsgs.length);
+      }
       setDetail(d);
 
       // If the user just clicked a row in the Venue Direct inbox, jump to the
@@ -647,8 +656,10 @@ export function SupportInboxPanel() {
       requestAnimationFrame(() => {
         messagesEndRef.current?.scrollIntoView({ block: 'end' });
       });
-      // Mark actively-viewed thread as read whenever a new message arrives in it
-      if (evt.threadId === activeThreadId && activeThreadId) {
+      // When a new message arrives in the active thread, only mark read if the
+      // sender is NOT the bride. Inbound (bride) messages should stay unread
+      // so the concierge knows a reply is needed.
+      if (evt.threadId === activeThreadId && activeThreadId && evt.senderKind !== 'contact') {
         markThreadRead(activeThreadId);
         setThreadLastReadAt(new Date().toISOString());
       }
