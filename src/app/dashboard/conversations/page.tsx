@@ -269,7 +269,7 @@ export default function ConversationsPage() {
   const [mobileShowThread, setMobileShowThread] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
-  const [contactResults, setContactResults] = useState<{ id: string; first_name: string; last_name: string; customer_email: string }[]>([]);
+  const [contactResults, setContactResults] = useState<{ id: string; first_name: string; last_name: string; customer_email: string; phone: string }[]>([]);
   const [creatingThread, setCreatingThread] = useState(false);
   const [newConversationError, setNewConversationError] = useState('');
   const [threadSearch, setThreadSearch] = useState('');
@@ -1361,7 +1361,7 @@ export default function ConversationsPage() {
           if (Array.isArray(d)) setContactResults(d.slice(0, 20));
         })
         .catch(() => setContactResults([]));
-    }, 300);
+    }, 150);
     return () => clearTimeout(t);
   }, [contactSearch, showNew]);
 
@@ -3140,10 +3140,11 @@ export default function ConversationsPage() {
                       type="button"
                       disabled={creatingThread}
                       onClick={() => createThreadForContact(c.id)}
-                      className="flex w-full flex-col items-start gap-0.5 border-b border-gray-50 px-3 py-2.5 text-left text-sm hover:bg-gray-50 disabled:opacity-50"
+                      className="flex w-full flex-col items-start border-b border-gray-50 px-3 py-2.5 text-left text-sm hover:bg-gray-50 disabled:opacity-50"
                     >
-                      <span className="font-medium text-gray-900">{name}</span>
-                      <span className="text-xs text-gray-500">{c.customer_email}</span>
+                      <span className="font-bold text-gray-900">{name}</span>
+                      {c.phone && <span className="text-xs text-gray-600">{c.phone}</span>}
+                      {c.customer_email && <span className="text-xs text-gray-500">{c.customer_email}</span>}
                     </button>
                   );
                 })}

@@ -646,6 +646,20 @@ ${triggerBlock}
     insErr = retry.error;
   }
 
+  // Backwards-compat: if migration 043/158 (email_cc / email_bcc columns) hasn't been
+  // applied yet, retry without them so message sending still succeeds.
+  if (insErr && /email_(?:cc|bcc)/i.test(insErr.message ?? '') && ('email_cc' in insertRow || 'email_bcc' in insertRow)) {
+    delete insertRow.email_cc;
+    delete insertRow.email_bcc;
+    const retry = await supabaseAdmin
+      .from('conversation_messages')
+      .insert(insertRow)
+      .select('*')
+      .single();
+    row = retry.data;
+    insErr = retry.error;
+  }
+
   if (insErr || !row) {
     console.error('[conversations/messages POST]', insErr);
     return NextResponse.json({ error: insErr?.message ?? 'Failed to save message' }, { status: 500 });

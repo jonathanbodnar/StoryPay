@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   if (!search) return NextResponse.json([]);
 
   const { data: merged } = await mergeVenueContacts(venueId, { search, page: 1, limit: 40 });
-  const out: { id: string; first_name: string; last_name: string; customer_email: string }[] = [];
+  const out: { id: string; first_name: string; last_name: string; customer_email: string; phone: string }[] = [];
   const seen = new Set<string>();
 
   const candidates = merged.slice(0, 24);
@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       first_name: c.firstName,
       last_name: c.lastName,
       customer_email: c.email || '',
+      phone: c.phone || '',
     });
     if (out.length >= 20) break;
   }

@@ -57,19 +57,66 @@ export async function GET(request: NextRequest) {
   const venueId = await getEffectiveVenueId(request);
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data, error } = await supabaseAdmin
-    .from('venue_team_members')
-    .select('*')
-    .eq('venue_id', venueId)
-    .order('created_at', { ascending: false });
+  const [membersRes, venueRes] = await Promise.all([
+    supabaseAdmin
+      .from('venue_team_members')
+      .select('*')
+      .eq('venue_id', venueId)
+      .order('created_at', { ascending: false }),
+    supabaseAdmin
+      .from('venues')
+      .select('owner_id, email, owner_first_name, owner_last_name')
+      .eq('id', venueId)
+      .maybeSingle(),
+  ]);
 
-  if (error) {
-    if (error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
+  if (membersRes.error) {
+    if (membersRes.error.message?.includes('schema cache') || membersRes.error.message?.includes('does not exist')) {
       return NextResponse.json([]);
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: membersRes.error.message }, { status: 500 });
   }
-  return NextResponse.json(data ?? []);
+
+  const members: Record<string, unknown>[] = membersRes.data ?? [];
+
+  // Prepend the venue owner so they appear in @mention autocomplete
+  const venue = venueRes.data as Record<string, unknown> | null;
+  if (venue?.owner_id) {
+    const ownerEmail = (venue.email as string | null) ?? '';
+    // Skip if the owner is already in venue_team_members (some setups add them)
+    const alreadyInTeam = members.some(
+      (m) => (m.email as string | null)?.toLowerCase() === ownerEmail.toLowerCase(),
+    );
+    if (!alreadyInTeam && ownerEmail) {
+      let firstName = (venue.owner_first_name as string | null) ?? '';
+      let lastName  = (venue.owner_last_name  as string | null) ?? '';
+
+      // Fallback: resolve name from profiles table
+      if (!firstName) {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('full_name')
+          .eq('id', venue.owner_id as string)
+          .maybeSingle();
+        if (prof?.full_name) {
+          const parts = (prof.full_name as string).trim().split(/\s+/);
+          firstName = parts[0] ?? '';
+          lastName  = parts.slice(1).join(' ');
+        }
+      }
+
+      members.unshift({
+        id:         venue.owner_id,
+        venue_id:   venueId,
+        first_name: firstName,
+        last_name:  lastName,
+        email:      ownerEmail,
+        role:       'owner',
+      });
+    }
+  }
+
+  return NextResponse.json(members);
 }
 
 export async function POST(request: NextRequest) {
