@@ -635,6 +635,32 @@ export async function onMarketingProposalPaid(
   }
 }
 
+/**
+ * Build the guide link for merge variables.
+ *
+ * If the venue has a `guide_short_code` we emit the short form:
+ *   https://app.storyvenue.com/g/fcdca338?l=<leadId>
+ *
+ * Otherwise (migration not run yet / new venue) we fall back to the full URL:
+ *   https://app.storyvenue.com/guide/<venueId>?l=<leadId>
+ *
+ * Both include the `?l=` lead-tracking parameter so the preview page can log
+ * the view in the contact's conversation thread.
+ */
+export function buildGuideShortUrl(
+  base: string,
+  venueId: string,
+  leadId: string,
+  shortCode?: string | null,
+): string {
+  const origin = base.replace(/\/$/, '');
+  const leadParam = leadId ? `?l=${encodeURIComponent(leadId)}` : '';
+  if (shortCode) {
+    return `${origin}/g/${shortCode}${leadParam}`;
+  }
+  return `${origin}/guide/${venueId}${leadParam}`;
+}
+
 export async function buildMergeVars(
   venueId: string,
   leadId: string,
@@ -644,7 +670,7 @@ export async function buildMergeVars(
   const forSms = opts?.forSms === true;
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('name, email, location_full, location_city, location_state, owner_first_name, owner_last_name, notification_phone, brand_website, slug, description')
+    .select('name, email, location_full, location_city, location_state, owner_first_name, owner_last_name, notification_phone, brand_website, slug, description, guide_short_code')
     .eq('id', venueId)
     .maybeSingle();
   const { data: lead } = await supabaseAdmin
@@ -779,12 +805,12 @@ export async function buildMergeVars(
     'marketing.preferences_url': prefs,
     'system.date':               now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
     'system.year':               String(now.getFullYear()),
-    // Pricing guide — links to the branded preview page (/venue/[id]/guide).
-    // ?l={leadId} is appended so the preview page can log the view as a
-    // system message in the contact's conversation thread (full audit trail).
-    // ?dl=1 on the underlying /pricing-guide API route forces a download.
-    pricing_guide_url:         `${appOrigin}/guide/${venueId}?l=${encodeURIComponent(leadId)}`,
-    'venue.pricing_guide_url': `${appOrigin}/guide/${venueId}?l=${encodeURIComponent(leadId)}`,
+    // Pricing guide — short branded link (/g/{code}) that redirects to the
+    // full guide page. The short code is unique per venue and never changes,
+    // so any SMS/email containing this link stays valid indefinitely.
+    // ?l={leadId} is forwarded through the redirect for view tracking.
+    pricing_guide_url:         buildGuideShortUrl(base, venueId, leadId, (venue as { guide_short_code?: string | null } | null)?.guide_short_code),
+    'venue.pricing_guide_url': buildGuideShortUrl(base, venueId, leadId, (venue as { guide_short_code?: string | null } | null)?.guide_short_code),
   };
 }
 

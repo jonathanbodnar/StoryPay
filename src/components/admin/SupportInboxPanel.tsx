@@ -1699,7 +1699,13 @@ function ThreadDetailView({
                     type="button"
                     title="Insert pricing guide link (always shows the latest version)"
                     onClick={() => {
-                      const guideUrl = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/guide/${detail.venue!.id}`;
+                      const origin = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+                      const shortCode = detail.venue?.id
+                        ? detail.venue.id.replace(/-/g, '').slice(0, 8)
+                        : null;
+                      const guideUrl = shortCode
+                        ? `${origin}/g/${shortCode}`
+                        : `${origin}/guide/${detail.venue!.id}`;
                       onReplyBodyChange(replyBody ? `${replyBody}\n${guideUrl}` : guideUrl);
                       setGuideAdded(true);
                       trackClient('pricing_guide_inserted', { label: 'Admin support inbox' });

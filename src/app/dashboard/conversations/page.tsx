@@ -2895,7 +2895,15 @@ export default function ConversationsPage() {
                                 title="Insert pricing guide link (always shows the current version of your guide)"
                                 aria-label="Insert pricing guide link"
                                 onClick={() => {
-                                  const guideUrl = `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/guide/${threadDetail.venue_id}`;
+                                  const origin = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+                                  // Derive the short code from the venue UUID (first 8 hex chars, no dashes).
+                                  // This matches the value stored in venues.guide_short_code by migration 157.
+                                  const shortCode = threadDetail.venue_id
+                                    ? threadDetail.venue_id.replace(/-/g, '').slice(0, 8)
+                                    : null;
+                                  const guideUrl = shortCode
+                                    ? `${origin}/g/${shortCode}`
+                                    : `${origin}/guide/${threadDetail.venue_id}`;
                                   setBody((b) => b ? `${b}\n${guideUrl}` : guideUrl);
                                   setComposerExpanded(true);
                                   setGuideAdded(true);
