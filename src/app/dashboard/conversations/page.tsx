@@ -981,6 +981,14 @@ export default function ConversationsPage() {
     }
   }
 
+  // Total unread across ALL threads (for the pill badge — always counts everything,
+  // not just the currently-filtered subset, so the number doesn't jump around
+  // as you switch filters).
+  const totalUnreadCount = useMemo(
+    () => threads.reduce((sum, t) => sum + (Number(t.unread_count) > 0 ? 1 : 0), 0),
+    [threads],
+  );
+
   const threadsFiltered = useMemo(() => {
     const q = threadSearch.trim().toLowerCase();
 
@@ -1343,13 +1351,25 @@ export default function ConversationsPage() {
                 type="button"
                 onClick={() => setThreadListFilter(tab.id)}
                 className={classNames(
-                  'rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
+                  'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
                   threadListFilter === tab.id
                     ? 'bg-gray-900 text-white'
                     : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
                 )}
               >
                 {tab.label}
+                {/* Red badge on the Unread pill — always visible when there are
+                    unread threads, regardless of which filter is active. */}
+                {tab.id === 'unread' && totalUnreadCount > 0 && (
+                  <span className={classNames(
+                    'inline-flex min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none',
+                    threadListFilter === 'unread'
+                      ? 'bg-white text-gray-900'
+                      : 'bg-red-500 text-white',
+                  )}>
+                    {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                  </span>
+                )}
               </button>
             ))}
             {/* ── Icon-toggle overlays: starred + pinned ── */}
@@ -1592,9 +1612,10 @@ export default function ConversationsPage() {
                             <Trash2 size={14} />
                           </button>
                         )}
-                        {/* Unread count badge */}
-                        {unread && unreadN > 1 ? (
-                          <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
+                        {/* Unread count badge — always shown when there are
+                            unread messages, even if just 1. */}
+                        {unread ? (
+                          <span className="ml-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
                             {unreadN > 99 ? '99+' : unreadN}
                           </span>
                         ) : null}
