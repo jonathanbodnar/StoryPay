@@ -150,6 +150,18 @@ export interface ErrorLoggedEvent {
   createdAt:  string;
 }
 
+/**
+ * Fired on venue:{id}:conversations when a lead's AI state changes so the
+ * AI Concierge pill in the conversations page updates live without a refresh.
+ */
+export interface AiStateChangedEvent {
+  leadId:      string;
+  venueId:     string;
+  newState:    string;
+  /** ISO timestamp for ai_next_send_at — null when AI is off. */
+  nextSendAt:  string | null;
+}
+
 /** Fired when tags on a contact's lead(s) change (added or removed). */
 export interface TagsChangedEvent {
   threadId:    string;

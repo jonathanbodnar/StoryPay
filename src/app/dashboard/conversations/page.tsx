@@ -48,7 +48,7 @@ import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/l
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
 import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
-import { supportChannels, type BrideMessageEvent, type StageChangedEvent } from '@/lib/realtime/channels';
+import { supportChannels, type AiStateChangedEvent, type BrideMessageEvent, type StageChangedEvent } from '@/lib/realtime/channels';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 import { trackClient } from '@/lib/analytics-client';
 
@@ -705,10 +705,28 @@ export default function ConversationsPage() {
   // currently open thread. This venue-wide channel fires for EVERY thread so
   // we can update unread badges, previews, and sort order without a refresh —
   // exactly like iMessage does when a message arrives in a closed conversation.
+  // It also carries ai_state events so the AI Concierge pill updates live.
   useBroadcastChannel(
     pageVenueId ? supportChannels.venueConversations(pageVenueId) : null,
-    ['message'],
+    ['message', 'ai_state'],
     useCallback((_evt, payload) => {
+      // ── AI state change: update the AI pill instantly ──────────────────
+      if (_evt === 'ai_state') {
+        const ai = payload as AiStateChangedEvent;
+        if (!ai?.leadId) return;
+        // Only update if the currently displayed contact's lead matches.
+        setContactLead((prev) => {
+          if (!prev || prev.id !== ai.leadId) return prev;
+          return {
+            ...prev,
+            ai_state: ai.newState,
+            ai_next_send_at: ai.nextSendAt,
+          };
+        });
+        return;
+      }
+
+      // ── New message: optimistic sidebar card update ────────────────────
       const evt = payload as BrideMessageEvent;
       if (!evt?.threadId || evt.supportOnly || evt.venueDirectMessage) return;
 

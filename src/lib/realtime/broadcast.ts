@@ -18,6 +18,7 @@
  */
 import {
   supportChannels,
+  type AiStateChangedEvent,
   type BrideMessageEvent,
   type TicketMessageEvent,
   type TicketStatusEvent,
@@ -155,6 +156,16 @@ export async function broadcastErrorLogged(evt: ErrorLoggedEvent): Promise<void>
  *  updates instantly instead of waiting for the poll cycle. */
 export async function broadcastNewLead(evt: NewLeadEvent): Promise<void> {
   await send(supportChannels.venueLeads(evt.venueId), 'new_lead', evt);
+}
+
+/**
+ * Broadcast an AI state change so the AI Concierge pill in the venue's
+ * conversations page updates instantly (no page refresh required).
+ * Fires on the venue-wide conversations channel so the page can match the
+ * event to whichever contact lead is currently displayed.
+ */
+export async function broadcastAiStateChanged(evt: AiStateChangedEvent): Promise<void> {
+  await send(supportChannels.venueConversations(evt.venueId), 'ai_state', evt);
 }
 
 /** Broadcast a tag change so the admin context sidebar reflects it without a refresh. */

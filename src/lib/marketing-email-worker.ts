@@ -188,7 +188,7 @@ async function handleAiConciergeOnStageChange(
         return;
       }
 
-      await setLeadAiState({
+      const result = await setLeadAiState({
         leadId,
         venueId,
         newState:         'ai_active',
@@ -196,6 +196,12 @@ async function handleAiConciergeOnStageChange(
         triggeredBy:      'pipeline:stage_change',
         firstSendDelayMs: TWENTY_FOUR_HOURS_MS,
       });
+
+      if (result.ok && !result.noop) {
+        const nextSendAt = new Date(Date.now() + TWENTY_FOUR_HOURS_MS).toISOString();
+        const { broadcastAiStateChanged } = await import('@/lib/realtime/broadcast');
+        void broadcastAiStateChanged({ leadId, venueId, newState: 'ai_active', nextSendAt });
+      }
 
     } else if (movingOut) {
       // Read current state — only pause leads that are actively running or in
@@ -208,13 +214,18 @@ async function handleAiConciergeOnStageChange(
 
       const currentState = ((lead as { ai_state?: AiState | null } | null)?.ai_state) ?? null;
       if (currentState === 'ai_active' || currentState === 'handoff') {
-        await setLeadAiState({
+        const result = await setLeadAiState({
           leadId,
           venueId,
           newState:    'paused',
           reason:      'stage_moved_out_of_followup',
           triggeredBy: 'pipeline:stage_change',
         });
+
+        if (result.ok && !result.noop) {
+          const { broadcastAiStateChanged } = await import('@/lib/realtime/broadcast');
+          void broadcastAiStateChanged({ leadId, venueId, newState: 'paused', nextSendAt: null });
+        }
       }
     }
   } catch (e) {
