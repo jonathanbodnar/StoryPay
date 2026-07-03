@@ -148,7 +148,9 @@ interface TeamMember {
 }
 
 type ComposerTab = 'team' | 'email' | 'sms' | 'concierge';
-type ThreadListFilter = 'all' | 'unread' | 'starred' | 'pinned' | 'team_contacts';
+/** Main pill filters. Starred and pinned are now icon-toggle overlays
+ *  that combine with any main filter (handled by filterStarred / filterPinned state). */
+type ThreadListFilter = 'all' | 'unread' | 'needs_followup' | 'team_contacts';
 
 interface TeamContact {
   email: string;
@@ -235,6 +237,9 @@ export default function ConversationsPage() {
   const [threads, setThreads] = useState<ThreadRow[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [threadListFilter, setThreadListFilter] = useState<ThreadListFilter>('all');
+  // Icon-toggle overlays — combinable with any main pill filter.
+  const [filterStarred, setFilterStarred] = useState(false);
+  const [filterPinned, setFilterPinned] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [threadDetail, setThreadDetail] = useState<ThreadDetail | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -310,8 +315,9 @@ export default function ConversationsPage() {
     try {
       const params = new URLSearchParams();
       if (threadListFilter === 'unread') params.set('unread', '1');
-      if (threadListFilter === 'starred') params.set('starred', '1');
-      if (threadListFilter === 'pinned') params.set('pinned', '1');
+      // Starred / pinned are icon-toggle overlays — server-filtered when active.
+      if (filterStarred) params.set('starred', '1');
+      if (filterPinned) params.set('pinned', '1');
       const q = params.toString() ? `?${params.toString()}` : '';
       const res = await fetch(`/api/conversations/threads${q}`, { cache: 'no-store' });
       if (res.ok) {
@@ -325,7 +331,7 @@ export default function ConversationsPage() {
         window.dispatchEvent(new Event('storypay:conversations-unread'));
       }
     }
-  }, [threadListFilter]);
+  }, [threadListFilter, filterStarred, filterPinned]);
 
   useEffect(() => {
     loadThreads();
@@ -986,6 +992,14 @@ export default function ConversationsPage() {
       base = threads.filter((t) => emailSet.has((t.contact_email || '').toLowerCase()));
     }
 
+    // "Needs Follow-up" = contact is in a stage whose name contains "follow"
+    // (matches the default "Follow up" stage and any custom variants).
+    if (threadListFilter === 'needs_followup') {
+      base = base.filter((t) =>
+        t.contact_stage?.name?.toLowerCase().includes('follow'),
+      );
+    }
+
     if (q) {
       base = base.filter((t) => {
         const name = [t.contact_first_name, t.contact_last_name]
@@ -1020,7 +1034,7 @@ export default function ConversationsPage() {
       if (bp !== ap) return bp - ap;
       return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
     });
-  }, [threads, threadSearch, threadListFilter, teamContacts]);
+  }, [threads, threadSearch, threadListFilter, teamContacts, filterStarred, filterPinned]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -1309,18 +1323,18 @@ export default function ConversationsPage() {
             mobileShowThread ? 'hidden md:flex' : 'flex',
           )}
         >
-          <div className="flex flex-shrink-0 items-center gap-1.5 border-b border-gray-200 px-3 py-2">
+          <div className="flex flex-shrink-0 items-center gap-1 border-b border-gray-200 px-3 py-2">
             {listActionError ? (
               <p className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 {listActionError}
               </p>
             ) : null}
+            {/* ── Main pill filters ── */}
             {(
               [
                 { id: 'all' as const, label: 'All' },
                 { id: 'unread' as const, label: 'Unread' },
-                { id: 'starred' as const, label: 'Starred' },
-                { id: 'pinned' as const, label: 'Pinned' },
+                { id: 'needs_followup' as const, label: 'Follow-up' },
                 { id: 'team_contacts' as const, label: 'Team' },
               ] as const
             ).map((tab) => (
@@ -1332,12 +1346,41 @@ export default function ConversationsPage() {
                   'rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
                   threadListFilter === tab.id
                     ? 'bg-gray-900 text-white'
-                    : 'bg-white text-gray-600 border border-gray-200',
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
                 )}
               >
                 {tab.label}
               </button>
             ))}
+            {/* ── Icon-toggle overlays: starred + pinned ── */}
+            <div className="ml-auto flex items-center gap-0.5">
+              <button
+                type="button"
+                title={filterStarred ? 'Show all (remove star filter)' : 'Show starred only'}
+                onClick={() => setFilterStarred((v) => !v)}
+                className={classNames(
+                  'rounded-full p-1.5 transition-colors',
+                  filterStarred
+                    ? 'bg-amber-100 text-amber-600'
+                    : 'text-gray-400 hover:bg-gray-100 hover:text-amber-500',
+                )}
+              >
+                <Star size={14} className={filterStarred ? 'fill-amber-400 text-amber-500' : ''} />
+              </button>
+              <button
+                type="button"
+                title={filterPinned ? 'Show all (remove pin filter)' : 'Show pinned only'}
+                onClick={() => setFilterPinned((v) => !v)}
+                className={classNames(
+                  'rounded-full p-1.5 transition-colors',
+                  filterPinned
+                    ? 'bg-sky-100 text-sky-600'
+                    : 'text-gray-400 hover:bg-gray-100 hover:text-sky-500',
+                )}
+              >
+                <Pin size={14} className={filterPinned ? 'text-sky-600' : ''} />
+              </button>
+            </div>
           </div>
           <div className="flex-shrink-0 border-b border-gray-200 p-2">
             <div className="relative">
@@ -1426,17 +1469,21 @@ export default function ConversationsPage() {
               </div>
             ) : threads.length === 0 && threadListFilter !== 'team_contacts' ? (
               <p className="px-4 py-10 text-center text-sm text-gray-500">
-                {threadListFilter === 'starred'
-                  ? 'No starred conversations. Star a thread from the list using the star icon.'
-                  : threadListFilter === 'pinned'
-                    ? 'No pinned conversations. Pin a thread from the list using the pin icon.'
+                {filterStarred
+                  ? 'No starred conversations match this filter.'
+                  : filterPinned
+                    ? 'No pinned conversations match this filter.'
                     : threadListFilter === 'unread'
                       ? 'No unread conversations.'
-                      : 'No conversations yet. Start one with a contact.'}
+                      : threadListFilter === 'needs_followup'
+                        ? 'No conversations in the Follow-up stage.'
+                        : 'No conversations yet. Start one with a contact.'}
               </p>
             ) : threadsFiltered.length === 0 && threadListFilter !== 'team_contacts' ? (
               <p className="px-4 py-10 text-center text-sm text-gray-500">
-                No threads match your search.
+                {threadListFilter === 'needs_followup'
+                  ? 'No conversations in the Follow-up stage match your search.'
+                  : 'No threads match your search.'}
               </p>
             ) : threadsFiltered.length > 0 ? (
               threadsFiltered.map((t) => {
