@@ -985,7 +985,7 @@ export default function ConversationsPage() {
   // not just the currently-filtered subset, so the number doesn't jump around
   // as you switch filters).
   const totalUnreadCount = useMemo(
-    () => threads.reduce((sum, t) => sum + (Number(t.unread_count) > 0 ? 1 : 0), 0),
+    () => threads.reduce((sum, t) => sum + (Number(t.unread_count) || 0), 0),
     [threads],
   );
 
