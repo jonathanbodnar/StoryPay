@@ -132,6 +132,52 @@ const TOOLS = [
       required: ['query'],
     },
   },
+  {
+    name: 'get_directory_stats',
+    description:
+      'Get statistics about the public wedding venue directory — total listed venues, recent inquiry form submissions, and which venues have the most public visibility',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_ab_test_results',
+    description:
+      'Get A/B test performance results for landing page headlines and CTAs on the marketing website',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_couple_inquiries',
+    description:
+      'Get recent inquiry form submissions from brides browsing the wedding directory',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        days: {
+          type: 'number',
+          description: 'Number of days to look back (default 7)',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_top_venues_by_leads',
+    description:
+      'Get the top venues ranked by number of leads/inquiries received, showing which venues are most popular in the directory',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        days: {
+          type: 'number',
+          description: 'Number of days to look back for period count (default 30)',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max venues to return (default 10)',
+        },
+      },
+      required: [],
+    },
+  },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -433,6 +479,195 @@ async function toolGetVenueDetail(args: { query: string }) {
   return { found: true, matches: enriched };
 }
 
+async function toolGetDirectoryStats() {
+  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [{ count: publishedCount }, { data: recentLeads, count: recentLeadCount }] =
+    await Promise.all([
+      supabaseAdmin
+        .from('venues')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_published', true),
+      supabaseAdmin
+        .from('leads')
+        .select('id, venue_id', { count: 'exact' })
+        .gte('created_at', since30d),
+    ]);
+
+  // Group by venue_id to find top 5
+  const byVenue: Record<string, number> = {};
+  for (const lead of recentLeads ?? []) {
+    const vid = (lead.venue_id as string) ?? 'unknown';
+    byVenue[vid] = (byVenue[vid] || 0) + 1;
+  }
+
+  const topVenueIds = Object.entries(byVenue)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id]) => id);
+
+  let topVenues: { venue_id: string; name: string | null; lead_count: number }[] = [];
+  if (topVenueIds.length > 0) {
+    const { data: venueRows } = await supabaseAdmin
+      .from('venues')
+      .select('id, name')
+      .in('id', topVenueIds);
+    const nameById = new Map((venueRows ?? []).map((v) => [v.id as string, v.name as string]));
+    topVenues = topVenueIds.map((vid) => ({
+      venue_id: vid,
+      name: nameById.get(vid) ?? null,
+      lead_count: byVenue[vid],
+    }));
+  }
+
+  return {
+    published_venues: publishedCount ?? 0,
+    leads_last_30_days: recentLeadCount ?? 0,
+    top_5_venues_by_leads_last_30_days: topVenues,
+  };
+}
+
+async function toolGetAbTestResults() {
+  try {
+    const [{ data: variants, error: variantsErr }, { data: pages, error: pagesErr }] =
+      await Promise.all([
+        supabaseAdmin.from('funnel_variants').select('*').limit(100),
+        supabaseAdmin.from('funnel_pages').select('*').limit(100),
+      ]);
+
+    if (variantsErr || pagesErr) {
+      return { available: false, message: 'No A/B test data available yet' };
+    }
+
+    if (!variants?.length) {
+      return { available: false, message: 'No A/B test data available yet' };
+    }
+
+    const results = (variants as unknown as Record<string, unknown>[]).map((v) => {
+      const impressions = (v.impressions as number) ?? 0;
+      const clicks = (v.clicks as number) ?? 0;
+      const conversions = (v.conversions as number) ?? 0;
+      return {
+        id: v.id,
+        name: v.name,
+        page: v.page_id ?? null,
+        impressions,
+        clicks,
+        conversions,
+        click_rate: impressions > 0 ? Math.round((clicks / impressions) * 1000) / 10 : 0,
+        conversion_rate:
+          impressions > 0 ? Math.round((conversions / impressions) * 1000) / 10 : 0,
+      };
+    });
+
+    return {
+      available: true,
+      total_variants: results.length,
+      total_pages: pages?.length ?? 0,
+      variants: results,
+    };
+  } catch {
+    return { available: false, message: 'No A/B test data available yet' };
+  }
+}
+
+async function toolGetCoupleInquiries(args: { days?: number }) {
+  const days = args.days ?? 7;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: leads } = await supabaseAdmin
+    .from('leads')
+    .select('id, venue_id, name, email, wedding_date, created_at')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (!leads?.length) return { period_days: days, count: 0, inquiries: [] };
+
+  // Enrich with venue names
+  const venueIds = [...new Set((leads as unknown as Record<string, unknown>[]).map((l) => l.venue_id as string).filter(Boolean))];
+  const { data: venueRows } = await supabaseAdmin
+    .from('venues')
+    .select('id, name')
+    .in('id', venueIds);
+  const nameById = new Map((venueRows ?? []).map((v) => [v.id as string, v.name as string]));
+
+  const inquiries = (leads as unknown as Record<string, unknown>[]).map((l) => ({
+    id: l.id,
+    name: l.name ?? null,
+    email: l.email ?? null,
+    venue_name: nameById.get(l.venue_id as string) ?? null,
+    wedding_date: l.wedding_date ?? null,
+    created_at: l.created_at,
+  }));
+
+  return { period_days: days, count: inquiries.length, inquiries };
+}
+
+async function toolGetTopVenuesByLeads(args: { days?: number; limit?: number }) {
+  const days = args.days ?? 30;
+  const limit = Math.min(args.limit ?? 10, 50);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const [{ data: recentLeads }, { data: allLeads }] = await Promise.all([
+    supabaseAdmin
+      .from('leads')
+      .select('venue_id')
+      .gte('created_at', since),
+    supabaseAdmin
+      .from('leads')
+      .select('venue_id'),
+  ]);
+
+  // Count leads per venue for the period
+  const periodCounts: Record<string, number> = {};
+  for (const l of (recentLeads ?? []) as unknown as Record<string, unknown>[]) {
+    const vid = l.venue_id as string;
+    if (vid) periodCounts[vid] = (periodCounts[vid] || 0) + 1;
+  }
+
+  // Count all-time leads per venue
+  const allTimeCounts: Record<string, number> = {};
+  for (const l of (allLeads ?? []) as unknown as Record<string, unknown>[]) {
+    const vid = l.venue_id as string;
+    if (vid) allTimeCounts[vid] = (allTimeCounts[vid] || 0) + 1;
+  }
+
+  const topVenueIds = Object.entries(periodCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => id);
+
+  if (!topVenueIds.length) return { period_days: days, count: 0, venues: [] };
+
+  const { data: venueRows } = await supabaseAdmin
+    .from('venues')
+    .select('id, name, directory_plan_id, directory_subscription_status, is_published')
+    .in('id', topVenueIds);
+
+  const { data: plans } = await supabaseAdmin.from('directory_plans').select('id, name');
+  const planById = new Map((plans ?? []).map((p) => [p.id as string, p.name as string]));
+  const venueMap = new Map(
+    ((venueRows ?? []) as unknown as Record<string, unknown>[]).map((v) => [v.id as string, v]),
+  );
+
+  const venues = topVenueIds.map((vid) => {
+    const v = venueMap.get(vid) as Record<string, unknown> | undefined;
+    const pid = v?.directory_plan_id as string | null;
+    return {
+      venue_id: vid,
+      name: v?.name ?? null,
+      plan: pid ? (planById.get(pid) ?? pid) : null,
+      is_published: v?.is_published ?? null,
+      subscription_status: v?.directory_subscription_status ?? null,
+      leads_in_period: periodCounts[vid] ?? 0,
+      leads_all_time: allTimeCounts[vid] ?? 0,
+    };
+  });
+
+  return { period_days: days, count: venues.length, venues };
+}
+
 // ---------------------------------------------------------------------------
 // Tool dispatcher
 // ---------------------------------------------------------------------------
@@ -451,6 +686,14 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       return toolGetUnreadConversations(args as { limit?: number });
     case 'get_venue_detail':
       return toolGetVenueDetail(args as { query: string });
+    case 'get_directory_stats':
+      return toolGetDirectoryStats();
+    case 'get_ab_test_results':
+      return toolGetAbTestResults();
+    case 'get_couple_inquiries':
+      return toolGetCoupleInquiries(args as { days?: number });
+    case 'get_top_venues_by_leads':
+      return toolGetTopVenuesByLeads(args as { days?: number; limit?: number });
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
