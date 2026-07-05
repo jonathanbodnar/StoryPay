@@ -226,6 +226,13 @@ export async function PATCH(req: NextRequest) {
   if (body.aiMessages        !== undefined) venueUpdate.booking_ai_messages         = body.aiMessages;
   if (body.aiNotifyEmails    !== undefined) venueUpdate.ai_concierge_notify_emails  = body.aiNotifyEmails;
 
+  // Master switch OFF → force AI concierge off too so every automated/AI
+  // workflow stops immediately. The venue owner must re-enable AI manually
+  // after turning the system back on.
+  if (body.masterEnabled === false) {
+    venueUpdate.ai_concierge_enabled = false;
+  }
+
   if (Object.keys(venueUpdate).length > 0) {
     // Some columns may not exist yet (added by migration). Ignore column errors.
     const { error: ve } = await supabaseAdmin
@@ -235,6 +242,16 @@ export async function PATCH(req: NextRequest) {
     if (ve && !/column/.test(ve.message)) {
       return NextResponse.json({ error: ve.message }, { status: 500 });
     }
+  }
+
+  // When the master switch is turned OFF, pause every lead whose AI is
+  // currently active or in handoff so the concierge stops sending immediately.
+  if (body.masterEnabled === false) {
+    await supabaseAdmin
+      .from('leads')
+      .update({ ai_state: 'paused' })
+      .eq('venue_id', venueId)
+      .in('ai_state', ['ai_active', 'handoff']);
   }
 
   // ── Sequence steps ───────────────────────────────────────────────────────

@@ -936,8 +936,12 @@ export default function BookingSystemPage() {
           accent="bg-emerald-50"
           enabled={cfg.aiEnabled}
           onToggle={(v) => void save({ aiEnabled: v })}
-          locked={!cfg.aiConciergeAllowed}
-          lockTooltip="AI Concierge is on our All-Inclusive plan, not Free or the Bride Booking System™. Schedule a demo to learn more."
+          locked={!cfg.aiConciergeAllowed || !cfg.masterEnabled}
+          lockTooltip={
+            !cfg.masterEnabled
+              ? 'Turn the Speed to Lead System on to enable AI Concierge.'
+              : 'AI Concierge is on our All-Inclusive plan, not Free or the Bride Booking System™. Schedule a demo to learn more.'
+          }
           noPadding
         >
           <AiConciergeSettingsPage />
