@@ -54,6 +54,10 @@ export type AdminVenueRow = Record<string, unknown> & {
   lunarpay_admin?: LunarPayAdminSummary;
   /** Protected demo venue — cannot be deleted by anyone. */
   is_demo?: boolean | null;
+  /** Venue owner login is suspended (churned account). */
+  is_suspended?: boolean | null;
+  suspended_at?: string | null;
+  suspended_by?: string | null;
 };
 
 function lunarPaySummaryForRow(v: AdminVenueRow): LunarPayAdminSummary {
@@ -228,6 +232,11 @@ export function VenueManagementPortal({
   const [billingWorking, setBillingWorking] = useState(false);
   const [billingMsg, setBillingMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
+  // Suspension state
+  const [suspendTarget, setSuspendTarget] = useState<AdminVenueRow | null>(null);
+  const [suspending, setSuspending] = useState(false);
+  const [suspendToast, setSuspendToast] = useState<{ id: string; msg: string; ok: boolean } | null>(null);
+
   const loadPlans = useCallback(async () => {
     setPlansLoading(true);
     try {
@@ -388,6 +397,34 @@ export function VenueManagementPortal({
       await onRefresh();
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function suspendVenue(venueId: string, action: 'suspend' | 'unsuspend') {
+    setSuspending(true);
+    try {
+      const res = await fetch(`/api/admin/venues/${venueId}/suspend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; venueName?: string };
+      if (!res.ok) {
+        setSuspendToast({ id: venueId, msg: j.error || `${action} failed`, ok: false });
+      } else {
+        setSuspendToast({
+          id: venueId,
+          msg: action === 'suspend' ? 'Access suspended' : 'Access restored',
+          ok: true,
+        });
+        await onRefresh();
+      }
+    } catch {
+      setSuspendToast({ id: venueId, msg: 'Request failed', ok: false });
+    } finally {
+      setSuspending(false);
+      setSuspendTarget(null);
+      setTimeout(() => setSuspendToast(null), 3000);
     }
   }
 
@@ -972,6 +1009,10 @@ export function VenueManagementPortal({
                 setTrialError('');
                 setTrialSuccess(false);
               }}
+              suspendToast={suspendToast}
+              suspending={suspending}
+              onSuspend={() => setSuspendTarget(venue)}
+              onUnsuspend={() => void suspendVenue(venue.id, 'unsuspend')}
             />
           ))
         )}
@@ -1023,6 +1064,11 @@ export function VenueManagementPortal({
                   <span className="font-semibold text-sm text-gray-900 leading-tight">{venue.name}</span>
                   {venue.is_demo && (
                     <span className="ml-1.5 inline-flex items-center rounded-full bg-violet-50 border border-violet-200 px-1.5 py-0 text-[9px] font-semibold text-violet-700">DEMO</span>
+                  )}
+                  {venue.is_suspended && (
+                    <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-red-50 border border-red-200 px-1.5 py-0 text-[9px] font-semibold text-red-700">
+                      <Lock size={8} />SUSPENDED
+                    </span>
                   )}
                   {venue.slug && (
                     <div className="text-[10px] font-mono text-gray-400 truncate max-w-[220px]">{venue.slug}</div>
@@ -1129,11 +1175,31 @@ export function VenueManagementPortal({
                     <CreditCard size={11} /> Billing
                   </button>
                 )}
+                {venue.is_suspended ? (
+                  <button type="button" onClick={() => void suspendVenue(venue.id, 'unsuspend')}
+                    disabled={suspending}
+                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+                    <RotateCcw size={11} /> Restore Access
+                  </button>
+                ) : (
+                  !venue.is_demo && (
+                    <button type="button" onClick={() => setSuspendTarget(venue)}
+                      disabled={suspending}
+                      className="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-50">
+                      <Lock size={11} /> Suspend
+                    </button>
+                  )
+                )}
                 {!venue.is_demo && (
                   <button type="button" onClick={() => { setDeleteTarget(venue); setDeleteConfirmName(''); }}
                     className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100">
                     <Trash2 size={11} /> Delete
                   </button>
+                )}
+                {suspendToast?.id === venue.id && (
+                  <span className={`text-[10px] font-medium ${suspendToast.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {suspendToast.msg}
+                  </span>
                 )}
                 {inviteToastId === venue.id && inviteToastMsg && (
                   <span className="text-[10px] text-emerald-700">{inviteToastMsg}</span>
@@ -1482,6 +1548,46 @@ export function VenueManagementPortal({
       </div>
     )}
 
+    {/* Suspend confirmation modal */}
+    {suspendTarget && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+              <Lock size={20} className="text-orange-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900">Suspend Access</h3>
+              <p className="text-xs text-gray-500">Prevents the owner from logging in</p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-700 mb-4">
+            This will prevent <strong>{suspendTarget.name}</strong>&apos;s owner from logging in.
+            Super admin access is unaffected. This is fully reversible.
+          </p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setSuspendTarget(null)}
+              disabled={suspending}
+              className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={suspending}
+              onClick={() => void suspendVenue(suspendTarget.id, 'suspend')}
+              className="flex-1 rounded-xl bg-orange-600 py-2.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {suspending ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+              {suspending ? 'Suspending…' : 'Suspend Access'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Delete confirmation modal */}
     {deleteTarget && (
       <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4">
@@ -1545,6 +1651,8 @@ function VenueMobileCard({
   invitingId,
   inviteToastId,
   inviteToastMsg,
+  suspendToast,
+  suspending,
   onPatch,
   onCopyLogin,
   onSendInvite,
@@ -1552,6 +1660,8 @@ function VenueMobileCard({
   onCopyBillingLink,
   onDelete,
   onExtendTrial,
+  onSuspend,
+  onUnsuspend,
 }: {
   venue: AdminVenueRow;
   lpSummary: LunarPayAdminSummary;
@@ -1562,6 +1672,8 @@ function VenueMobileCard({
   invitingId: string | null;
   inviteToastId: string | null;
   inviteToastMsg: string;
+  suspendToast: { id: string; msg: string; ok: boolean } | null;
+  suspending: boolean;
   onPatch: (id: string, b: Record<string, unknown>) => void;
   onCopyLogin: (url: string, id: string) => void;
   onSendInvite: () => void;
@@ -1569,13 +1681,22 @@ function VenueMobileCard({
   onCopyBillingLink: () => void;
   onDelete?: () => void;
   onExtendTrial: () => void;
+  onSuspend: () => void;
+  onUnsuspend: () => void;
 }) {
   const vs = (venue.directory_verified_status as string) || 'none';
   const ss = (venue.directory_sponsored_status as string) || 'none';
   const busy = savingKey !== null;
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
-      <div className="font-semibold text-gray-900">{venue.name}</div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="font-semibold text-gray-900">{venue.name}</span>
+        {venue.is_suspended && (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-red-50 border border-red-200 px-1.5 py-0 text-[9px] font-semibold text-red-700">
+            <Lock size={8} />SUSPENDED
+          </span>
+        )}
+      </div>
       <div className="text-xs text-gray-600">{venue.email}</div>
       {venue.phone ? <div className="text-xs text-gray-500">{venue.phone}</div> : null}
       <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-gray-500">
@@ -1682,6 +1803,25 @@ function VenueMobileCard({
         >
           <CalendarClock size={12} /> Trial
         </button>
+        {venue.is_suspended ? (
+          <button
+            type="button"
+            disabled={suspending}
+            onClick={onUnsuspend}
+            className="flex-1 min-w-[100px] inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-50"
+          >
+            <RotateCcw size={12} /> Restore Access
+          </button>
+        ) : onDelete ? (
+          <button
+            type="button"
+            disabled={suspending}
+            onClick={onSuspend}
+            className="flex-1 min-w-[100px] inline-flex items-center justify-center gap-1 rounded-lg border border-orange-200 bg-orange-50 py-2 text-xs font-semibold text-orange-700 disabled:opacity-50"
+          >
+            <Lock size={12} /> Suspend
+          </button>
+        ) : null}
         {onDelete && (
           <button
             type="button"
@@ -1691,12 +1831,15 @@ function VenueMobileCard({
             <Trash2 size={12} /> Delete
           </button>
         )}
-        {!onDelete && (
+        {!onDelete && !venue.is_suspended && (
           <span className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-gray-200 bg-gray-50 py-2 text-xs font-semibold text-gray-400 cursor-not-allowed select-none" title="Demo venue — protected from deletion">
             <Lock size={12} /> Protected
           </span>
         )}
       </div>
+      {suspendToast?.id === venue.id && (
+        <p className={`text-[11px] font-medium mt-1 ${suspendToast.ok ? 'text-emerald-700' : 'text-red-600'}`}>{suspendToast.msg}</p>
+      )}
       {inviteToastId === venue.id && inviteToastMsg && (
         <p className="text-[11px] text-emerald-700 mt-1">{inviteToastMsg}</p>
       )}

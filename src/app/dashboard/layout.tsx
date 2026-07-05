@@ -28,9 +28,16 @@ export default async function DashboardLayout({
  // don't hit the venues table 3 times per page render.
  const { data: venueRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_plan_id, directory_subscription_status, email_verified_at, email, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed')
+   .select('directory_plan_id, directory_subscription_status, email_verified_at, email, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended')
    .eq('id', user.venueId)
    .maybeSingle();
+
+ // Block suspended venue owners from the dashboard. Super admin impersonation
+ // sessions carry the admin_impersonating cookie and are never gated.
+ const isSuspended = Boolean((venueRow as { is_suspended?: boolean | null } | null)?.is_suspended);
+ if (isSuspended && !isImpersonating) {
+   redirect('/suspended');
+ }
 
  // Pass pre-fetched plan ID so loadDirectoryNavAccess skips its own venues query.
  const navAccess = await loadDirectoryNavAccess(
