@@ -7,26 +7,30 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * POST /api/admin/venues/[venueId]/suspend
+ * POST /api/admin/venues/[id]/suspend
  * Body: { action: 'suspend' | 'unsuspend', reason?: string }
  *
  * Suspending sets a 100-year Supabase ban on the venue owner's auth user,
  * blocking their own credentials (email/password/magic-link-to-their-inbox).
  * Admin-generated sign-in links via the service role bypass the ban, so
  * super admin impersonation ("View as venue") continues to work unchanged.
+ *
+ * NOTE: This segment MUST use the slug name `[id]` to match the sibling
+ * routes under /api/admin/venues/[id]/* — Next.js refuses to boot if two
+ * dynamic segments at the same path use different slug names.
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ venueId: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   // Only master super admin may suspend/unsuspend
   if (!(await verifyMasterAdminOnly())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { venueId } = await params;
+  const { id: venueId } = await params;
   if (!venueId) {
-    return NextResponse.json({ error: 'Missing venueId' }, { status: 400 });
+    return NextResponse.json({ error: 'Missing venue id' }, { status: 400 });
   }
 
   let body: { action?: string; reason?: string };
