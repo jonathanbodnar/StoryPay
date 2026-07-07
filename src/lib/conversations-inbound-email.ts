@@ -295,6 +295,27 @@ export async function insertInboundConversationEmail(params: {
       }
     })();
 
+    // Slack alert for the support team — fire-and-forget, never blocks the
+    // inbound email flow. No-ops if SLACK_SUPPORT_WEBHOOK_URL is unset.
+    void (async () => {
+      try {
+        const { data: v } = await supabaseAdmin
+          .from('venues')
+          .select('name')
+          .eq('id', venueId)
+          .maybeSingle();
+        const { notifyBrideReply } = await import('@/lib/slack-notify');
+        await notifyBrideReply({
+          venueName: (v as { name?: string } | null)?.name || 'Unknown venue',
+          contactName: fromName?.trim() || fromEmail || 'Contact',
+          messagePreview: body,
+          threadId,
+        });
+      } catch (e) {
+        console.warn('[inbound-email] slack notify failed', e);
+      }
+    })();
+
     // Owner push — fires only when push is enabled and push_new_message is on.
     // No-op for venues that haven't opted in.
     notifyOwnerNewMessage({

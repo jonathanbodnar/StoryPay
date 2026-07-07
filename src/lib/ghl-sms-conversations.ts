@@ -424,6 +424,27 @@ export async function insertInboundGhlSms(params: {
     };
     void broadcastInbound();
 
+    // Slack alert for the support team — fire-and-forget, never blocks the
+    // inbound SMS flow. No-ops if SLACK_SUPPORT_WEBHOOK_URL is unset.
+    void (async () => {
+      try {
+        const { data: v } = await supabaseAdmin
+          .from('venues')
+          .select('name')
+          .eq('id', venueId)
+          .maybeSingle();
+        const { notifyBrideReply } = await import('@/lib/slack-notify');
+        await notifyBrideReply({
+          venueName: (v as { name?: string } | null)?.name || 'Unknown venue',
+          contactName: contactName?.trim() || 'Contact',
+          messagePreview: messageBody.trim(),
+          threadId,
+        });
+      } catch (e) {
+        console.warn('[ghl-sms] slack notify failed', e);
+      }
+    })();
+
     // Owner notification — fire on EVERY inbound SMS reply, independent of the
     // AI Concierge state machine. This guarantees the venue owner is emailed
     // when: (a) a contact replies for the first time after a public-listing

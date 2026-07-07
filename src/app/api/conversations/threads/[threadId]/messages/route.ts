@@ -9,6 +9,7 @@ import { ensureLocationToken } from '@/lib/ghl-auth';
 import { buildConversationsReplyToEmail } from '@/lib/conversations-inbound-email';
 import { syncInboundSmsFromGhlForThread } from '@/lib/ghl-sms-conversations';
 import { broadcastBrideMessage } from '@/lib/realtime/broadcast';
+import { notifyVenueReply } from '@/lib/slack-notify';
 import { pushVenueCustomerToGhl } from '@/lib/ghl-push-contact';
 
 export const dynamic = 'force-dynamic';
@@ -730,6 +731,17 @@ ${triggerBlock}
       supportAgentId:     null,
       createdAt:          (row as { created_at?: string }).created_at || new Date().toISOString(),
     });
+
+    // Slack alert for the support team when the VENUE side (owner or team
+    // member) replies to a bride — fire-and-forget, never blocks the send.
+    if (sender_kind === 'owner' || sender_kind === 'team') {
+      void notifyVenueReply({
+        venueName:      user.venueName || 'Venue',
+        senderName:     user.memberName || user.venueName || 'Venue owner',
+        messagePreview: rawBody,
+        threadId,
+      }).catch(() => {});
+    }
   }
 
   return NextResponse.json(row, { status: 201 });

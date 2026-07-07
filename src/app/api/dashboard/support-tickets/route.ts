@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { resolveVenueAttribution } from '@/lib/support/venue-attribution';
 import { broadcastTicketMessage } from '@/lib/realtime/broadcast';
+import { notifySupportTicket } from '@/lib/slack-notify';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -137,6 +138,26 @@ export async function POST(req: NextRequest) {
       createdAt:  (firstMsg as { created_at?: string }).created_at || new Date().toISOString(),
       status:     'open',
     });
+
+    // Slack alert for a brand-new support ticket — fire-and-forget, never
+    // blocks the response to the venue.
+    void (async () => {
+      try {
+        const { data: v } = await supabaseAdmin
+          .from('venues')
+          .select('name')
+          .eq('id', attr.venueId)
+          .maybeSingle();
+        await notifySupportTicket({
+          venueName:      (v as { name?: string } | null)?.name || 'Unknown venue',
+          subject,
+          messagePreview: text,
+          ticketId:       (ticket as { id: string }).id,
+        });
+      } catch (e) {
+        console.warn('[support-tickets] slack notify failed', e);
+      }
+    })();
   }
 
   return NextResponse.json({ ok: true, ticket }, { status: 201 });
