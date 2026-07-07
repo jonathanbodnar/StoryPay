@@ -11,7 +11,10 @@ import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 
 export const SUPPORT_SESSION_COOKIE = 'support_session';
-const SESSION_TTL_HOURS = 12;
+// Concierge/support team sessions last a full week of inactivity before
+// requiring re-login — was 12h, which forced the team to re-authenticate
+// multiple times a day. Manual logout still clears the cookie immediately.
+const SESSION_TTL_HOURS = 24 * 7;
 
 export type SupportRole = 'support_agent' | 'support_admin';
 

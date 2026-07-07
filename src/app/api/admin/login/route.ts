@@ -80,7 +80,7 @@ export async function POST(request: Request) {
 
         const response = NextResponse.json({ success: true, identity: 'team_member' });
         response.cookies.set(SUPPORT_SESSION_COOKIE, token, {
-          httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 12,
+          httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 7,
         });
         // Make sure the env-based super-admin cookie is cleared so we don't
         // accidentally elevate this team member to full access.

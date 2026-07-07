@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     secure:   process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path:     '/',
-    maxAge:   60 * 60 * 12,
+    maxAge:   60 * 60 * 24 * 7,
   });
 
   // Stamp last_login_at (best-effort)

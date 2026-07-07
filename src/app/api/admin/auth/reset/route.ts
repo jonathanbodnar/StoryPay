@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
 
   const response = NextResponse.json({ ok: true, redirect: '/admin' });
   response.cookies.set(SUPPORT_SESSION_COOKIE, sessionToken, {
-    httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 12,
+    httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 7,
   });
   // Never elevate a team member to the env super-admin via a stale cookie.
   response.cookies.set('admin_token', '', {
