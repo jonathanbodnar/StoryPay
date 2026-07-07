@@ -150,8 +150,10 @@ interface TeamMember {
 
 type ComposerTab = 'team' | 'email' | 'sms' | 'concierge';
 /** Main pill filters. Starred and pinned are now icon-toggle overlays
- *  that combine with any main filter (handled by filterStarred / filterPinned state). */
-type ThreadListFilter = 'all' | 'unread' | 'needs_followup' | 'team_contacts';
+ *  that combine with any main filter (handled by filterStarred / filterPinned state).
+ *  Pipeline-stage pills use the `stage:<stage_id>` convention so any venue's
+ *  (dynamic) default-pipeline stages can be selected without a fixed union. */
+type ThreadListFilter = 'all' | 'unread' | 'team_contacts' | `stage:${string}`;
 
 interface TeamContact {
   email: string;
@@ -1076,6 +1078,23 @@ export default function ConversationsPage() {
     [threads],
   );
 
+  // Default sales-pipeline stages, in pipeline order — powers the sidebar
+  // stage-filter pills. Sourced from the same `/api/pipelines` fetch that
+  // drives the per-contact stage selector in the detail header, so custom
+  // renames/reorders (if a venue ever edits its default pipeline) stay in sync.
+  const defaultPipelineStages = useMemo(() => {
+    const def = threadPipelines.find((p) => p.is_default) ?? threadPipelines[0];
+    if (!def) return [];
+    return [...def.stages].sort((a, b) => a.position - b.position);
+  }, [threadPipelines]);
+
+  const activeStageFilterId = threadListFilter.startsWith('stage:')
+    ? threadListFilter.slice('stage:'.length)
+    : null;
+  const activeStageFilterName = activeStageFilterId
+    ? defaultPipelineStages.find((s) => s.id === activeStageFilterId)?.name ?? null
+    : null;
+
   const threadsFiltered = useMemo(() => {
     const q = threadSearch.trim().toLowerCase();
 
@@ -1087,12 +1106,11 @@ export default function ConversationsPage() {
       base = threads.filter((t) => emailSet.has((t.contact_email || '').toLowerCase()));
     }
 
-    // "Needs Follow-up" = contact is in a stage whose name contains "follow"
-    // (matches the default "Follow up" stage and any custom variants).
-    if (threadListFilter === 'needs_followup') {
-      base = base.filter((t) =>
-        t.contact_stage?.name?.toLowerCase().includes('follow'),
-      );
+    // Pipeline-stage pills: show only contacts whose *current* stage matches
+    // exactly. Threads with no stage data simply never match (safe default).
+    if (threadListFilter.startsWith('stage:')) {
+      const stageId = threadListFilter.slice('stage:'.length);
+      base = base.filter((t) => t.contact_stage_id === stageId);
     }
 
     if (q) {
@@ -1418,18 +1436,47 @@ export default function ConversationsPage() {
             mobileShowThread ? 'hidden md:flex' : 'flex',
           )}
         >
-          <div className="flex flex-shrink-0 items-center gap-1 border-b border-gray-200 px-3 py-2">
+          <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-b border-gray-200 px-3 py-2">
             {listActionError ? (
               <p className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 {listActionError}
               </p>
             ) : null}
-            {/* ── Main pill filters ── */}
+            {/* ── Icon-toggle overlays: pinned + starred (leftmost, independent of the
+                main/stage pills — combinable with any single-select filter below) ── */}
+            <div className="flex flex-shrink-0 items-center gap-0.5">
+              <button
+                type="button"
+                title={filterPinned ? 'Show all (remove pin filter)' : 'Show pinned only'}
+                onClick={() => setFilterPinned((v) => !v)}
+                className={classNames(
+                  'rounded-full p-1.5 transition-colors',
+                  filterPinned
+                    ? 'bg-sky-100 text-sky-600'
+                    : 'text-gray-400 hover:bg-gray-100 hover:text-sky-500',
+                )}
+              >
+                <Pin size={14} className={filterPinned ? 'text-sky-600' : ''} />
+              </button>
+              <button
+                type="button"
+                title={filterStarred ? 'Show all (remove star filter)' : 'Show starred only'}
+                onClick={() => setFilterStarred((v) => !v)}
+                className={classNames(
+                  'rounded-full p-1.5 transition-colors',
+                  filterStarred
+                    ? 'bg-amber-100 text-amber-600'
+                    : 'text-gray-400 hover:bg-gray-100 hover:text-amber-500',
+                )}
+              >
+                <Star size={14} className={filterStarred ? 'fill-amber-400 text-amber-500' : ''} />
+              </button>
+            </div>
+            {/* ── Main pill filters: All / Unread / Team ── */}
             {(
               [
                 { id: 'all' as const, label: 'All' },
                 { id: 'unread' as const, label: 'Unread' },
-                { id: 'needs_followup' as const, label: 'Follow-up' },
                 { id: 'team_contacts' as const, label: 'Team' },
               ] as const
             ).map((tab) => (
@@ -1459,35 +1506,32 @@ export default function ConversationsPage() {
                 )}
               </button>
             ))}
-            {/* ── Icon-toggle overlays: starred + pinned ── */}
-            <div className="ml-auto flex items-center gap-0.5">
-              <button
-                type="button"
-                title={filterStarred ? 'Show all (remove star filter)' : 'Show starred only'}
-                onClick={() => setFilterStarred((v) => !v)}
-                className={classNames(
-                  'rounded-full p-1.5 transition-colors',
-                  filterStarred
-                    ? 'bg-amber-100 text-amber-600'
-                    : 'text-gray-400 hover:bg-gray-100 hover:text-amber-500',
-                )}
-              >
-                <Star size={14} className={filterStarred ? 'fill-amber-400 text-amber-500' : ''} />
-              </button>
-              <button
-                type="button"
-                title={filterPinned ? 'Show all (remove pin filter)' : 'Show pinned only'}
-                onClick={() => setFilterPinned((v) => !v)}
-                className={classNames(
-                  'rounded-full p-1.5 transition-colors',
-                  filterPinned
-                    ? 'bg-sky-100 text-sky-600'
-                    : 'text-gray-400 hover:bg-gray-100 hover:text-sky-500',
-                )}
-              >
-                <Pin size={14} className={filterPinned ? 'text-sky-600' : ''} />
-              </button>
-            </div>
+            {/* ── Pipeline-stage filter pills — one per default sales-pipeline stage,
+                in pipeline order. Same single-select pattern as All/Unread/Team, just
+                keyed on `stage:<stage_id>` so it works for any venue's stage set. ── */}
+            {defaultPipelineStages.map((st) => {
+              const filterId = `stage:${st.id}` as const;
+              const isActive = threadListFilter === filterId;
+              return (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setThreadListFilter(filterId)}
+                  className={classNames(
+                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
+                    isActive
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
+                  )}
+                >
+                  <span
+                    className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                    style={{ backgroundColor: isActive ? '#ffffff' : (st.color || '#9ca3af') }}
+                  />
+                  {st.name}
+                </button>
+              );
+            })}
           </div>
           <div className="flex-shrink-0 border-b border-gray-200 p-2">
             <div className="relative">
@@ -1582,14 +1626,14 @@ export default function ConversationsPage() {
                     ? 'No pinned conversations match this filter.'
                     : threadListFilter === 'unread'
                       ? 'No unread conversations.'
-                      : threadListFilter === 'needs_followup'
-                        ? 'No conversations in the Follow-up stage.'
+                      : activeStageFilterName
+                        ? `No conversations in the ${activeStageFilterName} stage.`
                         : 'No conversations yet. Start one with a contact.'}
               </p>
             ) : threadsFiltered.length === 0 && threadListFilter !== 'team_contacts' ? (
               <p className="px-4 py-10 text-center text-sm text-gray-500">
-                {threadListFilter === 'needs_followup'
-                  ? 'No conversations in the Follow-up stage match your search.'
+                {activeStageFilterName
+                  ? `No conversations in the ${activeStageFilterName} stage match your search.`
                   : 'No threads match your search.'}
               </p>
             ) : threadsFiltered.length > 0 ? (
