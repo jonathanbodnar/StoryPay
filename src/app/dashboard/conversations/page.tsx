@@ -1428,6 +1428,102 @@ export default function ConversationsPage() {
         </button>
       </div>
 
+      {/* ── Filter bar — one thin horizontal row spanning the full width,
+          scrolls horizontally instead of wrapping so it always stays a
+          single line no matter how many stage pills a venue's pipeline has. ── */}
+      <div className="mb-3 flex flex-shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto rounded-2xl border border-gray-200 bg-white px-3 py-2">
+        {/* ── Icon-toggle overlays: pinned + starred (leftmost, independent of the
+            main/stage pills — combinable with any single-select filter below) ── */}
+        <div className="flex flex-shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            title={filterPinned ? 'Show all (remove pin filter)' : 'Show pinned only'}
+            onClick={() => setFilterPinned((v) => !v)}
+            className={classNames(
+              'rounded-full p-1.5 transition-colors',
+              filterPinned
+                ? 'bg-sky-100 text-sky-600'
+                : 'text-gray-400 hover:bg-gray-100 hover:text-sky-500',
+            )}
+          >
+            <Pin size={14} className={filterPinned ? 'text-sky-600' : ''} />
+          </button>
+          <button
+            type="button"
+            title={filterStarred ? 'Show all (remove star filter)' : 'Show starred only'}
+            onClick={() => setFilterStarred((v) => !v)}
+            className={classNames(
+              'rounded-full p-1.5 transition-colors',
+              filterStarred
+                ? 'bg-amber-100 text-amber-600'
+                : 'text-gray-400 hover:bg-gray-100 hover:text-amber-500',
+            )}
+          >
+            <Star size={14} className={filterStarred ? 'fill-amber-400 text-amber-500' : ''} />
+          </button>
+        </div>
+        {/* ── Main pill filters: All / Unread / Team ── */}
+        {(
+          [
+            { id: 'all' as const, label: 'All' },
+            { id: 'unread' as const, label: 'Unread' },
+            { id: 'team_contacts' as const, label: 'Team' },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setThreadListFilter(tab.id)}
+            className={classNames(
+              'inline-flex flex-shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
+              threadListFilter === tab.id
+                ? 'bg-gray-900 text-white'
+                : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
+            )}
+          >
+            {tab.label}
+            {/* Red badge on the Unread pill — always visible when there are
+                unread threads, regardless of which filter is active. */}
+            {tab.id === 'unread' && totalUnreadCount > 0 && (
+              <span className={classNames(
+                'inline-flex min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none',
+                threadListFilter === 'unread'
+                  ? 'bg-white text-gray-900'
+                  : 'bg-red-500 text-white',
+              )}>
+                {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+              </span>
+            )}
+          </button>
+        ))}
+        {/* ── Pipeline-stage filter pills — one per default sales-pipeline stage,
+            in pipeline order. Same single-select pattern as All/Unread/Team, just
+            keyed on `stage:<stage_id>` so it works for any venue's stage set. ── */}
+        {defaultPipelineStages.map((st) => {
+          const filterId = `stage:${st.id}` as const;
+          const isActive = threadListFilter === filterId;
+          return (
+            <button
+              key={st.id}
+              type="button"
+              onClick={() => setThreadListFilter(filterId)}
+              className={classNames(
+                'inline-flex flex-shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
+                isActive
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
+              )}
+            >
+              <span
+                className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                style={{ backgroundColor: isActive ? '#ffffff' : (st.color || '#9ca3af') }}
+              />
+              {st.name}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white">
         {/* Thread list */}
         <aside
@@ -1436,103 +1532,11 @@ export default function ConversationsPage() {
             mobileShowThread ? 'hidden md:flex' : 'flex',
           )}
         >
-          <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 border-b border-gray-200 px-3 py-2">
-            {listActionError ? (
-              <p className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                {listActionError}
-              </p>
-            ) : null}
-            {/* ── Icon-toggle overlays: pinned + starred (leftmost, independent of the
-                main/stage pills — combinable with any single-select filter below) ── */}
-            <div className="flex flex-shrink-0 items-center gap-0.5">
-              <button
-                type="button"
-                title={filterPinned ? 'Show all (remove pin filter)' : 'Show pinned only'}
-                onClick={() => setFilterPinned((v) => !v)}
-                className={classNames(
-                  'rounded-full p-1.5 transition-colors',
-                  filterPinned
-                    ? 'bg-sky-100 text-sky-600'
-                    : 'text-gray-400 hover:bg-gray-100 hover:text-sky-500',
-                )}
-              >
-                <Pin size={14} className={filterPinned ? 'text-sky-600' : ''} />
-              </button>
-              <button
-                type="button"
-                title={filterStarred ? 'Show all (remove star filter)' : 'Show starred only'}
-                onClick={() => setFilterStarred((v) => !v)}
-                className={classNames(
-                  'rounded-full p-1.5 transition-colors',
-                  filterStarred
-                    ? 'bg-amber-100 text-amber-600'
-                    : 'text-gray-400 hover:bg-gray-100 hover:text-amber-500',
-                )}
-              >
-                <Star size={14} className={filterStarred ? 'fill-amber-400 text-amber-500' : ''} />
-              </button>
-            </div>
-            {/* ── Main pill filters: All / Unread / Team ── */}
-            {(
-              [
-                { id: 'all' as const, label: 'All' },
-                { id: 'unread' as const, label: 'Unread' },
-                { id: 'team_contacts' as const, label: 'Team' },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setThreadListFilter(tab.id)}
-                className={classNames(
-                  'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
-                  threadListFilter === tab.id
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
-                )}
-              >
-                {tab.label}
-                {/* Red badge on the Unread pill — always visible when there are
-                    unread threads, regardless of which filter is active. */}
-                {tab.id === 'unread' && totalUnreadCount > 0 && (
-                  <span className={classNames(
-                    'inline-flex min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none',
-                    threadListFilter === 'unread'
-                      ? 'bg-white text-gray-900'
-                      : 'bg-red-500 text-white',
-                  )}>
-                    {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-                  </span>
-                )}
-              </button>
-            ))}
-            {/* ── Pipeline-stage filter pills — one per default sales-pipeline stage,
-                in pipeline order. Same single-select pattern as All/Unread/Team, just
-                keyed on `stage:<stage_id>` so it works for any venue's stage set. ── */}
-            {defaultPipelineStages.map((st) => {
-              const filterId = `stage:${st.id}` as const;
-              const isActive = threadListFilter === filterId;
-              return (
-                <button
-                  key={st.id}
-                  type="button"
-                  onClick={() => setThreadListFilter(filterId)}
-                  className={classNames(
-                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
-                    isActive
-                      ? 'bg-gray-900 text-white'
-                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
-                  )}
-                >
-                  <span
-                    className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
-                    style={{ backgroundColor: isActive ? '#ffffff' : (st.color || '#9ca3af') }}
-                  />
-                  {st.name}
-                </button>
-              );
-            })}
-          </div>
+          {listActionError ? (
+            <p className="flex-shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {listActionError}
+            </p>
+          ) : null}
           <div className="flex-shrink-0 border-b border-gray-200 p-2">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
