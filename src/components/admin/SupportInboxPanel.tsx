@@ -161,6 +161,7 @@ export function SupportInboxPanel() {
     return 'bride-replies';
   })();
   const initialThread = searchParams.get('thread') || null;
+  const initialTicket = searchParams.get('ticket') || null;
 
   const [subTab, setSubTab] = useState<SupportSubTab>(initialTab);
 
@@ -993,6 +994,7 @@ export function SupportInboxPanel() {
             teamMembers={teamMembers}
             actAsId={actAsId}
             onOpenCount={setTicketOpenCount}
+            initialTicketId={initialTicket}
           />
         </div>
       )}
@@ -2496,12 +2498,17 @@ function VenueDirectInboxView({
 }
 
 function TicketsView({
-  me, teamMembers, actAsId, onOpenCount,
+  me, teamMembers, actAsId, onOpenCount, initialTicketId,
 }: {
   me: SupportMe | null;
   teamMembers: SupportTeamMember[];
   actAsId: string;
   onOpenCount?: (n: number) => void;
+  // Deep-link support: when a Slack "new ticket" notification links here with
+  // ?tab=tickets&ticket=<id>, this seeds the active ticket on mount so the
+  // detail view opens automatically — mirrors how SupportInboxPanel seeds
+  // activeThreadId from the `thread` query param for bride replies.
+  initialTicketId?: string | null;
 }) {
   const [tickets, setTickets] = useState<TicketListRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -2510,7 +2517,7 @@ function TicketsView({
   const [statusFilter, setStatusFilter] = useState<'open' | 'all' | 'closed'>('open');
   const [search, setSearch] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
-  const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+  const [activeTicketId, setActiveTicketId] = useState<string | null>(initialTicketId ?? null);
   const [soundMuted] = useInboxSoundMuted();
 
   const fetchTickets = useCallback(async (opts: { append?: boolean; cursor?: string | null } = {}) => {
