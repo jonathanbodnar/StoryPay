@@ -20,11 +20,15 @@ import {
   Mail, MessageCircle, Building2, Loader2, AlertCircle, CheckCircle2,
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
   UserPlus, Flag, X, Radio, Sparkles, FileText, Maximize2, Minimize2,
-  Eye, EyeOff, ChevronDown, ChevronUp, BookOpen,
+  Eye, EyeOff, ChevronDown, ChevronUp, BookOpen, Volume2, VolumeX,
 } from 'lucide-react';
 import { trackClient } from '@/lib/analytics-client';
 import { useBroadcastChannel, useBroadcastChannels } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent, type VenueDirectInboxEvent } from '@/lib/realtime/channels';
+import {
+  playBrideReplyChime, playVenueReplyChime, playSupportNoteChime,
+  useInboxSoundMuted,
+} from '@/lib/notification-sounds';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 import { SupportContextSidebar } from '@/components/admin/SupportContextSidebar';
 import { SlaDot, SlaPill } from '@/components/support/SlaIndicator';
@@ -221,6 +225,17 @@ export function SupportInboxPanel() {
 
   // ── Focus mode ─────────────────────────────────────────────────────────────
   const [focusMode, setFocusMode] = useState(false);
+
+  // ── Notification sounds ────────────────────────────────────────────────────
+  // Shared across sibling components (TicketsView, VenueDirectInboxView) via
+  // the module-level store in notification-sounds.ts — no prop drilling.
+  const [soundMuted, setSoundMuted] = useInboxSoundMuted();
+  const toggleSoundMuted = useCallback(() => setSoundMuted(!soundMuted), [soundMuted, setSoundMuted]);
+  // Resolves to the currently-acting support identity (super admins can act
+  // as a teammate via the identity picker) — mirrors the `selfId` logic used
+  // by MessageBubble elsewhere in this file, so "was this sent by me" is
+  // consistent across the read-receipt UI and the sound-alert self-check.
+  const myAgentId = (me?.superAdmin ? actAsId : null) || me?.member?.id || null;
   const [ticketOpenCount, setTicketOpenCount] = useState(0);
   const [venueDirectUnreadCount, setVenueDirectUnreadCount] = useState(0);
 
@@ -534,12 +549,40 @@ export function SupportInboxPanel() {
 
   const [liveBride, setLiveBride] = useState(false);
 
+  // Sound alerts for the bride-inbox stream — chimes fire regardless of which
+  // sub-tab is active (an admin on the Tickets tab still needs to hear a
+  // bride reply), and regardless of whether the affected thread happens to
+  // be the one currently open (per product requirement, ANY new message
+  // should chime, not just ones outside the open thread). Only real broadcast
+  // events reach this handler — optimistic/local sends never go through
+  // useBroadcastChannel, so the composer never triggers its own chime.
+  const handleBrideInboxSoundEvent = useCallback((payload: unknown) => {
+    const evt = payload as BrideMessageEvent | null;
+    if (!evt) return;
+    if (soundMuted) return;
+    // Don't chime for a message the currently-acting support identity just
+    // sent themselves (reply OR internal note) — only for messages from
+    // someone/something else.
+    if (evt.senderKind === 'concierge' && evt.supportAgentId && evt.supportAgentId === myAgentId) return;
+    if (evt.supportOnly) {
+      // Internal "team only" note — another teammate needs my attention.
+      playSupportNoteChime();
+    } else if (evt.senderKind === 'contact') {
+      playBrideReplyChime();
+    } else if (evt.senderKind === 'owner' || evt.senderKind === 'team') {
+      playVenueReplyChime();
+    }
+    // 'concierge' (non-note) / 'ai' / 'system' sender kinds are outbound admin
+    // replies or automated messages — no chime needed for those.
+  }, [myAgentId, soundMuted]);
+
   useBroadcastChannel(
     subTab === 'bride-replies' ? supportChannels.brideInbox() : null,
     ['message'],
     useCallback((_evt, payload) => {
       const evt = payload as BrideMessageEvent;
       if (!evt) return;
+      handleBrideInboxSoundEvent(payload);
       // Pulse the "live" indicator briefly
       setLiveBride(true);
       setTimeout(() => setLiveBride(false), 1500);
@@ -578,7 +621,17 @@ export function SupportInboxPanel() {
         // Outbound reply TO the bride — thread is answered, drop from list.
         setThreads(prev => prev.filter(t => t.thread_id !== evt.threadId));
       }
-    }, [debouncedInboxRefresh]),
+    }, [debouncedInboxRefresh, handleBrideInboxSoundEvent]),
+  );
+
+  // Same bride-inbox stream, but active only while a DIFFERENT sub-tab is
+  // shown (the subscription above already covers sound when 'bride-replies'
+  // is active) — keeps the admin's ears on new bride/venue messages even
+  // while browsing Tickets or Venue Direct.
+  useBroadcastChannel(
+    subTab !== 'bride-replies' ? supportChannels.brideInbox() : null,
+    ['message'],
+    useCallback((_evt, payload) => handleBrideInboxSoundEvent(payload), [handleBrideInboxSoundEvent]),
   );
 
   // Active thread realtime — append new messages immediately. Subscribes to
@@ -886,6 +939,16 @@ export function SupportInboxPanel() {
             actAsId={actAsId}
             onChange={chooseActAs}
           />
+          <button
+            type="button"
+            onClick={toggleSoundMuted}
+            title={soundMuted ? 'Unmute new-message alerts' : 'Mute new-message alerts'}
+            aria-pressed={soundMuted}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors shrink-0"
+          >
+            {soundMuted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+            {soundMuted ? 'Muted' : 'Sound'}
+          </button>
           <button
             type="button"
             onClick={() => setFocusMode(v => !v)}
@@ -2448,6 +2511,7 @@ function TicketsView({
   const [search, setSearch] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+  const [soundMuted] = useInboxSoundMuted();
 
   const fetchTickets = useCallback(async (opts: { append?: boolean; cursor?: string | null } = {}) => {
     setListLoading(true);
@@ -2557,6 +2621,11 @@ function TicketsView({
         const m = payload as TicketMessageEvent;
         if (!m) return;
         pulseLive();
+        // Venue support tickets don't carry a support-agent id in the payload
+        // (senderType is only 'venue' | 'support'), so a 'venue' message can
+        // never be the currently-acting admin's own send — safe to chime
+        // unconditionally without a self-check.
+        if (!soundMuted && m.senderType === 'venue') playVenueReplyChime();
         // Bump existing row to top with new preview, or refetch for a brand-new ticket
         setTickets(prev => {
           const idx = prev.findIndex(t => t.id === m.ticketId);
@@ -2584,7 +2653,7 @@ function TicketsView({
           assigned_support_user_id: s.assignedSupportUserId,
         } : t));
       }
-    }, [pulseLive, debouncedTicketsRefresh]),
+    }, [pulseLive, debouncedTicketsRefresh, soundMuted]),
   );
 
   // Active ticket realtime — append new messages instantly
