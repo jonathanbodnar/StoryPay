@@ -144,3 +144,14 @@ button, input, select, textarea, optgroup {
   background-color: rgba(100, 116, 139, 0.45);
   transition: background-color 0.1s ease;
 }
+
+/* Fully hides the scrollbar track/thumb while keeping the element scrollable
+   (drag, trackpad, and arrow-key scroll all still work). Used for the
+   single-row conversations filter bar so it never shows a visible scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;      /* Firefox */
+  -ms-overflow-style: none;   /* IE / legacy Edge */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;              /* Chrome, Safari, modern Edge */
+}

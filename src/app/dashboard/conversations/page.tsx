@@ -1431,7 +1431,7 @@ export default function ConversationsPage() {
       {/* ── Filter bar — one thin horizontal row spanning the full width,
           scrolls horizontally instead of wrapping so it always stays a
           single line no matter how many stage pills a venue's pipeline has. ── */}
-      <div className="mb-3 flex flex-shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto rounded-2xl border border-gray-200 bg-white px-3 py-2">
+      <div className="no-scrollbar mb-3 flex flex-shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto rounded-2xl border border-gray-200 bg-white px-3 py-2">
         {/* ── Icon-toggle overlays: pinned + starred (leftmost, independent of the
             main/stage pills — combinable with any single-select filter below) ── */}
         <div className="flex flex-shrink-0 items-center gap-0.5">
