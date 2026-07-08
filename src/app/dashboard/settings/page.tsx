@@ -14,7 +14,6 @@ import {
  Webhook,
  RotateCcw,
  Sparkles,
- Target,
 } from 'lucide-react';
 
 interface VenueInfo {
@@ -31,8 +30,6 @@ interface VenueInfo {
  ghl_location_id: string | null;
  ghl_access_token: string | null; // masked '••••XXXX' or null on GET
  ghl_contacts_synced_at: string | null;
- meta_pixel_id: string | null;
- meta_capi_access_token: string | null; // masked '••••XXXX' or null on GET
  legacy_location_id?: string | null;
  lunarpay_merchant_id: number | null;
  service_fee_rate: number;
@@ -189,60 +186,7 @@ export default function SettingsPage() {
    finally { setSavingLocationId(false); }
  }
 
- // Meta (Facebook) Conversions API — Pixel ID + access token
- const [metaPixelIdInput, setMetaPixelIdInput] = useState('');
- const [savingMetaPixelId, setSavingMetaPixelId] = useState(false);
- const [metaPixelIdSaved, setMetaPixelIdSaved] = useState(false);
- const [metaPixelIdError, setMetaPixelIdError] = useState('');
-
- const [metaTokenInput, setMetaTokenInput] = useState('');
- const [savingMetaToken, setSavingMetaToken] = useState(false);
- const [metaTokenSaved, setMetaTokenSaved] = useState(false);
- const [metaTokenError, setMetaTokenError] = useState('');
-
- async function saveMetaPixelId() {
-   const val = metaPixelIdInput.trim();
-   if (!val) return;
-   setSavingMetaPixelId(true);
-   setMetaPixelIdError('');
-   setMetaPixelIdSaved(false);
-   try {
-     const res = await fetch('/api/venues/me', {
-       method: 'PATCH',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ meta_pixel_id: val }),
-     });
-     if (!res.ok) { setMetaPixelIdError('Failed to save. Please try again.'); return; }
-     const updated = await res.json();
-     setVenue(prev => prev ? { ...prev, meta_pixel_id: updated.meta_pixel_id } : prev);
-     setMetaPixelIdSaved(true);
-     setTimeout(() => setMetaPixelIdSaved(false), 3000);
-   } catch { setMetaPixelIdError('Failed to save. Please try again.'); }
-   finally { setSavingMetaPixelId(false); }
- }
-
- async function saveMetaToken() {
-   const val = metaTokenInput.trim();
-   if (!val) return;
-   setSavingMetaToken(true);
-   setMetaTokenError('');
-   setMetaTokenSaved(false);
-   try {
-     const res = await fetch('/api/venues/me', {
-       method: 'PATCH',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ meta_capi_access_token: val }),
-     });
-     if (!res.ok) { setMetaTokenError('Failed to save. Please try again.'); return; }
-     setVenue(prev => prev ? { ...prev, meta_capi_access_token: `••••${val.slice(-4)}` } : prev);
-     setMetaTokenSaved(true);
-     setMetaTokenInput('');
-     setTimeout(() => setMetaTokenSaved(false), 3000);
-   } catch { setMetaTokenError('Failed to save. Please try again.'); }
-   finally { setSavingMetaToken(false); }
- }
-
- async function syncGhlContacts() {
+async function syncGhlContacts() {
    stopSyncPolling();
    setSyncStarting(true);
    setSyncError('');
@@ -337,7 +281,6 @@ async function devResetOnboarding() {
  const data = await res.json();
 setVenue(data);
 if (data.ghl_location_id) setLocationIdInput(data.ghl_location_id);
-if (data.meta_pixel_id) setMetaPixelIdInput(data.meta_pixel_id);
 
 // Restore sync state if a sync is in flight (e.g. user refreshed the
 // page while a previous sync was still running on the server).
@@ -709,70 +652,6 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
   );
 })()}
 
- </div>
- </section>
-
- {/* Meta (Facebook) Conversions API — server-side lead tracking */}
- <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
- <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
- <Target size={18} className="text-gray-400" />
- <h2 className="font-heading text-base font-semibold text-gray-900">Meta Ads Tracking</h2>
- </div>
- <div className="px-6 py-5 space-y-5">
- <p className="text-sm text-gray-500">
- Connect your Meta Pixel and Conversions API access token to send guide-download
- leads from your listing page to Meta as a <span className="font-mono text-xs">Lead</span> event,
- so you can optimize your ad campaigns. Find these in <strong>Meta Events Manager → Settings → Conversions API</strong>.
- This is entirely server-side — no tracking script is ever added to your listing page.
- </p>
-
- {/* Pixel ID */}
- <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
- <p className="text-xs font-medium text-gray-700 mb-2">Meta Pixel ID</p>
- <div className="flex gap-2">
- <input
- type="text"
- value={metaPixelIdInput}
- onChange={e => setMetaPixelIdInput(e.target.value)}
- placeholder="e.g. 123456789012345"
- className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none font-mono"
- />
- <button
- onClick={() => void saveMetaPixelId()}
- disabled={savingMetaPixelId || !metaPixelIdInput.trim()}
- className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
- >
- {savingMetaPixelId ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
- {savingMetaPixelId ? 'Saving…' : 'Save'}
- </button>
- </div>
- {metaPixelIdSaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
- {metaPixelIdError && <p className="mt-2 text-xs text-red-600">{metaPixelIdError}</p>}
- </div>
-
- {/* Conversions API Access Token */}
- <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
- <p className="text-xs font-medium text-gray-700 mb-2">Conversions API Access Token</p>
- <div className="flex gap-2">
- <input
- type="password"
- value={metaTokenInput}
- onChange={e => setMetaTokenInput(e.target.value)}
- placeholder={venue.meta_capi_access_token ? `${venue.meta_capi_access_token} (paste a new one to replace)` : 'Paste your Conversions API access token here'}
- className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none font-mono"
- />
- <button
- onClick={() => void saveMetaToken()}
- disabled={savingMetaToken || !metaTokenInput.trim()}
- className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
- >
- {savingMetaToken ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
- {savingMetaToken ? 'Saving…' : 'Save'}
- </button>
- </div>
- {metaTokenSaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
- {metaTokenError && <p className="mt-2 text-xs text-red-600">{metaTokenError}</p>}
- </div>
  </div>
  </section>
  </div>

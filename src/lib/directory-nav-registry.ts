@@ -46,6 +46,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_listing_analytics', label: 'Listing — Analytics', pathPrefix: '/dashboard/listing/analytics', group: 'listing' },
   { id: 'nav_listing_reviews', label: 'Listing — Reviews', pathPrefix: '/dashboard/listing/reviews', group: 'listing' },
   { id: 'nav_listing_directory', label: 'Listing — Verified & Sponsored', pathPrefix: '/dashboard/listing/directory', group: 'listing' },
+  { id: 'nav_listing_ad_tracking', label: 'Listing — Ad Tracking', pathPrefix: '/dashboard/listing/ad-tracking', group: 'listing' },
   { id: 'nav_listing_directory_billing', label: 'Plans & billing', pathPrefix: '/dashboard/directory-billing', group: 'listing' },
 
   { id: 'nav_payments_new', label: 'Payments — New', pathPrefix: '/dashboard/payments/new', group: 'payments' },

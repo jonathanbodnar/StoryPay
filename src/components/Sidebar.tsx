@@ -25,6 +25,7 @@ import {
   Building2,
   Diamond,
   Gem,
+  Target,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
@@ -109,6 +110,7 @@ const listingItems: NavItem[] = [
   { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: CircleDollarSign, navId: 'nav_listing_pricing_guide' },
   { label: 'Speed to Lead System', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
   { label: 'Verified & Sponsored', href: '/dashboard/listing/directory', icon: BadgeCheck, navId: 'nav_listing_directory' },
+  { label: 'Ad Tracking', href: '/dashboard/listing/ad-tracking', icon: Target, navId: 'nav_listing_ad_tracking' },
 ];
 
 type FlyoutGroup = 'payments' | 'marketing' | 'settings' | 'listing' | null;

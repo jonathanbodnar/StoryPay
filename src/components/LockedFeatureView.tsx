@@ -89,6 +89,11 @@ const FEATURE_OUTCOMES: Record<string, FeatureOutcome> = {
     outcome:
       'Verified and Sponsored badges put your venue at the top of couples\' searches on storyvenue.com. More visibility means more inquiries without more ad spend.',
   },
+  nav_listing_ad_tracking: {
+    headline: 'Turn ad spend into booked tours',
+    outcome:
+      'Every guide download fires a real Lead event straight to your Meta Pixel — no code, no separate pixel install. Meta\'s algorithm auto-optimizes your campaigns toward actual leads, and you see true cost-per-lead in Ads Manager instead of guessing from clicks.',
+  },
   nav_payments_new: {
     headline: 'Get paid before the tour is over',
     outcome:
