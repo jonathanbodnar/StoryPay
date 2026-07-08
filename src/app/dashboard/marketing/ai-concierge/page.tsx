@@ -172,7 +172,7 @@ export default function AiConciergeSettingsPage() {
   return (
     <div className="bg-white overflow-hidden min-h-[500px]">
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 px-4 pt-2 bg-white">
+      <div className="flex gap-1 border-b border-gray-200 px-6 pt-2 bg-white">
         {([
           { id: 'overview', label: 'Overview', icon: Sparkles },
           { id: 'leads',    label: 'Active Leads', icon: Bot,
@@ -194,7 +194,7 @@ export default function AiConciergeSettingsPage() {
 
       {/* Overview tab */}
       {activeTab === 'overview' && (
-        <div className="space-y-6 pt-6">
+        <div className="space-y-6 px-6 pb-8 pt-6">
           <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
             <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
               <MessageSquare size={18} className="text-gray-400" />
@@ -295,7 +295,7 @@ export default function AiConciergeSettingsPage() {
 
       {/* Active Leads tab */}
       {activeTab === 'leads' && (
-        <div className="pt-6">
+        <div className="px-6 pb-8 pt-6">
           <ActiveLeadsPanel />
         </div>
       )}
