@@ -555,11 +555,14 @@ function SequenceEditor({
   onStepsChange,
   leadsData,
   allowAi = true,
+  maxMessages,
 }: {
   steps: StepConfig[];
   onStepsChange: (s: StepConfig[]) => void;
   leadsData: StepLeadsPayload | null;
   allowAi?: boolean;
+  /** Combined cap on send_sms + send_email steps. When reached, both add buttons are hidden. */
+  maxMessages?: number;
 }) {
   const dragSrc = useRef<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
@@ -655,15 +658,21 @@ function SequenceEditor({
       })}
 
       {/* Add buttons */}
+      {(() => {
+        const msgCount = steps.filter(s => s.step_type === 'send_sms' || s.step_type === 'send_email').length;
+        const atLimit = maxMessages !== undefined && msgCount >= maxMessages;
+        return (
       <div className="flex flex-wrap gap-2 pt-1">
-        <button
-          type="button"
-          onClick={() => addStep('send_sms')}
-          className="flex items-center gap-1.5 rounded-xl border border-dashed border-violet-200 px-3 py-2 text-[12px] font-medium text-violet-600 hover:bg-violet-50 transition-colors"
-        >
-          <Plus size={13} /> SMS
-        </button>
-        {steps.filter(s => s.step_type === 'send_email').length < 5 && (
+        {!atLimit && (
+          <button
+            type="button"
+            onClick={() => addStep('send_sms')}
+            className="flex items-center gap-1.5 rounded-xl border border-dashed border-violet-200 px-3 py-2 text-[12px] font-medium text-violet-600 hover:bg-violet-50 transition-colors"
+          >
+            <Plus size={13} /> SMS
+          </button>
+        )}
+        {!atLimit && (
           <button
             type="button"
             onClick={() => addStep('send_email')}
@@ -671,6 +680,11 @@ function SequenceEditor({
           >
             <Plus size={13} /> Email
           </button>
+        )}
+        {atLimit && maxMessages !== undefined && (
+          <span className="text-[11px] text-gray-400 py-2">
+            Maximum of {maxMessages} SMS/email touches reached.
+          </span>
         )}
         <button
           type="button"
@@ -689,6 +703,8 @@ function SequenceEditor({
           </button>
         )}
       </div>
+        );
+      })()}
 
       <p className="text-[11px] text-gray-400 pt-1">
         Drag <GripVertical size={11} className="inline mb-0.5 text-gray-400" /> to reorder. Sequence stops automatically when the bride replies.
@@ -902,6 +918,7 @@ export default function BookingSystemPage() {
             onStepsChange={(steps) => void save({ phase4Steps: steps })}
             leadsData={null}
             allowAi={false}
+            maxMessages={10}
           />
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name', 'appointment_date', 'appointment_time', 'venue_address']} />
         </PhaseCard>
@@ -921,6 +938,7 @@ export default function BookingSystemPage() {
             onStepsChange={(steps) => void save({ phase5Steps: steps })}
             leadsData={null}
             allowAi={false}
+            maxMessages={10}
           />
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
