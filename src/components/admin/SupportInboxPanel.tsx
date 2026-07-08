@@ -148,6 +148,11 @@ function fullName(first: string | null, last: string | null, fallback = 'Unknown
   return [first, last].filter(Boolean).join(' ').trim() || fallback;
 }
 
+// Mirrors SUPER_ADMIN_SUPPORT_USER_ID in src/lib/support/super-admin-member.ts.
+// Kept as a client-side constant so we can suppress self-chimes when the
+// super admin sends a note without selecting an acting team identity.
+const SUPER_ADMIN_SUPPORT_MEMBER_ID = '00000000-0000-0000-0000-0000000000a1';
+
 export function SupportInboxPanel() {
   const router       = useRouter();
   const pathname     = usePathname();
@@ -561,21 +566,30 @@ export function SupportInboxPanel() {
     const evt = payload as BrideMessageEvent | null;
     if (!evt) return;
     if (soundMuted) return;
-    // Don't chime for a message the currently-acting support identity just
-    // sent themselves (reply OR internal note) — only for messages from
-    // someone/something else.
-    if (evt.senderKind === 'concierge' && evt.supportAgentId && evt.supportAgentId === myAgentId) return;
+
     if (evt.supportOnly) {
-      // Internal "team only" note — another teammate needs my attention.
-      playSupportNoteChime();
-    } else if (evt.senderKind === 'contact') {
-      playBrideReplyChime();
-    } else if (evt.senderKind === 'owner' || evt.senderKind === 'team') {
-      playVenueReplyChime();
+      // Internal "team only" note — chime only if a DIFFERENT agent sent it.
+      // Self-check covers two cases:
+      //   1. Regular agent: compare supportAgentId directly with myAgentId.
+      //   2. Super admin without acting identity: myAgentId is null, but the
+      //      note still carries the synthetic SUPER_ADMIN_SUPPORT_MEMBER_ID.
+      const sentBySelf = evt.senderKind === 'concierge' && evt.supportAgentId && (
+        (myAgentId && evt.supportAgentId === myAgentId) ||
+        (!myAgentId && me?.superAdmin && evt.supportAgentId === SUPER_ADMIN_SUPPORT_MEMBER_ID)
+      );
+      if (!sentBySelf) playSupportNoteChime();
+      return;
     }
-    // 'concierge' (non-note) / 'ai' / 'system' sender kinds are outbound admin
-    // replies or automated messages — no chime needed for those.
-  }, [myAgentId, soundMuted]);
+
+    // Only chime for inbound messages from the bride/contact.
+    // Outbound venue-owner / team messages (senderKind 'owner', 'team') are
+    // intentionally excluded: they are always inbound=false and do NOT create
+    // a new "needs attention" item in the inbox, so chiming for them produces
+    // false-positive alerts (the admin hears a sound but sees nothing new).
+    if (evt.senderKind === 'contact') {
+      playBrideReplyChime();
+    }
+  }, [myAgentId, me, soundMuted]);
 
   useBroadcastChannel(
     subTab === 'bride-replies' ? supportChannels.brideInbox() : null,
