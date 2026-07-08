@@ -10,6 +10,7 @@ import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
+import { sendMetaLeadEvent } from '@/lib/meta-conversions-api';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -427,6 +428,17 @@ export async function POST(request: NextRequest) {
   void sendBookingSystemGuide(venue.id, lr.id).catch((e) =>
     console.error('[public/leads] sendBookingSystemGuide error:', e),
   );
+
+  // Meta (Facebook) Conversions API — server-side `Lead` event, fire-and-forget.
+  // No-ops if the venue hasn't configured meta_pixel_id + meta_capi_access_token.
+  void sendMetaLeadEvent({
+    venueId:        venue.id,
+    email:          lr.email,
+    phone:          phone || null,
+    firstName:      firstName || null,
+    lastName:       lastName || null,
+    eventSourceUrl: venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}` : DIRECTORY_URL,
+  }).catch(() => {});
 
   // Fire form-submitted workflow trigger then kick the cron so any delay steps
   // that were just scheduled get picked up automatically.

@@ -81,11 +81,18 @@ export async function GET() {
   const rawRefresh = (venue as { ghl_refresh_token?: string | null }).ghl_refresh_token;
   const ghl_refresh_token = rawRefresh && typeof rawRefresh === 'string' ? '••••' : null;
 
+  // Mask the Meta Conversions API access token the same way as the GHL token.
+  const rawMetaToken = (venue as { meta_capi_access_token?: string | null }).meta_capi_access_token;
+  const meta_capi_access_token = rawMetaToken && typeof rawMetaToken === 'string'
+    ? `••••${rawMetaToken.slice(-4)}`
+    : null;
+
   return NextResponse.json({
     ...venue,
     ...(brand_socials !== undefined ? { brand_socials } : {}),
     ghl_access_token,
     ghl_refresh_token,
+    meta_capi_access_token,
     directory_plans,
   });
 }
@@ -126,6 +133,8 @@ export async function PATCH(request: Request) {
     ghl_location_id: true,
     ghl_connected:   true,
     ghl_access_token: true, // per-venue Legacy API Key (v1 location key)
+    meta_pixel_id:            true, // Meta (Facebook) Conversions API — pixel ID
+    meta_capi_access_token:   true, // Meta (Facebook) Conversions API — access token
   };
   const updates: Record<string, unknown> = {};
 
@@ -234,7 +243,8 @@ export async function PATCH(request: Request) {
       'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets',
       'accept_ach',
       'payment_reminders_enabled', 'payment_reminder_offsets',
-      'ghl_location_id', 'ghl_connected', 'ghl_access_token'];
+      'ghl_location_id', 'ghl_connected', 'ghl_access_token',
+      'meta_pixel_id', 'meta_capi_access_token'];
     for (const k of knownCols) {
       if (k in updates) safeUpdates[k] = updates[k];
     }
