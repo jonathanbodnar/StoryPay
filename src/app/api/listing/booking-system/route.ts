@@ -38,18 +38,31 @@ export const PHASE4_STAGE_NAME = 'Tour Booked';
 export const PHASE5_STAGE_NAME = 'Wedding Booked';
 
 // Stable stage keys used by the /stage-default publish/reset API and by
-// `booking_system_stage_defaults.stage_key` (migrations/164). Stage 1 (guide
-// delivery) is intentionally excluded — it's just two on/off toggles + a
-// single fixed body each, no StepConfig[] sequence, so there's nothing to
-// publish/reset for it (see page.tsx).
-export type StageKey = 'phase2' | 'phase4' | 'phase5';
+// `booking_system_stage_defaults.stage_key` (migrations/164, 165).
+//
+// 'phase1' (guide delivery) is a bit different from the other three: it has
+// no StepConfig[] automation sequence, just two on/off toggles + a single
+// fixed email body and a single fixed SMS body (`guideEmailBody` /
+// `guideSmsBody` on the venue row). Its `booking_system_stage_defaults` row
+// stores `{ guideEmailBody, guideSmsBody }` instead of a steps array, and
+// reset/publish write directly to `venues` instead of
+// `marketing_automation_steps` — see /stage-default/route.ts.
+export type StageKey = 'phase1' | 'phase2' | 'phase4' | 'phase5';
+export const ALL_STAGE_KEYS: StageKey[] = ['phase1', 'phase2', 'phase4', 'phase5'];
 
-// Maps each stage key to the automation name it corresponds to.
-export const STAGE_KEY_TO_AUTOMATION_NAME: Record<StageKey, string> = {
+/** The subset of stage keys backed by a `marketing_automations` row + StepConfig[] sequence. */
+export type AutomationStageKey = 'phase2' | 'phase4' | 'phase5';
+
+// Maps each automation-backed stage key to the automation name it corresponds to.
+export const STAGE_KEY_TO_AUTOMATION_NAME: Record<AutomationStageKey, string> = {
   phase2: STL_NAME,
   phase4: PHASE4_NAME,
   phase5: PHASE5_NAME,
 };
+
+export function isAutomationStageKey(key: StageKey): key is AutomationStageKey {
+  return key === 'phase2' || key === 'phase4' || key === 'phase5';
+}
 
 /**
  * Resolves the per-venue stage UUID for a named stage in the venue's

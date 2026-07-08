@@ -39,7 +39,7 @@ function LockedPhaseControl({ tooltip }: { tooltip: string }) {
     </>
   );
 }
-import type { BookingSystemConfig, StepConfig } from '@/app/api/listing/booking-system/route';
+import type { BookingSystemConfig, StepConfig, StageKey } from '@/app/api/listing/booking-system/route';
 import type { StepLeadsPayload, StepLeadInfo } from '@/app/api/listing/booking-system/step-leads/route';
 import RichTextEditor from '@/components/RichTextEditor';
 import AiConciergeSettingsPage from '@/app/dashboard/marketing/ai-concierge/page';
@@ -772,21 +772,38 @@ function ConfirmModal({
   );
 }
 
+/** Stage 1 (Guide Delivery) has no StepConfig[] sequence — its "content" is
+ *  just the two fixed body strings. */
+interface GuideBodies {
+  guideEmailBody: string;
+  guideSmsBody:   string;
+}
+
+/** The shape passed to/returned from StageDefaultActions — a step sequence
+ *  for phase2/4/5, or the two guide-delivery bodies for phase1. */
+type StageDefaultContent = StepConfig[] | GuideBodies;
+
 /**
  * "Reset to Default" (all venues) + "Save as Default" (Demo Venue only)
- * toolbar shown above a stage's SequenceEditor. Calls
- * /api/listing/booking-system/stage-default and hands the refreshed steps
- * back to the parent so the SequenceEditor updates without a page reload.
- * Never touches the stage's on/off toggle — only step content.
+ * toolbar shown above a stage's editable content. Calls
+ * /api/listing/booking-system/stage-default and hands the refreshed content
+ * back to the parent so the stage updates without a page reload. Never
+ * touches the stage's on/off toggle — only its message/copy content.
+ *
+ * `content` is either a StepConfig[] (phase2/4/5's SequenceEditor steps) or
+ * a `{ guideEmailBody, guideSmsBody }` object (phase1) — the request/response
+ * shape sent to the API is picked based on which one it is.
  */
 function StageDefaultActions({
-  stageKey, stageName, steps, isDemoVenue, onStepsUpdated,
+  stageKey, stageName, contentNoun = 'messages', content, isDemoVenue, onContentUpdated,
 }: {
-  stageKey: 'phase2' | 'phase4' | 'phase5';
+  stageKey: StageKey;
   stageName: string;
-  steps: StepConfig[];
+  /** Noun used in the reset confirm copy, e.g. "messages" or "email and SMS copy". */
+  contentNoun?: string;
+  content: StageDefaultContent;
   isDemoVenue: boolean;
-  onStepsUpdated: (steps: StepConfig[]) => void;
+  onContentUpdated: (content: StageDefaultContent) => void;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy]       = useState<'reset' | 'publish' | null>(null);
@@ -804,16 +821,25 @@ function StageDefaultActions({
   async function callApi(action: 'reset' | 'publish') {
     setBusy(action);
     try {
+      const payload: Record<string, unknown> = { action, stageKey };
+      if (action === 'publish') {
+        if (Array.isArray(content)) payload.steps = content;
+        else { payload.guideEmailBody = content.guideEmailBody; payload.guideSmsBody = content.guideSmsBody; }
+      }
       const r = await fetch('/api/listing/booking-system/stage-default', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          action === 'publish' ? { action, stageKey, steps } : { action, stageKey },
-        ),
+        body: JSON.stringify(payload),
       });
-      const d = await r.json() as { ok?: boolean; error?: string; steps?: StepConfig[] };
+      const d = await r.json() as {
+        ok?: boolean; error?: string; steps?: StepConfig[];
+        guideEmailBody?: string; guideSmsBody?: string;
+      };
       if (!r.ok || !d.ok) throw new Error(d.error ?? 'Request failed');
-      if (d.steps) onStepsUpdated(d.steps);
+      if (d.steps) onContentUpdated(d.steps);
+      else if (d.guideEmailBody !== undefined && d.guideSmsBody !== undefined) {
+        onContentUpdated({ guideEmailBody: d.guideEmailBody, guideSmsBody: d.guideSmsBody });
+      }
       flash(action === 'publish' ? 'Saved as the new default template for all venues' : 'Reset to latest default');
     } catch (e) {
       flash(e instanceof Error ? e.message : 'Something went wrong', true);
@@ -853,7 +879,7 @@ function StageDefaultActions({
       {confirmOpen && (
         <ConfirmModal
           title={`Reset ${stageName}?`}
-          message={`This will replace your current ${stageName} messages with the latest default template. This cannot be undone. Continue?`}
+          message={`This will replace your current ${stageName} ${contentNoun} with the latest default template. This cannot be undone. Continue?`}
           confirmLabel="Reset"
           danger
           busy={busy === 'reset'}
@@ -985,6 +1011,16 @@ export default function BookingSystemPage() {
           disabledTooltip={!cfg.masterEnabled ? 'Turn the Speed to Lead System on to enable this stage.' : undefined}
         >
           <div className="space-y-4">
+            <StageDefaultActions
+              stageKey="phase1"
+              stageName="Guide Delivery"
+              contentNoun="email and SMS copy"
+              content={{ guideEmailBody: cfg.guideEmailBody, guideSmsBody: cfg.guideSmsBody }}
+              isDemoVenue={cfg.isDemoVenue}
+              onContentUpdated={(updated) => setCfg(prev => (prev && !Array.isArray(updated))
+                ? { ...prev, guideEmailBody: updated.guideEmailBody, guideSmsBody: updated.guideSmsBody }
+                : prev)}
+            />
             <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
               <div className="flex items-center gap-2">
                 <Mail size={14} className="text-blue-500" />
@@ -1054,9 +1090,9 @@ export default function BookingSystemPage() {
           <StageDefaultActions
             stageKey="phase2"
             stageName="14-Day Sequence"
-            steps={cfg.steps}
+            content={cfg.steps}
             isDemoVenue={cfg.isDemoVenue}
-            onStepsUpdated={(steps) => setCfg(prev => prev ? { ...prev, steps } : prev)}
+            onContentUpdated={(updated) => setCfg(prev => (prev && Array.isArray(updated)) ? { ...prev, steps: updated } : prev)}
           />
           <SequenceEditor
             steps={cfg.steps}
@@ -1081,9 +1117,9 @@ export default function BookingSystemPage() {
           <StageDefaultActions
             stageKey="phase4"
             stageName="Booked Tour → Toured"
-            steps={cfg.phase4Steps}
+            content={cfg.phase4Steps}
             isDemoVenue={cfg.isDemoVenue}
-            onStepsUpdated={(steps) => setCfg(prev => prev ? { ...prev, phase4Steps: steps } : prev)}
+            onContentUpdated={(updated) => setCfg(prev => (prev && Array.isArray(updated)) ? { ...prev, phase4Steps: updated } : prev)}
           />
           <SequenceEditor
             steps={cfg.phase4Steps}
@@ -1110,9 +1146,9 @@ export default function BookingSystemPage() {
           <StageDefaultActions
             stageKey="phase5"
             stageName="Wedding Day → Welcomed"
-            steps={cfg.phase5Steps}
+            content={cfg.phase5Steps}
             isDemoVenue={cfg.isDemoVenue}
-            onStepsUpdated={(steps) => setCfg(prev => prev ? { ...prev, phase5Steps: steps } : prev)}
+            onContentUpdated={(updated) => setCfg(prev => (prev && Array.isArray(updated)) ? { ...prev, phase5Steps: updated } : prev)}
           />
           <SequenceEditor
             steps={cfg.phase5Steps}

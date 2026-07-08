@@ -3,40 +3,46 @@
  *
  * POST /api/listing/booking-system/stage-default
  *
- *   action: 'publish' — { stageKey, steps }
- *     Publishes the CALLING venue's current step content for `stageKey` as
- *     the new global default template, stored in
- *     `booking_system_stage_defaults`. ONLY the Demo Venue may do this
- *     (enforced here, not just hidden client-side).
+ *   action: 'publish'
+ *     Publishes the CALLING venue's current content for `stageKey` as the
+ *     new global default template, stored in `booking_system_stage_defaults`.
+ *     ONLY the Demo Venue may do this (enforced here, not just hidden
+ *     client-side).
+ *       - stageKey 'phase2' | 'phase4' | 'phase5' — body: { steps }
+ *       - stageKey 'phase1'                        — body: { guideEmailBody, guideSmsBody }
  *
  *   action: 'reset' — { stageKey }
- *     Looks up the published default steps for `stageKey` and overwrites
- *     ONLY the calling venue's automation step content for the matching
- *     `marketing_automations` row (delete + reinsert
- *     `marketing_automation_steps`, same pattern as PATCH in the parent
- *     route / migrations/162). Never touches that automation's on/off
- *     status or trigger wiring beyond self-healing on first creation — see
- *     `replaceAutomationStepsOnly`.
- *
- * Stage 1 (guide delivery) has no entry in `STAGE_KEY_TO_AUTOMATION_NAME` —
- * it's just two on/off toggles + a fixed body each, no StepConfig[] sequence,
- * so it's not supported by either action here.
+ *     Looks up the published default for `stageKey` and overwrites ONLY the
+ *     calling venue's content for that stage:
+ *       - 'phase2' | 'phase4' | 'phase5' — delete + reinsert
+ *         `marketing_automation_steps` for the matching `marketing_automations`
+ *         row (same pattern as PATCH in the parent route / migrations/162).
+ *         Never touches that automation's on/off status or trigger wiring
+ *         beyond self-healing on first creation — see `replaceAutomationStepsOnly`.
+ *       - 'phase1' — writes `booking_guide_email_body` / `booking_guide_sms_body`
+ *         directly onto the venue's row. Never touches
+ *         `booking_guide_email_enabled` / `booking_guide_sms_enabled`.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId, getMemberName } from '@/lib/auth-helpers';
 import {
-  STAGE_KEY_TO_AUTOMATION_NAME, DEMO_VENUE_NAME,
+  STAGE_KEY_TO_AUTOMATION_NAME, DEMO_VENUE_NAME, ALL_STAGE_KEYS, isAutomationStageKey,
   PHASE4_STAGE_NAME, PHASE5_STAGE_NAME,
   resolveDefaultStageIdByName, replaceAutomationStepsOnly, formatStepRows,
-  type StepConfig, type StageKey,
+  type StepConfig, type StageKey, type AutomationStageKey,
 } from '@/app/api/listing/booking-system/route';
 
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
 
+interface Phase1Default {
+  guideEmailBody: string;
+  guideSmsBody:   string;
+}
+
 function isValidStageKey(key: unknown): key is StageKey {
-  return typeof key === 'string' && Object.prototype.hasOwnProperty.call(STAGE_KEY_TO_AUTOMATION_NAME, key);
+  return typeof key === 'string' && (ALL_STAGE_KEYS as string[]).includes(key);
 }
 
 async function isDemoVenue(venueId: string): Promise<boolean> {
@@ -50,7 +56,7 @@ async function isDemoVenue(venueId: string): Promise<boolean> {
 
 /** trigger_type + trigger_config used only if a venue's automation row for
  *  this stage doesn't exist yet and needs to be created during reset. */
-async function creationDefaultsForStage(venueId: string, stageKey: StageKey): Promise<{
+async function creationDefaultsForStage(venueId: string, stageKey: AutomationStageKey): Promise<{
   triggerType: string;
   triggerConfig?: Record<string, unknown>;
 }> {
@@ -69,7 +75,10 @@ export async function POST(req: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { action?: string; stageKey?: string; steps?: StepConfig[] };
+  let body: {
+    action?: string; stageKey?: string; steps?: StepConfig[];
+    guideEmailBody?: string; guideSmsBody?: string;
+  };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
@@ -79,9 +88,6 @@ export async function POST(req: NextRequest) {
   const stageKey = body.stageKey;
 
   if (body.action === 'publish') {
-    if (!Array.isArray(body.steps)) {
-      return NextResponse.json({ error: 'Missing steps' }, { status: 400 });
-    }
     // Server-side enforcement — publish is Demo-Venue-only regardless of
     // what the client sends/hides.
     if (!(await isDemoVenue(venueId))) {
@@ -89,10 +95,32 @@ export async function POST(req: NextRequest) {
     }
 
     const actingName = (await getMemberName()) ?? DEMO_VENUE_NAME;
+    const updatedAt = new Date().toISOString();
+
+    if (stageKey === 'phase1') {
+      if (typeof body.guideEmailBody !== 'string' || typeof body.guideSmsBody !== 'string') {
+        return NextResponse.json({ error: 'Missing guideEmailBody/guideSmsBody' }, { status: 400 });
+      }
+      const phase1Default: Phase1Default = { guideEmailBody: body.guideEmailBody, guideSmsBody: body.guideSmsBody };
+
+      const { error } = await supabaseAdmin
+        .from('booking_system_stage_defaults')
+        .upsert(
+          { stage_key: stageKey, steps_json: phase1Default, updated_at: updatedAt, updated_by: actingName },
+          { onConflict: 'stage_key' },
+        );
+      if (error) {
+        return NextResponse.json({ error: `Failed to publish default: ${error.message}` }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, stageKey, ...phase1Default, updatedAt });
+    }
+
+    if (!Array.isArray(body.steps)) {
+      return NextResponse.json({ error: 'Missing steps' }, { status: 400 });
+    }
     // Published defaults never carry over per-row DB ids — they get fresh
     // ids wherever they're later inserted for a resetting venue.
     const stepsJson: StepConfig[] = body.steps.map((s, i) => ({ ...s, id: undefined, step_order: i }));
-    const updatedAt = new Date().toISOString();
 
     const { error } = await supabaseAdmin
       .from('booking_system_stage_defaults')
@@ -127,7 +155,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No default template has been published for this stage yet' }, { status: 404 });
     }
 
+    if (stageKey === 'phase1') {
+      const { guideEmailBody, guideSmsBody } = (defaultRow.steps_json as Phase1Default) ?? { guideEmailBody: '', guideSmsBody: '' };
+
+      // Writes ONLY the two body fields — never the on/off toggle columns
+      // (booking_guide_email_enabled / booking_guide_sms_enabled).
+      const { error: updateErr } = await supabaseAdmin
+        .from('venues')
+        .update({ booking_guide_email_body: guideEmailBody, booking_guide_sms_body: guideSmsBody })
+        .eq('id', venueId);
+
+      if (updateErr) {
+        return NextResponse.json({ error: `Failed to reset guide delivery copy: ${updateErr.message}` }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        stageKey,
+        guideEmailBody,
+        guideSmsBody,
+        defaultUpdatedAt: defaultRow.updated_at,
+      });
+    }
+
     const defaultSteps = (defaultRow.steps_json as StepConfig[]) ?? [];
+    if (!isAutomationStageKey(stageKey)) {
+      return NextResponse.json({ error: 'Unsupported stageKey' }, { status: 400 });
+    }
     const automationName = STAGE_KEY_TO_AUTOMATION_NAME[stageKey];
     const { triggerType, triggerConfig } = await creationDefaultsForStage(venueId, stageKey);
 
