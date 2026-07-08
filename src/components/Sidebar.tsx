@@ -762,7 +762,7 @@ export default function Sidebar({
                 />
               </Link>
               {listingOpen && (
-                <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
+                <div className="mt-1 mx-0.5 rounded-xl bg-gray-100/80 px-2 py-2 space-y-0.5">
                   {(isMobile ? mobileListing : listingFiltered).map((sub) => (
                     <SubNavLink key={sub.label} sub={sub} active={listingSubActive(sub.href)} />
                   ))}
