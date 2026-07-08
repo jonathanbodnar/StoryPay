@@ -68,12 +68,12 @@ function Toggle({
 
 function PhaseCard({
   number, title, subtitle, icon, enabled, onToggle, disabled, children, accent, noPadding, defaultOpen,
-  locked, lockTooltip, hideNumber,
+  locked, lockTooltip, hideNumber, disabledTooltip,
 }: {
   number: number; title: string; subtitle: string;
   icon: React.ReactNode; enabled: boolean; onToggle: (v: boolean) => void;
   disabled?: boolean; children?: React.ReactNode; accent: string; noPadding?: boolean; defaultOpen?: boolean;
-  locked?: boolean; lockTooltip?: string; hideNumber?: boolean;
+  locked?: boolean; lockTooltip?: string; hideNumber?: boolean; disabledTooltip?: string;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
   const effectiveEnabled = locked ? false : enabled;
@@ -96,7 +96,16 @@ function PhaseCard({
             </div>
             {locked
               ? <LockedPhaseControl tooltip={lockTooltip ?? 'This is an upgraded plan tier. Schedule a demo to learn more.'} />
-              : <Toggle checked={enabled} onChange={onToggle} disabled={disabled} />}
+              : (disabled && disabledTooltip)
+                ? (
+                  <div className="group relative shrink-0">
+                    <Toggle checked={enabled} onChange={onToggle} disabled />
+                    <span className="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-left text-[11px] leading-relaxed text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100">
+                      {disabledTooltip}
+                    </span>
+                  </div>
+                )
+                : <Toggle checked={enabled} onChange={onToggle} disabled={disabled} />}
           </div>
         </div>
       </div>
@@ -829,6 +838,8 @@ export default function BookingSystemPage() {
           accent="bg-blue-50"
           enabled={cfg.guideEmailEnabled || cfg.guideSmsEnabled}
           onToggle={(v) => void save({ guideEmailEnabled: v, guideSmsEnabled: v })}
+          disabled={!cfg.masterEnabled}
+          disabledTooltip={!cfg.masterEnabled ? 'Turn the Speed to Lead System on to enable this stage.' : undefined}
         >
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
@@ -839,7 +850,7 @@ export default function BookingSystemPage() {
                   <p className="text-[11px] text-gray-500">Sent immediately on form submit</p>
                 </div>
               </div>
-              <Toggle checked={cfg.guideEmailEnabled} onChange={(v) => void save({ guideEmailEnabled: v })} />
+              <Toggle checked={cfg.guideEmailEnabled} onChange={(v) => void save({ guideEmailEnabled: v })} disabled={!cfg.masterEnabled} />
             </div>
             {cfg.guideEmailEnabled && (
               <div>
@@ -861,7 +872,7 @@ export default function BookingSystemPage() {
                   <p className="text-[11px] text-gray-500">Text with guide link, sent immediately</p>
                 </div>
               </div>
-              <Toggle checked={cfg.guideSmsEnabled} onChange={(v) => void save({ guideSmsEnabled: v })} />
+              <Toggle checked={cfg.guideSmsEnabled} onChange={(v) => void save({ guideSmsEnabled: v })} disabled={!cfg.masterEnabled} />
             </div>
             {cfg.guideSmsEnabled && (
               <div>
@@ -894,6 +905,8 @@ export default function BookingSystemPage() {
           accent="bg-violet-50"
           enabled={cfg.sequenceEnabled}
           onToggle={(v) => void save({ sequenceEnabled: v })}
+          disabled={!cfg.masterEnabled}
+          disabledTooltip={!cfg.masterEnabled ? 'Turn the Speed to Lead System on to enable this stage.' : undefined}
         >
           <SequenceEditor
             steps={cfg.steps}
@@ -912,6 +925,8 @@ export default function BookingSystemPage() {
           accent="bg-amber-50"
           enabled={cfg.phase4Enabled}
           onToggle={(v) => void save({ phase4Enabled: v })}
+          disabled={!cfg.masterEnabled}
+          disabledTooltip={!cfg.masterEnabled ? 'Turn the Speed to Lead System on to enable this stage.' : undefined}
         >
           <SequenceEditor
             steps={cfg.phase4Steps}
@@ -932,6 +947,8 @@ export default function BookingSystemPage() {
           accent="bg-emerald-50"
           enabled={cfg.phase5Enabled}
           onToggle={(v) => void save({ phase5Enabled: v })}
+          disabled={!cfg.masterEnabled}
+          disabledTooltip={!cfg.masterEnabled ? 'Turn the Speed to Lead System on to enable this stage.' : undefined}
         >
           <SequenceEditor
             steps={cfg.phase5Steps}

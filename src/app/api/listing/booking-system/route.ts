@@ -235,6 +235,19 @@ export async function GET() {
     aiConciergeAllowed: await venueAllowsAiConcierge(venueId),
   };
 
+  // When the master switch is off, present every individual stage as disabled
+  // in the UI without touching their stored DB state. When the master comes
+  // back on, each stage's real status is restored from the DB automatically.
+  if (!cfg.masterEnabled) {
+    cfg.guideEmailEnabled = false;
+    cfg.guideSmsEnabled   = false;
+    cfg.sequenceEnabled   = false;
+    cfg.automationActive  = false;
+    cfg.phase4Enabled     = false;
+    cfg.phase5Enabled     = false;
+    cfg.aiEnabled         = false;
+  }
+
   return NextResponse.json(cfg);
 }
 
