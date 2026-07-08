@@ -68,12 +68,12 @@ function Toggle({
 
 function PhaseCard({
   number, title, subtitle, icon, enabled, onToggle, disabled, children, accent, noPadding, defaultOpen,
-  locked, lockTooltip,
+  locked, lockTooltip, hideNumber,
 }: {
   number: number; title: string; subtitle: string;
   icon: React.ReactNode; enabled: boolean; onToggle: (v: boolean) => void;
   disabled?: boolean; children?: React.ReactNode; accent: string; noPadding?: boolean; defaultOpen?: boolean;
-  locked?: boolean; lockTooltip?: string;
+  locked?: boolean; lockTooltip?: string; hideNumber?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen ?? true);
   const effectiveEnabled = locked ? false : enabled;
@@ -88,7 +88,7 @@ function PhaseCard({
           <div className="flex items-center justify-between gap-3">
             <div className={`flex-1 ${locked ? '' : 'cursor-pointer'}`} onClick={() => { if (!locked) setIsOpen(!isOpen); }}>
               <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase flex items-center gap-1">
-                Phase {number}
+                {!hideNumber && `Stage ${number}`}
                 {locked ? <Lock size={11} className="text-violet-400" /> : (isOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
               </span>
               <h3 className="text-[15px] font-semibold text-gray-900 leading-tight">{title}</h3>
@@ -941,6 +941,7 @@ export default function BookingSystemPage() {
               ? 'Turn the Speed to Lead System on to enable AI Concierge.'
               : 'AI Concierge is on our All-Inclusive plan, not Free or the Bride Booking System™. Schedule a demo to learn more.'
           }
+          hideNumber
           noPadding
         >
           <AiConciergeSettingsPage />
