@@ -25,17 +25,31 @@ export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
 
 // Name used to identify the managed Speed-to-Lead automation.
-const STL_NAME = 'Speed to Lead — Booking System';
+export const STL_NAME = 'Speed to Lead — Booking System';
 // Note: the old "Nurture Sequence — Booking System" (Phase 3) automation was
 // removed from this page's UI — venues can build that kind of nurture
 // content directly via Email Campaigns instead. Any pre-existing automation
 // rows with that name were paused via migrations/163.
-const PHASE4_NAME = 'Booked Tour Sequence — Booking System';
-const PHASE5_NAME = 'Booked Wedding Sequence — Booking System';
+export const PHASE4_NAME = 'Booked Tour Sequence — Booking System';
+export const PHASE5_NAME = 'Booked Wedding Sequence — Booking System';
 
 // Stage names in the venue's default/locked pipeline that fire Phase 4/5.
-const PHASE4_STAGE_NAME = 'Tour Booked';
-const PHASE5_STAGE_NAME = 'Wedding Booked';
+export const PHASE4_STAGE_NAME = 'Tour Booked';
+export const PHASE5_STAGE_NAME = 'Wedding Booked';
+
+// Stable stage keys used by the /stage-default publish/reset API and by
+// `booking_system_stage_defaults.stage_key` (migrations/164). Stage 1 (guide
+// delivery) is intentionally excluded — it's just two on/off toggles + a
+// single fixed body each, no StepConfig[] sequence, so there's nothing to
+// publish/reset for it (see page.tsx).
+export type StageKey = 'phase2' | 'phase4' | 'phase5';
+
+// Maps each stage key to the automation name it corresponds to.
+export const STAGE_KEY_TO_AUTOMATION_NAME: Record<StageKey, string> = {
+  phase2: STL_NAME,
+  phase4: PHASE4_NAME,
+  phase5: PHASE5_NAME,
+};
 
 /**
  * Resolves the per-venue stage UUID for a named stage in the venue's
@@ -44,7 +58,7 @@ const PHASE5_STAGE_NAME = 'Wedding Booked';
  * stage can't be found (should not normally happen once the pipeline is
  * provisioned).
  */
-async function resolveDefaultStageIdByName(venueId: string, stageName: string): Promise<string | null> {
+export async function resolveDefaultStageIdByName(venueId: string, stageName: string): Promise<string | null> {
   try {
     const pipelineId = await ensureDefaultPipeline(venueId);
     const { data: stage } = await supabaseAdmin
@@ -111,7 +125,16 @@ export interface BookingSystemConfig {
   ghlConnected:           boolean;
   /** Whether the venue's plan tier includes the AI Concierge (All-Inclusive). */
   aiConciergeAllowed:     boolean;
+  /**
+   * Whether the current venue IS the "Demo Venue" — the master template
+   * venue whose live stage config can be "Saved as Default" for every other
+   * venue to "Reset to Default" from (see /stage-default route).
+   */
+  isDemoVenue:            boolean;
 }
+
+/** Name of the master-template venue — see migrations/162, 163, 164. */
+export const DEMO_VENUE_NAME = 'Demo Venue';
 
 /**
  * AI Concierge is a higher-tier (All-Inclusive) feature. Allowed when the
@@ -138,7 +161,7 @@ export async function GET() {
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select(
-      'ai_concierge_enabled, ai_assistant_persona_name, ai_concierge_notify_emails, ' +
+      'name, ai_concierge_enabled, ai_assistant_persona_name, ai_concierge_notify_emails, ' +
       'a2p_verified, ghl_connected, notification_email, email, ' +
       'booking_system_enabled, booking_guide_email_enabled, booking_guide_sms_enabled, ' +
       'booking_guide_email_body, booking_guide_sms_body, ' +
@@ -173,23 +196,7 @@ export async function GET() {
         .eq('automation_id', auto.id)
         .order('step_order', { ascending: true });
 
-      steps = (stepRows ?? []).map((s) => {
-        const cfg = (s.config_json ?? {}) as Record<string, unknown>;
-        return {
-          id:            s.id as string,
-          step_order:    s.step_order as number,
-          step_type:     s.step_type as StepConfig['step_type'],
-          label:         (cfg.label as string | undefined) ?? labelForStep(s.step_type as string, cfg),
-          body:          (cfg.body as string | undefined) ?? '',
-          subject:       (cfg.subject as string | undefined) ?? '',
-          preview_text:  (cfg.preview_text as string | undefined) ?? '',
-          image_url:     (cfg.image_url as string | undefined) ?? '',
-          image_link:    (cfg.image_link as string | undefined) ?? '',
-          button_text:   (cfg.button_text as string | undefined) ?? '',
-          button_link:   (cfg.button_link as string | undefined) ?? '',
-          delay_minutes: (cfg.delay_minutes as number | undefined) ?? 0,
-        };
-      });
+      steps = formatStepRows(stepRows ?? []);
     }
 
     // First-time / never-customized state: no automation row (or an
@@ -233,6 +240,7 @@ export async function GET() {
     a2pVerified:        (v.a2p_verified  as boolean | null) ?? false,
     ghlConnected:       (v.ghl_connected as boolean | null) ?? false,
     aiConciergeAllowed: await venueAllowsAiConcierge(venueId),
+    isDemoVenue:        (v.name as string | null) === DEMO_VENUE_NAME,
   };
 
   // When the master switch is off, present every individual stage as disabled
@@ -441,9 +449,115 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
+// ─── Reset-to-default step replacement ─────────────────────────────────────
+
+/**
+ * Replaces ONLY a venue's automation step content for the named automation —
+ * used by the /stage-default "reset" action. Unlike `saveAutomation` in
+ * PATCH above, this NEVER touches `status` (the on/off toggle) on an
+ * existing row — resetting a stage's message content must never flip a
+ * venue's stage on or off. If no automation row exists yet for this venue
+ * (e.g. it was never saved before), one is created in the 'paused' (off)
+ * state so a reset can never silently turn a stage on either.
+ */
+export async function replaceAutomationStepsOnly(
+  venueId: string,
+  automationName: string,
+  triggerTypeForCreate: string,
+  steps: StepConfig[],
+  triggerConfigForCreate?: Record<string, unknown>,
+): Promise<{ automationId: string; automationActive: boolean }> {
+  let { data: auto } = await supabaseAdmin
+    .from('marketing_automations')
+    .select('id, status')
+    .eq('venue_id', venueId)
+    .eq('name', automationName)
+    .maybeSingle();
+
+  if (!auto) {
+    const { data: created, error: createErr } = await supabaseAdmin
+      .from('marketing_automations')
+      .insert({
+        venue_id:       venueId,
+        name:           automationName,
+        status:         'paused',
+        trigger_type:   triggerTypeForCreate,
+        trigger_config: triggerConfigForCreate ?? {},
+      })
+      .select('id, status')
+      .single();
+    if (createErr) throw new Error(`Failed to create automation: ${createErr.message}`);
+    auto = created;
+  }
+
+  if (!auto) throw new Error(`Could not create automation ${automationName}`);
+
+  const autoId = auto.id as string;
+
+  const { error: delErr } = await supabaseAdmin
+    .from('marketing_automation_steps')
+    .delete()
+    .eq('automation_id', autoId);
+  if (delErr) throw new Error(`Failed to clear existing steps: ${delErr.message}`);
+
+  if (steps.length > 0) {
+    const inserts = steps.map((s, i) => ({
+      automation_id: autoId,
+      step_order:    i,
+      step_type:     s.step_type,
+      config_json:   {
+        label:         s.label,
+        body:          s.body          ?? '',
+        subject:       s.subject       ?? '',
+        preview_text:  s.preview_text  ?? '',
+        image_url:     s.image_url     ?? '',
+        image_link:    s.image_link    ?? '',
+        button_text:   s.button_text   ?? '',
+        button_link:   s.button_link   ?? '',
+        delay_minutes: s.delay_minutes ?? 0,
+        mode:          s.step_type === 'send_email' ? 'quick' : undefined,
+      },
+    }));
+    const { error: insErr } = await supabaseAdmin
+      .from('marketing_automation_steps')
+      .insert(inserts);
+    if (insErr) throw new Error(`Failed to save steps: ${insErr.message}`);
+  }
+
+  return { automationId: autoId, automationActive: (auto.status as string) === 'active' };
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function labelForStep(type: string, cfg: Record<string, unknown>): string {
+/**
+ * Maps raw `marketing_automation_steps` rows (as selected with
+ * `id, step_order, step_type, config_json`) into the UI-facing `StepConfig[]`
+ * shape. Shared by GET here and by the /stage-default route so both stay in
+ * sync with the same field defaults.
+ */
+export function formatStepRows(
+  stepRows: Array<{ id?: string; step_order: unknown; step_type: unknown; config_json: unknown }>,
+): StepConfig[] {
+  return stepRows.map((s) => {
+    const cfg = (s.config_json ?? {}) as Record<string, unknown>;
+    return {
+      id:            s.id as string | undefined,
+      step_order:    s.step_order as number,
+      step_type:     s.step_type as StepConfig['step_type'],
+      label:         (cfg.label as string | undefined) ?? labelForStep(s.step_type as string, cfg),
+      body:          (cfg.body as string | undefined) ?? '',
+      subject:       (cfg.subject as string | undefined) ?? '',
+      preview_text:  (cfg.preview_text as string | undefined) ?? '',
+      image_url:     (cfg.image_url as string | undefined) ?? '',
+      image_link:    (cfg.image_link as string | undefined) ?? '',
+      button_text:   (cfg.button_text as string | undefined) ?? '',
+      button_link:   (cfg.button_link as string | undefined) ?? '',
+      delay_minutes: (cfg.delay_minutes as number | undefined) ?? 0,
+    };
+  });
+}
+
+export function labelForStep(type: string, cfg: Record<string, unknown>): string {
   if (type === 'delay') {
     const m = Number(cfg.delay_minutes ?? 0);
     const d = Math.round(m / 1440);

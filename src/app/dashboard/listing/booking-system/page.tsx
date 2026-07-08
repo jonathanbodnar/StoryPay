@@ -6,6 +6,7 @@ import {
   Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, GripVertical,
   Clock, Send, Users, ExternalLink, SkipForward, X as XIcon,
   RefreshCw, Image as ImageIcon, Link as LinkIcon, Lock, CalendarClock,
+  Star,
 } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
 
@@ -722,6 +723,148 @@ function SequenceEditor({
   );
 }
 
+// ─── Save as Default / Reset to Default ──────────────────────────────────
+
+/** Small reusable confirm dialog, styled consistently with StepLeadsModal above. */
+function ConfirmModal({
+  title, message, confirmLabel = 'Continue', danger, busy, onConfirm, onCancel,
+}: {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  danger?: boolean;
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-[15px] font-semibold text-gray-900">{title}</h3>
+        <p className="mt-2 text-[13px] leading-relaxed text-gray-500">{message}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-xl px-4 py-2 text-[13px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold text-white transition-colors disabled:opacity-60 ${
+              danger ? 'bg-red-600 hover:bg-red-700' : 'bg-violet-600 hover:bg-violet-700'
+            }`}
+          >
+            {busy && <Loader2 size={13} className="animate-spin" />}
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Reset to Default" (all venues) + "Save as Default" (Demo Venue only)
+ * toolbar shown above a stage's SequenceEditor. Calls
+ * /api/listing/booking-system/stage-default and hands the refreshed steps
+ * back to the parent so the SequenceEditor updates without a page reload.
+ * Never touches the stage's on/off toggle — only step content.
+ */
+function StageDefaultActions({
+  stageKey, stageName, steps, isDemoVenue, onStepsUpdated,
+}: {
+  stageKey: 'phase2' | 'phase4' | 'phase5';
+  stageName: string;
+  steps: StepConfig[];
+  isDemoVenue: boolean;
+  onStepsUpdated: (steps: StepConfig[]) => void;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [busy, setBusy]       = useState<'reset' | 'publish' | null>(null);
+  const [message, setMessage] = useState('');
+  const [msgError, setMsgError] = useState(false);
+  const msgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function flash(msg: string, isError = false) {
+    setMessage(msg);
+    setMsgError(isError);
+    if (msgTimer.current) clearTimeout(msgTimer.current);
+    msgTimer.current = setTimeout(() => setMessage(''), 3500);
+  }
+
+  async function callApi(action: 'reset' | 'publish') {
+    setBusy(action);
+    try {
+      const r = await fetch('/api/listing/booking-system/stage-default', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          action === 'publish' ? { action, stageKey, steps } : { action, stageKey },
+        ),
+      });
+      const d = await r.json() as { ok?: boolean; error?: string; steps?: StepConfig[] };
+      if (!r.ok || !d.ok) throw new Error(d.error ?? 'Request failed');
+      if (d.steps) onStepsUpdated(d.steps);
+      flash(action === 'publish' ? 'Saved as the new default template for all venues' : 'Reset to latest default');
+    } catch (e) {
+      flash(e instanceof Error ? e.message : 'Something went wrong', true);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setConfirmOpen(true)}
+        disabled={busy !== null}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+      >
+        {busy === 'reset' ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+        Reset to Default
+      </button>
+      {isDemoVenue && (
+        <button
+          type="button"
+          onClick={() => void callApi('publish')}
+          disabled={busy !== null}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[11px] font-medium text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50"
+        >
+          {busy === 'publish' ? <Loader2 size={11} className="animate-spin" /> : <Star size={11} />}
+          Save as Default
+        </button>
+      )}
+      {message && (
+        <span className={`flex items-center gap-1 text-[11px] font-medium ${msgError ? 'text-red-600' : 'text-emerald-600'}`}>
+          {msgError ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />}
+          {message}
+        </span>
+      )}
+      {confirmOpen && (
+        <ConfirmModal
+          title={`Reset ${stageName}?`}
+          message={`This will replace your current ${stageName} messages with the latest default template. This cannot be undone. Continue?`}
+          confirmLabel="Reset"
+          danger
+          busy={busy === 'reset'}
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={() => { setConfirmOpen(false); void callApi('reset'); }}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────
 
 export default function BookingSystemPage() {
@@ -908,6 +1051,13 @@ export default function BookingSystemPage() {
           disabled={!cfg.masterEnabled}
           disabledTooltip={!cfg.masterEnabled ? 'Turn the Speed to Lead System on to enable this stage.' : undefined}
         >
+          <StageDefaultActions
+            stageKey="phase2"
+            stageName="14-Day Sequence"
+            steps={cfg.steps}
+            isDemoVenue={cfg.isDemoVenue}
+            onStepsUpdated={(steps) => setCfg(prev => prev ? { ...prev, steps } : prev)}
+          />
           <SequenceEditor
             steps={cfg.steps}
             onStepsChange={(steps) => void save({ steps })}
@@ -928,6 +1078,13 @@ export default function BookingSystemPage() {
           disabled={!cfg.masterEnabled}
           disabledTooltip={!cfg.masterEnabled ? 'Turn the Speed to Lead System on to enable this stage.' : undefined}
         >
+          <StageDefaultActions
+            stageKey="phase4"
+            stageName="Booked Tour → Toured"
+            steps={cfg.phase4Steps}
+            isDemoVenue={cfg.isDemoVenue}
+            onStepsUpdated={(steps) => setCfg(prev => prev ? { ...prev, phase4Steps: steps } : prev)}
+          />
           <SequenceEditor
             steps={cfg.phase4Steps}
             onStepsChange={(steps) => void save({ phase4Steps: steps })}
@@ -950,6 +1107,13 @@ export default function BookingSystemPage() {
           disabled={!cfg.masterEnabled}
           disabledTooltip={!cfg.masterEnabled ? 'Turn the Speed to Lead System on to enable this stage.' : undefined}
         >
+          <StageDefaultActions
+            stageKey="phase5"
+            stageName="Wedding Day → Welcomed"
+            steps={cfg.phase5Steps}
+            isDemoVenue={cfg.isDemoVenue}
+            onStepsUpdated={(steps) => setCfg(prev => prev ? { ...prev, phase5Steps: steps } : prev)}
+          />
           <SequenceEditor
             steps={cfg.phase5Steps}
             onStepsChange={(steps) => void save({ phase5Steps: steps })}
