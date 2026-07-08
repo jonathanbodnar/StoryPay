@@ -887,27 +887,9 @@ export default function BookingSystemPage() {
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
 
-        {/* Phase 3 — Nurture */}
+        {/* Phase 3 — Booked Tour */}
         <PhaseCard
           number={3}
-          title="Nurture Sequence"
-          subtitle="Tips to picking / touring venues (5 email sequence)"
-          icon={<Mail size={18} className="text-pink-600" />}
-          accent="bg-pink-50"
-          enabled={cfg.phase3Enabled}
-          onToggle={(v) => void save({ phase3Enabled: v })}
-        >
-          <SequenceEditor
-            steps={cfg.phase3Steps}
-            onStepsChange={(steps) => void save({ phase3Steps: steps })}
-            leadsData={null}
-            allowAi={false}
-          />
-        </PhaseCard>
-
-        {/* Phase 4 — Booked Tour */}
-        <PhaseCard
-          number={4}
           title="Booked Tour → Toured"
           subtitle='Fires the moment a lead is moved to the "Tour Booked" pipeline stage — everything they need before their visit.'
           icon={<Users size={18} className="text-amber-600" />}
@@ -924,9 +906,9 @@ export default function BookingSystemPage() {
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name', 'appointment_date', 'appointment_time', 'venue_address']} />
         </PhaseCard>
 
-        {/* Phase 5 — Booked Wedding */}
+        {/* Phase 4 — Booked Wedding */}
         <PhaseCard
-          number={5}
+          number={4}
           title="Booked Wedding → Welcomed"
           subtitle='Fires the moment a lead is moved to the "Wedding Booked" pipeline stage — a warm welcome and what comes next.'
           icon={<CheckCircle2 size={18} className="text-emerald-600" />}
@@ -944,9 +926,9 @@ export default function BookingSystemPage() {
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
 
-        {/* Phase 6 — AI Concierge Settings (All-Inclusive tier only) */}
+        {/* Phase 5 — AI Concierge Settings (All-Inclusive tier only) */}
         <PhaseCard
-          number={6}
+          number={5}
           title="AI Concierge"
           subtitle="A personal AI assistant that follows up with quiet leads via SMS until they reply or 60 days pass."
           icon={<Bot size={18} className="text-emerald-600" />}

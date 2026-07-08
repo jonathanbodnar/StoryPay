@@ -1185,43 +1185,41 @@ Privacy: only approximate location data (city-level) is captured. No names, emai
       },
       {
         id: 'listing-booking-system',
-        title: 'Speed to Lead System — 6-phase automated follow-up',
-        tags: ['booking system', 'speed to lead', 'guide delivery', 'pricing guide', 'pdf', 'sms guide', 'email guide', 'follow-up sequence', 'nurture', 'booked tour', 'booked wedding', 'automation', 'bride', 'lead form', 'public listing', 'pricing_guide_url', 'merge variable', 'ai concierge trigger', 'phase'],
+        title: 'Speed to Lead System — 5-phase automated follow-up',
+        tags: ['booking system', 'speed to lead', 'guide delivery', 'pricing guide', 'pdf', 'sms guide', 'email guide', '14-day sequence', 'booked tour', 'booked wedding', 'automation', 'bride', 'lead form', 'public listing', 'pricing_guide_url', 'merge variable', 'ai concierge trigger', 'phase', 'appointment_date', 'appointment_time', 'venue_address', 'owner_name'],
         body: `The Speed to Lead System (Venue listing → Speed to Lead System) automates everything from the moment a bride submits your listing inquiry form to when she books her wedding.
 
 Path: Venue listing → Speed to Lead System (sidebar)
 
-The system has 6 phases, each with its own toggle so you can enable only what you need:
+The system has 5 phases, each with its own toggle so you can enable only what you need. By default, only Phase 1 (Guide Delivery) and Phase 2 (14-Day Sequence) are on — Phases 3 and 4 (Booked Tour, Booked Wedding) start off so venues can review/customize the pre-filled copy before turning them on.
 
-Phase 1 — Guide Delivery (instant)
+Phase 1 — Inquiry → Guide Delivered (instant)
 Triggered immediately when a bride submits your inquiry form. Sends her an email and/or SMS with a direct link to your Pricing & Availability Guide PDF.
 - Toggle "Email" and/or "SMS" on independently.
-- Write the message body. Use {{pricing_guide_url}} to insert the guide link, {{first_name}} for her name, {{venue_name}} for your venue.
+- Write the message body. Use {{pricing_guide_url}} to insert the guide link, {{first_name}} for her name, {{venue_name}} for your venue, {{owner_name}} for the venue owner's name.
 - The PDF link is always live — every click generates the current version of your guide. Edit your Pricing Guide and the next click delivers the updated version automatically. No re-upload needed.
 
-Phase 2 — Follow-up Sequence
-A multi-step sequence of emails, SMS messages, and Wait blocks that fires after guide delivery until the bride replies.
-- Add steps with the "+" button: Send Email, Send SMS, Wait (1/2/3 days), or Activate AI Concierge.
+Phase 2 — Guide Delivered → 14-Day Sequence
+A 7-touch SMS nurture sequence (Day 1, 2, 3, 5, 7, 10, 14) that fires after guide delivery until the bride replies. Comes pre-loaded with proven default copy — fully editable.
+- Add steps with the "+" button: Send Email, Send SMS, Wait, or Activate AI Concierge.
 - Drag steps to reorder.
 - The sequence stops automatically the moment a bride replies to any message.
 - You can see how many leads are currently active in this sequence in the phase subtitle.
 - "Activate AI Concierge" block: hands the lead off to the AI Concierge at that point in the sequence. Once added, the AI takes over follow-up from there.
+- Note: the old separate "Nurture Sequence" phase was removed — venues that want additional educational/nurture content can build that as its own Email Campaign instead, which keeps the Speed to Lead page focused on the core inquiry-to-booking funnel.
 
-Phase 3 — Nurture Sequence
-A 5-email educational sequence about picking and touring venues. Runs concurrently or after the follow-up sequence. No AI Concierge handoff available in this phase.
+Phase 3 — Booked Tour → Toured
+Fires the moment a lead is moved to the "Tour Booked" pipeline stage. 3 touches (SMS immediate, email immediate, email +2 days) with everything the bride needs before her visit. Supports {{appointment_date}}, {{appointment_time}}, and {{venue_address}} merge variables (sourced from the calendar event tied to her tour). No AI Concierge handoff.
 
-Phase 4 — Booked Tour
-A 5-email sequence triggered when a lead books a tour — sets expectations about what to expect during the visit. No AI Concierge handoff.
+Phase 4 — Booked Wedding → Welcomed
+Fires the moment a lead is moved to the "Wedding Booked" pipeline stage. 5 touches (SMS, email, email +3 days, email +7 days, SMS +1 day) celebrating the booking and setting next steps. No AI Concierge handoff.
 
-Phase 5 — Booked Wedding
-A 5-email sequence triggered when a lead books a wedding — celebrates the win and sets next steps. No AI Concierge handoff.
-
-Phase 6 — AI Concierge (All-Inclusive plan only)
+Phase 5 — AI Concierge (All-Inclusive plan only)
 An AI-powered SMS follow-up system that contacts quiet leads on a 1–2 day cadence until they reply or 60 days pass.
-- Phase 6 is locked on the Bride Booking System™ Free and Bride Booking System™ plans. The toggle is greyed out with an "All-Inclusive" badge.
+- Phase 5 is locked on the Bride Booking System™ Free and Bride Booking System™ plans. The toggle is greyed out with an "All-Inclusive" badge.
 - Hovering the locked toggle shows a tooltip: "AI Concierge is on our All-Inclusive plan, not Free or the Bride Booking System™. Schedule a demo to learn more."
 - Clicking the greyed toggle opens the demo scheduling calendar.
-- Once on an eligible plan, enabling Phase 6 embeds the full AI Concierge settings inline — persona name, concierge notification email, and eligibility status.
+- Once on an eligible plan, enabling Phase 5 embeds the full AI Concierge settings inline — persona name, concierge notification email, and eligibility status.
 
 Stop on reply (all phases)
 The moment a bride replies (email or SMS) during any active sequence, all enrollments stop and the venue is notified. The lead moves to "Conversation Started" in the pipeline.

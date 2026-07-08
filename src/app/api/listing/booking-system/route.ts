@@ -26,7 +26,10 @@ export const runtime  = 'nodejs';
 
 // Name used to identify the managed Speed-to-Lead automation.
 const STL_NAME = 'Speed to Lead — Booking System';
-const PHASE3_NAME = 'Nurture Sequence — Booking System';
+// Note: the old "Nurture Sequence — Booking System" (Phase 3) automation was
+// removed from this page's UI — venues can build that kind of nurture
+// content directly via Email Campaigns instead. Any pre-existing automation
+// rows with that name were paused via migrations/163.
 const PHASE4_NAME = 'Booked Tour Sequence — Booking System';
 const PHASE5_NAME = 'Booked Wedding Sequence — Booking System';
 
@@ -89,16 +92,13 @@ export interface BookingSystemConfig {
   steps:                  StepConfig[];
   automationId:           string | null;
   automationActive:       boolean;
-  // Phase 3 — Nurture
-  phase3Enabled:          boolean;
-  phase3Steps:            StepConfig[];
   // Phase 4 — Booked Tour
   phase4Enabled:          boolean;
   phase4Steps:            StepConfig[];
   // Phase 5 — Booked Wedding
   phase5Enabled:          boolean;
   phase5Steps:            StepConfig[];
-  // Phase 6 — AI Concierge long-tail
+  // Phase 5 — AI Concierge long-tail
   aiEnabled:              boolean;
   aiPersonaName:          string;
   aiMaxDays:              number;
@@ -156,7 +156,7 @@ export async function GET() {
     .from('marketing_automations')
     .select('id, name, status')
     .eq('venue_id', venueId)
-    .in('name', [STL_NAME, PHASE3_NAME, PHASE4_NAME, PHASE5_NAME]);
+    .in('name', [STL_NAME, PHASE4_NAME, PHASE5_NAME]);
 
   const loadAuto = async (name: string, defaultSteps: StepConfig[] = []) => {
     const auto = autos?.find(a => a.name === name);
@@ -204,7 +204,6 @@ export async function GET() {
   };
 
   const phase2 = await loadAuto(STL_NAME, DEFAULT_PHASE2_STEPS);
-  const phase3 = await loadAuto(PHASE3_NAME);
   const phase4 = await loadAuto(PHASE4_NAME, DEFAULT_PHASE4_STEPS);
   const phase5 = await loadAuto(PHASE5_NAME, DEFAULT_PHASE5_STEPS);
 
@@ -220,8 +219,6 @@ export async function GET() {
     steps:              phase2.steps,
     automationId:       phase2.automationId,
     automationActive:   phase2.automationActive,
-    phase3Enabled:      phase3.automationActive,
-    phase3Steps:        phase3.steps,
     phase4Enabled:      phase4.automationActive,
     phase4Steps:        phase4.steps,
     phase5Enabled:      phase5.automationId ? phase5.automationActive : false,
@@ -405,7 +402,6 @@ export async function PATCH(req: NextRequest) {
 
   try {
     await saveAutomation(STL_NAME, body.sequenceEnabled, body.steps, 'form_submitted');
-    await saveAutomation(PHASE3_NAME, body.phase3Enabled, body.phase3Steps, 'tag_added');
 
     // Phase 4/5 fire on entering a specific pipeline stage. Resolve the
     // venue's own default-pipeline stage id every save so any pre-existing
