@@ -909,7 +909,7 @@ export default function BookingSystemPage() {
         {/* Phase 4 — Booked Wedding */}
         <PhaseCard
           number={4}
-          title="Booked Wedding → Welcomed"
+          title="Wedding Day → Welcomed"
           subtitle='Fires the moment a lead is moved to the "Wedding Booked" pipeline stage — a warm welcome and what comes next.'
           icon={<CheckCircle2 size={18} className="text-emerald-600" />}
           accent="bg-emerald-50"
