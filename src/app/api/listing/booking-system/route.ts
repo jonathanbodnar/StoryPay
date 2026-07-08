@@ -19,6 +19,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { DEFAULT_GUIDE_EMAIL_BODY, DEFAULT_GUIDE_SMS_BODY } from '@/lib/marketing-email-worker';
 import { loadDirectoryNavAccess } from '@/lib/directory-plans-venue';
+import { ensureDefaultPipeline } from '@/lib/pipelines';
 
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
@@ -28,6 +29,34 @@ const STL_NAME = 'Speed to Lead — Booking System';
 const PHASE3_NAME = 'Nurture Sequence — Booking System';
 const PHASE4_NAME = 'Booked Tour Sequence — Booking System';
 const PHASE5_NAME = 'Booked Wedding Sequence — Booking System';
+
+// Stage names in the venue's default/locked pipeline that fire Phase 4/5.
+const PHASE4_STAGE_NAME = 'Tour Booked';
+const PHASE5_STAGE_NAME = 'Wedding Booked';
+
+/**
+ * Resolves the per-venue stage UUID for a named stage in the venue's
+ * default/locked pipeline (see src/lib/pipelines.ts — that pipeline's stage
+ * names are fixed, so looking up by name is stable). Returns null if the
+ * stage can't be found (should not normally happen once the pipeline is
+ * provisioned).
+ */
+async function resolveDefaultStageIdByName(venueId: string, stageName: string): Promise<string | null> {
+  try {
+    const pipelineId = await ensureDefaultPipeline(venueId);
+    const { data: stage } = await supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('id')
+      .eq('pipeline_id', pipelineId)
+      .eq('venue_id', venueId)
+      .eq('name', stageName)
+      .maybeSingle();
+    return (stage as { id?: string } | null)?.id ?? null;
+  } catch (e) {
+    console.error(`[booking-system] failed to resolve stage "${stageName}" for venue ${venueId}:`, e);
+    return null;
+  }
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -129,7 +158,7 @@ export async function GET() {
     .eq('venue_id', venueId)
     .in('name', [STL_NAME, PHASE3_NAME, PHASE4_NAME, PHASE5_NAME]);
 
-  const loadAuto = async (name: string) => {
+  const loadAuto = async (name: string, defaultSteps: StepConfig[] = []) => {
     const auto = autos?.find(a => a.name === name);
     let steps: StepConfig[] = [];
     let automationId: string | null = null;
@@ -162,13 +191,22 @@ export async function GET() {
         };
       });
     }
+
+    // First-time / never-customized state: no automation row (or an
+    // automation row with zero saved steps) yet — show pre-filled, fully
+    // editable defaults instead of an empty sequence. Nothing is written to
+    // the DB until the venue owner actually saves.
+    if (steps.length === 0 && defaultSteps.length > 0) {
+      steps = defaultSteps;
+    }
+
     return { steps, automationId, automationActive };
   };
 
-  const phase2 = await loadAuto(STL_NAME);
+  const phase2 = await loadAuto(STL_NAME, DEFAULT_PHASE2_STEPS);
   const phase3 = await loadAuto(PHASE3_NAME);
-  const phase4 = await loadAuto(PHASE4_NAME);
-  const phase5 = await loadAuto(PHASE5_NAME);
+  const phase4 = await loadAuto(PHASE4_NAME, DEFAULT_PHASE4_STEPS);
+  const phase5 = await loadAuto(PHASE5_NAME, DEFAULT_PHASE5_STEPS);
 
   const cfg: BookingSystemConfig = {
     masterEnabled:      (v.booking_system_enabled as boolean | null) ?? true,
@@ -176,7 +214,9 @@ export async function GET() {
     guideSmsEnabled:    (v.booking_guide_sms_enabled   as boolean | null) ?? true,
     guideEmailBody:     (v.booking_guide_email_body as string | null) ?? DEFAULT_GUIDE_EMAIL_BODY,
     guideSmsBody:       (v.booking_guide_sms_body   as string | null) ?? DEFAULT_GUIDE_SMS_BODY,
-    sequenceEnabled:    phase2.automationActive,
+    // New venues (no automation row yet) default Phase 2 to ON — mirrors the
+    // phase5 special-case pattern below but inverted (phase5 defaults off).
+    sequenceEnabled:    phase2.automationId ? phase2.automationActive : true,
     steps:              phase2.steps,
     automationId:       phase2.automationId,
     automationActive:   phase2.automationActive,
@@ -259,7 +299,12 @@ export async function PATCH(req: NextRequest) {
     name: string,
     enabled: boolean | undefined,
     steps: StepConfig[] | undefined,
-    triggerType: string
+    triggerType: string,
+    // When provided, this is set/corrected on the automation row on every
+    // save (both create and update) — used to self-heal Phase 4/5's
+    // trigger_config to the venue's current default-pipeline stage id even
+    // if the row was created before this was wired up correctly.
+    triggerConfig?: Record<string, unknown>,
   ) => {
     if (enabled === undefined && steps === undefined) return;
 
@@ -283,7 +328,7 @@ export async function PATCH(req: NextRequest) {
           name:          name,
           status,
           trigger_type:  triggerType,
-          trigger_config: {},
+          trigger_config: triggerConfig ?? {},
         })
         .select('id')
         .single();
@@ -292,12 +337,22 @@ export async function PATCH(req: NextRequest) {
         throw new Error(`Failed to create automation: ${createErr.message}`);
       }
       auto = created;
-    } else if (enabled !== undefined) {
-      const { error: statusErr } = await supabaseAdmin
-        .from('marketing_automations')
-        .update({ status })
-        .eq('id', auto.id);
-      if (statusErr) console.warn(`[booking-system] sequence status update failed for ${name}:`, statusErr);
+    } else {
+      const updatePayload: Record<string, unknown> = {};
+      if (enabled !== undefined) updatePayload.status = status;
+      // Self-heal trigger wiring on every save, not just at creation, so
+      // pre-existing rows with the old (buggy) trigger get corrected.
+      if (triggerConfig !== undefined) {
+        updatePayload.trigger_type = triggerType;
+        updatePayload.trigger_config = triggerConfig;
+      }
+      if (Object.keys(updatePayload).length > 0) {
+        const { error: statusErr } = await supabaseAdmin
+          .from('marketing_automations')
+          .update(updatePayload)
+          .eq('id', auto.id);
+        if (statusErr) console.warn(`[booking-system] automation update failed for ${name}:`, statusErr);
+      }
     }
 
     if (!auto) throw new Error(`Could not create automation ${name}`);
@@ -351,8 +406,25 @@ export async function PATCH(req: NextRequest) {
   try {
     await saveAutomation(STL_NAME, body.sequenceEnabled, body.steps, 'form_submitted');
     await saveAutomation(PHASE3_NAME, body.phase3Enabled, body.phase3Steps, 'tag_added');
-    await saveAutomation(PHASE4_NAME, body.phase4Enabled, body.phase4Steps, 'tag_added');
-    await saveAutomation(PHASE5_NAME, body.phase5Enabled ?? false, body.phase5Steps, 'tag_added');
+
+    // Phase 4/5 fire on entering a specific pipeline stage. Resolve the
+    // venue's own default-pipeline stage id every save so any pre-existing
+    // rows self-heal from the old (buggy) 'tag_added'-matches-anything
+    // trigger to the correct stage_changed trigger.
+    if (body.phase4Enabled !== undefined || body.phase4Steps !== undefined) {
+      const tourStageId = await resolveDefaultStageIdByName(venueId, PHASE4_STAGE_NAME);
+      await saveAutomation(
+        PHASE4_NAME, body.phase4Enabled, body.phase4Steps, 'stage_changed',
+        tourStageId ? { to_stage_ids: [tourStageId] } : undefined,
+      );
+    }
+    if (body.phase5Enabled !== undefined || body.phase5Steps !== undefined) {
+      const weddingStageId = await resolveDefaultStageIdByName(venueId, PHASE5_STAGE_NAME);
+      await saveAutomation(
+        PHASE5_NAME, body.phase5Enabled, body.phase5Steps, 'stage_changed',
+        weddingStageId ? { to_stage_ids: [weddingStageId] } : undefined,
+      );
+    }
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Failed to save automations' }, { status: 500 });
   }
@@ -372,6 +444,68 @@ function labelForStep(type: string, cfg: Record<string, unknown>): string {
   if (type === 'send_email') return 'Send email';
   return type;
 }
+
+// ─── Phase 2 default — "Guide Delivered → 14-Day Sequence" ─────────────────
+// Alternating [delay, sms, delay, sms, ...]; each delay is the increment from
+// the previous touch (deltas: 1,1,1,2,2,3,4 days → Day 1,2,3,5,7,10,14).
+const DEFAULT_PHASE2_STEPS: StepConfig[] = [
+  { step_order: 0,  step_type: 'delay',    label: 'Wait 1 day',  delay_minutes: 1 * 1440 },
+  { step_order: 1,  step_type: 'send_sms', label: 'Day 1',
+    body: `Hi {{first_name}}! It's {{owner_name}} over at {{venue_name}}, just making sure the pricing and availability guide landed in your inbox ok? 😊 And do you have a date in mind yet? Happy to peek at the calendar and see if it's still open for you!` },
+  { step_order: 2,  step_type: 'delay',    label: 'Wait 1 day',  delay_minutes: 1 * 1440 },
+  { step_order: 3,  step_type: 'send_sms', label: 'Day 2',
+    body: `Hey {{first_name}}, this is {{owner_name}} from {{venue_name}}. Saw you downloaded our guide! Just making sure it reached you ok? And do you have a date picked out yet? Happy to check if it's still open for you.` },
+  { step_order: 4,  step_type: 'delay',    label: 'Wait 1 day',  delay_minutes: 1 * 1440 },
+  { step_order: 5,  step_type: 'send_sms', label: 'Day 3',
+    body: `Hi {{first_name}}! Totally get that looking at venues can feel like a lot. If it's easier, just tell me the one thing you're trying to figure out right now and I'll help with that.` },
+  { step_order: 6,  step_type: 'delay',    label: 'Wait 2 days', delay_minutes: 2 * 1440 },
+  { step_order: 7,  step_type: 'send_sms', label: 'Day 5',
+    body: `Hi {{first_name}}! Okay, fun question. 😊 Are you picturing spring blooms, summer sunsets, or cozy fall vibes for your wedding?` },
+  { step_order: 8,  step_type: 'delay',    label: 'Wait 2 days', delay_minutes: 2 * 1440 },
+  { step_order: 9,  step_type: 'send_sms', label: 'Day 7',
+    body: `Hey {{first_name}}! Feels like there might be a few things easier to just talk through than text back and forth. Want to hop on a quick 5-min call? Whenever's good for you, no pressure at all.` },
+  { step_order: 10, step_type: 'delay',    label: 'Wait 3 days', delay_minutes: 3 * 1440 },
+  { step_order: 11, step_type: 'send_sms', label: 'Day 10',
+    body: `Hey {{first_name}}, there's so much that goes into planning your wedding day. 😊 Please don't feel like you have to figure it all out by yourself. I'd love to help however I can.` },
+  { step_order: 12, step_type: 'delay',    label: 'Wait 4 days', delay_minutes: 4 * 1440 },
+  { step_order: 13, step_type: 'send_sms', label: 'Day 14',
+    body: `Hi {{first_name}}! When you reached out about {{venue_name}}, I didn't want to just send a guide and disappear on you. So I wanted to check in one more time, is there anything you're still wondering about that I can help with?` },
+];
+
+// ─── Phase 4 default — "Booked Tour → Toured" ──────────────────────────────
+// Appointment-reminder SMS's ("day before" / "morning of") are intentionally
+// excluded here — those are handled by the calendar notification system.
+const DEFAULT_PHASE4_STEPS: StepConfig[] = [
+  { step_order: 0, step_type: 'send_sms', label: 'Touch 1 — Immediate',
+    body: `Hi {{first_name}}, it's {{owner_name}} from {{venue_name}}. I'm so glad you booked a tour with us. I just sent everything over to your email so keep an eye out for it. It has all the little details to make your visit easy. Can't wait to meet you.` },
+  { step_order: 1, step_type: 'send_email', label: 'Touch 2 — Immediate',
+    subject: 'Everything for your visit to {{venue_name}}',
+    body: `Hi {{first_name}},\n\nI'm so happy you're coming to see us. I wanted to get everything to you in one place so the day of your tour feels easy and you can just enjoy it.\n\nHere's what to know:\nWhen: {{appointment_date}} at {{appointment_time}}\nWhere: {{venue_address}}\nParking: [Add parking/entrance details here]\n\nPlan for about [30 to 45 minutes] together. I'll walk you through the whole space, show you where everything happens on a wedding day, and answer anything on your mind. Bring whoever helps you make big decisions, a partner, your mom, a friend, whoever you want with you.\n\nIf anything comes up before then, just reply here or text me. I'm easy to reach.\n\nSee you soon,\n{{owner_name}}\n{{venue_name}}` },
+  { step_order: 2, step_type: 'delay', label: 'Wait 2 days', delay_minutes: 2 * 1440 },
+  { step_order: 3, step_type: 'send_email', label: 'Touch 3',
+    subject: 'A little of what I love about this place',
+    body: `Hi {{first_name}},\n\nI keep thinking about your visit coming up. Before you get here I wanted to share a little of why couples fall for this place.\n\n[Add 1-2 sentences on your venue's signature moment — the light in the afternoon, the ceremony spot, the view, the thing brides always gasp at.]\n\n[Add 1-2 sentences painting a real wedding day here — where she'd get ready, where the first look happens, where everyone dances at night.]\n\nWhen you're here I'd love to hear what you're picturing for your day. The season you're dreaming of, the feeling you want your guests to walk into. That's my favorite part, helping you see it in the space.\n\nSee you soon,\n{{owner_name}}\n{{venue_name}}` },
+];
+
+// ─── Phase 5 default — "Booked Wedding → Welcomed" ─────────────────────────
+const DEFAULT_PHASE5_STEPS: StepConfig[] = [
+  { step_order: 0, step_type: 'send_sms', label: 'Touch 1 — Immediate',
+    body: `Hi {{first_name}}, it's {{owner_name}} from {{venue_name}}. It's official, you're getting married at {{venue_name}} and I could not be more excited for you. I just sent a welcome note to your email with everything for what comes next. Congratulations, this is going to be so good.` },
+  { step_order: 1, step_type: 'send_email', label: 'Touch 2 — Immediate',
+    subject: "You're getting married at {{venue_name}}",
+    body: `Hi {{first_name}},\n\nIt's official and I am so happy. You're getting married at {{venue_name}}, and I still get a little excited every time a couple books their day with us. Thank you for trusting us with something this big. It means the world.\n\nI want you to know you don't have to have anything figured out right now. There is so much time, and I'll be with you the whole way. Over the coming months I'll check in, share a few helpful things, and always make sure you know what's next.\n\nFor right now, all you have to do is enjoy this. You picked your place. That's the big one, and everything gets easier from here.\n\n[Optional: add your next step here — e.g. payment date / planning meeting / portal login — and I'll walk you through it when it's time.]\n\nAnytime a question pops into your head, just reply here or text me. I'm your person for all of it.\n\nCongratulations {{first_name}},\n{{owner_name}}\n{{venue_name}}` },
+  { step_order: 2, step_type: 'delay', label: 'Wait 3 days', delay_minutes: 3 * 1440 },
+  { step_order: 3, step_type: 'send_email', label: 'Touch 3',
+    subject: 'What to expect between now and your wedding',
+    body: `Hi {{first_name}},\n\nNow that the excitement has settled a little, I wanted to walk you through how this all works so nothing ever feels like a mystery.\n\nHere's the simple version. Between now and your wedding, we'll stay in touch at a few key points along the way. [Add your typical planning-meeting timeframe here.] You will never have to guess what's next. I'll always tell you.\n\nYou don't need to rush any of it. The couples who enjoy this most are the ones who take it one step at a time, and that's exactly how we'll do it together.\n\nIf anything ever feels unclear, or you just want to talk something through, I'm one message away.\n\nTalk soon,\n{{owner_name}}\n{{venue_name}}` },
+  { step_order: 4, step_type: 'delay', label: 'Wait 7 days', delay_minutes: 7 * 1440 },
+  { step_order: 5, step_type: 'send_email', label: 'Touch 4',
+    subject: 'A few easy things to do after booking',
+    body: `Hi {{first_name}},\n\nA few couples have asked me what they should do first after booking, so I put together the short list. None of this is urgent. It's just the stuff that makes everything later feel calmer.\n\nSave your date everywhere. Put it in your calendar, tell the people closest to you, make it real.\n\nStart a little inspiration folder. Anything that catches your eye, colors, flowers, a dress, a feeling. It helps more than you would think when we start planning.\n\nHave a rough idea of who's coming. Not a final list, just a ballpark. It quietly shapes almost every other decision, so even a loose number helps.\n\nThat's it. Do them whenever you feel like it. And if you would rather just sit in the excitement a little longer, that's completely allowed too.\n\nHere for you,\n{{owner_name}}\n{{venue_name}}` },
+  { step_order: 6, step_type: 'delay', label: 'Wait 1 day', delay_minutes: 1 * 1440 },
+  { step_order: 7, step_type: 'send_sms', label: 'Touch 5',
+    body: `Hi {{first_name}}, it's {{owner_name}}. I just wanted you to hear it from me one more time, you're in good hands and I'm so glad we get to be part of your day. Anything you need between now and then, I'm right here. No question is too small.` },
+];
 
 const DEFAULT_AI_MESSAGES = [
   `Hi {{first_name}}, just checking in! {{venue_name}} has some great dates still available. Would love to answer any questions you have.`,

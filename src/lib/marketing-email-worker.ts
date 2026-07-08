@@ -661,6 +661,71 @@ export function buildGuideShortUrl(
   return `${origin}/guide/${venueId}${leadParam}`;
 }
 
+/**
+ * Best-effort lookup of the most relevant `calendar_events` row for a lead,
+ * formatted into human-readable date/time strings for merge vars (mirrors
+ * the Intl.DateTimeFormat approach in calendar-notifications.ts). Prefers the
+ * soonest upcoming event, falls back to the most recent past event, and
+ * never throws — a failed lookup should never block message sending.
+ */
+async function resolveAppointmentVars(
+  venueId: string,
+  customerEmail: string,
+): Promise<{ date: string; time: string }> {
+  const empty = { date: '', time: '' };
+  if (!customerEmail) return empty;
+  try {
+    const { data: settings } = await supabaseAdmin
+      .from('venue_calendar_settings')
+      .select('timezone')
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    const tz = resolveVenueTimezone((settings as { timezone?: string } | null)?.timezone);
+
+    const nowIso = new Date().toISOString();
+    const { data: upcoming } = await supabaseAdmin
+      .from('calendar_events')
+      .select('start_at')
+      .eq('venue_id', venueId)
+      .ilike('customer_email', customerEmail)
+      .neq('status', 'cancelled')
+      .gte('start_at', nowIso)
+      .order('start_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    let startAt = (upcoming as { start_at?: string } | null)?.start_at ?? null;
+
+    if (!startAt) {
+      const { data: past } = await supabaseAdmin
+        .from('calendar_events')
+        .select('start_at')
+        .eq('venue_id', venueId)
+        .ilike('customer_email', customerEmail)
+        .neq('status', 'cancelled')
+        .lt('start_at', nowIso)
+        .order('start_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      startAt = (past as { start_at?: string } | null)?.start_at ?? null;
+    }
+
+    if (!startAt) return empty;
+
+    const startDate = new Date(startAt);
+    const date = new Intl.DateTimeFormat('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: tz,
+    }).format(startDate);
+    const time = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric', minute: '2-digit', timeZone: tz,
+    }).format(startDate);
+    return { date, time };
+  } catch (e) {
+    console.warn('[buildMergeVars] resolveAppointmentVars failed:', e);
+    return empty;
+  }
+}
+
 export async function buildMergeVars(
   venueId: string,
   leadId: string,
@@ -723,6 +788,7 @@ export async function buildMergeVars(
   const email =
     emailRaw ||
     `lead.${String(lead.id).replace(/-/g, '').slice(0, 12)}@sms-auto.storypay.placeholder`;
+  const { date: appointmentDate, time: appointmentTime } = await resolveAppointmentVars(venueId, emailRaw);
   const fullAddr = (venue?.location_full as string)
     || ([venue?.location_city, venue?.location_state].filter(Boolean).join(', '))
     || '';
@@ -761,6 +827,7 @@ export async function buildMergeVars(
     email,
     venue_name:         venueName,
     venue_full_address: fullAddr,
+    venue_address:      fullAddr,
     venue_city:         (venue?.location_city as string) || '',
     venue_state:        (venue?.location_state as string) || '',
     unsubscribe_url:    unsub,
@@ -770,6 +837,9 @@ export async function buildMergeVars(
     wedding_date_nice:  wedding_date_nice || '',
     wedding_month:      wedding_month || '',
     guest_count:        gc != null ? String(gc) : '',
+    owner_name:         ownerName,
+    appointment_date:   appointmentDate,
+    appointment_time:   appointmentTime,
     // ── Canonical dot-notation keys (new unified system) ─────────────────
     'contact.first_name':        fn,
     'contact.last_name':         ln,

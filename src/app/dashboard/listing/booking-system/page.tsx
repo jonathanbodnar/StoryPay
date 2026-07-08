@@ -535,6 +535,19 @@ function StepLeadsModal({ stepLabel, leads, onClose }: {
   );
 }
 
+// Small persistent hint row of available merge tags, consistent with the
+// Phase 1 tag-hint row style.
+function MergeTagHint({ tags }: { tags: string[] }) {
+  return (
+    <p className="mt-3 text-[11px] text-gray-400">
+      Tags:{' '}
+      {tags.map((t) => (
+        <code key={t} className="mr-1 rounded bg-gray-100 px-1">{`{{${t}}}`}</code>
+      ))}
+    </p>
+  );
+}
+
 // ─── Sequence editor (Phase 2 body) ──────────────────────────────────────
 
 function SequenceEditor({
@@ -794,7 +807,7 @@ export default function BookingSystemPage() {
         {/* Phase 1 — Guide Delivery */}
         <PhaseCard
           number={1}
-          title="Guide Delivery"
+          title="Inquiry → Guide Delivered"
           subtitle="Send your pricing guide the moment a bride submits your listing form."
           icon={<Send size={18} className="text-blue-600" />}
           accent="bg-blue-50"
@@ -857,10 +870,10 @@ export default function BookingSystemPage() {
         {/* Phase 2 — Sequence */}
         <PhaseCard
           number={2}
-          title="Follow-up Sequence"
+          title="Guide Delivered → 14-Day Sequence"
           subtitle={leadsData?.total
-            ? `${leadsData.total} lead${leadsData.total !== 1 ? 's' : ''} active in sequence · SMS and email touchpoints that fire until she replies.`
-            : 'SMS and email touchpoints that fire until she replies. Drag to reorder.'}
+            ? `${leadsData.total} lead${leadsData.total !== 1 ? 's' : ''} active in sequence · SMS nurture touchpoints for two weeks after the guide is sent.`
+            : 'SMS nurture touchpoints that run for two weeks after the guide is sent, until she replies.'}
           icon={<MessageSquare size={18} className="text-violet-600" />}
           accent="bg-violet-50"
           enabled={cfg.sequenceEnabled}
@@ -871,6 +884,7 @@ export default function BookingSystemPage() {
             onStepsChange={(steps) => void save({ steps })}
             leadsData={leadsData}
           />
+          <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
 
         {/* Phase 3 — Nurture */}
@@ -894,8 +908,8 @@ export default function BookingSystemPage() {
         {/* Phase 4 — Booked Tour */}
         <PhaseCard
           number={4}
-          title="Booked Tour"
-          subtitle="If they book a tour, what to expect (5 email sequence)"
+          title="Booked Tour → Toured"
+          subtitle='Fires the moment a lead is moved to the "Tour Booked" pipeline stage — everything they need before their visit.'
           icon={<Users size={18} className="text-amber-600" />}
           accent="bg-amber-50"
           enabled={cfg.phase4Enabled}
@@ -907,13 +921,14 @@ export default function BookingSystemPage() {
             leadsData={null}
             allowAi={false}
           />
+          <MergeTagHint tags={['first_name', 'owner_name', 'venue_name', 'appointment_date', 'appointment_time', 'venue_address']} />
         </PhaseCard>
 
         {/* Phase 5 — Booked Wedding */}
         <PhaseCard
           number={5}
-          title="Booked Wedding"
-          subtitle="If they book a wedding, what to expect (5 email sequence)"
+          title="Booked Wedding → Welcomed"
+          subtitle='Fires the moment a lead is moved to the "Wedding Booked" pipeline stage — a warm welcome and what comes next.'
           icon={<CheckCircle2 size={18} className="text-emerald-600" />}
           accent="bg-emerald-50"
           enabled={cfg.phase5Enabled}
@@ -926,6 +941,7 @@ export default function BookingSystemPage() {
             leadsData={null}
             allowAi={false}
           />
+          <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
 
         {/* Phase 6 — AI Concierge Settings (All-Inclusive tier only) */}
