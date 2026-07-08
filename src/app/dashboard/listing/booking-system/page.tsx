@@ -848,7 +848,8 @@ export default function BookingSystemPage() {
             <p className="text-[11px] text-gray-400">
               Tags: <code className="rounded bg-gray-100 px-1">{'{{first_name}}'}</code>{' '}
               <code className="rounded bg-gray-100 px-1">{'{{venue_name}}'}</code>{' '}
-              <code className="rounded bg-gray-100 px-1">{'{{pricing_guide_url}}'}</code>
+              <code className="rounded bg-gray-100 px-1">{'{{pricing_guide_url}}'}</code>{' '}
+              <code className="rounded bg-gray-100 px-1">{'{{owner_name}}'}</code>
             </p>
           </div>
         </PhaseCard>
