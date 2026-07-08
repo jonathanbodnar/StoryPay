@@ -75,7 +75,7 @@ function PhaseCard({
   disabled?: boolean; children?: React.ReactNode; accent: string; noPadding?: boolean; defaultOpen?: boolean;
   locked?: boolean; lockTooltip?: string; hideNumber?: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen ?? true);
+  const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
   const effectiveEnabled = locked ? false : enabled;
 
   return (
@@ -915,7 +915,6 @@ export default function BookingSystemPage() {
           accent="bg-emerald-50"
           enabled={cfg.phase5Enabled}
           onToggle={(v) => void save({ phase5Enabled: v })}
-          defaultOpen={false}
         >
           <SequenceEditor
             steps={cfg.phase5Steps}
