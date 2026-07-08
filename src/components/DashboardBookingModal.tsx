@@ -71,13 +71,13 @@ export default function DashboardBookingModal({
           id={CALENDAR_ID}
           title="Book your free demo call"
           scrolling="no"
-          style={{ width: '100%', border: 'none', overflow: 'hidden', display: 'block' }}
+          style={{ width: '100%', minHeight: '100vh', border: 'none', overflow: 'hidden', display: 'block' }}
         />
       </div>
 
       {/* DESKTOP — centered card */}
       <div
-        className={`hidden sm:flex fixed inset-0 z-[9999] items-center justify-center bg-black/50 ${open ? '' : '!hidden'}`}
+        className={`hidden sm:flex fixed inset-0 z-[9999] items-center justify-center bg-black/70 backdrop-blur-sm ${open ? '' : '!hidden'}`}
         role="dialog"
         aria-modal="true"
         aria-label="Book your free demo call"
@@ -100,13 +100,16 @@ export default function DashboardBookingModal({
               <X size={16} />
             </button>
           </div>
-          {/* Calendar */}
+          {/* Calendar — minHeight reserves space before the GHL embed script
+              resizes the iframe via postMessage; without it the calendar
+              renders squished at the browser's tiny default iframe height
+              for a moment, making the widget's own date grid look broken. */}
           <div className="bg-white px-10">
             <iframe
               src={CALENDAR_URL}
               id={`${CALENDAR_ID}_dashboard_desktop`}
               className="block bg-white"
-              style={{ width: '100%', border: 'none', overflow: 'hidden' }}
+              style={{ width: '100%', minHeight: '650px', border: 'none', overflow: 'hidden' }}
               scrolling="no"
               title="Book your free demo call"
             />
