@@ -106,7 +106,7 @@ export async function syncLeadFromVenueCustomerRow(
     }
 
     if (prevStageId && vc.stage_id && prevStageId !== vc.stage_id) {
-      void onMarketingStageChanged(venueId, leadId, vc.stage_id);
+      void onMarketingStageChanged(venueId, leadId, vc.stage_id, prevStageId);
     }
   }
 }

@@ -19,7 +19,17 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { DEFAULT_GUIDE_EMAIL_BODY, DEFAULT_GUIDE_SMS_BODY } from '@/lib/marketing-email-worker';
 import { loadDirectoryNavAccess } from '@/lib/directory-plans-venue';
-import { ensureDefaultPipeline } from '@/lib/pipelines';
+import {
+  PHASE4_STAGE_NAME,
+  PHASE5_STAGE_NAME,
+  resolveDefaultStageIdByName,
+} from '@/lib/booking-system-stages';
+
+// Re-exported for backwards compatibility with existing importers of this
+// route file (e.g. `stage-default/route.ts`). Source of truth now lives in
+// `src/lib/booking-system-stages.ts` so lib-only modules (like
+// `marketing-email-worker.ts`) can depend on these without importing a route.
+export { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, resolveDefaultStageIdByName };
 
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
@@ -32,10 +42,6 @@ export const STL_NAME = 'Speed to Lead — Booking System';
 // rows with that name were paused via migrations/163.
 export const PHASE4_NAME = 'Booked Tour Sequence — Booking System';
 export const PHASE5_NAME = 'Booked Wedding Sequence — Booking System';
-
-// Stage names in the venue's default/locked pipeline that fire Phase 4/5.
-export const PHASE4_STAGE_NAME = 'Tour Booked';
-export const PHASE5_STAGE_NAME = 'Wedding Booked';
 
 // Stable stage keys used by the /stage-default publish/reset API and by
 // `booking_system_stage_defaults.stage_key` (migrations/164, 165).
@@ -62,30 +68,6 @@ export const STAGE_KEY_TO_AUTOMATION_NAME: Record<AutomationStageKey, string> = 
 
 export function isAutomationStageKey(key: StageKey): key is AutomationStageKey {
   return key === 'phase2' || key === 'phase4' || key === 'phase5';
-}
-
-/**
- * Resolves the per-venue stage UUID for a named stage in the venue's
- * default/locked pipeline (see src/lib/pipelines.ts — that pipeline's stage
- * names are fixed, so looking up by name is stable). Returns null if the
- * stage can't be found (should not normally happen once the pipeline is
- * provisioned).
- */
-export async function resolveDefaultStageIdByName(venueId: string, stageName: string): Promise<string | null> {
-  try {
-    const pipelineId = await ensureDefaultPipeline(venueId);
-    const { data: stage } = await supabaseAdmin
-      .from('lead_pipeline_stages')
-      .select('id')
-      .eq('pipeline_id', pipelineId)
-      .eq('venue_id', venueId)
-      .eq('name', stageName)
-      .maybeSingle();
-    return (stage as { id?: string } | null)?.id ?? null;
-  } catch (e) {
-    console.error(`[booking-system] failed to resolve stage "${stageName}" for venue ${venueId}:`, e);
-    return null;
-  }
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────

@@ -16,11 +16,18 @@ import { logStepExecution } from '@/lib/workflow-execution-logs';
 import { canRunBookingSystem, venueCanRunBookingSystem, VENUE_ENTITLEMENT_COLUMNS, type VenueBillingState } from '@/lib/venue-entitlements';
 import { setLeadAiState } from '@/lib/ai-concierge/state-control';
 import type { AiState, AiVenueResources } from '@/lib/ai-concierge/types';
+import { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, resolveDefaultStageIdByName } from '@/lib/booking-system-stages';
 
 const BATCH = 25;
 
 /** Returns the new enrollment id, or null if already enrolled / error. */
-async function enrollIfNew(automationId: string, venueId: string, leadId: string): Promise<string | null> {
+async function enrollIfNew(
+  automationId: string,
+  venueId: string,
+  leadId: string,
+  delayMs?: number,
+): Promise<string | null> {
+  const nextRunAt = delayMs ? new Date(Date.now() + delayMs) : new Date();
   const { data, error } = await supabaseAdmin
     .from('marketing_automation_enrollments')
     .insert({
@@ -29,7 +36,7 @@ async function enrollIfNew(automationId: string, venueId: string, leadId: string
       lead_id: leadId,
       current_step_index: 0,
       status: 'active',
-      next_run_at: new Date().toISOString(),
+      next_run_at: nextRunAt.toISOString(),
     })
     .select('id')
     .single();
@@ -108,6 +115,75 @@ export async function onMarketingTagAdded(
   }
 }
 
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Resolves the venue's "Tour Booked" (Stage 3) and "Wedding Booked" (Stage 4)
+ * pipeline stage UUIDs. These two stages get a 1-hour grace period before
+ * their stage-triggered automation enrollment starts sending, and get their
+ * enrollment auto-cancelled if the lead is moved back out before/while it
+ * runs. Best-effort — returns nulls (never throws) if the pipeline/stages
+ * can't be resolved for any reason.
+ */
+async function resolveGraceStageIds(
+  venueId: string,
+): Promise<{ tourBookedStageId: string | null; weddingBookedStageId: string | null }> {
+  try {
+    const [tourBookedStageId, weddingBookedStageId] = await Promise.all([
+      resolveDefaultStageIdByName(venueId, PHASE4_STAGE_NAME),
+      resolveDefaultStageIdByName(venueId, PHASE5_STAGE_NAME),
+    ]);
+    return { tourBookedStageId, weddingBookedStageId };
+  } catch (e) {
+    console.warn('[marketing-automation] resolveGraceStageIds failed (non-fatal):', e instanceof Error ? e.message : e);
+    return { tourBookedStageId: null, weddingBookedStageId: null };
+  }
+}
+
+/**
+ * Cancels any active `stage_changed`-triggered enrollment for this lead whose
+ * automation trigger matches `exitedStageId`. Used when a lead is moved OUT
+ * of the "Tour Booked" / "Wedding Booked" grace stages before (or while) its
+ * automation has finished sending — the entire enrollment is cancelled so no
+ * further steps ever send, whether it's still in the 1-hour grace window
+ * (current_step_index 0) or already partway through the sequence.
+ *
+ * Best-effort / fire-and-forget: never throws into the caller's stage-change
+ * flow — every failure is caught and logged as a warning.
+ */
+async function cancelStageEnrollmentsOnExit(
+  venueId: string,
+  leadId: string,
+  exitedStageId: string,
+): Promise<void> {
+  try {
+    const autos = await loadVenueActiveAutomations(venueId);
+    const matchingAutomationIds = autos
+      .filter((row) =>
+        flatTriggersFor(row).some((t) => {
+          if (t.type !== 'stage_changed') return false;
+          const stages = t.to_stage_ids?.filter(Boolean) ?? [];
+          return stages.length > 0 && stages.includes(exitedStageId);
+        }),
+      )
+      .map((row) => row.id);
+    if (!matchingAutomationIds.length) return;
+
+    const { error } = await supabaseAdmin
+      .from('marketing_automation_enrollments')
+      .update({ status: 'cancelled' })
+      .eq('venue_id', venueId)
+      .eq('lead_id', leadId)
+      .in('automation_id', matchingAutomationIds)
+      .eq('status', 'active');
+    if (error) {
+      console.warn('[marketing-automation] cancelStageEnrollmentsOnExit update failed (non-fatal):', error);
+    }
+  } catch (e) {
+    console.warn('[marketing-automation] cancelStageEnrollmentsOnExit failed (non-fatal):', e instanceof Error ? e.message : e);
+  }
+}
+
 export async function onMarketingStageChanged(
   venueId: string,
   leadId: string,
@@ -117,8 +193,24 @@ export async function onMarketingStageChanged(
   // ── AI Concierge: auto-activate when entering Followup, pause when leaving ──
   void handleAiConciergeOnStageChange(venueId, leadId, newStageId, previousStageId);
 
+  // ── Grace period (Stage 3 "Tour Booked" / Stage 4 "Wedding Booked") ───────
+  // A venue owner gets a 1-hour window to correct an accidental move into
+  // either of these two stages before the matching automation actually sends
+  // anything. If the lead is moved back out (to any other stage) before that
+  // window closes, or even mid-sequence, the enrollment is cancelled outright.
+  const { tourBookedStageId, weddingBookedStageId } = await resolveGraceStageIds(venueId);
+
+  if (previousStageId && previousStageId !== newStageId) {
+    const exitedGraceStage =
+      previousStageId === tourBookedStageId || previousStageId === weddingBookedStageId;
+    if (exitedGraceStage) {
+      void cancelStageEnrollmentsOnExit(venueId, leadId, previousStageId);
+    }
+  }
+
   // ── Marketing automation enrollment (existing logic) ──────────────────────
   if (!newStageId) return;
+  const isGraceStage = newStageId === tourBookedStageId || newStageId === weddingBookedStageId;
   const autos = await loadVenueActiveAutomations(venueId);
   for (const row of autos) {
     const matched = flatTriggersFor(row).some((t) => {
@@ -126,7 +218,7 @@ export async function onMarketingStageChanged(
       const stages = t.to_stage_ids?.filter(Boolean) ?? [];
       return stages.length > 0 && stages.includes(newStageId);
     });
-    if (matched) await enrollIfNew(row.id, venueId, leadId);
+    if (matched) await enrollIfNew(row.id, venueId, leadId, isGraceStage ? ONE_HOUR_MS : undefined);
   }
 }
 

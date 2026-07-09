@@ -135,7 +135,7 @@ export async function moveLeadToAiStage(
 
     // Fire the workflow trigger for stage changes
     if (prevStageId !== stageId) {
-      void onMarketingStageChanged(venueId, leadId, stageId).catch((e) => {
+      void onMarketingStageChanged(venueId, leadId, stageId, prevStageId).catch((e) => {
         console.error('[ai-concierge] onMarketingStageChanged failed:', e);
       });
     }
