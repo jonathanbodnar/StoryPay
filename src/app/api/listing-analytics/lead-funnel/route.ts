@@ -1,6 +1,12 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import {
+  bucketLeadSource,
+  LEAD_SOURCE_LABELS,
+  LEAD_SOURCE_ORDER,
+  type LeadSourceBucket,
+} from '@/lib/lead-source';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -20,6 +26,12 @@ export const runtime = 'nodejs';
  *
  * Always live: the client polls this on the same 30s cadence as the realtime
  * panel so the numbers stay current without a manual refresh.
+ *
+ * Source attribution: every lead is bucketed into Meta / Google / Direct /
+ * Other (see lib/lead-source). The response always includes a `sources`
+ * breakdown of the whole date range so the dashboard can show where leads came
+ * from, and an optional `?source=` filter re-runs the entire funnel over just
+ * the leads from that one source.
  */
 
 type StageInfo = { name: string; kind: string; position: number };
@@ -51,6 +63,12 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const fromParam = url.searchParams.get('from');
   const toParam = url.searchParams.get('to');
+
+  const sourceParam = url.searchParams.get('source');
+  const sourceFilter: LeadSourceBucket | null =
+    sourceParam && LEAD_SOURCE_ORDER.includes(sourceParam as LeadSourceBucket)
+      ? (sourceParam as LeadSourceBucket)
+      : null;
   
   let since = '';
   let until = '';
@@ -69,7 +87,7 @@ export async function GET(req: Request) {
 
   let leadsQuery = supabaseAdmin
     .from('leads')
-    .select('id, status, stage_id')
+    .select('id, status, stage_id, first_touch_utm, source, referral_source')
     .eq('venue_id', venueId);
     
   if (days > 0) {
@@ -99,13 +117,42 @@ export async function GET(req: Request) {
   let tours = 0;
   let weddings = 0;
 
-  for (const row of (leads ?? []) as Array<{ status: string; stage_id: string | null }>) {
+  // Per-source lead tallies for the whole range (unaffected by the active
+  // filter) so the dashboard can render the "where leads came from" breakdown.
+  const sourceCounts: Record<LeadSourceBucket, number> = { meta: 0, google: 0, direct: 0, other: 0 };
+
+  type LeadRow = {
+    status: string;
+    stage_id: string | null;
+    first_touch_utm: Record<string, unknown> | null;
+    source: string | null;
+    referral_source: string | null;
+  };
+
+  for (const row of (leads ?? []) as LeadRow[]) {
+    const bucket = bucketLeadSource({
+      first_touch_utm: row.first_touch_utm,
+      source: row.source,
+      referral_source: row.referral_source,
+    });
+    sourceCounts[bucket] += 1;
+
+    // When a source filter is active, only that source's leads flow through
+    // the funnel math — every step and conversion % reflects just that slice.
+    if (sourceFilter && bucket !== sourceFilter) continue;
+
     leadsCount += 1;
     const { rank, lost } = leadRank(row.status ?? 'new', row.stage_id ? stageById.get(row.stage_id) : undefined);
     if (rank >= 4) weddings += 1;
     if (rank >= 3 && !lost) tours += 1;
     if (rank >= 2 && !lost) conversations += 1;
   }
+
+  const sources = LEAD_SOURCE_ORDER.map((key) => ({
+    key,
+    label: LEAD_SOURCE_LABELS[key],
+    count: sourceCounts[key],
+  }));
 
   const steps = [
     { key: 'leads', label: 'Leads', count: leadsCount },
@@ -120,5 +167,5 @@ export async function GET(req: Request) {
     return from > 0 ? Math.round((step.count / from) * 100) : null;
   });
 
-  return NextResponse.json({ steps, conversions });
+  return NextResponse.json({ steps, conversions, sources, source: sourceFilter });
 }

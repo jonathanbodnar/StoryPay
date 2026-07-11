@@ -106,9 +106,13 @@ type RealtimePayload = {
 };
 
 type LeadFunnelStep = { key: string; label: string; count: number };
+type LeadSourceBucket = 'meta' | 'google' | 'direct' | 'other';
+type LeadFunnelSource = { key: LeadSourceBucket; label: string; count: number };
 type LeadFunnelPayload = {
   steps: LeadFunnelStep[];
   conversions: (number | null)[];
+  sources?: LeadFunnelSource[];
+  source?: LeadSourceBucket | null;
 };
 
 type LeadInsightsPayload = {
@@ -256,9 +260,24 @@ const FUNNEL_FALLBACK: LeadFunnelStep[] = [
   { key: 'weddings', label: 'Booked Weddings', count: 0 },
 ];
 
-function FunnelMetrics({ funnel }: { funnel: LeadFunnelPayload | null }) {
+const SOURCE_DOT: Record<LeadSourceBucket, string> = {
+  meta: 'bg-blue-500',
+  google: 'bg-amber-500',
+  direct: 'bg-gray-400',
+  other: 'bg-violet-500',
+};
+
+function FunnelMetrics({
+  funnel, sourceFilter, onSourceFilterChange,
+}: {
+  funnel: LeadFunnelPayload | null;
+  sourceFilter: LeadSourceBucket | null;
+  onSourceFilterChange: (v: LeadSourceBucket | null) => void;
+}) {
   const steps = funnel?.steps?.length ? funnel.steps : FUNNEL_FALLBACK;
   const conversions = funnel?.conversions ?? [null, null, null];
+  const sources = funnel?.sources ?? [];
+  const totalSourced = sources.reduce((a, s) => a + s.count, 0);
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6">
@@ -274,6 +293,44 @@ function FunnelMetrics({ funnel }: { funnel: LeadFunnelPayload | null }) {
           </span>
           Live
         </span>
+      </div>
+
+      {/* ── Lead source filter ─────────────────────────────────────────────
+          Pick a source to re-run the entire funnel below over just that
+          traffic. Counts next to each source are for the selected date range. */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mr-1">Source</span>
+        <button
+          type="button"
+          onClick={() => onSourceFilterChange(null)}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+            sourceFilter === null
+              ? 'border-gray-900 bg-gray-900 text-white'
+              : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          All sources
+          <span className={sourceFilter === null ? 'text-gray-300' : 'text-gray-400'}>{totalSourced}</span>
+        </button>
+        {sources.map((s) => {
+          const active = sourceFilter === s.key;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => onSourceFilterChange(active ? null : s.key)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                active
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${SOURCE_DOT[s.key]}`} />
+              {s.label}
+              <span className={active ? 'text-gray-300' : 'text-gray-400'}>{s.count}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Desktop: horizontal funnel with dashed connectors + conversion % */}
@@ -398,6 +455,7 @@ export default function ListingAnalyticsPage() {
 
   const [insights, setInsights] = useState<LeadInsightsPayload | null>(null);
   const [funnel, setFunnel] = useState<LeadFunnelPayload | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<LeadSourceBucket | null>(null);
 
   // ── Alerts dismissed ─────────────────────────────────────────────────────
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
@@ -447,9 +505,14 @@ export default function ListingAnalyticsPage() {
   const dateRangeRef = useRef(dateRange);
   useEffect(() => { dateRangeRef.current = dateRange; }, [dateRange]);
 
-  async function loadFunnel(range: DateRange) {
+  const sourceFilterRef = useRef(sourceFilter);
+  useEffect(() => { sourceFilterRef.current = sourceFilter; }, [sourceFilter]);
+
+  async function loadFunnel(range: DateRange, source: LeadSourceBucket | null = sourceFilterRef.current) {
     try {
-      const res = await fetch(`/api/listing-analytics/lead-funnel?from=${range.from}&to=${range.to}`, { cache: 'no-store' });
+      const params = new URLSearchParams({ from: range.from, to: range.to });
+      if (source) params.set('source', source);
+      const res = await fetch(`/api/listing-analytics/lead-funnel?${params.toString()}`, { cache: 'no-store' });
       if (res.ok) setFunnel(await res.json() as LeadFunnelPayload);
     } catch { /* silent */ }
   }
@@ -502,6 +565,12 @@ export default function ListingAnalyticsPage() {
     void loadFunnel(dateRange);
   }, [dateRange]);
 
+  // Re-run the funnel whenever the lead-source filter changes.
+  useEffect(() => {
+    void loadFunnel(dateRangeRef.current, sourceFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceFilter]);
+
   useEffect(() => {
     void loadRealtime();
     void loadInsights();
@@ -552,7 +621,7 @@ export default function ListingAnalyticsPage() {
       </div>
 
       {/* ── Booking funnel — first thing on the dashboard, always live ──── */}
-      <FunnelMetrics funnel={funnel} />
+      <FunnelMetrics funnel={funnel} sourceFilter={sourceFilter} onSourceFilterChange={setSourceFilter} />
 
       {/* ── Status banners ─────────────────────────────────────────────── */}
       {error && (

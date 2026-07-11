@@ -72,7 +72,8 @@ interface VenueCustomer {
   ceremony_type: string | null; guest_count: number | null;
   rehearsal_date: string | null; coordinator_name: string | null;
   coordinator_phone: string | null; catering_notes: string | null;
-  referral_source: string | null; pipeline_stage: string;
+  /** Read-only, system-attributed traffic source (Meta / Google / Direct / Other). */
+  attributed_source?: string | null; pipeline_stage: string;
   pipeline_id?: string | null;
   stage_id?: string | null;
   pipeline_context?: PipelineContext;
@@ -96,7 +97,13 @@ interface ActivityEntry {
   id: string; activity_type: string; title: string; description: string | null; created_at: string;
 }
 
-const REFERRAL_SOURCES = ['Instagram','Google','Wedding Wire','The Knot','Referral','Venue Website','Facebook','Other'];
+const SOURCE_LABELS: Record<string, string> = { meta: 'Meta', google: 'Google', direct: 'Direct', other: 'Other' };
+const SOURCE_BADGE_STYLES: Record<string, string> = {
+  meta: 'border-blue-200 bg-blue-50 text-blue-700',
+  google: 'border-amber-200 bg-amber-50 text-amber-700',
+  direct: 'border-gray-200 bg-gray-50 text-gray-600',
+  other: 'border-violet-200 bg-violet-50 text-violet-700',
+};
 const CEREMONY_TYPES   = [
   { value: 'ceremony_only',       label: 'Ceremony Only' },
   { value: 'reception_only',      label: 'Reception Only' },
@@ -171,7 +178,7 @@ export default function CustomerDetailPage() {
 
   // Partner edit — separate state from wedding details
   const [editingPartner, setEditingPartner] = useState(false);
-  const [partnerForm,    setPartnerForm]    = useState({ partner_first_name: '', partner_last_name: '', partner_email: '', partner_phone: '', referral_source: '' });
+  const [partnerForm,    setPartnerForm]    = useState({ partner_first_name: '', partner_last_name: '', partner_email: '', partner_phone: '' });
   const [savingPartner,  setSavingPartner]  = useState(false);
   const [partnerError,   setPartnerError]   = useState('');
 
@@ -642,7 +649,6 @@ export default function CustomerDetailPage() {
       partner_last_name:  venueCustomer?.partner_last_name  || '',
       partner_email:      venueCustomer?.partner_email      || '',
       partner_phone:      venueCustomer?.partner_phone      || '',
-      referral_source:    venueCustomer?.referral_source    || '',
     });
     setPartnerError('');
     setEditingPartner(true);
@@ -1105,7 +1111,14 @@ export default function CustomerDetailPage() {
               <div className="flex flex-wrap items-center gap-3 mt-0.5">
                 {customer.email && <a href={`mailto:${customer.email}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"><Mail size={13} />{customer.email}</a>}
                 {customer.phone && <a href={`tel:${customer.phone.replace(/[^\d+]/g, '')}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"><Phone size={13} />{customer.phone}</a>}
-                {venueCustomer?.referral_source && <span className="text-xs text-gray-400 border border-gray-200 rounded-full px-2 py-0.5">via {venueCustomer.referral_source}</span>}
+                {venueCustomer?.attributed_source && SOURCE_LABELS[venueCustomer.attributed_source] && (
+                  <span
+                    title="Traffic source, detected automatically from how this lead first arrived. Read-only."
+                    className={`text-xs border rounded-full px-2 py-0.5 font-medium ${SOURCE_BADGE_STYLES[venueCustomer.attributed_source] ?? SOURCE_BADGE_STYLES.other}`}
+                  >
+                    {SOURCE_LABELS[venueCustomer.attributed_source]}
+                  </span>
+                )}
               </div>
               {conversationsOutreach && (
                 <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -1475,14 +1488,6 @@ export default function CustomerDetailPage() {
                       className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
                   </div>
                 ))}
-                <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Referral Source</label>
-                  <select value={partnerForm.referral_source} onChange={e => setPartnerForm(p => ({...p,referral_source:e.target.value}))}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
-                    <option value="">Unknown</option>
-                    {REFERRAL_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
                 <EditFooter onCancel={() => setEditingPartner(false)} onSave={savePartner} saving={savingPartner} error={partnerError} />
               </div>
             ) : venueCustomer?.partner_first_name ? (

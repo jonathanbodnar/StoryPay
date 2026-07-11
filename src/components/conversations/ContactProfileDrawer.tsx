@@ -30,7 +30,9 @@ interface VenueCustomer {
   wedding_date: string | null; guest_count: number | null;
   ceremony_type: string | null; rehearsal_date: string | null;
   coordinator_name: string | null; coordinator_phone: string | null;
-  catering_notes: string | null; referral_source: string | null;
+  catering_notes: string | null;
+  /** Read-only, system-attributed traffic source (Meta / Google / Direct / Other). */
+  attributed_source?: string | null;
   pipeline_stage: string; pipeline_id?: string | null; stage_id?: string | null;
   wedding_space_id?: string | null;
   venue_spaces?: { id: string; name: string; color: string } | null;
@@ -75,7 +77,13 @@ const CEREMONY_TYPES = [
   { value: 'reception_only', label: 'Reception Only' },
   { value: 'ceremony_reception', label: 'Ceremony & Reception' },
 ];
-const REFERRAL_SOURCES = ['Instagram','Google','Wedding Wire','The Knot','Referral','Venue Website','Facebook','Other'];
+const SOURCE_LABELS: Record<string, string> = { meta: 'Meta', google: 'Google', direct: 'Direct', other: 'Other' };
+const SOURCE_BADGE_STYLES: Record<string, string> = {
+  meta: 'border-blue-200 bg-blue-50 text-blue-700',
+  google: 'border-amber-200 bg-amber-50 text-amber-700',
+  direct: 'border-gray-200 bg-gray-50 text-gray-600',
+  other: 'border-violet-200 bg-violet-50 text-violet-700',
+};
 const FILE_TYPES    = ['contract','floor_plan','vendor_agreement','insurance','photo','other'];
 const FILE_STATUSES = ['pending','received','approved'];
 const FILE_STATUS_COLORS: Record<string, string> = {
@@ -192,7 +200,7 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
       wedding_date: null, guest_count: null,
       ceremony_type: null, rehearsal_date: null,
       coordinator_name: null, coordinator_phone: null,
-      catering_notes: null, referral_source: null,
+      catering_notes: null, attributed_source: null,
       pipeline_stage: '', pipeline_id: null, stage_id: null,
       wedding_space_id: null, venue_spaces: null, pipeline_context: null,
     };
@@ -249,7 +257,7 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
   const [contactError, setContactError] = useState('');
 
   const [editingPartner, setEditingPartner] = useState(false);
-  const [partnerForm, setPartnerForm] = useState({ partner_first_name: '', partner_last_name: '', partner_email: '', partner_phone: '', referral_source: '' });
+  const [partnerForm, setPartnerForm] = useState({ partner_first_name: '', partner_last_name: '', partner_email: '', partner_phone: '' });
   const [savingPartner, setSavingPartner] = useState(false);
   const [partnerError, setPartnerError] = useState('');
 
@@ -710,7 +718,14 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
                   <div className="mt-0.5 flex flex-wrap items-center gap-3 text-sm text-gray-500">
                     {displayEmail && <span className="flex items-center gap-1"><Mail size={12}/>{displayEmail}</span>}
                     {vc.phone && <span className="flex items-center gap-1"><Phone size={12}/>{vc.phone}</span>}
-                    {vc.referral_source && <span className="rounded-full border border-gray-200 px-2 py-0.5 text-xs">via {vc.referral_source}</span>}
+                    {vc.attributed_source && SOURCE_LABELS[vc.attributed_source] && (
+                      <span
+                        title="Traffic source, detected automatically from how this lead first arrived. Read-only."
+                        className={`rounded-full border px-2 py-0.5 text-xs font-medium ${SOURCE_BADGE_STYLES[vc.attributed_source] ?? SOURCE_BADGE_STYLES.other}`}
+                      >
+                        {SOURCE_LABELS[vc.attributed_source]}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -802,7 +817,7 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
                   <div className="rounded-xl border border-gray-200 bg-white p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5"><Heart size={14}/>Partner</h4>
-                      {!editingPartner && <button onClick={()=>{setPartnerForm({partner_first_name:vc.partner_first_name||'',partner_last_name:vc.partner_last_name||'',partner_email:vc.partner_email||'',partner_phone:vc.partner_phone||'',referral_source:vc.referral_source||''});setPartnerError('');setEditingPartner(true);}} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11}/>{vc.partner_first_name?'Edit':'Add'}</button>}
+                      {!editingPartner && <button onClick={()=>{setPartnerForm({partner_first_name:vc.partner_first_name||'',partner_last_name:vc.partner_last_name||'',partner_email:vc.partner_email||'',partner_phone:vc.partner_phone||''});setPartnerError('');setEditingPartner(true);}} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11}/>{vc.partner_first_name?'Edit':'Add'}</button>}
                     </div>
                     {editingPartner ? (
                       <div className="space-y-3">
@@ -816,10 +831,6 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
                           <div key={f.k}><label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
                             <input type={f.t} value={partnerForm[f.k]} onChange={(e)=>setPartnerForm((p)=>({...p,[f.k]:e.target.value}))} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"/></div>
                         ))}
-                        <div><label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Referral Source</label>
-                          <select value={partnerForm.referral_source} onChange={(e)=>setPartnerForm((p)=>({...p,referral_source:e.target.value}))} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none">
-                            <option value="">Unknown</option>{REFERRAL_SOURCES.map((s)=><option key={s} value={s}>{s}</option>)}
-                          </select></div>
                         <EditFooter onCancel={()=>setEditingPartner(false)} onSave={()=>void savePartner()} saving={savingPartner} err={partnerError}/>
                       </div>
                     ) : vc.partner_first_name ? (

@@ -14,9 +14,41 @@ import {
 } from '@/lib/venue-customer-db-error';
 import { applySmsDndForVenueCustomer, clearSmsDndForVenueCustomer } from '@/lib/sms-compliance';
 import { schedulePushVenueCustomerToGhl } from '@/lib/ghl-push-contact';
+import { bucketLeadSource } from '@/lib/lead-source';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+/**
+ * Resolve the read-only, system-attributed traffic source (Meta / Google /
+ * Direct / Other) for a contact by looking up their matching lead's immutable
+ * first-touch data. Best-effort — returns null if there's no linked lead. This
+ * is derived, never editable, so the value can't be hand-changed to skew
+ * reporting.
+ */
+async function resolveAttributedSource(
+  venueId: string,
+  email: string,
+): Promise<string | null> {
+  const normalized = (email || '').trim().toLowerCase();
+  if (!normalized) return null;
+  const { data } = await supabaseAdmin
+    .from('leads')
+    .select('first_touch_utm, source, referral_source, created_at')
+    .eq('venue_id', venueId)
+    .ilike('email', normalized)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  const lead = (data ?? [])[0] as
+    | { first_touch_utm: Record<string, unknown> | null; source: string | null; referral_source: string | null }
+    | undefined;
+  if (!lead) return null;
+  return bucketLeadSource({
+    first_touch_utm: lead.first_touch_utm,
+    source: lead.source,
+    referral_source: lead.referral_source,
+  });
+}
 
 async function fetchById(venueId: string, id: string) {
   const { data, error } = await supabaseAdmin
@@ -55,7 +87,8 @@ export async function GET(
       pipeline_id: (r.pipeline_id as string | null) ?? null,
       stage_id: (r.stage_id as string | null) ?? null,
     });
-    return NextResponse.json(ctx ? { ...row, pipeline_context: ctx } : row);
+    const attributed_source = await resolveAttributedSource(venueId, String(r.customer_email ?? ''));
+    return NextResponse.json({ ...row, attributed_source, ...(ctx ? { pipeline_context: ctx } : {}) });
   } catch (err) {
     console.error('[venue-customers GET by id]', err);
     const msg = err instanceof Error ? err.message : String(err);
@@ -84,7 +117,6 @@ const UPDATABLE = [
   'coordinator_name',
   'coordinator_phone',
   'catering_notes',
-  'referral_source',
   'pipeline_stage',
   'pipeline_id',
   'stage_id',
@@ -163,7 +195,8 @@ export async function PATCH(
       pipeline_id: (r.pipeline_id as string | null) ?? null,
       stage_id: (r.stage_id as string | null) ?? null,
     });
-    return NextResponse.json(ctx ? { ...row, pipeline_context: ctx } : row);
+    const attributed_source = await resolveAttributedSource(venueId, String(r.customer_email ?? ''));
+    return NextResponse.json({ ...row, attributed_source, ...(ctx ? { pipeline_context: ctx } : {}) });
   }
 
   updates.updated_at = new Date().toISOString();
@@ -280,7 +313,8 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json(ctx ? { ...refreshed, pipeline_context: ctx } : refreshed);
+    const attributed_source = await resolveAttributedSource(venueId, String(rr.customer_email ?? ''));
+    return NextResponse.json({ ...refreshed, attributed_source, ...(ctx ? { pipeline_context: ctx } : {}) });
   } catch (err) {
     console.error('[venue-customers PATCH refetch]', err);
     const msg = err instanceof Error ? err.message : String(err);
