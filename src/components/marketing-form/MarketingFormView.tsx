@@ -677,6 +677,8 @@ export function MarketingFormView({
           const v = u.get(key);
           if (v) fd.append(key, v);
         }
+        // Browser referrer — zero-setup fallback signal for source attribution.
+        if (document.referrer) fd.append('referrer', document.referrer);
       }
       try {
         const res = await fetch(`/api/public/forms/${embedToken}/submit`, {

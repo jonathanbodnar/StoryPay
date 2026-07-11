@@ -16,9 +16,17 @@
  *              a referral, the venue's own website, etc.)
  *
  * Buckets are intentionally coarse (Meta / Google / Direct / Other) so the
- * dashboard funnel and per-contact badge stay simple to read. Accuracy is only
- * as good as the tags on the links people click — untagged traffic that really
- * came from an ad lands in "Direct".
+ * dashboard funnel and per-contact badge stay simple to read.
+ *
+ * Two layers of signal, most precise first:
+ *   1. First-touch UTM tags (or legacy manual referral text) — used when present.
+ *   2. Browser referrer host fallback (facebook.com, instagram.com, google.*,
+ *      etc.) — captured automatically on every click with zero setup, so even
+ *      untagged ad/search traffic gets attributed instead of dumping into
+ *      "Direct". Stored as `referrer` inside the first_touch_utm jsonb.
+ * Only genuinely source-less visits (no tag, no external referrer) land in
+ * "Direct". The referrer can't distinguish paid vs. organic within a platform,
+ * but for these four buckets that distinction doesn't matter.
  */
 
 export type LeadSourceBucket = 'meta' | 'google' | 'direct' | 'other';
@@ -46,6 +54,43 @@ const GOOGLE_TOKENS = new Set([
 
 function norm(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+/** Extract a lowercased hostname from a referrer URL string. Empty on failure. */
+function referrerHost(value: unknown): string {
+  const raw = norm(value);
+  if (!raw) return '';
+  try {
+    return new URL(raw).hostname.toLowerCase();
+  } catch {
+    // Not a full URL — treat the raw value as a bare host if it looks like one.
+    return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(raw) ? raw : '';
+  }
+}
+
+/** Our own domains — an internal referrer tells us nothing about origin. */
+function isInternalHost(host: string): boolean {
+  return (
+    host.includes('storyvenue') ||
+    host.includes('storypay') ||
+    host === 'localhost' ||
+    host.startsWith('127.') ||
+    host.startsWith('192.168.')
+  );
+}
+
+/**
+ * Classify a referrer hostname into a bucket, or null when it carries no useful
+ * signal (empty or one of our own domains).
+ */
+function bucketFromReferrer(host: string): LeadSourceBucket | null {
+  if (!host || isInternalHost(host)) return null;
+  if (/(^|\.)(facebook|instagram)\.com$/.test(host) || host.includes('facebook') || host.includes('instagram') || host === 'fb.com' || host === 'fb.me' || host === 'ig.me') {
+    return 'meta';
+  }
+  if (/(^|\.)google\./.test(host)) return 'google';
+  // A real external site we don't specifically recognize → Other, not Direct.
+  return 'other';
 }
 
 export interface LeadSourceInput {
@@ -95,12 +140,16 @@ export function bucketLeadSource(input: LeadSourceInput): LeadSourceBucket {
     return 'google';
   }
 
-  // ── Direct — no meaningful source signal at all ───────────────────────
-  // A bare listing visit (source='directory') with no UTM and no referral is
-  // treated as Direct: someone opened the link with no tracking tag on it.
-  const hasSignal = Boolean(utmSource) || Boolean(ref);
-  if (!hasSignal) return 'direct';
+  // ── Known tag/referral that isn't Meta or Google → Other ──────────────
+  const hasTagSignal = Boolean(utmSource) || Boolean(ref);
+  if (hasTagSignal) return 'other';
 
-  // ── Other — a known source that isn't Meta or Google ──────────────────
-  return 'other';
+  // ── Referrer fallback (no tag at all) ─────────────────────────────────
+  // Captured automatically by the browser, so untagged ad/search traffic
+  // still gets attributed instead of collapsing into Direct.
+  const fromReferrer = bucketFromReferrer(referrerHost(utm.referrer));
+  if (fromReferrer) return fromReferrer;
+
+  // ── Direct — truly no source signal (no tag, no external referrer) ────
+  return 'direct';
 }

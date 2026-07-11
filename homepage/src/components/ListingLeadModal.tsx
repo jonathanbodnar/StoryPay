@@ -21,6 +21,23 @@ interface Props {
 
 type Status = 'idle' | 'submitting' | 'success' | 'error';
 
+/** Capture first-touch attribution: any UTM tags on the URL plus the browser
+ *  referrer. The referrer is the zero-setup fallback so untagged ad/search
+ *  traffic still gets attributed instead of collapsing into "Direct". */
+function captureAttribution(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  const out: Record<string, string> = {};
+  try {
+    const p = new URLSearchParams(window.location.search);
+    for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']) {
+      const v = p.get(k);
+      if (v) out[k] = v;
+    }
+    if (document.referrer) out.referrer = document.referrer;
+  } catch { /* noop */ }
+  return out;
+}
+
 export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confirmationBase = '' }: Props) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>('idle');
@@ -58,6 +75,7 @@ export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confi
           venue_matters:    form.venue_matters,
           message:          form.message.trim() || undefined,
           source:           'directory',
+          ...captureAttribution(),
         }),
       });
 

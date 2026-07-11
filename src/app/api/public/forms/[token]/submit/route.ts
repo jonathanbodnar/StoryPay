@@ -243,9 +243,16 @@ export async function POST(
     const v = fd.get(k);
     if (typeof v === 'string' && v.trim()) utm[k] = v.trim();
   }
+  // Browser referrer — a zero-setup fallback signal for source attribution.
+  const referrerVal = fd.get('referrer');
+  if (typeof referrerVal === 'string' && referrerVal.trim()) {
+    utm.referrer = referrerVal.trim().slice(0, 500);
+  }
   if (Object.keys(utm).length > 0) {
     (payload as Record<string, unknown>)._utm = utm;
   }
+  // First-touch attribution stored on any lead we create below.
+  const firstTouchUtm: Record<string, string> = { ...utm };
 
   for (const key of new Set(fd.keys())) {
     const m = key.match(NAME_RE);
@@ -343,6 +350,7 @@ export async function POST(
               pipeline_id: stageRow.pipeline_id,
               stage_id:    stageRow.id,
               position:    0,
+              first_touch_utm: firstTouchUtm,
             })
             .select('id')
             .maybeSingle();
@@ -404,6 +412,7 @@ export async function POST(
             phone:      phoneVal || null,
             source:     'form',
             status:     'lead',
+            first_touch_utm: firstTouchUtm,
           })
           .select('id')
           .maybeSingle();

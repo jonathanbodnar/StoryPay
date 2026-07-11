@@ -48,6 +48,8 @@ interface LeadPayload {
   utm_term?: string;
   utm_content?: string;
   referral_source?: string;
+  /** Browser document.referrer captured client-side — used as a source fallback. */
+  referrer?: string;
 }
 
 function isEmail(s: string): boolean {
@@ -182,6 +184,11 @@ export async function POST(request: NextRequest) {
   for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const) {
     const v = payload[k];
     if (typeof v === 'string' && v.trim()) utm[k] = v.trim();
+  }
+  // Store the browser referrer alongside the UTMs so source attribution can
+  // fall back to it when no UTM tag was set on the link.
+  if (typeof payload.referrer === 'string' && payload.referrer.trim()) {
+    utm.referrer = payload.referrer.trim().slice(0, 500);
   }
 
   const insertPayload: Record<string, unknown> = {
