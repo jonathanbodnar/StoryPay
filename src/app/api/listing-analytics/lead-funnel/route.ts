@@ -84,6 +84,8 @@ export async function GET(req: Request) {
     days = Math.min(parseInt(url.searchParams.get('days') || '30', 10), 365);
     since = new Date(Date.now() - days * 86400000).toISOString();
   }
+  // Visitor counting needs a bounded window on both ends.
+  if (!until) until = new Date().toISOString();
 
   let leadsQuery = supabaseAdmin
     .from('leads')
@@ -154,7 +156,58 @@ export async function GET(req: Request) {
     count: sourceCounts[key],
   }));
 
+  // ── Visitors (top of funnel) ──────────────────────────────────────────
+  // Unique listing-page sessions in the same window, bucketed by the SAME
+  // source logic (utm + referrer). This becomes the leftmost funnel step so
+  // the owner can see traffic → lead conversion. Counted independently of the
+  // leads table (a session can't be hard-linked to a lead), so visitors → leads
+  // is a same-window approximation, like every other step here.
+  const visitorSessions = new Map<string, LeadSourceBucket>();
+  try {
+    const PAGE = 1000;
+    const MAX_PAGES = 60;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const { data, error } = await supabaseAdmin
+        .from('listing_events')
+        .select('session_id, utm_source, utm_medium, utm_campaign, referrer')
+        .eq('venue_id', venueId)
+        .eq('event_type', 'page_view')
+        .gte('created_at', since)
+        .lte('created_at', until)
+        .order('created_at', { ascending: true })
+        .range(page * PAGE, page * PAGE + PAGE - 1);
+      if (error) break; // table missing / query failed → treat as zero visitors
+      const batch = (data ?? []) as Array<{
+        session_id: string;
+        utm_source: string | null;
+        utm_medium: string | null;
+        utm_campaign: string | null;
+        referrer: string | null;
+      }>;
+      for (const row of batch) {
+        if (!row.session_id || visitorSessions.has(row.session_id)) continue;
+        const bucket = bucketLeadSource({
+          first_touch_utm: {
+            utm_source: row.utm_source ?? undefined,
+            utm_medium: row.utm_medium ?? undefined,
+            utm_campaign: row.utm_campaign ?? undefined,
+            referrer: row.referrer ?? undefined,
+          },
+        });
+        visitorSessions.set(row.session_id, bucket);
+      }
+      if (batch.length < PAGE) break;
+    }
+  } catch { /* no visitor data — visitors step shows 0 */ }
+
+  let visitorsCount = 0;
+  for (const bucket of visitorSessions.values()) {
+    if (sourceFilter && bucket !== sourceFilter) continue;
+    visitorsCount += 1;
+  }
+
   const steps = [
+    { key: 'visitors', label: 'Listing Visitors', count: visitorsCount },
     { key: 'leads', label: 'Leads', count: leadsCount },
     { key: 'conversations', label: 'Conversations Started', count: conversations },
     { key: 'tours', label: 'Booked Tours', count: tours },

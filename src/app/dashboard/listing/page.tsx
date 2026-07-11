@@ -252,8 +252,9 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 // ── Booking funnel (top-of-dashboard) ─────────────────────────────────────────
-const FUNNEL_ICONS = [Inbox, MessageCircle, CalendarCheck, Heart];
+const FUNNEL_ICONS = [Users, Inbox, MessageCircle, CalendarCheck, Heart];
 const FUNNEL_FALLBACK: LeadFunnelStep[] = [
+  { key: 'visitors', label: 'Listing Visitors', count: 0 },
   { key: 'leads', label: 'Leads', count: 0 },
   { key: 'conversations', label: 'Conversations Started', count: 0 },
   { key: 'tours', label: 'Booked Tours', count: 0 },
@@ -275,7 +276,7 @@ function FunnelMetrics({
   onSourceFilterChange: (v: LeadSourceBucket | null) => void;
 }) {
   const steps = funnel?.steps?.length ? funnel.steps : FUNNEL_FALLBACK;
-  const conversions = funnel?.conversions ?? [null, null, null];
+  const conversions = funnel?.conversions ?? [null, null, null, null];
   const sources = funnel?.sources ?? [];
   const totalSourced = sources.reduce((a, s) => a + s.count, 0);
 
@@ -284,7 +285,7 @@ function FunnelMetrics({
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Booking funnel</h2>
-          <p className="text-xs text-gray-400 mt-0.5">How leads progress from inquiry to a booked wedding</p>
+          <p className="text-xs text-gray-400 mt-0.5">From listing visitors through to a booked wedding</p>
         </div>
         <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
           <span className="relative flex h-2 w-2">
