@@ -1426,6 +1426,47 @@ function KanbanCard({
         </div>
       )}
 
+      {/* ── Source badge ────────────────────────────────────────────── */}
+      {(() => {
+        const utm = lead.first_touch_utm as Record<string, unknown> | null | undefined;
+        const fbclid = utm && typeof utm.fbclid === 'string' && utm.fbclid;
+        const utmSrc = utm && typeof utm.utm_source === 'string' ? utm.utm_source.toLowerCase() : '';
+        const utmMed = utm && typeof utm.utm_medium === 'string' ? utm.utm_medium.toLowerCase() : '';
+        const ref = utm && typeof utm.referrer === 'string' ? utm.referrer.toLowerCase() : '';
+        const src = lead.source?.toLowerCase() ?? '';
+
+        let bucket: string | null = null;
+        let label = '';
+        let cls = '';
+
+        if (fbclid) {
+          bucket = 'meta_paid';
+        } else if (utmSrc.includes('facebook') || utmSrc.includes('fb') || utmMed.includes('facebook') || utmSrc.includes('instagram') || utmMed.includes('instagram') || utmMed.includes('paid_social')) {
+          bucket = 'meta';
+        } else if (utmSrc.includes('google') || utmMed === 'cpc' || utmMed === 'ppc' || utmMed === 'search') {
+          bucket = 'google';
+        } else if (!utmSrc && (ref.includes('facebook.com') || ref.includes('instagram.com') || ref.includes('fb.com') || ref.includes('l.facebook'))) {
+          bucket = 'meta';
+        } else if (!utmSrc && ref.includes('google.')) {
+          bucket = 'google';
+        } else if (utmSrc || src === 'form' || src === 'directory') {
+          bucket = 'direct';
+        }
+
+        if (!bucket) return null;
+
+        if (bucket === 'meta_paid') { label = 'Meta — Paid Ad'; cls = 'border-blue-300 bg-blue-100 text-blue-800'; }
+        else if (bucket === 'meta')  { label = 'Meta';            cls = 'border-blue-200 bg-blue-50 text-blue-700'; }
+        else if (bucket === 'google'){ label = 'Google';          cls = 'border-amber-200 bg-amber-50 text-amber-700'; }
+        else                         { label = 'Direct';          cls = 'border-gray-200 bg-gray-50 text-gray-500'; }
+
+        return (
+          <span className={`mt-1.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${cls}`}>
+            {label}
+          </span>
+        );
+      })()}
+
       {/* ── Action buttons ──────────────────────────────────────────── */}
       <div
         className="mt-2 flex items-center gap-1 pt-2 border-t border-gray-100"
@@ -1522,8 +1563,8 @@ function KanbanCard({
       </div>
 
       {/* ── Footer: created date ────────────────────────────────────── */}
-      <div className="mt-1.5 flex items-center gap-1 text-[10px] text-gray-400">
-        <Clock className="w-2.5 h-2.5" /> {formatShortDate(lead.created_at, venueTz)}
+      <div className="mt-1.5 text-[10px] text-gray-400">
+        Lead Created: {formatShortDate(lead.created_at, venueTz)}
       </div>
     </div>
   );
