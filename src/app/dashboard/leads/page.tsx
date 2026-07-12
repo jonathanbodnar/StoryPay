@@ -1460,10 +1460,11 @@ function KanbanCard({
         else if (bucket === 'google'){ label = 'Google';          cls = 'border-amber-200 bg-amber-50 text-amber-700'; }
         else                         { label = 'Direct';          cls = 'border-gray-200 bg-gray-50 text-gray-500'; }
 
+        void cls;
         return (
-          <span className={`mt-1.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${cls}`}>
-            {label}
-          </span>
+          <p className="mt-1 text-[10px] text-gray-400">
+            Source: {label}
+          </p>
         );
       })()}
 
