@@ -21,10 +21,12 @@ interface Props {
 
 type Status = 'idle' | 'submitting' | 'success' | 'error';
 
-/** Capture first-touch attribution: any UTM tags on the URL plus the browser
- *  referrer. The referrer is the zero-setup fallback so untagged ad/search
- *  traffic still gets attributed instead of collapsing into "Direct". */
-function captureAttribution(): Record<string, string> {
+/**
+ * Capture first-touch attribution: any UTM tags on the URL, the fbclid Meta
+ * auto-appends on every paid-ad click (stored by ListingTracker before the
+ * param disappears), and the browser referrer as a zero-setup fallback.
+ */
+function captureAttribution(venueId: string): Record<string, string> {
   if (typeof window === 'undefined') return {};
   const out: Record<string, string> = {};
   try {
@@ -33,6 +35,12 @@ function captureAttribution(): Record<string, string> {
       const v = p.get(k);
       if (v) out[k] = v;
     }
+    // Prefer live fbclid from URL; fall back to sessionStorage copy captured
+    // when the page first loaded (ListingTracker stores it there).
+    const fbclid =
+      p.get('fbclid') ??
+      (() => { try { return sessionStorage.getItem(`fbclid_${venueId}`); } catch { return null; } })();
+    if (fbclid) out.fbclid = fbclid;
     if (document.referrer) out.referrer = document.referrer;
   } catch { /* noop */ }
   return out;
@@ -75,7 +83,7 @@ export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confi
           venue_matters:    form.venue_matters,
           message:          form.message.trim() || undefined,
           source:           'directory',
-          ...captureAttribution(),
+          ...captureAttribution(venueId),
         }),
       });
 

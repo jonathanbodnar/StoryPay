@@ -14,7 +14,7 @@ import {
 } from '@/lib/venue-customer-db-error';
 import { applySmsDndForVenueCustomer, clearSmsDndForVenueCustomer } from '@/lib/sms-compliance';
 import { schedulePushVenueCustomerToGhl } from '@/lib/ghl-push-contact';
-import { bucketLeadSource } from '@/lib/lead-source';
+import { bucketLeadSource, isMetaPaidAd } from '@/lib/lead-source';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -43,11 +43,16 @@ async function resolveAttributedSource(
     | { first_touch_utm: Record<string, unknown> | null; source: string | null; referral_source: string | null }
     | undefined;
   if (!lead) return null;
-  return bucketLeadSource({
+  const bucket = bucketLeadSource({
     first_touch_utm: lead.first_touch_utm,
     source: lead.source,
     referral_source: lead.referral_source,
   });
+  // Narrow Meta further: if fbclid was captured we know it was a paid ad click.
+  if (bucket === 'meta' && isMetaPaidAd({ first_touch_utm: lead.first_touch_utm })) {
+    return 'meta_paid';
+  }
+  return bucket;
 }
 
 async function fetchById(venueId: string, id: string) {

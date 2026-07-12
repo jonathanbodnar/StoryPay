@@ -41,6 +41,29 @@ function getUtmParams(): { utm_source?: string; utm_medium?: string; utm_campaig
   }
 }
 
+/**
+ * Grab the fbclid Meta auto-appends to every paid ad click and persist it in
+ * sessionStorage so the lead modal can attach it to the form submission even
+ * after the page has re-rendered and the URL param is gone.
+ */
+function captureFbclid(venueId: string): void {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const fbclid = p.get('fbclid');
+    if (fbclid) {
+      sessionStorage.setItem(`fbclid_${venueId}`, fbclid);
+    }
+  } catch { /* noop */ }
+}
+
+export function getStoredFbclid(venueId: string): string | null {
+  try {
+    return sessionStorage.getItem(`fbclid_${venueId}`);
+  } catch {
+    return null;
+  }
+}
+
 export function ListingTracker({ venueId, referrer }: Props) {
   const sessionId = useRef<string | null>(null);
   const scrollFired = useRef({ s25: false, s50: false, s75: false, s100: false });
@@ -75,6 +98,11 @@ export function ListingTracker({ venueId, referrer }: Props) {
 
   useEffect(() => {
     sessionId.current = getOrCreateSessionId(venueId);
+
+    // Capture fbclid before the query string can disappear due to client-side
+    // navigation. Meta auto-appends this on every paid-ad click; organic posts
+    // do not carry it, so its presence alone identifies a paid visit.
+    captureFbclid(venueId);
 
     // Log the target URL so it's easy to verify in DevTools on the listing page
     console.log(`[ListingTracker] venue=${venueId} url=${getTrackUrl()}`);

@@ -243,6 +243,12 @@ export async function POST(
     const v = fd.get(k);
     if (typeof v === 'string' && v.trim()) utm[k] = v.trim();
   }
+  // fbclid — Meta auto-appends this on every paid-ad click. Presence alone is
+  // a definitive paid-Meta signal with zero manual UTM setup required.
+  const fbclidVal = fd.get('fbclid');
+  if (typeof fbclidVal === 'string' && fbclidVal.trim()) {
+    utm.fbclid = fbclidVal.trim().slice(0, 200);
+  }
   // Browser referrer — a zero-setup fallback signal for source attribution.
   const referrerVal = fd.get('referrer');
   if (typeof referrerVal === 'string' && referrerVal.trim()) {

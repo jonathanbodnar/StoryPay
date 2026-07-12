@@ -50,6 +50,12 @@ interface LeadPayload {
   referral_source?: string;
   /** Browser document.referrer captured client-side — used as a source fallback. */
   referrer?: string;
+  /**
+   * Facebook Click ID — Meta auto-appends this to every paid-ad click URL.
+   * Its presence definitively identifies the lead as paid Meta traffic with
+   * zero manual UTM setup required.
+   */
+  fbclid?: string;
 }
 
 function isEmail(s: string): boolean {
@@ -184,6 +190,10 @@ export async function POST(request: NextRequest) {
   for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const) {
     const v = payload[k];
     if (typeof v === 'string' && v.trim()) utm[k] = v.trim();
+  }
+  // fbclid — definitive paid-Meta signal; truncated to a safe length.
+  if (typeof payload.fbclid === 'string' && payload.fbclid.trim()) {
+    utm.fbclid = payload.fbclid.trim().slice(0, 200);
   }
   // Store the browser referrer alongside the UTMs so source attribution can
   // fall back to it when no UTM tag was set on the link.

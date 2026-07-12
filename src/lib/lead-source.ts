@@ -94,12 +94,24 @@ function bucketFromReferrer(host: string): LeadSourceBucket | null {
 }
 
 export interface LeadSourceInput {
-  /** first_touch_utm jsonb: { utm_source, utm_medium, utm_campaign, ... } */
+  /** first_touch_utm jsonb: { utm_source, utm_medium, utm_campaign, referrer, fbclid, ... } */
   first_touch_utm?: Record<string, unknown> | null;
   /** ingest `source` column (e.g. 'directory', 'import', 'manual', 'ghl'). */
   source?: string | null;
   /** legacy manual referral_source free text (fallback signal only). */
   referral_source?: string | null;
+}
+
+/**
+ * Returns true when the first-touch data proves the visit came from a paid
+ * Meta ad — i.e. an fbclid was present on the URL (Meta auto-appends this on
+ * every ad click, organic posts do not get it).
+ */
+export function isMetaPaidAd(input: LeadSourceInput): boolean {
+  const utm = (input.first_touch_utm && typeof input.first_touch_utm === 'object')
+    ? (input.first_touch_utm as Record<string, unknown>)
+    : {};
+  return Boolean(norm(utm.fbclid));
 }
 
 /**
@@ -115,6 +127,10 @@ export function bucketLeadSource(input: LeadSourceInput): LeadSourceBucket {
   const utmMedium = norm(utm.utm_medium);
   const utmCampaign = norm(utm.utm_campaign);
   const ref = norm(input.referral_source);
+
+  // fbclid is auto-appended by Meta on every paid ad click with zero setup.
+  // Its presence is a definitive signal that the visit came from a paid Meta ad.
+  if (norm(utm.fbclid)) return 'meta';
 
   // Combined haystack for loose substring checks (medium/campaign often carry
   // "paid_social", "facebook", etc. even when utm_source is generic).

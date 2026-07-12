@@ -97,9 +97,16 @@ interface ActivityEntry {
   id: string; activity_type: string; title: string; description: string | null; created_at: string;
 }
 
-const SOURCE_LABELS: Record<string, string> = { meta: 'Meta', google: 'Google', direct: 'Direct', other: 'Other' };
+const SOURCE_LABELS: Record<string, string> = {
+  meta: 'Meta',
+  meta_paid: 'Meta — Paid Ad',
+  google: 'Google',
+  direct: 'Direct',
+  other: 'Other',
+};
 const SOURCE_BADGE_STYLES: Record<string, string> = {
   meta: 'border-blue-200 bg-blue-50 text-blue-700',
+  meta_paid: 'border-blue-300 bg-blue-100 text-blue-800',
   google: 'border-amber-200 bg-amber-50 text-amber-700',
   direct: 'border-gray-200 bg-gray-50 text-gray-600',
   other: 'border-violet-200 bg-violet-50 text-violet-700',

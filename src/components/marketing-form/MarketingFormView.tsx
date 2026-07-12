@@ -677,6 +677,11 @@ export function MarketingFormView({
           const v = u.get(key);
           if (v) fd.append(key, v);
         }
+        // fbclid — Meta auto-appends this on every paid-ad click (organic
+        // posts do not carry it), so capturing it definitively marks the lead
+        // as paid Meta traffic with zero manual setup.
+        const fbclid = u.get('fbclid');
+        if (fbclid) fd.append('fbclid', fbclid);
         // Browser referrer — zero-setup fallback signal for source attribution.
         if (document.referrer) fd.append('referrer', document.referrer);
       }
