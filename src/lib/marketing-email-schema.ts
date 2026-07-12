@@ -318,7 +318,7 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
  * Saved segments themselves can ONLY hold `all_leads`/`tags_any`/`stages`
  * to prevent cycles — never another `saved_segment`.
  */
-export type SegmentType = 'all_leads' | 'tags_any' | 'stages' | 'saved_segment';
+export type SegmentType = 'all_leads' | 'tags_any' | 'stages' | 'saved_segment' | 'specific_contacts';
 
 export interface CampaignSegment {
   type: SegmentType;
@@ -326,6 +326,12 @@ export interface CampaignSegment {
   stage_ids?: string[];
   /** When type === 'saved_segment', the marketing_segments.id to resolve against */
   saved_segment_id?: string;
+  /**
+   * When type === 'specific_contacts', the list of lead emails to include.
+   * Only leads whose email matches one of these values (case-insensitive) and
+   * who have not unsubscribed will receive the campaign.
+   */
+  contact_emails?: string[];
   /** Exclude leads currently in any of these pipeline stages */
   exclude_stage_ids?: string[];
   /** Only leads with a wedding date set */
@@ -360,6 +366,15 @@ export function parseSegment(raw: unknown): CampaignSegment {
   };
   if (t === 'saved_segment' && typeof raw.saved_segment_id === 'string' && raw.saved_segment_id.trim()) {
     return { type: 'saved_segment', saved_segment_id: raw.saved_segment_id.trim(), ...extra };
+  }
+  if (t === 'specific_contacts') {
+    return {
+      type: 'specific_contacts',
+      contact_emails: Array.isArray(raw.contact_emails)
+        ? raw.contact_emails.filter((x): x is string => typeof x === 'string')
+        : [],
+      ...extra,
+    };
   }
   if (t === 'tags_any' && Array.isArray(raw.tag_ids)) {
     return {

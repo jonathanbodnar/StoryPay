@@ -128,6 +128,23 @@ export async function resolveCampaignRecipients(
 
   const selectCols = 'id, email, stage_id, wedding_date, marketing_email_opt_in';
 
+  if (effective.type === 'specific_contacts') {
+    const emails = (effective.contact_emails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean);
+    if (emails.length === 0) return [];
+    const { data: leads, error } = await supabaseAdmin
+      .from('leads')
+      .select(selectCols)
+      .eq('venue_id', venueId)
+      .in('email', emails);
+    if (error || !leads) return [];
+    return applyBehaviorFilters(
+      leads as Array<{ id: string; email: string | null; stage_id: string | null; wedding_date: string | null; marketing_email_opt_in: boolean | null }>,
+      effective,
+      suppressed,
+      clickedSet,
+    );
+  }
+
   if (effective.type === 'tags_any' && (effective.tag_ids?.length ?? 0) > 0) {
     const { data: rows, error } = await supabaseAdmin
       .from('lead_tag_assignments')
