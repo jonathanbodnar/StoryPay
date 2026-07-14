@@ -80,7 +80,7 @@ function PhaseCard({
   const effectiveEnabled = locked ? false : enabled;
 
   return (
-    <div className={`rounded-2xl border bg-white transition-shadow overflow-hidden ${effectiveEnabled ? 'shadow-sm border-gray-200' : 'border-gray-100 opacity-60'}`}>
+    <div className={`rounded-2xl border bg-white overflow-hidden ${effectiveEnabled ? 'border-gray-200' : 'border-gray-200 opacity-60'}`}>
       <div className="flex items-start gap-4 p-5">
         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent}`}>
           {icon}
@@ -246,7 +246,7 @@ function MessageBlock({
   const preview = step.body?.trim().slice(0, 60);
 
   return (
-    <div className={`rounded-xl border bg-white overflow-hidden ${expanded ? 'border-gray-300 shadow-sm' : 'border-gray-200'}`}>
+    <div className={`rounded-xl border bg-white overflow-hidden ${expanded ? 'border-gray-300' : 'border-gray-200'}`}>
       <button
         type="button"
         className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
@@ -1140,7 +1140,7 @@ export default function BookingSystemPage() {
         <div className="flex items-center gap-2.5 shrink-0">
           {saving && <Loader2 size={14} className="animate-spin text-gray-400" />}
           {saved  && <span className="flex items-center gap-1 text-[12px] font-medium text-emerald-600"><CheckCircle2 size={13} /> Saved</span>}
-          <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2">
             <span className="text-[12px] font-medium text-gray-700">
               {cfg.masterEnabled ? 'System on' : 'System off'}
             </span>
