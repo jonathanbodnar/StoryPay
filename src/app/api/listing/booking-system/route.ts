@@ -123,6 +123,8 @@ export interface BookingSystemConfig {
   aiMaxGapDays:           number;
   aiMessages:             string[];
   aiNotifyEmails:         string[];
+  /** Venue's own email — prefilled as the default recipient for test sends. */
+  ownerEmail:             string;
   // Eligibility
   a2pVerified:            boolean;
   ghlConnected:           boolean;
@@ -243,6 +245,7 @@ export async function GET() {
     aiMaxGapDays:       (v.booking_ai_max_gap_days as number | null) ?? 3,
     aiMessages:         (v.booking_ai_messages     as string[] | null) ?? DEFAULT_AI_MESSAGES,
     aiNotifyEmails:     (v.ai_concierge_notify_emails as string[] | null) ?? [],
+    ownerEmail:         ((v.notification_email as string | null)?.trim() || (v.email as string | null)?.trim()) ?? '',
     a2pVerified:        (v.a2p_verified  as boolean | null) ?? false,
     ghlConnected:       (v.ghl_connected as boolean | null) ?? false,
     aiConciergeAllowed: await venueAllowsAiConcierge(venueId),

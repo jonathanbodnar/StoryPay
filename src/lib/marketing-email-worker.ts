@@ -1569,7 +1569,7 @@ async function sendAutomationSmsToLead(
  * `overrideName` is used by the quick-compose workflow step (venues can
  * customise per-step from_name / from_email there).
  */
-async function resolveVenueFromAddress(
+export async function resolveVenueFromAddress(
   venueId: string,
   overrideName?: string,
   overrideEmail?: string,

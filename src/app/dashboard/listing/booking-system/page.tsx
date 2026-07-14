@@ -230,13 +230,14 @@ function WaitBlock({
 
 // SMS / Email block — collapsible
 function MessageBlock({
-  step, onRemove, onChange, dragHandleProps, leadsHere = [],
+  step, onRemove, onChange, dragHandleProps, leadsHere = [], ownerEmail,
 }: {
   step: StepConfig;
   onRemove: () => void;
   onChange: (s: StepConfig) => void;
   dragHandleProps: React.HTMLAttributes<HTMLSpanElement>;
   leadsHere?: StepLeadInfo[];
+  ownerEmail?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isSms = step.step_type === 'send_sms';
@@ -365,6 +366,16 @@ function MessageBlock({
               </div>
             </div>
           )}
+
+          <div className="flex items-center justify-end border-t border-gray-100 pt-2.5">
+            <TestSendControl
+              channel={isSms ? 'sms' : 'email'}
+              defaultTo={isSms ? undefined : ownerEmail}
+              getSpec={() => isSms
+                ? { body: step.body }
+                : { subject: step.subject, body: step.body, preheader: step.preview_text }}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -558,6 +569,88 @@ function MergeTagHint({ tags }: { tags: string[] }) {
   );
 }
 
+// ─── Test send control (per email / SMS) ─────────────────────────────────
+
+/** Small inline "Send test" control shown under each email/SMS. Sends the
+ *  live editor content to the venue owner (or a typed address/number) via
+ *  /api/listing/booking-system/test so they can preview a message before a
+ *  real lead ever gets it. */
+function TestSendControl({
+  channel, getSpec, defaultTo,
+}: {
+  channel: 'email' | 'sms';
+  getSpec: () => { subject?: string; body?: string; preheader?: string };
+  defaultTo?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState(defaultTo ?? '');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const noun = channel === 'sms' ? 'text' : 'email';
+
+  async function send() {
+    const spec = getSpec();
+    if (!spec.body?.trim()) { setMsg({ ok: false, text: `Write your ${noun} first.` }); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const r = await fetch('/api/listing/booking-system/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, to: to.trim() || undefined, ...spec }),
+      });
+      const d = await r.json().catch(() => ({})) as { sent?: boolean; to?: string; error?: string };
+      if (r.ok && d.sent) setMsg({ ok: true, text: `Test ${noun} sent to ${d.to}` });
+      else setMsg({ ok: false, text: d.error || `Failed to send test ${noun}` });
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally { setBusy(false); }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 text-[11px] font-medium text-violet-600 hover:text-violet-800 transition-colors"
+      >
+        <Send size={11} /> Send test {noun}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        type={channel === 'sms' ? 'tel' : 'email'}
+        value={to}
+        onChange={(e) => setTo(e.target.value)}
+        placeholder={channel === 'sms' ? 'Your phone number' : 'you@email.com'}
+        className="w-48 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-[12px] text-gray-800 placeholder:text-gray-400 focus:border-violet-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 transition"
+      />
+      <button
+        type="button"
+        onClick={() => void send()}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+      >
+        {busy ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Send
+      </button>
+      <button
+        type="button"
+        onClick={() => { setOpen(false); setMsg(null); }}
+        className="text-[12px] text-gray-400 hover:text-gray-600"
+      >
+        Cancel
+      </button>
+      {msg && (
+        <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${msg.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+          {msg.ok ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />} {msg.text}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ─── Sequence editor (Phase 2 body) ──────────────────────────────────────
 
 function SequenceEditor({
@@ -566,6 +659,7 @@ function SequenceEditor({
   leadsData,
   allowAi = true,
   maxMessages,
+  ownerEmail,
 }: {
   steps: StepConfig[];
   onStepsChange: (s: StepConfig[]) => void;
@@ -573,6 +667,8 @@ function SequenceEditor({
   allowAi?: boolean;
   /** Combined cap on send_sms + send_email steps. When reached, both add buttons are hidden. */
   maxMessages?: number;
+  /** Prefilled recipient for "Send test email" controls. */
+  ownerEmail?: string;
 }) {
   const dragSrc = useRef<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
@@ -654,6 +750,7 @@ function SequenceEditor({
                 onChange={(s) => updateStep(i, s)}
                 dragHandleProps={dragHandleFor(i)}
                 leadsHere={leadsHere}
+                ownerEmail={ownerEmail}
               />
             )}
             {step.step_type === 'start_ai_concierge' && (
@@ -729,10 +826,11 @@ function SequenceEditor({
  *  and button blocks. Used by the Anniversary stage, which sends a single
  *  email a year after the wedding date. */
 function SingleEmailEditor({
-  step, onChange,
+  step, onChange, ownerEmail,
 }: {
   step: StepConfig;
   onChange: (s: StepConfig) => void;
+  ownerEmail?: string;
 }) {
   return (
     <div className="space-y-3">
@@ -777,6 +875,13 @@ function SingleEmailEditor({
             <InlineInput value={step.button_link ?? ''} onChange={(v) => onChange({ ...step, button_link: v })} placeholder="Button Link (https://...)" className="flex-1" />
           </div>
         </div>
+      </div>
+      <div className="flex items-center justify-end">
+        <TestSendControl
+          channel="email"
+          defaultTo={ownerEmail}
+          getSpec={() => ({ subject: step.subject, body: step.body, preheader: step.preview_text })}
+        />
       </div>
     </div>
   );
@@ -1099,6 +1204,13 @@ export default function BookingSystemPage() {
                   rows={6}
                   placeholder="Use {{first_name}}, {{venue_name}}, {{pricing_guide_url}}"
                 />
+                <div className="mt-2 flex justify-end">
+                  <TestSendControl
+                    channel="email"
+                    defaultTo={cfg.ownerEmail}
+                    getSpec={() => ({ subject: `Your ${'{{venue_name}}'} pricing guide`, body: cfg.guideEmailBody })}
+                  />
+                </div>
               </div>
             )}
 
@@ -1121,6 +1233,12 @@ export default function BookingSystemPage() {
                   rows={3}
                   placeholder="Use {{first_name}}, {{venue_name}}, {{pricing_guide_url}}"
                 />
+                <div className="mt-2 flex justify-end">
+                  <TestSendControl
+                    channel="sms"
+                    getSpec={() => ({ body: cfg.guideSmsBody })}
+                  />
+                </div>
               </div>
             )}
             <p className="text-[11px] text-gray-400">
@@ -1157,6 +1275,7 @@ export default function BookingSystemPage() {
             steps={cfg.steps}
             onStepsChange={(steps) => void save({ steps })}
             leadsData={leadsData}
+            ownerEmail={cfg.ownerEmail}
           />
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
@@ -1186,6 +1305,7 @@ export default function BookingSystemPage() {
             leadsData={null}
             allowAi={false}
             maxMessages={10}
+            ownerEmail={cfg.ownerEmail}
           />
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name', 'appointment_date', 'appointment_time', 'venue_address']} />
         </PhaseCard>
@@ -1215,6 +1335,7 @@ export default function BookingSystemPage() {
             leadsData={null}
             allowAi={false}
             maxMessages={10}
+            ownerEmail={cfg.ownerEmail}
           />
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
@@ -1246,6 +1367,7 @@ export default function BookingSystemPage() {
               <SingleEmailEditor
                 step={anniversaryStep}
                 onChange={(s) => void save({ anniversarySteps: [{ ...s, step_order: 0, step_type: 'send_email' }] })}
+                ownerEmail={cfg.ownerEmail}
               />
               <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
             </PhaseCard>
