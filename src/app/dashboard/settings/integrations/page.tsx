@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Zap,
   Plus,
@@ -14,6 +14,9 @@ import {
   KeyRound,
   Activity,
   ShieldCheck,
+  Link2,
+  Unlink,
+  Send,
 } from 'lucide-react';
 
 interface ApiKey {
@@ -33,6 +36,252 @@ interface ApiKey {
 const ZAPIER_INVITE_URL =
   process.env.NEXT_PUBLIC_ZAPIER_INVITE_URL ||
   'https://zapier.com/developer/public-invite/241169/4cb250d00c7d98a07f4e8d9a2a6adc8c/';
+
+// ── Tripleseat Integration Card ───────────────────────────────────────────────
+
+interface TSLocation { id: number; name: string }
+
+function TripleseatCard() {
+  const [status, setStatus] = useState<'loading' | 'connected' | 'disconnected'>('loading');
+  const [maskedKey, setMaskedKey]   = useState('');
+  const [locationId, setLocationId] = useState<number | null>(null);
+  const [locations, setLocations]   = useState<TSLocation[]>([]);
+
+  const [inputKey, setInputKey]       = useState('');
+  const [showConnect, setShowConnect] = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [testing, setTesting]         = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const flash = (ok: boolean, text: string) => {
+    setMsg({ ok, text });
+    setTimeout(() => setMsg(null), 4000);
+  };
+
+  const load = useCallback(async () => {
+    setStatus('loading');
+    try {
+      const r = await fetch('/api/integrations/tripleseat', { cache: 'no-store' });
+      const d = await r.json() as { connected: boolean; publicKey: string | null; locationId: number | null; locations: TSLocation[] };
+      setStatus(d.connected ? 'connected' : 'disconnected');
+      setMaskedKey(d.publicKey ?? '');
+      setLocationId(d.locationId);
+      setLocations(d.locations ?? []);
+    } catch {
+      setStatus('disconnected');
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function connect() {
+    if (!inputKey.trim()) { flash(false, 'Paste your Tripleseat public API key first.'); return; }
+    setSaving(true); setMsg(null);
+    try {
+      const r = await fetch('/api/integrations/tripleseat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicKey: inputKey.trim(), locationId }),
+      });
+      const d = await r.json() as { connected?: boolean; locations?: TSLocation[]; locationId?: number | null; error?: string };
+      if (!r.ok) { flash(false, d.error ?? 'Connection failed.'); return; }
+      setInputKey('');
+      setShowConnect(false);
+      setLocations(d.locations ?? []);
+      setLocationId(d.locationId ?? null);
+      setStatus('connected');
+      flash(true, 'Tripleseat connected successfully.');
+    } catch {
+      flash(false, 'Network error — check your connection and try again.');
+    } finally { setSaving(false); }
+  }
+
+  async function updateLocation(id: number) {
+    setLocationId(id);
+    await fetch('/api/integrations/tripleseat', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locationId: id }),
+    });
+  }
+
+  async function sendTest() {
+    setTesting(true); setMsg(null);
+    try {
+      const r = await fetch('/api/integrations/tripleseat/test', { method: 'POST' });
+      const d = await r.json() as { ok?: boolean; tripleseatLeadId?: number; error?: string };
+      if (r.ok && d.ok) flash(true, `Test lead sent to Tripleseat${d.tripleseatLeadId ? ` (ID #${d.tripleseatLeadId})` : ''}.`);
+      else flash(false, d.error ?? 'Test lead failed.');
+    } catch {
+      flash(false, 'Network error.');
+    } finally { setTesting(false); }
+  }
+
+  async function disconnect() {
+    if (!confirm('Disconnect Tripleseat? New leads will stop being sent over.')) return;
+    setDisconnecting(true);
+    await fetch('/api/integrations/tripleseat', { method: 'DELETE' });
+    setStatus('disconnected');
+    setMaskedKey('');
+    setLocationId(null);
+    setLocations([]);
+    setDisconnecting(false);
+    flash(true, 'Tripleseat disconnected.');
+  }
+
+  const isLoading = status === 'loading';
+  const isConnected = status === 'connected';
+
+  return (
+    <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      {/* Header row */}
+      <div className="px-6 py-5 flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sky-50">
+          {/* Tripleseat wordmark-style logo placeholder */}
+          <svg viewBox="0 0 32 32" className="h-6 w-6" fill="none">
+            <rect width="32" height="32" rx="8" fill="#0ea5e9" />
+            <text x="16" y="22" textAnchor="middle" fontSize="14" fontWeight="700" fill="white" fontFamily="sans-serif">T</text>
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Tripleseat</h2>
+            {isLoading ? (
+              <Loader2 size={13} className="animate-spin text-gray-400" />
+            ) : isConnected ? (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">Connected</span>
+            ) : (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">Not connected</span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-gray-500 leading-relaxed">
+            Automatically send new leads into Tripleseat the moment they submit your form — name, email, phone,
+            message, and UTM attribution, all mapped over instantly.
+          </p>
+
+          {/* Connected state */}
+          {isConnected && (
+            <div className="mt-3 space-y-3">
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <ShieldCheck size={13} className="text-emerald-500" />
+                <span>Key: <code className="font-mono text-gray-700">{maskedKey}</code></span>
+              </div>
+
+              {locations.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-gray-700 shrink-0">Location:</label>
+                  <select
+                    value={locationId ?? ''}
+                    onChange={(e) => void updateLocation(Number(e.target.value))}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:border-gray-400 focus:outline-none"
+                  >
+                    <option value="" disabled>Select a location</option>
+                    {locations.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {locations.length === 1 && (
+                <p className="text-xs text-gray-500">Location: <strong className="text-gray-700">{locations[0].name}</strong></p>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => void sendTest()}
+                  disabled={testing}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-all"
+                >
+                  {testing ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                  Send test lead
+                </button>
+                <button
+                  onClick={() => void disconnect()}
+                  disabled={disconnecting}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60 transition-all"
+                >
+                  {disconnecting ? <Loader2 size={13} className="animate-spin" /> : <Unlink size={13} />}
+                  Disconnect
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Disconnected state */}
+          {!isConnected && !isLoading && (
+            <div className="mt-3">
+              {!showConnect ? (
+                <button
+                  onClick={() => setShowConnect(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition-all"
+                >
+                  <Link2 size={14} /> Connect Tripleseat
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                      Public API key
+                      <a
+                        href="https://app.tripleseat.com/settings/api"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 font-normal text-sky-600 hover:text-sky-800 inline-flex items-center gap-0.5"
+                      >
+                        Find it in Tripleseat <ExternalLink size={10} />
+                      </a>
+                    </label>
+                    <input
+                      type="text"
+                      value={inputKey}
+                      onChange={(e) => setInputKey(e.target.value)}
+                      placeholder="Paste your Tripleseat public API key"
+                      className="w-full max-w-md rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors font-mono"
+                    />
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      In Tripleseat: Settings → API → copy your <strong>Public Key</strong>.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => void connect()}
+                      disabled={saving || !inputKey.trim()}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-all"
+                    >
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                      {saving ? 'Connecting…' : 'Connect'}
+                    </button>
+                    <button
+                      onClick={() => { setShowConnect(false); setInputKey(''); }}
+                      className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Feedback message */}
+          {msg && (
+            <div className={`mt-3 flex items-center gap-1.5 text-sm font-medium ${msg.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+              {msg.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+              {msg.text}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* What gets sent */}
+      <div className="border-t border-gray-100 px-6 py-4 text-sm text-gray-500">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">What gets pushed to Tripleseat</span>
+        <p>Name · Email · Phone · Message · UTM source / medium / campaign — sent the moment a lead submits your form. No sync back — data only flows from StoryVenue to Tripleseat.</p>
+      </div>
+    </div>
+  );
+}
 
 export default function IntegrationsPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
@@ -124,6 +373,9 @@ export default function IntegrationsPage() {
           </p>
         </div>
       </div>
+
+      {/* ── Tripleseat card ──────────────────────────────────────────── */}
+      <TripleseatCard />
 
       {/* ── Zapier card ──────────────────────────────────────────────── */}
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">

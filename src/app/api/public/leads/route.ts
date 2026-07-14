@@ -11,6 +11,7 @@ import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 import { sendMetaLeadEvent } from '@/lib/meta-conversions-api';
+import { maybePushLeadToTripleseat } from '@/lib/tripleseat';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -445,6 +446,23 @@ export async function POST(request: NextRequest) {
   void sendBookingSystemGuide(venue.id, lr.id).catch((e) =>
     console.error('[public/leads] sendBookingSystemGuide error:', e),
   );
+
+  // Tripleseat integration — push lead data if the venue has connected their
+  // Tripleseat account. Fire-and-forget; never blocks the response.
+  void maybePushLeadToTripleseat(venue.id, {
+    first_name:   firstName || null,
+    last_name:    lastName  || null,
+    email:        lr.email,
+    phone:        phone || null,
+    wedding_date: null,          // not collected on the public form
+    guest_count:  null,          // not collected on the public form
+    message:      payload.message ?? null,
+    utm_source:   payload.utm_source ?? null,
+    utm_medium:   payload.utm_medium ?? null,
+    utm_campaign: payload.utm_campaign ?? null,
+    utm_term:     payload.utm_term ?? null,
+    utm_content:  payload.utm_content ?? null,
+  }).catch(() => {});
 
   // Meta (Facebook) Conversions API — server-side `Lead` event, fire-and-forget.
   // No-ops if the venue hasn't configured meta_pixel_id + meta_capi_access_token.
