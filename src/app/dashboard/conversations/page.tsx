@@ -274,6 +274,14 @@ export default function ConversationsPage() {
   const [contactResults, setContactResults] = useState<{ id: string; first_name: string; last_name: string; customer_email: string; phone: string }[]>([]);
   const [creatingThread, setCreatingThread] = useState(false);
   const [newConversationError, setNewConversationError] = useState('');
+  // New-contact sub-form inside the "New conversation" modal
+  const [showCreateContact, setShowCreateContact] = useState(false);
+  const [newContactFirstName, setNewContactFirstName] = useState('');
+  const [newContactLastName, setNewContactLastName] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactChannel, setNewContactChannel] = useState<'sms' | 'email'>('sms');
+  const [savingContact, setSavingContact] = useState(false);
   const [threadSearch, setThreadSearch] = useState('');
   const [emailCc, setEmailCc] = useState('');
   const [emailBcc, setEmailBcc] = useState('');
@@ -1383,14 +1391,30 @@ export default function ConversationsPage() {
     return () => clearTimeout(t);
   }, [contactSearch, showNew]);
 
-  async function createThreadForContact(venueCustomerId: string) {
+  function resetNewConvModal() {
+    setShowNew(false);
+    setContactSearch('');
+    setNewConversationError('');
+    setShowCreateContact(false);
+    setNewContactFirstName('');
+    setNewContactLastName('');
+    setNewContactEmail('');
+    setNewContactPhone('');
+    setNewContactChannel('sms');
+  }
+
+  async function createThreadForContact(venueCustomerId: string, channel?: 'sms' | 'email') {
     setCreatingThread(true);
     setNewConversationError('');
     try {
       const res = await fetch('/api/conversations/threads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ venue_customer_id: venueCustomerId, subject: 'Conversation' }),
+        body: JSON.stringify({
+          venue_customer_id: venueCustomerId,
+          subject: 'Conversation',
+          ...(channel ? { channel } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1399,13 +1423,43 @@ export default function ConversationsPage() {
         setSendError(msg);
         return;
       }
-      setShowNew(false);
-      setContactSearch('');
+      resetNewConvModal();
       setSelectedId(data.id);
       setMobileShowThread(true);
       await loadThreads({ silent: true });
     } finally {
       setCreatingThread(false);
+    }
+  }
+
+  async function createContactAndThread() {
+    if (!newContactEmail.trim() && !newContactPhone.trim()) {
+      setNewConversationError('Enter at least an email or phone number.');
+      return;
+    }
+    setSavingContact(true);
+    setNewConversationError('');
+    try {
+      // 1. Create (or upsert) the venue_customer
+      const res = await fetch('/api/venue-customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name: newContactFirstName.trim() || null,
+          last_name: newContactLastName.trim() || null,
+          customer_email: newContactEmail.trim() || null,
+          phone: newContactPhone.trim() || null,
+        }),
+      });
+      const contact = await res.json();
+      if (!res.ok || !contact?.id) {
+        setNewConversationError(contact.error || 'Could not create contact.');
+        return;
+      }
+      // 2. Open a thread for them with the chosen channel
+      await createThreadForContact(contact.id, newContactChannel);
+    } finally {
+      setSavingContact(false);
     }
   }
 
@@ -3147,61 +3201,213 @@ export default function ConversationsPage() {
 
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-          <div className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-t-2xl border border-gray-200 bg-white sm:rounded-2xl">
+          <div className="max-h-[92vh] w-full max-w-md overflow-hidden rounded-t-2xl border border-gray-200 bg-white sm:rounded-2xl">
+            {/* ── Header ── */}
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <p className="font-semibold text-gray-900">New conversation</p>
+              <div className="flex items-center gap-2">
+                {showCreateContact && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowCreateContact(false); setNewConversationError(''); }}
+                    className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
+                    aria-label="Back"
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                )}
+                <p className="font-semibold text-gray-900">
+                  {showCreateContact ? 'New contact' : 'New conversation'}
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => {
-                  setShowNew(false);
-                  setContactSearch('');
-                  setNewConversationError('');
-                }}
+                onClick={resetNewConvModal}
                 className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
                 aria-label="Close"
               >
                 <X size={20} />
               </button>
             </div>
-            <div className="p-4">
-              {newConversationError && (
-                <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
-                  {newConversationError}
-                </p>
-              )}
-              <div className="relative mb-3">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={contactSearch}
-                  onChange={(e) => setContactSearch(e.target.value)}
-                  placeholder="Search contacts by name, email, or phone…"
-                  className="w-full rounded-xl border border-gray-200 py-2.5 pl-9 pr-3 text-sm"
-                  style={{ fontSize: 16 }}
-                  autoFocus
-                />
+
+            {/* ── Error banner ── */}
+            {newConversationError && (
+              <p className="mx-4 mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                {newConversationError}
+              </p>
+            )}
+
+            {/* ════ Panel A — search existing contacts ════ */}
+            {!showCreateContact && (
+              <div className="p-4">
+                <div className="relative mb-3">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={contactSearch}
+                    onChange={(e) => setContactSearch(e.target.value)}
+                    placeholder="Search contacts by name, email, or phone…"
+                    className="w-full rounded-xl border border-gray-200 py-2.5 pl-9 pr-3 text-sm"
+                    style={{ fontSize: 16 }}
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-100">
+                  {contactResults.map((c) => {
+                    const name = toTitleCase([c.first_name, c.last_name].filter(Boolean).join(' ')) || c.customer_email;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        disabled={creatingThread}
+                        onClick={() => createThreadForContact(c.id)}
+                        className="flex w-full flex-col items-start border-b border-gray-50 px-3 py-2.5 text-left text-sm hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        <span className="font-bold text-gray-900">{name}</span>
+                        {c.phone && <span className="text-xs text-gray-600">{c.phone}</span>}
+                        {c.customer_email && <span className="text-xs text-gray-500">{c.customer_email}</span>}
+                      </button>
+                    );
+                  })}
+                  {contactSearch.trim() && contactResults.length === 0 && !creatingThread && (
+                    <p className="px-3 py-6 text-center text-xs text-gray-400">No contacts match.</p>
+                  )}
+                  {!contactSearch.trim() && contactResults.length === 0 && (
+                    <p className="px-3 py-6 text-center text-xs text-gray-400">
+                      Search by name, email, or phone number.
+                    </p>
+                  )}
+                </div>
+
+                {/* ── Create new contact CTA ── */}
+                <div className="mt-4 border-t border-gray-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => { setShowCreateContact(true); setNewConversationError(''); }}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 py-2.5 text-sm font-medium text-gray-600 transition hover:border-gray-400 hover:bg-gray-50"
+                  >
+                    <Plus size={15} />
+                    Create new contact
+                  </button>
+                </div>
               </div>
-              <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-100">
-                {contactResults.map((c) => {
-                  const name = toTitleCase([c.first_name, c.last_name].filter(Boolean).join(' ')) || c.customer_email;
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      disabled={creatingThread}
-                      onClick={() => createThreadForContact(c.id)}
-                      className="flex w-full flex-col items-start border-b border-gray-50 px-3 py-2.5 text-left text-sm hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      <span className="font-bold text-gray-900">{name}</span>
-                      {c.phone && <span className="text-xs text-gray-600">{c.phone}</span>}
-                      {c.customer_email && <span className="text-xs text-gray-500">{c.customer_email}</span>}
-                    </button>
-                  );
-                })}
-                {contactSearch.trim() && contactResults.length === 0 && !creatingThread && (
-                  <p className="px-3 py-6 text-center text-xs text-gray-400">No contacts match.</p>
-                )}
+            )}
+
+            {/* ════ Panel B — create new contact ════ */}
+            {showCreateContact && (
+              <div className="overflow-y-auto p-4" style={{ maxHeight: 'calc(92vh - 56px)' }}>
+                <div className="space-y-3">
+                  {/* Name row */}
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs font-semibold text-gray-600">First name</label>
+                      <input
+                        type="text"
+                        value={newContactFirstName}
+                        onChange={(e) => setNewContactFirstName(e.target.value)}
+                        placeholder="Jane"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+                        style={{ fontSize: 16 }}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs font-semibold text-gray-600">Last name</label>
+                      <input
+                        type="text"
+                        value={newContactLastName}
+                        onChange={(e) => setNewContactLastName(e.target.value)}
+                        placeholder="Smith"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+                        style={{ fontSize: 16 }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">
+                      Email <span className="font-normal text-gray-400">(required for email conversations)</span>
+                    </label>
+                    <div className="relative">
+                      <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="email"
+                        value={newContactEmail}
+                        onChange={(e) => setNewContactEmail(e.target.value)}
+                        placeholder="jane@example.com"
+                        className="w-full rounded-xl border border-gray-200 py-2.5 pl-8 pr-3 text-sm focus:border-gray-400 focus:outline-none"
+                        style={{ fontSize: 16 }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Phone */}
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">
+                      Phone <span className="font-normal text-gray-400">(required for SMS conversations)</span>
+                    </label>
+                    <div className="relative">
+                      <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="tel"
+                        value={newContactPhone}
+                        onChange={(e) => setNewContactPhone(e.target.value)}
+                        placeholder="(614) 226-2075"
+                        className="w-full rounded-xl border border-gray-200 py-2.5 pl-8 pr-3 text-sm focus:border-gray-400 focus:outline-none"
+                        style={{ fontSize: 16 }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Channel selector */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-gray-600">Start conversation via</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewContactChannel('sms')}
+                        className={classNames(
+                          'flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition',
+                          newContactChannel === 'sms'
+                            ? 'border-brand-900 bg-brand-900 text-white'
+                            : 'border-gray-200 text-gray-700 hover:bg-gray-50',
+                        )}
+                      >
+                        <MessageCircle size={15} />
+                        Text (SMS)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewContactChannel('email')}
+                        className={classNames(
+                          'flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition',
+                          newContactChannel === 'email'
+                            ? 'border-brand-900 bg-brand-900 text-white'
+                            : 'border-gray-200 text-gray-700 hover:bg-gray-50',
+                        )}
+                      >
+                        <Mail size={15} />
+                        Email
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Submit */}
+                  <button
+                    type="button"
+                    onClick={() => void createContactAndThread()}
+                    disabled={savingContact || creatingThread || (!newContactEmail.trim() && !newContactPhone.trim())}
+                    className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-900 py-3 text-sm font-semibold text-white transition hover:bg-brand-800 disabled:opacity-50"
+                  >
+                    {(savingContact || creatingThread) ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Send size={15} />
+                    )}
+                    {(savingContact || creatingThread) ? 'Creating…' : 'Create contact & open conversation'}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
