@@ -33,9 +33,15 @@ export async function fetchTripleseatLocations(
     const text = await res.text().catch(() => '');
     throw new Error(`Tripleseat locations fetch failed (${res.status}): ${text.slice(0, 200)}`);
   }
-  const data = await res.json() as Array<{ id: number; name: string }> | { locations?: Array<{ id: number; name: string }> };
-  const rows = Array.isArray(data) ? data : (data.locations ?? []);
-  return rows.map((l) => ({ id: Number(l.id), name: String(l.name ?? ''), active: true }));
+  // The API returns an array of LocationWrapped objects:
+  // [{ location: { id: 123, name: "My Venue", ... } }, ...]
+  const data = await res.json() as Array<{ location?: { id?: number; name?: string } }>;
+  const rows = Array.isArray(data) ? data : [];
+  return rows.map((item) => ({
+    id:     Number(item.location?.id ?? 0),
+    name:   String(item.location?.name ?? ''),
+    active: true,
+  })).filter((l) => l.id > 0);
 }
 
 export interface TripleseatLeadPayload {
