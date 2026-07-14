@@ -1433,8 +1433,8 @@ export default function ConversationsPage() {
   }
 
   async function createContactAndThread() {
-    if (!newContactEmail.trim() && !newContactPhone.trim()) {
-      setNewConversationError('Enter at least an email or phone number.');
+    if (!newContactFirstName.trim() || !newContactLastName.trim() || !newContactEmail.trim() || !newContactPhone.trim()) {
+      setNewConversationError('All fields are required.');
       return;
     }
     setSavingContact(true);
@@ -3303,8 +3303,9 @@ export default function ConversationsPage() {
                         type="text"
                         value={newContactFirstName}
                         onChange={(e) => setNewContactFirstName(e.target.value)}
-                        placeholder="Jane"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+                        placeholder="First name"
+                        required
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm placeholder:text-gray-300 focus:border-gray-400 focus:outline-none"
                         style={{ fontSize: 16 }}
                         autoFocus
                       />
@@ -3315,8 +3316,9 @@ export default function ConversationsPage() {
                         type="text"
                         value={newContactLastName}
                         onChange={(e) => setNewContactLastName(e.target.value)}
-                        placeholder="Smith"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+                        placeholder="Last name"
+                        required
+                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm placeholder:text-gray-300 focus:border-gray-400 focus:outline-none"
                         style={{ fontSize: 16 }}
                       />
                     </div>
@@ -3324,17 +3326,16 @@ export default function ConversationsPage() {
 
                   {/* Email */}
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-gray-600">
-                      Email <span className="font-normal text-gray-400">(required for email conversations)</span>
-                    </label>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Email</label>
                     <div className="relative">
                       <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="email"
                         value={newContactEmail}
                         onChange={(e) => setNewContactEmail(e.target.value)}
-                        placeholder="jane@example.com"
-                        className="w-full rounded-xl border border-gray-200 py-2.5 pl-8 pr-3 text-sm focus:border-gray-400 focus:outline-none"
+                        placeholder="Email"
+                        required
+                        className="w-full rounded-xl border border-gray-200 py-2.5 pl-8 pr-3 text-sm placeholder:text-gray-300 focus:border-gray-400 focus:outline-none"
                         style={{ fontSize: 16 }}
                       />
                     </div>
@@ -3342,17 +3343,16 @@ export default function ConversationsPage() {
 
                   {/* Phone */}
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-gray-600">
-                      Phone <span className="font-normal text-gray-400">(required for SMS conversations)</span>
-                    </label>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Phone number</label>
                     <div className="relative">
                       <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="tel"
                         value={newContactPhone}
                         onChange={(e) => setNewContactPhone(e.target.value)}
-                        placeholder="(614) 226-2075"
-                        className="w-full rounded-xl border border-gray-200 py-2.5 pl-8 pr-3 text-sm focus:border-gray-400 focus:outline-none"
+                        placeholder="Phone number"
+                        required
+                        className="w-full rounded-xl border border-gray-200 py-2.5 pl-8 pr-3 text-sm placeholder:text-gray-300 focus:border-gray-400 focus:outline-none"
                         style={{ fontSize: 16 }}
                       />
                     </div>
@@ -3395,7 +3395,7 @@ export default function ConversationsPage() {
                   <button
                     type="button"
                     onClick={() => void createContactAndThread()}
-                    disabled={savingContact || creatingThread || (!newContactEmail.trim() && !newContactPhone.trim())}
+                    disabled={savingContact || creatingThread || !newContactFirstName.trim() || !newContactLastName.trim() || !newContactEmail.trim() || !newContactPhone.trim()}
                     className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-900 py-3 text-sm font-semibold text-white transition hover:bg-brand-800 disabled:opacity-50"
                   >
                     {(savingContact || creatingThread) ? (
