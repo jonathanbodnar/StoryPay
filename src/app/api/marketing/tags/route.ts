@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ensureSystemTagsForVenue } from '@/lib/system-tags';
+import { isSystemTagVisible } from '@/lib/system-tag-visibility';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -27,7 +28,18 @@ export async function GET() {
     .order('name', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ tags: data ?? [] });
+
+  // Hide background system tags from the venue owner. Only custom tags and the
+  // small allow-list of informational system tags (Hot Lead, VIP, etc.) are
+  // surfaced anywhere in the SaaS UI. Background tags still exist and still
+  // power automations + segmentation under the hood — they're just not shown.
+  const visible = (data ?? []).filter((t) => {
+    const row = t as { is_system?: boolean | null; system_key?: string | null };
+    if (!row.is_system) return true;
+    return isSystemTagVisible(row.system_key);
+  });
+
+  return NextResponse.json({ tags: visible });
 }
 
 export async function POST(request: NextRequest) {

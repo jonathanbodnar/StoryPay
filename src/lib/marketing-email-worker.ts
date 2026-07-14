@@ -17,6 +17,7 @@ import { canRunBookingSystem, venueCanRunBookingSystem, VENUE_ENTITLEMENT_COLUMN
 import { setLeadAiState } from '@/lib/ai-concierge/state-control';
 import type { AiState, AiVenueResources } from '@/lib/ai-concierge/types';
 import { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, resolveDefaultStageIdByName } from '@/lib/booking-system-stages';
+import { isSystemTagInert } from '@/lib/system-tag-visibility';
 
 const BATCH = 25;
 
@@ -102,6 +103,26 @@ export async function onMarketingTagAdded(
   addedTagIds: string[],
 ): Promise<void> {
   if (!addedTagIds.length) return;
+
+  // Drop any venue-visible "informational only" system tags (Hot Lead, VIP,
+  // Do Not Contact, etc.). These are inert — applying one must never enroll a
+  // lead in an automation, no matter which code path applied it (manual tag
+  // popover, API, or a system hook). Background system tags and custom tags
+  // continue to fire triggers as normal.
+  const { data: tagRows } = await supabaseAdmin
+    .from('marketing_tags')
+    .select('id, system_key')
+    .eq('venue_id', venueId)
+    .in('id', addedTagIds);
+  const inertIds = new Set(
+    (tagRows ?? [])
+      .filter((t) => isSystemTagInert((t as { system_key: string | null }).system_key))
+      .map((t) => (t as { id: string }).id),
+  );
+  const triggerTagIds = addedTagIds.filter((id) => !inertIds.has(id));
+  if (!triggerTagIds.length) return;
+  addedTagIds = triggerTagIds;
+
   const autos = await loadVenueActiveAutomations(venueId);
   for (const row of autos) {
     const matched = flatTriggersFor(row).some((t) => {
@@ -184,6 +205,25 @@ async function cancelStageEnrollmentsOnExit(
   }
 }
 
+/**
+ * Returns the venue's master Speed-to-Lead switch. When this is OFF, all
+ * stage-triggered automation enrollment stops immediately — it's the emergency
+ * kill switch. Missing column / null is treated as ON (default behavior).
+ */
+async function isBookingSystemEnabled(venueId: string): Promise<boolean> {
+  try {
+    const { data } = await supabaseAdmin
+      .from('venues')
+      .select('booking_system_enabled')
+      .eq('id', venueId)
+      .maybeSingle();
+    const v = (data as { booking_system_enabled?: boolean | null } | null)?.booking_system_enabled;
+    return v !== false; // null/undefined => enabled by default
+  } catch {
+    return true; // fail open — a transient read error shouldn't silence automations
+  }
+}
+
 export async function onMarketingStageChanged(
   venueId: string,
   leadId: string,
@@ -193,23 +233,25 @@ export async function onMarketingStageChanged(
   // ── AI Concierge: auto-activate when entering Followup, pause when leaving ──
   void handleAiConciergeOnStageChange(venueId, leadId, newStageId, previousStageId);
 
-  // ── Grace period (Stage 3 "Tour Booked" / Stage 4 "Wedding Booked") ───────
-  // A venue owner gets a 1-hour window to correct an accidental move into
-  // either of these two stages before the matching automation actually sends
-  // anything. If the lead is moved back out (to any other stage) before that
-  // window closes, or even mid-sequence, the enrollment is cancelled outright.
-  const { tourBookedStageId, weddingBookedStageId } = await resolveGraceStageIds(venueId);
-
+  // ── Cancel the previous stage's sequence on exit ──────────────────────────
+  // Moving a lead OUT of any stage (backwards or forwards) cancels whatever
+  // stage-triggered sequence that stage had started, so the new stage's
+  // sequence can take over cleanly and a lead is only ever in one stage
+  // sequence at a time. Previously this only fired for the two "grace" stages.
   if (previousStageId && previousStageId !== newStageId) {
-    const exitedGraceStage =
-      previousStageId === tourBookedStageId || previousStageId === weddingBookedStageId;
-    if (exitedGraceStage) {
-      void cancelStageEnrollmentsOnExit(venueId, leadId, previousStageId);
-    }
+    void cancelStageEnrollmentsOnExit(venueId, leadId, previousStageId);
   }
 
-  // ── Marketing automation enrollment (existing logic) ──────────────────────
+  // ── Master kill switch ────────────────────────────────────────────────────
+  // If the venue's Speed-to-Lead master switch is OFF, do not auto-enroll into
+  // any stage sequence. (Exits above still cancel so nothing keeps sending.)
+  if (!(await isBookingSystemEnabled(venueId))) return;
+
+  // ── Marketing automation enrollment ───────────────────────────────────────
   if (!newStageId) return;
+  // The two "booked" stages keep a 1-hour grace window before their sequence
+  // actually starts sending, so an accidental drag can be undone in time.
+  const { tourBookedStageId, weddingBookedStageId } = await resolveGraceStageIds(venueId);
   const isGraceStage = newStageId === tourBookedStageId || newStageId === weddingBookedStageId;
   const autos = await loadVenueActiveAutomations(venueId);
   for (const row of autos) {
@@ -220,6 +262,197 @@ export async function onMarketingStageChanged(
     });
     if (matched) await enrollIfNew(row.id, venueId, leadId, isGraceStage ? ONE_HOUR_MS : undefined);
   }
+}
+
+// ── Stage-automation management (contact profile panel + batch catch-up) ──────
+
+export interface StageAutomationInfo {
+  automationId: string;
+  name: string;
+  /** 'active' = this stage's sequence is turned on; 'paused' = stage toggle off. */
+  status: string;
+  /** This lead's enrollment status for this automation, or null if never enrolled. */
+  enrollmentStatus: string | null;
+}
+
+/**
+ * All automations whose `stage_changed` trigger matches `stageId`, regardless
+ * of on/off status (so the profile panel can show a paused stage's sequence
+ * and still allow a manual enroll). Returns [] when stageId is null.
+ */
+export async function getStageAutomations(
+  venueId: string,
+  stageId: string | null,
+): Promise<Array<AutoTriggerRow & { name: string; status: string }>> {
+  if (!stageId) return [];
+  const { data } = await supabaseAdmin
+    .from('marketing_automations')
+    .select('id, name, trigger_type, trigger_config, status')
+    .eq('venue_id', venueId);
+  const rows = (data ?? []) as Array<AutoTriggerRow & { name: string; status: string }>;
+  return rows.filter((row) =>
+    flatTriggersFor(row).some((t) => {
+      if (t.type !== 'stage_changed') return false;
+      const stages = t.to_stage_ids?.filter(Boolean) ?? [];
+      return stages.length > 0 && stages.includes(stageId);
+    }),
+  );
+}
+
+/**
+ * Builds the profile-panel view for a lead: for each automation tied to the
+ * lead's current stage, the automation's on/off status and the lead's
+ * enrollment status.
+ */
+export async function getLeadStageAutomationInfo(
+  venueId: string,
+  leadId: string,
+  stageId: string | null,
+): Promise<StageAutomationInfo[]> {
+  const autos = await getStageAutomations(venueId, stageId);
+  if (autos.length === 0) return [];
+
+  const { data: enrollments } = await supabaseAdmin
+    .from('marketing_automation_enrollments')
+    .select('automation_id, status')
+    .eq('venue_id', venueId)
+    .eq('lead_id', leadId)
+    .in('automation_id', autos.map((a) => a.id));
+
+  const statusByAuto = new Map<string, string>();
+  for (const e of enrollments ?? []) {
+    statusByAuto.set((e as { automation_id: string }).automation_id, (e as { status: string }).status);
+  }
+
+  return autos.map((a) => ({
+    automationId: a.id,
+    name: a.name,
+    status: a.status,
+    enrollmentStatus: statusByAuto.get(a.id) ?? null,
+  }));
+}
+
+/**
+ * Manually enroll a lead into an automation from the contact profile. This is
+ * a deliberate human action, so it bypasses the master + stage toggles. If a
+ * prior enrollment row exists (completed / cancelled / active) it's reset to
+ * active at step 0 with an immediate next_run_at so the sequence (re)starts.
+ * Returns true on success.
+ */
+export async function manualEnrollLead(
+  venueId: string,
+  leadId: string,
+  automationId: string,
+): Promise<boolean> {
+  // Confirm the automation belongs to this venue.
+  const { data: auto } = await supabaseAdmin
+    .from('marketing_automations')
+    .select('id')
+    .eq('id', automationId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (!auto) return false;
+
+  const nowIso = new Date().toISOString();
+  const { data: existing } = await supabaseAdmin
+    .from('marketing_automation_enrollments')
+    .select('id')
+    .eq('venue_id', venueId)
+    .eq('lead_id', leadId)
+    .eq('automation_id', automationId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabaseAdmin
+      .from('marketing_automation_enrollments')
+      .update({ status: 'active', current_step_index: 0, next_run_at: nowIso })
+      .eq('id', (existing as { id: string }).id);
+    return !error;
+  }
+
+  const enrollmentId = await enrollIfNew(automationId, venueId, leadId);
+  return enrollmentId !== null;
+}
+
+/**
+ * Manually remove a lead from an automation (contact profile "unenroll").
+ * Cancels the active enrollment so no further steps send. Returns true on
+ * success (including the no-op case where there was nothing active).
+ */
+export async function manualUnenrollLead(
+  venueId: string,
+  leadId: string,
+  automationId: string,
+): Promise<boolean> {
+  const { error } = await supabaseAdmin
+    .from('marketing_automation_enrollments')
+    .update({ status: 'cancelled' })
+    .eq('venue_id', venueId)
+    .eq('lead_id', leadId)
+    .eq('automation_id', automationId)
+    .eq('status', 'active');
+  return !error;
+}
+
+const CATCH_UP_RATE = 50;            // enroll at most 50 leads…
+const CATCH_UP_WINDOW_MS = 5 * 60_000; // …per 5-minute window
+
+export interface CatchUpResult {
+  eligible: number;
+  enrolled: number;
+}
+
+/**
+ * Batch "catch up" every lead currently sitting in a stage into that stage's
+ * sequence — used after a stage toggle is turned back on. Leads that already
+ * have an enrollment row for the automation are skipped. Enrollments are
+ * staggered (50 per 5 minutes) via next_run_at so a large stage doesn't blast
+ * everyone at once. Respects the master kill switch.
+ */
+export async function catchUpStageAutomation(
+  venueId: string,
+  stageId: string,
+  automationId: string,
+): Promise<CatchUpResult> {
+  if (!(await isBookingSystemEnabled(venueId))) return { eligible: 0, enrolled: 0 };
+
+  // Confirm the automation is tied to this stage and belongs to the venue.
+  const autos = await getStageAutomations(venueId, stageId);
+  if (!autos.some((a) => a.id === automationId)) return { eligible: 0, enrolled: 0 };
+
+  // Every lead currently in the stage with a usable email.
+  const { data: leads } = await supabaseAdmin
+    .from('leads')
+    .select('id, email')
+    .eq('venue_id', venueId)
+    .eq('stage_id', stageId);
+  const stageLeads = (leads ?? []).filter((l) => (l as { email: string | null }).email);
+  if (stageLeads.length === 0) return { eligible: 0, enrolled: 0 };
+
+  // Skip anyone who already has an enrollment row (active/completed/cancelled)
+  // so we never double-enroll or resurrect a deliberately cancelled lead.
+  const { data: existing } = await supabaseAdmin
+    .from('marketing_automation_enrollments')
+    .select('lead_id')
+    .eq('venue_id', venueId)
+    .eq('automation_id', automationId)
+    .in('lead_id', stageLeads.map((l) => (l as { id: string }).id));
+  const alreadyEnrolled = new Set((existing ?? []).map((e) => (e as { lead_id: string }).lead_id));
+
+  const toEnroll = stageLeads
+    .map((l) => (l as { id: string }).id)
+    .filter((id) => !alreadyEnrolled.has(id));
+
+  let enrolled = 0;
+  for (let i = 0; i < toEnroll.length; i++) {
+    // Stagger: leads 0-49 start now, 50-99 in +5min, etc.
+    const batchIndex = Math.floor(i / CATCH_UP_RATE);
+    const delayMs = batchIndex * CATCH_UP_WINDOW_MS;
+    const id = await enrollIfNew(automationId, venueId, toEnroll[i], delayMs || undefined);
+    if (id) enrolled++;
+  }
+
+  return { eligible: toEnroll.length, enrolled };
 }
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;

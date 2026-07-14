@@ -35,11 +35,20 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // The default pipeline is locked — block any rename. (Toggling which
-  // pipeline is default via `is_default` is still allowed below, which is the
-  // only supported way to "replace" the locked default.)
+  // The default pipeline is permanently locked — block any rename.
   if (typeof body.name === 'string' && (await isDefaultPipeline(venueId, id))) {
     return NextResponse.json({ error: DEFAULT_PIPELINE_LOCKED_MESSAGE }, { status: 403 });
+  }
+
+  // Changing which pipeline is the default is not supported. The default
+  // pipeline powers every venue's out-of-the-box stage automations, so it must
+  // stay the default forever (and therefore can never be demoted and then
+  // deleted). Multi-pipeline default switching is a future feature.
+  if (body.is_default !== undefined) {
+    return NextResponse.json(
+      { error: 'The default pipeline is locked and cannot be changed.' },
+      { status: 403 },
+    );
   }
 
   const updates: Record<string, unknown> = {};
@@ -49,18 +58,6 @@ export async function PATCH(
     updates.name = trimmed;
   }
   if (typeof body.position === 'number') updates.position = body.position;
-
-  // Only one default per venue.
-  if (body.is_default === true) {
-    await supabaseAdmin
-      .from('lead_pipelines')
-      .update({ is_default: false })
-      .eq('venue_id', venueId)
-      .neq('id', id);
-    updates.is_default = true;
-  } else if (body.is_default === false) {
-    updates.is_default = false;
-  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });

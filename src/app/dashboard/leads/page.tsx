@@ -1786,6 +1786,75 @@ function LeadDrawer({
   };
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
 
+  type StageAutomationInfo = {
+    automationId: string; name: string; status: string; enrollmentStatus: string | null;
+  };
+  const [stageAutos, setStageAutos] = useState<StageAutomationInfo[]>([]);
+  const [stageAutoMaster, setStageAutoMaster] = useState(true);
+  const [stageAutoStageId, setStageAutoStageId] = useState<string | null>(null);
+  const [stageAutoBusy, setStageAutoBusy] = useState<string | null>(null);
+  const [catchUpMsg, setCatchUpMsg] = useState<string | null>(null);
+
+  const loadStageAutos = useCallback(async () => {
+    const r = await fetch(`/api/leads/${lead.id}/stage-automation`, { cache: 'no-store' });
+    if (!r.ok) { setStageAutos([]); return; }
+    const d = await r.json();
+    setStageAutos((d.automations ?? []) as StageAutomationInfo[]);
+    setStageAutoMaster(d.masterEnabled !== false);
+    setStageAutoStageId((d.stageId as string | null) ?? null);
+  }, [lead.id]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadStageAutos(); }, [loadStageAutos]);
+
+  const toggleStageEnroll = useCallback(async (automationId: string, enroll: boolean) => {
+    setStageAutoBusy(automationId);
+    try {
+      const r = await fetch(`/api/leads/${lead.id}/stage-automation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ automationId, action: enroll ? 'enroll' : 'unenroll' }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setStageAutos((d.automations ?? []) as StageAutomationInfo[]);
+        // Refresh the read-only enrollments list too.
+        fetch(`/api/leads/${lead.id}/enrollments`, { cache: 'no-store' })
+          .then((rr) => rr.json())
+          .then((dd: { enrollments?: EnrollmentRow[] }) => setEnrollments(dd.enrollments ?? []))
+          .catch(() => {});
+      }
+    } finally {
+      setStageAutoBusy(null);
+    }
+  }, [lead.id]);
+
+  const catchUpStage = useCallback(async (automationId: string) => {
+    if (!stageAutoStageId) return;
+    setStageAutoBusy(automationId);
+    setCatchUpMsg(null);
+    try {
+      const r = await fetch('/api/leads/stage-automation/catch-up', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stageId: stageAutoStageId, automationId }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        setCatchUpMsg(
+          d.enrolled > 0
+            ? `Enrolled ${d.enrolled} lead${d.enrolled === 1 ? '' : 's'} from this stage.`
+            : 'No leads needed catching up — everyone in this stage is already enrolled.',
+        );
+        void loadStageAutos();
+      } else {
+        setCatchUpMsg(d.error || 'Catch-up failed.');
+      }
+    } finally {
+      setStageAutoBusy(null);
+    }
+  }, [stageAutoStageId, loadStageAutos]);
+
   // On open, silently re-fetch the full record so fields added by newer
   // migrations (venue_matters, etc.) are populated even if the Kanban
   // list SELECT didn't include them. onReloadCurrentLead updates the
@@ -2419,6 +2488,65 @@ function LeadDrawer({
               </button>
             )}
           </section>
+
+          {/* Stage Automation — enroll / unenroll this lead in the sequence
+              tied to their current pipeline stage. */}
+          {stageAutos.length > 0 && (
+            <section>
+              <h3 className="text-sm font-semibold text-[#1b1b1b] flex items-center gap-1.5 mb-1">
+                <Settings2 className="w-4 h-4" /> Stage Automation
+              </h3>
+              <p className="text-[11px] text-gray-500 mb-3">
+                Sequences that run for leads in this stage. Turn a lead on or off individually — this
+                overrides the stage&apos;s toggle for this person only.
+                {!stageAutoMaster && (
+                  <span className="block mt-1 text-amber-700">
+                    Automations are paused by your master switch (Speed to Lead is off).
+                  </span>
+                )}
+              </p>
+              <div className="space-y-2">
+                {stageAutos.map((sa) => {
+                  const enrolled = sa.enrollmentStatus === 'active';
+                  const busy = stageAutoBusy === sa.automationId;
+                  return (
+                    <div key={sa.automationId} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-gray-900 truncate">{sa.name}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            Stage sequence {sa.status === 'active' ? 'on' : 'off'}
+                            {sa.enrollmentStatus ? ` · this lead: ${sa.enrollmentStatus.replace(/_/g, ' ')}` : ''}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => toggleStageEnroll(sa.automationId, !enrolled)}
+                          disabled={busy}
+                          className={`flex-shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-medium disabled:opacity-50 ${
+                            enrolled
+                              ? 'border-red-200 bg-white text-red-600 hover:bg-red-50'
+                              : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'
+                          }`}
+                        >
+                          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : enrolled ? 'Unenroll' : 'Enroll'}
+                        </button>
+                      </div>
+                      {sa.status === 'active' && (
+                        <button
+                          onClick={() => catchUpStage(sa.automationId)}
+                          disabled={busy}
+                          className="mt-2 text-[10px] font-medium text-gray-500 hover:text-gray-800 disabled:opacity-50"
+                        >
+                          Catch up all leads in this stage (50 / 5 min)
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {catchUpMsg && <p className="mt-2 text-[11px] text-gray-600">{catchUpMsg}</p>}
+            </section>
+          )}
 
           {/* Workflow Enrollments */}
           {enrollments.length > 0 && (
@@ -3078,15 +3206,6 @@ function PipelineEditor({
     await apply(res);
   }
 
-  async function makeDefault(id: string) {
-    const res = await fetch(`/api/pipelines/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_default: true }),
-    });
-    await apply(res);
-  }
-
   async function addStage() {
     if (!editing) return;
     const name = newStageName.trim();
@@ -3237,14 +3356,9 @@ function PipelineEditor({
                       )}
                     </div>
                     <div className="flex items-center gap-2 pt-4">
-                      {!editing.is_default && (
-                        <button
-                          onClick={() => makeDefault(editing.id)}
-                          className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                        >
-                          Make default
-                        </button>
-                      )}
+                      {/* Default-pipeline switching is intentionally not exposed:
+                          the default pipeline is permanently locked because it
+                          powers every venue's stage automations. */}
                       <button
                         onClick={() => {
                           onActivePipelineChange(editing.id);

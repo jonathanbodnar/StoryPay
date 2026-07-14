@@ -8,6 +8,13 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { onMarketingTagAdded } from '@/lib/marketing-email-worker';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
+// Tag-visibility helpers live in a dependency-free leaf module to avoid a
+// system-tags ↔ marketing-email-worker import cycle.
+import {
+  VISIBLE_SYSTEM_TAG_KEYS,
+  isSystemTagVisible,
+  isSystemTagInert,
+} from '@/lib/system-tag-visibility';
 
 // ── Canonical tag definitions ─────────────────────────────────────────────────
 
@@ -112,6 +119,9 @@ export const SYSTEM_TAG_DEFS: SystemTagDef[] = [
   { system_key: 'ai_opted_out',       name: 'AI Opted Out',        category: 'AI Concierge',    description: 'Lead has opted out of AI follow-ups (STOP keyword or DND)',         auto_apply_events: [],                              color: '#ef4444' },
   { system_key: 'ai_exhausted',       name: 'AI Exhausted',        category: 'AI Concierge',    description: 'AI Concierge has reached the maximum follow-up attempts for this lead', auto_apply_events: [],                           color: '#6b7280' },
 ];
+
+// Re-exported for backwards compatibility with existing importers.
+export { VISIBLE_SYSTEM_TAG_KEYS, isSystemTagVisible, isSystemTagInert };
 
 // ── Utility functions ─────────────────────────────────────────────────────────
 
@@ -256,8 +266,10 @@ export async function applySystemTag(
       return;
     }
 
-    if (!error) {
-      // Tag was newly added — fire workflow trigger and external integration event
+    if (!error && !isSystemTagInert(systemKey)) {
+      // Tag was newly added — fire workflow trigger and external integration event.
+      // Inert (venue-visible, informational) tags are skipped entirely: they must
+      // never enroll a lead in an automation or emit an integration event.
       await onMarketingTagAdded(venueId, leadId, [tagId]);
       void dispatchIntegrationEvent(venueId, 'tag.added', {
         lead_id: leadId,

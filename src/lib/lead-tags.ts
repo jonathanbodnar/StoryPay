@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { isSystemTagVisible } from '@/lib/system-tag-visibility';
 
 export interface LeadTagRow {
   id: string;
@@ -18,19 +19,24 @@ export async function fetchTagsForLeadIds(
 
   const { data: rows, error } = await supabaseAdmin
     .from('lead_tag_assignments')
-    .select('lead_id, marketing_tags ( id, name, icon, color )')
+    .select('lead_id, marketing_tags ( id, name, icon, color, is_system, system_key )')
     .eq('venue_id', venueId)
     .in('lead_id', leadIds);
 
   if (error || !rows) return map;
 
+  type MtRow = LeadTagRow & { is_system?: boolean | null; system_key?: string | null };
   for (const row of rows as Array<{
     lead_id: string;
-    marketing_tags: LeadTagRow | LeadTagRow[] | null;
+    marketing_tags: MtRow | MtRow[] | null;
   }>) {
     const mt = row.marketing_tags;
     const tag = Array.isArray(mt) ? mt[0] : mt;
     if (!tag?.id) continue;
+    // Hide background system tags from anything the venue owner sees (Kanban
+    // cards, contact profiles). Custom tags and the informational system tags
+    // (Hot Lead, VIP, etc.) are still shown.
+    if (tag.is_system && !isSystemTagVisible(tag.system_key)) continue;
     const list = map.get(row.lead_id) ?? [];
     list.push({ id: tag.id, name: tag.name, icon: tag.icon, color: tag.color ?? null });
     map.set(row.lead_id, list);
