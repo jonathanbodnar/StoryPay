@@ -28,7 +28,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId, getMemberName } from '@/lib/auth-helpers';
 import {
   STAGE_KEY_TO_AUTOMATION_NAME, DEMO_VENUE_NAME, ALL_STAGE_KEYS, isAutomationStageKey,
-  PHASE4_STAGE_NAME, PHASE5_STAGE_NAME,
+  PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, ANNIVERSARY_DAYS_AFTER_WEDDING,
   resolveDefaultStageIdByName, replaceAutomationStepsOnly, formatStepRows,
   type StepConfig, type StageKey, type AutomationStageKey,
 } from '@/app/api/listing/booking-system/route';
@@ -67,6 +67,9 @@ async function creationDefaultsForStage(venueId: string, stageKey: AutomationSta
   if (stageKey === 'phase5') {
     const stageId = await resolveDefaultStageIdByName(venueId, PHASE5_STAGE_NAME);
     return { triggerType: 'stage_changed', triggerConfig: stageId ? { to_stage_ids: [stageId] } : undefined };
+  }
+  if (stageKey === 'phase6') {
+    return { triggerType: 'wedding_date_followup', triggerConfig: { days_after_wedding: ANNIVERSARY_DAYS_AFTER_WEDDING } };
   }
   return { triggerType: 'form_submitted' };
 }

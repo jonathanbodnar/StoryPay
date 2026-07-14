@@ -601,17 +601,27 @@ export async function processWeddingDateFollowupAutomations(): Promise<{ enrolle
   }
 
   const venueIds = [...byVenue.keys()];
-  const { data: venues } = await supabaseAdmin.from('venues').select('id, timezone').in('id', venueIds);
+  const { data: venues } = await supabaseAdmin
+    .from('venues')
+    .select('id, timezone, booking_system_enabled')
+    .in('id', venueIds);
 
   const tzMap = new Map<string, string>();
+  const masterOffVenues = new Set<string>();
   for (const v of venues ?? []) {
     tzMap.set(v.id as string, resolveVenueTimezone(v.timezone as string | null));
+    if ((v as { booking_system_enabled?: boolean | null }).booking_system_enabled === false) {
+      masterOffVenues.add(v.id as string);
+    }
   }
 
   let enrolled = 0;
   const now = new Date();
 
   for (const [venueId, autoList] of byVenue) {
+    // Respect the master Speed-to-Lead kill switch — skip venues that turned
+    // the whole system off (e.g. anniversary emails shouldn't fire either).
+    if (masterOffVenues.has(venueId)) continue;
     const tz = tzMap.get(venueId) ?? resolveVenueTimezone(null);
     const todayYmd = formatInTimeZone(now, tz, 'yyyy-MM-dd');
 

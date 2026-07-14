@@ -6,7 +6,7 @@ import {
   Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, GripVertical,
   Clock, Send, Users, ExternalLink, SkipForward, X as XIcon,
   RefreshCw, Image as ImageIcon, Link as LinkIcon, Lock, CalendarClock,
-  Star,
+  Star, Heart,
 } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
 
@@ -723,6 +723,65 @@ function SequenceEditor({
   );
 }
 
+// ─── Single email editor (Anniversary) ───────────────────────────────────
+
+/** A focused editor for exactly one email — subject, body, and optional image
+ *  and button blocks. Used by the Anniversary stage, which sends a single
+ *  email a year after the wedding date. */
+function SingleEmailEditor({
+  step, onChange,
+}: {
+  step: StepConfig;
+  onChange: (s: StepConfig) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <SectionLabel>Subject line</SectionLabel>
+        <InlineInput
+          value={step.subject ?? ''}
+          onChange={(v) => onChange({ ...step, subject: v })}
+          placeholder="Subject line"
+          className="w-full font-medium"
+        />
+        <InlineInput
+          value={step.preview_text ?? ''}
+          onChange={(v) => onChange({ ...step, preview_text: v })}
+          placeholder="Preview text (optional preheader)"
+          className="w-full text-gray-500"
+        />
+      </div>
+      <div className="space-y-3 border border-gray-200 rounded-lg p-3 bg-gray-50/50">
+        <div className="space-y-2">
+          <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5"><ImageIcon size={12} /> Image Block (Optional)</label>
+          <div className="flex gap-2">
+            <InlineInput value={step.image_url ?? ''} onChange={(v) => onChange({ ...step, image_url: v })} placeholder="Image URL (https://...)" className="flex-1" />
+            <InlineInput value={step.image_link ?? ''} onChange={(v) => onChange({ ...step, image_link: v })} placeholder="Link URL (when clicked)" className="flex-1" />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Email Body</label>
+          <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+            <RichTextEditor
+              content={step.body ?? ''}
+              onChange={(v: string) => onChange({ ...step, body: v })}
+              placeholder="Email body… {{first_name}}, {{venue_name}}"
+              minHeight={120}
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5"><LinkIcon size={12} /> Button Block (Optional)</label>
+          <div className="flex gap-2">
+            <InlineInput value={step.button_text ?? ''} onChange={(v) => onChange({ ...step, button_text: v })} placeholder="Button Text (e.g. Leave a review)" className="flex-1" />
+            <InlineInput value={step.button_link ?? ''} onChange={(v) => onChange({ ...step, button_link: v })} placeholder="Button Link (https://...)" className="flex-1" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Save as Default / Reset to Default ──────────────────────────────────
 
 /** Small reusable confirm dialog, styled consistently with StepLeadsModal above. */
@@ -1159,6 +1218,39 @@ export default function BookingSystemPage() {
           />
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
+
+        {/* Anniversary — single email one year after the wedding date */}
+        {(() => {
+          const anniversaryStep: StepConfig =
+            cfg.anniversarySteps[0] ?? { step_order: 0, step_type: 'send_email', label: 'Happy Anniversary', subject: '', body: '' };
+          return (
+            <PhaseCard
+              number={5}
+              title="Anniversary → Celebrated"
+              subtitle="A single email that sends automatically one year after the wedding date — a warm check-in that keeps referrals coming."
+              icon={<Heart size={18} className="text-rose-600" />}
+              accent="bg-rose-50"
+              enabled={cfg.anniversaryEnabled}
+              onToggle={(v) => void save({ anniversaryEnabled: v })}
+              disabled={!cfg.masterEnabled}
+              disabledTooltip={!cfg.masterEnabled ? 'Turn the Speed to Lead System on to enable this stage.' : undefined}
+            >
+              <StageDefaultActions
+                stageKey="phase6"
+                stageName="Anniversary → Celebrated"
+                contentNoun="email"
+                content={cfg.anniversarySteps}
+                isDemoVenue={cfg.isDemoVenue}
+                onContentUpdated={(updated) => setCfg(prev => (prev && Array.isArray(updated)) ? { ...prev, anniversarySteps: updated } : prev)}
+              />
+              <SingleEmailEditor
+                step={anniversaryStep}
+                onChange={(s) => void save({ anniversarySteps: [{ ...s, step_order: 0, step_type: 'send_email' }] })}
+              />
+              <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
+            </PhaseCard>
+          );
+        })()}
 
         {/* Phase 5 — AI Concierge Settings (All-Inclusive tier only) */}
         <PhaseCard

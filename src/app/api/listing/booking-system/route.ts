@@ -42,6 +42,10 @@ export const STL_NAME = 'Speed to Lead — Booking System';
 // rows with that name were paused via migrations/163.
 export const PHASE4_NAME = 'Booked Tour Sequence — Booking System';
 export const PHASE5_NAME = 'Booked Wedding Sequence — Booking System';
+// Anniversary — a single email that fires once a year after the wedding date.
+export const PHASE6_NAME = 'Anniversary — Booking System';
+// Days after the wedding date the anniversary email fires (1 year).
+export const ANNIVERSARY_DAYS_AFTER_WEDDING = 365;
 
 // Stable stage keys used by the /stage-default publish/reset API and by
 // `booking_system_stage_defaults.stage_key` (migrations/164, 165).
@@ -53,21 +57,22 @@ export const PHASE5_NAME = 'Booked Wedding Sequence — Booking System';
 // stores `{ guideEmailBody, guideSmsBody }` instead of a steps array, and
 // reset/publish write directly to `venues` instead of
 // `marketing_automation_steps` — see /stage-default/route.ts.
-export type StageKey = 'phase1' | 'phase2' | 'phase4' | 'phase5';
-export const ALL_STAGE_KEYS: StageKey[] = ['phase1', 'phase2', 'phase4', 'phase5'];
+export type StageKey = 'phase1' | 'phase2' | 'phase4' | 'phase5' | 'phase6';
+export const ALL_STAGE_KEYS: StageKey[] = ['phase1', 'phase2', 'phase4', 'phase5', 'phase6'];
 
 /** The subset of stage keys backed by a `marketing_automations` row + StepConfig[] sequence. */
-export type AutomationStageKey = 'phase2' | 'phase4' | 'phase5';
+export type AutomationStageKey = 'phase2' | 'phase4' | 'phase5' | 'phase6';
 
 // Maps each automation-backed stage key to the automation name it corresponds to.
 export const STAGE_KEY_TO_AUTOMATION_NAME: Record<AutomationStageKey, string> = {
   phase2: STL_NAME,
   phase4: PHASE4_NAME,
   phase5: PHASE5_NAME,
+  phase6: PHASE6_NAME,
 };
 
 export function isAutomationStageKey(key: StageKey): key is AutomationStageKey {
-  return key === 'phase2' || key === 'phase4' || key === 'phase5';
+  return key === 'phase2' || key === 'phase4' || key === 'phase5' || key === 'phase6';
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -107,6 +112,9 @@ export interface BookingSystemConfig {
   // Phase 5 — Booked Wedding
   phase5Enabled:          boolean;
   phase5Steps:            StepConfig[];
+  // Anniversary — single email one year after the wedding date
+  anniversaryEnabled:     boolean;
+  anniversarySteps:       StepConfig[];
   // Phase 5 — AI Concierge long-tail
   aiEnabled:              boolean;
   aiPersonaName:          string;
@@ -174,7 +182,7 @@ export async function GET() {
     .from('marketing_automations')
     .select('id, name, status')
     .eq('venue_id', venueId)
-    .in('name', [STL_NAME, PHASE4_NAME, PHASE5_NAME]);
+    .in('name', [STL_NAME, PHASE4_NAME, PHASE5_NAME, PHASE6_NAME]);
 
   const loadAuto = async (name: string, defaultSteps: StepConfig[] = []) => {
     const auto = autos?.find(a => a.name === name);
@@ -208,6 +216,7 @@ export async function GET() {
   const phase2 = await loadAuto(STL_NAME, DEFAULT_PHASE2_STEPS);
   const phase4 = await loadAuto(PHASE4_NAME, DEFAULT_PHASE4_STEPS);
   const phase5 = await loadAuto(PHASE5_NAME, DEFAULT_PHASE5_STEPS);
+  const phase6 = await loadAuto(PHASE6_NAME, DEFAULT_PHASE6_STEPS);
 
   const cfg: BookingSystemConfig = {
     masterEnabled:      (v.booking_system_enabled as boolean | null) ?? true,
@@ -225,6 +234,8 @@ export async function GET() {
     phase4Steps:        phase4.steps,
     phase5Enabled:      phase5.automationId ? phase5.automationActive : false,
     phase5Steps:        phase5.steps,
+    anniversaryEnabled: phase6.automationId ? phase6.automationActive : false,
+    anniversarySteps:   phase6.steps,
     aiEnabled:          (v.ai_concierge_enabled as boolean | null) ?? false,
     aiPersonaName:      (v.ai_assistant_persona_name as string | null) ?? 'StoryVenue Concierge',
     aiMaxDays:          (v.booking_ai_max_days     as number | null) ?? 60,
@@ -248,6 +259,7 @@ export async function GET() {
     cfg.automationActive  = false;
     cfg.phase4Enabled     = false;
     cfg.phase5Enabled     = false;
+    cfg.anniversaryEnabled = false;
     cfg.aiEnabled         = false;
   }
 
@@ -437,6 +449,14 @@ export async function PATCH(req: NextRequest) {
         weddingStageId ? { to_stage_ids: [weddingStageId] } : undefined,
       );
     }
+    // Anniversary — fires once a year after the wedding date via the daily
+    // wedding-date-followup cron. The trigger offset is fixed at 365 days.
+    if (body.anniversaryEnabled !== undefined || body.anniversarySteps !== undefined) {
+      await saveAutomation(
+        PHASE6_NAME, body.anniversaryEnabled, body.anniversarySteps, 'wedding_date_followup',
+        { days_after_wedding: ANNIVERSARY_DAYS_AFTER_WEDDING },
+      );
+    }
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Failed to save automations' }, { status: 500 });
   }
@@ -623,6 +643,13 @@ const DEFAULT_PHASE5_STEPS: StepConfig[] = [
   { step_order: 6, step_type: 'delay', label: 'Wait 1 day', delay_minutes: 1 * 1440 },
   { step_order: 7, step_type: 'send_sms', label: 'Touch 5',
     body: `Hi {{first_name}}, it's {{owner_name}}. I just wanted you to hear it from me one more time, you're in good hands and I'm so glad we get to be part of your day. Anything you need between now and then, I'm right here. No question is too small.` },
+];
+
+// ─── Anniversary default — single email, one year after the wedding date ────
+const DEFAULT_PHASE6_STEPS: StepConfig[] = [
+  { step_order: 0, step_type: 'send_email', label: 'Happy Anniversary',
+    subject: 'Happy anniversary, {{first_name}} 💛',
+    body: `Hi {{first_name}},\n\nOne year ago you got married at {{venue_name}}, and I've been thinking about you two. I hope this year has been everything you hoped for and then some.\n\nWe still talk about your day here. It meant so much to us to be part of it.\n\nIf you ever find yourself back in the area, we'd love to see you. And if anyone you love is starting to plan their own wedding, you know where to find us. 😊\n\nHappy anniversary,\n{{owner_name}}\n{{venue_name}}` },
 ];
 
 const DEFAULT_AI_MESSAGES = [
