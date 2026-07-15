@@ -466,6 +466,8 @@ export async function POST(
         wedding_date: null,
         guest_count:  null,
         message:      null,
+        fbclid:       utm.fbclid   || null,
+        referrer:     utm.referrer || null,
         utm_source:   utm.utm_source   ?? null,
         utm_medium:   utm.utm_medium   ?? null,
         utm_campaign: utm.utm_campaign ?? null,

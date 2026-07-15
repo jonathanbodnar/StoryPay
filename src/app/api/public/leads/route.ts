@@ -450,18 +450,23 @@ export async function POST(request: NextRequest) {
   // Tripleseat integration — push lead data if the venue has connected their
   // Tripleseat account. Fire-and-forget; never blocks the response.
   void maybePushLeadToTripleseat(venue.id, {
-    first_name:   firstName || null,
-    last_name:    lastName  || null,
-    email:        lr.email,
-    phone:        phone || null,
-    wedding_date: null,          // not collected on the public form
-    guest_count:  null,          // not collected on the public form
-    message:      payload.message ?? null,
-    utm_source:   payload.utm_source ?? null,
-    utm_medium:   payload.utm_medium ?? null,
-    utm_campaign: payload.utm_campaign ?? null,
-    utm_term:     payload.utm_term ?? null,
-    utm_content:  payload.utm_content ?? null,
+    first_name:       firstName || null,
+    last_name:        lastName  || null,
+    email:            lr.email,
+    phone:            phone || null,
+    wedding_date:     null,
+    guest_count:      null,
+    message:          payload.message ?? null,
+    booking_timeline: payload.booking_timeline ?? null,
+    venue_matters:    payload.venue_matters ?? null,
+    referral_source:  payload.referral_source ?? null,
+    referrer:         utm.referrer || payload.referrer || null,
+    fbclid:           utm.fbclid   || null,
+    utm_source:       payload.utm_source ?? null,
+    utm_medium:       payload.utm_medium ?? null,
+    utm_campaign:     payload.utm_campaign ?? null,
+    utm_term:         payload.utm_term ?? null,
+    utm_content:      payload.utm_content ?? null,
   }).catch(() => {});
 
   // Meta (Facebook) Conversions API — server-side `Lead` event, fire-and-forget.

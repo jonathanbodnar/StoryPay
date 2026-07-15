@@ -60,6 +60,53 @@ export interface TripleseatLeadPayload {
   campaign_term?: string;
   campaign_content?: string;
   email_opt_in?: boolean;
+  selected_lead_sources_attributes?: Array<{ lead_source_other: string }>;
+}
+
+const SOURCE_LABEL = 'StoryVenue - Bride Booking System';
+
+/**
+ * Build the additional_information block that gets attached to every
+ * Tripleseat lead. Includes all supplemental form fields that don't map
+ * to a dedicated Tripleseat property, formatted so venue staff can read
+ * them at a glance when the lead lands in their inbox.
+ */
+export function buildAdditionalInformation(fields: {
+  booking_timeline?: string | null;
+  venue_matters?: string | null;
+  referral_source?: string | null;
+  referrer?: string | null;
+  fbclid?: string | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+}): string {
+  const lines: string[] = [`Source: ${SOURCE_LABEL}`];
+
+  if (fields.booking_timeline) {
+    lines.push(`Booking Timeline: ${fields.booking_timeline}`);
+  }
+  if (fields.venue_matters) {
+    lines.push(`What Matters Most: ${fields.venue_matters}`);
+  }
+  if (fields.referral_source) {
+    lines.push(`How They Heard About Us: ${fields.referral_source}`);
+  }
+
+  // Attribution detail — only include if something meaningful was captured.
+  const utmParts: string[] = [];
+  if (fields.fbclid) utmParts.push('Meta Paid Ad (fbclid detected)');
+  if (fields.utm_source) utmParts.push(`utm_source: ${fields.utm_source}`);
+  if (fields.utm_medium) utmParts.push(`utm_medium: ${fields.utm_medium}`);
+  if (fields.utm_campaign) utmParts.push(`utm_campaign: ${fields.utm_campaign}`);
+  if (fields.referrer && !fields.fbclid && !fields.utm_source) {
+    utmParts.push(`referrer: ${fields.referrer}`);
+  }
+  if (utmParts.length > 0) {
+    lines.push(`Attribution: ${utmParts.join(' | ')}`);
+  }
+
+  return lines.join('\n');
 }
 
 /**
@@ -72,7 +119,14 @@ export async function pushLeadToTripleseat(
   lead: TripleseatLeadPayload,
 ): Promise<{ ok: boolean; tripleseatLeadId?: number; error?: string }> {
   try {
-    const body: Record<string, unknown> = { lead: { ...lead } };
+    // Always stamp our source attribution so every lead is credited to the
+    // Bride Booking System in Tripleseat's reporting regardless of channel.
+    const leadWithSource: TripleseatLeadPayload = {
+      ...lead,
+      selected_lead_sources_attributes: [{ lead_source_other: SOURCE_LABEL }],
+    };
+
+    const body: Record<string, unknown> = { lead: { ...leadWithSource } };
     if (locationId) (body.lead as Record<string, unknown>).location_id = locationId;
 
     const url = `${TRIPLESEAT_API}/leads/create.json?public_key=${encodeURIComponent(publicKey)}`;
@@ -110,6 +164,11 @@ export async function maybePushLeadToTripleseat(
     wedding_date?: string | null;
     guest_count?: number | null;
     message?: string | null;
+    booking_timeline?: string | null;
+    venue_matters?: string | null;
+    referral_source?: string | null;
+    referrer?: string | null;
+    fbclid?: string | null;
     utm_source?: string | null;
     utm_medium?: string | null;
     utm_campaign?: string | null;
@@ -127,23 +186,35 @@ export async function maybePushLeadToTripleseat(
     const v = venue as { tripleseat_public_key?: string | null; tripleseat_location_id?: number | null } | null;
     if (!v?.tripleseat_public_key) return;
 
+    const additionalInfo = buildAdditionalInformation({
+      booking_timeline: lead.booking_timeline,
+      venue_matters:    lead.venue_matters,
+      referral_source:  lead.referral_source,
+      referrer:         lead.referrer,
+      fbclid:           lead.fbclid,
+      utm_source:       lead.utm_source,
+      utm_medium:       lead.utm_medium,
+      utm_campaign:     lead.utm_campaign,
+    });
+
     const result = await pushLeadToTripleseat(
       v.tripleseat_public_key,
       v.tripleseat_location_id ?? null,
       {
-        first_name:          lead.first_name ?? undefined,
-        last_name:           lead.last_name ?? undefined,
-        email_address:       lead.email ?? undefined,
-        phone_number:        lead.phone ?? undefined,
-        event_date:          lead.wedding_date?.slice(0, 10) ?? undefined,
-        guest_count:         lead.guest_count ?? undefined,
-        event_description:   lead.message ?? undefined,
-        campaign_source:     lead.utm_source ?? undefined,
-        campaign_medium:     lead.utm_medium ?? undefined,
-        campaign_name:       lead.utm_campaign ?? undefined,
-        campaign_term:       lead.utm_term ?? undefined,
-        campaign_content:    lead.utm_content ?? undefined,
-        email_opt_in:        true,
+        first_name:             lead.first_name ?? undefined,
+        last_name:              lead.last_name ?? undefined,
+        email_address:          lead.email ?? undefined,
+        phone_number:           lead.phone ?? undefined,
+        event_date:             lead.wedding_date?.slice(0, 10) ?? undefined,
+        guest_count:            lead.guest_count ?? undefined,
+        event_description:      lead.message ?? undefined,
+        additional_information: additionalInfo,
+        campaign_source:        lead.utm_source ?? undefined,
+        campaign_medium:        lead.utm_medium ?? undefined,
+        campaign_name:          lead.utm_campaign ?? undefined,
+        campaign_term:          lead.utm_term ?? undefined,
+        campaign_content:       lead.utm_content ?? undefined,
+        email_opt_in:           true,
       },
     );
 
