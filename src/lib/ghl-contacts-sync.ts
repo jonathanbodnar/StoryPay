@@ -112,7 +112,7 @@ interface VenueRow {
  * and the API rejects the access token, refresh and persist.
  */
 
-async function tryRefresh(venue: VenueRow): Promise<string | null> {
+async function tryRefresh(venue: Pick<VenueRow, 'id' | 'ghl_refresh_token'>): Promise<string | null> {
   if (!venue.ghl_refresh_token) return null;
   try {
     const tokens = await refreshAccessToken(venue.ghl_refresh_token);
@@ -128,6 +128,78 @@ async function tryRefresh(venue: VenueRow): Promise<string | null> {
     console.error('[ghl-contacts-sync] refresh failed for venue', venue.id, err);
     return null;
   }
+}
+
+/** GHL rejects with 401 (invalid key) or 403 (key valid but wrong location /
+ *  missing scope). Both mean "this token can't do the job" — same recovery. */
+function isGhlAuthError(msg: string): boolean {
+  return /\b40[13]\b/.test(msg);
+}
+
+/**
+ * Last-resort token recovery shared by every sync path.
+ *
+ * Order:
+ *   1. OAuth refresh (if the venue has a refresh token).
+ *   2. Env agency key. v1 agency keys are NOT location-scoped, so they must be
+ *      exchanged via /v1/locations/{id} for the location's own key — passing
+ *      them straight to the contacts endpoint guarantees another 401/403.
+ *
+ * The recovered location-scoped token is persisted to venues.ghl_access_token
+ * so the broken key (revoked v1 key, mis-scoped PIT, stale OAuth token) is
+ * healed permanently, not just for this one request.
+ *
+ * Returns the working token, or throws with an actionable message.
+ */
+export async function bootstrapFallbackLocationToken(
+  venue: Pick<VenueRow, 'id' | 'ghl_refresh_token'>,
+  locationId: string,
+): Promise<string> {
+  // 1. OAuth refresh
+  if (venue.ghl_refresh_token) {
+    const refreshed = await tryRefresh(venue);
+    if (refreshed) {
+      try {
+        return await resolveLocationToken(refreshed, locationId);
+      } catch {
+        // fall through to the agency key
+      }
+    }
+  }
+
+  // 2. Agency key from env
+  const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
+  if (!agencyKey) {
+    throw new Error(
+      'Your GHL API key was rejected and no agency-level fallback is configured. ' +
+      'Go to Settings → StoryVenue Legacy, generate a fresh API key in the sub-account, and paste it in.',
+    );
+  }
+
+  let token: string;
+  try {
+    if (classifyToken(agencyKey) === 'v1') {
+      token = await fetchV1LocationApiKey(agencyKey, locationId);
+    } else {
+      token = await resolveLocationToken(agencyKey, locationId);
+    }
+  } catch (err) {
+    const rmsg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Your GHL credentials were rejected and the agency fallback could not reach sub-account ${locationId}. ` +
+      'Double-check the Sub-Account ID in Settings → StoryVenue Legacy — it must exactly match the sub-account ' +
+      `where the API key was created. (technical detail: ${rmsg})`,
+    );
+  }
+
+  // Persist the healed key so every future call (sync, SMS, webhooks) works.
+  await supabaseAdmin
+    .from('venues')
+    .update({ ghl_access_token: token })
+    .eq('id', venue.id);
+  console.log('[ghl-contacts-sync] healed GHL token for venue', venue.id, 'via fallback');
+
+  return token;
 }
 
 // ── GHL list pagination ──────────────────────────────────────────────────────
@@ -416,54 +488,11 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
       pageData = await fetchContactPage(token, venue.ghl_location_id, startAfter, startAfterId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown';
-      // 401 → try a one-shot refresh & retry the page once.
-      if (/\b401\b/.test(msg)) {
-        let refreshed: string | null = null;
-        // Attempt OAuth refresh first (if the venue has a refresh token).
-        if (venue.ghl_refresh_token) {
-          refreshed = await tryRefresh(venue);
-        }
-        // If OAuth refresh wasn't available or failed, fall back to the
-        // agency key. This is the primary path for legacy clients that
-        // were connected via the agency flow and don't have per-venue
-        // OAuth tokens.
-        if (!refreshed) {
-          const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
-          if (agencyKey) {
-            refreshed = agencyKey;
-          }
-        }
-        if (refreshed) {
-          try {
-            // v1 agency keys are NOT location-scoped — resolveLocationToken returns
-            // them unchanged, which means the contacts endpoint would get another 401.
-            // For v1, explicitly exchange the agency key for a fresh location key.
-            if (classifyToken(refreshed) === 'v1') {
-              const freshLocationKey = await fetchV1LocationApiKey(refreshed, venue.ghl_location_id!);
-              // Persist the fresh key so the next call doesn't need to re-bootstrap.
-              await supabaseAdmin
-                .from('venues')
-                .update({ ghl_access_token: freshLocationKey })
-                .eq('id', venue.id);
-              token = freshLocationKey;
-            } else {
-              token = await resolveLocationToken(refreshed, venue.ghl_location_id!);
-            }
-          } catch (resolveErr) {
-            const rmsg = resolveErr instanceof Error ? resolveErr.message : String(resolveErr);
-            throw new Error(
-              `Your GHL connection credentials have expired and automatic renewal failed. ` +
-              `Please go to Settings → Messaging and reconnect your GHL account. ` +
-              `(technical detail: ${rmsg})`,
-            );
-          }
-          pageData = await fetchContactPage(token, venue.ghl_location_id!, startAfter, startAfterId);
-        } else {
-          throw new Error(
-            'Your GHL API key is no longer valid and no fallback credentials are configured. ' +
-            'Please go to Settings → Messaging and reconnect your GHL account.',
-          );
-        }
+      // 401 (invalid key) or 403 (wrong location / missing PIT scope) →
+      // recover a working location-scoped token once, retry the page.
+      if (isGhlAuthError(msg)) {
+        token = await bootstrapFallbackLocationToken(venue, venue.ghl_location_id!);
+        pageData = await fetchContactPage(token, venue.ghl_location_id!, startAfter, startAfterId);
       } else {
         throw err;
       }
@@ -584,17 +613,12 @@ export async function syncSingleGhlContact(
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown';
-      // 401 → try agency key fallback for legacy clients
-      if (/\b401\b/.test(msg)) {
-        const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
-        if (agencyKey) {
-          token = await resolveLocationToken(agencyKey, locationId);
-          result = await ghlRequest(`/contacts/${contactId}`, token, { locationId }) as {
-            contact?: GhlContact;
-          };
-        } else {
-          throw err;
-        }
+      // 401/403 → recover a working location token and retry once.
+      if (isGhlAuthError(msg)) {
+        token = await bootstrapFallbackLocationToken(venue, locationId);
+        result = await ghlRequest(`/contacts/${contactId}`, token, { locationId }) as {
+          contact?: GhlContact;
+        };
       } else {
         throw err;
       }
