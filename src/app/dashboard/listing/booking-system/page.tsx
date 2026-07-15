@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Zap, Mail, MessageSquare, Bot, ChevronDown, ChevronUp,
   Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, GripVertical,
   Clock, Send, Users, ExternalLink, SkipForward, X as XIcon,
   RefreshCw, Image as ImageIcon, Link as LinkIcon, Lock, CalendarClock,
-  Star, Heart,
+  Star, Heart, BarChart2, Download, CalendarDays,
 } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
 
@@ -1055,15 +1056,255 @@ function StageDefaultActions({
   );
 }
 
+// ─── Report Modal ─────────────────────────────────────────────────────────────
+
+type ScheduleState = { enabled: boolean; emails: string[]; nextAt: string | null };
+
+function ReportModal({ onClose }: { onClose: () => void }) {
+  const [tab,            setTab]            = useState<'send' | 'schedule'>('send');
+  const [sendEmails,     setSendEmails]     = useState('');
+  const [sending,        setSending]        = useState(false);
+  const [sendResult,     setSendResult]     = useState<{ ok: boolean; msg: string } | null>(null);
+  const [schedule,       setSchedule]       = useState<ScheduleState>({ enabled: false, emails: [], nextAt: null });
+  const [scheduleInput,  setScheduleInput]  = useState('');
+  const [savingSched,    setSavingSched]     = useState(false);
+  const [schedResult,    setSchedResult]    = useState<{ ok: boolean; msg: string } | null>(null);
+  const [loadingData,    setLoadingData]    = useState(true);
+
+  useEffect(() => {
+    fetch('/api/listing/booking-report', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d: { schedule?: ScheduleState }) => {
+        if (d.schedule) {
+          setSchedule(d.schedule);
+          setScheduleInput((d.schedule.emails ?? []).join(', '));
+        }
+      })
+      .catch(() => {/* non-fatal */})
+      .finally(() => setLoadingData(false));
+  }, []);
+
+  async function handleSendNow() {
+    const emails = sendEmails.split(/[\s,;]+/).map((e) => e.trim()).filter((e) => e.includes('@'));
+    if (!emails.length) { setSendResult({ ok: false, msg: 'Enter at least one valid email address.' }); return; }
+    setSending(true); setSendResult(null);
+    try {
+      const r = await fetch('/api/listing/booking-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails }),
+      });
+      const d = await r.json() as { ok?: boolean; sent?: number; error?: string };
+      if (!r.ok) throw new Error(d.error || 'Send failed');
+      setSendResult({ ok: true, msg: `Report sent to ${d.sent} address${(d.sent ?? 0) !== 1 ? 'es' : ''}!` });
+    } catch (e) {
+      setSendResult({ ok: false, msg: e instanceof Error ? e.message : 'Send failed' });
+    } finally { setSending(false); }
+  }
+
+  async function handleSaveSchedule() {
+    const emails = scheduleInput.split(/[\s,;]+/).map((e) => e.trim()).filter((e) => e.includes('@'));
+    setSavingSched(true); setSchedResult(null);
+    try {
+      const r = await fetch('/api/listing/booking-report', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: schedule.enabled, emails }),
+      });
+      const d = await r.json() as { ok?: boolean; nextAt?: string | null; error?: string };
+      if (!r.ok) throw new Error(d.error || 'Save failed');
+      setSchedule({ enabled: schedule.enabled, emails, nextAt: d.nextAt ?? null });
+      setSchedResult({ ok: true, msg: schedule.enabled ? `Scheduled! Next report sends on ${d.nextAt ? new Date(d.nextAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}.` : 'Auto-send disabled.' });
+    } catch (e) {
+      setSchedResult({ ok: false, msg: e instanceof Error ? e.message : 'Save failed' });
+    } finally { setSavingSched(false); }
+  }
+
+  const modal = (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl">
+
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600">
+              <BarChart2 size={15} className="text-white" />
+            </div>
+            <div>
+              <p className="text-[13px] font-bold text-gray-900">Export Report</p>
+              <p className="text-[11px] text-gray-400">Last 30 days · Bride Booking System™</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <XIcon size={14} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100">
+          {(['send', 'schedule'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`flex-1 py-2.5 text-[12px] font-semibold transition-colors ${
+                tab === t
+                  ? 'border-b-2 border-gray-900 text-gray-900'
+                  : 'text-gray-400 hover:text-gray-700'
+              }`}
+            >
+              {t === 'send' ? (
+                <span className="flex items-center justify-center gap-1.5"><Download size={12} /> Download / Send Now</span>
+              ) : (
+                <span className="flex items-center justify-center gap-1.5"><CalendarDays size={12} /> Auto-Send Schedule</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        {loadingData ? (
+          <div className="flex items-center justify-center py-12 text-gray-300">
+            <Loader2 size={20} className="animate-spin" />
+          </div>
+        ) : (
+          <div className="px-5 py-5">
+            {tab === 'send' && (
+              <div className="space-y-4">
+                <p className="text-[12px] text-gray-500">
+                  Enter one or more email addresses and we'll send the full 30-day report instantly — funnel, source breakdown, and key metrics all in one clean email.
+                </p>
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                    Email address(es)
+                  </label>
+                  <input
+                    type="text"
+                    value={sendEmails}
+                    onChange={(e) => setSendEmails(e.target.value)}
+                    placeholder="you@example.com, partner@example.com"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[13px] text-gray-800 outline-none placeholder:text-gray-300 focus:border-gray-400 focus:ring-1 focus:ring-gray-200"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">Separate multiple addresses with commas.</p>
+                </div>
+
+                {sendResult && (
+                  <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-[12px] font-medium ${
+                    sendResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                  }`}>
+                    {sendResult.ok ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+                    {sendResult.msg}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => void handleSendNow()}
+                  disabled={sending || !sendEmails.trim()}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                  {sending ? 'Sending…' : 'Send Report Now'}
+                </button>
+              </div>
+            )}
+
+            {tab === 'schedule' && (
+              <div className="space-y-4">
+                <p className="text-[12px] text-gray-500">
+                  Turn on auto-send and we'll email the 30-day report to the addresses below every month — no manual work required.
+                </p>
+
+                {/* Toggle */}
+                <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                  <div>
+                    <p className="text-[13px] font-medium text-gray-800">Monthly auto-send</p>
+                    <p className="text-[11px] text-gray-400">
+                      {schedule.enabled && schedule.nextAt
+                        ? `Next: ${new Date(schedule.nextAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                        : "Off \u2014 reports won\u2019t send automatically."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSchedule((s) => ({ ...s, enabled: !s.enabled }))}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                      schedule.enabled ? 'bg-gray-900' : 'bg-gray-200'
+                    }`}
+                    role="switch"
+                    aria-checked={schedule.enabled}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        schedule.enabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Email list */}
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                    Send to
+                  </label>
+                  <input
+                    type="text"
+                    value={scheduleInput}
+                    onChange={(e) => setScheduleInput(e.target.value)}
+                    placeholder="you@example.com, partner@example.com"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[13px] text-gray-800 outline-none placeholder:text-gray-300 focus:border-gray-400 focus:ring-1 focus:ring-gray-200"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">Separate multiple addresses with commas. Up to 10.</p>
+                </div>
+
+                {schedResult && (
+                  <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-[12px] font-medium ${
+                    schedResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                  }`}>
+                    {schedResult.ok ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+                    {schedResult.msg}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => void handleSaveSchedule()}
+                  disabled={savingSched}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  {savingSched ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                  {savingSched ? 'Saving…' : 'Save Schedule'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(modal, document.body);
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────
 
 export default function BookingSystemPage() {
-  const [cfg, setCfg]             = useState<BookingSystemConfig | null>(null);
-  const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(false);
-  const [saved, setSaved]         = useState(false);
-  const [error, setError]         = useState('');
-  const [leadsData, setLeadsData] = useState<StepLeadsPayload | null>(null);
+  const [cfg, setCfg]               = useState<BookingSystemConfig | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [saving, setSaving]         = useState(false);
+  const [saved, setSaved]           = useState(false);
+  const [error, setError]           = useState('');
+  const [leadsData, setLeadsData]   = useState<StepLeadsPayload | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   // Placeholders for new phases (removed local state, using cfg)
 
@@ -1140,6 +1381,14 @@ export default function BookingSystemPage() {
         <div className="flex items-center gap-2.5 shrink-0">
           {saving && <Loader2 size={14} className="animate-spin text-gray-400" />}
           {saved  && <span className="flex items-center gap-1 text-[12px] font-medium text-emerald-600"><CheckCircle2 size={13} /> Saved</span>}
+          <button
+            type="button"
+            onClick={() => setReportOpen(true)}
+            className="flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <BarChart2 size={13} className="text-violet-500" />
+            Export Report
+          </button>
           <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2">
             <span className="text-[12px] font-medium text-gray-700">
               {cfg.masterEnabled ? 'System on' : 'System off'}
@@ -1395,6 +1644,8 @@ export default function BookingSystemPage() {
           <AiConciergeSettingsPage />
         </PhaseCard>
       </div>
+
+      {reportOpen && <ReportModal onClose={() => setReportOpen(false)} />}
     </div>
   );
 }
