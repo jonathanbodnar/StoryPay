@@ -63,7 +63,7 @@ export interface TripleseatLeadPayload {
   selected_lead_sources_attributes?: Array<{ lead_source_other: string }>;
 }
 
-const SOURCE_LABEL = 'StoryVenue - Bride Booking System';
+const SOURCE_LABEL = 'StoryVenue - Bride Booking System™';
 
 /**
  * Build the additional_information block that gets attached to every
