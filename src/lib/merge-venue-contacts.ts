@@ -100,6 +100,33 @@ export interface MergedContactsResult {
 }
 
 /**
+ * Supabase/PostgREST silently caps every query at 1,000 rows. For venues with
+ * more contacts than that, a single .select() drops the rest — which made the
+ * Contacts page show ~1,000 contacts no matter how many were synced. This
+ * helper pages through a table in 1,000-row chunks until exhausted.
+ */
+const DB_PAGE = 1000;
+const MAX_DB_ROWS = 100_000; // hard safety cap
+
+async function fetchAllRows<T>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  label: string,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let offset = 0; offset < MAX_DB_ROWS; offset += DB_PAGE) {
+    const { data, error } = await buildQuery(offset, offset + DB_PAGE - 1);
+    if (error) {
+      console.error(`[mergeVenueContacts] ${label} page fetch error:`, error.message);
+      break;
+    }
+    const rows = data ?? [];
+    all.push(...rows);
+    if (rows.length < DB_PAGE) break;
+  }
+  return all;
+}
+
+/**
  * How many contacts to fetch live from GHL on each contacts-page load.
  * GHL's hard cap is 100/page; we use 100 so we capture recent adds that
  * haven't been written to venue_customers yet by the nightly sync.
@@ -127,16 +154,32 @@ export async function mergeVenueContacts(
 
   if (!venue) return { data: [], total: 0, ghlConnected: false, ghlContactsSyncedAt: null };
 
-  const [{ data: stageRows }, { data: vcFunnelRows }] = await Promise.all([
+  const [{ data: stageRows }, vcFunnelRows] = await Promise.all([
     supabaseAdmin
       .from('lead_pipeline_stages')
       .select('id, name, color')
       .eq('venue_id', venueId),
-    supabaseAdmin
-      .from('venue_customers')
-      .select('id, customer_email, first_name, last_name, phone, ghl_contact_id, lunarpay_customer_id, stage_id, pipeline_stage')
-      .eq('venue_id', venueId)
-      .order('created_at', { ascending: false }),
+    // Paged — venues can have well over Supabase's 1,000-row cap.
+    fetchAllRows<{
+      id: string;
+      customer_email: string | null;
+      first_name: string | null;
+      last_name: string | null;
+      phone: string | null;
+      ghl_contact_id: string | null;
+      lunarpay_customer_id: string | number | null;
+      stage_id: string | null;
+      pipeline_stage: string | null;
+    }>(
+      (from, to) =>
+        supabaseAdmin
+          .from('venue_customers')
+          .select('id, customer_email, first_name, last_name, phone, ghl_contact_id, lunarpay_customer_id, stage_id, pipeline_stage')
+          .eq('venue_id', venueId)
+          .order('created_at', { ascending: false })
+          .range(from, to),
+      'venue_customers',
+    ),
   ]);
 
   const stageById = new Map<string, { name: string; color: string }>();
@@ -190,7 +233,7 @@ export async function mergeVenueContacts(
     }
   }
 
-  const [ghlResult, lpResult, { data: leadRows, error: leadErr }] = await Promise.all([
+  const [ghlResult, lpResult, leadRows] = await Promise.all([
     (venue.ghl_connected && ghlToken && venue.ghl_location_id)
       ? ghlRequest(
           `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${GHL_LIVE_FETCH_LIMIT}`,
@@ -207,11 +250,28 @@ export async function mergeVenueContacts(
           return { data: [] };
         })
       : Promise.resolve({ data: [] }),
-    supabaseAdmin
-      .from('leads')
-      .select('id, first_name, last_name, name, email, phone, stage_id, pipeline_id, status, created_at')
-      .eq('venue_id', venueId)
-      .order('created_at', { ascending: false })
+    // Paged — same 1,000-row cap applies to leads.
+    fetchAllRows<{
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      name: string | null;
+      email: string | null;
+      phone: string | null;
+      stage_id: string | null;
+      pipeline_id: string | null;
+      status: string | null;
+      created_at: string;
+    }>(
+      (from, to) =>
+        supabaseAdmin
+          .from('leads')
+          .select('id, first_name, last_name, name, email, phone, stage_id, pipeline_id, status, created_at')
+          .eq('venue_id', venueId)
+          .order('created_at', { ascending: false })
+          .range(from, to),
+      'leads',
+    ),
   ]);
 
   const merged: MergedContact[] = [];
@@ -271,10 +331,8 @@ export async function mergeVenueContacts(
     if (email) seenEmails.add(email);
   }
 
-  if (leadErr) {
-    console.error('[mergeVenueContacts] leads fetch error:', leadErr);
-  } else {
-    for (const l of leadRows ?? []) {
+  {
+    for (const l of leadRows) {
       const email = ((l.email as string) || '').toLowerCase();
       if (email && seenEmails.has(email)) continue;
       const firstName = (l.first_name as string) || '';
