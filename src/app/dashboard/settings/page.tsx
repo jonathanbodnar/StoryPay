@@ -635,19 +635,32 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
       )}
 
       {/* Failed banner */}
-      {syncProgress?.status === 'failed' && (
-        <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700 flex items-start gap-2">
-          <AlertCircle size={13} className="mt-0.5 shrink-0" />
-          <span>{syncProgress.error || 'Contact sync failed.'}</span>
-        </div>
-      )}
+      {syncProgress?.status === 'failed' && (() => {
+        const rawErr = syncProgress.error || '';
+        const isCredentialError = /401|api key is invalid|credentials have expired|reconnect/i.test(rawErr);
+        const friendlyMsg = isCredentialError
+          ? 'Your GHL API key has expired or been revoked. Go to Settings → Messaging and reconnect your GHL account to fix this.'
+          : rawErr || 'Contact sync failed.';
+        return (
+          <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700 flex items-start gap-2">
+            <AlertCircle size={13} className="mt-0.5 shrink-0" />
+            <span>{friendlyMsg}</span>
+          </div>
+        );
+      })()}
 
-      {syncError && (
-        <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700 flex items-start gap-2">
-          <AlertCircle size={13} className="mt-0.5 shrink-0" />
-          <span>{syncError}</span>
-        </div>
-      )}
+      {syncError && (() => {
+        const isCredentialError = /401|api key is invalid|credentials have expired|reconnect/i.test(syncError);
+        const friendlyMsg = isCredentialError
+          ? 'Your GHL API key has expired or been revoked. Go to Settings → Messaging and reconnect your GHL account to fix this.'
+          : syncError;
+        return (
+          <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-xs text-red-700 flex items-start gap-2">
+            <AlertCircle size={13} className="mt-0.5 shrink-0" />
+            <span>{friendlyMsg}</span>
+          </div>
+        );
+      })()}
     </div>
   );
 })()}

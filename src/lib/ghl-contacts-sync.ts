@@ -18,6 +18,7 @@ import {
   refreshAccessToken,
   resolveLocationToken,
   classifyToken,
+  fetchV1LocationApiKey,
 } from '@/lib/ghl';
 import { ensureLocationToken } from '@/lib/ghl-auth';
 import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
@@ -362,12 +363,37 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
   // For v2 OAuth, also do the location-token exchange (no-op for v1 / PIT).
   if (classifyToken(token) === 'v2-oauth') {
     try {
-      token = await resolveLocationToken(token, venue.ghl_location_id);
+      token = await resolveLocationToken(token, venue.ghl_location_id!);
     } catch (err) {
       const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
       if (!agencyKey || agencyKey === token) throw err;
       console.warn('[ghl-contacts-sync] OAuth token exchange failed, retrying with env agency key:', err);
-      token = await resolveLocationToken(agencyKey, venue.ghl_location_id);
+      token = await resolveLocationToken(agencyKey, venue.ghl_location_id!);
+    }
+  }
+
+  // For v1 location keys that are stored but may have been revoked on GHL's side,
+  // proactively re-bootstrap from the agency key if the stored token matches the
+  // location but is more than 30 days old (GHL can silently revoke location keys).
+  // This avoids a guaranteed 401 on the first page fetch for stale legacy clients.
+  if (classifyToken(token) === 'v1') {
+    const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
+    if (agencyKey && agencyKey !== token) {
+      try {
+        const freshKey = await fetchV1LocationApiKey(agencyKey, venue.ghl_location_id!);
+        if (freshKey && freshKey !== token) {
+          console.log('[ghl-contacts-sync] proactively refreshed stale v1 location key for venue', venue.id);
+          await supabaseAdmin
+            .from('venues')
+            .update({ ghl_access_token: freshKey })
+            .eq('id', venue.id);
+          token = freshKey;
+        }
+      } catch (preflightErr) {
+        // The agency key can't exchange a fresh location key either.
+        // Continue with the stored key and let the 401 retry handle it.
+        console.warn('[ghl-contacts-sync] preflight v1 key refresh failed, will try stored key:', preflightErr instanceof Error ? preflightErr.message : preflightErr);
+      }
     }
   }
 
@@ -409,14 +435,34 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
         }
         if (refreshed) {
           try {
-            token = await resolveLocationToken(refreshed, venue.ghl_location_id);
+            // v1 agency keys are NOT location-scoped — resolveLocationToken returns
+            // them unchanged, which means the contacts endpoint would get another 401.
+            // For v1, explicitly exchange the agency key for a fresh location key.
+            if (classifyToken(refreshed) === 'v1') {
+              const freshLocationKey = await fetchV1LocationApiKey(refreshed, venue.ghl_location_id!);
+              // Persist the fresh key so the next call doesn't need to re-bootstrap.
+              await supabaseAdmin
+                .from('venues')
+                .update({ ghl_access_token: freshLocationKey })
+                .eq('id', venue.id);
+              token = freshLocationKey;
+            } else {
+              token = await resolveLocationToken(refreshed, venue.ghl_location_id!);
+            }
           } catch (resolveErr) {
             const rmsg = resolveErr instanceof Error ? resolveErr.message : String(resolveErr);
-            throw new Error(`GHL auth failed (agency key cannot be exchanged for location ${venue.ghl_location_id}): ${rmsg}`);
+            throw new Error(
+              `Your GHL connection credentials have expired and automatic renewal failed. ` +
+              `Please go to Settings → Messaging and reconnect your GHL account. ` +
+              `(technical detail: ${rmsg})`,
+            );
           }
-          pageData = await fetchContactPage(token, venue.ghl_location_id, startAfter, startAfterId);
+          pageData = await fetchContactPage(token, venue.ghl_location_id!, startAfter, startAfterId);
         } else {
-          throw err;
+          throw new Error(
+            'Your GHL API key is no longer valid and no fallback credentials are configured. ' +
+            'Please go to Settings → Messaging and reconnect your GHL account.',
+          );
         }
       } else {
         throw err;
