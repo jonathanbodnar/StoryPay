@@ -67,19 +67,14 @@ const SOURCE_LABEL = 'StoryVenue - Bride Booking System';
 
 /**
  * Build the additional_information block that gets attached to every
- * Tripleseat lead. Includes all supplemental form fields that don't map
- * to a dedicated Tripleseat property, formatted so venue staff can read
- * them at a glance when the lead lands in their inbox.
+ * Tripleseat lead. Includes supplemental form fields that don't map to a
+ * dedicated Tripleseat property, formatted so venue staff can read them
+ * at a glance when the lead lands in their inbox.
  */
 export function buildAdditionalInformation(fields: {
   booking_timeline?: string | null;
   venue_matters?: string | null;
-  referral_source?: string | null;
-  referrer?: string | null;
-  fbclid?: string | null;
-  utm_source?: string | null;
-  utm_medium?: string | null;
-  utm_campaign?: string | null;
+  message?: string | null;
 }): string {
   const lines: string[] = [`Source: ${SOURCE_LABEL}`];
 
@@ -89,21 +84,8 @@ export function buildAdditionalInformation(fields: {
   if (fields.venue_matters) {
     lines.push(`What Matters Most: ${fields.venue_matters}`);
   }
-  if (fields.referral_source) {
-    lines.push(`How They Heard About Us: ${fields.referral_source}`);
-  }
-
-  // Attribution detail — only include if something meaningful was captured.
-  const utmParts: string[] = [];
-  if (fields.fbclid) utmParts.push('Meta Paid Ad (fbclid detected)');
-  if (fields.utm_source) utmParts.push(`utm_source: ${fields.utm_source}`);
-  if (fields.utm_medium) utmParts.push(`utm_medium: ${fields.utm_medium}`);
-  if (fields.utm_campaign) utmParts.push(`utm_campaign: ${fields.utm_campaign}`);
-  if (fields.referrer && !fields.fbclid && !fields.utm_source) {
-    utmParts.push(`referrer: ${fields.referrer}`);
-  }
-  if (utmParts.length > 0) {
-    lines.push(`Attribution: ${utmParts.join(' | ')}`);
+  if (fields.message) {
+    lines.push(`Additional Notes: ${fields.message}`);
   }
 
   return lines.join('\n');
@@ -166,9 +148,6 @@ export async function maybePushLeadToTripleseat(
     message?: string | null;
     booking_timeline?: string | null;
     venue_matters?: string | null;
-    referral_source?: string | null;
-    referrer?: string | null;
-    fbclid?: string | null;
     utm_source?: string | null;
     utm_medium?: string | null;
     utm_campaign?: string | null;
@@ -189,12 +168,7 @@ export async function maybePushLeadToTripleseat(
     const additionalInfo = buildAdditionalInformation({
       booking_timeline: lead.booking_timeline,
       venue_matters:    lead.venue_matters,
-      referral_source:  lead.referral_source,
-      referrer:         lead.referrer,
-      fbclid:           lead.fbclid,
-      utm_source:       lead.utm_source,
-      utm_medium:       lead.utm_medium,
-      utm_campaign:     lead.utm_campaign,
+      message:          lead.message,
     });
 
     const result = await pushLeadToTripleseat(
