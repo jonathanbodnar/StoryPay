@@ -24,6 +24,7 @@ export const runtime  = 'nodejs';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
 
+/** Escape for HTML attribute / text content contexts. */
 function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -31,6 +32,11 @@ function esc(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/** Escape for use inside a JS single-quoted string literal (no HTML encoding). */
+function escJs(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 export async function GET(
@@ -112,6 +118,7 @@ export async function GET(
       line-height: 1.3;
       border-bottom: 3px solid var(--primary);
       padding-bottom: 14px;
+      text-align: center;
     }
     .row { display: flex; gap: 12px; }
     .field { margin-bottom: 14px; flex: 1; }
@@ -258,7 +265,7 @@ export async function GET(
           fbclid:           fbclid || undefined,
         };
 
-        fetch('${APP_URL}/api/public/leads', {
+        fetch('${APP_URL}/api/public/embed-leads', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -273,7 +280,7 @@ export async function GET(
           errEl.textContent = err.message || 'Something went wrong. Please try again.';
           errEl.style.display = 'block';
           btn.disabled = false;
-          btn.textContent = '${esc(btnLabel)}';
+          btn.textContent = '${escJs(btnLabel)}';
         });
       });
     })();
