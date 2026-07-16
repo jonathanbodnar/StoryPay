@@ -32,6 +32,8 @@ interface BrandState {
  zip: string;
  footer_note: string;
  timezone: string;
+ embed_form_title: string;
+ embed_form_btn_label: string;
 }
 
 // ─── Social Networks Card ────────────────────────────────────────────────────
@@ -228,6 +230,8 @@ export default function BrandingPage() {
  venueName: '', email: '', phone: '', website: '',
  address: '', city: '', state: '', zip: '', footer_note: '',
  timezone: DEFAULT_VENUE_TIMEZONE,
+ embed_form_title: '',
+ embed_form_btn_label: '',
  });
 
  useEffect(() => {
@@ -247,6 +251,8 @@ export default function BrandingPage() {
  zip: d.brand_zip || '',
  footer_note: d.brand_footer_note || '',
  timezone: resolveVenueTimezone(d.timezone),
+ embed_form_title: d.embed_form_title || '',
+ embed_form_btn_label: d.embed_form_btn_label || '',
  });
  }).finally(() => setLoading(false));
  }, []);
@@ -341,6 +347,8 @@ export default function BrandingPage() {
  brand_zip: brand.zip,
  brand_footer_note: brand.footer_note,
  timezone: brand.timezone,
+ embed_form_title:     brand.embed_form_title     || null,
+ embed_form_btn_label: brand.embed_form_btn_label || null,
  }),
  });
  // Parse body once regardless of status
@@ -523,6 +531,41 @@ className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 te
 
 {/* Social Networks — used by the marketing email Social Links block */}
 <BrandSocialsCard />
+
+{/* Embed Form — custom title + button label for the embeddable form */}
+<div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+  <div className="px-6 py-4 border-b border-gray-200">
+    <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+      <ExternalLink size={16} className="text-gray-500" />
+      Embeddable Form
+    </h2>
+    <p className="text-xs text-gray-400 mt-0.5">Customise the title and button label on your embeddable lead-capture form.</p>
+  </div>
+  <div className="px-6 py-5 space-y-4">
+    <div>
+      <label className={LABEL}>Form heading</label>
+      <input
+        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-200"
+        value={brand.embed_form_title}
+        onChange={e => setBrand(b => ({ ...b, embed_form_title: e.target.value }))}
+        placeholder="Download Our Pricing Guide"
+        maxLength={120}
+      />
+      <p className="mt-1 text-xs text-gray-400">Shown at the top of the form. Defaults to &ldquo;Download Our Pricing Guide&rdquo;.</p>
+    </div>
+    <div>
+      <label className={LABEL}>Submit button label</label>
+      <input
+        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-200"
+        value={brand.embed_form_btn_label}
+        onChange={e => setBrand(b => ({ ...b, embed_form_btn_label: e.target.value }))}
+        placeholder="Download Pricing & Availability Guide"
+        maxLength={80}
+      />
+      <p className="mt-1 text-xs text-gray-400">Text on the submit button. Defaults to &ldquo;Download Pricing &amp; Availability Guide&rdquo;.</p>
+    </div>
+  </div>
+</div>
 
 {/* Time zone — scheduling & calendar */}
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">

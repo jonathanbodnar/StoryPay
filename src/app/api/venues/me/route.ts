@@ -113,6 +113,8 @@ export async function PATCH(request: Request) {
     brand_btn_text:    true,  // button text color
     brand_colors:      true,  // jsonb array of saved swatches
     brand_socials:     true,  // jsonb array of {platform, url}
+    embed_form_title:     true,
+    embed_form_btn_label: true,
     brand_tagline:     true,
     brand_website:     true,
     brand_email:       true,
@@ -239,7 +241,9 @@ export async function PATCH(request: Request) {
     const knownCols = ['name', 'service_fee_rate', 'brand_logo_url', 'brand_color',
       'brand_bg_color', 'brand_btn_text', 'brand_colors', 'brand_socials',
       'brand_tagline', 'brand_website', 'brand_email', 'brand_phone',
-      'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note', 'monthly_booking_goal',
+      'brand_address', 'brand_city', 'brand_state', 'brand_zip', 'brand_footer_note',
+      'embed_form_title', 'embed_form_btn_label',
+      'monthly_booking_goal',
       'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets',
       'accept_ach',
       'payment_reminders_enabled', 'payment_reminder_offsets',

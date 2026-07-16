@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
   Loader2, Save, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
   Plus, Trash2, GripVertical, Image as ImageIcon, Sparkles, Star,
   ArrowLeft, Upload, Eye, Wand2, Download, FileText, HelpCircle,
+  Code2, X, Copy, Check,
 } from 'lucide-react';
 import { AIField } from '@/components/pricing-guide/AIField';
 import PreviewGuideModal from '@/components/pricing-guide/PreviewGuideModal';
@@ -160,6 +162,102 @@ const FEATURE_OPTIONS = [
   'Pet friendly', 'Outdoor ceremony', 'Tented options',
 ];
 
+// ─── Embed Code Modal ─────────────────────────────────────────────────────────
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
+
+function EmbedCodeModal({ venueSlug, onClose }: { venueSlug: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const embedSrc = `${APP_URL}/api/embed/${encodeURIComponent(venueSlug)}`;
+  const snippet  = `<iframe\n  src="${embedSrc}"\n  width="100%"\n  height="720"\n  frameborder="0"\n  scrolling="auto"\n  style="border:none;max-width:520px;"\n  title="Pricing Guide Request"\n></iframe>`;
+
+  function copySnippet() {
+    void navigator.clipboard.writeText(snippet).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  }
+
+  const modal = (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gray-900">
+              <Code2 size={15} className="text-white" />
+            </div>
+            <div>
+              <p className="text-[13px] font-bold text-gray-900">Embed Code</p>
+              <p className="text-[11px] text-gray-400">Paste this anywhere on your website</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="px-5 py-5 space-y-4">
+          <p className="text-[12px] text-gray-500 leading-relaxed">
+            Copy the snippet below and paste it into any page on your website — works with WordPress, Squarespace, Wix, Webflow, and any HTML page. The form automatically matches your brand colours from <Link href="/dashboard/settings/branding" className="text-gray-900 underline underline-offset-2">Settings → Branding</Link>.
+          </p>
+
+          {/* Snippet box */}
+          <div className="relative">
+            <pre className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-[11px] font-mono text-gray-700 whitespace-pre overflow-x-auto leading-relaxed">
+{snippet}
+            </pre>
+            <button
+              type="button"
+              onClick={copySnippet}
+              className="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              {copied ? <><Check size={11} className="text-emerald-500" /> Copied!</> : <><Copy size={11} /> Copy</>}
+            </button>
+          </div>
+
+          {/* Tips */}
+          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-1.5">
+            <p className="text-[11px] font-semibold text-gray-700">Tips</p>
+            <ul className="space-y-1 text-[11px] text-gray-500 list-disc list-inside">
+              <li>Leads submitted through this form land in your Lead Inbox instantly.</li>
+              <li>The pricing guide is emailed automatically — same as the listing form.</li>
+              <li>Source is tagged as <strong className="text-gray-700">Embed</strong> in your booking funnel.</li>
+              <li>Update brand colours in <Link href="/dashboard/settings/branding" className="text-gray-700 underline underline-offset-2">Settings → Branding</Link> — the form updates automatically on your site.</li>
+            </ul>
+          </div>
+
+          {!venueSlug && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800">
+              Your listing doesn&apos;t have a slug yet. <Link href="/dashboard/listing/venue-listing" className="underline">Set one in the Venue Listing editor</Link> first.
+            </div>
+          )}
+
+          <a
+            href={embedSrc}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[12px] text-gray-500 hover:text-gray-800 transition-colors"
+          >
+            <Eye size={12} /> Preview form in a new tab
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(modal, document.body);
+}
+
 export default function PricingGuidePage() {
   const [guide, setGuide] = useState<Guide | null>(null);
   const [loading, setLoading] = useState(true);
@@ -172,6 +270,8 @@ export default function PricingGuidePage() {
   const [showPreview, setShowPreview] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState('');
+  const [venueSlug, setVenueSlug] = useState('');
+  const [embedOpen, setEmbedOpen] = useState(false);
 
   async function handleDownloadPdf() {
     setDownloading(true);
@@ -283,6 +383,9 @@ export default function PricingGuidePage() {
           if (guideJson.schemaMissing) setSchemaMissing(true);
           if (seedJson) setSeedData(seedJson);
           if (contactJson?.listing) {
+            if ((contactJson.listing as { slug?: string }).slug) {
+              setVenueSlug((contactJson.listing as { slug?: string }).slug!);
+            }
             setVenueContact({
               ...contactJson.listing,
               faq: Array.isArray(contactJson.listing.faq) ? contactJson.listing.faq : [],
@@ -565,6 +668,13 @@ export default function PricingGuidePage() {
               <CheckCircle2 size={12} /> Saved
             </span>
           ) : null}
+          <button
+            type="button"
+            onClick={() => setEmbedOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+          >
+            <Code2 size={14} /> Get Embed Code
+          </button>
           <button
             type="button"
             onClick={() => setShowPreview(true)}
@@ -1586,6 +1696,11 @@ export default function PricingGuidePage() {
         open={showPreview}
         onClose={() => setShowPreview(false)}
       />
+
+      {/* ── Embed code modal ───────────────────────────────────────── */}
+      {embedOpen && (
+        <EmbedCodeModal venueSlug={venueSlug} onClose={() => setEmbedOpen(false)} />
+      )}
 
       {/* ── Media library picker ──────────────────────────────────── */}
       <VenueMediaPickerModal
