@@ -570,7 +570,7 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
       )}
 
       <div className="mt-6 flex items-center justify-end">
-        <button onClick={() => { try { localStorage.setItem(MANUAL_KEY, '1'); } catch {} onNext(); }} className="text-sm font-medium text-gray-500 hover:text-gray-800">Enter manually →</button>
+        {/* "Enter manually" removed — users type their venue name above; manual entry option appears inline as they type */}
       </div>
     </div>
   );
