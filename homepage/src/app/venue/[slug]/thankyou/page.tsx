@@ -71,8 +71,7 @@ export default async function ThankyouPage({ params }: { params: Promise<{ slug:
           </h1>
 
           <p className="mt-4 text-base leading-relaxed text-gray-600">
-            It&apos;s on the way to your inbox, and we&apos;ll text a copy too. We&apos;ll
-            personally follow up to answer any questions you have and check your date.
+            It&apos;s on the way to your inbox. We&apos;ll personally follow up to answer any questions you have and check your date.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
