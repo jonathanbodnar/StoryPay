@@ -838,13 +838,13 @@ export default function ListingAnalyticsPage() {
           <button
             type="button"
             onClick={() => setReportOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[12px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-300 transition-all"
           >
-            <BarChart2 size={13} className="text-violet-500" />
+            <BarChart2 size={14} className="text-violet-500" />
             Export Report
           </button>
           <button onClick={() => { void load(dateRange); void loadFunnel(dateRange); }} disabled={loading}
-            className="p-2 rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors">
+            className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2.5 py-2.5 text-gray-500 hover:border-gray-300 disabled:opacity-40 transition-all">
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
