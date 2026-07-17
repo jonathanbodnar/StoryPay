@@ -126,25 +126,22 @@ function sectionHeader(title: string, sub = ''): string {
     </table>`;
 }
 
-// 4-col: (556 - 3×6) / 4 = 134px  3-col: (556 - 2×6) / 3 = 181px
+// Equal-width columns via table-layout:fixed + border-spacing gutters.
+// Every cell has an identical 3-line structure (value / badge / label) so
+// all boxes in a row are always the same height.
 function kpiGrid(cells: string[]): string {
-  const cols = Math.min(cells.length, 4);
-  const gutter = 6;
-  const cellW = Math.floor((556 - gutter * (cols - 1)) / cols);
-  return `<table cellpadding="0" cellspacing="0" border="0" width="556" style="table-layout:fixed;border-collapse:separate;border-spacing:0;">
-    <tr>
-      ${cells.map((c, i) => `<td width="${cellW}" valign="top" style="padding-right:${i < cols - 1 ? gutter : 0}px;">${c}</td>`).join('')}
-    </tr>
+  return `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="table-layout:fixed;border-collapse:separate;border-spacing:6px 0;margin-left:-6px;margin-right:-6px;">
+    <tr>${cells.map(c => `<td valign="top">${c}</td>`).join('')}</tr>
   </table>`;
 }
 
 function kpiCell(label: string, value: string, accent = '#8b5cf6', badge = ''): string {
   return `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
-    <tr><td style="padding:12px 10px 10px;">
-      <div style="width:18px;height:3px;background:${accent};border-radius:2px;margin-bottom:7px;"></div>
-      <div style="font-size:17px;font-weight:800;color:#111827;line-height:1.2;">${esc(value)}</div>
-      ${badge ? `<div style="margin-top:3px;">${badge}</div>` : ''}
-      <div style="font-size:9px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#9ca3af;margin-top:5px;line-height:1.3;">${esc(label)}</div>
+    <tr><td align="center" style="padding:12px 6px 10px;">
+      <div style="width:18px;height:3px;background:${accent};border-radius:2px;margin:0 auto 7px;"></div>
+      <div style="font-size:16px;font-weight:800;color:#111827;line-height:1.2;white-space:nowrap;">${esc(value)}</div>
+      <div style="margin-top:3px;line-height:14px;height:14px;">${badge || '&nbsp;'}</div>
+      <div style="font-size:8px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#9ca3af;margin-top:3px;line-height:1.2;white-space:nowrap;">${esc(label)}</div>
     </td></tr>
   </table>`;
 }
@@ -167,27 +164,25 @@ function barRow(label: string, count: number, max: number, color = '#6366f1', ex
 export function buildBookingReportHtml(d: BookingReportData): string {
 
   // ── Funnel ─────────────────────────────────────────────────────────────────
-  // 556px = 4 boxes × 112px + 3 connectors × 28px = 448 + 84 = 532 (+ 24px slack for borders)
-  const BOX_W = 112;
-  const CON_W = 28;
-  // Short labels so text never wraps inside the box
+  // 4 equal-width boxes (table-layout:fixed splits evenly). The conversion %
+  // from the previous step lives INSIDE each box as a green pill — no fragile
+  // connector cells, so nothing can wrap or misalign. Every box has the same
+  // 3-line structure (number / label / pill) so all heights match.
   const FUNNEL_SHORT: Record<string, string> = {
     leads: 'Leads', conversations: 'Conversations', tours: 'Tours', weddings: 'Weddings',
   };
   const funnelCells = d.steps.map((step, i) => {
     const conv = d.conversions[i - 1];
     const shortLabel = FUNNEL_SHORT[step.key] ?? step.label;
-    const connector = i > 0
-      ? `<td width="${CON_W}" align="center" valign="middle" style="padding:0;">
-           <div style="font-size:12px;font-weight:800;color:#111827;line-height:1.1;text-align:center;">${conv != null ? `${conv}%` : '—'}</div>
-           <div style="font-size:8px;color:#9ca3af;text-align:center;line-height:1;margin-top:2px;">conv.</div>
-         </td>`
-      : '';
-    return `${connector}<td width="${BOX_W}" valign="middle" style="padding:0;">
-      <table cellpadding="0" cellspacing="0" border="0" width="${BOX_W}" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;table-layout:fixed;">
-        <tr><td width="${BOX_W}" align="center" style="padding:12px 4px 10px;">
+    const pill = i > 0 && conv != null
+      ? `<span style="display:inline-block;font-size:9px;font-weight:700;color:#059669;background:#d1fae5;border-radius:20px;padding:2px 8px;">${conv}% conv.</span>`
+      : '&nbsp;';
+    return `<td valign="top">
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
+        <tr><td align="center" style="padding:12px 4px 10px;">
           <div style="font-size:20px;font-weight:800;color:#111827;line-height:1;">${fmtNum(step.count)}</div>
-          <div style="font-size:8px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7280;margin-top:4px;line-height:1.2;white-space:nowrap;">${esc(shortLabel)}</div>
+          <div style="font-size:8px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#6b7280;margin-top:5px;line-height:1.2;white-space:nowrap;">${esc(shortLabel)}</div>
+          <div style="margin-top:5px;line-height:16px;height:16px;">${pill}</div>
         </td></tr>
       </table>
     </td>`;
@@ -322,7 +317,7 @@ export function buildBookingReportHtml(d: BookingReportData): string {
 
     <!-- 1. Booking Funnel -->
     ${sectionHeader('Booking Funnel', 'Leads → Conversations → Tours → Weddings')}
-    <table cellpadding="0" cellspacing="0" border="0" width="532" style="table-layout:fixed;">
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="table-layout:fixed;border-collapse:separate;border-spacing:6px 0;margin-left:-6px;margin-right:-6px;">
       <tr>${funnelCells}</tr>
     </table>
 
@@ -410,7 +405,7 @@ export function buildBookingReportHtml(d: BookingReportData): string {
     <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
       <td style="font-size:11px;color:#9ca3af;">
         Sent by <strong style="color:#6b7280;">StoryVenue Bride Booking System™</strong><br>
-        Data covers ${esc(d.fromDate)} – ${esc(d.toDate)}.
+        Data covers ${esc(d.fromDate)} – ${esc(d.toDate)}. Generated ${esc(new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))}.
       </td>
       <td align="right" style="font-size:11px;">
         <a href="${esc(d.dashboardUrl)}" style="color:#9ca3af;text-decoration:none;">storyvenue.com</a>
