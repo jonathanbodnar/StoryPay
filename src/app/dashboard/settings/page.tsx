@@ -143,6 +143,25 @@ export default function SettingsPage() {
  const [apiKeyError, setApiKeyError] = useState('');
  const [showApiKeyHelp, setShowApiKeyHelp] = useState(false);
 
+ // Connection verification — runs the exact call the contact sync makes so a
+ // bad key/sub-account pairing is caught at save time, not at sync time.
+ const [verifying, setVerifying] = useState(false);
+ const [verifyResult, setVerifyResult] = useState<{ ok: boolean; message: string; totalContacts?: number | null } | null>(null);
+
+ async function verifyGhlConnection() {
+   setVerifying(true);
+   setVerifyResult(null);
+   try {
+     const res = await fetch('/api/integrations/ghl/verify', { method: 'POST' });
+     const d = await res.json() as { ok?: boolean; message?: string; totalContacts?: number | null };
+     setVerifyResult({ ok: !!d.ok, message: d.message ?? (d.ok ? 'Connected.' : 'Connection test failed.'), totalContacts: d.totalContacts });
+   } catch {
+     setVerifyResult({ ok: false, message: 'Connection test failed — network error.' });
+   } finally {
+     setVerifying(false);
+   }
+ }
+
  async function saveApiKey() {
    const val = apiKeyInput.trim();
    if (!val) return;
@@ -160,6 +179,8 @@ export default function SettingsPage() {
      setApiKeySaved(true);
      setApiKeyInput('');
      setTimeout(() => setApiKeySaved(false), 3000);
+     // Immediately test the new key against the saved sub-account ID.
+     void verifyGhlConnection();
    } catch { setApiKeyError('Failed to save. Please try again.'); }
    finally { setSavingApiKey(false); }
  }
@@ -182,6 +203,8 @@ export default function SettingsPage() {
      setLocationIdSaved(true);
      setLocationIdInput('');
      setTimeout(() => setLocationIdSaved(false), 3000);
+     // Immediately test the pairing with the stored API key.
+     void verifyGhlConnection();
    } catch { setLocationIdError('Failed to save. Please try again.'); }
    finally { setSavingLocationId(false); }
  }
@@ -501,8 +524,8 @@ try {
 type="text"
 value={locationIdInput}
 onChange={e => setLocationIdInput(e.target.value)}
-placeholder="Paste your sub-account ID here"
-className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+placeholder={venue.ghl_location_id ? `${venue.ghl_location_id} (paste a new one to replace)` : 'Paste your sub-account ID here'}
+className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none font-mono"
 />
 <button
 onClick={() => void saveLocationId()}
@@ -559,6 +582,35 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
   </div>
   {apiKeySaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
   {apiKeyError && <p className="mt-2 text-xs text-red-600">{apiKeyError}</p>}
+</div>
+
+{/* Connection test — runs the exact API call the contact sync uses */}
+<div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <p className="text-xs font-medium text-gray-700">Connection Test</p>
+      <p className="mt-0.5 text-[11px] text-gray-500">Confirms your API key and sub-account ID work together before syncing.</p>
+    </div>
+    <button
+      onClick={() => void verifyGhlConnection()}
+      disabled={verifying}
+      className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+    >
+      {verifying ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+      {verifying ? 'Testing…' : 'Test connection'}
+    </button>
+  </div>
+  {verifyResult && (
+    <div className={`mt-3 rounded-xl border px-3.5 py-2.5 text-xs flex items-start gap-2 ${verifyResult.ok ? 'border-emerald-100 bg-emerald-50 text-emerald-800' : 'border-red-100 bg-red-50 text-red-700'}`}>
+      {verifyResult.ok ? <CheckCircle2 size={13} className="mt-0.5 shrink-0" /> : <AlertCircle size={13} className="mt-0.5 shrink-0" />}
+      <span>
+        {verifyResult.message}
+        {verifyResult.ok && typeof verifyResult.totalContacts === 'number' && (
+          <> Found <strong>{verifyResult.totalContacts.toLocaleString()}</strong> contacts ready to sync.</>
+        )}
+      </span>
+    </div>
+  )}
 </div>
 
 {/* Contact sync — only show when connected */}

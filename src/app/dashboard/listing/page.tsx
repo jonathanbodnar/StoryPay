@@ -562,8 +562,20 @@ function ReportModal({ onClose }: { onClose: () => void }) {
             {tab === 'send' && (
               <div className="space-y-4">
                 <p className="text-[12px] text-gray-500">
-                  Enter one or more email addresses and we'll send the full 30-day report instantly — funnel, source breakdown, and key metrics all in one clean email.
+                  Download the full 30-day report as a PDF, or email it — the message includes your headline numbers with the complete PDF report attached.
                 </p>
+                <a
+                  href="/api/listing/booking-report/pdf"
+                  download
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+                >
+                  <Download size={13} /> Download PDF Now
+                </a>
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-gray-100" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-300">or email it</span>
+                  <div className="h-px flex-1 bg-gray-100" />
+                </div>
                 <div>
                   <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Email address(es)</label>
                   <input

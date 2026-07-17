@@ -233,6 +233,7 @@ export async function sendEmail({
   text,
   from,
   headers,
+  attachments,
 }: {
   to: string;
   cc?: string[];
@@ -247,6 +248,8 @@ export async function sendEmail({
   from?: { email?: string; name?: string };
   /** Custom headers (e.g. List-Unsubscribe, Precedence). */
   headers?: Record<string, string>;
+  /** File attachments — content is base64-encoded. */
+  attachments?: { filename: string; content: string }[];
 }): Promise<{ success: boolean; error?: string }> {
   const resendKey = process.env.RESEND_API_KEY?.trim();
   if (!resendKey) {
@@ -307,6 +310,7 @@ export async function sendEmail({
       if (bccList.length) body.bcc = bccList;
       if (effectiveReplyTo) body.reply_to = effectiveReplyTo;
       if (headers && Object.keys(headers).length > 0) body.headers = headers;
+      if (attachments?.length) body.attachments = attachments;
 
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -363,6 +367,7 @@ export async function sendEmail({
         if (bccList.length) body.bcc = bccList;
         if (restoredReplyTo) body.reply_to = restoredReplyTo;
         if (headers && Object.keys(headers).length > 0) body.headers = headers;
+        if (attachments?.length) body.attachments = attachments;
 
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
