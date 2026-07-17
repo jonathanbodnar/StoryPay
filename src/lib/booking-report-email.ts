@@ -128,18 +128,22 @@ function sectionHeader(title: string, sub = ''): string {
 
 function kpiGrid(cells: string[]): string {
   const cols = Math.min(cells.length, 4);
-  const w = Math.floor(100 / cols);
-  return `<table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-    ${cells.map(c => `<td width="${w}%" style="padding:3px;" valign="top">${c}</td>`).join('')}
-  </tr></table>`;
+  const gutter = 6;
+  const totalGutter = (cols - 1) * gutter;
+  const cellW = Math.floor((556 - totalGutter) / cols);
+  return `<table cellpadding="0" cellspacing="0" border="0" width="556" style="table-layout:fixed;">
+    <tr>
+      ${cells.map((c, i) => `<td width="${cellW}" style="padding-right:${i < cols - 1 ? gutter : 0}px;" valign="top">${c}</td>`).join('')}
+    </tr>
+  </table>`;
 }
 
 function kpiCell(label: string, value: string, accent = '#8b5cf6', badge = ''): string {
-  return `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
-    <tr><td style="padding:12px 10px 10px;">
-      <div style="width:24px;height:3px;background:${accent};border-radius:2px;margin-bottom:8px;"></div>
-      <div style="font-size:18px;font-weight:800;color:#111827;">${esc(value)}${badge}</div>
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#9ca3af;margin-top:3px;">${esc(label)}</div>
+  return `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;table-layout:fixed;">
+    <tr><td style="padding:14px 12px 12px;">
+      <div style="width:20px;height:3px;background:${accent};border-radius:2px;margin-bottom:8px;"></div>
+      <div style="font-size:20px;font-weight:800;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(value)}${badge}</div>
+      <div style="font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#9ca3af;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(label)}</div>
     </td></tr>
   </table>`;
 }
@@ -162,18 +166,26 @@ function barRow(label: string, count: number, max: number, color = '#6366f1', ex
 export function buildBookingReportHtml(d: BookingReportData): string {
 
   // ── Funnel ─────────────────────────────────────────────────────────────────
+  // Fixed layout: 4 boxes × 118px + 3 connectors × 34px = 472 + 102 = 574 → fits 556px content
+  const BOX_W = 118;
+  const CON_W = 34;
   const funnelCells = d.steps.map((step, i) => {
     const conv = d.conversions[i - 1];
-    const connectorHtml = i > 0
-      ? `<td align="center" width="48" style="font-size:10px;color:#6b7280;padding:0 2px;">
-           ${conv != null ? `<strong style="color:#111827;">${conv}%</strong><br><span style="font-size:9px;">conv.</span>` : '<span style="color:#d1d5db;">—</span>'}
+    const connector = i > 0
+      ? `<td width="${CON_W}" align="center" valign="middle" style="padding:0;font-size:0;">
+           <table cellpadding="0" cellspacing="0" border="0" width="${CON_W}"><tr>
+             <td align="center" style="padding:0 2px;">
+               <div style="font-size:11px;font-weight:800;color:#111827;line-height:1.2;">${conv != null ? `${conv}%` : '—'}</div>
+               <div style="font-size:8px;font-weight:500;color:#9ca3af;line-height:1;">conv.</div>
+             </td>
+           </tr></table>
          </td>`
       : '';
-    return `${connectorHtml}<td align="center" style="padding:0;">
-      <table cellpadding="0" cellspacing="0" border="0" width="112" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
-        <tr><td align="center" style="padding:16px 8px 14px;">
-          <div style="font-size:24px;font-weight:800;color:#111827;">${fmtNum(step.count)}</div>
-          <div style="font-size:9px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;margin-top:3px;">${esc(step.label)}</div>
+    return `${connector}<td width="${BOX_W}" valign="top" style="padding:0;">
+      <table cellpadding="0" cellspacing="0" border="0" width="${BOX_W}" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;table-layout:fixed;">
+        <tr><td width="${BOX_W}" align="center" style="padding:14px 6px 12px;">
+          <div style="font-size:22px;font-weight:800;color:#111827;line-height:1;">${fmtNum(step.count)}</div>
+          <div style="font-size:8px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;margin-top:5px;line-height:1.3;">${esc(step.label)}</div>
         </td></tr>
       </table>
     </td>`;
@@ -308,11 +320,9 @@ export function buildBookingReportHtml(d: BookingReportData): string {
 
     <!-- 1. Booking Funnel -->
     ${sectionHeader('Booking Funnel', 'Leads → Conversations → Tours → Weddings')}
-    <div style="overflow-x:auto;">
-      <table cellpadding="0" cellspacing="0" border="0" style="min-width:100%;">
-        <tr>${funnelCells}</tr>
-      </table>
-    </div>
+    <table cellpadding="0" cellspacing="0" border="0" width="556" style="table-layout:fixed;">
+      <tr>${funnelCells}</tr>
+    </table>
 
     <!-- 2. Lead Sources -->
     ${sectionHeader('Lead Sources', 'Where your leads came from')}
