@@ -6,9 +6,12 @@
  */
 
 import React from 'react';
+import path from 'path';
 import {
-  Document, Page, View, Text, StyleSheet, renderToBuffer,
+  Document, Page, View, Text, Image, StyleSheet, renderToBuffer,
 } from '@react-pdf/renderer';
+
+const LOGO_PATH = path.join(process.cwd(), 'public', 'storyvenue-light-logo.png');
 import type { BookingReportData } from '@/lib/booking-report-email';
 
 // ── Palette (matches dashboard) ───────────────────────────────────────────────
@@ -38,15 +41,14 @@ const s = StyleSheet.create({
 
   // Header
   header: {
-    backgroundColor: C.ink, borderRadius: 12, padding: 20,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#1b1b1b', borderRadius: 12, padding: 20,
     marginBottom: 20,
   },
-  headerKicker: { fontSize: 7, color: C.gray400, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  headerLogoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  headerLogo: { width: 90, height: 18 },
+  headerSystemName: { fontSize: 11, color: '#ffffff', marginLeft: 8 },
   headerVenue:  { fontSize: 16, color: '#ffffff', fontFamily: 'Helvetica-Bold' },
-  headerPeriodBox: { backgroundColor: '#1f2937', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12 },
-  headerPeriodLabel: { fontSize: 6, color: C.gray400, letterSpacing: 0.5, textTransform: 'uppercase' },
-  headerPeriodValue: { fontSize: 9, color: '#e5e7eb', fontFamily: 'Helvetica-Bold', marginTop: 2 },
+  headerDate:   { fontSize: 9, color: '#9ca3af', marginTop: 4 },
 
   // Section headers
   section: { marginTop: 18, marginBottom: 8, borderBottomWidth: 1.5, borderBottomColor: '#f3f4f6', paddingBottom: 5, flexDirection: 'row', alignItems: 'baseline' },
@@ -203,14 +205,12 @@ function ReportDoc({ d }: { d: BookingReportData }) {
 
         {/* Header */}
         <View style={s.header}>
-          <View>
-            <Text style={s.headerKicker}>Bride Booking System™</Text>
-            <Text style={s.headerVenue}>{d.venueName}</Text>
+          <View style={s.headerLogoRow}>
+            <Image src={LOGO_PATH} style={s.headerLogo} />
+            <Text style={s.headerSystemName}>- Bride Booking System&#8482;</Text>
           </View>
-          <View style={s.headerPeriodBox}>
-            <Text style={s.headerPeriodLabel}>Period</Text>
-            <Text style={s.headerPeriodValue}>{d.periodLabel}</Text>
-          </View>
+          <Text style={s.headerVenue}>{d.venueName}</Text>
+          <Text style={s.headerDate}>{d.periodLabel}</Text>
         </View>
 
         {/* 1. Booking Funnel — boxes + dashed connectors with conversion % */}
@@ -397,7 +397,7 @@ function ReportDoc({ d }: { d: BookingReportData }) {
 
         {/* Footer on every page */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>StoryVenue Bride Booking System™ — Data covers {d.fromDate} – {d.toDate}</Text>
+          <Text style={s.footerText}>StoryVenue Bride Booking System™  |  Data covers {d.fromDate} - {d.toDate}</Text>
           <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
 
