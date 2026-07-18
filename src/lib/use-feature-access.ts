@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 export interface FeatureAccess {
   hasSms: boolean;
   hasConcierge: boolean;
+  canMessageConcierge: boolean;
   isLegacy: boolean;
   planSlug: string | null;
 }

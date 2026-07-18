@@ -19,6 +19,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { getSessionUser, type SessionUser } from '@/lib/session';
 import { broadcastBrideMessageAdminOnly, broadcastVenueDirectInboxUpdate } from '@/lib/realtime/broadcast';
+import { loadVenueFeatureAccess } from '@/lib/plan-features';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -37,6 +38,16 @@ export async function POST(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const user = await getSessionUser();
   if (!user)    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Plan gate: messaging the StoryVenue Concierge team is an All-Inclusive
+  // feature. $97 / free plans use Contact Support instead.
+  const access = await loadVenueFeatureAccess(venueId);
+  if (!access.canMessageConcierge) {
+    return NextResponse.json(
+      { error: 'Concierge messaging is available on All-Inclusive plans.', code: 'concierge_not_available' },
+      { status: 403 },
+    );
+  }
 
   const { threadId } = await params;
 

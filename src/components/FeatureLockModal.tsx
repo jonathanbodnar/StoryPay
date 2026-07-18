@@ -31,11 +31,11 @@ const COPY: Record<LockFeature, LockCopy> = {
     note: 'Included in All-Inclusive plans.',
   },
   concierge: {
-    label: 'AI Venue Concierge',
-    headline: 'AI follows up so you don\u2019t have to',
+    label: 'Concierge messaging',
+    headline: 'A dedicated concierge team, one message away',
     outcome:
-      'Personalized follow-up sent on your behalf on a 1\u20132 day cadence for up to 60 days. The AI stops the moment a couple replies, then hands the conversation to you.',
-    note: 'Available as an add-on or included in the All-Inclusive Concierge plan.',
+      'Message the StoryVenue Concierge team directly from any conversation to get hands-on help with a couple. You always have Contact Support \u2014 concierge messaging is included on our All-Inclusive plans.',
+    note: 'Included in All-Inclusive plans.',
   },
 };
 

@@ -38,8 +38,13 @@ export interface PlanFeatureRow {
 export interface VenueFeatureAccess {
   /** Can send / receive SMS (plan includes it). */
   hasSms: boolean;
-  /** AI Concierge available + bride replies routed to super-admin inbox. */
+  /** AI Concierge feature available (add-on purchased/bundled or legacy) +
+   *  bride replies routed to the super-admin concierge inbox. */
   hasConcierge: boolean;
+  /** Can message the StoryVenue Concierge team from Conversations. This is a
+   *  plan-tier feature (any All-Inclusive plan, or legacy) — NOT the concierge
+   *  add-on. $97 / free plans get Contact Support but not concierge messaging. */
+  canMessageConcierge: boolean;
   /** Legacy / grandfathered plan — gets all add-ons. */
   isLegacy: boolean;
   /** Resolved plan slug (lowercase) or null when the venue has no plan. */
@@ -71,16 +76,17 @@ export function resolveVenueFeatureAccess(
   const legacy = noPlan || isLegacyPlan(plan);
 
   const slug = String(plan?.slug ?? '').toLowerCase() || null;
-  const planHasSms = slug ? slug.includes('all-inclusive') : false;
+  const isAllInclusive = slug ? slug.includes('all-inclusive') : false;
 
   const conciergeBundled  = planIncludesConcierge(plan ? { id: 'x', feature_flags: plan.feature_flags } : null);
   const conciergePurchased = venue?.directory_addon_concierge === true;
 
   return {
-    hasSms:       legacy || planHasSms,
-    hasConcierge: legacy || conciergeBundled || conciergePurchased,
-    isLegacy:     legacy,
-    planSlug:     slug,
+    hasSms:              legacy || isAllInclusive,
+    hasConcierge:        legacy || conciergeBundled || conciergePurchased,
+    canMessageConcierge: legacy || isAllInclusive,
+    isLegacy:            legacy,
+    planSlug:            slug,
   };
 }
 
@@ -97,7 +103,7 @@ export async function loadVenueFeatureAccess(venueId: string): Promise<VenueFeat
 
   if (!venue) {
     // Unknown venue — safest default is no access to gated features.
-    return { hasSms: false, hasConcierge: false, isLegacy: false, planSlug: null };
+    return { hasSms: false, hasConcierge: false, canMessageConcierge: false, isLegacy: false, planSlug: null };
   }
 
   const v = venue as VenueFeatureRow;

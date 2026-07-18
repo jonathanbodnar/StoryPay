@@ -287,7 +287,9 @@ export default function ConversationsPage() {
   // Plan gating: SMS + Concierge access for lock states.
   const featureAccess = useFeatureAccess();
   const smsLocked = featureAccess ? !featureAccess.hasSms : false;
-  const conciergeLocked = featureAccess ? !featureAccess.hasConcierge : false;
+  // Messaging the StoryVenue Concierge team is an All-Inclusive feature (not
+  // the concierge add-on). $97 / free plans use Contact Support instead.
+  const conciergeLocked = featureAccess ? !featureAccess.canMessageConcierge : false;
   const [lockModal, setLockModal] = useState<LockFeature | null>(null);
   // When SMS isn't available on the plan, never leave the composer or the
   // new-conversation channel defaulted to SMS.

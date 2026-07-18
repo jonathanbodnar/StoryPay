@@ -16,6 +16,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { getSessionUser, type SessionUser } from '@/lib/session';
 import { broadcastBrideMessageAdminOnly, broadcastVenueDirectInboxUpdate } from '@/lib/realtime/broadcast';
+import { loadVenueFeatureAccess } from '@/lib/plan-features';
 
 /** Reader ref for venue_direct read-state. Prefixed `vd:` so it's independent
  *  from bride-conversation read state on the same thread. */
@@ -157,6 +158,15 @@ export async function POST(
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const user = await getSessionUser();
   if (!user)    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Plan gate: concierge messaging is an All-Inclusive feature.
+  const access = await loadVenueFeatureAccess(venueId);
+  if (!access.canMessageConcierge) {
+    return NextResponse.json(
+      { error: 'Concierge messaging is available on All-Inclusive plans.', code: 'concierge_not_available' },
+      { status: 403 },
+    );
+  }
 
   const { contactId } = await params;
   const t = await resolveThreadId(contactId, venueId);
