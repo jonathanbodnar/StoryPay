@@ -11,6 +11,7 @@ import { syncInboundSmsFromGhlForThread } from '@/lib/ghl-sms-conversations';
 import { broadcastBrideMessage } from '@/lib/realtime/broadcast';
 import { notifyVenueReply } from '@/lib/slack-notify';
 import { pushVenueCustomerToGhl } from '@/lib/ghl-push-contact';
+import { loadVenueFeatureAccess } from '@/lib/plan-features';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -349,6 +350,17 @@ export async function POST(
   }
 
   const venueCustomerId = (gate.thread as { venue_customer_id: string }).venue_customer_id;
+
+  // Plan gate: block outbound SMS on plans without SMS (no A2P registration).
+  if (visibility === 'external' && replyChannel === 'sms') {
+    const access = await loadVenueFeatureAccess(venueId);
+    if (!access.hasSms) {
+      return NextResponse.json(
+        { error: 'SMS is not available on your plan.', code: 'sms_not_available' },
+        { status: 403 },
+      );
+    }
+  }
 
   if (visibility === 'external') {
     const { data: dndRow } = await supabaseAdmin

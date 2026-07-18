@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ghlRequest, normalizePhone, sendSms } from '@/lib/ghl';
+import { loadVenueFeatureAccess } from '@/lib/plan-features';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -9,6 +10,16 @@ export async function POST(request: NextRequest) {
 
   if (!venueId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Plan gate: SMS requires an All-Inclusive plan (or legacy). $97 / free
+  // plans have no A2P carrier registration and can never send SMS.
+  const access = await loadVenueFeatureAccess(venueId);
+  if (!access.hasSms) {
+    return NextResponse.json(
+      { error: 'SMS is not available on your plan.', code: 'sms_not_available' },
+      { status: 403 },
+    );
   }
 
   const { phone, message, contactId } = await request.json();

@@ -9,6 +9,8 @@ import {
   Star, Heart,
 } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
+import { useFeatureAccess } from '@/lib/use-feature-access';
+import FeatureLockModal, { type LockFeature } from '@/components/FeatureLockModal';
 
 /** Greyed-out, locked control for tier-gated phases (e.g. AI Concierge). Shows
  *  a hover tooltip and opens the schedule-a-demo modal when clicked. */
@@ -230,7 +232,7 @@ function WaitBlock({
 
 // SMS / Email block — collapsible
 function MessageBlock({
-  step, onRemove, onChange, dragHandleProps, leadsHere = [], ownerEmail,
+  step, onRemove, onChange, dragHandleProps, leadsHere = [], ownerEmail, smsLocked = false, onSmsLocked,
 }: {
   step: StepConfig;
   onRemove: () => void;
@@ -238,9 +240,12 @@ function MessageBlock({
   dragHandleProps: React.HTMLAttributes<HTMLSpanElement>;
   leadsHere?: StepLeadInfo[];
   ownerEmail?: string;
+  smsLocked?: boolean;
+  onSmsLocked?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isSms = step.step_type === 'send_sms';
+  const locked = isSms && smsLocked;
   const Icon  = isSms ? MessageSquare : Mail;
   const color = isSms ? 'text-violet-600' : 'text-blue-500';
   const preview = step.body?.trim().slice(0, 60);
@@ -259,13 +264,22 @@ function MessageBlock({
         >
           <GripVertical size={14} />
         </span>
-        <Icon size={13} className={`${color} shrink-0`} />
+        <Icon size={13} className={`${locked ? 'text-gray-400' : color} shrink-0`} />
         <span className="flex-1 min-w-0 text-[12px] font-medium text-gray-700 truncate">
           {step.label || (isSms ? 'SMS message' : 'Email message')}
           {!expanded && preview
             ? <span className="ml-1.5 font-normal text-gray-400">{preview}{(step.body?.length ?? 0) > 60 ? '…' : ''}</span>
             : null}
         </span>
+        {locked && (
+          <span
+            onClick={(e) => { e.stopPropagation(); onSmsLocked?.(); }}
+            className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 shrink-0"
+            title="SMS is not available on your plan"
+          >
+            <Lock size={10} /> Not on your plan
+          </span>
+        )}
         {leadsHere.length > 0 && (
           <span onClick={e => e.stopPropagation()}>
             <LeadsPill stepLabel={step.label || (isSms ? 'SMS' : 'Email')} leads={leadsHere} />
@@ -368,13 +382,23 @@ function MessageBlock({
           )}
 
           <div className="flex items-center justify-end border-t border-gray-100 pt-2.5">
-            <TestSendControl
-              channel={isSms ? 'sms' : 'email'}
-              defaultTo={isSms ? undefined : ownerEmail}
-              getSpec={() => isSms
-                ? { body: step.body }
-                : { subject: step.subject, body: step.body, preheader: step.preview_text }}
-            />
+            {locked ? (
+              <button
+                type="button"
+                onClick={onSmsLocked}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+              >
+                <Lock size={12} /> SMS not available on your plan — upgrade or delete this step
+              </button>
+            ) : (
+              <TestSendControl
+                channel={isSms ? 'sms' : 'email'}
+                defaultTo={isSms ? undefined : ownerEmail}
+                getSpec={() => isSms
+                  ? { body: step.body }
+                  : { subject: step.subject, body: step.body, preheader: step.preview_text }}
+              />
+            )}
           </div>
         </div>
       )}
@@ -660,6 +684,8 @@ function SequenceEditor({
   allowAi = true,
   maxMessages,
   ownerEmail,
+  smsLocked = false,
+  onSmsLocked,
 }: {
   steps: StepConfig[];
   onStepsChange: (s: StepConfig[]) => void;
@@ -669,6 +695,9 @@ function SequenceEditor({
   maxMessages?: number;
   /** Prefilled recipient for "Send test email" controls. */
   ownerEmail?: string;
+  /** SMS gated by plan — steps show a lock and adding SMS opens the upgrade modal. */
+  smsLocked?: boolean;
+  onSmsLocked?: () => void;
 }) {
   const dragSrc = useRef<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
@@ -751,6 +780,8 @@ function SequenceEditor({
                 dragHandleProps={dragHandleFor(i)}
                 leadsHere={leadsHere}
                 ownerEmail={ownerEmail}
+                smsLocked={smsLocked}
+                onSmsLocked={onSmsLocked}
               />
             )}
             {step.step_type === 'start_ai_concierge' && (
@@ -773,10 +804,10 @@ function SequenceEditor({
         {!atLimit && (
           <button
             type="button"
-            onClick={() => addStep('send_sms')}
-            className="flex items-center gap-1.5 rounded-xl border border-dashed border-violet-200 px-3 py-2 text-[12px] font-medium text-violet-600 hover:bg-violet-50 transition-colors"
+            onClick={() => { if (smsLocked) { onSmsLocked?.(); return; } addStep('send_sms'); }}
+            className={`flex items-center gap-1.5 rounded-xl border border-dashed px-3 py-2 text-[12px] font-medium transition-colors ${smsLocked ? 'border-gray-200 text-gray-400 hover:bg-gray-50' : 'border-violet-200 text-violet-600 hover:bg-violet-50'}`}
           >
-            <Plus size={13} /> SMS
+            {smsLocked ? <Lock size={12} /> : <Plus size={13} />} SMS
           </button>
         )}
         {!atLimit && (
@@ -1064,6 +1095,9 @@ export default function BookingSystemPage() {
   const [saved, setSaved]         = useState(false);
   const [error, setError]         = useState('');
   const [leadsData, setLeadsData] = useState<StepLeadsPayload | null>(null);
+  const featureAccess = useFeatureAccess();
+  const smsLocked = featureAccess ? !featureAccess.hasSms : false;
+  const [lockModal, setLockModal] = useState<LockFeature | null>(null);
 
   // Placeholders for new phases (removed local state, using cfg)
 
@@ -1276,6 +1310,8 @@ export default function BookingSystemPage() {
             onStepsChange={(steps) => void save({ steps })}
             leadsData={leadsData}
             ownerEmail={cfg.ownerEmail}
+            smsLocked={smsLocked}
+            onSmsLocked={() => setLockModal('sms')}
           />
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
@@ -1306,6 +1342,8 @@ export default function BookingSystemPage() {
             allowAi={false}
             maxMessages={10}
             ownerEmail={cfg.ownerEmail}
+            smsLocked={smsLocked}
+            onSmsLocked={() => setLockModal('sms')}
           />
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name', 'appointment_date', 'appointment_time', 'venue_address']} />
         </PhaseCard>
@@ -1336,6 +1374,8 @@ export default function BookingSystemPage() {
             allowAi={false}
             maxMessages={10}
             ownerEmail={cfg.ownerEmail}
+            smsLocked={smsLocked}
+            onSmsLocked={() => setLockModal('sms')}
           />
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
@@ -1396,6 +1436,9 @@ export default function BookingSystemPage() {
         </PhaseCard>
       </div>
 
+      {lockModal && (
+        <FeatureLockModal open onClose={() => setLockModal(null)} feature={lockModal} />
+      )}
     </div>
   );
 }

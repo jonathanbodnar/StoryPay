@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { filterConciergeManagedVenueIds } from '@/lib/plan-features';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -337,6 +338,16 @@ export async function GET(req: NextRequest) {
           message_count:           countByThread.get(t.id) ?? 0,
         };
       });
+    }
+
+    // ── Concierge gate ─────────────────────────────────────────────────────
+    // Only venues with the Venue Concierge active (add-on purchased, plan
+    // bundled, or legacy) route their bride replies to the super-admin inbox.
+    // $97 / free / All-Inclusive (without concierge) venues manage their own
+    // replies and never appear here.
+    if (rows.length > 0) {
+      const conciergeVenues = await filterConciergeManagedVenueIds(rows.map(r => r.venue_id));
+      rows = rows.filter(r => conciergeVenues.has(r.venue_id));
     }
 
     // ── Common: search, cursor, sort, paginate ─────────────────────────────

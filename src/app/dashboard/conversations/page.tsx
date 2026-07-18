@@ -51,6 +51,8 @@ import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type AiStateChangedEvent, type BrideMessageEvent, type StageChangedEvent } from '@/lib/realtime/channels';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 import { trackClient } from '@/lib/analytics-client';
+import { useFeatureAccess } from '@/lib/use-feature-access';
+import FeatureLockModal, { type LockFeature } from '@/components/FeatureLockModal';
 
 interface ThreadRow {
   thread_id: string;
@@ -282,6 +284,19 @@ export default function ConversationsPage() {
   const [newContactPhone, setNewContactPhone] = useState('');
   const [newContactChannel, setNewContactChannel] = useState<'sms' | 'email'>('sms');
   const [savingContact, setSavingContact] = useState(false);
+  // Plan gating: SMS + Concierge access for lock states.
+  const featureAccess = useFeatureAccess();
+  const smsLocked = featureAccess ? !featureAccess.hasSms : false;
+  const conciergeLocked = featureAccess ? !featureAccess.hasConcierge : false;
+  const [lockModal, setLockModal] = useState<LockFeature | null>(null);
+  // When SMS isn't available on the plan, never leave the composer or the
+  // new-conversation channel defaulted to SMS.
+  useEffect(() => {
+    if (smsLocked) {
+      setComposerTab((t) => (t === 'sms' ? 'email' : t));
+      setNewContactChannel((c) => (c === 'sms' ? 'email' : c));
+    }
+  }, [smsLocked]);
   const [threadSearch, setThreadSearch] = useState('');
   const [emailCc, setEmailCc] = useState('');
   const [emailBcc, setEmailBcc] = useState('');
@@ -2573,6 +2588,9 @@ export default function ConversationsPage() {
                     <CollapsedComposer
                       composerTab={composerTab}
                       menuOpen={composerMenuOpen}
+                      smsLocked={smsLocked}
+                      conciergeLocked={conciergeLocked}
+                      onLocked={(f) => setLockModal(f)}
                       onToggleMenu={() => setComposerMenuOpen((v) => !v)}
                       onCloseMenu={() => setComposerMenuOpen(false)}
                       onChooseTab={(tab) => {
@@ -2593,6 +2611,7 @@ export default function ConversationsPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        if (smsLocked) { setLockModal('sms'); return; }
                         setComposerTab('sms');
                         setMentionedIds([]);
                         setSendError('');
@@ -2601,10 +2620,14 @@ export default function ConversationsPage() {
                         'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
                         composerTab === 'sms'
                           ? 'bg-white text-gray-900 border border-gray-200'
-                          : 'text-gray-600 hover:text-gray-900',
+                          : smsLocked
+                            ? 'text-gray-400 hover:text-gray-600'
+                            : 'text-gray-600 hover:text-gray-900',
                       )}
                     >
-                      <MessageSquare size={14} className="hidden shrink-0 sm:inline" />
+                      {smsLocked
+                        ? <Lock size={12} className="shrink-0" />
+                        : <MessageSquare size={14} className="hidden shrink-0 sm:inline" />}
                       <span className="truncate">SMS</span>
                     </button>
                     <button
@@ -2643,6 +2666,7 @@ export default function ConversationsPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        if (conciergeLocked) { setLockModal('concierge'); return; }
                         setComposerTab('concierge');
                         setMentionedIds([]);
                         setSendError('');
@@ -2651,10 +2675,14 @@ export default function ConversationsPage() {
                         'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
                         composerTab === 'concierge'
                           ? 'bg-white text-violet-800 border border-violet-300'
-                          : 'text-gray-600 hover:text-violet-700',
+                          : conciergeLocked
+                            ? 'text-gray-400 hover:text-gray-600'
+                            : 'text-gray-600 hover:text-violet-700',
                       )}
                     >
-                      <Building2 size={14} className="hidden shrink-0 sm:inline" />
+                      {conciergeLocked
+                        ? <Lock size={12} className="shrink-0" />
+                        : <Building2 size={14} className="hidden shrink-0 sm:inline" />}
                       <span className="truncate">Concierge</span>
                     </button>
                     </div>
@@ -3364,15 +3392,20 @@ export default function ConversationsPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => setNewContactChannel('sms')}
+                        onClick={() => {
+                          if (smsLocked) { setLockModal('sms'); return; }
+                          setNewContactChannel('sms');
+                        }}
                         className={classNames(
                           'flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition',
                           newContactChannel === 'sms'
                             ? 'border-brand-900 bg-brand-900 text-white'
-                            : 'border-gray-200 text-gray-700 hover:bg-gray-50',
+                            : smsLocked
+                              ? 'border-gray-200 text-gray-400 hover:bg-gray-50'
+                              : 'border-gray-200 text-gray-700 hover:bg-gray-50',
                         )}
                       >
-                        <MessageCircle size={15} />
+                        {smsLocked ? <Lock size={14} /> : <MessageCircle size={15} />}
                         Text (SMS)
                       </button>
                       <button
@@ -3430,6 +3463,10 @@ export default function ConversationsPage() {
               : null
           }
         />
+      )}
+
+      {lockModal && (
+        <FeatureLockModal open onClose={() => setLockModal(null)} feature={lockModal} />
       )}
     </div>
   );
@@ -3856,6 +3893,9 @@ function CollapsedComposer({
   onChooseTab,
   onExpand,
   onInputChange,
+  smsLocked,
+  conciergeLocked,
+  onLocked,
 }: {
   composerTab: ComposerTab;
   menuOpen: boolean;
@@ -3864,7 +3904,12 @@ function CollapsedComposer({
   onChooseTab: (tab: ComposerTab) => void;
   onExpand: () => void;
   onInputChange: (value: string) => void;
+  smsLocked: boolean;
+  conciergeLocked: boolean;
+  onLocked: (feature: LockFeature) => void;
 }) {
+  const lockedFor = (id: ComposerTab): LockFeature | null =>
+    id === 'sms' && smsLocked ? 'sms' : id === 'concierge' && conciergeLocked ? 'concierge' : null;
   const CurrentIcon = composerTab === 'team'
     ? Lock
     : composerTab === 'email'
@@ -3900,17 +3945,23 @@ function CollapsedComposer({
             role="menu"
           >
             {options.map((opt) => {
-              const Icon = opt.icon;
+              const lockFeature = lockedFor(opt.id);
+              const Icon = lockFeature ? Lock : opt.icon;
               return (
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => onChooseTab(opt.id)}
+                  onClick={() => {
+                    if (lockFeature) { onLocked(lockFeature); onCloseMenu(); return; }
+                    onChooseTab(opt.id);
+                  }}
                   className={classNames(
                     'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
                     composerTab === opt.id
                       ? 'bg-gray-100 font-semibold text-gray-900'
-                      : 'text-gray-700 hover:bg-gray-50',
+                      : lockFeature
+                        ? 'text-gray-400 hover:bg-gray-50'
+                        : 'text-gray-700 hover:bg-gray-50',
                   )}
                   role="menuitem"
                 >

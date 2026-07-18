@@ -22,6 +22,7 @@ import { sendEmail, buildBulkEmailHeaders, htmlToPlainText, injectPreheaderHtml 
 import { mergeMarketingFields } from '@/lib/marketing-email-render';
 import { resolveVenueFromAddress } from '@/lib/marketing-email-worker';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
+import { loadVenueFeatureAccess } from '@/lib/plan-features';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -89,6 +90,10 @@ export async function POST(req: NextRequest) {
 
   // ── SMS ────────────────────────────────────────────────────────────────
   if (channel === 'sms') {
+    const access = await loadVenueFeatureAccess(venueId);
+    if (!access.hasSms) {
+      return NextResponse.json({ error: 'SMS is not available on your plan.', code: 'sms_not_available' }, { status: 403 });
+    }
     const rawPhone = normalizePhone((body.to ?? '').trim());
     if (!rawPhone) return NextResponse.json({ error: 'Enter a valid phone number to send a test text.' }, { status: 400 });
     if (!(v.ghl_connected as boolean | null)) {

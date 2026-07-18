@@ -18,6 +18,7 @@
 import { NextResponse } from 'next/server';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { filterConciergeManagedVenueIds } from '@/lib/plan-features';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -57,7 +58,22 @@ export async function GET() {
         .in('id', brideReplyThreadIds)
         .eq('status', 'closed');
       const closedSet = new Set(((closedRows ?? []) as Array<{ id: string }>).map(r => r.id));
-      brideReplies = brideReplyThreadIds.filter(id => !closedSet.has(id)).length;
+      const openBrideThreadIds = brideReplyThreadIds.filter(id => !closedSet.has(id));
+
+      // Concierge gate: only count bride replies for venues with the Venue
+      // Concierge active. Others manage their own replies and don't hit the
+      // super-admin badge.
+      if (openBrideThreadIds.length > 0) {
+        const { data: threadVenues } = await supabaseAdmin
+          .from('conversation_threads')
+          .select('id, venue_id')
+          .in('id', openBrideThreadIds);
+        const rows = (threadVenues ?? []) as Array<{ id: string; venue_id: string }>;
+        const conciergeVenues = await filterConciergeManagedVenueIds(rows.map(r => r.venue_id));
+        brideReplies = rows.filter(r => conciergeVenues.has(r.venue_id)).length;
+      } else {
+        brideReplies = 0;
+      }
     }
 
     // ── 2. Venue Direct replies that need concierge attention ────────────────

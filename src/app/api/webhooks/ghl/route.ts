@@ -10,6 +10,7 @@ import { applySmsDndForVenueCustomer, applySmsOptInForVenueCustomer, isSmsOptOut
 import { syncSingleGhlContact } from '@/lib/ghl-contacts-sync';
 import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
 import { handleInboundAiMessage } from '@/lib/ai-concierge/inbound-handler';
+import { loadVenueFeatureAccess } from '@/lib/plan-features';
 
 export async function POST(request: NextRequest) {
   try {
@@ -74,15 +75,25 @@ export async function POST(request: NextRequest) {
           // AI Concierge: classify the reply + drive the lead's AI state machine.
           // Only runs when the message was newly inserted (not a duplicate
           // re-delivery from GHL) AND we resolved a venue_customer.
+          //
+          // Plan gate: venues without SMS (no A2P — $97 / free) never route
+          // inbound replies through the AI Concierge or to the super-admin
+          // inbox. The message is still stored above so it appears in their
+          // conversation thread (locked state), but nothing is auto-sent.
           if (r.inserted && r.venueCustomerId) {
-            void handleInboundAiMessage({
-              venueId:         venue.id as string,
-              venueCustomerId: r.venueCustomerId,
-              messageBody:     inboundSms.body,
-              ghlMessageId:    inboundSms.messageId ?? null,
-            }).catch((err) => {
-              console.error('[ghl webhook] AI inbound handler failed:', err);
-            });
+            const access = await loadVenueFeatureAccess(venue.id as string);
+            if (access.hasSms) {
+              void handleInboundAiMessage({
+                venueId:         venue.id as string,
+                venueCustomerId: r.venueCustomerId,
+                messageBody:     inboundSms.body,
+                ghlMessageId:    inboundSms.messageId ?? null,
+              }).catch((err) => {
+                console.error('[ghl webhook] AI inbound handler failed:', err);
+              });
+            } else {
+              console.log(`[ghl webhook] inbound SMS stored but AI routing skipped for venue ${venue.id}: plan has no SMS`);
+            }
           }
         }
       } else {

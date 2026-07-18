@@ -5,6 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { authenticateApiV1, corsPreflight, CORS_HEADERS } from '@/lib/api-v1-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { findOrCreateContact, getGhlToken, sendSms } from '@/lib/ghl';
+import { loadVenueFeatureAccess } from '@/lib/plan-features';
 
 export async function OPTIONS() { return corsPreflight(); }
 
@@ -36,6 +37,14 @@ export async function POST(request: NextRequest) {
   const message = (body.message || '').trim();
   if (!to || !message) {
     return NextResponse.json({ error: 'to_and_message_required' }, { status: 400, headers: CORS_HEADERS });
+  }
+
+  const access = await loadVenueFeatureAccess(auth.venueId);
+  if (!access.hasSms) {
+    return NextResponse.json(
+      { error: 'sms_not_available', message: 'SMS is not available on your plan.' },
+      { status: 403, headers: CORS_HEADERS },
+    );
   }
 
   const { data: venueData } = await supabaseAdmin

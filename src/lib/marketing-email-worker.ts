@@ -18,6 +18,7 @@ import { setLeadAiState } from '@/lib/ai-concierge/state-control';
 import type { AiState, AiVenueResources } from '@/lib/ai-concierge/types';
 import { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, resolveDefaultStageIdByName } from '@/lib/booking-system-stages';
 import { isSystemTagInert } from '@/lib/system-tag-visibility';
+import { loadVenueFeatureAccess } from '@/lib/plan-features';
 
 const BATCH = 25;
 
@@ -1518,6 +1519,13 @@ async function sendAutomationSmsToLead(
   mediaUrls?: string[],
 ): Promise<{ ok: boolean; error?: string; mergedBody?: string }> {
   const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+  // Plan gate: skip SMS steps on plans without SMS (no A2P carrier
+  // registration). Email steps in the same sequence continue to run.
+  const smsAccess = await loadVenueFeatureAccess(venueId);
+  if (!smsAccess.hasSms) {
+    console.log(`[worker] SMS skipped for venue ${venueId}: plan has no SMS (hasSms=false)`);
+    return { ok: false, error: 'sms_not_available' };
+  }
   const vars = await buildMergeVars(venueId, leadId, appOrigin, { forSms: true });
   if (!vars) return { ok: false, error: 'suppressed' };
   const phone = await resolvePhoneForLead(venueId, leadId);
@@ -1989,7 +1997,10 @@ async function processOneEnrollment(en: {
     }
     const send = await sendAutomationSmsToLead(en.venue_id, en.lead_id, body, cfg.media_urls);
     console.log(`[worker] SMS step enrollment=${en.id} ok=${send.ok} error=${send.error ?? 'none'}`);
-    if (!send.ok && send.error !== 'suppressed') {
+    // 'suppressed' (DND/unsubscribed) and 'sms_not_available' (plan has no SMS)
+    // are soft skips: advance to the next step so email steps still run.
+    const softSkip = send.error === 'suppressed' || send.error === 'sms_not_available';
+    if (!send.ok && !softSkip) {
       await supabaseAdmin
         .from('marketing_automation_enrollments')
         .update({ status: 'failed', last_error: send.error ?? 'sms failed' })
@@ -1997,7 +2008,7 @@ async function processOneEnrollment(en: {
       void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_sms', status: 'failed', error_text: send.error ?? 'sms failed' });
       return 'failed';
     }
-    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_sms', status: send.error === 'suppressed' ? 'skipped' : 'success' });
+    void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_sms', status: softSkip ? 'skipped' : 'success' });
     if (send.ok && send.mergedBody) {
       void findOrCreateThreadForLead(en.venue_id, en.lead_id).then((threadId) => {
         if (threadId) void logToConversationThread({ threadId, venueId: en.venue_id, channel: 'sms', body: send.mergedBody! });
@@ -2153,8 +2164,15 @@ async function processOneEnrollment(en: {
       }
     }
 
-    // SMS branch — only via GHL (legacy messaging) for now
-    if ((channel === 'sms' || channel === 'both')) {
+    // SMS branch — only via GHL (legacy messaging) for now.
+    // Plan gate: skip owner SMS on plans without SMS (no A2P registration).
+    const ownerSmsAccess = (channel === 'sms' || channel === 'both')
+      ? await loadVenueFeatureAccess(en.venue_id)
+      : null;
+    if ((channel === 'sms' || channel === 'both') && ownerSmsAccess && !ownerSmsAccess.hasSms) {
+      smsOk = channel === 'sms' ? true : true; // treat as soft-skip, don't fail the step
+      skipped = skipped || 'sms_not_available';
+    } else if ((channel === 'sms' || channel === 'both')) {
       const ownerPhone = (venue?.notification_phone as string | null)?.trim();
       const ghlToken = getGhlToken({ ghl_access_token: (venue?.ghl_access_token as string | null) ?? null });
       const locId    = (venue?.ghl_location_id as string | null) || '';
