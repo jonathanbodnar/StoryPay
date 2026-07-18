@@ -24,6 +24,7 @@ import {
   PHASE5_STAGE_NAME,
   resolveDefaultStageIdByName,
 } from '@/lib/booking-system-stages';
+import { STL_NAME, PHASE4_NAME, PHASE5_NAME, PHASE6_NAME } from '@/lib/booking-system-sequences';
 
 // Re-exported for backwards compatibility with existing importers of this
 // route file (e.g. `stage-default/route.ts`). Source of truth now lives in
@@ -34,16 +35,15 @@ export { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, resolveDefaultStageIdByName };
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
 
-// Name used to identify the managed Speed-to-Lead automation.
-export const STL_NAME = 'Speed to Lead — Booking System';
+// Automation names are the single source of truth in
+// '@/lib/booking-system-sequences' so both this route and the super-admin
+// analytics panel identify the same sequences. Re-exported here for the many
+// existing importers of these constants.
 // Note: the old "Nurture Sequence — Booking System" (Phase 3) automation was
 // removed from this page's UI — venues can build that kind of nurture
 // content directly via Email Campaigns instead. Any pre-existing automation
 // rows with that name were paused via migrations/163.
-export const PHASE4_NAME = 'Booked Tour Sequence — Booking System';
-export const PHASE5_NAME = 'Booked Wedding Sequence — Booking System';
-// Anniversary — a single email that fires once a year after the wedding date.
-export const PHASE6_NAME = 'Anniversary — Booking System';
+export { STL_NAME, PHASE4_NAME, PHASE5_NAME, PHASE6_NAME };
 // Days after the wedding date the anniversary email fires (1 year).
 export const ANNIVERSARY_DAYS_AFTER_WEDDING = 365;
 

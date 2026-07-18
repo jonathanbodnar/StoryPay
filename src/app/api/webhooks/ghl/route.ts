@@ -11,6 +11,7 @@ import { syncSingleGhlContact } from '@/lib/ghl-contacts-sync';
 import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
 import { handleInboundAiMessage } from '@/lib/ai-concierge/inbound-handler';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
+import { recordSmsReplyAttribution } from '@/lib/sms-reply-tracking';
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,6 +71,19 @@ export async function POST(request: NextRequest) {
                 source: 'inbound_start_keyword',
               });
             }
+          }
+
+          // SMS reply attribution: credit the last automated SMS step this
+          // bride was sent with a first-reply so we can measure which messages
+          // in the standard sequence actually earn responses. Runs for every
+          // venue (no-ops when there was no prior SMS send). Fire-and-forget.
+          if (r.inserted && r.venueCustomerId) {
+            void recordSmsReplyAttribution({
+              venueId:         venue.id as string,
+              venueCustomerId: r.venueCustomerId,
+            }).catch((err) => {
+              console.error('[ghl webhook] SMS reply attribution failed:', err);
+            });
           }
 
           // AI Concierge: classify the reply + drive the lead's AI state machine.
