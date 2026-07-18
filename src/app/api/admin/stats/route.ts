@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     supabaseAdmin.from('venues').select('*', { count: 'exact', head: true }),
     supabaseAdmin
       .from('venues')
-      .select('id, name, email, ghl_location_id, directory_plan_id, directory_subscription_status, directory_trial_ends_at, directory_trial_consumed, last_login_at, is_demo, setup_completed, created_at')
+      .select('id, name, email, ghl_location_id, directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_ends_at, directory_trial_consumed, last_login_at, is_demo, setup_completed, created_at')
       .not('directory_plan_id', 'is', null),
     (async () => {
       let peq = supabaseAdmin.from('platform_billing_events').select('amount_cents, occurred_at');
@@ -103,6 +103,8 @@ export async function GET(request: NextRequest) {
   const EXCLUDE_FROM_ASSIGNED_MRR = new Set(['canceled', 'trialing', 'none', 'pending', '']);
 
   let directoryActiveMrrCents = 0;
+  let directoryScheduledMrrCents = 0;
+  let directoryScheduledVenueCount = 0;
   let directoryAssignedMrrCents = 0;
   let directoryActiveSubscriptionCount = 0;
   let directoryAssignedPayingVenueCount = 0;
@@ -139,6 +141,14 @@ export async function GET(request: NextRequest) {
     if (price <= 0) continue;
 
     const st = (row.directory_subscription_status as string | undefined) ?? 'none';
+    const hasCard = Boolean((row as Record<string, unknown>).directory_subscription_external_id);
+
+    // Scheduled MRR: trialing venues that have already added a card (sub on file,
+    // charge fires when trial ends). This is committed future revenue.
+    if (st === 'trialing' && hasCard) {
+      directoryScheduledMrrCents += price;
+      directoryScheduledVenueCount++;
+    }
 
     if (!EXCLUDE_FROM_ASSIGNED_MRR.has(st)) {
       directoryAssignedMrrCents += price;
@@ -292,6 +302,8 @@ export async function GET(request: NextRequest) {
     monthlyChart,
     featureRequests: featureRequests ?? [],
     directoryActiveMrrCents,
+    directoryScheduledMrrCents,
+    directoryScheduledVenueCount,
     directoryAssignedMrrCents,
     directoryActiveSubscriptionCount,
     directoryAssignedPayingVenueCount,

@@ -139,6 +139,8 @@ interface AdminStats {
   monthlyChart: { month: string; label: string; revenue: number; proposals: number }[];
   featureRequests: { id: string; title: string; vote_count: number; status: string; created_at: string; admin_read_at: string | null; category: string; venue_id: string | null }[];
   directoryActiveMrrCents?: number;
+  directoryScheduledMrrCents?: number;
+  directoryScheduledVenueCount?: number;
   directoryAssignedMrrCents?: number;
   directoryActiveSubscriptionCount?: number;
   directoryAssignedPayingVenueCount?: number;
@@ -172,7 +174,7 @@ interface FeatureRequestDetail { id: string; title: string; description: string 
 const STATUS_COLORS_FR: Record<string, string> = { open: 'bg-gray-100 text-gray-600', planned: 'bg-blue-100 text-blue-700', in_progress: 'bg-amber-100 text-amber-700', completed: 'bg-emerald-100 text-emerald-700' };
 const STATUS_LABELS_FR: Record<string, string> = { open: 'Open', planned: 'Planned', in_progress: 'In Progress', completed: 'Completed' };
 
-function KPICard({ label, value, icon: Icon, color, onClick }: { label: string; value: string | number; icon: React.ElementType; color: string; onClick?: () => void }) {
+function KPICard({ label, value, icon: Icon, color, onClick, sub }: { label: string; value: string | number; icon: React.ElementType; color: string; onClick?: () => void; sub?: string }) {
   return (
     <div
       className={`rounded-xl bg-white border border-gray-200 p-5 ${onClick ? 'cursor-pointer hover:hover:border-gray-300 transition-all' : ''}`}
@@ -188,6 +190,7 @@ function KPICard({ label, value, icon: Icon, color, onClick }: { label: string; 
         </div>
       </div>
       <p className="text-2xl font-bold text-gray-900 tracking-tight">{value}</p>
+      {sub && <p className="mt-1 text-[11px] text-gray-400">{sub}</p>}
     </div>
   );
 }
@@ -1594,15 +1597,21 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
               <div>
                 <h3 className="text-sm font-semibold text-gray-900">Directory SaaS (StoryVenue)</h3>
                 <p className="text-xs text-gray-500 mt-1 max-w-3xl">
-                  Only <strong>active</strong> (paid) subscriptions count toward MRR. Trialing venues are free trials. SaaS cash sums actual charges from <code className="text-[10px] bg-white px-1 rounded border">platform_billing_events</code>.
+                  <strong>Active MRR</strong> = paid subscriptions billing today. <strong>Scheduled MRR</strong> = trialing venues with a card on file whose first charge fires when their trial ends (committed future revenue). SaaS cash sums actual charges from <code className="text-[10px] bg-white px-1 rounded border">platform_billing_events</code>.
                 </p>
               </div>
 
               {/* Revenue row */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <KPICard label="MRR (active subs)" value={statsLoading ? '...' : formatCents(stats?.directoryActiveMrrCents ?? 0)} icon={Repeat} color="#0d9488" />
+                <KPICard label="MRR (active subs)" value={statsLoading ? '...' : formatCents(stats?.directoryActiveMrrCents ?? 0)} icon={Repeat} color="#0d9488" onClick={undefined} />
+                <KPICard
+                  label="Scheduled MRR"
+                  value={statsLoading ? '...' : formatCents(stats?.directoryScheduledMrrCents ?? 0)}
+                  icon={CalendarDays}
+                  color="#6366f1"
+                  sub={statsLoading ? undefined : `${stats?.directoryScheduledVenueCount ?? 0} venue${(stats?.directoryScheduledVenueCount ?? 0) === 1 ? '' : 's'} — card on file, trial active`}
+                />
                 <KPICard label="Active subscriptions" value={statsLoading ? '...' : stats?.directoryActiveSubscriptionCount ?? 0} icon={Check} color="#0d9488" />
-                <KPICard label="MRR (assigned plans)" value={statsLoading ? '...' : formatCents(stats?.directoryAssignedMrrCents ?? 0)} icon={Layers} color="#6366f1" />
                 <KPICard label="SaaS cash (range)" value={statsLoading ? '...' : formatCents(stats?.platformSaaSRevenueInRangeCents ?? 0)} icon={Wallet} color="#b45309" />
               </div>
 
