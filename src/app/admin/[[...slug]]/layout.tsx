@@ -534,11 +534,11 @@ function FeatureRequestsAdminTab({
 }
 
 const ADMIN_NAV_ITEMS = [
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'funnel-ab', label: 'Funnel A/B', icon: TrendingUp },
   { key: 'analytics', label: 'Usage Analytics', icon: BarChart2 },
   { key: 'sms-analytics', label: 'SMS Reply Analytics', icon: MessageSquare },
   { key: 'venues', label: 'Venue management', icon: Building2 },
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'couples', label: 'Couples', icon: Heart },
   { key: 'contacts', label: 'Contacts', icon: Users },
   { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
