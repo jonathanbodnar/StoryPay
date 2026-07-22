@@ -129,6 +129,11 @@ STYLE RULES (follow strictly):
 - NEVER use em dashes or en dashes (— or –). Use a period or a comma instead.
 - Write short, declarative, outcome-first sentences. No filler.
 
+SEO RULES (invisible to the reader, follow naturally):
+- In "about_venue", work in the phrase "wedding venue in ${loc || 'the area'}" (or a close natural variant) exactly once. Never force or repeat it.
+- Mention the venue's city or region by name at least once in "about_venue" and once in "space_description" when location is known.
+- Use concrete nouns brides search for (ceremony, reception, guest capacity, wedding packages) instead of vague ones. Never keyword-stuff.
+
 Venue: ${venueName}${loc ? ` (${loc})` : ''}
 Existing description: ${description || '(none)'}
 Max capacity: ${a.max_capacity || '(unknown)'}

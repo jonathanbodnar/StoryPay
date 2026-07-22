@@ -11,6 +11,7 @@ import { VenueFaqSection, VenueMapEmbed, VenueSocialRow } from '@/components/Ven
 import { DirectoryListingBadges } from '@/components/DirectoryListingBadges';
 import { ListingTracker } from '@/components/ListingTracker';
 import { ListingLeadModal } from '@/components/ListingLeadModal';
+import { VenueSeoFooter } from '@/components/VenueSeoFooter';
 
 const API_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenue.com';
 const DIRECTORY_SITE =
@@ -91,6 +92,11 @@ type PublicVenuePayload = {
     pricing_guide_enabled?: boolean;
     /** When true the venue's plan requests the directory listing header be hidden (landing page mode). */
     hide_header?: boolean;
+    /** Auto-SEO fields (AI-generated, owner-invisible). */
+    seo_title?: string | null;
+    seo_description?: string | null;
+    seo_keywords?: string[];
+    brand_website?: string | null;
   };
   reviews: {
     average_rating: number | null;
@@ -147,8 +153,12 @@ export async function generateMetadata({
   }
   const { venue, reviews } = data;
   const loc = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
-  const title = loc ? `${venue.name} — ${loc}` : venue.name;
+  // Auto-SEO fields (AI-generated at go-live) win; templated fallbacks otherwise.
+  const title =
+    venue.seo_title?.trim() ||
+    (loc ? `${venue.name} | Wedding Venue in ${loc}` : venue.name);
   const desc =
+    venue.seo_description?.trim() ||
     venue.description?.slice(0, 155) ||
     `Wedding venue${loc ? ` in ${loc}` : ''}.${reviews.count ? ` ${reviews.count} verified reviews.` : ''}`;
 
@@ -158,6 +168,7 @@ export async function generateMetadata({
     metadataBase: new URL(DIRECTORY_SITE),
     title,
     description: desc,
+    ...(venue.seo_keywords?.length ? { keywords: venue.seo_keywords } : {}),
     // Demo venues must never be indexed — the preview token is auth, not content
     ...(previewToken ? { robots: { index: false, follow: false } } : {}),
     alternates: { canonical },
@@ -214,12 +225,37 @@ export default async function PublicVenuePage({
 
   const roundedAvg = reviews.average_rating != null ? Math.round(reviews.average_rating * 10) / 10 : null;
 
+  const sameAs = [
+    ...(venue.brand_website ? [venue.brand_website] : []),
+    ...Object.values(venue.social_links ?? {}).filter(
+      (u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u),
+    ),
+  ];
+
   const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
+    '@type': ['EventVenue', 'LocalBusiness'],
     name: venue.name,
     url: `${DIRECTORY_SITE}/venue/${venue.slug}`,
+    ...(venue.description ? { description: venue.description.slice(0, 500) } : {}),
     ...(venue.cover_image_url ? { image: venue.cover_image_url } : {}),
+    ...(venue.lat != null && venue.lng != null
+      ? { geo: { '@type': 'GeoCoordinates', latitude: venue.lat, longitude: venue.lng } }
+      : {}),
+    ...(venue.capacity_max != null ? { maximumAttendeeCapacity: venue.capacity_max } : {}),
+    ...(venue.price_min != null
+      ? { priceRange: `From $${venue.price_min.toLocaleString()}` }
+      : {}),
+    ...(venue.features?.length
+      ? {
+          amenityFeature: venue.features.slice(0, 20).map((f) => ({
+            '@type': 'LocationFeatureSpecification',
+            name: f,
+            value: true,
+          })),
+        }
+      : {}),
+    ...(sameAs.length ? { sameAs } : {}),
     ...(locationLine
       ? {
           address: {
@@ -267,11 +303,29 @@ export default async function PublicVenuePage({
       : {}),
   };
 
+  // FAQPage structured data — Q&A format is what both Google rich results and
+  // LLM answer engines (AEO) consume most readily.
+  const faqJsonLd =
+    venue.faq && venue.faq.length > 0
+      ? {
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: venue.faq.slice(0, 20).map((f) => ({
+            '@type': 'Question',
+            name: f.question,
+            acceptedAnswer: { '@type': 'Answer', text: f.answer },
+          })),
+        }
+      : null;
+
   return (
     <>
       <Ga4Scripts measurementId={venue.ga4_measurement_id} />
       {venue.id && <ListingTracker venueId={venue.id} />}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      {faqJsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+      )}
 
       <div className="min-h-screen bg-[#fafaf9]">
         {!venue.hide_header && (
@@ -524,13 +578,13 @@ export default async function PublicVenuePage({
           <VenueReviewsTabs venueName={venue.name} storyVenue={reviews} google={google_reviews} />
         </div>
 
-        <footer className="border-t border-gray-200 bg-white py-10 text-center text-xs text-gray-400">
-          <Link href="/" className="font-medium text-gray-600 hover:text-gray-900">
-            StoryVenue
-          </Link>
-          <span className="mx-2">·</span>
-          <span>Listings powered by StoryPay</span>
-        </footer>
+        <VenueSeoFooter
+          venueName={venue.name}
+          city={venue.location_city}
+          state={venue.location_state}
+          venueType={venue.venue_type}
+          landingMode={venue.hide_header === true}
+        />
       </div>
     </>
   );

@@ -215,5 +215,17 @@ export async function PATCH(request: NextRequest) {
       .catch(() => { /* non-fatal */ });
   }
 
+  // Auto-SEO: regenerate listing metadata in the background when content
+  // fields changed (invisible to the owner). Also fires on publish.
+  void import('@/lib/venue-seo')
+    .then(({ maybeRegenerateVenueSeo }) => {
+      const changed = Object.keys(updates);
+      if (updates.is_published === true && !changed.some((f) => f !== 'is_published')) {
+        changed.push('name'); // force generation on a bare publish toggle
+      }
+      maybeRegenerateVenueSeo(venueId, changed);
+    })
+    .catch(() => { /* non-fatal */ });
+
   return NextResponse.json({ listing: updated });
 }

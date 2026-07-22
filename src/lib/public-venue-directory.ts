@@ -102,6 +102,12 @@ export type PublicVenuePayload = {
     pricing_guide_enabled: boolean;
     /** When true the venue's plan requests the directory listing header be hidden (landing page mode). */
     hide_header: boolean;
+    /** AI-generated meta title (auto-SEO, invisible to owner). Null pre-generation. */
+    seo_title: string | null;
+    /** AI-generated meta description (auto-SEO). Null pre-generation. */
+    seo_description: string | null;
+    /** AI-generated target keywords (auto-SEO). */
+    seo_keywords: string[];
   };
   reviews: {
     average_rating: number | null;
@@ -338,6 +344,27 @@ export async function getPublicVenueBySlug(
     pricing_guide_enabled = guideRow?.enabled === true;
   }
 
+  // Auto-SEO fields — separate tolerant query so a pre-migration-173 schema
+  // never breaks the whole listing payload.
+  let seo_title: string | null = null;
+  let seo_description: string | null = null;
+  let seo_keywords: string[] = [];
+  try {
+    const { data: seoRow, error: seoErr } = await supabaseAdmin
+      .from('venues')
+      .select('seo_title, seo_description, seo_keywords')
+      .eq('id', venueId)
+      .maybeSingle();
+    if (!seoErr && seoRow) {
+      const s = seoRow as Record<string, unknown>;
+      seo_title = s.seo_title != null ? String(s.seo_title) : null;
+      seo_description = s.seo_description != null ? String(s.seo_description) : null;
+      seo_keywords = Array.isArray(s.seo_keywords) ? (s.seo_keywords as string[]) : [];
+    }
+  } catch {
+    /* pre-migration schema — serve without SEO overrides */
+  }
+
   let google_reviews: PublicVenuePayload['google_reviews'] = null;
   const gPlaceRaw = v.google_place_id != null ? String(v.google_place_id).trim() : '';
   if (gPlaceRaw && isValidGooglePlaceId(gPlaceRaw)) {
@@ -381,6 +408,9 @@ export async function getPublicVenueBySlug(
       brand_website: v.brand_website != null ? String(v.brand_website) : null,
       pricing_guide_enabled,
       hide_header,
+      seo_title,
+      seo_description,
+      seo_keywords,
     },
     reviews: {
       average_rating,

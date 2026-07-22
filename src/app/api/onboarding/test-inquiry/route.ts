@@ -216,6 +216,12 @@ export async function POST(): Promise<NextResponse> {
     .then(({ enrollReengagementDrip }) => enrollReengagementDrip(venueId))
     .catch((e) => console.warn('[test-inquiry] drip enroll', e));
 
+  // 8. Generate the listing's SEO metadata now that it's publicly live, and
+  //    ping IndexNow so Bing (and ChatGPT search) crawl it. Non-fatal.
+  void import('@/lib/venue-seo')
+    .then(({ generateVenueSeo }) => generateVenueSeo(venueId))
+    .catch((e) => console.warn('[test-inquiry] seo generation', e));
+
   void import('@/lib/analytics')
     .then(({ trackMilestone }) => trackMilestone('activated', { venueId, label: 'Onboarding: test lead activated' }))
     .catch(() => { /* non-fatal */ });
