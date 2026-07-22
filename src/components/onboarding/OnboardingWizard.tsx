@@ -1339,6 +1339,22 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
           price="Free for 14 days"
           priceSub="then $97/mo"
           sub="Turn on the Bride Booking System: instant lead follow-up, 14-day nurture sequences, and priority support."
+          perks={
+            <>
+              <span className="flex items-start gap-1.5 text-xs leading-relaxed text-gray-700">
+                <Check size={14} className="mt-0.5 shrink-0 text-emerald-600" />
+                <span><span className="font-semibold text-gray-900">14 days free</span> — full access, nothing locked.</span>
+              </span>
+              <span className="flex items-start gap-1.5 text-xs leading-relaxed text-gray-700">
+                <Check size={14} className="mt-0.5 shrink-0 text-emerald-600" />
+                <span><span className="font-semibold text-gray-900">No charge today</span> — first payment {firstChargeDate}, only if you stay.</span>
+              </span>
+              <span className="flex items-start gap-1.5 text-xs leading-relaxed text-gray-700">
+                <Check size={14} className="mt-0.5 shrink-0 text-emerald-600" />
+                <span><span className="font-semibold text-gray-900">Cancel anytime</span> in one click before day 14.</span>
+              </span>
+            </>
+          }
         />
         <PlanChoice
           selected={plan === 'free'}
@@ -1349,40 +1365,16 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
         />
       </div>
 
-      {/* Risk reversal — only meaningful for the Pro trial. */}
-      {plan === 'pro' && (
-        <div className="mt-4 space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
-          <div className="flex items-start gap-2">
-            <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" />
-            <p className="text-xs leading-relaxed text-gray-700">
-              <span className="font-semibold text-gray-900">14 days free</span> — full access, nothing locked.
-            </p>
-          </div>
-          <div className="flex items-start gap-2">
-            <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" />
-            <p className="text-xs leading-relaxed text-gray-700">
-              <span className="font-semibold text-gray-900">No charge today</span> — first payment {firstChargeDate}, only if you stay.
-            </p>
-          </div>
-          <div className="flex items-start gap-2">
-            <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" />
-            <p className="text-xs leading-relaxed text-gray-700">
-              <span className="font-semibold text-gray-900">Cancel anytime</span> in one click before day 14.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Why we need a card — always visible, both plans. */}
-      <div className="mt-4 flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
-        <Lock size={14} className="mt-0.5 shrink-0 text-gray-500" />
-        <p className="text-xs leading-relaxed text-gray-600">
-          <span className="font-medium text-gray-700">Why we need a card:</span> it verifies you&apos;re a
+      {/* Why we need a card — plain sentence directly above the card form. */}
+      <p className="mt-4 flex items-start gap-1.5 text-xs leading-relaxed text-gray-500">
+        <Lock size={13} className="mt-0.5 shrink-0 text-gray-400" />
+        <span>
+          <span className="font-medium text-gray-600">Why we need a card:</span> it verifies you&apos;re a
           real venue and keeps fake listings off StoryVenue.
-        </p>
-      </div>
+        </span>
+      </p>
 
-      <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="mt-3 rounded-xl border border-gray-200 bg-white p-4">
         {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
         {cardIntent && (
           <InlineTrialCardForm
@@ -1411,7 +1403,7 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
 
 /* Selectable plan card for the Access step. */
 function PlanChoice({
-  selected, onSelect, title, price, priceSub, badge, sub,
+  selected, onSelect, title, price, priceSub, badge, sub, perks,
 }: {
   selected: boolean;
   onSelect: () => void;
@@ -1420,6 +1412,7 @@ function PlanChoice({
   priceSub?: string;
   badge?: string;
   sub: string;
+  perks?: React.ReactNode;
 }) {
   return (
     <button
@@ -1449,6 +1442,7 @@ function PlanChoice({
         </span>
       </div>
       <p className="mt-1.5 pl-7 text-sm text-gray-500">{sub}</p>
+      {perks && <div className="mt-3 space-y-1.5 pl-7">{perks}</div>}
     </button>
   );
 }
