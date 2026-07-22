@@ -2860,6 +2860,18 @@ const MIGRATIONS = [
     description: 'Creates the platform-wide error_logs table that powers the new Error Log tab. Captures failures across API, SMS, email, payments, webhooks and cron for all sub-accounts. Run this once before using the Error Log.',
     endpoint: '/api/admin/run-migration-142',
   },
+  {
+    id: 'seo-backfill',
+    name: 'Backfill Venue SEO (173)',
+    description: 'Generates AI-optimized meta titles, descriptions, and keywords for every published listing that does not have them yet. Processes 25 venues per click — click repeatedly until complete. Requires migration 173 (seo columns) to be applied first.',
+    endpoint: '/api/admin/backfill-venue-seo',
+  },
+  {
+    id: 'listing-live-backfill',
+    name: 'Backfill Listing Go-Live',
+    description: 'Sets is_published = true for every venue that sent a test inquiry but whose listing is not yet live. Safe to run multiple times.',
+    endpoint: '/api/admin/backfill-listing-live',
+  },
 ];
 
 function SystemTab() {
@@ -2871,11 +2883,18 @@ function SystemTab() {
     try {
       const res = await fetch(endpoint, { method: 'POST' });
       const data = await res.json();
+      // Handle backfill-style responses (generated / remaining)
+      let message = data.message ?? 'Migration applied successfully.';
+      if (data.generated !== undefined) {
+        message = `Generated ${data.generated}. Remaining: ${data.remaining ?? 0}.${data.remaining > 0 ? ' Click Run again.' : ' All done!'}`;
+      } else if (data.published !== undefined) {
+        message = `Published ${data.published} listing${data.published !== 1 ? 's' : ''}. Enrolled ${data.enrolled ?? 0} in drip.`;
+      }
       setResults((r) => ({
         ...r,
         [id]: res.ok
-          ? { ok: true, message: data.message ?? 'Migration applied successfully.' }
-          : { ok: false, message: data.error ?? 'Migration failed.' },
+          ? { ok: true, message }
+          : { ok: false, message: data.error ?? 'Failed.' },
       }));
     } catch (e) {
       setResults((r) => ({ ...r, [id]: { ok: false, message: String(e) } }));
