@@ -31,15 +31,31 @@ if (!base) {
 }
 
 const origin = base.replace(/\/$/, '');
-const url = `${origin}/api/cron/marketing-email`;
 
-const res = await fetch(url, {
+// Primary job: marketing email campaign sends + automation steps.
+const res = await fetch(`${origin}/api/cron/marketing-email`, {
   headers: { Authorization: `Bearer ${secret}` },
 });
-
 const body = await res.text();
-if (!res.ok) {
+if (res.ok) {
+  console.log(body);
+} else {
   console.error(`marketing-email-cron: HTTP ${res.status}`, body);
-  process.exit(1);
 }
-console.log(body);
+
+// Piggyback (best-effort, non-fatal): fire due re-engagement drip emails for
+// dormant venues. Idempotent + timestamp-gated, so running it on the marketing
+// cadence never double-sends — it just delivers due touches promptly.
+try {
+  const r = await fetch(`${origin}/api/cron/reengagement-drip`, {
+    headers: { Authorization: `Bearer ${secret}` },
+  });
+  const rb = await r.text();
+  if (r.ok) console.log('[reengagement-drip]', rb);
+  else console.error(`reengagement-drip: HTTP ${r.status}`, rb);
+} catch (e) {
+  console.error('reengagement-drip: failed (non-fatal)', e?.message || e);
+}
+
+// Exit code reflects the primary marketing-email job only.
+if (!res.ok) process.exit(1);

@@ -28,3 +28,8 @@ fi
 
 BASE="${BASE%/}"
 curl -fsS -H "Authorization: Bearer ${SECRET}" "${BASE}/api/cron/marketing-email"
+
+# Piggyback (best-effort, non-fatal): fire due re-engagement drip emails for
+# dormant venues. Idempotent + timestamp-gated, safe on the marketing cadence.
+curl -fsS -H "Authorization: Bearer ${SECRET}" "${BASE}/api/cron/reengagement-drip" \
+  || echo "reengagement-drip: request failed (non-fatal)" >&2
