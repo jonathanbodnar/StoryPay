@@ -9,7 +9,8 @@
     "lint": "eslint",
     "cron:marketing-email": "node scripts/marketing-email-cron.mjs",
     "cron:appointment-reminders": "node scripts/appointment-reminders-cron.mjs",
-    "cron:payment-reminders": "node scripts/payment-reminders-cron.mjs"
+    "cron:payment-reminders": "node scripts/payment-reminders-cron.mjs",
+    "cron:reengagement-drip": "node scripts/reengagement-drip-cron.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
