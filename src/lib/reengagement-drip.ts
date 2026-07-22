@@ -171,6 +171,7 @@ interface VenueRow {
   last_login_at: string | null;
   directory_subscription_status: string | null;
   is_demo: boolean | null;
+  directory_card_on_file: boolean | null;
 }
 
 export interface DripRunResult {
@@ -202,15 +203,22 @@ export async function runReengagementDripCron(): Promise<DripRunResult> {
 
   // Load venue data for each drip
   const venueIds = [...new Set(dueDrips.map((d) => (d as DripRow).venue_id))];
-  const { data: venues } = await supabaseAdmin
+  const baseVenueCols =
+    'id, name, email, notification_email, owner_first_name, last_login_at, directory_subscription_status, is_demo';
+  let venues: Record<string, unknown>[] | null = null;
+  const fullV = await supabaseAdmin
     .from('venues')
-    .select(
-      'id, name, email, notification_email, owner_first_name, last_login_at, directory_subscription_status, is_demo',
-    )
+    .select(`${baseVenueCols}, directory_card_on_file`)
     .in('id', venueIds);
+  if (fullV.error && /directory_card_on_file/.test(fullV.error.message)) {
+    const slimV = await supabaseAdmin.from('venues').select(baseVenueCols).in('id', venueIds);
+    venues = (slimV.data ?? null) as Record<string, unknown>[] | null;
+  } else {
+    venues = (fullV.data ?? null) as Record<string, unknown>[] | null;
+  }
 
   const venueMap = new Map<string, VenueRow>(
-    ((venues ?? []) as VenueRow[]).map((v) => [v.id, v]),
+    ((venues ?? []) as unknown as VenueRow[]).map((v) => [v.id, v]),
   );
 
   const tpl = await loadTemplate();
@@ -224,10 +232,11 @@ export async function runReengagementDripCron(): Promise<DripRunResult> {
     const isActive  = subStatus === 'active' || subStatus === 'past_due';
     const isCanceled = subStatus === 'canceled';
     const isDemo    = venue?.is_demo === true;
+    const hasCard   = venue?.directory_card_on_file === true;
 
-    // Converted — they added CC
-    if (isActive || isCanceled || isDemo || !venue) {
-      const stopReason: DripCancelReason = isActive ? 'converted' : 'canceled';
+    // Converted — they added a card (paid trial OR Free-plan onboarder).
+    if (isActive || isCanceled || isDemo || hasCard || !venue) {
+      const stopReason: DripCancelReason = (isActive || hasCard) ? 'converted' : 'canceled';
       await supabaseAdmin
         .from('venue_reengagement_drip')
         .update({ status: stopReason, completed_at: now })

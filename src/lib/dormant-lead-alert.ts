@@ -92,24 +92,37 @@ interface VenueRow {
 }
 
 export async function isDormantVenue(venueId: string): Promise<boolean> {
-  const { data } = await supabaseAdmin
+  // Select card-on-file tolerantly: the column (migration 174) may not exist on
+  // older schemas, in which case we fall back to the pre-174 behavior.
+  let data: Record<string, unknown> | null = null;
+  const full = await supabaseAdmin
     .from('venues')
-    .select(
-      'id, onboarding_activated_at, directory_subscription_status, is_demo',
-    )
+    .select('id, onboarding_activated_at, directory_subscription_status, is_demo, directory_card_on_file')
     .eq('id', venueId)
     .maybeSingle();
+  if (full.error && /directory_card_on_file/.test(full.error.message)) {
+    const slim = await supabaseAdmin
+      .from('venues')
+      .select('id, onboarding_activated_at, directory_subscription_status, is_demo')
+      .eq('id', venueId)
+      .maybeSingle();
+    data = (slim.data ?? null) as Record<string, unknown> | null;
+  } else {
+    data = (full.data ?? null) as Record<string, unknown> | null;
+  }
 
   if (!data) return false;
-  const v = data as Pick<VenueRow, 'onboarding_activated_at' | 'directory_subscription_status' | 'is_demo'>;
 
+  // Card on file (paid trial OR Free-plan onboarder) → not dormant. Free
+  // onboarders get dedicated nudges later, not these.
+  if (data.directory_card_on_file === true) return false;
   // Must have sent test lead (listing complete)
-  if (!v.onboarding_activated_at) return false;
+  if (!data.onboarding_activated_at) return false;
   // Must not have active/past_due subscription
-  const sub = v.directory_subscription_status ?? '';
+  const sub = String(data.directory_subscription_status ?? '');
   if (sub === 'active' || sub === 'past_due') return false;
   // Not a demo account
-  if (v.is_demo) return false;
+  if (data.is_demo) return false;
 
   return true;
 }

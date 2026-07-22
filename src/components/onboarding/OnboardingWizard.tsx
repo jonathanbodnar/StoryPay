@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, Link2, Check, Copy, Share2, Sparkles, Loader2, X,
   ArrowRight, ArrowLeft, MapPin, Star, CheckCircle2, ImageIcon,
-  Mail, Send, Inbox,
+  Mail, Send, Inbox, Lock,
 } from 'lucide-react';
 import InlineTrialCardForm from '@/components/billing/InlineTrialCardForm';
 import { trackClient } from '@/lib/analytics-client';
@@ -1163,9 +1163,11 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
   const [phase, setPhase] = useState<'loading' | 'card' | 'finishing' | 'live' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [cardIntent, setCardIntent] = useState<{ clientToken: string; environment: string } | null>(null);
-  const [billing, setBilling] = useState<{ planName: string; amountCents: number; trialEndsAt: string } | null>(null);
   const [liveUrl, setLiveUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Plan the venue is unlocking on. Pro is pre-selected; the card is collected
+  // regardless. 'free' routes the vaulted card to confirm-free (no subscription).
+  const [plan, setPlan] = useState<'free' | 'pro'>('pro');
 
   // Card succeeded (or none required): NOW publish the public page and stamp
   // onboarding complete, then show the live/share screen. This is the moment the
@@ -1226,7 +1228,6 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
           setPhase('error');
           return;
         }
-        setBilling({ planName: b.planName, amountCents: b.amountCents, trialEndsAt: b.trialEndsAt });
         setCardIntent({ clientToken: pi.clientToken, environment: pi.environment || 'production' });
         setPhase('card');
         try { trackClient('card_shown', { label: 'Card capture shown', properties: { amountCents: b.amountCents } }); } catch { /* non-fatal */ }
@@ -1315,33 +1316,39 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
     );
   }
 
-  const trialDate = billing?.trialEndsAt
-    ? new Date(billing.trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-    : '';
-  const monthly = billing ? `$${(billing.amountCents / 100).toFixed(0)}` : '';
-
   return (
     <div>
       <div className="text-center">
-        <p className="text-sm font-medium text-emerald-600">No charge today</p>
-        <h2 className="mt-1 text-xl font-semibold text-gray-900">Access your Bride Booking System</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          <span className="block">Add a card to publish your page and unlock your dashboard.</span>
-          <span className="block">You won&apos;t be charged{trialDate ? ` until ${trialDate}` : ' during your free trial'}, and you can cancel anytime.</span>
-        </p>
+        <h2 className="text-xl font-semibold text-gray-900">Access your Bride Booking System</h2>
+        <p className="mt-1 text-sm text-gray-500">Add a card to unlock your dashboard.</p>
       </div>
 
-      {billing && (
-        <div className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">{billing.planName || 'Bride Booking System'}</span>
-            <span className="font-semibold text-gray-900">{monthly}/mo</span>
-          </div>
-          <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
-            <Sparkles size={11} /> 14-day free trial{trialDate ? ` · First charge ${trialDate}` : ''}
-          </p>
-        </div>
-      )}
+      {/* Plan selector — Pro pre-selected; the card is collected either way. */}
+      <div className="mt-5 space-y-3">
+        <PlanChoice
+          selected={plan === 'free'}
+          onSelect={() => setPlan('free')}
+          title="Free"
+          price="$0/mo"
+          sub="Keep your listing and dashboard. Never charged."
+        />
+        <PlanChoice
+          selected={plan === 'pro'}
+          onSelect={() => setPlan('pro')}
+          title="Pro"
+          price="$97/mo"
+          sub="Turn on the Bride Booking System: instant lead follow-up, 14-day nurture sequences, and priority support."
+        />
+      </div>
+
+      {/* Why we need a card — always visible, both plans. */}
+      <div className="mt-4 flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+        <Lock size={14} className="mt-0.5 shrink-0 text-gray-500" />
+        <p className="text-xs leading-relaxed text-gray-600">
+          <span className="font-medium text-gray-700">Why we need a card:</span> it verifies you&apos;re a
+          real venue and keeps fake listings off StoryVenue.
+        </p>
+      </div>
 
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
@@ -1349,8 +1356,9 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
           <InlineTrialCardForm
             clientToken={cardIntent.clientToken}
             environment={cardIntent.environment}
+            plan={plan}
             onSuccess={() => {
-              try { trackClient('card_entered', { label: 'Card vaulted, trial started' }); } catch { /* non-fatal */ }
+              try { trackClient('card_entered', { label: 'Card vaulted', properties: { plan } }); } catch { /* non-fatal */ }
               void goLiveAndFinish();
             }}
             onError={(msg) => setError(msg)}
@@ -1358,12 +1366,64 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
         )}
       </div>
 
-      <p className="mt-3 text-center text-[11px] leading-relaxed text-gray-500">
-        {trialDate
-          ? <>Your card is charged <strong className="text-gray-700">{monthly}/mo</strong> on <strong className="text-gray-700">{trialDate}</strong> unless you switch to Free before then.</>
-          : <>Your card is charged <strong className="text-gray-700">{monthly}/mo</strong> after your trial unless you switch to Free before then.</>}
-      </p>
-      <p className="mt-2 text-center text-[11px] text-gray-400">Secured &amp; encrypted. Billed as &ldquo;StoryVenue&rdquo;. Cancel anytime{trialDate ? ` before ${trialDate}` : ''}.</p>
+      {/* Trust signals */}
+      <div className="mt-3 flex items-center justify-center gap-3">
+        <span className="flex items-center gap-1.5 text-[11px] text-gray-400">
+          <Lock size={12} /> Secured &amp; encrypted.
+        </span>
+        <CardBrands />
+      </div>
     </div>
+  );
+}
+
+/* Selectable plan card for the Access step. */
+function PlanChoice({
+  selected, onSelect, title, price, sub,
+}: { selected: boolean; onSelect: () => void; title: string; price: string; sub: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full rounded-xl border p-4 text-left transition-colors ${
+        selected ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-white hover:border-gray-300'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+            selected ? 'border-gray-900' : 'border-gray-300'
+          }`}
+        >
+          {selected && <span className="h-2 w-2 rounded-full bg-gray-900" />}
+        </span>
+        <span className="text-base font-semibold text-gray-900">{title}</span>
+        <span className="ml-auto text-base font-semibold text-gray-900">{price}</span>
+      </div>
+      <p className="mt-1.5 pl-7 text-sm text-gray-500">{sub}</p>
+    </button>
+  );
+}
+
+/* VISA / Mastercard / Amex trust badges (inline SVG — no external assets). */
+function CardBrands() {
+  return (
+    <span className="flex items-center gap-1.5" aria-label="Accepts Visa, Mastercard, American Express">
+      {/* Visa */}
+      <span className="flex h-[18px] w-[28px] items-center justify-center rounded border border-gray-200 bg-white text-[9px] font-bold italic tracking-tight text-[#1a1f71]">
+        VISA
+      </span>
+      {/* Mastercard */}
+      <span className="flex h-[18px] w-[28px] items-center justify-center rounded border border-gray-200 bg-white">
+        <svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true">
+          <circle cx="8" cy="7" r="5" fill="#EB001B" />
+          <circle cx="14" cy="7" r="5" fill="#F79E1B" fillOpacity="0.9" />
+        </svg>
+      </span>
+      {/* Amex */}
+      <span className="flex h-[18px] w-[28px] items-center justify-center rounded border border-gray-200 bg-[#1f72cd] text-[8px] font-bold tracking-tight text-white">
+        AMEX
+      </span>
+    </span>
   );
 }

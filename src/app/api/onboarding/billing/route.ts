@@ -47,6 +47,19 @@ export async function POST(): Promise<NextResponse> {
     return NextResponse.json({ needsCard: false, alreadyActive: true });
   }
 
+  // Card already vaulted (incl. Free-plan onboarders on a $0 plan) → the card
+  // requirement is met; never re-prompt. Tolerant of pre-migration schemas.
+  {
+    const { data: cardRow } = await supabaseAdmin
+      .from('venues')
+      .select('directory_card_on_file')
+      .eq('id', venueId)
+      .maybeSingle();
+    if (cardRow && (cardRow as { directory_card_on_file?: boolean }).directory_card_on_file === true) {
+      return NextResponse.json({ needsCard: false, alreadyActive: true });
+    }
+  }
+
   // Billing not wired up (local dev) — don't block publishing.
   if (!isPlatformDirectoryBillingConfigured()) {
     return NextResponse.json({ needsCard: false, devSkip: true });

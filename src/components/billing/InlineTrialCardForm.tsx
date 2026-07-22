@@ -57,11 +57,21 @@ function extractTicketId(payload: unknown): { ticketId?: string; paymentMethod?:
 export default function InlineTrialCardForm({
   clientToken,
   environment,
+  plan = 'pro',
   onSuccess,
   onError,
 }: {
   clientToken: string;
   environment: string;
+  /**
+   * Which confirm endpoint the vaulted card's ticketId is sent to:
+   *   'pro'  → signup-checkout/confirm       (vault + $97 trial subscription)
+   *   'free' → signup-checkout/confirm-free   (vault only, no subscription)
+   * The card is vaulted identically either way; only the server-side confirm
+   * differs. Read live at success time via a ref so toggling the plan after
+   * the form mounts is respected.
+   */
+  plan?: 'free' | 'pro';
   onSuccess: () => void;
   onError: (msg: string) => void;
 }) {
@@ -69,8 +79,10 @@ export default function InlineTrialCardForm({
   const handledRef = useRef(false);
   const onSuccessRef = useRef(onSuccess);
   const onErrorRef = useRef(onError);
+  const planRef = useRef(plan);
   useEffect(() => { onSuccessRef.current = onSuccess; }, [onSuccess]);
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
+  useEffect(() => { planRef.current = plan; }, [plan]);
 
   const [ready, setReady] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -105,13 +117,16 @@ export default function InlineTrialCardForm({
       handledRef.current = true;
       setSubmitted(true);
       try {
-        const res = await fetch('/api/venue-billing/signup-checkout/confirm', {
+        const confirmUrl = planRef.current === 'free'
+          ? '/api/venue-billing/signup-checkout/confirm-free'
+          : '/api/venue-billing/signup-checkout/confirm';
+        const res = await fetch(confirmUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ticketId, paymentMethod: paymentMethod || 'cc' }),
         });
         const data = (await res.json()) as { error?: string };
-        if (!res.ok) throw new Error(data.error || 'Failed to start your trial');
+        if (!res.ok) throw new Error(data.error || 'Failed to unlock your dashboard');
         onSuccessRef.current();
       } catch (err: unknown) {
         handledRef.current = false;
@@ -204,7 +219,7 @@ export default function InlineTrialCardForm({
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
         <Loader2 size={24} className="animate-spin text-gray-500" />
-        <p className="text-sm font-semibold text-gray-900">Starting your trial…</p>
+        <p className="text-sm font-semibold text-gray-900">Unlocking your dashboard…</p>
         <p className="max-w-xs text-xs text-gray-500">Please don&apos;t close or refresh this window.</p>
       </div>
     );
