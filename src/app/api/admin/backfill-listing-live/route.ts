@@ -33,19 +33,82 @@ async function isAdmin(): Promise<boolean> {
   return !!data;
 }
 
+/** GET — dry run: returns counts without making any changes. */
+export async function GET(): Promise<NextResponse> {
+  if (!(await isAdmin())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { data: testLeadRows } = await supabaseAdmin
+    .from('leads')
+    .select('venue_id')
+    .eq('source', 'test_inquiry');
+
+  const venueIdsWithTestLead = [...new Set(
+    ((testLeadRows ?? []) as Array<{ venue_id: string }>).map((r) => r.venue_id)
+  )];
+
+  const total = venueIdsWithTestLead.length;
+
+  if (!total) {
+    return NextResponse.json({ total_sent_test_lead: 0, already_live: 0, would_publish: 0 });
+  }
+
+  const { data: alreadyLive } = await supabaseAdmin
+    .from('venues')
+    .select('id')
+    .in('id', venueIdsWithTestLead)
+    .eq('is_published', true)
+    .neq('is_demo', true);
+
+  const { data: notLive } = await supabaseAdmin
+    .from('venues')
+    .select('id')
+    .in('id', venueIdsWithTestLead)
+    .or('is_published.is.null,is_published.eq.false')
+    .neq('is_demo', true);
+
+  return NextResponse.json({
+    total_sent_test_lead: total,
+    already_live:         (alreadyLive ?? []).length,
+    would_publish:        (notLive ?? []).length,
+    note:                 'POST to this endpoint to apply the backfill.',
+  });
+}
+
 export async function POST(): Promise<NextResponse> {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // 1. Find venues that: sent test lead, listing not live, not demo, not canceled
+  // 1. Find venues with a test inquiry lead (proxy for "listing setup complete")
+  //    that are not yet live, not demo, not explicitly canceled.
+  //    Using leads.source = 'test_inquiry' as the signal because
+  //    onboarding_activated_at may not exist in all environments.
+  const { data: testLeadRows, error: leadsErr } = await supabaseAdmin
+    .from('leads')
+    .select('venue_id')
+    .eq('source', 'test_inquiry');
+
+  if (leadsErr) {
+    return NextResponse.json({ error: leadsErr.message }, { status: 500 });
+  }
+
+  const venueIdsWithTestLead = [...new Set(
+    ((testLeadRows ?? []) as Array<{ venue_id: string }>).map((r) => r.venue_id)
+  )];
+
+  if (!venueIdsWithTestLead.length) {
+    return NextResponse.json({ ok: true, published: 0, enrolled: 0, note: 'No test inquiry leads found' });
+  }
+
+  // Filter to only the ones not yet live (not demo, not already published)
   const { data: venues, error } = await supabaseAdmin
     .from('venues')
-    .select('id, directory_subscription_status, is_demo')
-    .not('onboarding_activated_at', 'is', null)
+    .select('id, is_demo')
+    .in('id', venueIdsWithTestLead)
     .or('is_published.is.null,is_published.eq.false')
-    .neq('is_demo', true)
-    .neq('directory_subscription_status', 'canceled');
+    .neq('is_demo', true);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -53,7 +116,6 @@ export async function POST(): Promise<NextResponse> {
 
   const rows = (venues ?? []) as Array<{
     id: string;
-    directory_subscription_status: string | null;
     is_demo: boolean | null;
   }>;
 
@@ -73,11 +135,9 @@ export async function POST(): Promise<NextResponse> {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
 
-  // 3. Enroll dormant ones in the re-engagement drip
-  const dormant = rows.filter((r) => {
-    const sub = r.directory_subscription_status ?? '';
-    return sub !== 'active' && sub !== 'past_due';
-  });
+  // 3. Enroll all backfilled venues in the re-engagement drip.
+  //    The drip engine itself will stop early if they convert.
+  const dormant = rows;
 
   let enrolled = 0;
   for (const r of dormant) {
