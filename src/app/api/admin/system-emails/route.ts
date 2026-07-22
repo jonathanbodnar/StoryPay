@@ -4,44 +4,46 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
   SYSTEM_EMAIL_REGISTRY,
   SYSTEM_EMAIL_BY_KEY,
   type SystemEmailDef,
 } from '@/lib/system-email-registry';
+import { getAdminIdentity } from '@/lib/admin-identity';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-async function isAdmin(): Promise<string | null> {
-  const c = await cookies();
-  const adminEmail = c.get('admin_email')?.value;
-  if (!adminEmail) return null;
-  const { data } = await supabaseAdmin
-    .from('super_admins')
-    .select('id')
-    .eq('email', adminEmail)
-    .maybeSingle();
-  return data ? adminEmail : null;
+async function resolveAdmin(): Promise<{ ok: boolean; email: string }> {
+  const id = await getAdminIdentity();
+  if (id.isMasterSuperAdmin) return { ok: true, email: id.member?.email ?? 'super-admin' };
+  if (id.member && id.allowedTabs.has('system-emails')) return { ok: true, email: id.member.email };
+  return { ok: false, email: '' };
 }
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function GET(): Promise<NextResponse> {
-  const adminEmail = await isAdmin();
-  if (!adminEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await resolveAdmin();
+  if (!admin.ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const adminEmail = admin.email;
 
-  // Load all saved overrides
-  const { data: saved } = await supabaseAdmin
-    .from('system_email_templates')
-    .select('key, subject, heading, body, button_text, updated_at, updated_by');
-
+  // Load all saved overrides — safe-fail if table doesn't exist yet
   type SavedRow = { key: string; subject: string; heading: string; body: string; button_text: string | null; updated_at: string; updated_by: string | null };
-  const savedMap = new Map<string, SavedRow>(
-    ((saved ?? []) as SavedRow[]).map((r) => [r.key, r]),
-  );
+  let savedMap = new Map<string, SavedRow>();
+  try {
+    const { data: saved, error: savedErr } = await supabaseAdmin
+      .from('system_email_templates')
+      .select('key, subject, heading, body, button_text, updated_at, updated_by');
+    if (!savedErr && saved) {
+      savedMap = new Map<string, SavedRow>(
+        (saved as SavedRow[]).map((r) => [r.key, r]),
+      );
+    }
+  } catch {
+    // Table may not exist yet — return defaults
+  }
 
   const templates = SYSTEM_EMAIL_REGISTRY.map((def: SystemEmailDef) => {
     const override = savedMap.get(def.key);
@@ -85,8 +87,9 @@ interface PatchBody {
 }
 
 export async function PATCH(req: NextRequest): Promise<NextResponse> {
-  const adminEmail = await isAdmin();
-  if (!adminEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await resolveAdmin();
+  if (!admin.ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const adminEmail = admin.email;
 
   let body: PatchBody;
   try { body = await req.json(); }

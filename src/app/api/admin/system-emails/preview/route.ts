@@ -6,31 +6,20 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { SYSTEM_EMAIL_BY_KEY, SYSTEM_EMAIL_SAMPLE_VARS } from '@/lib/system-email-registry';
 import { buildEmailHtml } from '@/lib/email-templates';
 import type { EmailTemplateRow } from '@/lib/email-templates';
+import { getAdminIdentity } from '@/lib/admin-identity';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/$/, '');
 
-async function isAdmin(): Promise<boolean> {
-  const c = await cookies();
-  const adminEmail = c.get('admin_email')?.value;
-  if (!adminEmail) return false;
-  const { data } = await supabaseAdmin
-    .from('super_admins')
-    .select('id')
-    .eq('email', adminEmail)
-    .maybeSingle();
-  return !!data;
-}
-
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  if (!(await isAdmin())) {
+  const id = await getAdminIdentity();
+  if (!id.isMasterSuperAdmin && !(id.member && id.allowedTabs.has('system-emails'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

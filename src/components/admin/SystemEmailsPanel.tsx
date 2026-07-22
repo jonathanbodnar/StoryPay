@@ -441,13 +441,14 @@ export default function SystemEmailsPanel({ adminEmail }: { adminEmail: string }
 
   useEffect(() => {
     fetch('/api/admin/system-emails')
-      .then((r) => r.json())
-      .then((json) => {
+      .then(async (r) => {
+        const json = await r.json();
+        if (!r.ok) throw new Error(json.error || `HTTP ${r.status}`);
         setTemplates(json.templates ?? []);
         setLoading(false);
       })
       .catch((e) => {
-        setErr(e.message);
+        setErr(String(e?.message || e));
         setLoading(false);
       });
   }, []);

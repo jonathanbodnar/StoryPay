@@ -6,33 +6,23 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { SYSTEM_EMAIL_BY_KEY, SYSTEM_EMAIL_SAMPLE_VARS } from '@/lib/system-email-registry';
 import { fillTemplate, buildEmailHtml } from '@/lib/email-templates';
 import { sendEmail } from '@/lib/email';
 import type { EmailTemplateRow } from '@/lib/email-templates';
+import { getAdminIdentity } from '@/lib/admin-identity';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/$/, '');
 
-async function isAdmin(): Promise<string | null> {
-  const c = await cookies();
-  const adminEmail = c.get('admin_email')?.value;
-  if (!adminEmail) return null;
-  const { data } = await supabaseAdmin
-    .from('super_admins')
-    .select('id')
-    .eq('email', adminEmail)
-    .maybeSingle();
-  return data ? adminEmail : null;
-}
-
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const adminEmail = await isAdmin();
-  if (!adminEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const id = await getAdminIdentity();
+  if (!id.isMasterSuperAdmin && !(id.member && id.allowedTabs.has('system-emails'))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   let body: { key: string; to: string };
   try { body = await req.json(); }

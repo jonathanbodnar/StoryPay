@@ -14,23 +14,16 @@
  */
 
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { enrollReengagementDrip } from '@/lib/reengagement-drip';
+import { getAdminIdentity } from '@/lib/admin-identity';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 async function isAdmin(): Promise<boolean> {
-  const c = await cookies();
-  const adminEmail = c.get('admin_email')?.value;
-  if (!adminEmail) return false;
-  const { data } = await supabaseAdmin
-    .from('super_admins')
-    .select('id')
-    .eq('email', adminEmail)
-    .maybeSingle();
-  return !!data;
+  const id = await getAdminIdentity();
+  return id.isMasterSuperAdmin || !!(id.member);
 }
 
 /** GET — dry run: returns counts without making any changes. */
