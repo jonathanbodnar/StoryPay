@@ -169,7 +169,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
 function EmbedCodeModal({ venueSlug, onClose }: { venueSlug: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const embedSrc = `${APP_URL}/api/embed/${encodeURIComponent(venueSlug)}`;
-  const snippet  = `<iframe\n  src="${embedSrc}"\n  width="100%"\n  height="720"\n  frameborder="0"\n  scrolling="auto"\n  style="border:none;max-width:520px;"\n  title="Pricing Guide Request"\n></iframe>`;
+  const snippet  = `<iframe\n  src="${embedSrc}"\n  width="100%"\n  height="720"\n  frameborder="0"\n  scrolling="auto"\n  style="border:none;max-width:520px;"\n  aria-label="Pricing Guide Request"\n></iframe>`;
 
   function copySnippet() {
     void navigator.clipboard.writeText(snippet).then(() => {

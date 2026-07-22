@@ -612,7 +612,7 @@ export function EmailBuilderEditor({
           <div className="rounded-xl border border-gray-200 bg-white p-3">
             <h2 className="mb-2 text-sm font-semibold text-gray-900">Preview</h2>
             <p className="mb-2 text-xs text-gray-500">Sample merge fields. Unsubscribe is a placeholder in preview.</p>
-            <iframe title="Email preview" className="h-[min(480px,55vh)] w-full rounded-lg border border-gray-200 bg-white" srcDoc={previewHtml} sandbox="allow-same-origin" />
+            <iframe aria-label="Email preview" className="h-[min(480px,55vh)] w-full rounded-lg border border-gray-200 bg-white" srcDoc={previewHtml} sandbox="allow-same-origin" />
           </div>
         </section>
 

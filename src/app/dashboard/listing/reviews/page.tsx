@@ -613,7 +613,7 @@ export default function ListingReviewsPage() {
               Paste this iframe where you want reviews to appear (Wordpress, custom HTML, etc.)
             </p>
             <pre className="mt-3 max-h-40 overflow-x-auto overflow-y-auto rounded-xl border border-sky-100 bg-white/90 p-3 text-[11px] leading-relaxed text-gray-800">
-              {`<iframe\n  src="${publicOrigin}/embed/listing-reviews/${listingSlug}"\n  title="Reviews"\n  style="width:100%;min-height:420px;border:0;border-radius:12px"\n  loading="lazy"\n/>`}
+              {`<iframe\n  src="${publicOrigin}/embed/listing-reviews/${listingSlug}"\n  aria-label="Reviews"\n  style="width:100%;min-height:420px;border:0;border-radius:12px"\n  loading="lazy"\n/>`}
             </pre>
             <p className="mt-2 text-[11px] text-sky-800/80">
               Preview:{' '}

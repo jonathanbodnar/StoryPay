@@ -167,7 +167,6 @@ export default function VenueDirectoryPage() {
               key={tier}
               type="button"
               onClick={() => setBudget((v) => (v === tier ? '' : tier))}
-              title={BUDGET_LABELS[tier]}
               className={[
                 'flex-1 rounded-xl border py-2 text-xs font-semibold transition-colors',
                 budget === tier

@@ -124,7 +124,7 @@ export default async function GuidePage({ params, searchParams }: Props) {
         {/* Desktop / tablet: native iframe PDF viewer */}
         <iframe
           src={pdfUrl}
-          title={`${venueName} Pricing Guide`}
+          aria-label={`${venueName} Pricing Guide`}
           style={{
             display: 'block',
             width: '100%',

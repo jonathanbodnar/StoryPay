@@ -2411,7 +2411,7 @@ export function FormBuilderEditor({
   const embedUrl = `${
     APP_ORIGIN || (typeof window !== 'undefined' ? window.location.origin : '')
   }/embed/form/${embedToken}`;
-  const iframeSnippet = `<iframe src="${embedUrl}" title="${name.replace(
+  const iframeSnippet = `<iframe src="${embedUrl}" aria-label="${name.replace(
     /"/g,
     '&quot;',
   )}" style="width:100%;min-height:520px;border:0;border-radius:12px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;

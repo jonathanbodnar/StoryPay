@@ -57,7 +57,7 @@ export function VenueMapEmbed({
       </h2>
       <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white">
         <iframe
-          title="Venue location map"
+          aria-label="Venue location map"
           className="h-[min(360px,55vh)] w-full"
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"

@@ -18,7 +18,7 @@ export function DirectoryListingBadges({
   return (
     <span className={`mt-2 inline-flex flex-wrap items-center gap-2`} aria-label="Listing badges">
       {verified ? (
-        <span className="inline-flex shrink-0" title="Verified venue" aria-label="Verified">
+        <span className="inline-flex shrink-0" aria-label="Verified venue">
           <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
             {/* Meta-style 12-point rosette, mirrors weddingdirectory + dashboard badges. */}
             <path
@@ -37,7 +37,7 @@ export function DirectoryListingBadges({
         </span>
       ) : null}
       {sponsored ? (
-        <span className={sponsoredClass} title="Sponsored listing">
+        <span className={sponsoredClass}>
           Sponsored
         </span>
       ) : null}
