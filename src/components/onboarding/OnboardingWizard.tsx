@@ -1323,21 +1323,22 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
         <p className="mt-1 text-sm text-gray-500">Add a card to unlock your dashboard.</p>
       </div>
 
-      {/* Plan selector — Pro pre-selected; the card is collected either way. */}
+      {/* Plan selector — Pro first (highest-value, pre-selected); Free below.
+          The card is collected either way. */}
       <div className="mt-5 space-y-3">
-        <PlanChoice
-          selected={plan === 'free'}
-          onSelect={() => setPlan('free')}
-          title="Free"
-          price="$0/mo"
-          sub="Keep your listing and dashboard. Never charged."
-        />
         <PlanChoice
           selected={plan === 'pro'}
           onSelect={() => setPlan('pro')}
           title="Pro"
           price="$97/mo"
           sub="Turn on the Bride Booking System: instant lead follow-up, 14-day nurture sequences, and priority support."
+        />
+        <PlanChoice
+          selected={plan === 'free'}
+          onSelect={() => setPlan('free')}
+          title="Free"
+          price="$0/mo"
+          sub="Keep your listing and dashboard. Never charged."
         />
       </div>
 
