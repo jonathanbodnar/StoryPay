@@ -1329,47 +1329,42 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
       </div>
 
       {/* Plan selector — Pro first (highest-value, pre-selected); Free below.
+          Only the selected plan expands its details, keeping the step compact.
           The card is collected either way. */}
-      <div className="mt-5 space-y-3">
+      <div className="mt-4 space-y-2.5">
         <PlanChoice
           selected={plan === 'pro'}
           onSelect={() => setPlan('pro')}
           title="Pro"
-          badge="14-Day Free Trial"
+          badge="14-day free trial"
           price="Free for 14 days"
           priceSub="then $97/mo"
-          sub="Turn on the Bride Booking System: instant lead follow-up, 14-day nurture sequences, and priority support."
-          perks={
-            <>
-              <span className="flex items-start gap-1.5 text-xs leading-relaxed text-gray-700">
-                <Check size={14} className="mt-0.5 shrink-0 text-emerald-600" />
-                <span><span className="font-semibold text-gray-900">14 days free</span> — full access, nothing locked.</span>
-              </span>
-              <span className="flex items-start gap-1.5 text-xs leading-relaxed text-gray-700">
-                <Check size={14} className="mt-0.5 shrink-0 text-emerald-600" />
-                <span><span className="font-semibold text-gray-900">No charge today</span> — first payment {firstChargeDate}, only if you stay.</span>
-              </span>
-              <span className="flex items-start gap-1.5 text-xs leading-relaxed text-gray-700">
-                <Check size={14} className="mt-0.5 shrink-0 text-emerald-600" />
-                <span><span className="font-semibold text-gray-900">Cancel anytime</span> in one click before day 14.</span>
-              </span>
-            </>
-          }
+          sub="The full Bride Booking System: instant lead follow-up, 14-day nurture sequences, and priority support."
+          bullets={[
+            <><span className="font-semibold text-gray-900">14 days free</span> — full access, nothing locked</>,
+            <><span className="font-semibold text-gray-900">No charge today</span> — first payment {firstChargeDate}, only if you stay</>,
+            <><span className="font-semibold text-gray-900">Cancel anytime</span> in one click before day 14</>,
+          ]}
         />
         <PlanChoice
           selected={plan === 'free'}
           onSelect={() => setPlan('free')}
           title="Free"
           price="$0/mo"
-          sub="Keep your listing and dashboard. Never charged."
+          sub="Everything you need to go live, at no cost."
+          bullets={[
+            <>Free venue listing</>,
+            <>Free venue proposals &amp; payments</>,
+            <>Dashboard access, never charged</>,
+          ]}
         />
       </div>
 
       {/* Why we need a card — plain sentence directly above the card form. */}
-      <p className="mt-4 flex items-start gap-1.5 text-xs leading-relaxed text-gray-500">
+      <p className="mt-3.5 flex items-start gap-1.5 text-xs leading-relaxed text-gray-500">
         <Lock size={13} className="mt-0.5 shrink-0 text-gray-400" />
         <span>
-          <span className="font-medium text-gray-600">Why we need a card:</span> it verifies you&apos;re a
+          <span className="font-medium text-gray-600">Why we need a card</span>: it verifies you&apos;re a
           real venue and keeps fake listings off StoryVenue.
         </span>
       </p>
@@ -1401,9 +1396,10 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
   );
 }
 
-/* Selectable plan card for the Access step. */
+/* Selectable plan card for the Access step. Compact by default; the selected
+   plan expands its bullet list so the step stays short and easy to scan. */
 function PlanChoice({
-  selected, onSelect, title, price, priceSub, badge, sub, perks,
+  selected, onSelect, title, price, priceSub, badge, sub, bullets,
 }: {
   selected: boolean;
   onSelect: () => void;
@@ -1412,37 +1408,49 @@ function PlanChoice({
   priceSub?: string;
   badge?: string;
   sub: string;
-  perks?: React.ReactNode;
+  bullets?: React.ReactNode[];
 }) {
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`relative w-full rounded-xl border p-4 text-left transition-colors ${
+      className={`w-full rounded-xl border p-3.5 text-left transition-colors ${
         selected ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-white hover:border-gray-300'
       }`}
     >
-      {badge && (
-        <span className="absolute right-3 top-3 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-          {badge}
-        </span>
-      )}
-      <div className="flex items-start gap-3">
+      {/* Title row: radio + title (+ inline badge) on the left, price on the right. */}
+      <div className="flex items-center gap-2">
         <span
-          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
             selected ? 'border-gray-900' : 'border-gray-300'
           }`}
         >
           {selected && <span className="h-2 w-2 rounded-full bg-gray-900" />}
         </span>
-        <span className="text-base font-semibold text-gray-900">{title}</span>
-        <span className={`ml-auto text-right ${badge ? 'mt-5' : ''}`}>
-          <span className="block text-base font-semibold text-gray-900">{price}</span>
-          {priceSub && <span className="block text-xs text-gray-400">{priceSub}</span>}
+        <span className="text-[15px] font-semibold text-gray-900">{title}</span>
+        {badge && (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+            {badge}
+          </span>
+        )}
+        <span className="ml-auto shrink-0 text-right leading-tight">
+          <span className="block text-[15px] font-semibold text-gray-900">{price}</span>
+          {priceSub && <span className="block text-[11px] text-gray-400">{priceSub}</span>}
         </span>
       </div>
-      <p className="mt-1.5 pl-7 text-sm text-gray-500">{sub}</p>
-      {perks && <div className="mt-3 space-y-1.5 pl-7">{perks}</div>}
+
+      <p className="mt-1 pl-6 text-[13px] leading-snug text-gray-500">{sub}</p>
+
+      {selected && bullets && bullets.length > 0 && (
+        <ul className="mt-2 space-y-1 pl-6">
+          {bullets.map((b, i) => (
+            <li key={i} className="flex items-start gap-1.5 text-[12px] leading-snug text-gray-600">
+              <Check size={13} className="mt-[3px] shrink-0 text-emerald-600" />
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </button>
   );
 }
