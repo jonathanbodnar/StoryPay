@@ -197,13 +197,24 @@ export async function POST(): Promise<NextResponse> {
     console.error('[test-inquiry] workflow trigger', e);
   }
 
-  // 6. Mark the venue activated (the real activation event). Best-effort —
-  //    column added by migration 151; ignored if not yet applied.
+  // 6. Mark the venue activated (the real activation event) AND flip the
+  //    listing live so it's publicly visible from this moment forward —
+  //    regardless of whether they later add a CC. Best-effort — columns are
+  //    ignored if not yet applied (pre-migration schema).
   await supabaseAdmin
     .from('venues')
-    .update({ onboarding_activated_at: new Date().toISOString() })
+    .update({
+      onboarding_activated_at: new Date().toISOString(),
+      is_published: true,
+    })
     .eq('id', venueId)
     .then(({ error }) => { if (error && !/column/i.test(error.message)) console.warn('[test-inquiry] activated stamp', error.message); });
+
+  // 7. Enroll in re-engagement drip (safe to call multiple times — idempotent).
+  //    Fires for venues that don't yet have an active subscription; non-fatal.
+  void import('@/lib/reengagement-drip')
+    .then(({ enrollReengagementDrip }) => enrollReengagementDrip(venueId))
+    .catch((e) => console.warn('[test-inquiry] drip enroll', e));
 
   void import('@/lib/analytics')
     .then(({ trackMilestone }) => trackMilestone('activated', { venueId, label: 'Onboarding: test lead activated' }))

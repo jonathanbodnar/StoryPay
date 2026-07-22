@@ -14,6 +14,7 @@ import {
   Settings, Database, CheckCircle2, AlertCircle, Heart, CreditCard,
   Inbox, ChevronLeft, PanelLeftClose, PanelLeftOpen, AlertTriangle,
   MessageSquare,
+  Mail,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -33,6 +34,7 @@ import { AdminProfilePanel } from '@/components/admin/AdminProfilePanel';
 import ErrorLogPanel from '@/components/admin/ErrorLogPanel';
 import AnalyticsPanel from '@/components/admin/AnalyticsPanel';
 import SmsSequenceAnalyticsPanel from '@/components/admin/SmsSequenceAnalyticsPanel';
+import SystemEmailsPanel from '@/components/admin/SystemEmailsPanel';
 import { FunnelAbPanel } from '@/components/admin/FunnelAbPanel';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
@@ -72,6 +74,7 @@ type AdminTabKey =
   | 'trends'
   | 'analytics'
   | 'sms-analytics'
+  | 'system-emails'
   | 'funnel-ab'
   | 'errors'
   | 'system'
@@ -100,6 +103,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'trends',
   'analytics',
   'sms-analytics',
+  'system-emails',
   'funnel-ab',
   'errors',
   'system',
@@ -541,6 +545,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'funnel-ab', label: 'Funnel A/B', icon: TrendingUp },
   { key: 'analytics', label: 'Usage Analytics', icon: BarChart2 },
   { key: 'sms-analytics', label: 'SMS Reply Analytics', icon: MessageSquare },
+  { key: 'system-emails', label: 'System Email Templates', icon: Mail },
   { key: 'venues', label: 'Venue management', icon: Building2 },
   { key: 'couples', label: 'Couples', icon: Heart },
   { key: 'contacts', label: 'Contacts', icon: Users },
@@ -2793,6 +2798,8 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         {activeTab === 'analytics' && <AnalyticsPanel />}
 
         {activeTab === 'sms-analytics' && <SmsSequenceAnalyticsPanel />}
+
+        {activeTab === 'system-emails' && <SystemEmailsPanel adminEmail={adminEmail} />}
 
         {activeTab === 'errors' && <ErrorLogPanel />}
 

@@ -500,6 +500,20 @@ export async function POST(request: NextRequest) {
     console.error('[public/leads] workflow trigger', e);
   }
 
+  // Dormant lead alert — send to inactive venues (no CC, listing live)
+  // Skip test_inquiry source and demov accounts; non-fatal.
+  if (payload.source !== 'test_inquiry' && !venue.is_demo) {
+    void import('@/lib/dormant-lead-alert')
+      .then(({ maybeSendDormantLeadAlert }) =>
+        maybeSendDormantLeadAlert({
+          venueId:       venue.id,
+          leadFirstName: firstName,
+          leadLastName:  lastName,
+        }),
+      )
+      .catch((e) => console.warn('[public/leads] dormant alert', e));
+  }
+
   // Owner notification email
   const notifyEnabled = venue.email_notifications !== false;
   if (notifyEnabled) {
