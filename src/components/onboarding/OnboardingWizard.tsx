@@ -1169,6 +1169,11 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
   // regardless. 'free' routes the vaulted card to confirm-free (no subscription).
   const [plan, setPlan] = useState<'free' | 'pro'>('pro');
 
+  // First charge lands on trial-end (today + 14 days). Computed for the
+  // risk-reversal copy so brides see the exact date they'd be billed.
+  const firstChargeDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+    .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
   // Card succeeded (or none required): NOW publish the public page and stamp
   // onboarding complete, then show the live/share screen. This is the moment the
   // listing actually goes live — not before.
@@ -1320,7 +1325,7 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
     <div>
       <div className="text-center">
         <h2 className="text-xl font-semibold text-gray-900">Access your Bride Booking System</h2>
-        <p className="mt-1 text-sm text-gray-500">Add a card to unlock your dashboard.</p>
+        <p className="mt-1 text-sm text-gray-500">Start free today — 14-day free trial, cancel anytime.</p>
       </div>
 
       {/* Plan selector — Pro first (highest-value, pre-selected); Free below.
@@ -1330,7 +1335,9 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
           selected={plan === 'pro'}
           onSelect={() => setPlan('pro')}
           title="Pro"
-          price="$97/mo"
+          badge="14-Day Free Trial"
+          price="Free for 14 days"
+          priceSub="then $97/mo"
           sub="Turn on the Bride Booking System: instant lead follow-up, 14-day nurture sequences, and priority support."
         />
         <PlanChoice
@@ -1341,6 +1348,30 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
           sub="Keep your listing and dashboard. Never charged."
         />
       </div>
+
+      {/* Risk reversal — only meaningful for the Pro trial. */}
+      {plan === 'pro' && (
+        <div className="mt-4 space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+          <div className="flex items-start gap-2">
+            <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" />
+            <p className="text-xs leading-relaxed text-gray-700">
+              <span className="font-semibold text-gray-900">14 days free</span> — full access, nothing locked.
+            </p>
+          </div>
+          <div className="flex items-start gap-2">
+            <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" />
+            <p className="text-xs leading-relaxed text-gray-700">
+              <span className="font-semibold text-gray-900">No charge today</span> — first payment {firstChargeDate}, only if you stay.
+            </p>
+          </div>
+          <div className="flex items-start gap-2">
+            <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" />
+            <p className="text-xs leading-relaxed text-gray-700">
+              <span className="font-semibold text-gray-900">Cancel anytime</span> in one click before day 14.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Why we need a card — always visible, both plans. */}
       <div className="mt-4 flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
@@ -1380,26 +1411,42 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
 
 /* Selectable plan card for the Access step. */
 function PlanChoice({
-  selected, onSelect, title, price, sub,
-}: { selected: boolean; onSelect: () => void; title: string; price: string; sub: string }) {
+  selected, onSelect, title, price, priceSub, badge, sub,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  price: string;
+  priceSub?: string;
+  badge?: string;
+  sub: string;
+}) {
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full rounded-xl border p-4 text-left transition-colors ${
+      className={`relative w-full rounded-xl border p-4 text-left transition-colors ${
         selected ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-white hover:border-gray-300'
       }`}
     >
-      <div className="flex items-center gap-3">
+      {badge && (
+        <span className="absolute right-3 top-3 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+          {badge}
+        </span>
+      )}
+      <div className="flex items-start gap-3">
         <span
-          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
             selected ? 'border-gray-900' : 'border-gray-300'
           }`}
         >
           {selected && <span className="h-2 w-2 rounded-full bg-gray-900" />}
         </span>
         <span className="text-base font-semibold text-gray-900">{title}</span>
-        <span className="ml-auto text-base font-semibold text-gray-900">{price}</span>
+        <span className={`ml-auto text-right ${badge ? 'mt-5' : ''}`}>
+          <span className="block text-base font-semibold text-gray-900">{price}</span>
+          {priceSub && <span className="block text-xs text-gray-400">{priceSub}</span>}
+        </span>
       </div>
       <p className="mt-1.5 pl-7 text-sm text-gray-500">{sub}</p>
     </button>
