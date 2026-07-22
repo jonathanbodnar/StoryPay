@@ -2867,6 +2867,12 @@ const MIGRATIONS = [
     endpoint: '/api/admin/backfill-venue-seo',
   },
   {
+    id: 'seo-backfill-force',
+    name: 'Regenerate All Venue SEO with AI (force)',
+    description: 'Re-runs AI SEO generation on ALL published listings, even ones that already have templated values. Use this to upgrade template-only entries to full AI copy. Processes 25 per click — keep clicking until remaining = 0.',
+    endpoint: '/api/admin/backfill-venue-seo?force=1',
+  },
+  {
     id: 'listing-live-backfill',
     name: 'Backfill Listing Go-Live',
     description: 'Sets is_published = true for every venue that sent a test inquiry but whose listing is not yet live. Safe to run multiple times.',
