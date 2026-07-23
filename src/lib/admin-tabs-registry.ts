@@ -34,7 +34,8 @@ export type AdminTabKey =
   | 'system-emails'
   | 'funnel-ab'
   | 'errors'
-  | 'system';
+  | 'system'
+  | 'ghl-migration';
 
 export interface AdminTabDef {
   key: AdminTabKey;
@@ -68,6 +69,7 @@ export const ADMIN_TABS: AdminTabDef[] = [
   { key: 'funnel-ab',          label: 'Funnel A/B',          category: 'tools' },
   { key: 'errors',             label: 'Error Log',           category: 'tools' },
   { key: 'system',             label: 'System / Migrations', category: 'tools' },
+  { key: 'ghl-migration',      label: 'GHL Migration',        category: 'tools' },
 ];
 
 export const ADMIN_TAB_KEY_SET = new Set<string>(ADMIN_TABS.map((t) => t.key));

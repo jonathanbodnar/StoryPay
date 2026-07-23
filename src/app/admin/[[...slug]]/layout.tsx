@@ -15,6 +15,7 @@ import {
   Inbox, ChevronLeft, PanelLeftClose, PanelLeftOpen, AlertTriangle,
   MessageSquare,
   Mail,
+  ArrowRightLeft,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -36,6 +37,7 @@ import AnalyticsPanel from '@/components/admin/AnalyticsPanel';
 import SmsSequenceAnalyticsPanel from '@/components/admin/SmsSequenceAnalyticsPanel';
 import SystemEmailsPanel from '@/components/admin/SystemEmailsPanel';
 import { FunnelAbPanel } from '@/components/admin/FunnelAbPanel';
+import GhlMigrationPanel from '@/components/admin/GhlMigrationPanel';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
 
@@ -78,6 +80,7 @@ type AdminTabKey =
   | 'funnel-ab'
   | 'errors'
   | 'system'
+  | 'ghl-migration'
   | 'team'
   | 'profile';
 
@@ -107,6 +110,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'funnel-ab',
   'errors',
   'system',
+  'ghl-migration',
   'team',
   'profile',
 ]);
@@ -566,6 +570,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'article-ratings', label: 'Article Ratings', icon: Star },
   { key: 'errors', label: 'Error Log', icon: AlertTriangle },
   { key: 'system', label: 'System / Migrations', icon: Settings },
+  { key: 'ghl-migration', label: 'GHL Migration', icon: ArrowRightLeft },
   { key: 'team', label: 'Team', icon: Users },
   { key: 'profile', label: 'My profile', icon: Settings },
 ] as const;
@@ -2805,6 +2810,9 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
         {/* ── System / Migrations Tab ── */}
         {activeTab === 'system' && <SystemTab />}
+
+        {/* ── GHL Migration Tab ── */}
+        {activeTab === 'ghl-migration' && <GhlMigrationPanel />}
 
         {/* ── Team management ── */}
         {activeTab === 'team' && canManageTeam && <AdminTeamPanel />}

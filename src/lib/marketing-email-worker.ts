@@ -1076,11 +1076,13 @@ export async function buildMergeVars(
     .maybeSingle();
   const { data: lead } = await supabaseAdmin
     .from('leads')
-    .select('id, email, phone, first_name, last_name, name, wedding_date, guest_count, marketing_email_opt_in, sms_dnd, created_at, notes, referral_source')
+    .select('id, email, phone, first_name, last_name, name, wedding_date, guest_count, marketing_email_opt_in, sms_dnd, is_ghl_migration, created_at, notes, referral_source')
     .eq('id', leadId)
     .eq('venue_id', venueId)
     .maybeSingle();
   if (!lead) return null;
+  // GHL-migrated contacts are permanently exempt from all automated sequences.
+  if ((lead as { is_ghl_migration?: boolean }).is_ghl_migration === true) return null;
   const emailRaw = String(lead.email || '').trim();
   if (forSms && (lead as { sms_dnd?: boolean }).sms_dnd === true) return null;
   if (forSms && emailRaw) {
