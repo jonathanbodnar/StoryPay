@@ -51,6 +51,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     console.error('[pricing-guide/packages PATCH]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  void import('@/lib/ai-concierge/venue-knowledge')
+    .then(({ triggerVenueKnowledgeRegen }) => triggerVenueKnowledgeRegen(venueId))
+    .catch(() => { /* non-fatal */ });
+
   return NextResponse.json({ package: data });
 }
 
@@ -71,5 +76,10 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     console.error('[pricing-guide/packages DELETE]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  void import('@/lib/ai-concierge/venue-knowledge')
+    .then(({ triggerVenueKnowledgeRegen }) => triggerVenueKnowledgeRegen(venueId))
+    .catch(() => { /* non-fatal */ });
+
   return NextResponse.json({ ok: true });
 }

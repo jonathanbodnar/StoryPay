@@ -16,6 +16,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { CANONICAL_TO_FLAT, FLAT_TO_CANONICAL, systemDateVars } from '@/lib/merge-variables';
 
 import { fetchLeadConversationHistory } from './conversation-helpers';
+import { loadVenueKnowledge } from './venue-knowledge';
 import type { AiAngleKey } from './types';
 
 // ── Public types ───────────────────────────────────────────────────────────
@@ -192,7 +193,14 @@ export async function buildAiConciergeSystemPrompt(
   }
 
   const tz = resolveVenueTimezone(venue.timezone);
-  const history = await fetchLeadConversationHistory(input.venueId, input.leadId, 10);
+  // Widened from 10 → 20 so long threads retain early context for the
+  // known-facts / no-repeat rule. Token name stays {{message_history_last_10}}
+  // (referenced by migration templates + admin editor) — only the count changed.
+  const history = await fetchLeadConversationHistory(input.venueId, input.leadId, 20);
+
+  // Truthful, pricing-free venue knowledge for {{venue_knowledge}} /
+  // {{venue_detail_highlight}} (graceful deterministic fallback if not generated).
+  const knowledge = await loadVenueKnowledge(input.venueId);
 
   const leadCtx: PromptInputContextLeadEntry = {
     bride_first_name:            firstName(lead),
@@ -217,6 +225,9 @@ export async function buildAiConciergeSystemPrompt(
     venue_state:              venueCtx.venue_state,
     venue_style_description:  venueCtx.venue_style_description,
     assistant_persona_name:   venueCtx.assistant_persona_name,
+    // Venue knowledge base (truthful, pricing-free amenity facts)
+    venue_knowledge:          knowledge.knowledge_block,
+    venue_detail_highlight:   knowledge.detail_highlight,
     // Lead
     bride_first_name:           leadCtx.bride_first_name,
     bride_full_name:             leadCtx.bride_full_name,
@@ -302,6 +313,12 @@ export async function buildAiConciergeTestSystemPrompt(
   const tz = resolveVenueTimezone(venue.timezone);
   const venueCtx = venueRowToContext(venue, tz);
 
+  // Real venue knowledge (the venue is real in a test send) — fall back to a
+  // sample highlight if this venue hasn't generated one yet.
+  const knowledge = await loadVenueKnowledge(input.venueId);
+  const sampleHighlight = knowledge.detail_highlight
+    || 'a light-filled ceremony space that opens onto the gardens';
+
   const fakeFirstName = (input.brideFirstName?.trim() || 'Sarah').slice(0, 60);
   const fakeFullName  = `${fakeFirstName} Johnson`;
   const inquiryIso    = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
@@ -326,6 +343,8 @@ export async function buildAiConciergeTestSystemPrompt(
     venue_state:              venueCtx.venue_state,
     venue_style_description:  venueCtx.venue_style_description,
     assistant_persona_name:   venueCtx.assistant_persona_name,
+    venue_knowledge:          knowledge.knowledge_block,
+    venue_detail_highlight:   sampleHighlight,
     bride_first_name:           leadCtx.bride_first_name,
     bride_full_name:             leadCtx.bride_full_name,
     initial_inquiry_date:       formatInTimeZone(new Date(inquiryIso), tz, 'MMMM d, yyyy'),

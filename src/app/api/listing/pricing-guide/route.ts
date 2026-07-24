@@ -207,5 +207,10 @@ export async function PATCH(req: Request) {
     })
     .catch(() => { /* non-fatal */ });
 
+  // Rebuild the AI Concierge venue knowledge base (pricing-guide text feeds it).
+  void import('@/lib/ai-concierge/venue-knowledge')
+    .then(({ triggerVenueKnowledgeRegen }) => triggerVenueKnowledgeRegen(venueId))
+    .catch(() => { /* non-fatal */ });
+
   return NextResponse.json({ guide: data });
 }

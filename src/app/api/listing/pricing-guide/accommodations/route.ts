@@ -50,5 +50,10 @@ export async function POST(req: Request) {
     console.error('[pricing-guide/accommodations POST]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  void import('@/lib/ai-concierge/venue-knowledge')
+    .then(({ triggerVenueKnowledgeRegen }) => triggerVenueKnowledgeRegen(venueId))
+    .catch(() => { /* non-fatal */ });
+
   return NextResponse.json({ accommodation: data });
 }

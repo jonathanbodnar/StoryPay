@@ -227,5 +227,13 @@ export async function PATCH(request: NextRequest) {
     })
     .catch(() => { /* non-fatal */ });
 
+  // Auto venue-knowledge: rebuild the AI Concierge knowledge base when amenity
+  // content fields changed (name, description, venue_type, features, …).
+  void import('@/lib/ai-concierge/venue-knowledge')
+    .then(({ maybeRegenerateVenueKnowledge }) =>
+      maybeRegenerateVenueKnowledge(venueId, Object.keys(updates)),
+    )
+    .catch(() => { /* non-fatal */ });
+
   return NextResponse.json({ listing: updated });
 }

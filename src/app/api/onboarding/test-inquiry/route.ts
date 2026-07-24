@@ -222,6 +222,11 @@ export async function POST(): Promise<NextResponse> {
     .then(({ generateVenueSeo }) => generateVenueSeo(venueId))
     .catch((e) => console.warn('[test-inquiry] seo generation', e));
 
+  // Build the AI Concierge venue knowledge base now that the listing is live.
+  void import('@/lib/ai-concierge/venue-knowledge')
+    .then(({ generateVenueKnowledge }) => generateVenueKnowledge(venueId))
+    .catch((e) => console.warn('[test-inquiry] knowledge generation', e));
+
   void import('@/lib/analytics')
     .then(({ trackMilestone }) => trackMilestone('activated', { venueId, label: 'Onboarding: test lead activated' }))
     .catch(() => { /* non-fatal */ });
