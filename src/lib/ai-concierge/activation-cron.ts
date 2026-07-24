@@ -192,11 +192,20 @@ async function fetchEligibleLeads(
   limit: number,
   bypassEligibility: boolean,
 ): Promise<EligibleLeadRow[]> {
+  // Concierge access = NOT force-disabled by super admin AND
+  // (addon purchased OR plan bundles it OR legacy/no-plan grandfathered).
+  // Mirrors resolveVenueFeatureAccess.hasConcierge in plan-features.ts.
   const venueGuard = bypassEligibility
     ? sql`TRUE`
     : sql`
         COALESCE(v.ai_concierge_enabled, false) = true
-        AND COALESCE(v.directory_addon_concierge, false) = true
+        AND COALESCE(v.ai_concierge_admin_disabled, false) = false
+        AND (
+          COALESCE(v.directory_addon_concierge, false) = true
+          OR COALESCE((dp.feature_flags->>'addon_concierge_included')::boolean, false) = true
+          OR COALESCE(dp.is_legacy, false) = true
+          OR v.directory_plan_id IS NULL
+        )
         AND (COALESCE(v.a2p_verified, false) = true OR COALESCE(v.ghl_connected, false) = true)
       `;
 
@@ -210,6 +219,7 @@ async function fetchEligibleLeads(
       v.timezone
     FROM public.leads l
     JOIN public.venues v ON v.id = l.venue_id
+    LEFT JOIN public.directory_plans dp ON dp.id = v.directory_plan_id
     WHERE l.ai_state = 'dormant'
       AND COALESCE(l.sms_dnd, false) = false
       AND ${venueGuard}
@@ -246,9 +256,16 @@ async function activateLead(
     : sql`
         EXISTS (
           SELECT 1 FROM public.venues v
+          LEFT JOIN public.directory_plans dp ON dp.id = v.directory_plan_id
           WHERE v.id = leads.venue_id
             AND COALESCE(v.ai_concierge_enabled, false) = true
-            AND COALESCE(v.directory_addon_concierge, false) = true
+            AND COALESCE(v.ai_concierge_admin_disabled, false) = false
+            AND (
+              COALESCE(v.directory_addon_concierge, false) = true
+              OR COALESCE((dp.feature_flags->>'addon_concierge_included')::boolean, false) = true
+              OR COALESCE(dp.is_legacy, false) = true
+              OR v.directory_plan_id IS NULL
+            )
             AND (COALESCE(v.a2p_verified, false) = true OR COALESCE(v.ghl_connected, false) = true)
         )
       `;

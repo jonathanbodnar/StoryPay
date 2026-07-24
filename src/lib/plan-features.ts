@@ -26,6 +26,9 @@ import { planIncludesConcierge } from '@/lib/directory-addons';
 export interface VenueFeatureRow {
   directory_plan_id?: string | null;
   directory_addon_concierge?: boolean | null;
+  /** Super admin force-off: when true the venue has NO concierge access,
+   *  even if the plan bundles it or the addon was purchased. */
+  ai_concierge_admin_disabled?: boolean | null;
 }
 
 export interface PlanFeatureRow {
@@ -51,7 +54,7 @@ export interface VenueFeatureAccess {
   planSlug: string | null;
 }
 
-export const VENUE_FEATURE_COLUMNS = 'directory_plan_id, directory_addon_concierge';
+export const VENUE_FEATURE_COLUMNS = 'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled';
 export const PLAN_FEATURE_COLUMNS  = 'slug, name, is_legacy, feature_flags';
 
 function isLegacyPlan(plan: PlanFeatureRow | null): boolean {
@@ -80,10 +83,12 @@ export function resolveVenueFeatureAccess(
 
   const conciergeBundled  = planIncludesConcierge(plan ? { id: 'x', feature_flags: plan.feature_flags } : null);
   const conciergePurchased = venue?.directory_addon_concierge === true;
+  // Super admin force-off beats everything — plan inclusion, addon, legacy.
+  const conciergeAdminDisabled = venue?.ai_concierge_admin_disabled === true;
 
   return {
     hasSms:              legacy || isAllInclusive,
-    hasConcierge:        legacy || conciergeBundled || conciergePurchased,
+    hasConcierge:        !conciergeAdminDisabled && (legacy || conciergeBundled || conciergePurchased),
     canMessageConcierge: legacy || isAllInclusive,
     isLegacy:            legacy,
     planSlug:            slug,

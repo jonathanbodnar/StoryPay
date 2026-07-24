@@ -132,9 +132,10 @@ async function resolveLeadForAi(
   const SELECT = 'id, venue_id, email, phone, first_name, last_name, name, ai_state, ai_attempt_count';
 
   // Relevant AI states: active states first (ai_active/paused/handoff), then
-  // dormant (14-day sequence still running). We prefer an active state if there
-  // are multiple leads for the same contact.
-  const AI_RELEVANT_STATES = ['ai_active', 'paused', 'handoff', 'dormant'] as const;
+  // dormant (14-day sequence still running), then exhausted (60-day window
+  // over — a reply here revives the lead). opted_out is intentionally
+  // EXCLUDED: TCPA opt-outs are permanent and never revived.
+  const AI_RELEVANT_STATES = ['ai_active', 'paused', 'handoff', 'dormant', 'exhausted'] as const;
 
   // Try email match first
   if (email && !email.endsWith('@ghl-sms.storypay.placeholder')) {
@@ -164,7 +165,7 @@ async function resolveLeadForAi(
       const sorted = (phoneCandidates as LeadAiSnapshot[])
         .filter((c) => normalizePhone(c.phone) === phoneNorm)
         .sort((a, b) => {
-          const order = ['ai_active', 'paused', 'handoff', 'dormant'];
+          const order = ['ai_active', 'paused', 'handoff', 'dormant', 'exhausted'];
           return order.indexOf(a.ai_state) - order.indexOf(b.ai_state);
         });
       if (sorted[0]) return sorted[0];
@@ -197,6 +198,35 @@ export async function handleInboundAiMessage(
     // + concierge team directly so they know to respond manually.
     if (lead.ai_state === 'dormant') {
       return handleDormantLeadReply({ lead, input });
+    }
+
+    // Revival fast-path: the 60-day window ended and she was moved to Not
+    // Interested — but she just replied. Move her back to Conversation
+    // Started, clear the not-interested/exhausted tags, and notify the owner
+    // + team that this is a warm lead again. STOP-style replies still go
+    // through the opt-out path instead.
+    if (lead.ai_state === 'exhausted') {
+      const { isSmsOptOutKeyword } = await import('@/lib/sms-compliance');
+      if (!isSmsOptOutKeyword(body)) {
+        return handleExhaustedLeadRevival({ lead, input });
+      }
+      // STOP after exhaustion: align state to opted_out, stage stays Not Interested.
+      await supabaseAdmin
+        .from('leads')
+        .update({ ai_state: 'opted_out', ai_next_send_at: null, updated_at: new Date().toISOString() })
+        .eq('id', lead.id)
+        .eq('venue_id', lead.venue_id);
+      await recordAiStateTransition({
+        leadId: lead.id, venueId: lead.venue_id,
+        fromState: 'exhausted', toState: 'opted_out',
+        reason: 'inbound_tcpa_opt_out', triggeredBy: 'webhook:ghl-inbound',
+        metadata: { message_excerpt: body.slice(0, 300) },
+      });
+      return {
+        ok: true, acted: true, leadId: lead.id,
+        fromState: 'exhausted', toState: 'opted_out',
+        matchedRule: null, matchedVia: 'keyword', notifiedScenario: null,
+      };
     }
 
     // 3. Keyword pass
@@ -367,6 +397,50 @@ async function handleDormantLeadReply(opts: {
   const { lead, input } = opts;
   const body = (input.messageBody || '').trim();
 
+  // TCPA guard: a STOP-style reply during the 14-day sequence must NEVER be
+  // treated as engagement. The webhook already applied sms_dnd; here we align
+  // the AI state, land her in the Not Interested stage (guaranteed), and
+  // notify the owner — no "she replied, take over" celebration email.
+  const { isSmsOptOutKeyword } = await import('@/lib/sms-compliance');
+  if (isSmsOptOutKeyword(body)) {
+    try {
+      await ensureVenueAiResources(lead.venue_id);
+      await supabaseAdmin
+        .from('leads')
+        .update({ ai_state: 'opted_out', ai_next_send_at: null, updated_at: new Date().toISOString() })
+        .eq('id', lead.id)
+        .eq('venue_id', lead.venue_id);
+      await applyAiTags(lead.venue_id, lead.id, ['ai_not_interested']);
+      await moveLeadToAiStage(lead.venue_id, lead.id, 'not_interested');
+      await recordAiStateTransition({
+        leadId:      lead.id,
+        venueId:     lead.venue_id,
+        fromState:   'dormant',
+        toState:     'opted_out',
+        reason:      'inbound_tcpa_opt_out',
+        triggeredBy: 'webhook:ghl-inbound',
+        metadata:    { message_excerpt: body.slice(0, 300), during: '14-day sequence' },
+      });
+    } catch (e) {
+      console.error('[ai-concierge] handleDormantLeadReply: TCPA opt-out handling failed:', e);
+    }
+    void notifyAiOwner({
+      venueId:       lead.venue_id,
+      leadId:        lead.id,
+      scenario:      'ai_tcpa_opt_out',
+      notifyRoles:   ['venue_owner'],
+      brideName:     firstNameOf(lead),
+      brideFullName: fullNameOf(lead),
+      brideReply:    body,
+      matchedTrigger: 'STOP keyword during 14-day sequence',
+    }).catch(() => {});
+    return {
+      ok: true, acted: true, leadId: lead.id,
+      fromState: 'dormant', toState: 'opted_out',
+      matchedRule: null, matchedVia: 'keyword', notifiedScenario: 'ai_tcpa_opt_out',
+    };
+  }
+
   // Step 1: apply 'replied' system tag — triggers any workflow configured on it
   try {
     await ensureSystemTagsForVenue(lead.venue_id);
@@ -432,6 +506,91 @@ async function handleDormantLeadReply(opts: {
   };
 }
 
+/**
+ * Exhausted-lead revival: the 60-day AI window ended without a reply and the
+ * lead was moved to Not Interested — but she just texted back. Move her back
+ * to Conversation Started, swap the exhausted/not-interested tags for
+ * ai_replied, park the AI in 'paused' (humans own the conversation now; AI
+ * never re-engages on its own), and email the owner + team to take over.
+ */
+async function handleExhaustedLeadRevival(opts: {
+  lead:  LeadAiSnapshot;
+  input: HandleInboundAiMessageInput;
+}): Promise<HandleInboundAiMessageResult> {
+  const { lead, input } = opts;
+  const body = (input.messageBody || '').trim();
+
+  try {
+    await supabaseAdmin
+      .from('leads')
+      .update({ ai_state: 'paused', ai_next_send_at: null, updated_at: new Date().toISOString() })
+      .eq('id', lead.id)
+      .eq('venue_id', lead.venue_id);
+
+    await ensureVenueAiResources(lead.venue_id);
+    await applyAiTags(lead.venue_id, lead.id, ['ai_replied']);
+    await removeAiTag(lead.venue_id, lead.id, 'ai_exhausted');
+    await removeAiTag(lead.venue_id, lead.id, 'ai_not_interested');
+    await moveLeadToAiStage(lead.venue_id, lead.id, 'conversation_started');
+
+    // 'replied' system tag so any venue workflow listening on it fires too.
+    try {
+      await ensureSystemTagsForVenue(lead.venue_id);
+      await applySystemTags(lead.venue_id, lead.id, ['replied']);
+    } catch (e) {
+      console.error('[ai-concierge] handleExhaustedLeadRevival: applySystemTags failed:', e);
+    }
+
+    await recordAiStateTransition({
+      leadId:      lead.id,
+      venueId:     lead.venue_id,
+      fromState:   'exhausted',
+      toState:     'paused',
+      reason:      'revived_after_exhausted',
+      triggeredBy: 'webhook:ghl-inbound',
+      metadata:    { message_excerpt: body.slice(0, 300) },
+    });
+  } catch (e) {
+    console.error('[ai-concierge] handleExhaustedLeadRevival failed:', e);
+  }
+
+  void notifyAiOwner({
+    venueId:       lead.venue_id,
+    leadId:        lead.id,
+    scenario:      'ai_lead_revived',
+    notifyRoles:   ['venue_owner', 'concierge'],
+    brideName:     firstNameOf(lead),
+    brideFullName: fullNameOf(lead),
+    brideReply:    body,
+    matchedTrigger: 'replied after the 60-day follow-up window ended',
+  }).catch((e) => {
+    console.error('[ai-concierge] handleExhaustedLeadRevival: notifyAiOwner failed:', e);
+  });
+
+  void supabaseAdmin.from('ai_runs').insert({
+    lead_id:             lead.id,
+    venue_id:            input.venueId,
+    attempt_number:      0,
+    input_context:       { kind: 'exhausted_revival', body: body.slice(0, 800), ai_state: 'exhausted' },
+    outcome:             'exhausted_lead_revived',
+    sms_provider:        'ghl',
+    provider_message_id: input.ghlMessageId ?? null,
+  }).then(() => {}).then(undefined, (e) => {
+    console.error('[ai-concierge] handleExhaustedLeadRevival: ai_runs insert failed:', e);
+  });
+
+  return {
+    ok:               true,
+    acted:            true,
+    leadId:           lead.id,
+    fromState:        'exhausted',
+    toState:          'paused',
+    matchedRule:      null,
+    matchedVia:       'default_neutral',
+    notifiedScenario: 'ai_lead_revived',
+  };
+}
+
 // ── Outcome derivation ─────────────────────────────────────────────────────
 
 interface Outcome {
@@ -472,10 +631,12 @@ function deriveOutcomeFromRule(rule: HandoffRuleRow): Outcome {
   switch (action) {
     case 'opt_out': {
       // TCPA hard opt-out — webhook already applied sms_dnd. Align state.
+      // Stage is ALWAYS Not Interested for opt-outs — never rule-overridable,
+      // so a STOP reply is guaranteed to land in the Not Interested stage.
       return {
         toState:          'opted_out',
         tags:             tags.length ? tags : ['ai_not_interested'],
-        stage:            stage ?? 'not_interested',
+        stage:            'not_interested',
         scenario:         'ai_tcpa_opt_out',
         notifyRoles:      roles.length ? roles : ['venue_owner'],
         transitionReason: 'inbound_tcpa_opt_out',
@@ -483,10 +644,12 @@ function deriveOutcomeFromRule(rule: HandoffRuleRow): Outcome {
       };
     }
     case 'mark_not_interested': {
+      // Same guarantee: "not interested" replies always land in the
+      // Not Interested stage regardless of rule configuration.
       return {
         toState:          'opted_out',
         tags:             tags.length ? tags : ['ai_not_interested'],
-        stage:            stage ?? 'not_interested',
+        stage:            'not_interested',
         scenario:         'ai_not_interested',
         notifyRoles:      roles.length ? roles : ['venue_owner'],
         transitionReason: 'inbound_negative_intent',

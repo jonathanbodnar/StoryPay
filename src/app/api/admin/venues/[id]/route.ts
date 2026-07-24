@@ -23,6 +23,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     directory_verified_status?: string;
     directory_sponsored_status?: string;
     password?: string;
+    /** Venue-card addon checkboxes. Each sets the addon flag AND the live
+     *  display state so the checkbox is a single source of truth. */
+    addon_verified?: boolean;
+    addon_sponsored?: boolean;
+    addon_ai_concierge?: boolean;
   };
   try {
     body = await request.json();
@@ -98,6 +103,30 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           // status by changeVenuePlan.
           planChangeCheckoutUrl = result.url;
         }
+
+        // Auto-activate plan-included addons so the venue card checkboxes,
+        // the badges page, and the live directory all reflect the plan
+        // immediately (single source of truth).
+        try {
+          const { planIncludesVerified, planIncludesSponsored } = await import('@/lib/directory-addons');
+          const { data: allPlans } = await supabaseAdmin
+            .from('directory_plans')
+            .select('id, price_monthly_cents, feature_flags');
+          const planRows = (allPlans ?? []) as Array<{ id: string; price_monthly_cents: number | null; feature_flags: Record<string, unknown> | null }>;
+          const newPlan = planRows.find((p) => p.id === pid) ?? null;
+          const inclusionUpdates: Record<string, unknown> = {};
+          if (newPlan && planIncludesVerified(newPlan, planRows)) {
+            inclusionUpdates.directory_verified_status = 'approved';
+          }
+          if (newPlan && planIncludesSponsored(newPlan, planRows)) {
+            inclusionUpdates.directory_sponsored_status = 'approved';
+          }
+          if (Object.keys(inclusionUpdates).length > 0) {
+            await supabaseAdmin.from('venues').update(inclusionUpdates).eq('id', venueId);
+          }
+        } catch (e) {
+          console.warn('[admin/venues PATCH] plan-included addon sync failed (non-fatal):', e);
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Plan change failed';
         return NextResponse.json({ error: msg }, { status: 502 });
@@ -118,6 +147,31 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Invalid directory_sponsored_status' }, { status: 400 });
     }
     updates.directory_sponsored_status = body.directory_sponsored_status;
+  }
+
+  // ── Addon checkboxes (venue card) ─────────────────────────────────────────
+  // Checking = grant the addon and make it live immediately.
+  // Unchecking = remove the addon and its live effect.
+  if (typeof body.addon_verified === 'boolean') {
+    updates.directory_addon_verified  = body.addon_verified;
+    updates.directory_verified_status = body.addon_verified ? 'approved' : 'none';
+  }
+  if (typeof body.addon_sponsored === 'boolean') {
+    updates.directory_addon_sponsored  = body.addon_sponsored;
+    updates.directory_sponsored_status = body.addon_sponsored ? 'approved' : 'none';
+  }
+  if (typeof body.addon_ai_concierge === 'boolean') {
+    if (body.addon_ai_concierge) {
+      // Grant: set the addon flag and clear any super-admin force-off.
+      updates.directory_addon_concierge   = true;
+      updates.ai_concierge_admin_disabled = false;
+    } else {
+      // Complete force-off: beats plan inclusion, addon purchase, everything.
+      // AI master toggle also goes off so no sends continue.
+      updates.directory_addon_concierge   = false;
+      updates.ai_concierge_admin_disabled = true;
+      updates.ai_concierge_enabled        = false;
+    }
   }
 
   // If a plan change was applied via the helper but no other fields were

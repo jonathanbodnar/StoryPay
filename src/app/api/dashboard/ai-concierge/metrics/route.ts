@@ -83,12 +83,16 @@ export async function GET(request: NextRequest) {
   const venueId = user.venueId;
 
   // Eligibility flags — also tells the UI whether to show a "you're not on
-  // the engine yet" prompt instead of empty zeros.
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('id, ai_concierge_enabled, a2p_verified, directory_addon_concierge')
-    .eq('id', venueId)
-    .maybeSingle();
+  // the engine yet" prompt instead of empty zeros. Uses the shared resolver
+  // so plan-bundled / legacy access and the super-admin force-off all apply.
+  const [{ data: venue }, access] = await Promise.all([
+    supabaseAdmin
+      .from('venues')
+      .select('id, ai_concierge_enabled, a2p_verified')
+      .eq('id', venueId)
+      .maybeSingle(),
+    import('@/lib/plan-features').then(({ loadVenueFeatureAccess }) => loadVenueFeatureAccess(venueId)),
+  ]);
 
   // Run all the counting queries in parallel — each one is tiny.
   const [
@@ -134,7 +138,7 @@ export async function GET(request: NextRequest) {
     effectiveDailyCap: spend.effectiveCap,
     enabled:           venue?.ai_concierge_enabled === true,
     a2pVerified:       venue?.a2p_verified === true,
-    addonActive:       venue?.directory_addon_concierge === true,
+    addonActive:       access.hasConcierge,
   };
 
   return NextResponse.json(payload);

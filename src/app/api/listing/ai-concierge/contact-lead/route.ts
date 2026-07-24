@@ -43,7 +43,7 @@ interface VenuePlanRow {
 async function loadVenueAiContext(venueId: string) {
   const { data: v } = await supabaseAdmin
     .from('venues')
-    .select('id, ai_concierge_enabled, directory_addon_concierge, a2p_verified, directory_plan_id')
+    .select('id, ai_concierge_enabled, directory_addon_concierge, ai_concierge_admin_disabled, a2p_verified, directory_plan_id')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -62,7 +62,8 @@ async function loadVenueAiContext(venueId: string) {
   const isLegacyPlan = plan?.is_legacy === true
     || String(plan?.name ?? '').toLowerCase().includes('legacy')
     || String(plan?.slug ?? '').toLowerCase().includes('legacy');
-  const addon = v?.directory_addon_concierge === true || planIncludesConcierge || isLegacyPlan;
+  const adminDisabled = (v as { ai_concierge_admin_disabled?: boolean | null } | null)?.ai_concierge_admin_disabled === true;
+  const addon = !adminDisabled && (v?.directory_addon_concierge === true || planIncludesConcierge || isLegacyPlan);
   const a2p = v?.a2p_verified === true;
   const enabled = v?.ai_concierge_enabled === true;
   // Eligible = has the addon (a2p only required for actual SMS sending, not button visibility)

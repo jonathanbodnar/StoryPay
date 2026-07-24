@@ -43,7 +43,12 @@ export type AiOwnerScenario =
   | 'ai_daily_cap_reached'
   /** Bride replied while still in the 14-day follow-up sequence (ai_state=dormant).
    *  AI is NOT active yet — a human needs to step in and respond. */
-  | 'sequence_reply_received';
+  | 'sequence_reply_received'
+  /** 60-day window elapsed with zero replies — lead moved to Not Interested. */
+  | 'ai_exhausted_no_reply'
+  /** Exhausted lead replied after the 60-day window — moved back to
+   *  Conversation Started, humans must take over. */
+  | 'ai_lead_revived';
 
 export type AiNotifyRole = 'venue_owner' | 'concierge';
 
@@ -159,6 +164,22 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     ctaLabel:     'Reply to her now →',
     notifyTeam:   true,
   },
+  ai_exhausted_no_reply: {
+    emailSubject: (n, v) => `${n} finished the 60-day follow-up window — ${v}`,
+    heading:      (n) => `${n} never replied — moved to Not Interested`,
+    intro:        (n) => `The AI Concierge completed its full 60-day follow-up sequence for ${n} without ever getting a reply. She has been moved to your "Not Interested" pipeline stage and is no longer considered a warm lead. No further automated messages will be sent. If she ever replies in the future, she'll automatically move back to "Conversation Started" and you'll be notified.`,
+    urgent:       false,
+    ctaLabel:     'View her contact record →',
+    notifyTeam:   true,
+  },
+  ai_lead_revived: {
+    emailSubject: (n, v) => `🎉 ${n} came back — she replied after going quiet — ${v}`,
+    heading:      (n) => `${n} is a warm lead again`,
+    intro:        (n) => `Great news — ${n} just replied, even though her follow-up window had already ended and she'd been moved to Not Interested. We've moved her back to "Conversation Started" in your pipeline. This is a warm lead — a real person should take over the conversation right now.`,
+    urgent:       false,
+    ctaLabel:     'Reply to her now →',
+    notifyTeam:   true,
+  },
 };
 
 // ── Public entry ───────────────────────────────────────────────────────────
@@ -169,8 +190,13 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
     if (!venue) return;
 
     const venueName = venue.name?.trim() || 'Your venue';
-    const meta = SCENARIOS[input.scenario];
-    if (!meta) return;
+    const defaultMeta = SCENARIOS[input.scenario];
+    if (!defaultMeta) return;
+
+    // Super-admin copy overrides (System Email Templates page). Any saved
+    // override for this scenario key replaces the hardcoded default copy.
+    // Variables: {{bride_first_name}}, {{venue_name}}.
+    const meta = await applyTemplateOverride(input.scenario, defaultMeta, venueName);
 
     const ownerEmail = await resolveOwnerEmail(venue);
     const conciergeEmails = (venue.ai_concierge_notify_emails ?? [])
@@ -230,6 +256,44 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
 }
 
 // ── Internals ──────────────────────────────────────────────────────────────
+
+/**
+ * Merge a saved System Email Template override (if any) over the hardcoded
+ * scenario copy. Overrides are stored with {{bride_first_name}} and
+ * {{venue_name}} variables; we substitute them here so the resulting meta is
+ * drop-in compatible with the function-based defaults. Fail-open: any error
+ * falls back to the defaults so notifications never break.
+ */
+async function applyTemplateOverride(
+  scenario: AiOwnerScenario,
+  defaults: ScenarioMeta,
+  venueName: string,
+): Promise<ScenarioMeta> {
+  try {
+    const { data } = await supabaseAdmin
+      .from('system_email_templates')
+      .select('subject, heading, body, button_text')
+      .eq('key', scenario)
+      .maybeSingle();
+    if (!data) return defaults;
+
+    const row = data as { subject?: string | null; heading?: string | null; body?: string | null; button_text?: string | null };
+    const fill = (tpl: string, brideName: string) =>
+      tpl
+        .replace(/\{\{\s*bride_first_name\s*\}\}/g, brideName)
+        .replace(/\{\{\s*venue_name\s*\}\}/g, venueName);
+
+    return {
+      ...defaults,
+      emailSubject: row.subject ? (n) => fill(row.subject as string, n) : defaults.emailSubject,
+      heading:      row.heading ? (n) => fill(row.heading as string, n) : defaults.heading,
+      intro:        row.body    ? (n) => fill(row.body as string, n)    : defaults.intro,
+      ctaLabel:     row.button_text?.trim() || defaults.ctaLabel,
+    };
+  } catch {
+    return defaults;
+  }
+}
 
 async function loadVenue(venueId: string): Promise<VenueRow | null> {
   const { data } = await supabaseAdmin

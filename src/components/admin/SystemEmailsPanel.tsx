@@ -47,6 +47,7 @@ const CATEGORY_COLORS: Record<SystemEmailCategory, string> = {
   auth:         'bg-gray-50 text-gray-600 border-gray-200',
   reporting:    'bg-violet-50 text-violet-700 border-violet-200',
   ai:           'bg-indigo-50 text-indigo-700 border-indigo-200',
+  billing:      'bg-rose-50 text-rose-700 border-rose-200',
 };
 
 function CategoryBadge({ cat }: { cat: SystemEmailCategory }) {

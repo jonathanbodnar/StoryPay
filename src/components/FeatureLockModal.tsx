@@ -13,7 +13,7 @@ import DashboardBookingModal from '@/components/DashboardBookingModal';
  * secondary "Schedule a demo" option.
  */
 
-export type LockFeature = 'sms' | 'concierge';
+export type LockFeature = 'sms' | 'concierge' | 'ai_concierge';
 
 interface LockCopy {
   label: string;
@@ -36,6 +36,13 @@ const COPY: Record<LockFeature, LockCopy> = {
     outcome:
       'Message the StoryVenue Concierge team directly from any conversation to get hands-on help with a couple. You always have Contact Support \u2014 concierge messaging is included on our All-Inclusive plans.',
     note: 'Included in All-Inclusive plans.',
+  },
+  ai_concierge: {
+    label: 'AI Concierge',
+    headline: 'Follow-up that never forgets a bride',
+    outcome:
+      'After your 14-day sequence ends, the AI Concierge keeps following up by SMS for a full 60 days \u2014 short, personal messages on a natural cadence. The moment she replies, the AI stops and your team is notified to take over a warm conversation.',
+    note: 'Available as an add-on or included in select plans.',
   },
 };
 

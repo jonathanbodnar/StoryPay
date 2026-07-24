@@ -111,12 +111,12 @@ interface ReservedLeadRow {
 
 /**
  * Hard floor between two AI follow-ups to the same contact. The cadence is
- * 24–48h (computeNextSendAt), so legitimate consecutive sends are always ≥24h
- * apart — a 22h floor never blocks them but does block any second send caused by
- * a reset schedule, duplicate lead rows for one person, or a cron race. This is
- * what guarantees "at most one AI follow-up per contact per day".
+ * alternating 4/5 days with ±6h jitter (computeNextSendAt), so legitimate
+ * consecutive sends are always ≥3.75 days apart — an 80h (~3.3 day) floor
+ * never blocks them but does block any second send caused by a reset
+ * schedule, duplicate lead rows for one person, or a cron race.
  */
-const MIN_SEND_INTERVAL_HOURS = 22;
+const MIN_SEND_INTERVAL_HOURS = 80;
 
 // ── Main entry ─────────────────────────────────────────────────────────────
 
@@ -250,12 +250,22 @@ async function reserveDueLeads(
         SELECT l2.id
           FROM public.leads l2
           JOIN public.venues v2 ON v2.id = l2.venue_id
+          LEFT JOIN public.directory_plans dp2 ON dp2.id = v2.directory_plan_id
          WHERE l2.ai_state = 'ai_active'
            AND l2.ai_next_send_at IS NOT NULL
            AND l2.ai_next_send_at <= NOW()
            AND COALESCE(l2.sms_dnd, false) = false
            AND COALESCE(v2.ai_concierge_enabled, false) = true
-           AND COALESCE(v2.directory_addon_concierge, false) = true
+           -- Super admin force-off beats plan inclusion, addon, everything.
+           AND COALESCE(v2.ai_concierge_admin_disabled, false) = false
+           -- Concierge access: addon purchased OR plan bundles it OR
+           -- legacy/no-plan grandfathered (mirrors plan-features hasConcierge).
+           AND (
+                 COALESCE(v2.directory_addon_concierge, false) = true
+              OR COALESCE((dp2.feature_flags->>'addon_concierge_included')::boolean, false) = true
+              OR COALESCE(dp2.is_legacy, false) = true
+              OR v2.directory_plan_id IS NULL
+           )
            AND (COALESCE(v2.a2p_verified, false) = true OR COALESCE(v2.ghl_connected, false) = true)
            -- Defense-in-depth gate #1 — never message a contact the venue has
            -- marked "Not Interested", whether by moving them into the Not
@@ -348,7 +358,7 @@ async function processOneLead(
   // between ticks). Skipped for admin force-sends (bypassQuietHours). Fail-open:
   // a guard query error must never halt the whole send run.
   if (!bypassQuietHours && await contactSentRecently(sql, row, MIN_SEND_INTERVAL_HOURS)) {
-    const next = computeNextSendAt(tz);
+    const next = computeNextSendAt(tz, row.ai_attempt_count);
     await rescheduleLead(row.id, next);
     await logAiRun({
       leadId:  row.id,
@@ -485,7 +495,8 @@ async function processOneLead(
       }
     }
 
-    const nextSendAt = computeNextSendAt(tz);
+    // Attempt count is about to be incremented — cadence keys off the NEW count.
+    const nextSendAt = computeNextSendAt(tz, row.ai_attempt_count + 1);
     const newAngles  = appendAngle(angleHistory, gen.angle);
 
     await sql`
@@ -647,6 +658,31 @@ async function markExhausted(row: ReservedLeadRow): Promise<void> {
         attempt_count:         row.ai_attempt_count,
       },
     });
+
+    // Notify owner + all team members: this lead is no longer warm.
+    try {
+      const { data: lead } = await supabaseAdmin
+        .from('leads')
+        .select('first_name, last_name, name')
+        .eq('id', row.id)
+        .maybeSingle();
+      const l = (lead ?? {}) as { first_name?: string | null; last_name?: string | null; name?: string | null };
+      const first = (l.first_name || '').trim() || (l.name || '').trim().split(/\s+/)[0] || 'This lead';
+      const full  = [l.first_name, l.last_name].map((p) => (p || '').trim()).filter(Boolean).join(' ')
+        || (l.name || '').trim() || first;
+      const { notifyAiOwner } = await import('./notifications');
+      void notifyAiOwner({
+        venueId:       row.venue_id,
+        leadId:        row.id,
+        scenario:      'ai_exhausted_no_reply',
+        notifyRoles:   ['venue_owner', 'concierge'],
+        brideName:     first,
+        brideFullName: full,
+        extraDetail:   `${row.ai_attempt_count} AI follow-ups were sent over 60 days with no reply.`,
+      });
+    } catch (e) {
+      console.error('[ai-send] markExhausted notify failed:', e);
+    }
   } catch (e) {
     console.error('[ai-send] markExhausted failed:', e);
   }
@@ -700,14 +736,17 @@ function nextMorningInVenueTz(timezone: string): Date {
 }
 
 /**
- * Compute the next send time: random between 24 and 48 hours from now (1–2 days),
- * pushed into the venue-local 9am–8pm window if it lands outside.
+ * Compute the next send time: alternating 4 / 5 / 4 / 5-day cadence keyed off
+ * the attempt count (even attempts wait 4 days, odd wait 5), with a small
+ * random jitter of up to ±6 hours so sends don't land at the exact same
+ * minute every time. Roughly 13 touches fit inside the 60-day window.
+ * Pushed into the venue-local 9am–8pm window if it lands outside.
  */
-function computeNextSendAt(timezone: string): Date {
-  const minMs = 24 * 60 * 60 * 1000;
-  const maxMs = 48 * 60 * 60 * 1000;
-  const offset = minMs + Math.floor(Math.random() * (maxMs - minMs));
-  const naive  = new Date(Date.now() + offset);
+function computeNextSendAt(timezone: string, attemptCount = 0): Date {
+  const days   = attemptCount % 2 === 0 ? 4 : 5;
+  const baseMs = days * 24 * 60 * 60 * 1000;
+  const jitter = Math.floor((Math.random() - 0.5) * 12 * 60 * 60 * 1000); // ±6h
+  const naive  = new Date(Date.now() + baseMs + jitter);
   return enforceQuietHours(naive, timezone);
 }
 

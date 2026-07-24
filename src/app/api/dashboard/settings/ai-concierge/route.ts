@@ -64,7 +64,7 @@ async function loadVenueRow(venueId: string): Promise<{ venue: VenueRow; plan: P
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select(
-      'id, name, ai_concierge_enabled, a2p_verified, directory_addon_concierge, ai_assistant_persona_name, ai_concierge_notify_emails, ai_concierge_enabled_at, ai_concierge_resources, ghl_connected, notification_email, email, directory_plan_id',
+      'id, name, ai_concierge_enabled, a2p_verified, directory_addon_concierge, ai_concierge_admin_disabled, ai_assistant_persona_name, ai_concierge_notify_emails, ai_concierge_enabled_at, ai_concierge_resources, ghl_connected, notification_email, email, directory_plan_id',
     )
     .eq('id', venueId)
     .maybeSingle();
@@ -93,7 +93,9 @@ function shapePayload(v: VenueRow, plan: PlanRow | null): AiConciergeSettingsPay
   const isLegacyPlan = plan?.is_legacy === true
     || String(plan?.name ?? '').toLowerCase().includes('legacy')
     || String(plan?.slug ?? '').toLowerCase().includes('legacy');
-  const addon  = v.directory_addon_concierge === true || planIncludesConcierge || isLegacyPlan;
+  // Super-admin force-off beats everything (plan inclusion, addon purchase).
+  const adminDisabled = (v as { ai_concierge_admin_disabled?: boolean | null }).ai_concierge_admin_disabled === true;
+  const addon  = !adminDisabled && (v.directory_addon_concierge === true || planIncludesConcierge || isLegacyPlan);
   // GHL-connected venues have A2P compliance handled by GHL/their carrier
   // account, not by StoryVenue's direct registration flow. Treat ghl_connected
   // as satisfying the a2p requirement everywhere.
@@ -198,6 +200,12 @@ export async function PATCH(request: Request) {
   // since it's a carrier-level compliance gate enforced outside our system.
   if (body.enabled !== undefined) {
     if (body.enabled === true) {
+      // Super-admin force-off: the venue cannot self-enable, period.
+      if ((current as { ai_concierge_admin_disabled?: boolean | null }).ai_concierge_admin_disabled === true) {
+        return NextResponse.json({
+          error: 'AI Concierge is not available on this account. Contact support to learn more.',
+        }, { status: 403 });
+      }
       const flags = currentResult.plan?.feature_flags ?? {};
       const planIncludesConcierge = flags['addon_concierge_included'] === true;
       const isLegacyPlan = currentResult.plan?.is_legacy === true

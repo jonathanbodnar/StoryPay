@@ -501,6 +501,13 @@ async function handleAiConciergeOnStageChange(
       // Venue must have AI concierge feature enabled before we auto-activate.
       if (!venue.ai_concierge_enabled) return;
 
+      // Full access check: addon purchased OR plan bundles it OR legacy —
+      // and never when super admin force-disabled it. The Followup stage move
+      // itself is universal; only the AI activation is gated.
+      const { loadVenueFeatureAccess } = await import('@/lib/plan-features');
+      const access = await loadVenueFeatureAccess(venueId);
+      if (!access.hasConcierge) return;
+
       // Read current ai_state to skip TCPA opt-outs.
       const { data: lead } = await supabaseAdmin
         .from('leads')
@@ -647,6 +654,116 @@ export async function processWeddingDateFollowupAutomations(): Promise<{ enrolle
   }
 
   return { enrolled };
+}
+
+/**
+ * Universal 14-day Followup stage mover.
+ *
+ * Any lead — at ANY venue, regardless of plan — that has gone 14 days without
+ * an inbound reply (measured from last_inbound_at, or created_at when the
+ * bride never replied, whichever is later) is automatically moved into the
+ * venue's "Followup" pipeline stage, as long as every sequence enrollment has
+ * finished. The stage move is universal; AI Concierge activation is handled
+ * downstream by onMarketingStageChanged and stays gated behind the venue's
+ * concierge access (addon / plan / admin override).
+ *
+ * Skips permanently (stamps followup_moved_at so the lead is never rescanned):
+ *   - leads already in the Followup stage
+ *   - leads in a won/lost stage (Wedding Booked, Not Interested, …)
+ *   - leads in an actively-managed stage (Tour Booked, Proposal Sent)
+ * Skips temporarily (rescanned next tick):
+ *   - leads with an active sequence enrollment still running
+ */
+export async function processFollowupStageMover(): Promise<{ scanned: number; moved: number }> {
+  const cutoffIso = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Candidate leads: 14+ days old, no reply in 14+ days, never moved before.
+  const { data: candidates, error } = await supabaseAdmin
+    .from('leads')
+    .select('id, venue_id, stage_id, last_inbound_at')
+    .is('followup_moved_at', null)
+    .lte('created_at', cutoffIso)
+    .or(`last_inbound_at.is.null,last_inbound_at.lte.${cutoffIso}`)
+    .eq('is_ghl_migration', false)
+    .neq('ai_state', 'opted_out')
+    .limit(200);
+  if (error || !candidates?.length) return { scanned: 0, moved: 0 };
+
+  const rows = candidates as Array<{ id: string; venue_id: string; stage_id: string | null; last_inbound_at: string | null }>;
+
+  // Drop leads with an active sequence enrollment still running.
+  const leadIds = rows.map((r) => r.id);
+  const { data: activeEnr } = await supabaseAdmin
+    .from('marketing_automation_enrollments')
+    .select('lead_id')
+    .in('lead_id', leadIds)
+    .eq('status', 'active');
+  const stillEnrolled = new Set((activeEnr ?? []).map((e) => (e as { lead_id: string }).lead_id));
+
+  // Group by venue so stage resolution happens once per venue.
+  const byVenue = new Map<string, typeof rows>();
+  for (const r of rows) {
+    if (stillEnrolled.has(r.id)) continue;
+    const list = byVenue.get(r.venue_id) ?? [];
+    list.push(r);
+    byVenue.set(r.venue_id, list);
+  }
+
+  let moved = 0;
+  const nowIso = new Date().toISOString();
+
+  for (const [venueId, venueLeads] of byVenue) {
+    try {
+      // Resolve the venue's Followup stage (creates it if missing — every
+      // venue's default pipeline ships with one, so this is a cache warm-up).
+      const { ensureVenueAiResources } = await import('@/lib/ai-concierge/venue-resources');
+      const resources = await ensureVenueAiResources(venueId);
+      const followupStageId = resources?.stages?.followup;
+      if (!followupStageId) continue;
+
+      // Stage exclusion map: skip won/lost stages and actively-managed ones.
+      const { data: stageRows } = await supabaseAdmin
+        .from('lead_pipeline_stages')
+        .select('id, name, kind')
+        .eq('venue_id', venueId);
+      const excluded = new Set<string>();
+      const managedNames = ['tourbooked', 'bookedtour', 'proposalsent', 'toured', 'welcomed'];
+      for (const s of (stageRows ?? []) as Array<{ id: string; name: string; kind: string }>) {
+        const norm = s.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (s.kind === 'won' || s.kind === 'lost' || managedNames.includes(norm)) {
+          excluded.add(s.id);
+        }
+      }
+
+      for (const lead of venueLeads) {
+        // Already in Followup, or in a stage we must not touch: stamp so the
+        // mover never rescans this lead, but leave the stage alone.
+        if (lead.stage_id === followupStageId || (lead.stage_id && excluded.has(lead.stage_id))) {
+          await supabaseAdmin
+            .from('leads')
+            .update({ followup_moved_at: nowIso })
+            .eq('id', lead.id);
+          continue;
+        }
+
+        const { error: upErr } = await supabaseAdmin
+          .from('leads')
+          .update({ stage_id: followupStageId, followup_moved_at: nowIso })
+          .eq('id', lead.id)
+          .is('followup_moved_at', null); // idempotency vs concurrent ticks
+        if (upErr) continue;
+
+        // Fire the standard stage-change side-effects: sequence cancel/start
+        // and (plan-gated) AI Concierge activation.
+        await onMarketingStageChanged(venueId, lead.id, followupStageId, lead.stage_id);
+        moved++;
+      }
+    } catch (e) {
+      console.error(`[followup-mover] venue ${venueId} failed:`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  return { scanned: rows.length, moved };
 }
 
 /**
@@ -2461,10 +2578,12 @@ export async function runMarketingEmailCron(): Promise<Record<string, number | s
   const w = await processWeddingDateFollowupAutomations();
   const a = await processAutomationEnrollmentsBatch();
   const c = await processCampaignsCron();
+  const f = await processFollowupStageMover();
   return {
     weddingFollowupEnrollments: w.enrolled,
     automationSteps: a.processed,
     campaignRecipientsSent: c.recipients,
     campaignsStarted: c.campaigns,
+    followupStageMoves: f.moved,
   };
 }

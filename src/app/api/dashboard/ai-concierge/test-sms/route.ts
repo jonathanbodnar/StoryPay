@@ -84,9 +84,13 @@ export async function POST(request: NextRequest) {
   const venue = venueRow as VenueAuthRow | null;
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
-  if (!venue.directory_addon_concierge) {
+  // Full concierge access resolution — addon, plan-bundled, or legacy, minus
+  // the super-admin force-off.
+  const { loadVenueFeatureAccess } = await import('@/lib/plan-features');
+  const access = await loadVenueFeatureAccess(user.venueId);
+  if (!access.hasConcierge) {
     return NextResponse.json({
-      error: 'Venue Concierge add-on is required to test the AI. Upgrade on the billing page first.',
+      error: 'AI Concierge is not active on this account. Upgrade on the billing page first.',
     }, { status: 422 });
   }
   if (!venue.ghl_location_id) {

@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { trackClient } from '@/lib/analytics-client';
+import FeatureLockModal from '@/components/FeatureLockModal';
 import {
   Sparkles, Loader2, Check, AlertTriangle, ShieldCheck,
   ShieldAlert, MessageSquare, BadgeCheck, ExternalLink,
   TrendingUp, Send, Inbox, UserCheck, UserX, Activity,
   Pause as PauseIcon, AlertOctagon, Gauge, Bot, RefreshCw,
   Search, Pause, Play, Clock, ChevronDown, ChevronUp,
-  CheckCircle2, Eye, AlarmClock,
+  CheckCircle2, Eye, AlarmClock, Lock,
 } from 'lucide-react';
 
 // ── Shared types ───────────────────────────────────────────────────────────
@@ -108,6 +109,7 @@ export default function AiConciergeSettingsPage() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
   const [toggleSaving, setToggleSaving] = useState(false);
+  const [lockOpen, setLockOpen] = useState(false);
 
   async function load() {
     setError('');
@@ -169,6 +171,52 @@ export default function AiConciergeSettingsPage() {
     );
   }
 
+  // ── Locked state: no concierge access (not in plan, no addon, or force-off) ──
+  // The whole feature is greyed out behind a lock; clicking anywhere opens the
+  // upgrade modal which routes to the billing page.
+  const locked = !data.eligibility.addonPurchased;
+  if (locked) {
+    return (
+      <div className="relative bg-white overflow-hidden min-h-[500px] rounded-xl border border-gray-200">
+        {/* Greyed-out preview of the feature */}
+        <div className="pointer-events-none select-none opacity-40 grayscale px-6 pb-8 pt-6 space-y-6" aria-hidden>
+          <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+            <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
+              <MessageSquare size={18} className="text-gray-400" />
+              <h2 className="font-heading text-base font-semibold text-gray-900">How AI Concierge works</h2>
+            </div>
+            <div className="px-6 py-6 space-y-6 text-sm text-gray-600">
+              <Step n={1} title="Automatic follow-up every 4–5 days for 60 days"
+                body="After your 14-day sequence ends, the AI keeps following up with short, varied SMS messages — never spammy, always casual." />
+              <Step n={2} title="Reply = AI stops"
+                body="The moment the bride replies, the AI stops and your team is notified to take over a warm conversation." />
+              <Step n={3} title="Quiet hours respected"
+                body="AI never sends outside 9am–8pm in your venue's local timezone." />
+            </div>
+          </section>
+          <section className="rounded-2xl border border-gray-200 bg-white h-40" />
+        </div>
+
+        {/* Lock overlay */}
+        <button
+          type="button"
+          onClick={() => setLockOpen(true)}
+          className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/60 backdrop-blur-[1px] cursor-pointer"
+        >
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-lg">
+            <Lock size={22} />
+          </span>
+          <span className="text-sm font-semibold text-gray-900">AI Concierge is locked on your plan</span>
+          <span className="text-xs text-gray-500 max-w-sm text-center">
+            60 days of automatic SMS follow-up after your 14-day sequence ends. Click to see what it does and how to unlock it.
+          </span>
+        </button>
+
+        <FeatureLockModal open={lockOpen} onClose={() => setLockOpen(false)} feature="ai_concierge" />
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white overflow-hidden min-h-[500px]">
       {/* Tabs */}
@@ -201,8 +249,8 @@ export default function AiConciergeSettingsPage() {
               <h2 className="font-heading text-base font-semibold text-gray-900">How AI Concierge works</h2>
             </div>
             <div className="px-6 py-6 space-y-6 text-sm text-gray-600">
-              <Step n={1} title="Random 1–2 day cadence for up to 60 days"
-                body="The AI sends short, varied SMS messages on a randomized cadence — never spammy, always casual. Each message picks a fresh angle so it never feels repetitive." />
+              <Step n={1} title="Every 4–5 days for up to 60 days"
+                body="The AI sends short, varied SMS messages on an alternating 4–5 day cadence — never spammy, always casual. Each message picks a fresh angle so it never feels repetitive." />
               <Step n={2} title="Reply = AI stops"
                 body="The moment the bride replies, the AI pauses and you (or your team) take over. We tag the contact and notify you immediately by email." />
               <Step n={3} title="Quiet hours respected"
@@ -456,7 +504,7 @@ function ActiveLeadsPanel() {
           <CheckCircle2 size={12} className="text-emerald-500" />
           How this works
         </div>
-        <p>AI Concierge automatically follows up with leads via SMS on a 1–2 day randomized cadence for up to 60 days. It never replies on its own — when a lead replies, your team gets notified to respond personally.</p>
+        <p>AI Concierge automatically follows up with leads via SMS every 4–5 days for up to 60 days. It never replies on its own — when a lead replies, your team gets notified to respond personally.</p>
         <p>Use <strong>Pause</strong> to stop AI outreach for a specific lead, and <strong>Resume</strong> to continue. Your StoryVenue concierge team can also manage this from their side.</p>
       </div>
     </div>

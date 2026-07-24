@@ -18,7 +18,8 @@ export type SystemEmailCategory =
   | 'leads'
   | 'auth'
   | 'reporting'
-  | 'ai';
+  | 'ai'
+  | 'billing';
 
 export interface SystemEmailDef {
   key: string;
@@ -200,6 +201,308 @@ Open the conversation to take over and reply.`,
       button_text: 'View Conversation',
     },
   },
+  // ── AI Concierge notifications (all editable) ───────────────────────────
+  // These fire from the AI Concierge inbound handler / send cron. Variables:
+  // {{bride_first_name}}, {{venue_name}}. The CTA button always deep-links to
+  // the conversation or contact record — button_text only changes its label.
+  {
+    key: 'ai_handoff_urgent',
+    label: 'AI: Urgent Handoff',
+    description:
+      'Sent to the venue owner + team when a bride replies with something that needs a human immediately (distress, complaint, or an urgent keyword). The AI stops and waits.',
+    trigger: 'Fires from the AI inbound handler when an urgent handoff rule matches a reply.',
+    category: 'ai',
+    editable: true,
+    defaults: {
+      subject: '🚨 Urgent: {{bride_first_name}} needs human attention — {{venue_name}}',
+      heading: '{{bride_first_name}} just sent a message that needs you NOW',
+      body: `{{bride_first_name}} replied to one of your AI follow-up messages with something that needs a human in the loop right away. The AI has stopped and is waiting for you to take over.`,
+      button_text: 'Open the conversation →',
+    },
+  },
+  {
+    key: 'ai_handoff_pricing',
+    label: 'AI: Pricing Question Handoff',
+    description:
+      'Sent when a bride asks the AI about pricing, packages, or rates. The AI never quotes prices, so it hands the conversation to a human.',
+    trigger: 'Fires from the AI inbound handler when a pricing keyword or intent matches a reply.',
+    category: 'ai',
+    editable: true,
+    defaults: {
+      subject: '{{bride_first_name}} is asking about pricing — {{venue_name}}',
+      heading: '{{bride_first_name}} asked about pricing — your concierge should reply',
+      body: `{{bride_first_name}} replied to one of your AI follow-up messages asking about pricing, packages, or rates. The AI is intentionally never quoting prices, so it has handed the conversation off so a real person can give her real answers.`,
+      button_text: 'Reply to her now →',
+    },
+  },
+  {
+    key: 'ai_reply_received',
+    label: 'AI: Bride Replied',
+    description:
+      'Sent when a bride replies to an AI follow-up message. The AI pauses so a human can take over the warm conversation.',
+    trigger: 'Fires from the AI inbound handler on any neutral reply while the AI is active.',
+    category: 'ai',
+    editable: true,
+    defaults: {
+      subject: '🎉 {{bride_first_name}} just replied — {{venue_name}}',
+      heading: '{{bride_first_name}} replied to your AI follow-up',
+      body: `Great news — {{bride_first_name}} just replied to one of your AI follow-up messages. The AI has paused so a human (you or your team) can take over the conversation. The sooner you respond, the warmer she'll feel.`,
+      button_text: 'Reply to her now →',
+    },
+  },
+  {
+    key: 'ai_not_interested',
+    label: 'AI: Bride Not Interested',
+    description:
+      'Sent when a bride replies indicating she is no longer interested or has chosen another venue. She is moved to the Not Interested stage and AI stops.',
+    trigger: 'Fires from the AI inbound handler when a not-interested keyword or intent matches.',
+    category: 'ai',
+    editable: true,
+    defaults: {
+      subject: '{{bride_first_name}} marked herself as not interested — {{venue_name}}',
+      heading: '{{bride_first_name}} is no longer interested',
+      body: `{{bride_first_name}} replied to your AI follow-up indicating she's no longer interested or has chosen another venue. We've moved her to your "Not Interested" pipeline and stopped all future AI follow-ups for her.`,
+      button_text: 'View her contact record →',
+    },
+  },
+  {
+    key: 'ai_tcpa_opt_out',
+    label: 'AI: SMS Opt-Out (STOP)',
+    description:
+      'Sent when a bride replies with a TCPA opt-out keyword (STOP, UNSUBSCRIBE). SMS is permanently disabled for her — a legal compliance requirement.',
+    trigger: 'Fires from the inbound webhook whenever an opt-out keyword is detected.',
+    category: 'ai',
+    editable: true,
+    defaults: {
+      subject: '{{bride_first_name}} opted out of SMS — {{venue_name}}',
+      heading: '{{bride_first_name}} replied STOP / UNSUBSCRIBE — SMS disabled',
+      body: `{{bride_first_name}} replied with a TCPA opt-out keyword (STOP, UNSUBSCRIBE, etc.). She will not receive any more SMS messages from your account — this is a legal compliance requirement and cannot be undone from the AI side. You can still reach out via email or other channels.`,
+      button_text: 'View her contact record →',
+    },
+  },
+  {
+    key: 'ai_daily_cap_warning',
+    label: 'AI: Daily Cap Warning (80%)',
+    description:
+      'Sent to the venue owner when the AI has used 80% of the day\'s outbound SMS budget.',
+    trigger: 'Fires from the AI send cron when the daily spend crosses 80% of the cap.',
+    category: 'ai',
+    editable: true,
+    defaults: {
+      subject: "Heads up: AI Concierge is at 80% of today's send cap — {{venue_name}}",
+      heading: 'AI Concierge daily cap warning',
+      body: `Your AI Concierge has used most of today's outbound SMS budget. We'll keep sending until the cap is reached, then pause new sends until tomorrow morning. Raise the cap from your AI Concierge admin if you want today's outreach to continue uninterrupted.`,
+      button_text: 'Open AI Concierge admin →',
+    },
+  },
+  {
+    key: 'ai_daily_cap_reached',
+    label: 'AI: Daily Cap Reached',
+    description:
+      'Sent to the venue owner when the AI hits the day\'s outbound SMS cap. Sends pause until the next morning.',
+    trigger: 'Fires from the AI send cron when the daily cap is reached.',
+    category: 'ai',
+    editable: true,
+    defaults: {
+      subject: "AI Concierge has hit today's send cap — {{venue_name}}",
+      heading: 'AI Concierge daily cap reached',
+      body: `Your AI Concierge has hit today's outbound SMS cap. New sends are paused until tomorrow morning (in your venue's local timezone). Inbound replies are unaffected — you'll still receive every reply notification. To resume sends sooner, raise the cap from your AI Concierge admin.`,
+      button_text: 'Open AI Concierge admin →',
+    },
+  },
+  {
+    key: 'sequence_reply_received',
+    label: 'AI: Reply During 14-Day Sequence',
+    description:
+      'Sent when a bride replies while the 14-day nurture sequence is still running (before the AI activates). A human needs to respond.',
+    trigger: 'Fires from the AI inbound handler for leads still in the dormant state.',
+    category: 'ai',
+    editable: true,
+    defaults: {
+      subject: '💬 {{bride_first_name}} replied to your follow-up — {{venue_name}}',
+      heading: '{{bride_first_name}} replied — time to step in',
+      body: `{{bride_first_name}} replied to one of your automated follow-up messages. The AI Concierge hasn't activated yet, so this conversation needs a real person right now. The faster you respond, the warmer she'll feel — don't let this one go cold.`,
+      button_text: 'Reply to her now →',
+    },
+  },
+  {
+    key: 'ai_exhausted_no_reply',
+    label: 'AI: 60-Day Window Complete (No Reply)',
+    description:
+      'Sent to the venue owner + team when the AI finishes its full 60-day follow-up window without ever getting a reply. The lead is moved to Not Interested.',
+    trigger: 'Fires from the AI send cron when a lead passes its 60-day expiry with zero replies.',
+    category: 'ai',
+    editable: true,
+    defaults: {
+      subject: '{{bride_first_name}} finished the 60-day follow-up window — {{venue_name}}',
+      heading: '{{bride_first_name}} never replied — moved to Not Interested',
+      body: `The AI Concierge completed its full 60-day follow-up sequence for {{bride_first_name}} without ever getting a reply. She has been moved to your "Not Interested" pipeline stage and is no longer considered a warm lead. No further automated messages will be sent. If she ever replies in the future, she'll automatically move back to "Conversation Started" and you'll be notified.`,
+      button_text: 'View her contact record →',
+    },
+  },
+  {
+    key: 'ai_lead_revived',
+    label: 'AI: Lead Revived After 60 Days',
+    description:
+      'Sent when a bride replies after her 60-day window already ended and she had been moved to Not Interested. She is moved back to Conversation Started — a human must take over.',
+    trigger: 'Fires from the AI inbound handler when an exhausted lead replies.',
+    category: 'ai',
+    editable: true,
+    defaults: {
+      subject: '🎉 {{bride_first_name}} came back — she replied after going quiet — {{venue_name}}',
+      heading: '{{bride_first_name}} is a warm lead again',
+      body: `Great news — {{bride_first_name}} just replied, even though her follow-up window had already ended and she'd been moved to Not Interested. We've moved her back to "Conversation Started" in your pipeline. This is a warm lead — a real person should take over the conversation right now.`,
+      button_text: 'Reply to her now →',
+    },
+  },
+
+  // ── SaaS billing (read-only preview) ────────────────────────────────────
+  {
+    key: 'billing_trial_ending',
+    label: 'Trial Ending Soon',
+    description: 'Sent to the venue owner shortly before their free trial converts to a paid subscription.',
+    trigger: 'Fires from the billing webhook/cron a few days before trial end.',
+    category: 'billing',
+    editable: false,
+    defaults: {
+      subject: 'Your free trial ends {{trial_end_date}} — {{plan_price}}/mo after',
+      heading: 'Your free trial is ending soon',
+      body: `Hi {{owner_first_name}},
+
+Your Bride Booking System free trial ends {{trial_end_date}}. After that, your card on file will be charged {{plan_price}}/mo. Nothing to do if you want to keep everything running — your leads, sequences, and listing stay live.`,
+      button_text: 'Manage billing',
+    },
+  },
+  {
+    key: 'billing_payment_received',
+    label: 'Payment Received',
+    description: 'Receipt email sent to the venue owner when a subscription payment is charged successfully.',
+    trigger: 'Fires from the payment webhook on each successful subscription charge.',
+    category: 'billing',
+    editable: false,
+    defaults: {
+      subject: 'Payment received — {{amount}} for your Bride Booking System™',
+      heading: 'Thanks — your payment went through',
+      body: `Hi {{owner_first_name}},
+
+We received your payment of {{amount}} for your Bride Booking System subscription. Your account is in good standing.`,
+      button_text: 'View billing',
+    },
+  },
+  {
+    key: 'billing_card_declined',
+    label: 'Card Declined',
+    description: 'Sent to the venue owner when their subscription payment fails so they can update the card before service is affected.',
+    trigger: 'Fires from the payment webhook on a failed charge.',
+    category: 'billing',
+    editable: false,
+    defaults: {
+      subject: 'Your card was declined — update it to keep your Bride Booking System™',
+      heading: 'Action needed: payment failed',
+      body: `Hi {{owner_first_name}},
+
+Your latest subscription payment didn't go through. Update your card on file to keep your Bride Booking System active — leads keep coming in either way, but follow-up automations pause if the account lapses.`,
+      button_text: 'Update my card',
+    },
+  },
+  {
+    key: 'billing_downgraded_free',
+    label: 'Downgraded to Free Plan',
+    description: 'Sent to the venue owner when their account moves to the Free plan (cancellation or downgrade).',
+    trigger: 'Fires when a subscription is cancelled or downgraded to Free.',
+    category: 'billing',
+    editable: false,
+    defaults: {
+      subject: "You're on the Free plan",
+      heading: 'Your account is now on the Free plan',
+      body: `Hi {{owner_first_name}},
+
+Your account has moved to the Free plan. Your listing stays live and you'll still receive lead alerts, but automated follow-up and premium features are paused. You can re-activate anytime from your billing page.`,
+      button_text: 'View plans',
+    },
+  },
+
+  // ── Miscellaneous (read-only preview) ───────────────────────────────────
+  {
+    key: 'email_verification',
+    label: 'Email Verification',
+    description: 'Sent to verify a venue owner\'s email address during signup or email change.',
+    trigger: 'Fires on signup / email change when verification is required.',
+    category: 'auth',
+    editable: false,
+    defaults: {
+      subject: 'Verify your email for StoryVenue',
+      heading: 'Confirm your email address',
+      body: `Hi,
+
+Click below to verify your email address and finish setting up your StoryVenue account.`,
+      button_text: 'Verify my email',
+    },
+  },
+  {
+    key: 'monthly_analytics_digest',
+    label: 'Monthly Analytics Digest',
+    description: 'Monthly summary of listing views, leads, and engagement sent to venue owners.',
+    trigger: 'Fires monthly from the analytics digest cron.',
+    category: 'reporting',
+    editable: false,
+    defaults: {
+      subject: 'Your {{venue_name}} monthly performance summary',
+      heading: 'Your month at a glance',
+      body: `Hi {{owner_first_name}},
+
+Here's how {{venue_name}} performed this month: listing views, new leads, and conversation activity — all in one summary.`,
+      button_text: 'Open your dashboard',
+    },
+  },
+  {
+    key: 'couple_password_reset',
+    label: 'Couple Password Reset',
+    description: 'Sent when a couple (bride/groom portal user) requests a password reset.',
+    trigger: 'Fires on `/api/auth/couple/forgot`.',
+    category: 'auth',
+    editable: false,
+    defaults: {
+      subject: 'Reset your password',
+      heading: 'Reset your password',
+      body: `Hi,
+
+We received a request to reset your password. Click below to choose a new one. If you did not request this, you can safely ignore this email.`,
+      button_text: 'Reset my password',
+    },
+  },
+  {
+    key: 'admin_login_link',
+    label: 'Admin-Sent Login Link',
+    description: 'Magic login link sent to a venue owner by a super admin from the Venue Management page ("Send invite").',
+    trigger: 'Fires when a super admin clicks "Send invite" on a venue card.',
+    category: 'auth',
+    editable: false,
+    defaults: {
+      subject: 'Your StoryVenue login link for {{venue_name}}',
+      heading: 'Log in to your StoryVenue account',
+      body: `Hi,
+
+Here's your one-click login link for {{venue_name}} on StoryVenue. It expires after use — request a new one anytime from the login page.`,
+      button_text: 'Log in now',
+    },
+  },
+  {
+    key: 'admin_created_venue_welcome',
+    label: 'Admin-Created Venue Welcome',
+    description: 'Welcome email sent when a super admin creates a venue account on someone\'s behalf.',
+    trigger: 'Fires when a super admin creates a new venue from the admin panel.',
+    category: 'onboarding',
+    editable: false,
+    defaults: {
+      subject: 'Your {{venue_name}} account on StoryVenue is ready',
+      heading: 'Welcome to StoryVenue',
+      body: `Hi {{owner_first_name}},
+
+We've set up a StoryVenue account for {{venue_name}}. Use the button below to log in and take a look around — your listing, leads, and follow-up tools are all in one place.`,
+      button_text: 'Log in to my account',
+    },
+  },
   {
     key: 'booking_report',
     label: 'Monthly Booking Report',
@@ -234,6 +537,7 @@ export const CATEGORY_LABELS: Record<SystemEmailCategory, string> = {
   auth: 'Authentication',
   reporting: 'Reporting',
   ai: 'AI Concierge',
+  billing: 'Billing',
 };
 
 /** Sample variables for test sends and browser previews. */
@@ -284,5 +588,57 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
     owner_first_name: 'Sarah',
     venue_name: 'Meadowbrook Estate',
     action_url: `${APP_URL}/dashboard/listing`,
+  },
+  // AI Concierge scenarios all share the same variable set.
+  ...Object.fromEntries(
+    [
+      'ai_handoff_urgent', 'ai_handoff_pricing', 'ai_reply_received',
+      'ai_not_interested', 'ai_tcpa_opt_out', 'ai_daily_cap_warning',
+      'ai_daily_cap_reached', 'sequence_reply_received',
+      'ai_exhausted_no_reply', 'ai_lead_revived',
+    ].map((key) => [key, {
+      bride_first_name: 'Emily',
+      venue_name: 'Meadowbrook Estate',
+      action_url: `${APP_URL}/dashboard/conversations`,
+    }]),
+  ),
+  billing_trial_ending: {
+    owner_first_name: 'Sarah',
+    trial_end_date: 'August 5',
+    plan_price: '$97',
+    action_url: `${APP_URL}/dashboard/directory-billing`,
+  },
+  billing_payment_received: {
+    owner_first_name: 'Sarah',
+    amount: '$97.00',
+    action_url: `${APP_URL}/dashboard/directory-billing`,
+  },
+  billing_card_declined: {
+    owner_first_name: 'Sarah',
+    action_url: `${APP_URL}/dashboard/directory-billing`,
+  },
+  billing_downgraded_free: {
+    owner_first_name: 'Sarah',
+    action_url: `${APP_URL}/dashboard/directory-billing`,
+  },
+  email_verification: {
+    action_url: `${APP_URL}/verify-email/example`,
+  },
+  monthly_analytics_digest: {
+    owner_first_name: 'Sarah',
+    venue_name: 'Meadowbrook Estate',
+    action_url: `${APP_URL}/dashboard/listing`,
+  },
+  couple_password_reset: {
+    action_url: `${APP_URL}/reset-password/couple`,
+  },
+  admin_login_link: {
+    venue_name: 'Meadowbrook Estate',
+    action_url: `${APP_URL}/login`,
+  },
+  admin_created_venue_welcome: {
+    owner_first_name: 'Sarah',
+    venue_name: 'Meadowbrook Estate',
+    action_url: `${APP_URL}/dashboard`,
   },
 };

@@ -138,13 +138,21 @@ export async function PATCH(
       // they have to make the venue eligible first.
       const { data: v } = await supabaseAdmin
         .from('venues')
-        .select('a2p_verified, directory_addon_concierge')
+        .select('a2p_verified, directory_addon_concierge, ai_concierge_admin_disabled')
         .eq('id', venueId)
         .maybeSingle();
       const needs: string[] = [];
       const a2pNow = update.a2p_verified === true || (update.a2p_verified === undefined && v?.a2p_verified === true);
       if (!a2pNow)                                    needs.push('a2p_verified');
-      if (!v?.directory_addon_concierge)              needs.push('directory_addon_concierge');
+      // Full concierge access: addon purchased OR plan bundles it OR legacy.
+      // Force-disabled by super admin always blocks.
+      const { loadVenueFeatureAccess } = await import('@/lib/plan-features');
+      const access = await loadVenueFeatureAccess(venueId);
+      if (!access.hasConcierge) needs.push(
+        (v as { ai_concierge_admin_disabled?: boolean } | null)?.ai_concierge_admin_disabled
+          ? 'ai_concierge_admin_disabled (super admin force-off is set)'
+          : 'concierge_access (addon not purchased and plan does not include it)',
+      );
       if (needs.length > 0) {
         return NextResponse.json({
           error:   'Venue is not eligible to enable AI Concierge',

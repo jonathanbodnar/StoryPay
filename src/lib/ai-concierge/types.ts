@@ -118,6 +118,7 @@ export type AiTransitionReason =
   | 'inbound_pricing_keyword'
   | 'inbound_tcpa_opt_out'
   | 'expired_60_days'
+  | 'revived_after_exhausted'
   | 'venue_disabled_ai'
   | 'admin_force_reset';
 

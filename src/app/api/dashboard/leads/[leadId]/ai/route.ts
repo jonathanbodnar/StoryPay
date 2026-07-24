@@ -122,7 +122,12 @@ async function loadVenueAi(venueId: string): Promise<VenueAiRow | null> {
     .select('id, ai_concierge_enabled, a2p_verified, directory_addon_concierge')
     .eq('id', venueId)
     .maybeSingle();
-  return (data as VenueAiRow | null) ?? null;
+  if (!data) return null;
+  // Full concierge access resolution (addon OR plan-bundled OR legacy, minus
+  // the super-admin force-off) — the raw addon column alone under-grants.
+  const { loadVenueFeatureAccess } = await import('@/lib/plan-features');
+  const access = await loadVenueFeatureAccess(venueId);
+  return { ...(data as VenueAiRow), directory_addon_concierge: access.hasConcierge } as VenueAiRow;
 }
 
 function isTcpaSource(source: string | null | undefined): boolean {

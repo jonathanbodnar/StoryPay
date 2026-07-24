@@ -25,6 +25,11 @@ import {
 } from 'lucide-react';
 import { DIRECTORY_BADGE_STATUSES, directoryBadgeLabel } from '@/lib/directory-badges';
 import {
+  planIncludesVerified,
+  planIncludesSponsored,
+  planIncludesConcierge,
+} from '@/lib/directory-addons';
+import {
   getLunarPayAdminSummary,
   type LunarPayAdminSummary,
 } from '@/lib/lunarpay-venue-admin';
@@ -48,6 +53,10 @@ export type AdminVenueRow = Record<string, unknown> & {
   directory_plan_id?: string | null;
   directory_verified_status?: string | null;
   directory_sponsored_status?: string | null;
+  directory_addon_verified?: boolean | null;
+  directory_addon_sponsored?: boolean | null;
+  directory_addon_concierge?: boolean | null;
+  ai_concierge_admin_disabled?: boolean | null;
   directory_subscription_status?: string | null;
   directory_trial_ends_at?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
@@ -147,7 +156,104 @@ function fmtTs(iso: string | null | undefined): string {
   }
 }
 
-type PlanOpt = { id: string; name: string; slug: string; price_monthly_cents?: number | null };
+type PlanOpt = {
+  id: string;
+  name: string;
+  slug: string;
+  price_monthly_cents?: number | null;
+  feature_flags?: Record<string, unknown> | null;
+  is_legacy?: boolean | null;
+};
+
+/**
+ * Addon checkboxes on the venue card — the single source of truth for whether
+ * a venue has AI Concierge, Verified Listing, or Sponsored Listing.
+ *
+ * Checked state = the addon is effectively live for this venue, whether from
+ * a manual grant, a self-serve purchase, or plan inclusion (auto-ticked).
+ * Unchecking always wins: for AI Concierge it sets the super-admin force-off
+ * so even a plan that bundles it is overridden.
+ */
+function AddonCheckboxes({
+  venue,
+  plans,
+  busy,
+  onPatch,
+}: {
+  venue: AdminVenueRow;
+  plans: PlanOpt[];
+  busy: boolean;
+  onPatch: (venueId: string, body: Record<string, unknown>) => void | Promise<void>;
+}) {
+  const plan = plans.find((p) => p.id === venue.directory_plan_id) ?? null;
+  const isLegacy =
+    !venue.directory_plan_id ||
+    plan?.is_legacy === true ||
+    (plan?.name ?? '').toLowerCase().includes('legacy') ||
+    (plan?.slug ?? '').toLowerCase().includes('legacy');
+
+  const verifiedFromPlan  = planIncludesVerified(plan, plans);
+  const sponsoredFromPlan = planIncludesSponsored(plan, plans);
+  const conciergeFromPlan = planIncludesConcierge(plan);
+
+  const adminDisabled = venue.ai_concierge_admin_disabled === true;
+
+  // Effective (displayed) states — plan-included addons show as checked
+  // automatically (single source of truth with the plan assignment).
+  const verifiedOn  = (venue.directory_verified_status as string) === 'approved'
+    || venue.directory_addon_verified === true
+    || verifiedFromPlan;
+  const sponsoredOn = (venue.directory_sponsored_status as string) === 'approved'
+    || venue.directory_addon_sponsored === true
+    || sponsoredFromPlan;
+  const conciergeOn = !adminDisabled && (
+    venue.directory_addon_concierge === true || conciergeFromPlan || isLegacy
+  );
+
+  const items: Array<{
+    key: 'addon_ai_concierge' | 'addon_verified' | 'addon_sponsored';
+    label: string;
+    on: boolean;
+    fromPlan: boolean;
+  }> = [
+    { key: 'addon_ai_concierge', label: 'AI Concierge', on: conciergeOn, fromPlan: conciergeFromPlan || isLegacy },
+    { key: 'addon_verified',     label: 'Verified',     on: verifiedOn,  fromPlan: verifiedFromPlan },
+    { key: 'addon_sponsored',    label: 'Sponsored',    on: sponsoredOn, fromPlan: sponsoredFromPlan },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {items.map((it) => (
+        <label
+          key={it.key}
+          className={`inline-flex items-center gap-1 text-[11px] ${busy ? 'opacity-50' : 'cursor-pointer'}`}
+          title={
+            it.key === 'addon_ai_concierge' && adminDisabled
+              ? 'Force-disabled by super admin (overrides plan)'
+              : it.fromPlan
+                ? 'Included in their plan'
+                : 'Manually granted addon'
+          }
+        >
+          <input
+            type="checkbox"
+            checked={it.on}
+            disabled={busy}
+            onChange={(e) => void onPatch(venue.id, { [it.key]: e.target.checked })}
+            className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
+          />
+          <span className="font-medium text-gray-600">{it.label}</span>
+          {it.on && it.fromPlan && (
+            <span className="rounded-full bg-blue-50 border border-blue-200 px-1 py-0 text-[8px] font-semibold text-blue-600 leading-tight">PLAN</span>
+          )}
+          {it.key === 'addon_ai_concierge' && adminDisabled && (
+            <span className="rounded-full bg-red-50 border border-red-200 px-1 py-0 text-[8px] font-semibold text-red-600 leading-tight">FORCED OFF</span>
+          )}
+        </label>
+      ))}
+    </div>
+  );
+}
 
 export function VenueManagementPortal({
   venues,
@@ -1135,6 +1241,8 @@ export function VenueManagementPortal({
                     {DIRECTORY_BADGE_STATUSES.map((s) => <option key={s} value={s}>{directoryBadgeLabel(s)}</option>)}
                   </select>
                 </div>
+                <span className="mx-1 h-4 w-px bg-gray-200" />
+                <AddonCheckboxes venue={venue} plans={plans} busy={busy} onPatch={patchVenue} />
               </div>
 
               {/* ── Strip 3: actions ── */}
@@ -1771,6 +1879,9 @@ function VenueMobileCard({
           </select>
         </div>
       </div>
+      <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-2 py-1.5">
+        <AddonCheckboxes venue={venue} plans={plans} busy={busy} onPatch={onPatch} />
+      </div>
       <div className="flex flex-wrap gap-2 pt-1">
         <button
           type="button"
@@ -1960,6 +2071,8 @@ function DemoVenueCard({
                 {DIRECTORY_BADGE_STATUSES.map((s) => <option key={s} value={s}>{directoryBadgeLabel(s)}</option>)}
               </select>
             </div>
+            <span className="mx-1 h-4 w-px bg-gray-200" />
+            <AddonCheckboxes venue={venue} plans={plans} busy={busy} onPatch={onPatch} />
           </div>
 
           {/* Strip 3: actions */}
