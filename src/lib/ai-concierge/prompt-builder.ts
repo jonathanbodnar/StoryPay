@@ -205,7 +205,7 @@ export async function buildAiConciergeSystemPrompt(
 
   const venueCtx: PromptInputContextVenueEntry = venueRowToContext(venue, tz);
 
-  const renderTokens = withCanonicalAliases({
+  const baseTokens = withCanonicalAliases({
     // Config sections (also embedded literally in the template)
     personality:        config.personality,
     goals:              config.goals,
@@ -225,6 +225,7 @@ export async function buildAiConciergeSystemPrompt(
       : 'unknown',
     time_since_initial_inquiry:  leadCtx.time_since_initial_inquiry,
     wedding_date_or_unknown:    leadCtx.wedding_date_or_unknown,
+    months_until_wedding:       monthsUntilWedding(lead.wedding_date),
     bride_notes_or_none:        leadCtx.bride_notes_or_none,
     // Run-specific
     attempt_number:           String(input.attemptNumber),
@@ -232,13 +233,21 @@ export async function buildAiConciergeSystemPrompt(
       ? input.anglesUsed.join(', ')
       : 'none yet',
     message_history_last_10:  formatMessageHistory(history),
+  });
+
+  const renderTokens = {
+    ...baseTokens,
     // Outreach question pool (migration 101). Two render variants so the
     // template author can choose flat or grouped:
     //   {{outreach_questions}}        — bullet list, one per line
     //   {{outreach_questions_grouped}} — grouped by category headings
-    outreach_questions:         formatOutreachQuestions(config.outreach_questions),
-    outreach_questions_grouped: formatOutreachQuestionsGrouped(config.outreach_questions),
-  });
+    // Pool text may itself contain tokens ({{bride_first_name}},
+    // {{months_until_wedding}}, ...) — renderTemplate does a single pass over
+    // the outer template and never re-scans injected values, so the pool is
+    // pre-rendered here with the same token map.
+    outreach_questions:         renderTemplate(formatOutreachQuestions(config.outreach_questions), baseTokens),
+    outreach_questions_grouped: renderTemplate(formatOutreachQuestionsGrouped(config.outreach_questions), baseTokens),
+  };
 
   const systemPrompt = renderTemplate(config.system_prompt_template, renderTokens);
 
@@ -307,7 +316,7 @@ export async function buildAiConciergeTestSystemPrompt(
     bride_notes_or_none:         'Initial inquiry: looking for an outdoor ceremony space, ~150 guests, mid-budget. (TEST DATA)',
   };
 
-  const renderTokens = withCanonicalAliases({
+  const baseTokens = withCanonicalAliases({
     personality:        config.personality,
     goals:              config.goals,
     guardrails:         config.guardrails,
@@ -322,13 +331,19 @@ export async function buildAiConciergeTestSystemPrompt(
     initial_inquiry_date:       formatInTimeZone(new Date(inquiryIso), tz, 'MMMM d, yyyy'),
     time_since_initial_inquiry:  leadCtx.time_since_initial_inquiry,
     wedding_date_or_unknown:    leadCtx.wedding_date_or_unknown,
+    months_until_wedding:       monthsUntilWedding(weddingIso),
     bride_notes_or_none:        leadCtx.bride_notes_or_none,
     attempt_number:           '1',
     angles_used_list:         'none yet',
     message_history_last_10:  '(no prior messages — test send)',
-    outreach_questions:         formatOutreachQuestions(config.outreach_questions),
-    outreach_questions_grouped: formatOutreachQuestionsGrouped(config.outreach_questions),
   });
+
+  const renderTokens = {
+    ...baseTokens,
+    // Pre-rendered so tokens inside pool text resolve (see main builder).
+    outreach_questions:         renderTemplate(formatOutreachQuestions(config.outreach_questions), baseTokens),
+    outreach_questions_grouped: renderTemplate(formatOutreachQuestionsGrouped(config.outreach_questions), baseTokens),
+  };
 
   const systemPrompt = renderTemplate(config.system_prompt_template, renderTokens);
 
@@ -433,6 +448,20 @@ function formatWeddingDate(iso: string | null): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return 'unknown';
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+/**
+ * Whole months until the wedding date, as a string for the
+ * {{months_until_wedding}} token ("about 7 months" reads wrong as "0" or a
+ * negative — anything under a month out or in the past renders 'unknown' so
+ * the date-urgency master message falls back to its no-date variant).
+ */
+function monthsUntilWedding(iso: string | null): string {
+  if (!iso) return 'unknown';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'unknown';
+  const months = Math.round((d.getTime() - Date.now()) / (30.44 * 86_400_000));
+  return months >= 1 ? String(months) : 'unknown';
 }
 
 function joinNotes(lead: LeadContextRow): string {

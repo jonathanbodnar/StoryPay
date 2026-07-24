@@ -73,6 +73,23 @@ export const AI_TAG_DEFS: readonly AiTagDef[] = [
 // ── Angles ─────────────────────────────────────────────────────────────────
 
 export type AiAngleKey =
+  // Master-message keys — the curated outreach pool (migration 181). Each key
+  // maps to a human-written script the model personalizes, grouped under the
+  // same key as the pool entry's category.
+  | 'personal_check_in'
+  | 'date_urgency'
+  | 'caring_check_in'
+  | 'bridge_call'
+  | 'bridge_tour'
+  | 'head_count'
+  | 'onsite_options'
+  | 'indoor_outdoor'
+  | 'pinterest_style'
+  | 'budget'
+  | 'venue_style'
+  // Legacy keys (pre-181 "angle inspiration" era). Still accepted so leads
+  // with these in ai_angles_used parse cleanly and so a not-yet-migrated
+  // prompt config doesn't hard-fail generation.
   | 'casual_check_in'
   | 'wedding_vision'
   | 'permission_to_ghost'
@@ -84,6 +101,9 @@ export type AiAngleKey =
   | 'open_ended';
 
 export const AI_ANGLE_KEYS: readonly AiAngleKey[] = [
+  'personal_check_in', 'date_urgency', 'caring_check_in', 'bridge_call',
+  'bridge_tour', 'head_count', 'onsite_options', 'indoor_outdoor',
+  'pinterest_style', 'budget', 'venue_style',
   'casual_check_in', 'wedding_vision', 'permission_to_ghost', 'helpful_offer',
   'curiosity_process', 'date_driven', 'soft_reintroduction', 'acknowledge_overwhelm',
   'open_ended',
