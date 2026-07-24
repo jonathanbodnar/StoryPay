@@ -306,8 +306,41 @@ export async function PATCH(req: NextRequest) {
     body.anniversarySteps = stripAi(body.anniversarySteps);
   }
 
+  // ── AI enable prerequisites ──────────────────────────────────────────────
+  // The venues_ai_concierge_eligibility_check DB constraint requires the
+  // addon flag + A2P verification before ai_concierge_enabled can be true.
+  // Mirror the sync logic from the dashboard settings route so an authorized
+  // venue never hits a raw constraint error:
+  //   - GHL-connected venues get a2p_verified auto-stamped (GHL handles A2P)
+  //   - access granted via plan/legacy/admin syncs directory_addon_concierge
+  //   - anything still missing returns a clear, human-readable message
+  const aiPrereqUpdate: Record<string, unknown> = {};
+  if (body.aiEnabled === true) {
+    const { data: vRow } = await supabaseAdmin
+      .from('venues')
+      .select('a2p_verified, ghl_connected, directory_addon_concierge')
+      .eq('id', venueId)
+      .maybeSingle();
+    const v = (vRow ?? {}) as { a2p_verified?: boolean | null; ghl_connected?: boolean | null; directory_addon_concierge?: boolean | null };
+
+    // Access was already confirmed by venueAllowsAiConcierge above — sync the
+    // raw addon column so the (pre-178) DB constraint passes for plan-bundled
+    // and legacy venues.
+    if (v.directory_addon_concierge !== true) {
+      aiPrereqUpdate.directory_addon_concierge = true;
+    }
+    if (v.ghl_connected === true && v.a2p_verified !== true) {
+      aiPrereqUpdate.a2p_verified = true;
+    }
+    if (v.a2p_verified !== true && v.ghl_connected !== true) {
+      return NextResponse.json({
+        error: 'AI Concierge sends SMS, which requires carrier (A2P) registration. Connect your messaging account on the Settings page, or contact support to complete registration.',
+      }, { status: 422 });
+    }
+  }
+
   // ── Venue-level fields ───────────────────────────────────────────────────
-  const venueUpdate: Record<string, unknown> = {};
+  const venueUpdate: Record<string, unknown> = { ...aiPrereqUpdate };
   if (body.masterEnabled     !== undefined) venueUpdate.booking_system_enabled      = body.masterEnabled;
   if (body.guideEmailEnabled !== undefined) venueUpdate.booking_guide_email_enabled = body.guideEmailEnabled;
   if (body.guideSmsEnabled   !== undefined) venueUpdate.booking_guide_sms_enabled   = body.guideSmsEnabled;
@@ -335,6 +368,11 @@ export async function PATCH(req: NextRequest) {
       .update(venueUpdate)
       .eq('id', venueId);
     if (ve && !/column/.test(ve.message)) {
+      if (ve.code === '23514' || /venues_ai_concierge_eligibility_check/.test(ve.message)) {
+        return NextResponse.json({
+          error: 'AI Concierge could not be enabled: your account is missing carrier (A2P) registration. Contact support to complete it.',
+        }, { status: 422 });
+      }
       return NextResponse.json({ error: ve.message }, { status: 500 });
     }
   }
