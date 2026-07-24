@@ -581,7 +581,7 @@ export function AiConciergeConfigEditor() {
                       Show legacy flat token names (still supported)
                     </summary>
                     <div className="mt-1 font-mono text-gray-500">
-                      {`{{venue_name}} {{venue_city}} {{venue_state}} {{venue_style_description}} {{assistant_persona_name}} {{bride_first_name}} {{bride_full_name}} {{initial_inquiry_date}} {{time_since_initial_inquiry}} {{wedding_date_or_unknown}} {{bride_notes_or_none}} {{attempt_number}} {{angles_used_list}} {{message_history_last_10}} {{personality}} {{goals}} {{guardrails}} {{prohibited_topics}} {{outreach_questions}} {{outreach_questions_grouped}}`}
+                      {`{{venue_name}} {{venue_city}} {{venue_state}} {{venue_style_description}} {{assistant_persona_name}} {{bride_first_name}} {{bride_full_name}} {{initial_inquiry_date}} {{time_since_initial_inquiry}} {{wedding_date_or_unknown}} {{months_until_wedding}} {{bride_notes_or_none}} {{attempt_number}} {{angles_used_list}} {{message_history_last_10}} {{personality}} {{goals}} {{guardrails}} {{prohibited_topics}} {{outreach_questions}} {{outreach_questions_grouped}}`}
                     </div>
                   </details>
                 </div>
@@ -673,16 +673,15 @@ function formToOverride(f: FormState): {
 // ── Outreach questions section ────────────────────────────────────────────
 
 const KNOWN_CATEGORIES = [
-  // Tactical (ask the bride something concrete)
-  'discovery', 'qualifying',
-  // Asks (call-to-action variants)
-  'cta', 'soft_cta',
-  // Empathy (no ask, just connect)
-  'check_in', 'reassurance', 'vibe',
-  // Trust (handle objections about pricing / fit)
-  'objection',
-  // Catch-all
-  'general',
+  // Master-message angle keys (migration 181) — the category doubles as the
+  // angle key the model must output, so these MUST match AI_ANGLE_KEYS in
+  // src/lib/ai-concierge/types.ts.
+  'personal_check_in', 'date_urgency', 'caring_check_in', 'bridge_call',
+  'bridge_tour', 'head_count', 'onsite_options', 'indoor_outdoor',
+  'pinterest_style', 'budget', 'venue_style',
+  // Legacy categories (pre-181 pools)
+  'discovery', 'qualifying', 'cta', 'soft_cta',
+  'check_in', 'reassurance', 'vibe', 'objection', 'general',
 ] as const;
 
 function OutreachQuestionsSection({
@@ -699,7 +698,7 @@ function OutreachQuestionsSection({
   const add = () => {
     const t = draftText.trim();
     if (!t) return;
-    const next: OutreachQuestion = { text: t.slice(0, 280) };
+    const next: OutreachQuestion = { text: t.slice(0, 500) };
     if (draftCategory) next.category = draftCategory;
     onChange([...questions, next]);
     setDraftText('');
@@ -741,7 +740,8 @@ function OutreachQuestionsSection({
           : editMode ? 'border-gray-200' : 'border-gray-100 bg-gray-50'
       }`}>
         <div className="px-3 py-2 text-[11px] text-gray-500 border-b border-gray-100">
-          Curated list of question ideas the LLM can rephrase casually. Render in the prompt template via{' '}
+          Master messages the AI personalizes — full scripts with {'{{variables}}'}, grouped by angle key
+          (the category doubles as the angle the model reports back). Render in the prompt template via{' '}
           <code className="font-mono">{`{{outreach_questions}}`}</code> (flat list) or{' '}
           <code className="font-mono">{`{{outreach_questions_grouped}}`}</code> (grouped by category).
         </div>
@@ -759,13 +759,13 @@ function OutreachQuestionsSection({
                 <span className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500">
                   {idx + 1}
                 </span>
-                <input
-                  type="text"
+                <textarea
                   value={q.text}
                   readOnly={!editMode}
                   onChange={(e) => updateAt(idx, { text: e.target.value })}
-                  maxLength={280}
-                  className={`min-w-0 rounded-md border px-2 py-1 text-[12px] ${
+                  maxLength={500}
+                  rows={2}
+                  className={`min-w-0 resize-y rounded-md border px-2 py-1 text-[12px] ${
                     editMode
                       ? 'border-gray-200 focus:border-gray-400 focus:outline-none'
                       : 'border-transparent bg-transparent text-gray-700'
@@ -824,7 +824,7 @@ function OutreachQuestionsSection({
                 onChange={(e) => setDraftText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
                 placeholder="e.g., What does your dream wedding day look like?"
-                maxLength={280}
+                maxLength={500}
                 className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[12px] focus:border-gray-400 focus:outline-none"
               />
               <select

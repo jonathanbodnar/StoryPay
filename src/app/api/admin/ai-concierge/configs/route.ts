@@ -72,7 +72,9 @@ export function sanitizeOutreachQuestions(input: unknown): OutreachQuestion[] {
     const r = raw as Record<string, unknown>;
     const text = typeof r.text === 'string' ? r.text.trim() : '';
     if (!text) continue;
-    const entry: OutreachQuestion = { text: text.slice(0, 280) };
+    // 500 cap: master messages (migration 181) are full scripts with
+    // {{variables}} and several run past 280 chars pre-substitution.
+    const entry: OutreachQuestion = { text: text.slice(0, 500) };
     if (typeof r.category === 'string' && r.category.trim()) {
       entry.category = r.category.trim().slice(0, 60);
     }
