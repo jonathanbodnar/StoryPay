@@ -14,6 +14,8 @@ import {
  Webhook,
  RotateCcw,
  Sparkles,
+ ShieldCheck,
+ ShieldAlert,
 } from 'lucide-react';
 
 interface VenueInfo {
@@ -30,6 +32,7 @@ interface VenueInfo {
  ghl_location_id: string | null;
  ghl_access_token: string | null; // masked '••••XXXX' or null on GET
  ghl_contacts_synced_at: string | null;
+ a2p_verified?: boolean | null;
  legacy_location_id?: string | null;
  lunarpay_merchant_id: number | null;
  service_fee_rate: number;
@@ -612,6 +615,36 @@ className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4
     </div>
   )}
 </div>
+
+{/* A2P carrier registration status — mirrors the GHL sub-account. Carrier
+    compliance lives on their messaging sub-account, so connected = verified. */}
+{(() => {
+  const a2pActive = venue.a2p_verified === true || venue.ghl_connected || Boolean(venue.ghl_location_id);
+  return (
+    <div className={`rounded-2xl border p-4 ${a2pActive ? 'border-emerald-100 bg-emerald-50/60' : 'border-amber-100 bg-amber-50/60'}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${a2pActive ? 'bg-white border-emerald-200' : 'bg-white border-amber-200'}`}>
+            {a2pActive
+              ? <ShieldCheck size={16} className="text-emerald-600" />
+              : <ShieldAlert size={16} className="text-amber-600" />}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900">A2P Carrier Registration</p>
+            <p className="mt-0.5 text-[11px] text-gray-500">
+              {a2pActive
+                ? 'Verified and active through your connected messaging sub-account. SMS features (14-day sequence texts, AI Concierge, two-way messaging) are cleared to send.'
+                : 'Not active yet. A2P registration is required by US carriers before any SMS can be sent. It activates automatically when your messaging sub-account is connected above.'}
+            </p>
+          </div>
+        </div>
+        <span className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${a2pActive ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+          {a2pActive ? <><ShieldCheck size={13} /> Verified &amp; active</> : <><ShieldAlert size={13} /> Not registered</>}
+        </span>
+      </div>
+    </div>
+  );
+})()}
 
 {/* Contact sync — only show when connected */}
 {(venue.ghl_connected || venue.ghl_location_id) && (() => {

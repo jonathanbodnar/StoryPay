@@ -28,6 +28,9 @@ export async function GET(request: Request) {
         ghl_location_id: tokens.locationId,
         ghl_location_token: tokens.access_token,
         ghl_connected: true,
+        // A2P carrier registration lives on the GHL sub-account — connected
+        // means SMS compliance is active for this venue.
+        a2p_verified: true,
       })
       .eq('id', venueId);
 

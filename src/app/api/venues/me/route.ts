@@ -227,6 +227,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
 
+  // A2P mirrors the GHL sub-account: carrier registration lives on their GHL
+  // side, so connecting = A2P verified & active, disconnecting = no SMS path.
+  // This keeps venues.a2p_verified a trustworthy, always-current flag.
+  if (updates.ghl_connected === true)  updates.a2p_verified = true;
+  if (updates.ghl_connected === false) updates.a2p_verified = false;
+
   let { data: venue, error } = await supabaseAdmin
     .from('venues')
     .update(updates)
@@ -247,7 +253,7 @@ export async function PATCH(request: Request) {
       'listing_marketing_monthly_spend', 'timezone', 'appointment_reminders_enabled', 'appointment_reminder_offsets',
       'accept_ach',
       'payment_reminders_enabled', 'payment_reminder_offsets',
-      'ghl_location_id', 'ghl_connected', 'ghl_access_token',
+      'ghl_location_id', 'ghl_connected', 'ghl_access_token', 'a2p_verified',
       'meta_pixel_id', 'meta_capi_access_token'];
     for (const k of knownCols) {
       if (k in updates) safeUpdates[k] = updates[k];

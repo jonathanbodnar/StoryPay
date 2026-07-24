@@ -265,6 +265,8 @@ export async function POST(request: NextRequest) {
               ghl_location_id: locationId,
               ghl_location_token: access_token,
               ghl_connected: true,
+              // A2P lives on the GHL sub-account — installed = SMS compliant.
+              a2p_verified: true,
             })
             .eq('ghl_location_id', locationId);
         }
@@ -284,6 +286,10 @@ export async function POST(request: NextRequest) {
               ghl_access_token: null,
               ghl_refresh_token: null,
               ghl_location_token: null,
+              // No GHL sub-account = no A2P send path. AI master toggle also
+              // goes off so nothing keeps trying to send SMS.
+              a2p_verified: false,
+              ai_concierge_enabled: false,
             })
             .eq('ghl_location_id', uninstallLocId);
         }
