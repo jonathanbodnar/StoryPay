@@ -175,9 +175,9 @@ export default function Sidebar({
   // mark it accessible here and avoid the lock icon + upgrade modal.
   const navOk = (navId: string) =>
     navId === 'nav_settings_billing' || allowedNavIds === null || allowedNavIds.includes(navId);
-  // "Lead Inbox" lives at /dashboard/leads but belongs to the Bride Booking
-  // System group, so treat it as part of the listing section too — otherwise
-  // navigating to it would collapse the group.
+  // Note: standalone items like Lead Inbox (/dashboard/leads) are deliberately
+  // NOT part of this check — they highlight themselves, and the group stays
+  // open anyway because the open-group effect below never auto-closes.
   const isOnListing = pathname.startsWith('/dashboard/listing');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [flyout, setFlyout] = useState<FlyoutGroup>(null);
@@ -394,12 +394,15 @@ export default function Sidebar({
   const marketingOpen = openGroup === 'marketing';
   const listingOpen = openGroup === 'listing';
 
+  // Auto-open the group that owns the current route, but never auto-close.
+  // Navigating to top-level items (Lead Inbox, Conversations, Contacts,
+  // Calendar, ...) leaves whatever group the user had open untouched, so
+  // e.g. the Bride Booking System group stays expanded while browsing them.
   useEffect(() => {
     if (isOnListing) setOpenGroup('listing');
     else if (isOnMarketing) setOpenGroup('marketing');
     else if (isOnPayments) setOpenGroup('payments');
     else if (isOnSettings) setOpenGroup('settings');
-    else setOpenGroup(null);
   }, [pathname, isOnListing, isOnMarketing, isOnPayments, isOnSettings]);
 
   function listingSubActive(subHref: string) {
