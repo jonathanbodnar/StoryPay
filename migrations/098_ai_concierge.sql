@@ -268,7 +268,7 @@ BRIDE CONTEXT:
 CONVERSATION HISTORY (most recent last):
 {{message_history_last_10}}
 
-ATTEMPT NUMBER: This is outreach attempt #{{attempt_number}} out of a maximum of around 20-40 over 60 days.
+ATTEMPT NUMBER: This is outreach attempt #{{attempt_number}} out of a maximum of about 13 over 60 days (one text every 4-5 days).
 
 ANGLES ALREADY USED IN PRIOR MESSAGES (do not repeat):
 {{angles_used_list}}

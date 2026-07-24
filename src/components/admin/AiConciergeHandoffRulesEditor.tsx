@@ -812,11 +812,23 @@ function RuleFormModal({
             </Field>
 
             <Field label="Pipeline stage">
-              <select value={state.pipeline_stage} onChange={(e) => update('pipeline_stage', e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
-                <option value="">— none —</option>
-                {enums.stages.map((s) => <option key={s} value={s}>{STAGE_LABELS[s] ?? s}</option>)}
-              </select>
+              {/* Opt-out / not-interested actions always land in Not Interested —
+                  enforced in the inbound handler regardless of rule config. */}
+              {state.action === 'opt_out' || state.action === 'mark_not_interested' ? (
+                <div>
+                  <select value="not_interested" disabled
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                    <option value="not_interested">{STAGE_LABELS['not_interested'] ?? 'Not Interested'}</option>
+                  </select>
+                  <p className="mt-1 text-[11px] text-gray-400">Enforced: opt-outs and &ldquo;not interested&rdquo; replies always move to the Not Interested stage.</p>
+                </div>
+              ) : (
+                <select value={state.pipeline_stage} onChange={(e) => update('pipeline_stage', e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                  <option value="">— none —</option>
+                  {enums.stages.map((s) => <option key={s} value={s}>{STAGE_LABELS[s] ?? s}</option>)}
+                </select>
+              )}
             </Field>
           </div>
 
