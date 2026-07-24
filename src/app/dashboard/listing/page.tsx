@@ -20,8 +20,10 @@ import {
   Radio, DollarSign, CalendarDays, UserCheck,
   Link2, Mail, Bell, Copy, Download, Check, X,
   Send, Zap, TrendingDown, Inbox, MessageCircle, CalendarCheck, Heart,
-  Gem, Lock, BarChart2,
+  Gem, Lock, BarChart2, Sparkles, Reply, Percent, UserX,
 } from 'lucide-react';
+import FeatureLockModal from '@/components/FeatureLockModal';
+import { useFeatureAccess } from '@/lib/use-feature-access';
 import NextLink from 'next/link';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -674,6 +676,120 @@ function getDefaultRange(): DateRange {
   return { ...preset.getRange(), label: preset.label };
 }
 
+// ── AI Concierge digest card ──────────────────────────────────────────────────
+
+type AiDigestPayload = {
+  sent: number;
+  replies: number;
+  replyRate: number;
+  movedNotInterested: number;
+};
+
+function AiDigestTile({ icon: Icon, label, value, color }: {
+  icon: React.ElementType; label: string; value: string | number;
+  color: 'purple' | 'emerald' | 'blue' | 'gray';
+}) {
+  const ring = { purple: 'border-purple-100', emerald: 'border-emerald-100', blue: 'border-blue-100', gray: 'border-gray-200' }[color];
+  const ic = { purple: 'text-purple-500', emerald: 'text-emerald-500', blue: 'text-blue-500', gray: 'text-gray-400' }[color];
+  return (
+    <div className={`rounded-xl border bg-white p-4 ${ring}`}>
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+        <Icon size={13} className={ic} /> {label}
+      </div>
+      <p className="mt-1.5 text-2xl font-bold text-gray-900 tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+/**
+ * AI Concierge activity digest for the signed-in venue, respecting the same
+ * date range as the rest of the dashboard. Greyed out with a lock overlay
+ * (FeatureLockModal, feature="ai_concierge") when the venue has no concierge
+ * access — and it never fetches stats while locked.
+ */
+function AiConciergeDigestCard({ dateRange }: { dateRange: DateRange }) {
+  const access = useFeatureAccess();
+  const locked = access ? !access.hasConcierge : null; // null while access loads
+  const [data, setData] = useState<AiDigestPayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [lockOpen, setLockOpen] = useState(false);
+
+  useEffect(() => {
+    if (locked !== false) return; // only fetch when we know access is granted
+    let alive = true;
+    setLoading(true);
+    const params = new URLSearchParams({ from: dateRange.from, to: dateRange.to });
+    fetch(`/api/dashboard/ai-concierge/digest?${params}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: AiDigestPayload | null) => { if (alive && j) setData(j); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [locked, dateRange.from, dateRange.to]);
+
+  const header = (
+    <div className="flex items-center gap-2 mb-4">
+      <Sparkles size={16} className="text-purple-500" />
+      <h2 className="text-sm font-semibold text-gray-900">AI Concierge activity</h2>
+      <span className="text-xs text-gray-400 hidden sm:inline">— automatic SMS follow-up for this date range</span>
+    </div>
+  );
+
+  // ── Locked state (no concierge access) ──────────────────────────────────
+  if (locked === true) {
+    return (
+      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-6">
+        <div className="pointer-events-none select-none opacity-40 grayscale" aria-hidden>
+          {header}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <AiDigestTile icon={Send} label="Texts sent" value="—" color="purple" />
+            <AiDigestTile icon={Reply} label="Replies" value="—" color="emerald" />
+            <AiDigestTile icon={Percent} label="Reply rate" value="—" color="blue" />
+            <AiDigestTile icon={UserX} label="Not interested" value="—" color="gray" />
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setLockOpen(true)}
+          className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/60 backdrop-blur-[1px] cursor-pointer"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-lg">
+            <Lock size={20} />
+          </span>
+          <span className="text-sm font-semibold text-gray-900">AI Concierge is locked on your plan</span>
+          <span className="max-w-sm text-center text-xs text-gray-500">
+            60 days of automatic SMS follow-up after your 14-day sequence ends. Click to see how to unlock it.
+          </span>
+        </button>
+        <FeatureLockModal open={lockOpen} onClose={() => setLockOpen(false)} feature="ai_concierge" />
+      </div>
+    );
+  }
+
+  // ── Unlocked / loading ──────────────────────────────────────────────────
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-6">
+      {header}
+      {locked === null || (loading && !data) ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-xl border border-gray-200 bg-white p-4 h-[86px] animate-pulse">
+              <div className="h-3 w-16 bg-gray-100 rounded mb-3" /><div className="h-6 w-10 bg-gray-200 rounded" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <AiDigestTile icon={Send}  label="Texts sent"     value={(data?.sent ?? 0).toLocaleString()} color="purple" />
+          <AiDigestTile icon={Reply} label="Replies"        value={(data?.replies ?? 0).toLocaleString()} color="emerald" />
+          <AiDigestTile icon={Percent} label="Reply rate"   value={`${data?.replyRate ?? 0}%`} color="blue" />
+          <AiDigestTile icon={UserX} label="Not interested" value={(data?.movedNotInterested ?? 0).toLocaleString()} color="gray" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ListingAnalyticsPage() {
@@ -1018,6 +1134,9 @@ export default function ListingAnalyticsPage() {
           </div>
         )}
       </div>
+
+      {/* ── AI Concierge digest — respects the dashboard date range ──────── */}
+      <AiConciergeDigestCard dateRange={dateRange} />
 
       {/* ── Loading skeletons ───────────────────────────────────────────── */}
       {loading && !d && (

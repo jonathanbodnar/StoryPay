@@ -23,12 +23,13 @@ import {
   CheckCircle2, XCircle, Pause, Play, Shield, ShieldOff,
   ExternalLink, BadgeCheck, Activity, MessageSquare, Filter,
   Workflow, FileCode2, DollarSign, RefreshCw, Stethoscope,
-  Radio,
+  Radio, BarChart3,
   X as XIcon,
 } from 'lucide-react';
 import AiConciergeHandoffRulesEditor from './AiConciergeHandoffRulesEditor';
 import AiConciergeConfigEditor from './AiConciergeConfigEditor';
 import AiConciergeMonitorTab from './AiConciergeMonitorTab';
+import AiConciergeMessageAnalyticsPanel from './AiConciergeMessageAnalyticsPanel';
 
 const BRAND = '#1b1b1b';
 
@@ -155,7 +156,7 @@ interface VenuesPayload {
   };
 }
 
-type TabKey = 'monitor' | 'runs' | 'transitions' | 'venues' | 'handoff-rules' | 'prompt-config';
+type TabKey = 'monitor' | 'runs' | 'transitions' | 'venues' | 'handoff-rules' | 'prompt-config' | 'message-analytics';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -331,12 +332,13 @@ export function AiConciergeAdminPanel() {
       {/* Tab bar */}
       <div className="flex items-center gap-1 border-b border-gray-200">
         {([
-          { key: 'monitor',        label: 'Active Leads',      icon: Radio        },
-          { key: 'runs',           label: 'Live runs',         icon: Activity     },
-          { key: 'transitions',    label: 'State transitions', icon: MessageSquare },
-          { key: 'venues',         label: 'Venues',            icon: BadgeCheck   },
-          { key: 'handoff-rules',  label: 'Handoff rules',     icon: Workflow     },
-          { key: 'prompt-config',  label: 'Prompt config',     icon: FileCode2    },
+          { key: 'monitor',           label: 'Active Leads',      icon: Radio        },
+          { key: 'runs',              label: 'Live runs',         icon: Activity     },
+          { key: 'transitions',       label: 'State transitions', icon: MessageSquare },
+          { key: 'message-analytics', label: 'Message analytics', icon: BarChart3    },
+          { key: 'venues',            label: 'Venues',            icon: BadgeCheck   },
+          { key: 'handoff-rules',     label: 'Handoff rules',     icon: Workflow     },
+          { key: 'prompt-config',     label: 'Prompt config',     icon: FileCode2    },
         ] as const).map(({ key, label, icon: Icon }) => {
           const active = tab === key;
           return (
@@ -357,12 +359,13 @@ export function AiConciergeAdminPanel() {
         })}
       </div>
 
-      {tab === 'monitor'       && <AiConciergeMonitorTab />}
-      {tab === 'runs'          && <RunsTable />}
-      {tab === 'transitions'   && <TransitionsTable />}
-      {tab === 'venues'        && <VenuesTable />}
-      {tab === 'handoff-rules' && <AiConciergeHandoffRulesEditor />}
-      {tab === 'prompt-config' && <AiConciergeConfigEditor />}
+      {tab === 'monitor'           && <AiConciergeMonitorTab />}
+      {tab === 'runs'              && <RunsTable />}
+      {tab === 'transitions'       && <TransitionsTable />}
+      {tab === 'message-analytics' && <AiConciergeMessageAnalyticsPanel />}
+      {tab === 'venues'            && <VenuesTable />}
+      {tab === 'handoff-rules'     && <AiConciergeHandoffRulesEditor />}
+      {tab === 'prompt-config'     && <AiConciergeConfigEditor />}
     </div>
   );
 }
