@@ -13,14 +13,15 @@ import { useFeatureAccess } from '@/lib/use-feature-access';
 import FeatureLockModal, { type LockFeature } from '@/components/FeatureLockModal';
 
 /** Greyed-out, locked control for tier-gated phases (e.g. AI Concierge). Shows
- *  a hover tooltip and opens the schedule-a-demo modal when clicked. */
-function LockedPhaseControl({ tooltip }: { tooltip: string }) {
+ *  a hover tooltip. Clicking opens the plan-upgrade lock modal when `onClick`
+ *  is provided (plan-gated lock), otherwise the schedule-a-demo modal. */
+function LockedPhaseControl({ tooltip, onClick }: { tooltip: string; onClick?: () => void }) {
   const [demoOpen, setDemoOpen] = useState(false);
   return (
     <>
       <button
         type="button"
-        onClick={() => setDemoOpen(true)}
+        onClick={() => (onClick ? onClick() : setDemoOpen(true))}
         className="group relative flex shrink-0 items-center gap-2"
       >
         <span className="flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-600">
@@ -71,12 +72,14 @@ function Toggle({
 
 function PhaseCard({
   number, title, subtitle, icon, enabled, onToggle, disabled, children, accent, noPadding, defaultOpen,
-  locked, lockTooltip, hideNumber, disabledTooltip,
+  locked, lockTooltip, hideNumber, disabledTooltip, onLockedClick,
 }: {
   number: number; title: string; subtitle: string;
   icon: React.ReactNode; enabled: boolean; onToggle: (v: boolean) => void;
   disabled?: boolean; children?: React.ReactNode; accent: string; noPadding?: boolean; defaultOpen?: boolean;
   locked?: boolean; lockTooltip?: string; hideNumber?: boolean; disabledTooltip?: string;
+  /** When set, clicking the locked control opens this instead of the demo modal. */
+  onLockedClick?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
   const effectiveEnabled = locked ? false : enabled;
@@ -98,7 +101,7 @@ function PhaseCard({
               <p className="mt-0.5 text-[12px] text-gray-500">{subtitle}</p>
             </div>
             {locked
-              ? <LockedPhaseControl tooltip={lockTooltip ?? 'This is an upgraded plan tier. Schedule a demo to learn more.'} />
+              ? <LockedPhaseControl tooltip={lockTooltip ?? 'This is an upgraded plan tier. Schedule a demo to learn more.'} onClick={onLockedClick} />
               : (disabled && disabledTooltip)
                 ? (
                   <div className="group relative shrink-0">
@@ -408,12 +411,39 @@ function MessageBlock({
 
 // AI Concierge handoff block — terminal, no expand
 function AiHandoffBlock({
-  onRemove, dragHandleProps, leadsHere = [],
+  onRemove, dragHandleProps, leadsHere = [], locked = false, onLockedClick,
 }: {
   onRemove: () => void;
   dragHandleProps: React.HTMLAttributes<HTMLSpanElement>;
   leadsHere?: StepLeadInfo[];
+  /** Venue has no AI Concierge access — the step is inert and greyed out.
+   *  Clicking it opens the upgrade modal; delete remains available. */
+  locked?: boolean;
+  onLockedClick?: () => void;
 }) {
+  if (locked) {
+    return (
+      <div
+        onClick={onLockedClick}
+        className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 cursor-pointer opacity-70"
+      >
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gray-300">
+          <Lock size={12} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] font-semibold text-gray-500">AI Concierge (locked)</p>
+          <p className="text-[11px] text-gray-400">Not included in your plan — this step will not run. Click to learn more or remove it.</p>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          className="text-gray-300 hover:text-red-400 transition-colors shrink-0"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
       <span {...dragHandleProps} className="cursor-grab text-emerald-300 hover:text-emerald-400 active:cursor-grabbing shrink-0">
@@ -686,6 +716,8 @@ function SequenceEditor({
   ownerEmail,
   smsLocked = false,
   onSmsLocked,
+  aiLocked = false,
+  onAiLocked,
 }: {
   steps: StepConfig[];
   onStepsChange: (s: StepConfig[]) => void;
@@ -698,6 +730,10 @@ function SequenceEditor({
   /** SMS gated by plan — steps show a lock and adding SMS opens the upgrade modal. */
   smsLocked?: boolean;
   onSmsLocked?: () => void;
+  /** AI Concierge gated by plan/addon — the AI button greys out with a lock
+   *  and clicking opens the upgrade modal instead of adding the step. */
+  aiLocked?: boolean;
+  onAiLocked?: () => void;
 }) {
   const dragSrc = useRef<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
@@ -789,6 +825,8 @@ function SequenceEditor({
                 onRemove={() => removeStep(i)}
                 dragHandleProps={dragHandleFor(i)}
                 leadsHere={leadsHere}
+                locked={aiLocked}
+                onLockedClick={onAiLocked}
               />
             )}
           </div>
@@ -834,10 +872,18 @@ function SequenceEditor({
         {!steps.some(s => s.step_type === 'start_ai_concierge') && allowAi && (
           <button
             type="button"
-            onClick={() => addStep('start_ai_concierge')}
-            className="flex items-center gap-1.5 rounded-xl border border-dashed border-emerald-200 px-3 py-2 text-[12px] font-medium text-emerald-600 hover:bg-emerald-50 transition-colors"
+            onClick={() => {
+              if (aiLocked) { onAiLocked?.(); return; }
+              addStep('start_ai_concierge');
+            }}
+            title={aiLocked ? 'AI Concierge is not included in your plan' : undefined}
+            className={`flex items-center gap-1.5 rounded-xl border border-dashed px-3 py-2 text-[12px] font-medium transition-colors ${
+              aiLocked
+                ? 'border-gray-200 text-gray-400 hover:bg-gray-50'
+                : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'
+            }`}
           >
-            <Plus size={13} /> <Bot size={12} /> AI Concierge
+            {aiLocked ? <Lock size={12} /> : <Plus size={13} />} <Bot size={12} /> AI Concierge
           </button>
         )}
       </div>
@@ -1312,6 +1358,8 @@ export default function BookingSystemPage() {
             ownerEmail={cfg.ownerEmail}
             smsLocked={smsLocked}
             onSmsLocked={() => setLockModal('sms')}
+            aiLocked={!cfg.aiConciergeAllowed}
+            onAiLocked={() => setLockModal('ai_concierge')}
           />
           <MergeTagHint tags={['first_name', 'owner_name', 'venue_name']} />
         </PhaseCard>
@@ -1425,10 +1473,11 @@ export default function BookingSystemPage() {
           onToggle={(v) => void save({ aiEnabled: v })}
           locked={!cfg.aiConciergeAllowed || !cfg.masterEnabled}
           lockTooltip={
-            !cfg.masterEnabled
-              ? 'Turn the Speed to Lead System on to enable AI Concierge.'
-              : 'AI Concierge is on our All-Inclusive plan, not Free or the Bride Booking System™. Schedule a demo to learn more.'
+            !cfg.aiConciergeAllowed
+              ? 'AI Concierge is not included in your plan. Click to see what it does and how to unlock it.'
+              : 'Turn the Speed to Lead System on to enable AI Concierge.'
           }
+          onLockedClick={!cfg.aiConciergeAllowed ? () => setLockModal('ai_concierge') : undefined}
           hideNumber
           noPadding
         >

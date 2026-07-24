@@ -18,7 +18,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { DEFAULT_GUIDE_EMAIL_BODY, DEFAULT_GUIDE_SMS_BODY } from '@/lib/marketing-email-worker';
-import { loadDirectoryNavAccess } from '@/lib/directory-plans-venue';
 import {
   PHASE4_STAGE_NAME,
   PHASE5_STAGE_NAME,
@@ -142,16 +141,16 @@ export interface BookingSystemConfig {
 export const DEMO_VENUE_NAME = 'Demo Venue';
 
 /**
- * AI Concierge is a higher-tier (All-Inclusive) feature. Allowed when the
- * venue's plan grants the `nav_marketing_ai_concierge` nav permission, or for
- * legacy/no-plan venues (full access). Free + Bride Booking System plans do not
- * include it.
+ * AI Concierge access — resolved through the shared plan-features logic:
+ * addon purchased OR plan bundles it OR legacy/no-plan, minus the super-admin
+ * force-off (ai_concierge_admin_disabled). This is the single source of truth;
+ * nav permissions alone are NOT enough (a force-off must always win).
  */
 async function venueAllowsAiConcierge(venueId: string): Promise<boolean> {
   try {
-    const nav = await loadDirectoryNavAccess(venueId);
-    if (nav.mode === 'full') return true;
-    return (nav.allowedNavIds ?? []).includes('nav_marketing_ai_concierge');
+    const { loadVenueFeatureAccess } = await import('@/lib/plan-features');
+    const access = await loadVenueFeatureAccess(venueId);
+    return access.hasConcierge;
   } catch {
     return true; // fail open — don't lock a paying venue out on a transient error
   }
@@ -278,6 +277,34 @@ export async function PATCH(req: NextRequest) {
   let body: Partial<BookingSystemConfig>;
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+
+  // ── AI Concierge access gate (server-side, cannot be bypassed) ───────────
+  // Venues without concierge access (not in plan, no addon, or super-admin
+  // force-off) can never enable the AI toggle, and any `start_ai_concierge`
+  // steps in submitted sequences are stripped before saving so the step can
+  // never persist or run.
+  const sequenceHasAiStep = (steps?: StepConfig[]) =>
+    Array.isArray(steps) && steps.some((s) => s?.step_type === 'start_ai_concierge');
+  const touchesAi = body.aiEnabled === true
+    || sequenceHasAiStep(body.steps)
+    || sequenceHasAiStep(body.phase4Steps)
+    || sequenceHasAiStep(body.phase5Steps)
+    || sequenceHasAiStep(body.anniversarySteps);
+  if (touchesAi && !(await venueAllowsAiConcierge(venueId))) {
+    if (body.aiEnabled === true) {
+      return NextResponse.json({
+        error: 'AI Concierge is not included in your plan. Upgrade from your billing page to unlock it.',
+      }, { status: 403 });
+    }
+    const stripAi = (steps?: StepConfig[]) =>
+      Array.isArray(steps)
+        ? steps.filter((s) => s?.step_type !== 'start_ai_concierge').map((s, i) => ({ ...s, step_order: i }))
+        : steps;
+    body.steps            = stripAi(body.steps);
+    body.phase4Steps      = stripAi(body.phase4Steps);
+    body.phase5Steps      = stripAi(body.phase5Steps);
+    body.anniversarySteps = stripAi(body.anniversarySteps);
+  }
 
   // ── Venue-level fields ───────────────────────────────────────────────────
   const venueUpdate: Record<string, unknown> = {};
