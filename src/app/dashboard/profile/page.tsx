@@ -592,6 +592,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* Personal Information */}
       <div className={SECTION}>
         <div className={SECTION_HEAD}>
           <User size={16} className="text-gray-500" />
@@ -659,6 +660,80 @@ export default function ProfilePage() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Login & Security — team members can change their password */}
+      <div className={SECTION}>
+        <div className={SECTION_HEAD}>
+          <ShieldCheck size={16} className="text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-900">Login & Security</h2>
+        </div>
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-2 mb-3">
+            <KeyRound size={14} className="text-gray-400" />
+            <h3 className="text-sm font-semibold text-gray-800">Change Password</h3>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            Set a personal password for your account. Your initial password was the invite link you received by email.
+          </p>
+          <form onSubmit={(e) => void updatePassword(e)} className="space-y-3">
+            <div>
+              <label className={LABEL}>New Password</label>
+              <div className="relative">
+                <input
+                  type={showNewPass ? 'text' : 'password'}
+                  value={passForm.new_password}
+                  onChange={(e) => setPassForm((f) => ({ ...f, new_password: e.target.value }))}
+                  placeholder="At least 8 characters"
+                  className={INPUT + ' pr-10'}
+                  minLength={8}
+                />
+                <button type="button" onClick={() => setShowNewPass((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showNewPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className={LABEL}>Confirm New Password</label>
+              <div className="relative">
+                <input
+                  type={showConfPass ? 'text' : 'password'}
+                  value={passForm.confirm_password}
+                  onChange={(e) => setPassForm((f) => ({ ...f, confirm_password: e.target.value }))}
+                  placeholder="Repeat new password"
+                  className={INPUT + ' pr-10'}
+                />
+                <button type="button" onClick={() => setShowConfPass((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showConfPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              {passForm.new_password && passForm.confirm_password && passForm.new_password !== passForm.confirm_password && (
+                <p className="mt-1 text-xs text-red-500">Passwords do not match.</p>
+              )}
+            </div>
+            {passError && (
+              <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                <AlertCircle size={13} /> {passError}
+              </div>
+            )}
+            {passSaved && (
+              <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700 font-medium">
+                <CheckCircle2 size={13} /> Password updated successfully.
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={passSaving || !passForm.new_password || !passForm.confirm_password}
+              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50"
+              style={{ backgroundColor: '#1b1b1b' }}
+            >
+              {passSaving ? <Loader2 size={13} className="animate-spin" /> : <KeyRound size={13} />}
+              {passSaving ? 'Saving…' : 'Update Password'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

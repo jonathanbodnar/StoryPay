@@ -1,11 +1,17 @@
 /**
  * PATCH /api/profile/credentials
  *
- * Allows a venue owner to update their login email or password with no
- * current-password confirmation required.
+ * Updates login credentials for the current session:
  *
- * - Email change: updates venues.email + syncs auth.users email
- * - Password change: hashes new password, updates venues.password_hash
+ * Venue owners:
+ *   - Email change: updates venues.email + syncs auth.users email
+ *   - Password change: hashes new password, updates venues.password_hash
+ *
+ * Team members:
+ *   - Password change only: hashes new password, updates
+ *     venue_team_members.password_hash (migration 177). Sign-in then
+ *     checks this hash first, falling back to invite_token for members
+ *     who haven't set a password yet.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
@@ -16,8 +22,37 @@ export const dynamic = 'force-dynamic';
 
 export async function PATCH(req: NextRequest) {
   const cookieStore = await cookies();
-  const venueId = cookieStore.get('venue_id')?.value;
+  const venueId  = cookieStore.get('venue_id')?.value;
+  const memberId = cookieStore.get('member_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // ── Team member password change ───────────────────────────────────────────
+  if (memberId) {
+    const body = await req.json() as {
+      action: 'password';
+      new_password?: string;
+      confirm_password?: string;
+    };
+    if (body.action !== 'password') {
+      return NextResponse.json({ error: 'Team members can only update their password.' }, { status: 400 });
+    }
+
+    const newPass     = (body.new_password    ?? '').trim();
+    const confirmPass = (body.confirm_password ?? '').trim();
+    if (!newPass)              return NextResponse.json({ error: 'New password is required.' },                    { status: 400 });
+    if (newPass.length < 8)   return NextResponse.json({ error: 'Password must be at least 8 characters.' },     { status: 400 });
+    if (newPass !== confirmPass) return NextResponse.json({ error: 'Passwords do not match.' },                   { status: 400 });
+
+    const newHash = await bcrypt.hash(newPass, 12);
+    const { error: updateErr } = await supabaseAdmin
+      .from('venue_team_members')
+      .update({ password_hash: newHash })
+      .eq('id', memberId)
+      .eq('venue_id', venueId);
+    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+
+    return NextResponse.json({ ok: true });
+  }
 
   const { data: venue, error: fetchErr } = await supabaseAdmin
     .from('venues')

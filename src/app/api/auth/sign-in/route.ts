@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
   try {
     const { data: member } = await supabaseAdmin
       .from('venue_team_members')
-      .select('id, venue_id, invite_token, status, email')
+      .select('id, venue_id, invite_token, password_hash, status, email')
       .ilike('email', normalized)
       .maybeSingle();
 
@@ -163,7 +163,20 @@ export async function POST(request: NextRequest) {
           { status: 401 }
         );
       }
-      if (member.invite_token === password.trim()) {
+
+      const pw = password.trim();
+      // Check bcrypt password_hash first (set after first password change),
+      // then fall back to plaintext invite_token for members who haven't
+      // changed their password yet (backwards-compatible).
+      const memberPasswordHash = (member as { password_hash?: string | null }).password_hash;
+      let memberValid = false;
+      if (memberPasswordHash) {
+        memberValid = await bcrypt.compare(pw, memberPasswordHash);
+      } else {
+        memberValid = pw === (member.invite_token ?? '');
+      }
+
+      if (memberValid) {
         const response = NextResponse.json({ redirect: '/dashboard' });
         response.cookies.set('venue_id', member.venue_id, {
           path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
