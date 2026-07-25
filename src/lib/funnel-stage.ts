@@ -19,6 +19,8 @@ export interface VenueFunnelState {
   onboarding_activated_at?: string | null;
   directory_subscription_status?: string | null;
   directory_subscription_external_id?: string | null;
+  /** Set to true when any card is vaulted (incl. Free-plan verification). */
+  directory_card_on_file?: boolean | null;
 }
 
 /**
@@ -31,11 +33,39 @@ export const CARDED_STATUSES = new Set(['active', 'past_due', 'canceled', 'cance
 /**
  * A real card on file = a LunarPay subscription exists
  * (directory_subscription_external_id is set, which only happens once a card is
- * vaulted) or the status genuinely implies a card was processed.
+ * vaulted) OR the status genuinely implies a card was processed OR the explicit
+ * directory_card_on_file flag is true (set for both Free and Pro onboarders the
+ * moment a card is vaulted, even when no recurring subscription is created).
  */
 export function hasCardOnFile(v: VenueFunnelState): boolean {
   const status = String(v.directory_subscription_status ?? '').toLowerCase();
-  return Boolean(v.directory_subscription_external_id) || CARDED_STATUSES.has(status);
+  return (
+    Boolean(v.directory_card_on_file) ||
+    Boolean(v.directory_subscription_external_id) ||
+    CARDED_STATUSES.has(status)
+  );
+}
+
+/**
+ * Chose Pro at the card step: a real LunarPay trial subscription was created,
+ * meaning directory_subscription_external_id is populated. Venues that entered
+ * a card for the Free plan have no external subscription ID.
+ */
+export function choseProPlan(v: VenueFunnelState): boolean {
+  return hasCardOnFile(v) && Boolean(v.directory_subscription_external_id);
+}
+
+/**
+ * Chose Free at the card step: card was vaulted for verification only — no
+ * recurring subscription was created (no external_id, non-paid status).
+ */
+export function choseFreePlan(v: VenueFunnelState): boolean {
+  const status = String(v.directory_subscription_status ?? '').toLowerCase();
+  return (
+    hasCardOnFile(v) &&
+    !Boolean(v.directory_subscription_external_id) &&
+    !CARDED_STATUSES.has(status)
+  );
 }
 
 /** Optional analytics-event membership sets (by venue id) for the in-modal micro-steps. */

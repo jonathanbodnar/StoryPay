@@ -21,6 +21,7 @@ export interface FunnelVenueRow {
   onboarding_activated_at: string | null;
   directory_subscription_status: string | null;
   directory_subscription_external_id: string | null;
+  directory_card_on_file: boolean | null;
 }
 
 export interface FunnelData {
@@ -34,7 +35,7 @@ export async function loadFunnelData(from?: string | null, to?: string | null): 
   let venuesQuery = supabaseAdmin
     .from('venues')
     .select(
-      'id, name, email, is_demo, created_at, is_published, onboarding_last_step, onboarding_completed_at, onboarding_activated_at, directory_subscription_status, directory_subscription_external_id',
+      'id, name, email, is_demo, created_at, is_published, onboarding_last_step, onboarding_completed_at, onboarding_activated_at, directory_subscription_status, directory_subscription_external_id, directory_card_on_file',
     );
   if (from) venuesQuery = venuesQuery.gte('created_at', from);
   if (toEnd) venuesQuery = venuesQuery.lte('created_at', toEnd);
@@ -53,6 +54,7 @@ export async function loadFunnelData(from?: string | null, to?: string | null): 
       onboarding_activated_at: (v.onboarding_activated_at as string | null) ?? null,
       directory_subscription_status: (v.directory_subscription_status as string | null) ?? null,
       directory_subscription_external_id: (v.directory_subscription_external_id as string | null) ?? null,
+      directory_card_on_file: (v.directory_card_on_file as boolean | null) ?? null,
     }));
 
   // Distinct-venue sets for the in-modal analytics micro-steps.

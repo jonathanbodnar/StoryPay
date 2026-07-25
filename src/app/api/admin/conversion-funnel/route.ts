@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminIdentity } from '@/lib/admin-identity';
 import { loadFunnelData } from '@/lib/funnel-data';
-import { FUNNEL_STAGES, venueStageReached, type FunnelStageKey } from '@/lib/funnel-stage';
+import { FUNNEL_STAGES, venueStageReached, choseProPlan, choseFreePlan, type FunnelStageKey } from '@/lib/funnel-stage';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -50,23 +50,60 @@ export async function GET(req: NextRequest) {
   const counts: Record<FunnelStageKey, number> = {
     signed_up: 0, started: 0, details: 0, activated: 0, card_shown: 0, card_entered: 0, paid: 0,
   };
+  let planPro = 0;
+  let planFree = 0;
   for (const v of venues) {
     const reached = venueStageReached(v, evSets);
     for (const s of FUNNEL_STAGES) if (reached[s.key]) counts[s.key] += 1;
+    // Plan-choice split for venues that reached the card step.
+    if (reached.card_entered) {
+      if (choseProPlan(v)) planPro += 1;
+      else if (choseFreePlan(v)) planFree += 1;
+      // else: card on file via CARDED_STATUSES (active/past_due/canceled) —
+      // these are paying/lapsed and count toward 'paid', not a choice split.
+    }
   }
 
   const stages = FUNNEL_STAGES.map((s) => ({ key: s.key, label: s.label, count: counts[s.key] }));
   const signedUp = counts.signed_up;
   const top = signedUp || 1;
-  const funnel = stages.map((s, i) => {
+  const funnel = stages.flatMap((s, i) => {
     const prev = i > 0 ? stages[i - 1].count : s.count;
-    return {
-      ...s,
+    const row = {
+      key: s.key,
+      label: s.label,
+      count: s.count,
       pctOfSignups: Math.round((s.count / top) * 100),
       stepConversion: prev > 0 ? Math.round((s.count / prev) * 100) : 0,
       dropFromPrev: i > 0 ? Math.max(0, prev - s.count) : 0,
+      isSubrow: false,
     };
+    // Inject plan-choice sub-rows directly after the card_entered stage.
+    if (s.key === 'card_entered' && counts.card_entered > 0) {
+      return [
+        row,
+        {
+          key: 'card_entered_pro',
+          label: 'Pro plan — 14-day trial',
+          count: planPro,
+          pctOfSignups: Math.round((planPro / top) * 100),
+          stepConversion: counts.card_entered > 0 ? Math.round((planPro / counts.card_entered) * 100) : 0,
+          dropFromPrev: 0,
+          isSubrow: true,
+        },
+        {
+          key: 'card_entered_free',
+          label: 'Free plan — card for verification',
+          count: planFree,
+          pctOfSignups: Math.round((planFree / top) * 100),
+          stepConversion: counts.card_entered > 0 ? Math.round((planFree / counts.card_entered) * 100) : 0,
+          dropFromPrev: 0,
+          isSubrow: true,
+        },
+      ];
+    }
+    return [row];
   });
 
-  return NextResponse.json({ funnel, signedUp });
+  return NextResponse.json({ funnel, signedUp, planSplit: { pro: planPro, free: planFree } });
 }

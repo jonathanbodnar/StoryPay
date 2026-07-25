@@ -20,6 +20,7 @@ interface Stage {
   pctOfSignups: number;
   stepConversion: number;
   dropFromPrev: number;
+  isSubrow?: boolean;
 }
 
 interface StageVenue {
@@ -30,6 +31,7 @@ interface StageVenue {
   status: string | null;
   furthestKey: string;
   furthestLabel: string;
+  planChoice?: 'pro' | 'free' | null;
 }
 
 function fmtDate(ts: string | null): string {
@@ -98,13 +100,16 @@ export default function ConversionFunnel({ range }: { range?: DateRange }) {
 
   const top = useMemo(() => Math.max(1, funnel?.[0]?.count ?? 1), [funnel]);
 
-  // Index of the biggest step drop-off (skip stage 0).
+  // Index of the biggest step drop-off — skip stage 0 and sub-rows.
   const worstIdx = useMemo(() => {
     if (!funnel || funnel.length < 2) return -1;
     let idx = -1;
     let worst = -1;
     for (let i = 1; i < funnel.length; i++) {
-      if (funnel[i].dropFromPrev > worst) { worst = funnel[i].dropFromPrev; idx = i; }
+      if (!funnel[i].isSubrow && funnel[i].dropFromPrev > worst) {
+        worst = funnel[i].dropFromPrev;
+        idx = i;
+      }
     }
     return idx;
   }, [funnel]);
@@ -138,6 +143,24 @@ export default function ConversionFunnel({ range }: { range?: DateRange }) {
       {funnel && (
         <div className="space-y-2.5">
           {funnel.map((s, i) => {
+            if (s.isSubrow) {
+              const isPro = s.key === 'card_entered_pro';
+              return (
+                <div key={s.key} className="ml-5 flex items-center gap-2 py-0.5">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${isPro ? 'bg-violet-500' : 'bg-gray-400'}`} />
+                  <span className={`text-[11px] font-medium ${isPro ? 'text-violet-700' : 'text-gray-500'}`}>
+                    {s.label}
+                  </span>
+                  <span className="ml-auto text-[11px] tabular-nums">
+                    <span className={`font-semibold ${isPro ? 'text-violet-700' : 'text-gray-700'}`}>
+                      {s.count.toLocaleString()}
+                    </span>
+                    <span className="ml-1 text-gray-400">({s.stepConversion}% of carded)</span>
+                  </span>
+                </div>
+              );
+            }
+
             // Zero conversions => no colored ribbon at all (just the empty track).
             const widthPct = s.count === 0 ? 0 : Math.max(3, (s.count / top) * 100);
             const isWorst = i === worstIdx && s.dropFromPrev > 0;
@@ -179,12 +202,19 @@ export default function ConversionFunnel({ range }: { range?: DateRange }) {
             );
           })}
 
-          {worstIdx > 0 && funnel[worstIdx].dropFromPrev > 0 && (
-            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
-              Biggest drop-off: <strong>{funnel[worstIdx - 1].label} → {funnel[worstIdx].label}</strong>{' '}
-              ({funnel[worstIdx].dropFromPrev.toLocaleString()} venues lost, only {funnel[worstIdx].stepConversion}% continue).
-            </p>
-          )}
+          {worstIdx > 0 && funnel[worstIdx].dropFromPrev > 0 && (() => {
+            // Find the closest non-subrow stage before worstIdx.
+            let prevLabel = funnel[worstIdx - 1].label;
+            for (let k = worstIdx - 1; k >= 0; k--) {
+              if (!funnel[k].isSubrow) { prevLabel = funnel[k].label; break; }
+            }
+            return (
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                Biggest drop-off: <strong>{prevLabel} → {funnel[worstIdx].label}</strong>{' '}
+                ({funnel[worstIdx].dropFromPrev.toLocaleString()} venues lost, only {funnel[worstIdx].stepConversion}% continue).
+              </p>
+            );
+          })()}
         </div>
       )}
 
@@ -233,14 +263,24 @@ export default function ConversionFunnel({ range }: { range?: DateRange }) {
                         <div className="truncate text-sm font-medium text-gray-900">{v.name || 'Untitled venue'}</div>
                         <div className="truncate text-[11px] text-gray-400">{v.email || '—'}</div>
                       </div>
-                      <div className="flex shrink-0 flex-col items-end text-right">
+                      <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
                         <span
                           className="inline-flex items-center rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700"
                           title="Furthest stage this venue has reached"
                         >
                           {v.furthestLabel}
                         </span>
-                        <span className="mt-0.5 text-[10px] text-gray-400">{fmtDate(v.created_at)}</span>
+                        {v.planChoice === 'pro' && (
+                          <span className="inline-flex items-center rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
+                            Pro trial
+                          </span>
+                        )}
+                        {v.planChoice === 'free' && (
+                          <span className="inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            Free plan
+                          </span>
+                        )}
+                        <span className="text-[10px] text-gray-400">{fmtDate(v.created_at)}</span>
                       </div>
                     </li>
                   ))}
