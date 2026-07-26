@@ -16,6 +16,7 @@ import {
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
 import { trackEvent } from '@/lib/analytics';
+import { autoVerifyGbpVenue } from '@/lib/directory-badges';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -229,6 +230,8 @@ export async function POST(req: NextRequest) {
         label: 'Card vaulted + trial subscription created',
         properties: { subId: newSubId, monthlyCents: charge.total_cents },
       });
+      // Auto-verify if venue was populated via Google Business Profile.
+      await autoVerifyGbpVenue(venueId);
     } else {
       console.error('[signup-confirm] venue row update FAILED after retries:', persistError, { venueId, newSubId });
       await trackEvent({

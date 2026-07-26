@@ -13,6 +13,7 @@ import {
 } from '@/lib/lunarpay';
 import { resolveFreePlan } from '@/lib/trial-plans';
 import { trackEvent } from '@/lib/analytics';
+import { autoVerifyGbpVenue } from '@/lib/directory-badges';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -142,6 +143,11 @@ export async function POST(req: NextRequest) {
       const { cancelReengagementDrip } = await import('@/lib/reengagement-drip');
       await cancelReengagementDrip(venueId, 'converted');
     } catch { /* non-fatal */ }
+
+    // ── Auto-verify if venue was populated via Google Business Profile ────────
+    if (persisted) {
+      await autoVerifyGbpVenue(venueId);
+    }
 
     // ── Audit log ─────────────────────────────────────────────────────────────
     await supabaseAdmin.from('platform_billing_events').insert({
