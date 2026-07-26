@@ -1364,12 +1364,12 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
         />
       </div>
 
-      {/* Badge-forward trust line — replaces the old "Why we need a card" sentence. */}
+      {/* Badge-forward trust line above the card form. */}
       <p className="mt-3.5 flex items-center gap-2 text-xs leading-relaxed text-gray-500">
         <span className="shrink-0 scale-75 origin-left"><VerifiedBadgeIcon /></span>
         <span>
-          <span className="font-medium text-gray-700">Get your blue verified badge.</span>{' '}
-          It tells brides you&apos;re a real venue and keeps StoryVenue trusted.{' '}
+          Adding your card verifies your venue, earns your blue badge, and unlocks your dashboard.
+          {' '}It&apos;s how we keep StoryVenue real and trusted.{' '}
           <span className="text-gray-400">Free accounts are never charged.</span>
         </span>
       </p>
