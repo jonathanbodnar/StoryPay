@@ -1343,7 +1343,7 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
           badge="14-day free trial"
           price="Free for 14 days"
           priceSub="then $97/mo"
-          sub="The full Bride Booking System: instant lead follow-up, 14-day nurture sequences, and priority support."
+          sub="Everything unlocked: venue listing, lead inbox, pricing guide, proposals, payments, and calendar, plus lead follow-up, nurture sequences, priority support, and your blue verified badge."
           bullets={[
             <><span className="font-semibold text-gray-900">14 days free</span> — full access, nothing locked</>,
             <><span className="font-semibold text-gray-900">No charge today</span> — first payment {firstChargeDate}, only if you stay</>,
@@ -1355,7 +1355,7 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
           onSelect={() => setPlan('free')}
           title="Free"
           price="$0/mo"
-          sub="Everything you need to go live, at no cost."
+          sub="Your venue listing, contacts, proposals, and payments, plus your blue verified badge. Everything you need to go live, free."
           bullets={[
             <>Free venue listing</>,
             <>Free venue proposals &amp; payments</>,
@@ -1365,8 +1365,8 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
       </div>
 
       {/* Badge-forward trust line — replaces the old "Why we need a card" sentence. */}
-      <p className="mt-3.5 flex items-start gap-2 text-xs leading-relaxed text-gray-500">
-        <span className="mt-0.5 shrink-0 scale-75 origin-left"><VerifiedBadgeIcon /></span>
+      <p className="mt-3.5 flex items-center gap-2 text-xs leading-relaxed text-gray-500">
+        <span className="shrink-0 scale-75 origin-left"><VerifiedBadgeIcon /></span>
         <span>
           <span className="font-medium text-gray-700">Get your blue verified badge.</span>{' '}
           It tells brides you&apos;re a real venue and keeps StoryVenue trusted.{' '}
