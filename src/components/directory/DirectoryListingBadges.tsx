@@ -31,7 +31,7 @@ export function DirectoryListingBadges({
   );
 }
 
-function VerifiedBadgeIcon() {
+export function VerifiedBadgeIcon() {
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center"

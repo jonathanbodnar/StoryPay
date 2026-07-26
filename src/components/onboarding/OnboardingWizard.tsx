@@ -22,6 +22,7 @@ import {
   Mail, Send, Inbox, Lock,
 } from 'lucide-react';
 import InlineTrialCardForm from '@/components/billing/InlineTrialCardForm';
+import { VerifiedBadgeIcon } from '@/components/directory/DirectoryListingBadges';
 import { trackClient } from '@/lib/analytics-client';
 
 const SKIP_KEY = 'sv_onboarding_skipped';
@@ -1324,8 +1325,11 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
   return (
     <div>
       <div className="text-center">
-        <h2 className="text-xl font-semibold text-gray-900">Access your Bride Booking System</h2>
-        <p className="mt-1 text-sm text-gray-500">Start free today — 14-day free trial, cancel anytime.</p>
+        <div className="mb-2 flex justify-center">
+          <VerifiedBadgeIcon />
+        </div>
+        <h2 className="text-xl font-semibold text-gray-900">Verify your venue to go live</h2>
+        <p className="mt-1 text-sm text-gray-500">Get your blue verified badge and unlock your dashboard.</p>
       </div>
 
       {/* Plan selector — Pro first (highest-value, pre-selected); Free below.
@@ -1360,12 +1364,13 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
         />
       </div>
 
-      {/* Why we need a card — plain sentence directly above the card form. */}
-      <p className="mt-3.5 flex items-start gap-1.5 text-xs leading-relaxed text-gray-500">
-        <Lock size={13} className="mt-0.5 shrink-0 text-gray-400" />
+      {/* Badge-forward trust line — replaces the old "Why we need a card" sentence. */}
+      <p className="mt-3.5 flex items-start gap-2 text-xs leading-relaxed text-gray-500">
+        <span className="mt-0.5 shrink-0 scale-75 origin-left"><VerifiedBadgeIcon /></span>
         <span>
-          <span className="font-medium text-gray-600">Why we need a card</span>: it verifies you&apos;re a
-          real venue and keeps fake listings off StoryVenue.
+          <span className="font-medium text-gray-700">Get your blue verified badge.</span>{' '}
+          It tells brides you&apos;re a real venue and keeps StoryVenue trusted.{' '}
+          <span className="text-gray-400">Free accounts are never charged.</span>
         </span>
       </p>
 
