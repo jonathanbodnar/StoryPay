@@ -705,10 +705,10 @@ export default function Sidebar({
             <button
               type="button"
               onClick={onToggleCollapsed}
-              className="hidden lg:flex shrink-0 rounded-lg p-2 text-gray-500 hover:bg-gray-200/80 hover:text-gray-900"
+              className="hidden lg:flex shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
               title="Collapse sidebar"
             >
-              <ChevronLeft size={20} />
+              <ChevronLeft size={16} />
             </button>
           )}
         </div>
@@ -1056,6 +1056,18 @@ export default function Sidebar({
         style={{ backgroundColor: '#ffffff' }}
       >
         <NavContent rail={collapsed} />
+
+        {/* Floating collapse/expand tab on the right edge — always visible. */}
+        {onToggleCollapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="absolute top-1/2 -right-3 -translate-y-1/2 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm text-gray-400 hover:text-gray-700 hover:border-gray-300 hover:shadow-md transition-all"
+          >
+            {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+          </button>
+        )}
       </aside>
 
       {flyoutBackdrop}
