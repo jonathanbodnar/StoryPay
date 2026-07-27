@@ -191,6 +191,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       })
       .catch(() => { /* non-fatal */ });
 
+    // Platform-owner side effects (exactly-once via owner_listing_alert_sent_at):
+    // push this venue into the owner's GHL sub-account and text the owner that
+    // a new listing went live. Fire-and-forget — never blocks the publish.
+    void import('@/lib/owner-ghl-sync')
+      .then(({ scheduleOnNewListingLive }) => scheduleOnNewListingLive(venueId))
+      .catch(() => { /* non-fatal */ });
+
     // The listing just went public — purge the separate directory deployment's
     // cache so the new venue surfaces on the homepage promptly.
     void import('@/lib/directory-revalidate')
