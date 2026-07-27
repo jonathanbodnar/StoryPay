@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
+  Unlink2,
 } from 'lucide-react';
 // autoSearchDoneRef is kept for future auto-search re-enablement
 import { classNames } from '@/lib/utils';
@@ -131,6 +132,7 @@ export default function ListingReviewsPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleSaveErr, setGoogleSaveErr] = useState('');
   const [googleSaving, setGoogleSaving] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   // ── Google connection state ───────────────────────────────────────────────
   type GoogleCandidate = {
@@ -318,6 +320,35 @@ export default function ListingReviewsPage() {
       setGoogleFetchedAt(data.google_reviews_fetched_at ?? null);
     } finally {
       setGoogleSaving(false);
+    }
+  }
+
+  async function disconnectGoogle() {
+    if (!confirm('Disconnect Google Business? This will remove the saved Place ID and all cached Google reviews from this venue.')) return;
+    setDisconnecting(true);
+    setGoogleSaveErr('');
+    try {
+      const res = await fetch('/api/listing/google-reviews', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ google_place_id: null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setGoogleSaveErr(typeof data.error === 'string' ? data.error : 'Disconnect failed');
+        return;
+      }
+      setGooglePlaceInput('');
+      setGoogleCache(null);
+      setGoogleFetchedAt(null);
+      setUrlCandidate(null);
+      setMapsUrl('');
+      setUrlErr('');
+      setSearchCandidates([]);
+      setShowUrlFallback(false);
+      autoSearchDoneRef.current = false;
+    } finally {
+      setDisconnecting(false);
     }
   }
 
@@ -656,6 +687,11 @@ export default function ListingReviewsPage() {
                     <button type="button" onClick={() => { setGooglePlaceInput(''); setGoogleCache(null); setGoogleFetchedAt(null); setUrlCandidate(null); setMapsUrl(''); setUrlErr(''); setSearchCandidates([]); setShowUrlFallback(false); autoSearchDoneRef.current = false; }}
                       className="text-xs text-emerald-700 underline hover:text-emerald-900">
                       Change business
+                    </button>
+                    <button type="button" onClick={() => void disconnectGoogle()} disabled={disconnecting}
+                      className="inline-flex items-center gap-1 text-xs text-red-600 underline hover:text-red-800 disabled:opacity-50">
+                      {disconnecting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unlink2 className="h-3 w-3" />}
+                      Disconnect
                     </button>
                   </div>
                 </div>
