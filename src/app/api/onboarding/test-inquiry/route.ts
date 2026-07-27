@@ -14,6 +14,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
+import { slugify } from '@/lib/directory';
 import {
   onMarketingFormSubmitted,
   sendBookingSystemGuide,
@@ -197,10 +198,49 @@ export async function POST(): Promise<NextResponse> {
     console.error('[test-inquiry] workflow trigger', e);
   }
 
-  // 6. Mark the venue activated (the real activation event) AND flip the
-  //    listing live so it's publicly visible from this moment forward —
-  //    regardless of whether they later add a CC. Best-effort — columns are
-  //    ignored if not yet applied (pre-migration schema).
+  // 6. Ensure the venue has a slug before going live — new signups are
+  //    created without one, and a null slug produces /venue/null on the
+  //    directory. Generate one now if it's missing.
+  const venueName = String((v.name as string) || '').trim();
+  let venueSlug: string | null = null;
+  try {
+    const { data: slugCheck } = await supabaseAdmin
+      .from('venues')
+      .select('slug')
+      .eq('id', venueId)
+      .maybeSingle();
+    venueSlug = (slugCheck?.slug as string | null) ?? null;
+    if (!venueSlug) {
+      const base = slugify(venueName) || `venue-${venueId.slice(0, 8)}`;
+      let candidate = base;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const { data: clash } = await supabaseAdmin
+          .from('venues')
+          .select('id')
+          .eq('slug', candidate)
+          .neq('id', venueId)
+          .maybeSingle();
+        if (!clash) break;
+        candidate = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+      }
+      const { error: slugErr } = await supabaseAdmin
+        .from('venues')
+        .update({ slug: candidate })
+        .eq('id', venueId);
+      if (slugErr) {
+        console.warn('[test-inquiry] slug generation failed:', slugErr.message);
+      } else {
+        venueSlug = candidate;
+        console.log(`[test-inquiry] generated slug "${candidate}" for venue ${venueId}`);
+      }
+    }
+  } catch (e) {
+    console.warn('[test-inquiry] slug check/generation error:', e);
+  }
+
+  // Mark the venue activated AND flip the listing live so it's publicly
+  // visible from this moment forward — regardless of whether they later add
+  // a CC. Best-effort — columns ignored if not yet on pre-migration schema.
   await supabaseAdmin
     .from('venues')
     .update({

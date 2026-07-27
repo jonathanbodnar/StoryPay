@@ -17,6 +17,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { enrollReengagementDrip } from '@/lib/reengagement-drip';
 import { getAdminIdentity } from '@/lib/admin-identity';
+import { slugify } from '@/lib/directory';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -128,6 +129,44 @@ export async function POST(): Promise<NextResponse> {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
 
+  // 2b. Also backfill slugs for ANY published venue (including already-live
+  //     ones) that still has a null slug — these produce /venue/null on the
+  //     directory and 404 for visitors.
+  let slugsFixed = 0;
+  try {
+    const { data: nullSlugVenues } = await supabaseAdmin
+      .from('venues')
+      .select('id, name')
+      .eq('is_published', true)
+      .is('slug', null)
+      .neq('is_demo', true);
+
+    for (const nv of (nullSlugVenues ?? []) as Array<{ id: string; name: string | null }>) {
+      const base = slugify(nv.name || '') || `venue-${nv.id.slice(0, 8)}`;
+      let candidate = base;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const { data: clash } = await supabaseAdmin
+          .from('venues')
+          .select('id')
+          .eq('slug', candidate)
+          .neq('id', nv.id)
+          .maybeSingle();
+        if (!clash) break;
+        candidate = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+      }
+      const { error: slugErr } = await supabaseAdmin
+        .from('venues')
+        .update({ slug: candidate })
+        .eq('id', nv.id);
+      if (!slugErr) {
+        console.log(`[backfill-listing-live] generated slug "${candidate}" for venue ${nv.id}`);
+        slugsFixed++;
+      }
+    }
+  } catch (e) {
+    console.warn('[backfill-listing-live] slug backfill error:', e);
+  }
+
   // 3. Enroll all backfilled venues in the re-engagement drip.
   //    The drip engine itself will stop early if they convert.
   const dormant = rows;
@@ -146,5 +185,6 @@ export async function POST(): Promise<NextResponse> {
     ok: true,
     published: ids.length,
     enrolled,
+    slugs_fixed: slugsFixed,
   });
 }
