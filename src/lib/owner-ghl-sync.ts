@@ -189,6 +189,14 @@ async function resolveOwnerPipeline(cfg: OwnerGhlConfig): Promise<ResolvedOwnerP
   return ownerPipelineInFlight;
 }
 
+/** Monthly value in dollars for each pipeline stage. Free = $0, Pro tiers = $97/mo. */
+const STAGE_VALUE: Record<StageName, number> = {
+  'New Listing':    0,
+  'Free Listing':   0,
+  'Trial Started':  97,
+  'Pro Listing':    97,
+};
+
 /**
  * Map a venue's lifecycle to its target stage in the owner's pipeline, reusing
  * the shared funnel-stage logic (single source of truth):
@@ -226,13 +234,14 @@ async function syncVenueOpportunity(
 
   const stageName = targetStageName(venue);
   const stageId = resolved.stageIds[stageName];
+  const monetaryValue = STAGE_VALUE[stageName];
   const oppName = (venue.name ?? '').trim() || 'StoryVenue Venue';
 
   try {
     if (venue.owner_ghl_opportunity_id) {
-      await updateOpportunityStage(cfg.token, cfg.locationId, venue.owner_ghl_opportunity_id, stageId);
+      await updateOpportunityStage(cfg.token, cfg.locationId, venue.owner_ghl_opportunity_id, stageId, monetaryValue);
       console.log(
-        `[owner-ghl-sync] moved opportunity ${venue.owner_ghl_opportunity_id} → "${stageName}" for venue ${venue.id}`,
+        `[owner-ghl-sync] moved opportunity ${venue.owner_ghl_opportunity_id} → "${stageName}" ($${monetaryValue}/mo) for venue ${venue.id}`,
       );
       return;
     }
@@ -242,7 +251,7 @@ async function syncVenueOpportunity(
       pipelineStageId: stageId,
       name: oppName,
       contactId,
-      monetaryValue: 0,
+      monetaryValue,
     });
     if (oppId) {
       await supabaseAdmin.from('venues').update({ owner_ghl_opportunity_id: oppId }).eq('id', venue.id);

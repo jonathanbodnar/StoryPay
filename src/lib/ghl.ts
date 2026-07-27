@@ -1181,21 +1181,24 @@ export async function createOpportunity(
 }
 
 /**
- * Move an existing opportunity to a new pipeline stage (one-way SaaS→GHL).
+ * Move an existing opportunity to a new pipeline stage and optionally update
+ * its monetary value (one-way SaaS→GHL).
  *
- * v2 endpoint: `PUT /opportunities/{id}` with a partial body. We only send
- * `pipelineStageId` (the card moves within the same pipeline).
+ * v2 endpoint: `PUT /opportunities/{id}` with a partial body.
  */
 export async function updateOpportunityStage(
   accessToken: string,
   locationId: string,
   opportunityId: string,
   pipelineStageId: string,
+  monetaryValue?: number,
 ): Promise<void> {
   const token = await resolveLocationToken(accessToken, locationId);
+  const body: Record<string, unknown> = { pipelineStageId };
+  if (monetaryValue !== undefined) body.monetaryValue = monetaryValue;
   await ghlRequest(`/opportunities/${encodeURIComponent(opportunityId)}`, token, {
     method: 'PUT',
-    body: { pipelineStageId },
+    body,
     locationId,
   });
 }
