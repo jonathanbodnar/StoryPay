@@ -413,3 +413,91 @@ export function scheduleOnNewListingLive(venueId: string): void {
     console.error('[owner-ghl-sync] onNewListingLive threw', err);
   });
 }
+
+/**
+ * Diagnostic: surface WHY the owner-GHL sync is failing. Unlike the best-effort
+ * sync paths (which swallow errors so the primary flow is never blocked), this
+ * deliberately captures and returns the concrete GHL error so an admin can see
+ * a token/scope/pipeline problem instead of an opaque "failed: N".
+ *
+ * Runs three checks against the LIVE GHL API:
+ *   1. Auth + pipeline read (fetchPipelines) — proves the PIT token works and
+ *      shows which pipelines/stages GHL actually returns (to verify names).
+ *   2. Target pipeline + stage-name resolution.
+ *   3. A real contact write against the first eligible venue (the operation
+ *      that's failing in the backfill), returning the raw error text.
+ */
+export async function diagnoseOwnerGhl(): Promise<Record<string, unknown>> {
+  const cfg = getOwnerGhlConfig();
+  if (!cfg) {
+    return {
+      configured: false,
+      error: 'OWNER_GHL_LOCATION_ID and/or OWNER_GHL_PIT_TOKEN are not set.',
+    };
+  }
+
+  const out: Record<string, unknown> = {
+    configured: true,
+    locationId: cfg.locationId,
+    tokenPrefix: cfg.token.slice(0, 4), // expect "pit-"
+    tokenLooksLikePit: cfg.token.startsWith('pit-'),
+    alertPhoneSet: Boolean(cfg.alertPhone),
+    pipelineId: OWNER_GHL_PIPELINE_ID,
+  };
+
+  // 1 + 2. Auth + pipeline/stage resolution.
+  try {
+    const pipelines = await fetchPipelines(cfg.token, cfg.locationId);
+    out.authOk = true;
+    out.pipelineCount = pipelines.length;
+    const target = pipelines.find((p) => p.id === OWNER_GHL_PIPELINE_ID);
+    if (target) {
+      out.targetPipelineFound = true;
+      out.targetPipelineName = target.name;
+      out.stagesInGhl = target.stages.map((s) => s.name);
+      out.stagesExpected = STAGE_NAMES;
+      out.stagesAllMatch = STAGE_NAMES.every((n) =>
+        target.stages.some((s) => (s.name ?? '').trim().toLowerCase() === n.trim().toLowerCase()),
+      );
+    } else {
+      out.targetPipelineFound = false;
+      out.availablePipelines = pipelines.map((p) => ({ id: p.id, name: p.name }));
+    }
+  } catch (err) {
+    out.authOk = false;
+    out.authError = err instanceof Error ? err.message : String(err);
+  }
+
+  // 3. Live contact-write test against the first eligible venue.
+  try {
+    const { data } = await supabaseAdmin
+      .from('venues')
+      .select(VENUE_SYNC_COLUMNS)
+      .neq('is_demo', true)
+      .not('email', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    const sample = ((data ?? []) as VenueSyncRow[])[0] ?? null;
+    if (!sample) {
+      out.contactWriteTest = 'skipped — no eligible venue with an email found';
+    } else {
+      const email = (sample.email ?? '').trim() || undefined;
+      const phone = normalizePhone(sample.phone) ?? undefined;
+      const { firstName, lastName } = venueContactName(sample);
+      const contactId = await findOrCreateContact(cfg.token, cfg.locationId, {
+        email,
+        phone,
+        firstName,
+        lastName,
+      });
+      out.contactWriteOk = Boolean(contactId);
+      out.contactWriteContactId = contactId;
+      out.contactWriteSampleVenueId = sample.id;
+    }
+  } catch (err) {
+    out.contactWriteOk = false;
+    out.contactWriteError = err instanceof Error ? err.message : String(err);
+  }
+
+  return out;
+}

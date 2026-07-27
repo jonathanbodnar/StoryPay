@@ -22,7 +22,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getAdminIdentity } from '@/lib/admin-identity';
-import { getOwnerGhlConfig, pushVenueToOwnerGhl } from '@/lib/owner-ghl-sync';
+import { diagnoseOwnerGhl, getOwnerGhlConfig, pushVenueToOwnerGhl } from '@/lib/owner-ghl-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -80,9 +80,13 @@ async function fetchVenues(onlyPublished: boolean, limit: number | null): Promis
   return limit ? eligible.slice(0, limit) : eligible;
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  // ?diagnose=1 — surface WHY the sync is failing (auth / pipeline / contact write).
+  if (req.nextUrl.searchParams.get('diagnose')) {
+    return NextResponse.json(await diagnoseOwnerGhl());
   }
   if (!getOwnerGhlConfig()) {
     return NextResponse.json(
