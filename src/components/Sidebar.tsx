@@ -1057,17 +1057,6 @@ export default function Sidebar({
       >
         <NavContent rail={collapsed} />
 
-        {/* Floating collapse/expand tab on the right edge — always visible. */}
-        {onToggleCollapsed && (
-          <button
-            type="button"
-            onClick={onToggleCollapsed}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="absolute top-1/2 -right-3 -translate-y-1/2 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm text-gray-400 hover:text-gray-700 hover:border-gray-300 hover:shadow-md transition-all"
-          >
-            {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
-          </button>
-        )}
       </aside>
 
       {flyoutBackdrop}
