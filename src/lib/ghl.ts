@@ -1087,6 +1087,119 @@ export async function findOrCreateContact(
   return contactId;
 }
 
+/**
+ * Add one or more tags to a GHL contact WITHOUT removing existing tags.
+ *
+ * Uses the v2 `POST /contacts/{id}/tags` endpoint, which merges the supplied
+ * tags into the contact's existing tag set (idempotent — re-adding a tag the
+ * contact already has is a no-op on GHL's side). Best-effort friendly: throws
+ * on API error so callers can decide, but never mutates other tags.
+ */
+export async function addContactTags(
+  accessToken: string,
+  locationId: string,
+  contactId: string,
+  tags: string[],
+): Promise<void> {
+  const clean = tags.map((t) => t.trim()).filter(Boolean);
+  if (!clean.length) return;
+  const token = await resolveLocationToken(accessToken, locationId);
+  await ghlRequest(`/contacts/${encodeURIComponent(contactId)}/tags`, token, {
+    method: 'POST',
+    body: { tags: clean },
+    locationId,
+  });
+}
+
+// ── Opportunities / Pipelines ──────────────────────────────────────────────────
+
+export interface GhlPipelineStage {
+  id: string;
+  name: string;
+  position?: number;
+}
+
+export interface GhlPipeline {
+  id: string;
+  name: string;
+  stages: GhlPipelineStage[];
+}
+
+/**
+ * List the opportunity pipelines (with their stages) for a location.
+ *
+ * v2 endpoint: `GET /opportunities/pipelines?locationId={id}` →
+ *   { pipelines: [ { id, name, stages: [ { id, name, position } ] } ] }
+ */
+export async function fetchPipelines(
+  accessToken: string,
+  locationId: string,
+): Promise<GhlPipeline[]> {
+  const token = await resolveLocationToken(accessToken, locationId);
+  const res = (await ghlRequest(
+    `/opportunities/pipelines?locationId=${encodeURIComponent(locationId)}`,
+    token,
+    { locationId },
+  )) as { pipelines?: GhlPipeline[] };
+  return Array.isArray(res.pipelines) ? res.pipelines : [];
+}
+
+/**
+ * Create an opportunity in a pipeline stage.
+ *
+ * v2 endpoint: `POST /opportunities/` with
+ *   { pipelineId, locationId, name, pipelineStageId, status, contactId, monetaryValue }
+ * Returns the new opportunity id, or null if GHL didn't return one.
+ */
+export async function createOpportunity(
+  accessToken: string,
+  locationId: string,
+  data: {
+    pipelineId: string;
+    pipelineStageId: string;
+    name: string;
+    contactId: string;
+    monetaryValue?: number;
+    status?: string;
+  },
+): Promise<string | null> {
+  const token = await resolveLocationToken(accessToken, locationId);
+  const res = (await ghlRequest('/opportunities/', token, {
+    method: 'POST',
+    body: {
+      pipelineId: data.pipelineId,
+      locationId,
+      name: data.name,
+      pipelineStageId: data.pipelineStageId,
+      status: data.status ?? 'open',
+      contactId: data.contactId,
+      monetaryValue: data.monetaryValue ?? 0,
+    },
+    locationId,
+  })) as { opportunity?: { id?: string }; id?: string };
+  return res.opportunity?.id ?? res.id ?? null;
+}
+
+/**
+ * Move an existing opportunity to a new pipeline stage (one-way SaaS→GHL).
+ *
+ * v2 endpoint: `PUT /opportunities/{id}` with a partial body. We only send
+ * `pipelineStageId` (the card moves within the same pipeline).
+ */
+export async function updateOpportunityStage(
+  accessToken: string,
+  locationId: string,
+  opportunityId: string,
+  pipelineStageId: string,
+): Promise<void> {
+  const token = await resolveLocationToken(accessToken, locationId);
+  await ghlRequest(`/opportunities/${encodeURIComponent(opportunityId)}`, token, {
+    method: 'PUT',
+    body: { pipelineStageId },
+    locationId,
+  });
+}
+
 // ── DND types ─────────────────────────────────────────────────────────────────
 
 export interface GhlDndChannelSetting {

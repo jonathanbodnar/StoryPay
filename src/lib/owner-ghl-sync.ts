@@ -22,9 +22,36 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
-import { findOrCreateContact, normalizePhone, sendSms } from '@/lib/ghl';
+import {
+  addContactTags,
+  createOpportunity,
+  fetchPipelines,
+  findOrCreateContact,
+  normalizePhone,
+  sendSms,
+  updateOpportunityStage,
+} from '@/lib/ghl';
+import { choseFreePlan, choseProPlan, type VenueFunnelState } from '@/lib/funnel-stage';
 
 const DIRECTORY_URL = (process.env.NEXT_PUBLIC_DIRECTORY_URL || 'https://storyvenue.com').replace(/\/$/, '');
+
+/**
+ * The owner's dedicated "SaaS Clients" pipeline. The pipeline id is NOT a
+ * secret (unlike the PIT token), so it's a plain constant, overridable via
+ * OWNER_GHL_PIPELINE_ID for other environments.
+ */
+const OWNER_GHL_PIPELINE_ID = (process.env.OWNER_GHL_PIPELINE_ID || 'aNF35LVcuD2AmV347ayK').trim();
+
+/** Tag applied to every synced SaaS venue contact in the owner's GHL. */
+const OWNER_GHL_TAG = 'saas-client';
+
+/**
+ * Lifecycle stages in the owner's "SaaS Clients" pipeline. Resolved to GHL
+ * stage IDs by NAME at runtime (see resolveOwnerPipeline) so the owner can
+ * reorder/rename with no code change as long as these display names match.
+ */
+const STAGE_NAMES = ['New Listing', 'Trial Started', 'Free Listing', 'Pro Listing'] as const;
+type StageName = (typeof STAGE_NAMES)[number];
 
 interface OwnerGhlConfig {
   locationId: string;
@@ -61,10 +88,15 @@ interface VenueSyncRow {
   city: string | null;
   state: string | null;
   owner_ghl_contact_id: string | null;
+  owner_ghl_opportunity_id: string | null;
+  // Lifecycle columns for funnel-stage → pipeline-stage mapping (mirrors funnel-data.ts).
+  directory_subscription_status: string | null;
+  directory_subscription_external_id: string | null;
+  directory_card_on_file: boolean | null;
 }
 
 const VENUE_SYNC_COLUMNS =
-  'id, name, email, phone, owner_first_name, owner_last_name, slug, city, state, owner_ghl_contact_id';
+  'id, name, email, phone, owner_first_name, owner_last_name, slug, city, state, owner_ghl_contact_id, owner_ghl_opportunity_id, directory_subscription_status, directory_subscription_external_id, directory_card_on_file';
 
 async function loadVenueForSync(venueId: string): Promise<VenueSyncRow | null> {
   const { data, error } = await supabaseAdmin
@@ -89,6 +121,143 @@ function venueContactName(v: VenueSyncRow): { firstName: string; lastName: strin
   if (first || last) return { firstName: first || (v.name ?? 'Venue'), lastName: last };
   // No owner name — use the venue name as the first name.
   return { firstName: (v.name ?? '').trim() || 'Venue', lastName: '' };
+}
+
+// ── Pipeline / stage resolution (cached per process run) ────────────────────
+
+interface ResolvedOwnerPipeline {
+  pipelineId: string;
+  /** Stage display name → GHL pipelineStageId. */
+  stageIds: Record<StageName, string>;
+}
+
+/** Successful resolution is cached for the life of the process. */
+let resolvedOwnerPipeline: ResolvedOwnerPipeline | null = null;
+/** In-flight resolution so concurrent syncs share one fetch (failures are NOT cached — next sync retries). */
+let ownerPipelineInFlight: Promise<ResolvedOwnerPipeline | null> | null = null;
+
+/**
+ * Fetch the owner's "SaaS Clients" pipeline and resolve the four lifecycle
+ * stage IDs by NAME (case-insensitive, trimmed). Returns null (and logs a
+ * clear error) if the pipeline or any required stage can't be matched, so the
+ * caller keeps doing the contact + tag sync and just skips opportunity work.
+ */
+async function resolveOwnerPipeline(cfg: OwnerGhlConfig): Promise<ResolvedOwnerPipeline | null> {
+  if (resolvedOwnerPipeline) return resolvedOwnerPipeline;
+  if (ownerPipelineInFlight) return ownerPipelineInFlight;
+
+  ownerPipelineInFlight = (async () => {
+    try {
+      const pipelines = await fetchPipelines(cfg.token, cfg.locationId);
+      const pipeline = pipelines.find((p) => p.id === OWNER_GHL_PIPELINE_ID);
+      if (!pipeline) {
+        console.error(
+          `[owner-ghl-sync] pipeline ${OWNER_GHL_PIPELINE_ID} not found in owner GHL location ${cfg.locationId}. ` +
+            `Available: [${pipelines.map((p) => `${p.name}=${p.id}`).join(', ')}]. Skipping opportunity placement.`,
+        );
+        return null;
+      }
+
+      const stageIds = {} as Record<StageName, string>;
+      for (const name of STAGE_NAMES) {
+        const target = name.trim().toLowerCase();
+        const stage = pipeline.stages.find((s) => (s.name ?? '').trim().toLowerCase() === target);
+        if (!stage) {
+          console.error(
+            `[owner-ghl-sync] stage "${name}" not found in pipeline "${pipeline.name}" (${pipeline.id}). ` +
+              `Available stages: [${pipeline.stages.map((s) => s.name).join(', ')}]. Skipping opportunity placement.`,
+          );
+          return null;
+        }
+        stageIds[name] = stage.id;
+      }
+
+      resolvedOwnerPipeline = { pipelineId: pipeline.id, stageIds };
+      console.log('[owner-ghl-sync] resolved owner pipeline stages:', JSON.stringify(resolvedOwnerPipeline));
+      return resolvedOwnerPipeline;
+    } catch (err) {
+      console.error(
+        '[owner-ghl-sync] resolveOwnerPipeline failed:',
+        err instanceof Error ? err.message : err,
+      );
+      return null;
+    } finally {
+      ownerPipelineInFlight = null;
+    }
+  })();
+
+  return ownerPipelineInFlight;
+}
+
+/**
+ * Map a venue's lifecycle to its target stage in the owner's pipeline, reusing
+ * the shared funnel-stage logic (single source of truth):
+ *   - Pro Listing   — active paid subscription.
+ *   - Trial Started — Pro trial (card on file + subscription external id), not active-paid.
+ *   - Free Listing  — Free plan (card vaulted, no subscription external id).
+ *   - New Listing   — everything else (listing exists, no card yet).
+ */
+function targetStageName(v: VenueSyncRow): StageName {
+  const funnelState: VenueFunnelState = {
+    id: v.id,
+    directory_subscription_status: v.directory_subscription_status,
+    directory_subscription_external_id: v.directory_subscription_external_id,
+    directory_card_on_file: v.directory_card_on_file,
+  };
+  const paidActive = String(v.directory_subscription_status ?? '').toLowerCase() === 'active';
+  if (paidActive) return 'Pro Listing';
+  if (choseProPlan(funnelState)) return 'Trial Started';
+  if (choseFreePlan(funnelState)) return 'Free Listing';
+  return 'New Listing';
+}
+
+/**
+ * Create-or-move the venue's opportunity in the owner's "SaaS Clients"
+ * pipeline so its stage tracks the venue's lifecycle. Idempotent via
+ * `owner_ghl_opportunity_id`. Best-effort — never throws.
+ */
+async function syncVenueOpportunity(
+  cfg: OwnerGhlConfig,
+  venue: VenueSyncRow,
+  contactId: string,
+): Promise<void> {
+  const resolved = await resolveOwnerPipeline(cfg);
+  if (!resolved) return; // error already logged; skip opportunity placement.
+
+  const stageName = targetStageName(venue);
+  const stageId = resolved.stageIds[stageName];
+  const oppName = (venue.name ?? '').trim() || 'StoryVenue Venue';
+
+  try {
+    if (venue.owner_ghl_opportunity_id) {
+      await updateOpportunityStage(cfg.token, cfg.locationId, venue.owner_ghl_opportunity_id, stageId);
+      console.log(
+        `[owner-ghl-sync] moved opportunity ${venue.owner_ghl_opportunity_id} → "${stageName}" for venue ${venue.id}`,
+      );
+      return;
+    }
+
+    const oppId = await createOpportunity(cfg.token, cfg.locationId, {
+      pipelineId: resolved.pipelineId,
+      pipelineStageId: stageId,
+      name: oppName,
+      contactId,
+      monetaryValue: 0,
+    });
+    if (oppId) {
+      await supabaseAdmin.from('venues').update({ owner_ghl_opportunity_id: oppId }).eq('id', venue.id);
+      venue.owner_ghl_opportunity_id = oppId;
+      console.log(
+        `[owner-ghl-sync] created opportunity ${oppId} in "${stageName}" for venue ${venue.id}`,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      '[owner-ghl-sync] syncVenueOpportunity failed for',
+      venue.id,
+      err instanceof Error ? err.message : err,
+    );
+  }
 }
 
 /**
@@ -129,9 +298,24 @@ export async function pushVenueToOwnerGhl(
         .from('venues')
         .update({ owner_ghl_contact_id: contactId })
         .eq('id', venue.id);
+      venue.owner_ghl_contact_id = contactId;
     }
     if (contactId) {
       console.log('[owner-ghl-sync] synced venue', venue.id, '→ owner GHL contact', contactId);
+
+      // Tag the contact (merge-only; never removes other tags) on create AND update.
+      try {
+        await addContactTags(cfg.token, cfg.locationId, contactId, [OWNER_GHL_TAG]);
+      } catch (tagErr) {
+        console.warn(
+          '[owner-ghl-sync] addContactTags failed for',
+          venue.id,
+          tagErr instanceof Error ? tagErr.message : tagErr,
+        );
+      }
+
+      // Create-or-move the opportunity to the stage matching the venue lifecycle.
+      await syncVenueOpportunity(cfg, venue, contactId);
     }
     return contactId ?? venue.owner_ghl_contact_id;
   } catch (err) {
