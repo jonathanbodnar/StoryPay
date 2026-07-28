@@ -493,6 +493,12 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
           behind a small toggle since most owners won't know what a link is. */}
       {mode === 'search' ? (
         <div className="mt-5">
+          <div className="mb-2 flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-0.5 text-[11px] font-semibold text-green-700 ring-1 ring-green-200">
+              ✓ Recommended
+            </span>
+            <span className="text-xs text-gray-400">Faster setup, auto-fills your info</span>
+          </div>
           <div className="relative">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -571,7 +577,12 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
       )}
 
       <div className="mt-6 flex items-center justify-end">
-        {/* "Enter manually" removed — users type their venue name above; manual entry option appears inline as they type */}
+        <button
+          onClick={() => { try { localStorage.setItem(MANUAL_KEY, '1'); } catch {} onNext(); }}
+          className="text-xs text-gray-400 underline underline-offset-2 hover:text-gray-600 transition-colors"
+        >
+          Enter manually instead
+        </button>
       </div>
     </div>
   );
