@@ -9,11 +9,13 @@ import AnnouncementTicker from '@/components/AnnouncementTicker';
 import MobileTabBar from '@/components/MobileTabBar';
 import MobileFab from '@/components/MobileFab';
 import MobileDashboardRedirect from '@/components/MobileDashboardRedirect';
+import NativePushRegistrar from '@/components/NativePushRegistrar';
 // ImpersonationBanner rendered server-side in layout.tsx (black bar)
 import { DirectoryRouteGuard } from '@/components/DirectoryRouteGuard';
 import UsageTracker from '@/components/analytics/UsageTracker';
 import OnboardingLauncher from '@/components/onboarding/OnboardingLauncher';
 import { trackClient } from '@/lib/analytics-client';
+import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
 const STORAGE_KEY = 'storypay.dashboard.sidebarCollapsed';
 
@@ -84,11 +86,27 @@ export default function DashboardShell({
       if (!res.ok || !data.url) {
         throw new Error(data.error || 'Could not start checkout.');
       }
+      // On native, open the checkout in the external system browser so the
+      // purchase flow never happens inside the app webview (Apple/Play rules).
+      if (isNativeApp()) {
+        await openExternalBrowser(data.url as string);
+        setStartEarlyBusy(false);
+        return;
+      }
       window.location.href = data.url as string;
     } catch (e) {
       setStartEarlyError(e instanceof Error ? e.message : 'Something went wrong.');
       setStartEarlyBusy(false);
     }
+  }, []);
+
+  // Route billing-page links out to the external browser on native so the
+  // in-app webview never renders an Apple-risk upgrade/checkout flow. On the
+  // web this is a no-op and the <Link> navigates normally.
+  const routeBillingOut = useCallback((e: React.MouseEvent, path: string) => {
+    if (!isNativeApp()) return;
+    e.preventDefault();
+    void openExternalBrowser(path);
   }, []);
 
   const resendVerification = useCallback(async () => {
@@ -171,6 +189,8 @@ export default function DashboardShell({
     >
       {/* ImpersonationBanner removed — rendered once in layout.tsx */}
       <UsageTracker />
+      {/* Native-shell push registration (no-op on the web). */}
+      <NativePushRegistrar />
       <Sidebar
         venue={venue}
         role={role}
@@ -206,6 +226,7 @@ export default function DashboardShell({
                 </div>
                 <Link
                   href="/dashboard/directory-billing"
+                  onClick={(e) => routeBillingOut(e, '/dashboard/directory-billing')}
                   className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
                 >
                   Upgrade
@@ -226,6 +247,7 @@ export default function DashboardShell({
                 </div>
                 <Link
                   href="/dashboard/directory-billing"
+                  onClick={(e) => routeBillingOut(e, '/dashboard/directory-billing')}
                   className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
                 >
                   Manage subscription
@@ -261,7 +283,11 @@ export default function DashboardShell({
           {directoryBillingPending ? (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
               <span className="font-semibold">Directory plan payment due.</span>{' '}
-              <Link href="/dashboard/directory-billing" className="underline font-medium hover:text-amber-900">
+              <Link
+                href="/dashboard/directory-billing"
+                onClick={(e) => routeBillingOut(e, '/dashboard/directory-billing')}
+                className="underline font-medium hover:text-amber-900"
+              >
                 Add a card and start your subscription
               </Link>
               .
@@ -293,8 +319,9 @@ export default function DashboardShell({
             </div>
           ) : null}
 
-          {/* StoryPay not active banner — shown only on the main /dashboard/settings page */}
-          {pathname === '/dashboard/settings' && paymentsActive === false ? (
+          {/* StoryPay not active banner — shown only on the main /dashboard/settings page.
+              Hidden in the native shell (Apple-risk financial onboarding CTA). */}
+          {!isNativeApp() && pathname === '/dashboard/settings' && paymentsActive === false ? (
             <div className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-900">
               <span className="mt-0.5 shrink-0 text-red-500">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

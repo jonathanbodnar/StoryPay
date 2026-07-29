@@ -16,6 +16,7 @@ import { sendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
 import { sendPushToVenue } from '@/lib/push';
+import { sendNativePush } from '@/lib/native-push';
 
 export type OwnerScenario =
   | 'payment_received'
@@ -435,14 +436,29 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
         const title = interpolate(meta.defaultPushTitle, vars);
         const body  = interpolate(meta.defaultPushBody,  vars);
         const url   = args.actionUrl || meta.defaultPushUrl;
-        const result = await sendPushToVenue(args.venueId, {
-          title,
-          body,
-          url,
-          tag:  `${args.scenario}-${args.venueId}`,
-        });
+        // Fire web-push (browsers / installed PWAs) and native push (Capacitor
+        // iOS/Android shell) from the SAME gated point so every device a user
+        // is signed in on gets the alert. Both are best-effort and independent
+        // — one being unconfigured never blocks the other.
+        const [result, nativeResult] = await Promise.all([
+          sendPushToVenue(args.venueId, {
+            title,
+            body,
+            url,
+            tag:  `${args.scenario}-${args.venueId}`,
+          }),
+          sendNativePush(args.venueId, {
+            title,
+            body,
+            url,
+            data: { scenario: args.scenario, venueId: args.venueId },
+          }),
+        ]);
         if (result.sent > 0 || result.pruned > 0) {
           console.log('[notifyOwner]', args.scenario, 'push', result);
+        }
+        if (nativeResult.sent > 0 || nativeResult.pruned > 0) {
+          console.log('[notifyOwner]', args.scenario, 'native-push', nativeResult);
         }
       } catch (err) {
         console.error('[notifyOwner push]', args.scenario, err instanceof Error ? err.message : err);

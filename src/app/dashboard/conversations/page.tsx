@@ -1599,8 +1599,8 @@ export default function ConversationsPage() {
         {/* Thread list */}
         <aside
           className={classNames(
-            'flex w-full flex-shrink-0 flex-col border-gray-200 bg-gray-50/80 md:w-[min(100%,340px)] md:border-r',
-            mobileShowThread ? 'hidden md:flex' : 'flex',
+            'flex w-full flex-shrink-0 flex-col border-gray-200 bg-gray-50/80 lg:w-[min(100%,340px)] lg:border-r',
+            mobileShowThread ? 'hidden lg:flex' : 'flex',
           )}
         >
           {listActionError ? (
@@ -1887,18 +1887,21 @@ export default function ConversationsPage() {
         </aside>
 
         {/* Thread pane
-            Desktop (md+): flex column in the normal flow.
-            Mobile with thread open: fixed full-screen overlay (z-[45] sits above
-            the tab bar at z-40 so the composer is always reachable, but below the
-            sidebar slide-out at z-50 so navigation still works).  The bottom
-            padding on the composer balances the tab bar height. */}
+            Desktop (lg+): flex column in the normal flow (two-pane, unchanged).
+            Mobile/tablet (< lg) with thread open: fixed full-screen overlay
+            (z-[45] sits above the tab bar at z-40 so the composer is always
+            reachable, but below the sidebar slide-out at z-50 so navigation
+            still works). The bottom padding on the composer balances the tab
+            bar height. Breakpoint is `lg` to match the rest of the mobile skin
+            (MobileTabBar, slide-out sidebar) so phones + tablets get the
+            phone-native master→detail flow. */}
         <section
           className={classNames(
             'flex min-w-0 flex-col bg-white',
-            // md+: always in-flow, fills remaining width
-            'md:relative md:flex-1 md:min-h-0',
-            // mobile: hidden when list is shown; fixed overlay when thread is open
-            !mobileShowThread ? 'hidden md:flex' : 'flex fixed inset-x-0 z-[45]',
+            // lg+: always in-flow, fills remaining width
+            'lg:relative lg:flex-1 lg:min-h-0',
+            // mobile/tablet: hidden when list is shown; fixed overlay when thread is open
+            !mobileShowThread ? 'hidden lg:flex' : 'flex fixed inset-x-0 z-[45]',
           )}
           style={mobileShowThread ? { top: 0, bottom: 0 } : undefined}
         >
@@ -1907,7 +1910,7 @@ export default function ConversationsPage() {
               <header className="flex flex-shrink-0 items-center gap-3 border-b border-gray-100 px-3 py-3 sm:px-5">
                 <button
                   type="button"
-                  className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 md:hidden"
+                  className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden"
                   aria-label="Back to list"
                   onClick={() => setMobileShowThread(false)}
                 >

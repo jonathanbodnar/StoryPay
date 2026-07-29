@@ -28,6 +28,8 @@ import {
   Target,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
+import { isNativeApp } from '@/lib/platform';
+import { unregisterNativePush } from '@/components/NativePushRegistrar';
 import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
@@ -162,6 +164,17 @@ export default function Sidebar({
   const isOwner = role === 'owner';
   const isAdmin = role === 'owner' || role === 'admin';
   const pathname = usePathname();
+
+  // On the native shell, drop this device's push token before the logout
+  // navigation clears the session; on the web this is a no-op and the anchor
+  // navigates normally.
+  const handleLogoutClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!isNativeApp()) return;
+    e.preventDefault();
+    void unregisterNativePush().finally(() => {
+      window.location.assign('/api/auth/logout');
+    });
+  }, []);
   const router = useRouter();
   /**
    * Plan-level access check. Returns true when the current plan grants this
@@ -813,8 +826,9 @@ export default function Sidebar({
               </button>
               {paymentsOpen && (
                 <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                  {/* Signup for StoryPay™ — first item, shown when not yet active */}
-                  {paymentsActive === false && (
+                  {/* Signup for StoryPay™ — first item, shown when not yet active.
+                      Hidden in the native shell (Apple-risk financial onboarding). */}
+                  {!isNativeApp() && paymentsActive === false && (
                     <button
                       type="button"
                       onClick={() => setShowOnboardingModal(true)}
@@ -946,6 +960,7 @@ export default function Sidebar({
         </Link>
         <a
           href="/api/auth/logout"
+          onClick={handleLogoutClick}
           title="Logout"
           className={classNames(navItem(false, rail), 'w-full')}
         >
@@ -1018,6 +1033,7 @@ export default function Sidebar({
         <div className="flex items-center gap-2">
           <a
             href="/api/auth/logout"
+            onClick={handleLogoutClick}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
             title="Logout"
           >
@@ -1070,8 +1086,9 @@ export default function Sidebar({
             style={{ top: flyoutPos.top, left: flyoutPos.left }}
             role="menu"
           >
-            {/* Signup for StoryPay™ — shown only when not yet active */}
-            {paymentsActive === false && (
+            {/* Signup for StoryPay™ — shown only when not yet active.
+                Hidden in the native shell (Apple-risk financial onboarding). */}
+            {!isNativeApp() && paymentsActive === false && (
               <button
                 type="button"
                 onClick={() => { setShowOnboardingModal(true); setFlyout(null); setFlyoutPos(null); }}

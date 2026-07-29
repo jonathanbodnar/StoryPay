@@ -22,8 +22,23 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
+import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
 const BRAND = '#1b1b1b';
+
+/**
+ * Send the user to a LunarPay checkout URL. On the native shell this opens the
+ * external system browser (so the purchase flow is never inside the app
+ * webview — Apple/Play requirement); on the web it navigates in place exactly
+ * as before.
+ */
+async function redirectToCheckout(url: string): Promise<void> {
+  if (isNativeApp()) {
+    await openExternalBrowser(url);
+    return;
+  }
+  window.location.href = url;
+}
 
 /**
  * Plan feature checklist shown inside each plan's accordion body. The list is
@@ -359,7 +374,7 @@ export default function DirectoryBillingPage() {
         | { error?: string };
       if (!res.ok) throw new Error((d as { error?: string }).error || 'Plan change failed');
       if ((d as { kind?: string }).kind === 'checkout_required') {
-        window.location.href = (d as { url: string }).url;
+        void redirectToCheckout((d as { url: string }).url);
         return;
       }
       setInfo('Plan updated.');
@@ -378,7 +393,7 @@ export default function DirectoryBillingPage() {
       const res = await fetch('/api/venue-billing/resume-checkout', { method: 'POST' });
       const d = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok) throw new Error(d.error || 'Could not resume checkout');
-      if (d.url) window.location.href = d.url;
+      if (d.url) void redirectToCheckout(d.url);
     } catch (e) {
       setError(friendlyError(e instanceof Error ? e.message : 'Could not resume checkout'));
     } finally {
@@ -410,7 +425,7 @@ export default function DirectoryBillingPage() {
       const res = await fetch('/api/venue-billing/update-payment', { method: 'POST' });
       const d = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok) throw new Error(d.error || 'Could not start payment update');
-      if (d.url) window.location.href = d.url;
+      if (d.url) void redirectToCheckout(d.url);
     } catch (e) {
       setError(friendlyError(e instanceof Error ? e.message : 'Could not start payment update'));
     } finally {
@@ -425,7 +440,7 @@ export default function DirectoryBillingPage() {
       const res = await fetch('/api/venue-billing/start-paid', { method: 'POST' });
       const d = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok) throw new Error(d.error || 'Could not start paid checkout');
-      if (d.url) window.location.href = d.url;
+      if (d.url) void redirectToCheckout(d.url);
     } catch (e) {
       setError(friendlyError(e instanceof Error ? e.message : 'Could not start paid checkout'));
     } finally {
@@ -452,7 +467,7 @@ export default function DirectoryBillingPage() {
         | { error?: string };
       if (!res.ok) throw new Error((d as { error?: string }).error || 'Could not update add-on');
       if ((d as { kind?: string }).kind === 'checkout_required') {
-        window.location.href = (d as { url: string }).url;
+        void redirectToCheckout((d as { url: string }).url);
         return;
       }
       const labels: Record<string, string> = {

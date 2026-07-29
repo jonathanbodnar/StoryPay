@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">StoryVenue</string>
+    <string name="title_activity_main">StoryVenue</string>
+    <string name="package_name">com.storyvenue.app</string>
+    <string name="custom_url_scheme">com.storyvenue.app</string>
+</resources>

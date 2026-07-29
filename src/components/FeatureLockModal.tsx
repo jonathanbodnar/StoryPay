@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock, X, ArrowRight, Sparkles, CalendarClock } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
+import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
 /**
  * Inline lock modal for plan-gated features (SMS, AI Concierge) that live
@@ -71,7 +72,15 @@ function LockBody({ feature, onNavigate }: { feature: LockFeature; onNavigate?: 
       <div className="mt-6 flex flex-col items-center justify-center gap-3">
         <Link
           href="/dashboard/directory-billing"
-          onClick={onNavigate}
+          onClick={(e) => {
+            // Native: open the upgrade/checkout flow in the external browser
+            // (Apple-risk). Web: normal in-app navigation.
+            if (isNativeApp()) {
+              e.preventDefault();
+              void openExternalBrowser('/dashboard/directory-billing');
+            }
+            onNavigate?.();
+          }}
           className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
         >
           <Sparkles size={14} />
