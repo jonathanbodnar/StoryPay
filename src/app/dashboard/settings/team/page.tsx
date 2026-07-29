@@ -63,9 +63,10 @@ export default function TeamPage() {
  const [deletingId, setDeletingId] = useState<string | null>(null);
  const [resendingId, setResendingId] = useState<string | null>(null);
  const [editingId, setEditingId] = useState<string | null>(null);
- const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', role: 'member' });
+ const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', role: 'member', new_password: '', confirm_password: '' });
  const [editSaving, setEditSaving] = useState(false);
  const [editError, setEditError] = useState('');
+ const [editPasswordError, setEditPasswordError] = useState('');
  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -231,21 +232,30 @@ export default function TeamPage() {
 
  function startEdit(m: TeamMember) {
  setEditingId(m.id);
- setEditForm({ first_name: m.first_name || '', last_name: m.last_name || '', email: m.email, role: m.role });
+ setEditForm({ first_name: m.first_name || '', last_name: m.last_name || '', email: m.email, role: m.role, new_password: '', confirm_password: '' });
  setEditError('');
+ setEditPasswordError('');
  setMenuOpenId(null);
  }
 
  async function saveEdit(e: React.FormEvent) {
  e.preventDefault();
  if (!editingId) return;
+ setEditPasswordError('');
+ const { new_password, confirm_password, ...coreFields } = editForm;
+ if (new_password || confirm_password) {
+  if (new_password.length < 8) { setEditPasswordError('Password must be at least 8 characters'); return; }
+  if (new_password !== confirm_password) { setEditPasswordError('Passwords do not match'); return; }
+ }
  setEditSaving(true);
  setEditError('');
  try {
+ const payload: Record<string, string> = { ...coreFields };
+ if (new_password) payload.password = new_password;
  const res = await fetch(`/api/team/${editingId}`, {
  method: 'PATCH',
  headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify(editForm),
+ body: JSON.stringify(payload),
  });
  const data = await res.json();
  if (!res.ok) { setEditError(data.error || 'Failed to update'); return; }
@@ -434,6 +444,28 @@ export default function TeamPage() {
  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
  </div>
  </div>
+    <div>
+    <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Set New Password</label>
+    <div className="space-y-2">
+     <input
+      type="password"
+      value={editForm.new_password}
+      onChange={e => { setEditForm(p => ({ ...p, new_password: e.target.value })); setEditPasswordError(''); }}
+      placeholder="Leave blank to keep unchanged"
+      className={INPUT}
+      autoComplete="new-password"
+     />
+     <input
+      type="password"
+      value={editForm.confirm_password}
+      onChange={e => { setEditForm(p => ({ ...p, confirm_password: e.target.value })); setEditPasswordError(''); }}
+      placeholder="Confirm new password"
+      className={INPUT}
+      autoComplete="new-password"
+     />
+    </div>
+    {editPasswordError && <p className="text-xs text-red-500 mt-1.5">{editPasswordError}</p>}
+    </div>
     {editError && <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{editError}</p>}
    <div className="flex justify-end gap-2 pt-1">
    <button
@@ -453,27 +485,6 @@ export default function TeamPage() {
    {editSaving ? 'Saving...' : 'Save Changes'}
    </button>
    </div>
-   {editingId && (() => {
-     const editMember = members.find(x => x.id === editingId);
-     return editMember && editMember.role !== 'owner' ? (
-       <div className="border-t border-gray-100 pt-3 flex justify-center">
-         <button
-           type="button"
-           onClick={() => { resetPassword(editingId); setEditingId(null); }}
-           disabled={resetPasswordId === editingId}
-           className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-50"
-         >
-           {resetPasswordId === editingId
-             ? <Loader2 size={12} className="animate-spin"/>
-             : editMember.status === 'invited'
-               ? <Send size={12}/>
-               : <KeyRound size={12}/>
-           }
-           {editMember.status === 'invited' ? 'Resend invite / Set password' : 'Send password reset email'}
-         </button>
-       </div>
-     ) : null;
-   })()}
    </form>
  </div>
  </div>

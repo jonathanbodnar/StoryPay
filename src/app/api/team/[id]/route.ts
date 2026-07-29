@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { hash } from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSessionUser } from '@/lib/session';
 
@@ -32,6 +33,15 @@ export async function PATCH(
       return NextResponse.json({ error: 'Only the venue owner can change revenue visibility' }, { status: 403 });
     }
     updates.hide_revenue = body.hide_revenue;
+  }
+  if (body.password != null && typeof body.password === 'string') {
+    if (session.memberId !== null) {
+      return NextResponse.json({ error: 'Only the venue owner can set a team member password' }, { status: 403 });
+    }
+    if (body.password.length < 8) {
+      return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+    }
+    updates.password_hash = await hash(body.password, 10);
   }
 
   // Keep the denormalised name column in sync
