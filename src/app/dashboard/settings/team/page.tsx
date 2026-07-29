@@ -434,26 +434,47 @@ export default function TeamPage() {
  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
  </div>
  </div>
- {editError && <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{editError}</p>}
- <div className="flex justify-end gap-2 pt-1">
- <button
- type="button"
- onClick={() => setEditingId(null)}
- className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
- >
- Cancel
- </button>
- <button
- type="submit"
- disabled={editSaving}
- className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all"
- style={{ backgroundColor: '#1b1b1b' }}
- >
- {editSaving ? <Loader2 size={14} className="animate-spin"/> : <CheckCircle2 size={14} />}
- {editSaving ? 'Saving...' : 'Save Changes'}
- </button>
- </div>
- </form>
+    {editError && <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{editError}</p>}
+   <div className="flex justify-end gap-2 pt-1">
+   <button
+   type="button"
+   onClick={() => setEditingId(null)}
+   className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+   >
+   Cancel
+   </button>
+   <button
+   type="submit"
+   disabled={editSaving}
+   className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all"
+   style={{ backgroundColor: '#1b1b1b' }}
+   >
+   {editSaving ? <Loader2 size={14} className="animate-spin"/> : <CheckCircle2 size={14} />}
+   {editSaving ? 'Saving...' : 'Save Changes'}
+   </button>
+   </div>
+   {editingId && (() => {
+     const editMember = members.find(x => x.id === editingId);
+     return editMember && editMember.role !== 'owner' ? (
+       <div className="border-t border-gray-100 pt-3 flex justify-center">
+         <button
+           type="button"
+           onClick={() => { resetPassword(editingId); setEditingId(null); }}
+           disabled={resetPasswordId === editingId}
+           className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-50"
+         >
+           {resetPasswordId === editingId
+             ? <Loader2 size={12} className="animate-spin"/>
+             : editMember.status === 'invited'
+               ? <Send size={12}/>
+               : <KeyRound size={12}/>
+           }
+           {editMember.status === 'invited' ? 'Resend invite / Set password' : 'Send password reset email'}
+         </button>
+       </div>
+     ) : null;
+   })()}
+   </form>
  </div>
  </div>
  )}
@@ -487,26 +508,21 @@ export default function TeamPage() {
  >
  <Pencil size={14} className="text-gray-400"/> Edit Member
  </button>
-         {(m.status === 'invited' || m.status === 'inactive') && (
-             <button
-              onClick={() => resendInvite(m.id)}
-              disabled={resendingId === m.id}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-             >
-              {resendingId === m.id ? <Loader2 size={14} className="animate-spin text-gray-400"/> : <Send size={14} className="text-gray-400"/>}
-              Resend Invite
-             </button>
-            )}
-            {m.status === 'active' && m.role !== 'owner' && (
-             <button
-              onClick={() => resetPassword(m.id)}
-              disabled={resetPasswordId === m.id}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-             >
-              {resetPasswordId === m.id ? <Loader2 size={14} className="animate-spin text-gray-400"/> : <KeyRound size={14} className="text-gray-400"/>}
-              Reset Password
-             </button>
-            )}
+        {m.role !== 'owner' && (
+            <button
+             onClick={() => resetPassword(m.id)}
+             disabled={resetPasswordId === m.id}
+             className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+             {resetPasswordId === m.id
+               ? <Loader2 size={14} className="animate-spin text-gray-400"/>
+               : m.status === 'invited'
+                 ? <Send size={14} className="text-gray-400"/>
+                 : <KeyRound size={14} className="text-gray-400"/>
+             }
+             {m.status === 'invited' ? 'Resend invite / Set password' : 'Reset Password'}
+            </button>
+           )}
               <div className="border-t border-gray-200 my-1"/>
               {confirmDeleteId === m.id ? (
                <div className="px-4 py-2.5">
