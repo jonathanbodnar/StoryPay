@@ -641,12 +641,6 @@ export async function generatePricingGuidePdfServer(
     doc.text(lines, CX, y + 2, { align: 'center' });
     y += 2 + lines.length * 6 + 12;
 
-    // Signature block — never render an empty line.
-    doc.setFont(F.italic, 'normal'); doc.setFontSize(15); tc(PAL.soft);
-    doc.text('Warmly,', CX, y, { align: 'center' }); y += 9;
-    doc.setFont(F.serif, 'normal'); doc.setFontSize(15); tc(PAL.ink);
-    if (ownerName) { doc.text(ownerName, CX, y, { align: 'center' }); y += 7; }
-    tracked(name.toUpperCase(), CX, y, 8.5, 1.8, PAL.mute, F.bodySemi, 'normal', 'center');
     y += 12;
 
     const ph = BOTTOM - 4 - y;
