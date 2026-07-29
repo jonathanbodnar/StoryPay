@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
  Plus, Trash2, Loader2, Users, Mail, Shield, ChevronDown,
- CheckCircle2, Pencil, Send, MoreHorizontal, X,
+ CheckCircle2, Pencil, Send, MoreHorizontal, X, KeyRound,
 } from 'lucide-react';
 
 interface TeamMember {
@@ -70,6 +70,7 @@ export default function TeamPage() {
  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
  const [venueOwnerSession, setVenueOwnerSession] = useState(false);
+ const [resetPasswordId, setResetPasswordId] = useState<string | null>(null);
 
  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', role: 'member' });
 
@@ -208,6 +209,24 @@ export default function TeamPage() {
  }
  } catch { /* swallow */ }
  finally { setResendingId(null); }
+ }
+
+ async function resetPassword(id: string) {
+  setResetPasswordId(id);
+  setMenuOpenId(null);
+  try {
+   const res = await fetch(`/api/team/${id}/reset-password`, { method: 'POST' });
+   if (res.ok) {
+    showSaved('Password reset email sent');
+   } else {
+    const data = await res.json().catch(() => ({}));
+    setError((data as { error?: string }).error || 'Failed to send reset email');
+   }
+  } catch {
+   setError('Network error — please try again');
+  } finally {
+   setResetPasswordId(null);
+  }
  }
 
  function startEdit(m: TeamMember) {
@@ -468,16 +487,26 @@ export default function TeamPage() {
  >
  <Pencil size={14} className="text-gray-400"/> Edit Member
  </button>
- {(m.status === 'invited' || m.status === 'inactive') && (
- <button
- onClick={() => resendInvite(m.id)}
- disabled={resendingId === m.id}
- className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
- >
- {resendingId === m.id ? <Loader2 size={14} className="animate-spin text-gray-400"/> : <Send size={14} className="text-gray-400"/>}
- Resend Invite
- </button>
- )}
+         {(m.status === 'invited' || m.status === 'inactive') && (
+             <button
+              onClick={() => resendInvite(m.id)}
+              disabled={resendingId === m.id}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+             >
+              {resendingId === m.id ? <Loader2 size={14} className="animate-spin text-gray-400"/> : <Send size={14} className="text-gray-400"/>}
+              Resend Invite
+             </button>
+            )}
+            {m.status === 'active' && m.role !== 'owner' && (
+             <button
+              onClick={() => resetPassword(m.id)}
+              disabled={resetPasswordId === m.id}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+             >
+              {resetPasswordId === m.id ? <Loader2 size={14} className="animate-spin text-gray-400"/> : <KeyRound size={14} className="text-gray-400"/>}
+              Reset Password
+             </button>
+            )}
               <div className="border-t border-gray-200 my-1"/>
               {confirmDeleteId === m.id ? (
                <div className="px-4 py-2.5">
