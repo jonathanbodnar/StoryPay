@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Send invite email
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
   const inviteUrl = `${appUrl}/api/invite/${member.invite_token}`;
   const venueName = venue?.name || 'Your Venue';
   const inviteeName = first_name.trim();

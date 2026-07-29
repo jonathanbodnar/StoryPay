@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import crypto from 'node:crypto';
 
 async function getVenueId() {
   const c = await cookies();
@@ -55,9 +56,13 @@ export async function POST(
 
   const { id } = await params;
 
+  // Rotate the invite_token on every resend so the new email always carries a
+  // fresh link, and any previously-sent link is invalidated.
+  const freshToken = crypto.randomUUID();
+
   const { data: member, error } = await supabaseAdmin
     .from('venue_team_members')
-    .update({ invited_at: new Date().toISOString() })
+    .update({ invited_at: new Date().toISOString(), invite_token: freshToken })
     .eq('id', id)
     .eq('venue_id', venueId)
     .select()
@@ -72,10 +77,10 @@ export async function POST(
     .eq('id', venueId)
     .single();
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
   const inviteUrl = `${appUrl}/api/invite/${member.invite_token}`;
 
-  await sendEmail({
+  const emailResult = await sendEmail({
     to: member.email,
     subject: `You've been invited to join ${venue?.name || 'Your Venue'} on StoryVenue`,
     html: inviteEmailHtml({
@@ -88,5 +93,14 @@ export async function POST(
     }),
   });
 
-  return NextResponse.json(member);
+  if (!emailResult.success) {
+    console.error('[team-resend-invite] email failed for', member.email, ':', emailResult.error);
+    return NextResponse.json(
+      { error: `Invite email failed to send: ${emailResult.error ?? 'unknown error'}`, emailError: emailResult.error },
+      { status: 500 },
+    );
+  }
+
+  console.log('[team-resend-invite] invite resent to', member.email);
+  return NextResponse.json({ ...member, emailSent: true });
 }
