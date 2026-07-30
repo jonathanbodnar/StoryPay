@@ -150,15 +150,14 @@ const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
 ]);
 
 // Routes visible in the native app store shell (Capacitor iOS/Android).
-// Payments and billing are excluded — Apple/Play require those to open
-// in the external system browser instead of the in-app webview.
+// Payments, billing, Help Center, and branding are excluded — Apple/Play
+// require payment flows to open in the external system browser.
 const NATIVE_ALLOWED_NAV_IDS = new Set<string>([
   // Core nav
   'nav_main_leads',
   'nav_main_conversations',
   'nav_main_contacts',
   'nav_main_calendar',
-  'nav_main_help',
   // Settings — push notifications + team only; no billing/branding/general
   'nav_settings_push',
   'nav_settings_notifications',

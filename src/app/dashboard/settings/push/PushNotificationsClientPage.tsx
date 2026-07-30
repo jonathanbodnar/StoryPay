@@ -5,6 +5,7 @@ import {
   CheckCircle2, Bell, BellOff, Loader2, Send, Smartphone,
   ChevronRight, AlertTriangle, Monitor, RefreshCw,
 } from 'lucide-react';
+import { isNativeApp } from '@/lib/platform';
 
 // ── Platform detection ────────────────────────────────────────────────────────
 function getUA() { return typeof window !== 'undefined' ? window.navigator.userAgent : ''; }
@@ -228,7 +229,89 @@ export default function PushNotificationsClientPage() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Render
+  // Native app render — push is handled automatically by the OS via FCM/APNs.
+  // Show only the toggles; no install wizard or VAPID setup needed.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (isNativeApp()) {
+    const nativeEnabled = settings.push_enabled !== false;
+    return (
+      <div className="max-w-2xl">
+        <div className="mb-8">
+          <h1 className="font-heading text-2xl text-gray-900">Push Notifications</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Get instant alerts for new leads, payments, messages, and more — right on your phone.
+          </p>
+        </div>
+
+        {/* Master toggle */}
+        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden mb-4">
+          <div className="px-5 py-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Enable push notifications</p>
+              <p className="text-xs text-gray-400 mt-0.5">Turn off to stop all alerts on this device.</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={nativeEnabled}
+              onClick={() => {
+                const next = { ...settings, push_enabled: !nativeEnabled };
+                setSettings(next);
+                setSaving(true);
+                fetch('/api/notifications', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(next),
+                }).finally(() => setSaving(false));
+              }}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${nativeEnabled ? 'bg-emerald-500' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${nativeEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Per-scenario toggles */}
+        {nativeEnabled && (
+          <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Alert types</p>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {TOGGLES.map((row) => {
+                const current = settings[row.key] === undefined ? row.defaultOn : settings[row.key];
+                return (
+                  <div key={row.key} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50/60">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 leading-tight">{row.label}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{row.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={current}
+                      onClick={() => toggleScenario(row.key, row.defaultOn)}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${current ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${current ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            {saving && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-400 px-5 py-3">
+                <RefreshCw size={11} className="animate-spin" /> Saving…
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Web PWA render
   // ─────────────────────────────────────────────────────────────────────────
 
   const pl = platform;
