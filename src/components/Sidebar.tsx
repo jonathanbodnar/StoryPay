@@ -143,6 +143,7 @@ const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
   'nav_payments_subscriptions',
   'nav_transactions',
   'nav_settings_notifications',
+  'nav_settings_push',
   'nav_payments_settings',
   // Marketing — analytics only
   'nav_marketing_analytics',
