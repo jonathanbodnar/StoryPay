@@ -117,9 +117,7 @@ const listingItems: NavItem[] = [
 
 type FlyoutGroup = 'payments' | 'marketing' | 'settings' | 'listing' | null;
 
-// Routes visible in the mobile slide-out menu. Anything not listed here
-// is hidden when the menu is opened on phones / tablets (< lg breakpoint).
-// Owners can still navigate to hidden pages directly via URL on desktop.
+// Routes visible in the mobile slide-out menu on the WEB PWA / browser.
 const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
   // Main
   'nav_main_home',
@@ -128,8 +126,7 @@ const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
   'nav_main_calendar',
   'nav_main_leads',
   'nav_main_help',
-  // Listing — desktop-only subpages (pricing guide, booking system, reviews)
-  // are intentionally NOT in this list so they're hidden on mobile/tablet.
+  // Listing — desktop-only subpages hidden on mobile
   'nav_listing_dashboard',
   'nav_listing_analytics',
   'nav_listing_directory',
@@ -142,13 +139,29 @@ const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
   'nav_payments_installments',
   'nav_payments_subscriptions',
   'nav_transactions',
-  'nav_settings_notifications',
-  'nav_settings_push',
   'nav_payments_settings',
   // Marketing — analytics only
   'nav_marketing_analytics',
-  // Settings — "General" hidden on mobile (uses the desktop layout heavily)
+  // Settings
+  'nav_settings_notifications',
+  'nav_settings_push',
   'nav_settings_branding',
+  'nav_settings_team',
+]);
+
+// Routes visible in the native app store shell (Capacitor iOS/Android).
+// Payments and billing are excluded — Apple/Play require those to open
+// in the external system browser instead of the in-app webview.
+const NATIVE_ALLOWED_NAV_IDS = new Set<string>([
+  // Core nav
+  'nav_main_leads',
+  'nav_main_conversations',
+  'nav_main_contacts',
+  'nav_main_calendar',
+  'nav_main_help',
+  // Settings — push notifications + team only; no billing/branding/general
+  'nav_settings_push',
+  'nav_settings_notifications',
   'nav_settings_team',
 ]);
 
@@ -521,11 +534,14 @@ export default function Sidebar({
   const paymentsFiltered = paymentsItems;
   const marketingFiltered = marketingItems;
 
-  // Mobile-only filtered copies (used when rendering the slide-out menu)
-  const mobileListing   = listingFiltered.filter((s)   => MOBILE_ALLOWED_NAV_IDS.has(s.navId));
-  const mobilePayments  = paymentsFiltered.filter((s)  => MOBILE_ALLOWED_NAV_IDS.has(s.navId));
-  const mobileMarketing = marketingFiltered.filter((s) => MOBILE_ALLOWED_NAV_IDS.has(s.navId));
-  const mobileSettings  = settingsFiltered.filter((s)  => MOBILE_ALLOWED_NAV_IDS.has(s.navId));
+  // Mobile-only filtered copies (used when rendering the slide-out menu).
+  // On the native app store shell, use the tighter native-only set so
+  // Payments, Billing, and Branding are never shown inside the webview.
+  const mobileAllowedSet = isNativeApp() ? NATIVE_ALLOWED_NAV_IDS : MOBILE_ALLOWED_NAV_IDS;
+  const mobileListing   = listingFiltered.filter((s)   => mobileAllowedSet.has(s.navId));
+  const mobilePayments  = paymentsFiltered.filter((s)  => mobileAllowedSet.has(s.navId));
+  const mobileMarketing = marketingFiltered.filter((s) => mobileAllowedSet.has(s.navId));
+  const mobileSettings  = settingsFiltered.filter((s)  => mobileAllowedSet.has(s.navId));
 
   /**
    * Renders a sub-menu item (Listing → Pricing Guide, Payments → Coupons,
@@ -601,7 +617,7 @@ export default function Sidebar({
       if (!isAdmin && item.label === 'Reports') return false;
       // On mobile, restrict to the curated phone-friendly route list.
       // "Ask AI" is a button, not a route, so always allowed.
-      if (isMobile && item.label !== 'Ask AI' && !MOBILE_ALLOWED_NAV_IDS.has(item.navId)) return false;
+      if (isMobile && item.label !== 'Ask AI' && !mobileAllowedSet.has(item.navId)) return false;
       return true;
     }).map((item) => {
       const Icon = item.icon;

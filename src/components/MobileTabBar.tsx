@@ -3,17 +3,22 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { Home, MessageCircle, Inbox, Calendar, CreditCard } from 'lucide-react';
+import { Home, MessageCircle, Inbox, Calendar, CreditCard, Users, LayoutDashboard } from 'lucide-react';
 import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
+import { isNativeApp } from '@/lib/platform';
 
 /**
  * Bottom navigation bar — visible on mobile + tablet (below `lg`) across
- * every dashboard page. Mirrors the native-app pattern used by virtually
- * every consumer mobile app.
+ * every dashboard page.
+ *
+ * Native app store shell (Capacitor): shows the approved 5-tab set that
+ * matches the locked-in app store menu — no Payments tab (Apple rule).
+ *
+ * Web PWA / browser: shows the original 5-tab set including Payments.
  */
-const TABS = [
+const PWA_TABS = [
   { label: 'Home',        href: '/dashboard/home',          icon: Home,          match: ['/dashboard/home', '/dashboard'] },
   { label: 'Messages',    href: '/dashboard/conversations', icon: MessageCircle, match: ['/dashboard/conversations'] },
   { label: 'Lead Inbox',  href: '/dashboard/leads',         icon: Inbox,         match: ['/dashboard/leads'] },
@@ -21,8 +26,17 @@ const TABS = [
   { label: 'Payments',    href: '/dashboard/payments/new',  icon: CreditCard,    match: ['/dashboard/payments', '/dashboard/transactions', '/dashboard/proposals', '/dashboard/offerings'] },
 ];
 
+const NATIVE_TABS = [
+  { label: 'Dashboard',   href: '/dashboard',               icon: LayoutDashboard, match: ['/dashboard/home', '/dashboard'] },
+  { label: 'Lead Inbox',  href: '/dashboard/leads',         icon: Inbox,           match: ['/dashboard/leads'] },
+  { label: 'Messages',    href: '/dashboard/conversations', icon: MessageCircle,   match: ['/dashboard/conversations'] },
+  { label: 'Contacts',    href: '/dashboard/contacts',      icon: Users,           match: ['/dashboard/contacts'] },
+  { label: 'Calendar',    href: '/dashboard/calendar',      icon: Calendar,        match: ['/dashboard/calendar'] },
+];
+
 export default function MobileTabBar({ venueId }: { venueId?: string | null }) {
   const pathname = usePathname();
+  const TABS = isNativeApp() ? NATIVE_TABS : PWA_TABS;
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadLeads, setUnreadLeads] = useState(0);
 
