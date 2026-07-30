@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, type RefObject } from 'react';
+import { isNativeApp } from '@/lib/platform';
 import {
  Sparkles, X, Send, Loader2, ChevronDown,
  RotateCcw, AlertCircle,
@@ -488,6 +489,8 @@ setMessages([]); setInput(''); setError('');
 setPendingImage(null); setShowEmoji(false);
  setInlineArticleId(null);
  }
+
+ if (isNativeApp()) return null;
 
  return (
  <>

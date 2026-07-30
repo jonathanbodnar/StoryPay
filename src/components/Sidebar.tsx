@@ -614,8 +614,10 @@ export default function Sidebar({
       // Role-based filters still hide entries entirely — admin-only
       // pages are not "locked", they simply don't apply to members.
       if (!isAdmin && item.label === 'Reports') return false;
+      // On native app, exclude Ask AI entirely (no AskAIWidget in native).
+      if (isNativeApp() && item.label === 'Ask AI') return false;
       // On mobile, restrict to the curated phone-friendly route list.
-      // "Ask AI" is a button, not a route, so always allowed.
+      // "Ask AI" is a button, not a route, so always allowed on mobile PWA.
       if (isMobile && item.label !== 'Ask AI' && !mobileAllowedSet.has(item.navId)) return false;
       return true;
     }).map((item) => {
@@ -1047,14 +1049,16 @@ export default function Sidebar({
           <Image src="/storyvenue-dark-logo.png" alt="StoryVenue" width={90} height={22} />
         </Link>
         <div className="flex items-center gap-2">
-          <a
-            href="/api/auth/logout"
-            onClick={handleLogoutClick}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            title="Logout"
-          >
-            <LogOut size={17} />
-          </a>
+          {!isNativeApp() && (
+            <a
+              href="/api/auth/logout"
+              onClick={handleLogoutClick}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              title="Logout"
+            >
+              <LogOut size={17} />
+            </a>
+          )}
           <button
             type="button"
             onClick={() => setMobileOpen((v) => !v)}

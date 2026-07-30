@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AnnouncementTicker from '@/components/AnnouncementTicker';
 import MobileTabBar from '@/components/MobileTabBar';
-import MobileFab from '@/components/MobileFab';
 import MobileDashboardRedirect from '@/components/MobileDashboardRedirect';
 import NativePushRegistrar from '@/components/NativePushRegistrar';
 // ImpersonationBanner rendered server-side in layout.tsx (black bar)
@@ -348,7 +347,6 @@ export default function DashboardShell({
       </div>
 
       {/* Mobile-only chrome (hidden ≥ lg) */}
-      <MobileFab />
       <MobileTabBar venueId={venue.id} />
     </div>
   );

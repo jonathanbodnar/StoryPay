@@ -17,6 +17,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { classNames, toTitleCase } from '@/lib/utils';
+import { isNativeApp } from '@/lib/platform';
 import AddLeadModal, {
   NO_PIPELINE_STAGE,
   type LeadDraft,
@@ -297,7 +298,7 @@ export default function ContactsPage() {
             className="hidden"
             onChange={handleImportFile}
           />
-          {ghlConnected && (
+          {!isNativeApp() && ghlConnected && (
             <button
               type="button"
               disabled={syncStatus === 'running'}
@@ -309,22 +310,26 @@ export default function ContactsPage() {
               {syncStatus === 'running' ? 'Syncing…' : 'Sync from GHL'}
             </button>
           )}
-          <button
-            type="button"
-            disabled={importBusy}
-            onClick={() => importInputRef.current?.click()}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50"
-          >
-            {importBusy ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-            Import CSV
-          </button>
-          <a
-            href={exportHref}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50"
-          >
-            <Download size={16} />
-            Export CSV
-          </a>
+          {!isNativeApp() && (
+            <button
+              type="button"
+              disabled={importBusy}
+              onClick={() => importInputRef.current?.click()}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              {importBusy ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+              Import CSV
+            </button>
+          )}
+          {!isNativeApp() && (
+            <a
+              href={exportHref}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50"
+            >
+              <Download size={16} />
+              Export CSV
+            </a>
+          )}
           <button
             type="button"
             onClick={() => setShowModal(true)}

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import LeadInsightsStrip, { type LeadInsightsPayload } from '@/components/leads/LeadInsightsStrip';
 import AddLeadModal, { NO_PIPELINE_STAGE } from '@/components/leads/AddLeadModal';
+import { isNativeApp } from '@/lib/platform';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone, wallClockToUtc } from '@/lib/venue-timezone';
 import { effectiveWinProbability } from '@/lib/pipelines';
@@ -716,12 +717,14 @@ export default function LeadsPage() {
           </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <PipelineControls
-            pipelines={pipelines}
-            activeId={activePipelineId}
-            onChange={setActivePipelineId}
-            onManage={() => setEditorOpen(true)}
-          />
+          {!isNativeApp() && (
+            <PipelineControls
+              pipelines={pipelines}
+              activeId={activePipelineId}
+              onChange={setActivePipelineId}
+              onManage={() => setEditorOpen(true)}
+            />
+          )}
           <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden">
             <button
               onClick={() => setView('kanban')}
@@ -2424,7 +2427,7 @@ function LeadDrawer({
               onSave={(v) => void saveField('message', v || null)} saving={savingField === 'message'} />
           </section>
 
-          {lead.first_touch_utm && typeof lead.first_touch_utm === 'object' && Object.keys(lead.first_touch_utm).length > 0 ? (
+          {!isNativeApp() && lead.first_touch_utm && typeof lead.first_touch_utm === 'object' && Object.keys(lead.first_touch_utm).length > 0 ? (
             <section>
               <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
                 First-touch UTM
@@ -2594,7 +2597,7 @@ function LeadDrawer({
           )}
 
           {/* Personalized trigger links (automatic attribution via ?t=) */}
-          <section>
+          {!isNativeApp() && <section>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-[#1b1b1b] flex items-center gap-1.5">
                 <Link2 className="w-4 h-4" /> Trigger links for this lead
@@ -2655,7 +2658,7 @@ function LeadDrawer({
                 })}
               </ul>
             )}
-          </section>
+          </section>}
 
           {/* Tasks */}
           <section>

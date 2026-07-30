@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import FeatureLockModal from '@/components/FeatureLockModal';
 import { useFeatureAccess } from '@/lib/use-feature-access';
+import { isNativeApp } from '@/lib/platform';
 import NextLink from 'next/link';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -963,14 +964,16 @@ export default function ListingAnalyticsPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <DateRangePicker value={dateRange} onChange={setDateRange} />
-          <button
-            type="button"
-            onClick={() => setReportOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-300 transition-all"
-          >
-            <BarChart2 size={14} className="text-violet-500" />
-            Export Report
-          </button>
+          {!isNativeApp() && (
+            <button
+              type="button"
+              onClick={() => setReportOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-700 hover:border-gray-300 transition-all"
+            >
+              <BarChart2 size={14} className="text-violet-500" />
+              Export Report
+            </button>
+          )}
           <button onClick={() => { void load(dateRange); void loadFunnel(dateRange); }} disabled={loading}
             className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-2.5 py-2.5 text-gray-500 hover:border-gray-300 disabled:opacity-40 transition-all">
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -1468,7 +1471,7 @@ export default function ListingAnalyticsPage() {
       )}
 
       {/* ── Tools: UTM link builder + QR code ─────────────────────────── */}
-      {d && d.venue_slug && (
+      {d && d.venue_slug && !isNativeApp() && (
         <div className="space-y-4">
           <div className="flex items-center gap-2 pt-2">
             <Link2 size={16} className="text-gray-400" />
