@@ -59,7 +59,7 @@ export async function GET() {
     .from('venue_notifications')
     .select('settings')
     .eq('venue_id', venueId)
-    .single();
+    .maybeSingle();
 
   // Merge saved with defaults
   const saved = (data?.settings as Record<string, boolean>) ?? {};

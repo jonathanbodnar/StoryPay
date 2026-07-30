@@ -34,7 +34,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-// ── Per-scenario toggles (mirrored from PushNotificationManager) ─────────────
+// ── Per-scenario toggles — WEB PWA (full set) ────────────────────────────────
 const TOGGLES = [
   { key: 'push_new_lead',             label: 'New lead',              description: 'Someone enquires about your venue.',       defaultOn: true },
   { key: 'push_new_message',          label: 'New message',           description: 'A contact sends you a reply.',             defaultOn: true },
@@ -50,6 +50,27 @@ const TOGGLES = [
   { key: 'push_subscription_cancelled', label: 'Subscription cancelled', description: 'A recurring plan ends.',               defaultOn: false },
   { key: 'push_new_customer',         label: 'New contact',           description: 'A new customer record is created.',        defaultOn: false },
 ];
+
+// ── Native app toggles — financial scenarios excluded for App Store compliance ─
+const NATIVE_TOGGLES = [
+  { key: 'push_new_lead',    label: 'New lead',             description: 'Someone enquires about your venue.',    defaultOn: true },
+  { key: 'push_new_message', label: 'New message',          description: 'A contact sends you a reply.',          defaultOn: true },
+  { key: 'push_ai_handoff',  label: 'AI Concierge handoff', description: 'The AI hands a conversation to you.',   defaultOn: true },
+  { key: 'push_proposal_signed', label: 'Proposal signed',  description: 'A customer signs a proposal.',          defaultOn: true },
+  { key: 'push_document_viewed', label: 'Document opened',  description: 'A customer opens a proposal you sent.', defaultOn: false },
+  { key: 'push_new_customer',    label: 'New contact',      description: 'A new customer record is created.',     defaultOn: false },
+];
+
+// Financial scenario keys disabled on native to satisfy App Store guidelines.
+const NATIVE_DISABLED_FINANCIAL_KEYS: Record<string, boolean> = {
+  push_payment_received:      false,
+  push_payment_failed:        false,
+  push_high_value_payment:    false,
+  push_invoice_paid:          false,
+  push_refund_issued:         false,
+  push_subscription_created:  false,
+  push_subscription_cancelled: false,
+};
 
 function urlBase64ToArrayBuffer(b64: string): ArrayBuffer {
   const padding = '='.repeat((4 - (b64.length % 4)) % 4);
@@ -233,13 +254,13 @@ export default function PushNotificationsClientPage() {
   // Show only the toggles; no install wizard or VAPID setup needed.
   // ─────────────────────────────────────────────────────────────────────────
   if (isNativeApp()) {
-    const nativeEnabled = settings.push_enabled !== false;
+    const nativeEnabled = settings.push_enabled === true;
     return (
       <div className="max-w-2xl">
         <div className="mb-8">
           <h1 className="font-heading text-2xl text-gray-900">Push Notifications</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Get instant alerts for new leads, payments, messages, and more — right on your phone.
+            Get instant alerts for new leads, messages, and more — right on your phone.
           </p>
         </div>
 
@@ -255,7 +276,12 @@ export default function PushNotificationsClientPage() {
               role="switch"
               aria-checked={nativeEnabled}
               onClick={() => {
-                const next = { ...settings, push_enabled: !nativeEnabled };
+                const next = {
+                  ...settings,
+                  push_enabled: !nativeEnabled,
+                  // Keep financial scenarios disabled on native (App Store compliance).
+                  ...NATIVE_DISABLED_FINANCIAL_KEYS,
+                };
                 setSettings(next);
                 setSaving(true);
                 fetch('/api/notifications', {
@@ -278,7 +304,7 @@ export default function PushNotificationsClientPage() {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Alert types</p>
             </div>
             <div className="divide-y divide-gray-50">
-              {TOGGLES.map((row) => {
+              {NATIVE_TOGGLES.map((row) => {
                 const current = settings[row.key] === undefined ? row.defaultOn : settings[row.key];
                 return (
                   <div key={row.key} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50/60">
