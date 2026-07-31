@@ -45,6 +45,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
+import { isNativeApp } from '@/lib/platform';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
 import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
@@ -1533,66 +1534,92 @@ export default function ConversationsPage() {
             <Star size={14} className={filterStarred ? 'fill-amber-400 text-amber-500' : ''} />
           </button>
         </div>
-        {/* ── Main pill filters: All / Unread / Team ── */}
-        {(
-          [
-            { id: 'all' as const, label: 'All' },
-            { id: 'unread' as const, label: 'Unread' },
-            { id: 'team_contacts' as const, label: 'Team' },
-          ] as const
-        ).map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setThreadListFilter(tab.id)}
-            className={classNames(
-              'inline-flex flex-shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
-              threadListFilter === tab.id
-                ? 'bg-gray-900 text-white'
-                : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
-            )}
-          >
-            {tab.label}
-            {/* Red badge on the Unread pill — always visible when there are
-                unread threads, regardless of which filter is active. */}
-            {tab.id === 'unread' && totalUnreadCount > 0 && (
-              <span className={classNames(
-                'inline-flex min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none',
-                threadListFilter === 'unread'
-                  ? 'bg-white text-gray-900'
-                  : 'bg-red-500 text-white',
-              )}>
-                {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-              </span>
-            )}
-          </button>
-        ))}
-        {/* ── Pipeline-stage filter pills — one per default sales-pipeline stage,
-            in pipeline order. Same single-select pattern as All/Unread/Team, just
-            keyed on `stage:<stage_id>` so it works for any venue's stage set. ── */}
-        {defaultPipelineStages.map((st) => {
-          const filterId = `stage:${st.id}` as const;
-          const isActive = threadListFilter === filterId;
-          return (
-            <button
-              key={st.id}
-              type="button"
-              onClick={() => setThreadListFilter(filterId)}
-              className={classNames(
-                'inline-flex flex-shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
-                isActive
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
-              )}
+        {/* Mobile app: collapse the whole pill row into a single dropdown so it
+            matches the standard rounded-xl control style and fits the narrow
+            screen. Desktop/PWA keeps the horizontally-scrolling pills. */}
+        {isNativeApp() ? (
+          <div className="relative min-w-0 flex-1">
+            <select
+              value={threadListFilter}
+              onChange={(e) => setThreadListFilter(e.target.value as ThreadListFilter)}
+              aria-label="Filter conversations"
+              className="w-full appearance-none rounded-xl border border-gray-200 bg-white pl-3 pr-9 py-1.5 text-[13px] font-semibold text-gray-900 focus:border-gray-400 focus:outline-none"
             >
-              <span
-                className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
-                style={{ backgroundColor: isActive ? '#ffffff' : (st.color || '#9ca3af') }}
-              />
-              {st.name}
-            </button>
-          );
-        })}
+              <option value="all">All</option>
+              <option value="unread">
+                Unread{totalUnreadCount > 0 ? ` (${totalUnreadCount > 99 ? '99+' : totalUnreadCount})` : ''}
+              </option>
+              <option value="team_contacts">Team</option>
+              {defaultPipelineStages.map((st) => (
+                <option key={st.id} value={`stage:${st.id}`}>{st.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          </div>
+        ) : (
+          <>
+            {/* ── Main pill filters: All / Unread / Team ── */}
+            {(
+              [
+                { id: 'all' as const, label: 'All' },
+                { id: 'unread' as const, label: 'Unread' },
+                { id: 'team_contacts' as const, label: 'Team' },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setThreadListFilter(tab.id)}
+                className={classNames(
+                  'inline-flex flex-shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
+                  threadListFilter === tab.id
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
+                )}
+              >
+                {tab.label}
+                {/* Red badge on the Unread pill — always visible when there are
+                    unread threads, regardless of which filter is active. */}
+                {tab.id === 'unread' && totalUnreadCount > 0 && (
+                  <span className={classNames(
+                    'inline-flex min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none',
+                    threadListFilter === 'unread'
+                      ? 'bg-white text-gray-900'
+                      : 'bg-red-500 text-white',
+                  )}>
+                    {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                  </span>
+                )}
+              </button>
+            ))}
+            {/* ── Pipeline-stage filter pills — one per default sales-pipeline stage,
+                in pipeline order. Same single-select pattern as All/Unread/Team, just
+                keyed on `stage:<stage_id>` so it works for any venue's stage set. ── */}
+            {defaultPipelineStages.map((st) => {
+              const filterId = `stage:${st.id}` as const;
+              const isActive = threadListFilter === filterId;
+              return (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setThreadListFilter(filterId)}
+                  className={classNames(
+                    'inline-flex flex-shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors',
+                    isActive
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50',
+                  )}
+                >
+                  <span
+                    className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                    style={{ backgroundColor: isActive ? '#ffffff' : (st.color || '#9ca3af') }}
+                  />
+                  {st.name}
+                </button>
+              );
+            })}
+          </>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white">

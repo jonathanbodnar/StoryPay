@@ -739,27 +739,29 @@ export default function LeadsPage() {
               onManage={() => setEditorOpen(true)}
             />
           )}
-          <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden">
+          <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden">
             <button
               onClick={() => setView('kanban')}
+              title="Kanban view"
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
                 view === 'kanban' ? 'bg-gray-900 text-white' : 'text-gray-800 hover:bg-gray-50'
               }`}
             >
-              <LayoutGrid className="w-4 h-4" /> Kanban
+              <LayoutGrid className="w-4 h-4" /> {!isNativeApp() && 'Kanban'}
             </button>
             <button
               onClick={() => setView('list')}
+              title="List view"
               className={`flex items-center gap-2 border-l border-gray-200 px-4 py-2.5 text-sm font-medium transition-colors ${
                 view === 'list' ? 'bg-gray-900 text-white' : 'text-gray-800 hover:bg-gray-50'
               }`}
             >
-              <ListIcon className="w-4 h-4" /> List
+              <ListIcon className="w-4 h-4" /> {!isNativeApp() && 'List'}
             </button>
           </div>
           <button
             onClick={() => setAddingOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-800"
           >
             <Plus size={18} /> Add lead
           </button>
@@ -783,7 +785,7 @@ export default function LeadsPage() {
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="Search name, email, phone, venue, URL, notes…"
-            className="w-full rounded-2xl border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
           />
         </div>
         {view === 'list' && activePipeline && (
@@ -791,7 +793,7 @@ export default function LeadsPage() {
             <select
               value={stageFilter}
               onChange={(e) => setStageFilter(e.target.value)}
-              className="appearance-none rounded-2xl border border-gray-200 bg-white pl-9 pr-8 py-2 text-sm focus:border-gray-400 focus:outline-none"
+              className="appearance-none rounded-xl border border-gray-200 bg-white pl-9 pr-8 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
             >
               <option value="all">All stages</option>
               {activePipeline.stages.map((s) => (
@@ -984,6 +986,28 @@ function PipelineTabs({
   activeId: string | null;
   onChange: (id: string) => void;
 }) {
+  // Mobile app: render as a compact dropdown so it matches the standard
+  // rounded-xl control style and doesn't overflow the narrow screen.
+  if (isNativeApp()) {
+    return (
+      <div className="relative">
+        <select
+          value={activeId ?? ''}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label="Sales pipeline"
+          className="w-full appearance-none rounded-xl border border-gray-200 bg-white pl-4 pr-9 py-2.5 text-sm font-medium text-gray-900 focus:border-gray-400 focus:outline-none"
+        >
+          {pipelines.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}{p.is_default ? ' (Default)' : ''}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-gray-50/80 p-1.5"
