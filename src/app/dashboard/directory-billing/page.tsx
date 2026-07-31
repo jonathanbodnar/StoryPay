@@ -629,6 +629,8 @@ export default function DirectoryBillingPage() {
       ) : summary.trial.status === 'expired' && (currentPlan?.price_monthly_cents ?? 0) > 0 ? (
         <TrialExpiredBanner
           chargeTotalCents={summary.charge.total_cents}
+          hasPaymentMethod={Boolean(summary.payment_method)}
+          cardLastFour={summary.payment_method?.last4 ?? null}
           busy={busy}
           onAddCard={() => void startPaid()}
         />
@@ -1149,10 +1151,14 @@ function TrialActiveBanner({
  */
 function TrialExpiredBanner({
   chargeTotalCents,
+  hasPaymentMethod,
+  cardLastFour,
   busy,
   onAddCard,
 }: {
   chargeTotalCents: number;
+  hasPaymentMethod: boolean;
+  cardLastFour?: string | null;
   busy: string | null;
   onAddCard: () => void;
 }) {
@@ -1166,8 +1172,17 @@ function TrialExpiredBanner({
           <div>
             <h3 className="font-heading text-base text-amber-900">Your free trial has ended</h3>
             <p className="mt-0.5 text-sm text-amber-800">
-              Add a card to keep your current plan and add-ons. You&apos;ll be charged{' '}
-              <strong>{formatCents(chargeTotalCents)}/mo</strong>, starting today.
+              {hasPaymentMethod ? (
+                <>
+                  Your card{cardLastFour ? <> ending in <strong>••••{cardLastFour}</strong></> : null} will be charged{' '}
+                  <strong>{formatCents(chargeTotalCents)}/mo</strong> to keep your plan active.
+                </>
+              ) : (
+                <>
+                  Add a card to keep your current plan. You&apos;ll be charged{' '}
+                  <strong>{formatCents(chargeTotalCents)}/mo</strong>, starting today.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -1178,7 +1193,7 @@ function TrialExpiredBanner({
           className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
         >
           {busy === 'start_paid' ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />}
-          Add card &amp; keep plan
+          {hasPaymentMethod ? 'Activate plan' : 'Add card & keep plan'}
         </button>
       </div>
     </div>
