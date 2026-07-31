@@ -2,8 +2,7 @@
 
 /**
  * InlineTrialCardForm — embeds the Fortis Elements card form (no redirect) to
- * vault a card for a 14-day trial subscription. Mirrors the proven signup
- * flow (src/app/signup/addons/AddonsClient.tsx): on tokenize success it POSTs
+ * vault a card for a 14-day trial subscription. On tokenize success it POSTs
  * the ticketId to /api/venue-billing/signup-checkout/confirm, which saves the
  * card + creates the delayed-start subscription, then calls onSuccess().
  */
