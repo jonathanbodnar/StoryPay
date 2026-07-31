@@ -191,6 +191,20 @@ function formatMoney(n: number | null, hideRevenue = false): string {
   }).format(n);
 }
 
+// Format a phone number for display with dashes: 6142262075 → 614-226-2075,
+// 16142262075 → 1-614-226-2075. Non-US / unusual lengths are returned as-is.
+function formatPhone(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `1-${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+  return raw;
+}
+
 function displayName(lead: Lead): string {
   const composed = toTitleCase([lead.first_name, lead.last_name].filter(Boolean).join(' ').trim());
   return composed || toTitleCase(lead.name ?? '') || 'Unnamed lead';
@@ -1357,6 +1371,7 @@ function KanbanCard({
 }) {
   const weighted =
     lead.opportunity_value != null ? lead.opportunity_value * (stageWinPct / 100) : null;
+  const native = isNativeApp();
   return (
     <div
       draggable
@@ -1522,29 +1537,33 @@ function KanbanCard({
         )}
 
         {/* Notes — open drawer */}
-        <button
-          type="button"
-          title={lead.note_count > 0 ? `${lead.note_count} note${lead.note_count === 1 ? '' : 's'} — open` : 'Add a note'}
-          onClick={onClick}
-          className="relative inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-amber-50 hover:text-amber-600 transition-colors"
-        >
-          <StickyNote className="w-3.5 h-3.5" />
-          {lead.note_count > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white leading-none">
-              {lead.note_count > 9 ? '9+' : lead.note_count}
-            </span>
-          )}
-        </button>
+        {!native && (
+          <button
+            type="button"
+            title={lead.note_count > 0 ? `${lead.note_count} note${lead.note_count === 1 ? '' : 's'} — open` : 'Add a note'}
+            onClick={onClick}
+            className="relative inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+          >
+            <StickyNote className="w-3.5 h-3.5" />
+            {lead.note_count > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white leading-none">
+                {lead.note_count > 9 ? '9+' : lead.note_count}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Tags */}
-        <LeadTagPopover
-          lead={lead}
-          allTags={allTags}
-          onToggleTag={onToggleLeadTag}
-          onCreateTagForLead={onCreateTagForLead}
-          align="left"
-          compact
-        />
+        {!native && (
+          <LeadTagPopover
+            lead={lead}
+            allTags={allTags}
+            onToggleTag={onToggleLeadTag}
+            onCreateTagForLead={onCreateTagForLead}
+            align="left"
+            compact
+          />
+        )}
 
         {/* New appointment */}
         <Link
@@ -1566,7 +1585,17 @@ function KanbanCard({
         )}
       </div>
 
-      {/* ── Footer: created date ────────────────────────────────────── */}
+      {/* ── Footer: contact + created date ──────────────────────────── */}
+      {native && (lead.phone || lead.email) && (
+        <div className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-gray-500">
+          {lead.phone && (
+            <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {formatPhone(lead.phone)}</span>
+          )}
+          {lead.email && (
+            <span className="flex items-center gap-1 truncate"><Mail className="w-3 h-3 shrink-0" /> <span className="truncate">{lead.email}</span></span>
+          )}
+        </div>
+      )}
       <div className="mt-1.5 text-[10px] text-gray-400">
         Lead Created: {formatShortDate(lead.created_at, venueTz)}
       </div>
@@ -1599,6 +1628,7 @@ function ListBoard({
   }
 
   const stageById = new Map(stages.map((s) => [s.id, s]));
+  const native = isNativeApp();
 
   return (
     <div className="rounded-3xl border border-gray-200 bg-white overflow-hidden">
@@ -1643,28 +1673,47 @@ function ListBoard({
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                    {lead.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {lead.email}</span>}
-                    {lead.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {lead.phone}</span>}
-                    {lead.wedding_date && <span className="flex items-center gap-1"><CalendarIcon className="w-3.5 h-3.5" /> {formatDate(lead.wedding_date)}</span>}
-                    {lead.guest_count != null && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {lead.guest_count} guests</span>}
-                    {lead.venue_website_url && (
-                      <a
-                        href={lead.venue_website_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1 text-gray-500 hover:text-gray-900"
-                      >
-                        <Globe className="w-3.5 h-3.5" /> Website
-                      </a>
-                    )}
-                  </div>
+                  {native ? (
+                    <div className="mt-1 flex flex-col gap-1 text-xs text-gray-500">
+                      {lead.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {formatPhone(lead.phone)}</span>}
+                      {lead.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {lead.email}</span>}
+                      {lead.wedding_date && <span className="flex items-center gap-1"><CalendarIcon className="w-3.5 h-3.5" /> {formatDate(lead.wedding_date)}</span>}
+                      {lead.guest_count != null && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {lead.guest_count} guests</span>}
+                    </div>
+                  ) : (
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                      {lead.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {lead.email}</span>}
+                      {lead.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {lead.phone}</span>}
+                      {lead.wedding_date && <span className="flex items-center gap-1"><CalendarIcon className="w-3.5 h-3.5" /> {formatDate(lead.wedding_date)}</span>}
+                      {lead.guest_count != null && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {lead.guest_count} guests</span>}
+                      {lead.venue_website_url && (
+                        <a
+                          href={lead.venue_website_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 text-gray-500 hover:text-gray-900"
+                        >
+                          <Globe className="w-3.5 h-3.5" /> Website
+                        </a>
+                      )}
+                    </div>
+                  )}
                   {lead.message && (
                     <p className="mt-1 text-xs text-gray-500 line-clamp-1">{lead.message}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-3 flex-wrap justify-start sm:shrink-0 sm:justify-end">
+                  {lead.phone && (
+                    <a
+                      href={`tel:${lead.phone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      title={`Call ${formatPhone(lead.phone)}`}
+                      className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-green-50 hover:text-green-600 transition-colors"
+                    >
+                      <Phone className="w-4 h-4" />
+                    </a>
+                  )}
                   {lead.email && (
                     <Link
                       href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=sms`}
@@ -1675,13 +1724,15 @@ function ListBoard({
                       <MessageSquare className="w-4 h-4" />
                     </Link>
                   )}
-                  <LeadTagPopover
-                    lead={lead}
-                    allTags={allTags}
-                    onToggleTag={onToggleLeadTag}
-                    onCreateTagForLead={onCreateTagForLead}
-                    align="left"
-                  />
+                  {!native && (
+                    <LeadTagPopover
+                      lead={lead}
+                      allTags={allTags}
+                      onToggleTag={onToggleLeadTag}
+                      onCreateTagForLead={onCreateTagForLead}
+                      align="left"
+                    />
+                  )}
                   {lead.booking_badge && (
                     <div className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-900">
                       <CalendarPlus className="w-3 h-3 shrink-0" />
