@@ -739,7 +739,7 @@ export default function LeadsPage() {
               onManage={() => setEditorOpen(true)}
             />
           )}
-          <div className="flex h-11 rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className="flex h-10 rounded-lg border border-gray-200 bg-white overflow-hidden">
             <button
               onClick={() => setView('kanban')}
               title="Kanban view"
@@ -761,7 +761,7 @@ export default function LeadsPage() {
           </div>
           <button
             onClick={() => setAddingOpen(true)}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-900 px-4 text-sm font-medium text-white transition hover:bg-brand-800"
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-900 px-4 text-sm font-medium text-white transition hover:bg-brand-800"
           >
             <Plus size={18} /> Add lead
           </button>
@@ -785,7 +785,7 @@ export default function LeadsPage() {
               <select
                 value={stageFilter}
                 onChange={(e) => setStageFilter(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-gray-200 bg-white pl-9 pr-8 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-gray-200 bg-white pl-9 pr-8 h-10 text-sm focus:border-gray-400 focus:outline-none"
               >
                 <option value="all">All stages</option>
                 {activePipeline.stages.map((s) => (
@@ -803,7 +803,7 @@ export default function LeadsPage() {
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
               placeholder="Search name, email, phone, venue, URL, notes…"
-              className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+              className="w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 h-10 text-sm focus:border-gray-400 focus:outline-none"
             />
           </div>
         </div>
@@ -1027,7 +1027,7 @@ function PipelineTabs({
           value={activeId ?? ''}
           onChange={(e) => onChange(e.target.value)}
           aria-label="Sales pipeline"
-          className="w-full appearance-none rounded-xl border border-gray-200 bg-white pl-4 pr-9 py-2.5 text-sm font-medium text-gray-900 focus:border-gray-400 focus:outline-none"
+          className="w-full appearance-none rounded-lg border border-gray-200 bg-white pl-4 pr-9 h-10 text-sm font-medium text-gray-900 focus:border-gray-400 focus:outline-none"
         >
           {pipelines.map((p) => (
             <option key={p.id} value={p.id}>
@@ -1755,7 +1755,7 @@ function ListBoard({
                       )}
                     </div>
                   )}
-                  {lead.message && (
+                  {!native && lead.message && (
                     <p className="mt-1 text-xs text-gray-500 line-clamp-1">{lead.message}</p>
                   )}
                 </div>

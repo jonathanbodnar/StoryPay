@@ -348,7 +348,7 @@ export default function ContactsPage() {
           <button
             type="button"
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors"
+            className="flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition-colors"
             style={{ backgroundColor: '#1b1b1b' }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
@@ -401,7 +401,7 @@ export default function ContactsPage() {
           placeholder="Search by name, email, or phone..."
           autoComplete="off"
           style={{ fontSize: 16 }}
-          className="w-full rounded-lg border border-gray-200 py-2.5 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
+          className="h-10 w-full rounded-lg border border-gray-200 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
         />
       </div>
 

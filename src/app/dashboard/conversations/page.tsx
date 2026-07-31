@@ -1493,7 +1493,7 @@ export default function ConversationsPage() {
             setShowNew(true);
             setNewConversationError('');
           }}
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-900 px-4 text-sm font-medium text-white transition hover:bg-brand-800"
         >
           <Plus size={18} />
           New conversation
@@ -1503,7 +1503,10 @@ export default function ConversationsPage() {
       {/* ── Filter bar — one thin horizontal row spanning the full width,
           scrolls horizontally instead of wrapping so it always stays a
           single line no matter how many stage pills a venue's pipeline has. ── */}
-      <div className="no-scrollbar mb-3 flex flex-shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto rounded-2xl border border-gray-200 bg-white px-3 py-2">
+      <div className={classNames(
+        'no-scrollbar mb-3 flex flex-shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto border border-gray-200 bg-white',
+        isNativeApp() ? 'h-10 rounded-lg px-2' : 'rounded-2xl px-3 py-2',
+      )}>
         {/* ── Icon-toggle overlays: pinned + starred (leftmost, independent of the
             main/stage pills — combinable with any single-select filter below) ── */}
         <div className="flex flex-shrink-0 items-center gap-0.5">
@@ -1543,7 +1546,7 @@ export default function ConversationsPage() {
               value={threadListFilter}
               onChange={(e) => setThreadListFilter(e.target.value as ThreadListFilter)}
               aria-label="Filter conversations"
-              className="w-full appearance-none rounded-xl border border-gray-200 bg-white pl-3 pr-9 py-1.5 text-[13px] font-semibold text-gray-900 focus:border-gray-400 focus:outline-none"
+              className="h-full w-full appearance-none bg-transparent pl-2 pr-9 text-[13px] font-semibold text-gray-900 focus:outline-none"
             >
               <option value="all">All</option>
               <option value="unread">
