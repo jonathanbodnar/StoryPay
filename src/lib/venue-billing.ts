@@ -1627,16 +1627,13 @@ export async function checkAndSyncSubscriptionStatus(
       return 'past_due';
     }
 
-    // Was past_due but LP says next payment is in the future — someone paid externally.
-    if (!isOverdue && currentStatus === 'past_due') {
-      await supabaseAdmin
-        .from('venues')
-        .update({ directory_subscription_status: 'active' })
-        .eq('id', venueId);
-      return 'active';
-    }
+    // If already past_due in our DB, keep it locked. Only the retry API
+    // (/api/venue-billing/retry) or a manual admin override should clear this.
+    // LP moves nextPaymentOn forward to a future retry date after a failed charge,
+    // so a future nextPaymentOn does NOT mean payment succeeded.
+    if (currentStatus === 'past_due') return 'past_due';
 
-    return currentStatus === 'past_due' ? 'past_due' : 'active';
+    return 'active';
   } catch (err) {
     console.error('[checkAndSyncSubscriptionStatus] LP check failed (non-fatal):', err);
     return currentStatus === 'past_due' ? 'past_due' : 'skip';
