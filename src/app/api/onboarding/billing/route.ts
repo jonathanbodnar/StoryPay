@@ -7,9 +7,11 @@
  *
  * Returns:
  *   { needsCard: false, alreadyActive: true }   — card already on file
- *   { needsCard: false, devSkip: true }         — billing not configured (dev)
- *   { needsCard: false, noPaidPlan: true }      — no paid plan exists to sell
+ *   { needsCard: false, devSkip: true }         — billing not configured (dev only)
+ *   { needsCard: false, noPaidPlan: true }      — no paid plan to sell (dev only)
  *   { needsCard: true, planName, amountCents, trialEndsAt } — show the form
+ *   503 { error }                               — production misconfiguration; the
+ *                                                 gate is held rather than bypassed
  *
  * When needsCard is true we (idempotently) assign the target paid plan + a
  * 14-day trial window so /payment-intent and /signup-checkout/confirm can read
@@ -30,6 +32,28 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const TRIAL_DAYS = 14;
+
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+/**
+ * The card gate must fail closed. Every "skip the card" branch below is a
+ * misconfiguration (missing HQ key, empty plan catalog) rather than a real
+ * business state, so in production we hold the venue with a visible error
+ * instead of quietly letting them go live for free — a silent bypass leaks
+ * revenue with nothing to alert on. Locally these stay soft skips so dev
+ * doesn't need LunarPay credentials.
+ */
+function holdGate(reason: string): NextResponse | null {
+  if (!IS_PROD) return null;
+  console.error(`[onboarding/billing] card gate held — ${reason}`);
+  return NextResponse.json(
+    {
+      error:
+        'Billing is temporarily unavailable, so we can’t finish setting up your listing. Please try again in a few minutes or contact support@storyvenue.com.',
+    },
+    { status: 503 },
+  );
+}
 
 export async function POST(): Promise<NextResponse> {
   const c = await cookies();
@@ -60,8 +84,11 @@ export async function POST(): Promise<NextResponse> {
     }
   }
 
-  // Billing not wired up (local dev) — don't block publishing.
+  // Billing not wired up. In local dev this is expected; in production it means
+  // STORYPAY_HQ_LUNARPAY_SK is missing and every venue would sail past the card.
   if (!isPlatformDirectoryBillingConfigured()) {
+    const held = holdGate('STORYPAY_HQ_LUNARPAY_SK is not configured');
+    if (held) return held;
     return NextResponse.json({ needsCard: false, devSkip: true });
   }
 
@@ -81,6 +108,8 @@ export async function POST(): Promise<NextResponse> {
     null;
 
   if (!target) {
+    const held = holdGate('no paid plan exists in the catalog to assign');
+    if (held) return held;
     return NextResponse.json({ needsCard: false, noPaidPlan: true });
   }
 
@@ -111,7 +140,11 @@ export async function POST(): Promise<NextResponse> {
     prices: addonPrices,
   });
 
+  // Not reachable while `target` comes from paidPlans (price > 0), but kept as
+  // a backstop in case addon/plan pricing ever nets out to zero.
   if (charge.total_cents <= 0) {
+    const held = holdGate(`computed monthly total was ${charge.total_cents} for plan ${target.id}`);
+    if (held) return held;
     return NextResponse.json({ needsCard: false, noPaidPlan: true });
   }
 
