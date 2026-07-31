@@ -960,7 +960,7 @@ export default function ListingAnalyticsPage() {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">The Bride Booking System™</h1>
+          <h1 className="text-lg sm:text-2xl font-bold text-gray-900 whitespace-nowrap">The Bride Booking System™</h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <DateRangePicker value={dateRange} onChange={setDateRange} />
