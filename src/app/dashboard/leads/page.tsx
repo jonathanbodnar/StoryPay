@@ -1609,7 +1609,7 @@ function ListBoard({
             <li key={lead.id}>
               <div
                 onClick={() => onRowClick(lead)}
-                className="flex items-start gap-4 px-5 py-4 text-left hover:bg-gray-50 transition-colors cursor-pointer"
+                className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4 px-5 py-4 text-left hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1664,7 +1664,7 @@ function ListBoard({
                     <p className="mt-1 text-xs text-gray-500 line-clamp-1">{lead.message}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
+                <div className="flex items-center gap-3 flex-wrap justify-start sm:shrink-0 sm:justify-end">
                   {lead.email && (
                     <Link
                       href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=sms`}
