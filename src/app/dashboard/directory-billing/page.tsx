@@ -617,20 +617,14 @@ export default function DirectoryBillingPage() {
         </div>
       ) : null}
 
-      {/* Trial banner — active or expired trial gets a prominent CTA */}
+      {/* Trial banner — only shown during an active trial (not expired — everyone
+          has a card on file from onboarding, so LunarPay auto-charges at trial
+          end; the past-due wall handles any failed charge automatically). */}
       {summary.trial.status === 'active' || summary.trial.status === 'forever' ? (
         <TrialActiveBanner
           trial={summary.trial}
           chargeTotalCents={summary.charge.total_cents}
           hasPaymentMethod={Boolean(summary.payment_method)}
-          busy={busy}
-          onAddCard={() => void startPaid()}
-        />
-      ) : summary.trial.status === 'expired' && (currentPlan?.price_monthly_cents ?? 0) > 0 ? (
-        <TrialExpiredBanner
-          chargeTotalCents={summary.charge.total_cents}
-          hasPaymentMethod={Boolean(summary.payment_method)}
-          cardLastFour={summary.payment_method?.last4 ?? null}
           busy={busy}
           onAddCard={() => void startPaid()}
         />
