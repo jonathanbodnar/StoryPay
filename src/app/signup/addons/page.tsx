@@ -19,10 +19,9 @@ export default async function SignupAddonsPage({
   const planId = params.plan_id?.trim();
   if (!planId) redirect('/signup/plan');
 
-  // Verify venue exists and isn't already subscribed
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, owner_first_name, directory_subscription_status')
+    .select('id, owner_first_name, directory_subscription_status')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -31,7 +30,6 @@ export default async function SignupAddonsPage({
   const liveStatus = (venue as Record<string, unknown>).directory_subscription_status as string | null;
   if (liveStatus === 'active' || liveStatus === 'trialing') redirect('/dashboard');
 
-  // Load full catalog + addon prices in parallel
   const [catalog, addonPrices] = await Promise.all([
     listDirectoryPlanCatalog(),
     loadAddonPrices(),
@@ -40,21 +38,8 @@ export default async function SignupAddonsPage({
   const selectedPlan = catalog.find((p) => p.id === planId);
   if (!selectedPlan) redirect('/signup/plan');
 
-  // Resolve which addons are bundled into the selected plan
-  const ff = selectedPlan.feature_flags as Record<string, unknown>;
-  const inclusion = {
-    verified:  Boolean(ff.addon_verified_included  ?? ff.directory_addon_verified_included),
-    sponsored: Boolean(ff.addon_sponsored_included ?? ff.directory_addon_sponsored_included),
-    concierge: Boolean(ff.addon_concierge_included),
-  };
-  // All-Inclusive bundles concierge — hide the add-on card whether or not the
-  // feature flag is set correctly in the DB.
-  const planIsAllInclusive = selectedPlan.name.toLowerCase().replace(/[-\s]/g, '') === 'allinclusive';
-  if (planIsAllInclusive) inclusion.concierge = true;
-
-  // If concierge is already bundled into the plan, treat it as unavailable
-  // as an add-on so the card never appears.
-  const conciergeAvailable = !inclusion.concierge && Boolean(ff.addon_concierge_available);
+  // Force all add-ons off — add-on selection is not shown to users.
+  const inclusion = { verified: false, sponsored: false, concierge: false };
 
   return (
     <AddonsClient
@@ -62,11 +47,9 @@ export default async function SignupAddonsPage({
       planName={selectedPlan.name}
       planPriceCents={selectedPlan.price_monthly_cents ?? 0}
       inclusion={inclusion}
-      conciergeAvailable={conciergeAvailable}
+      conciergeAvailable={false}
       addonPrices={addonPrices}
-      ownerFirstName={
-        (venue as Record<string, unknown>).owner_first_name as string ?? ''
-      }
+      ownerFirstName={(venue as Record<string, unknown>).owner_first_name as string ?? ''}
     />
   );
 }

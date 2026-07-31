@@ -61,6 +61,7 @@ type PlanFeature = { label: string; outcome: string; minTier: number };
  */
 const BOOKING_SYSTEM_FEATURES: PlanFeature[] = [
   { label: 'Venue Listing',        outcome: 'Appear in the wedding directory so couples can find you',     minTier: 0 },
+  { label: 'Verified Listing',     outcome: 'Verified badge on your listing — builds trust with couples',  minTier: 0 },
   { label: 'Reviews',              outcome: 'Collect and showcase reviews on your listing',                minTier: 1 },
   { label: 'Pricing Guide',        outcome: 'Share your pricing with couples in a polished branded guide', minTier: 1 },
   { label: 'Speed to Lead System', outcome: 'Reply the instant a bride inquires',                          minTier: 1 },
@@ -822,20 +823,6 @@ export default function DirectoryBillingPage() {
                           </div>
                         </div>
 
-                        {/* Premium services — everything layered on top of the
-                            booking system (higher tiers + paid add-ons). */}
-                        <div className="mt-4">
-                          <div className="text-[11px] font-semibold uppercase tracking-wide mb-3 text-gray-400">
-                            Premium services
-                          </div>
-                          <div className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
-                            {PREMIUM_FEATURES.map((f) => {
-                              const tier = tierIndexById.get(plan.id) ?? 0;
-                              const on = tier >= f.minTier;
-                              return <FeatureRow key={f.label} feature={f} on={on} />;
-                            })}
-                          </div>
-                        </div>
                       </div>
 
 
