@@ -739,11 +739,11 @@ export default function LeadsPage() {
               onManage={() => setEditorOpen(true)}
             />
           )}
-          <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className="flex h-11 rounded-xl border border-gray-200 bg-white overflow-hidden">
             <button
               onClick={() => setView('kanban')}
               title="Kanban view"
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex h-full items-center justify-center gap-2 px-4 text-sm font-medium transition-colors ${
                 view === 'kanban' ? 'bg-gray-900 text-white' : 'text-gray-800 hover:bg-gray-50'
               }`}
             >
@@ -752,7 +752,7 @@ export default function LeadsPage() {
             <button
               onClick={() => setView('list')}
               title="List view"
-              className={`flex items-center gap-2 border-l border-gray-200 px-4 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex h-full items-center justify-center gap-2 border-l border-gray-200 px-4 text-sm font-medium transition-colors ${
                 view === 'list' ? 'bg-gray-900 text-white' : 'text-gray-800 hover:bg-gray-50'
               }`}
             >
@@ -761,7 +761,7 @@ export default function LeadsPage() {
           </div>
           <button
             onClick={() => setAddingOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-brand-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-800"
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-900 px-4 text-sm font-medium text-white transition hover:bg-brand-800"
           >
             <Plus size={18} /> Add lead
           </button>
@@ -777,34 +777,66 @@ export default function LeadsPage() {
       )}
 
       {/* Search + filter bar */}
-      <div className="flex flex-wrap items-center gap-2 -mt-1">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Search name, email, phone, venue, URL, notes…"
-            className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
-          />
-        </div>
-        {view === 'list' && activePipeline && (
-          <div className="relative">
-            <select
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value)}
-              className="appearance-none rounded-xl border border-gray-200 bg-white pl-9 pr-8 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
-            >
-              <option value="all">All stages</option>
-              {activePipeline.stages.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+      {isNativeApp() ? (
+        /* Native (mobile) order: stages filter (full-width) → search last */
+        <div className="flex flex-col gap-2 -mt-1">
+          {view === 'list' && activePipeline && (
+            <div className="relative w-full">
+              <select
+                value={stageFilter}
+                onChange={(e) => setStageFilter(e.target.value)}
+                className="w-full appearance-none rounded-xl border border-gray-200 bg-white pl-9 pr-8 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+              >
+                <option value="all">All stages</option>
+                {activePipeline.stages.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          )}
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              placeholder="Search name, email, phone, venue, URL, notes…"
+              className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+            />
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 -mt-1">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              placeholder="Search name, email, phone, venue, URL, notes…"
+              className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+            />
+          </div>
+          {view === 'list' && activePipeline && (
+            <div className="relative">
+              <select
+                value={stageFilter}
+                onChange={(e) => setStageFilter(e.target.value)}
+                className="appearance-none rounded-xl border border-gray-200 bg-white pl-9 pr-8 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+              >
+                <option value="all">All stages</option>
+                {activePipeline.stages.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          )}
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center py-16 text-gray-400">
@@ -1699,10 +1731,10 @@ function ListBoard({
                   </div>
                   {native ? (
                     <div className="mt-1 flex flex-col gap-1 text-xs text-gray-500">
-                      {lead.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {formatPhone(lead.phone)}</span>}
-                      {lead.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {lead.email}</span>}
-                      {lead.wedding_date && <span className="flex items-center gap-1"><CalendarIcon className="w-3.5 h-3.5" /> {formatDate(lead.wedding_date)}</span>}
-                      {lead.guest_count != null && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {lead.guest_count} guests</span>}
+                      {lead.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 shrink-0" /> {formatPhone(lead.phone)}</span>}
+                      {lead.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{lead.email}</span></span>}
+                      {lead.wedding_date && <span className="flex items-center gap-1"><CalendarIcon className="w-3.5 h-3.5 shrink-0" /> {formatDate(lead.wedding_date)}</span>}
+                      {lead.guest_count != null && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5 shrink-0" /> {lead.guest_count} guests</span>}
                     </div>
                   ) : (
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -1748,6 +1780,14 @@ function ListBoard({
                       <MessageSquare className="w-4 h-4" />
                     </Link>
                   )}
+                  <Link
+                    href={`/dashboard/calendar?new=1${lead.email ? `&email=${encodeURIComponent(lead.email)}` : ''}${lead.first_name || lead.name ? `&name=${encodeURIComponent((lead.first_name && lead.last_name ? `${lead.first_name} ${lead.last_name}` : lead.first_name || lead.name || '').trim())}` : ''}`}
+                    onClick={(e) => e.stopPropagation()}
+                    title="New appointment"
+                    className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                  >
+                    <CalendarPlus className="w-4 h-4" />
+                  </Link>
                   {!native && (
                     <LeadTagPopover
                       lead={lead}
