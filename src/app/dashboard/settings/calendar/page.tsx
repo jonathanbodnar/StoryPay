@@ -1055,14 +1055,14 @@ function AvailabilityTab() {
 
       {/* Date-specific overrides */}
       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Date Specific Hours</h3>
             <p className="text-xs text-gray-500 mt-0.5">Override weekly hours by marking availability/unavailability for specific dates.</p>
           </div>
           <button
             onClick={() => setShowAddOverride(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             <Plus size={14} /> Add Date Specific Hours
           </button>
@@ -2337,7 +2337,7 @@ function SaveButton({ saving, saved, onClick }: { saving: boolean; saved: boolea
     <button
       onClick={onClick}
       disabled={saving}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+      className={`inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-all ${
         saved
           ? 'bg-green-600 text-white'
           : 'bg-gray-900 text-white hover:opacity-85'

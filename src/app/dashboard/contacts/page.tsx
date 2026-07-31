@@ -486,28 +486,6 @@ export default function ContactsPage() {
                           <MessageSquare className="w-4 h-4" />
                         </Link>
                       )}
-                      <Link
-                        href={`/dashboard/payments/new?type=proposal&email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
-                        title="Create Proposal"
-                        className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                      >
-                        <FileText className="w-4 h-4" />
-                      </Link>
-                      <Link
-                        href={`/dashboard/payments/new?type=invoice&email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
-                        title="Create Invoice"
-                        className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                      >
-                        <Receipt className="w-4 h-4" />
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => deleteContact(c)}
-                        title="Delete contact"
-                        className="inline-flex items-center justify-center rounded-lg p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
                 </li>

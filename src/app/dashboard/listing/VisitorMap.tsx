@@ -32,7 +32,6 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const layerRef = useRef<LayerGroup | null>(null);
-  const didAutoFitRef = useRef(false);
 
   // One-time map initialisation.
   useEffect(() => {
@@ -45,8 +44,10 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
       if (cancelled || !containerRef.current) return;
 
       const map = L.map(containerRef.current, {
-        center: [20, 0],
-        zoom: 2,
+        // Default to a continental-US view since the business is USA-based.
+        // The user can freely pan/zoom to other countries from here.
+        center: [39.5, -98.35],
+        zoom: 4,
         minZoom: 2,
         maxZoom: 18,
         worldCopyJump: true,
@@ -174,16 +175,10 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
         markers.push(marker);
       }
 
-      // On the first batch that has data, fit the map to the markers so the
-      // owner doesn't have to pan. After that we leave zoom alone — the user
-      // may have zoomed in on a city and we don't want to yank it back.
-      if (!didAutoFitRef.current && markers.length > 0) {
-        const bounds = L.featureGroup(markers).getBounds();
-        if (bounds.isValid()) {
-          map.fitBounds(bounds.pad(0.4), { maxZoom: 6, animate: false });
-        }
-        didAutoFitRef.current = true;
-      }
+      // Intentionally NO auto-fit: the business is USA-based, so the map
+      // always opens on the continental-US view (set at init) and only moves
+      // when the owner pans/zooms themselves. Auto-fitting to markers would
+      // yank the view to whatever country a visitor happens to be in.
     })();
 
     return () => {

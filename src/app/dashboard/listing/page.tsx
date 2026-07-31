@@ -1040,34 +1040,26 @@ export default function ListingAnalyticsPage() {
         {/* Realtime world map */}
         {rt && !rt._migration_pending && (
           <div className="px-5 py-4 border-t border-gray-100">
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Live visitor map
               </p>
-              <div className="flex items-center gap-4 text-[10px] text-gray-400">
+              <div className="flex items-center gap-3 text-[10px] font-medium text-gray-400">
                 <span className="flex items-center gap-1.5">
                   <span className="relative inline-flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
                   </span>
-                  On the page now
+                  On page now
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
                   Last 30 min
                 </span>
-                <span className="text-gray-300">· scroll or use + / − to zoom to city view</span>
               </div>
             </div>
             <div className="relative">
               <VisitorMap points={rt.geo_points ?? []} />
-              {(rt.geo_points?.length ?? 0) === 0 && (
-                <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-[500] rounded-full bg-white/95 border border-gray-200 px-4 py-1.5 shadow-sm">
-                  <p className="text-[11px] font-medium text-gray-500">
-                    No visitors in the last 30 minutes — markers will appear here in realtime
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         )}
