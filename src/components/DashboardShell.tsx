@@ -177,6 +177,7 @@ export default function DashboardShell({
     '/dashboard/conversations',
     '/dashboard/calendar',
     '/dashboard/leads',
+    '/dashboard/listing',
     '/dashboard/media',
     '/dashboard/help',
     '/dashboard/payments',

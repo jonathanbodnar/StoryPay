@@ -15,9 +15,24 @@ import {
   Upload,
   Trash2,
   RefreshCw,
+  Phone,
+  Mail,
+  MessageSquare,
 } from 'lucide-react';
 import { classNames, toTitleCase } from '@/lib/utils';
 import { isNativeApp } from '@/lib/platform';
+
+function formatPhone(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `1-${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+  return raw;
+}
 import AddLeadModal, {
   NO_PIPELINE_STAGE,
   type LeadDraft,
@@ -390,7 +405,117 @@ export default function ContactsPage() {
         />
       </div>
 
-      {/* Table */}
+      {/* Native list view — matches the Lead Inbox list style */}
+      {isNativeApp() ? (
+        <div className="rounded-3xl border border-gray-200 bg-white overflow-hidden">
+          {loading ? (
+            <div className="px-5 py-8 text-center text-gray-400">
+              <Loader2 className="inline animate-spin" size={18} />
+            </div>
+          ) : contacts.length === 0 ? (
+            <div className="px-5 py-8 text-center text-gray-400">
+              {search ? 'No contacts match your search' : 'No contacts yet'}
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {contacts.map((c) => (
+                <li key={String(c.id)}>
+                  <div className="flex flex-col gap-3 px-5 py-4">
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        href={`/dashboard/contacts/${encodeURIComponent(String(c.id))}`}
+                        className="inline-flex items-center gap-1.5 font-medium text-gray-900 hover:text-brand-900 hover:underline"
+                      >
+                        {capitalizeName(c.name || '')}
+                        {vdUnreadIds.has(String(c.id)) && (
+                          <span
+                            className="inline-block w-2 h-2 rounded-full bg-violet-500 shrink-0"
+                            title="Unread message from StoryVenue Support"
+                          />
+                        )}
+                      </Link>
+                      {c.funnelStage && (
+                        <span
+                          className={classNames(
+                            'ml-2 inline-flex max-w-[160px] truncate rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide align-middle',
+                            !c.funnelStageColor && 'border-gray-200 bg-gray-50 text-gray-700',
+                          )}
+                          style={
+                            c.funnelStageColor
+                              ? {
+                                  backgroundColor: `${c.funnelStageColor}22`,
+                                  color: c.funnelStageColor,
+                                  borderColor: `${c.funnelStageColor}44`,
+                                }
+                              : undefined
+                          }
+                          title={c.funnelStage}
+                        >
+                          {c.funnelStage}
+                        </span>
+                      )}
+                      <div className="mt-1 flex flex-col gap-1 text-xs text-gray-500">
+                        {c.phone && (
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3.5 h-3.5" /> {formatPhone(c.phone)}
+                          </span>
+                        )}
+                        {c.email && (
+                          <span className="flex items-center gap-1 truncate">
+                            <Mail className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{c.email}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {c.phone && (
+                        <a
+                          href={`tel:${c.phone.replace(/[^\d+]/g, '')}`}
+                          title={`Call ${formatPhone(c.phone)}`}
+                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-green-50 hover:text-green-600 transition-colors"
+                        >
+                          <Phone className="w-4 h-4" />
+                        </a>
+                      )}
+                      {c.email && (
+                        <Link
+                          href={`/dashboard/conversations?email=${encodeURIComponent(c.email)}&compose=sms`}
+                          title="Text this contact"
+                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </Link>
+                      )}
+                      <Link
+                        href={`/dashboard/payments/new?type=proposal&email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
+                        title="Create Proposal"
+                        className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </Link>
+                      <Link
+                        href={`/dashboard/payments/new?type=invoice&email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
+                        title="Create Invoice"
+                        className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                      >
+                        <Receipt className="w-4 h-4" />
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => deleteContact(c)}
+                        title="Delete contact"
+                        className="inline-flex items-center justify-center rounded-lg p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
       <div className="overflow-x-auto rounded-2xl border border-gray-200">
         <table className="w-full text-left text-sm">
           <thead>
@@ -515,6 +640,7 @@ export default function ContactsPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (

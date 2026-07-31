@@ -952,7 +952,7 @@ export default function ListingAnalyticsPage() {
     : null;
 
   return (
-    <div className={`relative px-4 py-8${isFreePlan ? ' select-none' : ''}`}>
+    <div className={`relative py-8${isFreePlan ? ' select-none' : ''}`}>
 
       {/* ── Page body (greyed out on free plan — overlay sits above) ────── */}
       <div className={`space-y-8${isFreePlan ? ' pointer-events-none opacity-30 blur-[1px]' : ''}`}>

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { describeRule, type RecurrenceRule } from '@/lib/recurrence';
 import { toTitleCase } from '@/lib/utils';
+import { isNativeApp } from '@/lib/platform';
 import { formatInTimeZone, toDate } from 'date-fns-tz';
 import {
   addCalendarDaysYmd,
@@ -727,18 +728,26 @@ export default function CalendarPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={openAiPanel}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-              title="AI Calendar Search"
-            >
-              <Sparkles size={15} className="text-violet-500" /> Search &amp; Ask AI
-            </button>
+            {!isNativeApp() && (
+              <button
+                onClick={openAiPanel}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                title="AI Calendar Search"
+              >
+                <Sparkles size={15} className="text-violet-500" /> Search &amp; Ask AI
+              </button>
+            )}
             <Link
               href="/dashboard/settings/calendar"
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+              title="Calendar Settings"
+              aria-label="Calendar Settings"
+              className={
+                isNativeApp()
+                  ? 'inline-flex items-center justify-center rounded-lg border border-gray-300 p-2 text-gray-700 hover:bg-gray-50 transition'
+                  : 'inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition'
+              }
             >
-              <Settings size={15} /> Calendar Settings
+              <Settings size={isNativeApp() ? 18 : 15} /> {!isNativeApp() && 'Calendar Settings'}
             </Link>
             <button
               onClick={() => openNewEvent()}
