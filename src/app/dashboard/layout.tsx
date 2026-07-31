@@ -44,14 +44,12 @@ export default async function DashboardLayout({
  // ── Past-due check: automatically detect failed subscription charges ─────────
  // Non-impersonating venue owners only — admins always get through.
  const vr0 = (venueRow ?? {}) as Record<string, unknown>;
- const resolvedStatus = isImpersonating
-   ? String(vr0.directory_subscription_status ?? 'none')
-   : await checkAndSyncSubscriptionStatus(user.venueId, {
-       subId: vr0.directory_subscription_external_id as string | null,
-       currentStatus: vr0.directory_subscription_status as string | null,
-       lastCheckedAt: vr0.subscription_last_checked_at as string | null,
-     }).then((s) => s === 'skip' ? String(vr0.directory_subscription_status ?? 'none') : s)
-       .catch(() => String(vr0.directory_subscription_status ?? 'none'));
+ const resolvedStatus = await checkAndSyncSubscriptionStatus(user.venueId, {
+   subId: vr0.directory_subscription_external_id as string | null,
+   currentStatus: vr0.directory_subscription_status as string | null,
+   lastCheckedAt: vr0.subscription_last_checked_at as string | null,
+ }).then((s) => s === 'skip' ? String(vr0.directory_subscription_status ?? 'none') : s)
+   .catch(() => String(vr0.directory_subscription_status ?? 'none'));
 
  // Pass pre-fetched plan ID so loadDirectoryNavAccess skips its own venues query.
  const navAccess = await loadDirectoryNavAccess(
@@ -119,14 +117,24 @@ export default async function DashboardLayout({
  // A super admin "viewing as venue" must never be trapped behind a full-screen
  // gate — they need the dashboard + the exit ribbon. Show the wall only to the
  // actual venue.
- if (trialExpiredWall && !isImpersonating) {
-   return <TrialExpiredWall venueName={user.venueName} />;
+ if (trialExpiredWall) {
+   return (
+     <>
+       {isImpersonating && <ImpersonationBanner venueName={user.venueName} />}
+       <TrialExpiredWall venueName={user.venueName} />
+     </>
+   );
  }
 
  // Past-due wall: subscription charge failed. Block the dashboard until they
- // retry or update their card. Admins impersonating always bypass this.
- if (subStatus === 'past_due' && !isImpersonating) {
-   return <PastDueWall venueName={user.venueName} />;
+ // retry or update their card.
+ if (subStatus === 'past_due') {
+   return (
+     <>
+       {isImpersonating && <ImpersonationBanner venueName={user.venueName} />}
+       <PastDueWall venueName={user.venueName} />
+     </>
+   );
  }
 
  return (
