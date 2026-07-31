@@ -826,21 +826,8 @@ export default function DirectoryBillingPage() {
                       </div>
 
 
-                      {/* ── Monthly total breakdown ── */}
-                      {/* Contact-sales plans hide all pricing so the only path
-                          forward is booking a demo. */}
-                      {isContactSales ? (
-                        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                            <Calendar size={14} className="text-gray-500" />
-                            Custom pricing — book a call
-                          </div>
-                          <p className="mt-1 text-[12px] leading-relaxed text-gray-500">
-                            This plan is tailored to your venue. Book a quick demo and we&apos;ll walk you
-                            through everything and put together pricing that fits.
-                          </p>
-                        </div>
-                      ) : (
+                      {/* ── Monthly total breakdown — hidden for contact-sales tiers ── */}
+                      {!isContactSales && (
                       <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
                         <div className="text-[11px] font-semibold uppercase tracking-wide mb-3 text-gray-500">
                           Monthly total
@@ -886,17 +873,17 @@ export default function DirectoryBillingPage() {
                           <AlertTriangle size={12} /> Complete checkout above
                         </span>
                       ) : isContactSales ? (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <button
                             type="button"
                             onClick={() => setBookingModalOpen(true)}
-                            className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold text-white"
+                            className="w-full flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity"
                             style={{ backgroundColor: BRAND }}
                           >
-                            <Calendar size={12} />
+                            <Calendar size={16} />
                             Book a Demo Call
                           </button>
-                          <p className="text-[11px] text-gray-400 leading-snug">
+                          <p className="text-[11px] text-gray-400 leading-snug text-center">
                             See the full platform in action. Free 30-minute demo — no pressure.
                           </p>
                         </div>
