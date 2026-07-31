@@ -1553,13 +1553,34 @@ export async function checkAndSyncSubscriptionStatus(
     subId: string | null | undefined;
     currentStatus: string | null | undefined;
     lastCheckedAt: string | null | undefined;
+    trialEndsAt?: string | null | undefined;
   },
 ): Promise<'active' | 'past_due' | 'skip'> {
-  const { subId, currentStatus, lastCheckedAt } = opts;
+  const { subId, currentStatus, lastCheckedAt, trialEndsAt } = opts;
 
   // Only relevant for paying venues with a LP subscription.
   if (!subId || !['active', 'trialing', 'past_due'].includes(String(currentStatus ?? ''))) {
     return 'skip';
+  }
+
+  // Fast-path: if the venue is trialing and the trial end date has passed,
+  // mark past_due immediately without waiting for the LP check. LunarPay
+  // fires the charge on trial end — if we're past that date and still
+  // 'trialing', the charge either failed or never fired.
+  if (currentStatus === 'trialing' && trialEndsAt) {
+    const trialEnd = new Date(trialEndsAt);
+    // Give a 30-minute grace period for LP's cron to run before flagging.
+    const gracePeriodMs = 30 * 60 * 1_000;
+    if (trialEnd.getTime() + gracePeriodMs < Date.now()) {
+      await supabaseAdmin
+        .from('venues')
+        .update({
+          directory_subscription_status: 'past_due',
+          subscription_last_checked_at: new Date().toISOString(),
+        })
+        .eq('id', venueId);
+      return 'past_due';
+    }
   }
 
   // Cache: skip LP call if checked within the last hour and not already past_due.

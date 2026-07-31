@@ -48,6 +48,7 @@ export default async function DashboardLayout({
    subId: vr0.directory_subscription_external_id as string | null,
    currentStatus: vr0.directory_subscription_status as string | null,
    lastCheckedAt: vr0.subscription_last_checked_at as string | null,
+   trialEndsAt: vr0.directory_trial_ends_at as string | null,
  }).then((s) => s === 'skip' ? String(vr0.directory_subscription_status ?? 'none') : s)
    .catch(() => String(vr0.directory_subscription_status ?? 'none'));
 
