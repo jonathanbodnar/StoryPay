@@ -1607,13 +1607,20 @@ export async function checkAndSyncSubscriptionStatus(
       next_payment_on?: string;
     };
 
+    // LunarPay reports the subscription as cancelled. We only reach this code
+    // path when our own DB still considers the venue a paying customer
+    // (trialing / active / past_due — enforced by the guard above). That means
+    // LP cancelled the subscription itself, which it does after repeated failed
+    // charges. Treat this as a payment failure and gate behind the past-due
+    // wall — NOT a voluntary downgrade (those are handled elsewhere and never
+    // leave the status in a paying state).
     const lpCancelled = sub.status === 'cancelled';
     if (lpCancelled) {
       await supabaseAdmin
         .from('venues')
-        .update({ directory_subscription_status: 'canceled' })
+        .update({ directory_subscription_status: 'past_due' })
         .eq('id', venueId);
-      return 'skip';
+      return 'past_due';
     }
 
     const nextPaymentOn = sub.nextPaymentOn ?? sub.next_payment_on;
