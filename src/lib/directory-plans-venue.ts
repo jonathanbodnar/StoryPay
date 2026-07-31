@@ -129,8 +129,8 @@ export function computeAllowedNavIdsFromPlan(plan: {
 }
 
 export type DirectoryNavAccess =
-  | { mode: 'full'; allowedNavIds: null; isLegacyPlan: boolean }
-  | { mode: 'plan'; allowedNavIds: string[]; isLegacyPlan: boolean };
+  | { mode: 'full'; allowedNavIds: null; isLegacyPlan: boolean; isFreePlan: false }
+  | { mode: 'plan'; allowedNavIds: string[]; isLegacyPlan: boolean; isFreePlan: boolean };
 
 /**
  * Load nav access for a venue.
@@ -155,22 +155,27 @@ export async function loadDirectoryNavAccess(
   }
 
   if (!directoryPlanId) {
-    return { mode: 'full', allowedNavIds: null, isLegacyPlan: false };
+    return { mode: 'full', allowedNavIds: null, isLegacyPlan: false, isFreePlan: false };
   }
 
   const { data: plan } = await supabaseAdmin
     .from('directory_plans')
-    .select('feature_flags, nav_permissions, is_legacy, name, slug')
+    .select('feature_flags, nav_permissions, is_legacy, name, slug, price_monthly_cents')
     .eq('id', directoryPlanId)
     .maybeSingle();
 
   if (!plan) {
-    return { mode: 'full', allowedNavIds: null, isLegacyPlan: false };
+    return { mode: 'full', allowedNavIds: null, isLegacyPlan: false, isFreePlan: false };
   }
 
   const isLegacyPlan = Boolean((plan as Record<string, unknown>).is_legacy)
     || String((plan as Record<string, unknown>).name ?? '').toLowerCase().includes('legacy')
     || String((plan as Record<string, unknown>).slug ?? '').toLowerCase().includes('legacy');
+
+  const priceCents = (plan as Record<string, unknown>).price_monthly_cents;
+  const isFreePlan = !isLegacyPlan && (priceCents === 0 || priceCents === null || priceCents === undefined
+    || String((plan as Record<string, unknown>).name ?? '').toLowerCase().includes('free')
+    || String((plan as Record<string, unknown>).slug ?? '').toLowerCase().includes('free'));
 
   return {
     mode: 'plan',
@@ -179,6 +184,7 @@ export async function loadDirectoryNavAccess(
       nav_permissions: plan.nav_permissions as Record<string, boolean> | null,
     }),
     isLegacyPlan,
+    isFreePlan,
   };
 }
 

@@ -33,6 +33,7 @@ export default function DashboardShell({
   memberEmail,
   allowedNavIds = null,
   isLegacyPlan = false,
+  isFreePlan = false,
   directoryBillingPending = false,
   emailVerificationPending = false,
   ownerEmail = '',
@@ -51,6 +52,8 @@ export default function DashboardShell({
   allowedNavIds?: string[] | null;
   /** True when the venue is on a legacy/manually-billed plan. */
   isLegacyPlan?: boolean;
+  /** True when the venue is on the free plan (price = $0). */
+  isFreePlan?: boolean;
   /** Directory SaaS: priced plan assigned, payment still required. */
   directoryBillingPending?: boolean;
   /** True when the venue's email address has not yet been verified. */
@@ -199,6 +202,7 @@ export default function DashboardShell({
         onToggleCollapsed={toggleCollapsed}
         allowedNavIds={allowedNavIds}
         isLegacyPlan={isLegacyPlan}
+        isFreePlan={isFreePlan}
       />
 
       <div

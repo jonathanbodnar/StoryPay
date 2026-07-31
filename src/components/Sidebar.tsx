@@ -58,6 +58,8 @@ interface SidebarProps {
   allowedNavIds?: string[] | null;
   /** True when the venue is on a manually-billed legacy plan. */
   isLegacyPlan?: boolean;
+  /** True when the venue is on the free ($0) plan. */
+  isFreePlan?: boolean;
 }
 
 const topMenuItems: NavItem[] = [
@@ -111,9 +113,16 @@ const listingItems: NavItem[] = [
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
   { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: CircleDollarSign, navId: 'nav_listing_pricing_guide' },
   { label: 'Speed to Lead System', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
-  { label: 'Verified & Sponsored', href: '/dashboard/listing/directory', icon: BadgeCheck, navId: 'nav_listing_directory' },
+  // Verified & Sponsored is managed internally — not shown in venue sidebar.
   { label: 'Ad Tracking', href: '/dashboard/listing/ad-tracking', icon: Target, navId: 'nav_listing_ad_tracking' },
 ];
+
+/** Nav IDs that are always locked on the free plan, regardless of what DB nav_permissions says. */
+const FREE_TIER_LOCKED_NAV_IDS = new Set([
+  'nav_listing_booking_system',
+  'nav_listing_ad_tracking',
+  'nav_settings_push',
+]);
 
 type FlyoutGroup = 'payments' | 'marketing' | 'settings' | 'listing' | null;
 
@@ -173,6 +182,7 @@ export default function Sidebar({
   onToggleCollapsed,
   allowedNavIds = null,
   isLegacyPlan = false,
+  isFreePlan = false,
 }: SidebarProps) {
   const isOwner = role === 'owner';
   const isAdmin = role === 'owner' || role === 'admin';
@@ -199,8 +209,12 @@ export default function Sidebar({
   // unlocked so owners can manage/upgrade/downgrade/cancel. It's only rendered
   // for owners on non-legacy plans (filtered earlier), so it's safe to always
   // mark it accessible here and avoid the lock icon + upgrade modal.
-  const navOk = (navId: string) =>
-    navId === 'nav_settings_billing' || allowedNavIds === null || allowedNavIds.includes(navId);
+  const navOk = (navId: string) => {
+    if (navId === 'nav_settings_billing') return true;
+    // Free-tier items are always locked regardless of nav_permissions in the DB.
+    if (isFreePlan && FREE_TIER_LOCKED_NAV_IDS.has(navId)) return false;
+    return allowedNavIds === null || allowedNavIds.includes(navId);
+  };
   // Note: standalone items like Lead Inbox (/dashboard/leads) are deliberately
   // NOT part of this check — they highlight themselves, and the group stays
   // open anyway because the open-group effect below never auto-closes.

@@ -118,6 +118,7 @@ export default async function DashboardLayout({
  memberEmail={user.memberEmail}
  allowedNavIds={navAccess.allowedNavIds}
  isLegacyPlan={navAccess.isLegacyPlan}
+ isFreePlan={navAccess.isFreePlan}
  directoryBillingPending={directoryBillingPending}
  emailVerificationPending={showVerifyBanner}
  ownerEmail={ownerEmail}
