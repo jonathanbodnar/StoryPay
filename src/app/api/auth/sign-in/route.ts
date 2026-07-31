@@ -141,10 +141,6 @@ export async function POST(request: NextRequest) {
     return buildVenueAuthSuccessResponse({
       venueId:    venue.id,
       rememberMe: Boolean(rememberMe),
-      prefetched: {
-        directory_plan_id:             (venue.directory_plan_id as string | null) ?? null,
-        directory_subscription_status: (venue.directory_subscription_status as string | null) ?? null,
-      },
     });
   }
 

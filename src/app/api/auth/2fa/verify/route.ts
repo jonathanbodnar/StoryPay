@@ -95,10 +95,6 @@ export async function POST(req: NextRequest) {
   const response = await buildVenueAuthSuccessResponse({
     venueId:    venue.id,
     rememberMe: pending.rememberMe,
-    prefetched: {
-      directory_plan_id:             (venue.directory_plan_id as string | null) ?? null,
-      directory_subscription_status: (venue.directory_subscription_status as string | null) ?? null,
-    },
   });
   // Clear the pending token now that the real session is set.
   response.cookies.set(TWO_FA_PENDING_COOKIE, '', {
