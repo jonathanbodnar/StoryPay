@@ -1,12 +1,14 @@
 import { supabaseAdmin } from './supabase';
 import {
   cancelSubscription,
+  createCharge,
   createCheckoutSession,
   createSubscription,
   getCheckoutSession,
   getSubscription,
   listPaymentMethods,
   listSubscriptions,
+  updateSubscription,
 } from './lunarpay';
 import {
   getPlatformFortisMerchantId,
@@ -1528,3 +1530,180 @@ export async function verifyUpdatePaymentMethod(
 // Re-export the standard checkout verify so the page can still use it
 // via a single client call.
 export { verifyDirectoryPlatformCheckoutAndSubscribe };
+
+// ── Automatic past-due detection ──────────────────────────────────────────────
+
+/**
+ * Called on every dashboard layout render for paying venues.
+ *
+ * Checks LunarPay to see if the subscription's `nextPaymentOn` is in the past
+ * (i.e. the daily cron ran but the charge failed or was missed). If so, stamps
+ * `directory_subscription_status = 'past_due'` in the DB so the gate fires on
+ * the next page load.
+ *
+ * The check is cached for 1 hour via `subscription_last_checked_at` on the
+ * venues row — the column must be added via migration 188.
+ *
+ * Returns the resolved status: 'active' | 'past_due' | 'skip' (skip = not
+ * applicable, e.g. free plan, no sub ID, or LP unavailable).
+ */
+export async function checkAndSyncSubscriptionStatus(
+  venueId: string,
+  opts: {
+    subId: string | null | undefined;
+    currentStatus: string | null | undefined;
+    lastCheckedAt: string | null | undefined;
+  },
+): Promise<'active' | 'past_due' | 'skip'> {
+  const { subId, currentStatus, lastCheckedAt } = opts;
+
+  // Only relevant for paying venues with a LP subscription.
+  if (!subId || !['active', 'trialing', 'past_due'].includes(String(currentStatus ?? ''))) {
+    return 'skip';
+  }
+
+  // Cache: skip LP call if checked within the last hour and not already past_due.
+  if (currentStatus !== 'past_due' && lastCheckedAt) {
+    const age = Date.now() - new Date(lastCheckedAt).getTime();
+    if (age < 60 * 60 * 1_000) return currentStatus === 'active' ? 'active' : 'skip';
+  }
+
+  const secret = getPlatformLunarPaySecretKey();
+  if (!secret) return 'skip';
+
+  // Stamp last-checked regardless of outcome so we don't hammer LP on errors.
+  void supabaseAdmin
+    .from('venues')
+    .update({ subscription_last_checked_at: new Date().toISOString() })
+    .eq('id', venueId)
+    .then(() => {});
+
+  try {
+    const result = await getSubscription(secret, subId);
+    const sub = ((result as { data?: unknown }).data ?? result) as {
+      status?: string;
+      nextPaymentOn?: string;
+      next_payment_on?: string;
+    };
+
+    const lpCancelled = sub.status === 'cancelled';
+    if (lpCancelled) {
+      await supabaseAdmin
+        .from('venues')
+        .update({ directory_subscription_status: 'canceled' })
+        .eq('id', venueId);
+      return 'skip';
+    }
+
+    const nextPaymentOn = sub.nextPaymentOn ?? sub.next_payment_on;
+    const isOverdue = !!nextPaymentOn && new Date(nextPaymentOn) < new Date();
+
+    if (isOverdue && currentStatus !== 'past_due') {
+      await supabaseAdmin
+        .from('venues')
+        .update({ directory_subscription_status: 'past_due' })
+        .eq('id', venueId);
+      return 'past_due';
+    }
+
+    // Was past_due but LP says next payment is in the future — someone paid externally.
+    if (!isOverdue && currentStatus === 'past_due') {
+      await supabaseAdmin
+        .from('venues')
+        .update({ directory_subscription_status: 'active' })
+        .eq('id', venueId);
+      return 'active';
+    }
+
+    return currentStatus === 'past_due' ? 'past_due' : 'active';
+  } catch (err) {
+    console.error('[checkAndSyncSubscriptionStatus] LP check failed (non-fatal):', err);
+    return currentStatus === 'past_due' ? 'past_due' : 'skip';
+  }
+}
+
+/**
+ * Retry a failed subscription charge using the venue's saved payment method.
+ *
+ * Flow:
+ *   1. Load the venue's LP customer + plan context.
+ *   2. Fetch the default saved payment method.
+ *   3. Call POST /api/v1/charges for the plan amount.
+ *   4. If paid → push nextPaymentOn forward one month + stamp 'active'.
+ *   5. Record a billing event.
+ */
+export async function retrySubscriptionCharge(venueId: string): Promise<void> {
+  const ctx = await loadVenueDirectoryPlanContext(venueId);
+  if (!ctx) throw new Error('Venue not found');
+  if (!ctx.plan) throw new Error('No plan assigned to this venue');
+
+  const customerId = ctx.venue.platform_lunarpay_customer_id;
+  if (!customerId) throw new Error('No LunarPay customer on file — please add a card first.');
+
+  const subId = ctx.venue.directory_subscription_external_id;
+  if (!subId) throw new Error('No active subscription found.');
+
+  const amountCents = ctx.plan.price_monthly_cents ?? 0;
+  if (amountCents <= 0) throw new Error('No charge needed for a free plan.');
+
+  const secret = requirePlatformLunarPaySecretKey();
+
+  // Resolve default payment method.
+  const pmResult = await listPaymentMethods(secret, Number(customerId));
+  const pms = (
+    ((pmResult as { data?: unknown }).data ?? pmResult) as Array<{
+      id: number;
+      isDefault?: boolean;
+      is_default?: boolean;
+    }>
+  );
+  if (!Array.isArray(pms) || pms.length === 0) {
+    throw new Error('No payment method on file. Please add a card first.');
+  }
+  const pm = pms.find((p) => p.isDefault || p.is_default) ?? pms[0];
+
+  // Attempt the charge.
+  const chargeResult = await createCharge(secret, {
+    customerId: Number(customerId),
+    paymentMethodId: pm.id,
+    amount: amountCents,
+    description: `StoryVenue — ${ctx.plan.name} (retry)`,
+  });
+  const charge = ((chargeResult as { data?: unknown }).data ?? chargeResult) as {
+    status?: string;
+    id?: string | number;
+  };
+
+  if (charge.status !== 'paid') {
+    throw new Error(
+      'Your card was declined. Please update your payment method and try again.',
+    );
+  }
+
+  // Push subscription nextPaymentOn forward one month.
+  const nextMonth = new Date();
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  try {
+    await updateSubscription(secret, subId, { nextPaymentOn: nextMonth.toISOString() });
+  } catch {
+    // Non-fatal — charge went through; next cron will pick up the new date.
+  }
+
+  // Mark venue active and reset cache.
+  await supabaseAdmin
+    .from('venues')
+    .update({
+      directory_subscription_status: 'active',
+      subscription_last_checked_at: new Date().toISOString(),
+    })
+    .eq('id', venueId);
+
+  await recordBillingEvent(
+    venueId,
+    ctx.plan.id,
+    amountCents,
+    'charge_success',
+    String(charge.id ?? `retry:${Date.now()}`),
+    { retry: true, subscription_id: subId },
+  );
+}

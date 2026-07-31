@@ -4,9 +4,11 @@ import { getSessionUser } from '@/lib/session';
 import { loadDirectoryNavAccess } from '@/lib/directory-plans-venue';
 import { supabaseAdmin } from '@/lib/supabase';
 import { deriveTrialStatus, daysRemainingInTrial, type VenueTrialState } from '@/lib/directory-trial';
+import { checkAndSyncSubscriptionStatus } from '@/lib/venue-billing';
 import DashboardShell from '@/components/DashboardShell';
 import AskAIWidget from '@/components/AskAIWidget';
 import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
+import PastDueWall from '@/components/PastDueWall';
 import TrialExpiredWall from '@/components/TrialExpiredWall';
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard';
 
@@ -28,7 +30,7 @@ export default async function DashboardLayout({
  // don't hit the venues table 3 times per page render.
  const { data: venueRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_plan_id, directory_subscription_status, email_verified_at, email, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended')
+   .select('directory_plan_id, directory_subscription_status, email_verified_at, email, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id')
    .eq('id', user.venueId)
    .maybeSingle();
 
@@ -38,6 +40,18 @@ export default async function DashboardLayout({
  if (isSuspended && !isImpersonating) {
    redirect('/suspended');
  }
+
+ // ── Past-due check: automatically detect failed subscription charges ─────────
+ // Non-impersonating venue owners only — admins always get through.
+ const vr0 = (venueRow ?? {}) as Record<string, unknown>;
+ const resolvedStatus = isImpersonating
+   ? String(vr0.directory_subscription_status ?? 'none')
+   : await checkAndSyncSubscriptionStatus(user.venueId, {
+       subId: vr0.directory_subscription_external_id as string | null,
+       currentStatus: vr0.directory_subscription_status as string | null,
+       lastCheckedAt: vr0.subscription_last_checked_at as string | null,
+     }).then((s) => s === 'skip' ? String(vr0.directory_subscription_status ?? 'none') : s)
+       .catch(() => String(vr0.directory_subscription_status ?? 'none'));
 
  // Pass pre-fetched plan ID so loadDirectoryNavAccess skips its own venues query.
  const navAccess = await loadDirectoryNavAccess(
@@ -64,7 +78,8 @@ export default async function DashboardLayout({
  // Paying venues ('active'), legacy/no-plan venues, and downgraded-to-free
  // venues ('none') are therefore never affected.
  const vr = (venueRow ?? {}) as Record<string, unknown>;
- const subStatus = String(vr.directory_subscription_status ?? 'none');
+ // Use the resolved status (may have been updated to 'past_due' by the LP check above).
+ const subStatus = resolvedStatus;
  const hasExternalSub = Boolean(vr.directory_subscription_external_id);
  const trialState: VenueTrialState = {
    directory_trial_started_at: (vr.directory_trial_started_at as string | null) ?? null,
@@ -106,6 +121,12 @@ export default async function DashboardLayout({
  // actual venue.
  if (trialExpiredWall && !isImpersonating) {
    return <TrialExpiredWall venueName={user.venueName} />;
+ }
+
+ // Past-due wall: subscription charge failed. Block the dashboard until they
+ // retry or update their card. Admins impersonating always bypass this.
+ if (subStatus === 'past_due' && !isImpersonating) {
+   return <PastDueWall venueName={user.venueName} />;
  }
 
  return (
