@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCustomer } from '@/lib/lunarpay';
-import { mergeVenueContacts } from '@/lib/merge-venue-contacts';
+import { mergeVenueContacts, type ContactSort } from '@/lib/merge-venue-contacts';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,12 +23,16 @@ export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get('search') || '';
   const page = parseInt(request.nextUrl.searchParams.get('page') || '1', 10);
   const limit = parseInt(request.nextUrl.searchParams.get('limit') || '100', 10);
+  const sortParam = request.nextUrl.searchParams.get('sort');
+  const sort: ContactSort = (['newest', 'oldest', 'az', 'za'] as const).includes(sortParam as ContactSort)
+    ? (sortParam as ContactSort)
+    : 'newest';
 
   console.log(
     `[customers] venueId=${venueId} ghl_connected=${venue.ghl_connected} ghl_location=${venue.ghl_location_id} has_lp=${!!venue.lunarpay_secret_key}`,
   );
 
-  const { data, total, ghlConnected, ghlContactsSyncedAt } = await mergeVenueContacts(venueId, { search, page, limit });
+  const { data, total, ghlConnected, ghlContactsSyncedAt } = await mergeVenueContacts(venueId, { search, page, limit, sort });
   return NextResponse.json({ data, total, ghlConnected, ghlContactsSyncedAt });
 }
 

@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { isNativeApp } from '@/lib/platform';
 
 // ── Storage keys ─────────────────────────────────────────────────────────────
 const DISMISS_KEY = 'storyvenue.pwa.dismissed_at';
@@ -173,6 +174,10 @@ export default function PWAInstaller() {
     setShowIosCoach(false);
   }
 
+  // Never surface any install / "Add to Home Screen" UI inside the native
+  // Capacitor app — it's already installed from the App Store there. This
+  // prompt is only relevant for mobile-browser visitors on the web.
+  if (isNativeApp()) return null;
   if (!deferred && !showIosCoach) return null;
 
   return (

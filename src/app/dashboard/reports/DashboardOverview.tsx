@@ -10,6 +10,7 @@ import Link from 'next/link';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 import OnboardingChecklist from '@/components/OnboardingChecklist';
 import InstallAppCard from '@/components/InstallAppCard';
+import { isNativeApp } from '@/lib/platform';
 import {
  AreaChart,
  Area,
@@ -291,8 +292,9 @@ export function DashboardOverview() {
  return (
  <div className="min-h-full bg-white">
 
-      {/* ── Install app banner — shown until dismissed or installed ── */}
-      {!installBannerDismissed && (
+      {/* ── Install app banner — shown until dismissed or installed.
+          Never shown inside the native app (already installed there). ── */}
+      {!installBannerDismissed && !isNativeApp() && (
         <InstallAppCard variant="banner" onDismiss={dismissInstallBanner} />
       )}
 

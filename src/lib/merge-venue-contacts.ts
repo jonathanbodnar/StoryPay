@@ -17,7 +17,11 @@ export interface MergedContact {
   funnelStageColor?: string | null;
   /** StoryVenue `venue_customers.id` when known (for profile + conversations deep links). */
   venueCustomerId?: string | null;
+  /** ISO timestamp used for date sorting (from venue_customers/leads when known). */
+  createdAt?: string | null;
 }
+
+export type ContactSort = 'newest' | 'oldest' | 'az' | 'za';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -142,9 +146,9 @@ const GHL_LIVE_FETCH_LIMIT = 100;
  */
 export async function mergeVenueContacts(
   venueId: string,
-  opts: { search: string; page: number; limit: number },
+  opts: { search: string; page: number; limit: number; sort?: ContactSort },
 ): Promise<MergedContactsResult> {
-  const { search, page, limit } = opts;
+  const { search, page, limit, sort = 'newest' } = opts;
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
@@ -170,11 +174,12 @@ export async function mergeVenueContacts(
       lunarpay_customer_id: string | number | null;
       stage_id: string | null;
       pipeline_stage: string | null;
+      created_at: string | null;
     }>(
       (from, to) =>
         supabaseAdmin
           .from('venue_customers')
-          .select('id, customer_email, first_name, last_name, phone, ghl_contact_id, lunarpay_customer_id, stage_id, pipeline_stage')
+          .select('id, customer_email, first_name, last_name, phone, ghl_contact_id, lunarpay_customer_id, stage_id, pipeline_stage, created_at')
           .eq('venue_id', venueId)
           .order('created_at', { ascending: false })
           .range(from, to),
@@ -189,6 +194,7 @@ export async function mergeVenueContacts(
 
   const funnelLookup = new Map<string, { label: string; color: string | null }>();
   const vcIdLookup = new Map<string, string>();
+  const createdAtLookup = new Map<string, string | null>();
   for (const vc of vcFunnelRows ?? []) {
     const { label, color } = funnelLabelFromVenueCustomer(
       vc.stage_id as string | null | undefined,
@@ -197,24 +203,29 @@ export async function mergeVenueContacts(
     );
     const payload = { label, color };
     const vid = vc.id as string;
+    const createdAt = (vc.created_at as string | null) ?? null;
     const em = ((vc.customer_email as string) || '').toLowerCase().trim();
     if (em) {
       funnelLookup.set(`email:${em}`, payload);
       vcIdLookup.set(`email:${em}`, vid);
+      createdAtLookup.set(`email:${em}`, createdAt);
     }
     const ghlId = vc.ghl_contact_id as string | null | undefined;
     if (ghlId) {
       funnelLookup.set(`ghl:${ghlId}`, payload);
       vcIdLookup.set(`ghl:${ghlId}`, vid);
+      createdAtLookup.set(`ghl:${ghlId}`, createdAt);
     }
     const lpId = vc.lunarpay_customer_id;
     if (lpId != null && String(lpId).trim() !== '') {
       const lpKey = `lp:${String(lpId)}`;
       funnelLookup.set(lpKey, payload);
       vcIdLookup.set(lpKey, vid);
+      createdAtLookup.set(lpKey, createdAt);
     }
     funnelLookup.set(`uuid:${vid}`, payload);
     vcIdLookup.set(`uuid:${vid}`, vid);
+    createdAtLookup.set(`uuid:${vid}`, createdAt);
   }
 
   let ghlToken = venue.ghl_access_token;
@@ -327,6 +338,7 @@ export async function mergeVenueContacts(
       email: c.customer_email || '',
       phone: c.phone || '',
       source: 'storypay',
+      createdAt: (c.created_at as string | null) ?? null,
     });
     if (email) seenEmails.add(email);
   }
@@ -346,6 +358,7 @@ export async function mergeVenueContacts(
         email: (l.email as string) || '',
         phone: (l.phone as string) || '',
         source: 'storypay',
+        createdAt: (l.created_at as string) ?? null,
       });
       if (email) seenEmails.add(email);
       // Back-fill venue_customers so future loads are fast and the mirror is consistent
@@ -373,6 +386,22 @@ export async function mergeVenueContacts(
   attachFunnelMetadata(merged, funnelLookup);
   attachVenueCustomerIds(merged, vcIdLookup);
 
+  // Attach createdAt for GHL / LunarPay contacts (which have no native
+  // timestamp) from their venue_customers mirror when one exists.
+  for (const c of merged) {
+    if (c.createdAt) continue;
+    const keys: string[] = [];
+    const e = (c.email || '').toLowerCase().trim();
+    if (e) keys.push(`email:${e}`);
+    const sid = String(c.id);
+    if (c.source === 'ghl') keys.push(`ghl:${sid}`);
+    if (c.source === 'lunarpay') keys.push(`lp:${sid}`);
+    if (UUID_RE.test(sid)) keys.push(`uuid:${sid}`);
+    for (const k of keys) {
+      if (createdAtLookup.has(k)) { c.createdAt = createdAtLookup.get(k) ?? null; break; }
+    }
+  }
+
   const filtered = search
     ? merged.filter((c) => {
         const q = search.toLowerCase();
@@ -392,6 +421,28 @@ export async function mergeVenueContacts(
         );
       })
     : merged;
+
+  // Sort the full merged+filtered list before paginating so ordering is
+  // stable across pages. Default: newest contact first.
+  const ts = (c: MergedContact) => (c.createdAt ? new Date(c.createdAt).getTime() : 0);
+  const nameKey = (c: MergedContact) => String(c.name || '').trim().toLowerCase();
+  filtered.sort((a, b) => {
+    switch (sort) {
+      case 'oldest': {
+        const d = ts(a) - ts(b);
+        return d !== 0 ? d : nameKey(a).localeCompare(nameKey(b));
+      }
+      case 'az':
+        return nameKey(a).localeCompare(nameKey(b));
+      case 'za':
+        return nameKey(b).localeCompare(nameKey(a));
+      case 'newest':
+      default: {
+        const d = ts(b) - ts(a);
+        return d !== 0 ? d : nameKey(a).localeCompare(nameKey(b));
+      }
+    }
+  });
 
   const total = filtered.length;
   const offset = (page - 1) * limit;

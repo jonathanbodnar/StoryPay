@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import {
   useCallback, useEffect, useMemo, useRef, useState,
@@ -334,6 +335,47 @@ export default function LeadsPage() {
   const [insights, setInsights] = useState<LeadInsightsPayload | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [venueTz, setVenueTz] = useState<string | undefined>(undefined);
+  const router = useRouter();
+
+  // On the native app every lead entry point opens the full contact-profile
+  // page (the richest view — same one Contacts / Messages open) instead of the
+  // lead drawer. We resolve/create the lead's venue_customer, then navigate.
+  const openLead = useCallback(async (l: Lead) => {
+    if (!isNativeApp()) { setSelectedLead(l); return; }
+    const email = (l.email || '').trim().toLowerCase();
+    try {
+      if (email) {
+        const lookup = await fetch('/api/venue-customers/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        if (lookup.ok) {
+          const vc = (await lookup.json()) as { id?: string } | null;
+          if (vc?.id) { router.push(`/dashboard/contacts/${vc.id}`); return; }
+        }
+      }
+      // No mirror yet — create one from the lead so the profile can load.
+      const create = await fetch('/api/venue-customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_email: email || null,
+          first_name: l.first_name || l.name || '',
+          last_name: l.last_name || '',
+          phone: l.phone || null,
+          external_id: l.id,
+        }),
+      });
+      if (create.ok) {
+        const vc = (await create.json()) as { id?: string };
+        if (vc?.id) { router.push(`/dashboard/contacts/${vc.id}`); return; }
+      }
+    } catch {
+      /* fall through to the drawer */
+    }
+    setSelectedLead(l);
+  }, [router]);
 
   const loadTags = useCallback(async () => {
     const res = await fetch('/api/marketing/tags', { cache: 'no-store' });
@@ -860,7 +902,7 @@ export default function LeadsPage() {
           dragLeadId={dragLeadId}
           dragOverStage={dragOverStage}
           allTags={allTags}
-          onCardClick={(l) => setSelectedLead(l)}
+          onCardClick={(l) => void openLead(l)}
           onDragStartCard={onDragStart}
           onDragEndCard={onDragEnd}
           onDragOverStage={onDragOverStage}
@@ -878,7 +920,7 @@ export default function LeadsPage() {
           stages={activePipeline.stages}
           allTags={allTags}
           hideRevenue={hideRevenue}
-          onRowClick={(l) => setSelectedLead(l)}
+          onRowClick={(l) => void openLead(l)}
           onQuickStageChange={(id, stageId) => updateLead(id, { stageId })}
           onToggleLeadTag={setLeadTagSelection}
           onCreateTagForLead={createTagAndAssignToLead}
@@ -1778,6 +1820,16 @@ function ListBoard({
                       className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
                     >
                       <MessageSquare className="w-4 h-4" />
+                    </Link>
+                  )}
+                  {lead.email && (
+                    <Link
+                      href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=email`}
+                      onClick={(e) => e.stopPropagation()}
+                      title="Send email"
+                      className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-600 transition-colors"
+                    >
+                      <Mail className="w-4 h-4" />
                     </Link>
                   )}
                   <Link

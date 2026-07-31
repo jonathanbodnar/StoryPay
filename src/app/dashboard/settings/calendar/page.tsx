@@ -998,7 +998,7 @@ function AvailabilityTab() {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Weekly Working Hours</h3>
             <p className="text-xs text-gray-500 mt-0.5">Set working days and hours to determine when availability appears on calendars.</p>

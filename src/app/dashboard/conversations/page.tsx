@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Check,
@@ -970,6 +971,17 @@ export default function ConversationsPage() {
     : null;
 
   const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
+  const router = useRouter();
+
+  // On the native app the contact profile is a full page (the richest view,
+  // shared with Contacts / Leads). On web it stays an in-context drawer.
+  const openContactProfile = useCallback(() => {
+    if (isNativeApp() && contactProfileHref) {
+      router.push(contactProfileHref);
+      return;
+    }
+    setProfileDrawerOpen(true);
+  }, [router, contactProfileHref]);
 
   // AI concierge quick-control helpers
   async function aiAction(action: 'resume' | 'handoff') {
@@ -2102,7 +2114,7 @@ export default function ConversationsPage() {
                   {contactProfileHref ? (
                     <button
                       type="button"
-                      onClick={() => setProfileDrawerOpen(true)}
+                      onClick={openContactProfile}
                       className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
                     >
                       <User size={14} />
@@ -2201,7 +2213,7 @@ export default function ConversationsPage() {
                       <span className="text-xs text-red-700">{blocked.join(', ')} blocked</span>
                       <button
                         type="button"
-                        onClick={() => setProfileDrawerOpen(true)}
+                        onClick={openContactProfile}
                         className="ml-auto text-[11px] font-medium text-red-700 underline underline-offset-2 hover:text-red-900"
                       >
                         Manage in Profile

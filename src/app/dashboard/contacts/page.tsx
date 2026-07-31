@@ -18,6 +18,7 @@ import {
   Phone,
   Mail,
   MessageSquare,
+  CalendarPlus,
 } from 'lucide-react';
 import { classNames, toTitleCase } from '@/lib/utils';
 import { isNativeApp } from '@/lib/platform';
@@ -55,6 +56,15 @@ interface ContactRow {
 
 const PAGE_SIZE = 20;
 
+type ContactSort = 'newest' | 'oldest' | 'az' | 'za';
+
+const SORT_OPTIONS: { value: ContactSort; label: string }[] = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'az', label: 'Name A–Z' },
+  { value: 'za', label: 'Name Z–A' },
+];
+
 interface SyncProgress {
   status?: string;
   fetched?: number;
@@ -67,6 +77,9 @@ export default function ContactsPage() {
   // contactIds that have unread Venue Direct messages for the current viewer
   const [vdUnreadIds, setVdUnreadIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<ContactSort>('newest');
+  const sortRef = useRef<ContactSort>('newest');
+  sortRef.current = sort;
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [page, setPage] = useState(1);
@@ -117,11 +130,11 @@ export default function ContactsPage() {
     void loadModalData();
   }, [loadModalData]);
 
-  const fetchContacts = useCallback(async (q: string, p: number) => {
+  const fetchContacts = useCallback(async (q: string, p: number, s: ContactSort = sortRef.current) => {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/customers?search=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&page=${p}`,
+        `/api/customers?search=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&page=${p}&sort=${s}`,
       );
       if (res.ok) {
         const data = await res.json() as {
@@ -391,18 +404,35 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="relative mb-4 w-full max-w-md">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, email, or phone..."
-          autoComplete="off"
-          style={{ fontSize: 16 }}
-          className="h-10 w-full rounded-lg border border-gray-200 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
-        />
+      {/* Search + sort */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[220px] flex-1 sm:max-w-md">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email, or phone..."
+            autoComplete="off"
+            style={{ fontSize: 16 }}
+            className="h-10 w-full rounded-lg border border-gray-200 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
+          />
+        </div>
+        <select
+          value={sort}
+          onChange={(e) => {
+            const next = e.target.value as ContactSort;
+            setSort(next);
+            setPage(1);
+            fetchContacts(search, 1, next);
+          }}
+          aria-label="Sort contacts"
+          className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-gray-400 focus:outline-none"
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
       </div>
 
       {/* Native list view — matches the Lead Inbox list style */}
@@ -486,6 +516,22 @@ export default function ContactsPage() {
                           <MessageSquare className="w-4 h-4" />
                         </Link>
                       )}
+                      {c.email && (
+                        <Link
+                          href={`/dashboard/conversations?email=${encodeURIComponent(c.email)}&compose=email`}
+                          title="Send email"
+                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-600 transition-colors"
+                        >
+                          <Mail className="w-4 h-4" />
+                        </Link>
+                      )}
+                      <Link
+                        href={`/dashboard/calendar?new=1${c.email ? `&email=${encodeURIComponent(c.email)}` : ''}${c.name ? `&name=${encodeURIComponent(c.name)}` : ''}`}
+                        title="New appointment"
+                        className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                      >
+                        <CalendarPlus className="w-4 h-4" />
+                      </Link>
                     </div>
                   </div>
                 </li>
