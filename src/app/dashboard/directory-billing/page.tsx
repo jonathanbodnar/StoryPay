@@ -838,56 +838,6 @@ export default function DirectoryBillingPage() {
                         </div>
                       </div>
 
-                      {/* ── Add-ons ── */}
-                      <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-wide mb-3 text-gray-500">
-                          Add-ons
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <AddonRow
-                            icon={<BadgeCheck size={18} />}
-                            label="Verified Listing"
-                            description="Verified badge on your listing, in search, and in inquiries — builds trust with couples browsing."
-                            priceCents={summary.addon_prices.verified_cents}
-                            isOn={summary.addons.verifiedUser}
-                            isFromPlan={inclusion.verified}
-                            isUserOn={summary.addons.verifiedUser}
-                            busy={busy === 'addon:verified'}
-                            onChange={() => void toggleAddon('verified')}
-                            tone="emerald"
-                          />
-                          <AddonRow
-                            icon={<Megaphone size={18} />}
-                            label="Sponsored Listing"
-                            description="Top-of-results placement and 'Sponsored' label, with priority above non-sponsored venues."
-                            priceCents={summary.addon_prices.sponsored_cents}
-                            isOn={summary.addons.sponsoredUser}
-                            isFromPlan={inclusion.sponsored}
-                            isUserOn={summary.addons.sponsoredUser}
-                            busy={busy === 'addon:sponsored'}
-                            onChange={() => void toggleAddon('sponsored')}
-                            tone="violet"
-                          />
-                        </div>
-
-                        {/* Venue Concierge — only shown on plans where it's available or included */}
-                        {(conciergeAvailable || conciergeIncluded) && (
-                          <div className="mt-3">
-                            <AddonRow
-                              icon={<BotMessageSquare size={18} />}
-                              label="Venue Concierge"
-                              description="A personal concierge + AI forever-follow-up so no lead is ever forgotten. Books more tours for you automatically."
-                              priceCents={summary.addon_prices.concierge_cents ?? 49900}
-                              isOn={summary.addons.conciergeUser}
-                              isFromPlan={conciergeIncluded}
-                              isUserOn={summary.addons.conciergeUser}
-                              busy={busy === 'addon:concierge'}
-                              onChange={() => void toggleAddon('concierge')}
-                              tone="indigo"
-                            />
-                          </div>
-                        )}
-                      </div>
 
                       {/* ── Monthly total breakdown ── */}
                       {/* Contact-sales plans hide all pricing so the only path
@@ -912,60 +862,6 @@ export default function DirectoryBillingPage() {
                           <div className="flex justify-between text-gray-700">
                             <span>{displayPlanName(plan.name)}</span>
                             <span className="font-mono">{cents > 0 ? formatCents(cents) : 'Free'}</span>
-                          </div>
-                          <div className="flex justify-between text-gray-700">
-                            <span className="flex items-center gap-1.5">
-                              Verified Listing
-                              {inclusion.verified ? (
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Included</span>
-                              ) : null}
-                            </span>
-                            <span className="font-mono">
-                              {isCurrent
-                                ? (summary.charge.verified_cents > 0 ? formatCents(summary.charge.verified_cents) : summary.addons.verified ? 'Included' : '—')
-                                : (verifiedAdds > 0 ? `+${formatCents(verifiedAdds)}` : inclusion.verified && summary.addons.verifiedUser ? 'Included' : '—')}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-gray-700">
-                            <span className="flex items-center gap-1.5">
-                              Sponsored Listing
-                              {inclusion.sponsored ? (
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Included</span>
-                              ) : null}
-                            </span>
-                            <span className="font-mono">
-                              {isCurrent
-                                ? (summary.charge.sponsored_cents > 0 ? formatCents(summary.charge.sponsored_cents) : summary.addons.sponsored ? 'Included' : '—')
-                                : (sponsoredAdds > 0 ? `+${formatCents(sponsoredAdds)}` : inclusion.sponsored && summary.addons.sponsoredUser ? 'Included' : '—')}
-                            </span>
-                          </div>
-                          {(conciergeAvailable || conciergeIncluded) && (
-                            <div className="flex justify-between text-gray-700">
-                              <span className="flex items-center gap-1.5">
-                                Venue Concierge
-                                {conciergeIncluded ? (
-                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Included</span>
-                                ) : null}
-                              </span>
-                              <span className="font-mono">
-                                {isCurrent
-                                  ? ((summary.charge.concierge_cents ?? 0) > 0 ? formatCents(summary.charge.concierge_cents) : summary.addons.concierge ? 'Included' : '—')
-                                  : (conciergeAdds > 0 ? `+${formatCents(conciergeAdds)}` : conciergeIncluded && summary.addons.conciergeUser ? 'Included' : '—')}
-                              </span>
-                            </div>
-                          )}
-                          <div className="border-t border-gray-200 pt-2 flex justify-between font-semibold text-gray-900">
-                            <span>Total billed monthly</span>
-                            <span className="font-mono">
-                              {isCurrent
-                                ? (summary.charge.total_cents > 0 ? formatCents(summary.charge.total_cents) : 'Free')
-                                : (previewTotal > 0 ? formatCents(previewTotal) : 'Free')}
-                              {!isCurrent && previewDelta !== 0 ? (
-                                <span className={`ml-1.5 text-xs font-semibold ${previewDelta > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                  ({previewDelta > 0 ? '+' : ''}{formatCents(previewDelta)})
-                                </span>
-                              ) : null}
-                            </span>
                           </div>
                         </div>
                         <p className="mt-3 text-[11px] leading-relaxed text-gray-400">
@@ -1794,57 +1690,6 @@ function UpgradePlanModal({
                 </div>
               </div>
 
-              {/* Add-on toggles — live on top of the plan switch. Toggling
-                  immediately updates the venue's add-on state, so by the
-                  time the user clicks Confirm the LunarPay subscription
-                  amount already reflects what they want. */}
-              <div className="border-t border-gray-200 pt-2 space-y-0.5">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1">
-                  Add-ons
-                </div>
-                <ModalAddonToggle
-                  label="Verified Listing"
-                  priceCents={addonPrices.verified_cents}
-                  included={targetInclusion.verified}
-                  userOn={addons.verifiedUser}
-                  busy={addonBusy === 'verified'}
-                  tone="emerald"
-                  onToggle={() => onToggleAddon('verified')}
-                />
-                <ModalAddonToggle
-                  label="Sponsored Listing"
-                  priceCents={addonPrices.sponsored_cents}
-                  included={targetInclusion.sponsored}
-                  userOn={addons.sponsoredUser}
-                  busy={addonBusy === 'sponsored'}
-                  tone="violet"
-                  onToggle={() => onToggleAddon('sponsored')}
-                />
-                {(modalConciergeAvailable || modalConciergeIncluded) && (
-                  <ModalAddonToggle
-                    label="Venue Concierge"
-                    priceCents={addonPrices.concierge_cents ?? 49900}
-                    included={modalConciergeIncluded}
-                    userOn={addons.conciergeUser}
-                    busy={addonBusy === 'concierge'}
-                    tone="indigo"
-                    onToggle={() => onToggleAddon('concierge')}
-                  />
-                )}
-              </div>
-              <div className="border-t border-gray-200 pt-2 flex items-center justify-between text-sm font-semibold text-gray-900">
-                <span>Total per month</span>
-                <span className="font-mono">{newTotalCents > 0 ? formatCents(newTotalCents) : 'Free'}</span>
-              </div>
-              {newTotalCents !== currentTotalCents ? (
-                <div className="text-[11px] text-gray-500 text-right">
-                  Currently {formatCents(currentTotalCents)} / mo —{' '}
-                  <span className={newTotalCents > currentTotalCents ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'}>
-                    {newTotalCents > currentTotalCents ? '+' : ''}
-                    {formatCents(newTotalCents - currentTotalCents)}
-                  </span>
-                </div>
-              ) : null}
             </div>
 
             {/* What happens next */}
