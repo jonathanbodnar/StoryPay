@@ -100,21 +100,19 @@ export default function PastDueWall({
           </div>
         ) : (
           <div className="mt-7 space-y-3">
-            {cardLastFour && (
-              <button
-                type="button"
-                onClick={retryCharge}
-                disabled={disabled}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
-              >
-                {busy === 'retry' ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <RefreshCw size={16} />
-                )}
-                Retry charge on card ••••{cardLastFour}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={retryCharge}
+              disabled={disabled}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
+            >
+              {busy === 'retry' ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
+              {cardLastFour ? `Retry charge on card ••••${cardLastFour}` : 'Retry payment'}
+            </button>
 
             <button
               type="button"
