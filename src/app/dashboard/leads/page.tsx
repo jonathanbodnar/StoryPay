@@ -14,7 +14,7 @@ import {
   Globe, CalendarPlus, Clock, GripVertical, ArrowLeft, ArrowRight,
   ChevronDown, Filter, Link2, Copy, Tags,
   History, ListTodo, CheckSquare, Square, Send, Activity, StickyNote,
-  Lock,
+  Lock, Check,
 } from 'lucide-react';
 import LeadInsightsStrip, { type LeadInsightsPayload } from '@/components/leads/LeadInsightsStrip';
 import AddLeadModal, { NO_PIPELINE_STAGE } from '@/components/leads/AddLeadModal';
@@ -324,6 +324,15 @@ export default function LeadsPage() {
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<string | 'all'>('all');
 
+  // Unread-message rollups: per-stage counts drive the red pills in the stage
+  // filter, per-email counts flag individual leads with unread conversations.
+  const [unreadByStage, setUnreadByStage] = useState<Record<string, number>>({});
+  const [unreadByEmail, setUnreadByEmail] = useState<Record<string, number>>({});
+  const allUnread = useMemo(
+    () => Object.values(unreadByStage).reduce((s, n) => s + n, 0),
+    [unreadByStage],
+  );
+
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [addingOpen, setAddingOpen] = useState(false);
@@ -496,6 +505,26 @@ export default function LeadsPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadInsights(); }, [loadInsights]);
+
+  const loadUnread = useCallback(async () => {
+    try {
+      const res = await fetch('/api/leads/unread', { cache: 'no-store' });
+      if (!res.ok) return;
+      const d = (await res.json()) as {
+        byStage?: Record<string, number>;
+        emails?: Record<string, number>;
+      };
+      setUnreadByStage(d.byStage ?? {});
+      setUnreadByEmail(d.emails ?? {});
+    } catch {
+      /* non-fatal — pills just won't show */
+    }
+  }, []);
+
+  // Refresh unread rollups on mount and whenever leads reload (stage moves,
+  // new inquiries, reads elsewhere in the app all change the counts).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadUnread(); }, [loadUnread, leads]);
 
   // Debounce search — we don't want to refetch on every keystroke.
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -823,20 +852,13 @@ export default function LeadsPage() {
         /* Native (mobile) order: stages filter (full-width) → search last */
         <div className="flex flex-col gap-2 -mt-1">
           {view === 'list' && activePipeline && (
-            <div className="relative w-full">
-              <select
-                value={stageFilter}
-                onChange={(e) => setStageFilter(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-gray-200 bg-white pl-9 pr-8 h-10 text-sm focus:border-gray-400 focus:outline-none"
-              >
-                <option value="all">All stages</option>
-                {activePipeline.stages.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
+            <StageFilterDropdown
+              stages={activePipeline.stages}
+              value={stageFilter}
+              onChange={setStageFilter}
+              unreadByStage={unreadByStage}
+              allUnread={allUnread}
+            />
           )}
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -902,6 +924,7 @@ export default function LeadsPage() {
           dragLeadId={dragLeadId}
           dragOverStage={dragOverStage}
           allTags={allTags}
+          unreadByEmail={unreadByEmail}
           onCardClick={(l) => void openLead(l)}
           onDragStartCard={onDragStart}
           onDragEndCard={onDragEnd}
@@ -920,6 +943,7 @@ export default function LeadsPage() {
           stages={activePipeline.stages}
           allTags={allTags}
           hideRevenue={hideRevenue}
+          unreadByEmail={unreadByEmail}
           onRowClick={(l) => void openLead(l)}
           onQuickStageChange={(id, stageId) => updateLead(id, { stageId })}
           onToggleLeadTag={setLeadTagSelection}
@@ -1049,6 +1073,86 @@ function PipelineControls({
       >
         <Settings2 className="w-4 h-4" /> Edit
       </button>
+    </div>
+  );
+}
+
+/**
+ * Stage filter for the Leads list, rendered as a custom dropdown (instead of a
+ * native <select>) so each stage can carry a red unread-message pill. Tapping a
+ * stage filters the list; the pill counts come from /api/leads/unread.
+ */
+function StageFilterDropdown({
+  stages, value, onChange, unreadByStage, allUnread,
+}: {
+  stages: Stage[];
+  value: string;
+  onChange: (v: string) => void;
+  unreadByStage: Record<string, number>;
+  allUnread: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const currentLabel =
+    value === 'all' ? 'All stages' : (stages.find((s) => s.id === value)?.name ?? 'All stages');
+  const currentCount = value === 'all' ? allUnread : (unreadByStage[value] ?? 0);
+
+  const UnreadPill = ({ n }: { n: number }) =>
+    n > 0 ? (
+      <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">
+        {n > 99 ? '99+' : n}
+      </span>
+    ) : null;
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center rounded-lg border border-gray-200 bg-white pl-9 pr-8 h-10 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
+      >
+        <span className="truncate">{currentLabel}</span>
+        {currentCount > 0 && <span className="ml-2"><UnreadPill n={currentCount} /></span>}
+        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-11 z-30 max-h-80 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+          <button
+            type="button"
+            onClick={() => { onChange('all'); setOpen(false); }}
+            className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-900 hover:bg-gray-50"
+          >
+            <Check className={`w-4 h-4 shrink-0 ${value === 'all' ? 'text-brand-700' : 'text-transparent'}`} />
+            <span className="flex-1 truncate">All stages</span>
+            <UnreadPill n={allUnread} />
+          </button>
+          {stages.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => { onChange(s.id); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-900 hover:bg-gray-50"
+            >
+              <Check className={`w-4 h-4 shrink-0 ${value === s.id ? 'text-brand-700' : 'text-transparent'}`} />
+              <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color ?? '#9ca3af' }} />
+              <span className="flex-1 truncate">{s.name}</span>
+              <UnreadPill n={unreadByStage[s.id] ?? 0} />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1350,6 +1454,7 @@ function KanbanBoard({
   hideRevenue,
   dragLeadId, dragOverStage,
   allTags,
+  unreadByEmail,
   onCardClick, onDragStartCard, onDragEndCard, onDragOverStage, onDropStage, onToggleLeadTag,
   onCreateTagForLead, onDeleteLead, venueTz,
 }: {
@@ -1361,6 +1466,7 @@ function KanbanBoard({
   dragLeadId: string | null;
   dragOverStage: string | null;
   allTags: MarketingTag[];
+  unreadByEmail: Record<string, number>;
   onCardClick: (l: Lead) => void;
   onDragStartCard: (e: React.DragEvent, id: string) => void;
   onDragEndCard: () => void;
@@ -1426,6 +1532,7 @@ function KanbanBoard({
                       key={lead.id}
                       lead={lead}
                       allTags={allTags}
+                      unread={unreadByEmail[(lead.email ?? '').toLowerCase().trim()] ?? 0}
                       bookingBadge={lead.booking_badge ?? null}
                       stageWinPct={winPct}
                       hideRevenue={hideRevenue}
@@ -1450,11 +1557,12 @@ function KanbanBoard({
 }
 
 function KanbanCard({
-  lead, allTags, bookingBadge, stageWinPct, hideRevenue, isDragging, onClick, onDragStart, onDragEnd, onToggleLeadTag,
+  lead, allTags, unread, bookingBadge, stageWinPct, hideRevenue, isDragging, onClick, onDragStart, onDragEnd, onToggleLeadTag,
   onCreateTagForLead, onDelete, venueTz,
 }: {
   lead: Lead;
   allTags: MarketingTag[];
+  unread: number;
   bookingBadge: { iso: string; variant: 'wedding' | 'appointment' } | null;
   stageWinPct: number;
   hideRevenue: boolean;
@@ -1484,6 +1592,15 @@ function KanbanCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-medium text-sm text-gray-900 truncate">
+            {unread > 0 && (
+              <span
+                title={`${unread} unread message${unread > 1 ? 's' : ''}`}
+                className="mr-1.5 inline-flex h-[18px] items-center gap-1 rounded-full bg-red-500 px-1.5 align-middle text-[10px] font-bold text-white"
+              >
+                <MessageSquare className="w-2.5 h-2.5" />
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
             {displayName(lead)}
             {lead.source === 'test_inquiry' && (
               <span
@@ -1704,12 +1821,13 @@ function KanbanCard({
 // ─── List view ───────────────────────────────────────────────────────────────
 
 function ListBoard({
-  leads, stages, allTags, hideRevenue, onRowClick, onQuickStageChange, onToggleLeadTag, onCreateTagForLead, venueTz,
+  leads, stages, allTags, hideRevenue, unreadByEmail, onRowClick, onQuickStageChange, onToggleLeadTag, onCreateTagForLead, venueTz,
 }: {
   leads: Lead[];
   stages: Stage[];
   allTags: MarketingTag[];
   hideRevenue: boolean;
+  unreadByEmail: Record<string, number>;
   onRowClick: (l: Lead) => void;
   onQuickStageChange: (id: string, stageId: string) => void;
   onToggleLeadTag: (leadId: string, tagId: string) => void;
@@ -1733,6 +1851,7 @@ function ListBoard({
       <ul className="divide-y divide-gray-100">
         {leads.map((lead) => {
           const stage = lead.stage_id ? stageById.get(lead.stage_id) : null;
+          const unread = unreadByEmail[(lead.email ?? '').toLowerCase().trim()] ?? 0;
           return (
             <li key={lead.id}>
               <div
@@ -1741,6 +1860,15 @@ function ListBoard({
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
+                    {unread > 0 && (
+                      <span
+                        title={`${unread} unread message${unread > 1 ? 's' : ''}`}
+                        className="inline-flex h-5 items-center gap-1 rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        {unread > 99 ? '99+' : unread}
+                      </span>
+                    )}
                     <span className="font-medium text-gray-900">{displayName(lead)}</span>
                     {lead.source === 'test_inquiry' && (
                       <span

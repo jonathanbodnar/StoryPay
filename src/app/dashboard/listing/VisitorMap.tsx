@@ -28,10 +28,22 @@ type Props = {
   heightClass?: string; // tailwind height utility, default h-96
 };
 
+// Continental-US bounding box (SW → NE). Fitting to this guarantees the whole
+// country is visible regardless of the container's aspect ratio (portrait phone
+// vs. wide desktop), instead of a fixed zoom that clips to the Midwest.
+const US_BOUNDS: [[number, number], [number, number]] = [
+  [24.4, -125.0],
+  [49.4, -66.9],
+];
+
 export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const layerRef = useRef<LayerGroup | null>(null);
+  const pointsRef = useRef<GeoPoint[]>(points);
+  const fitViewRef = useRef<(() => void) | null>(null);
+  const userMovedRef = useRef(false);
+  const programmaticRef = useRef(false);
 
   // One-time map initialisation.
   useEffect(() => {
@@ -44,10 +56,10 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
       if (cancelled || !containerRef.current) return;
 
       const map = L.map(containerRef.current, {
-        // Default to a continental-US view since the business is USA-based.
-        // The user can freely pan/zoom to other countries from here.
+        // Seeded with a rough continental-US view; fitView() below refines it
+        // to the exact US bounds once the container has its final size.
         center: [39.5, -98.35],
-        zoom: 4,
+        zoom: 3,
         minZoom: 2,
         maxZoom: 18,
         worldCopyJump: true,
@@ -72,6 +84,43 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
       mapRef.current = map;
       layerRef.current = L.layerGroup().addTo(map);
 
+      // Once the owner pans/zooms manually, stop auto-fitting so we don't yank
+      // the view out from under them on the next realtime refresh. Programmatic
+      // fitBounds calls are flagged so they don't count as user movement.
+      map.on("movestart", () => {
+        if (!programmaticRef.current) userMovedRef.current = true;
+      });
+
+      // Fit the map to the current data: the whole US when there are no live
+      // visitors, or tight around the active markers (capped zoom) when there
+      // are. No-ops once the user has taken control of the view.
+      const fitView = () => {
+        const m = mapRef.current;
+        if (!m || userMovedRef.current) return;
+        const pts = pointsRef.current;
+        programmaticRef.current = true;
+        if (!pts.length) {
+          m.fitBounds(US_BOUNDS, { padding: [12, 12], animate: false });
+        } else {
+          let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+          for (const p of pts) {
+            minLat = Math.min(minLat, p.lat);
+            maxLat = Math.max(maxLat, p.lat);
+            minLng = Math.min(minLng, p.lng);
+            maxLng = Math.max(maxLng, p.lng);
+          }
+          m.fitBounds([[minLat, minLng], [maxLat, maxLng]], {
+            padding: [40, 40],
+            maxZoom: 8,
+            animate: false,
+          });
+        }
+        // Release the programmatic flag after this frame's move settles.
+        setTimeout(() => { programmaticRef.current = false; }, 0);
+      };
+      fitViewRef.current = fitView;
+      fitView();
+
       // Two reasons Leaflet can render white on one side:
       //   1. The container got its final width AFTER L.map() ran (common
       //      inside tabs, flex layouts, or conditionally rendered blocks).
@@ -83,7 +132,12 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
       });
       resizeObserver.observe(containerRef.current);
       nudgeTimers = [0, 60, 240, 600].map((ms) =>
-        setTimeout(() => mapRef.current?.invalidateSize(), ms)
+        setTimeout(() => {
+          mapRef.current?.invalidateSize();
+          // Re-fit after the container reaches its real size so the US view
+          // isn't computed against a zero/partial-width map on first paint.
+          fitViewRef.current?.();
+        }, ms)
       );
     })();
 
@@ -101,6 +155,7 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
 
   // Re-render markers whenever the realtime payload changes.
   useEffect(() => {
+    pointsRef.current = points;
     let cancelled = false;
     (async () => {
       const map = mapRef.current;
@@ -175,10 +230,9 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
         markers.push(marker);
       }
 
-      // Intentionally NO auto-fit: the business is USA-based, so the map
-      // always opens on the continental-US view (set at init) and only moves
-      // when the owner pans/zooms themselves. Auto-fitting to markers would
-      // yank the view to whatever country a visitor happens to be in.
+      // Fit to the data: whole US when idle, zoomed to visitors when present.
+      // Skips itself once the owner has manually moved the map.
+      fitViewRef.current?.();
     })();
 
     return () => {

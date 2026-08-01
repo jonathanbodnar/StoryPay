@@ -21,7 +21,11 @@ const config: CapacitorConfig = {
   webDir: 'capacitor-shell/www',
   server: {
     // Same-origin hosting: load the live site so session cookies attach.
-    url: 'https://app.storyvenue.com',
+    // Enter at /login (not the marketing "/" landing) so the app skips the
+    // heavy homepage bundle on cold start — the splash → login step is much
+    // faster. /login server-redirects already-signed-in owners to /dashboard,
+    // so this is also the right entry for returning users.
+    url: 'https://app.storyvenue.com/login',
     // Force HTTPS only — never allow plaintext (App Store / Play requirement).
     cleartext: false,
     // Serve the local shell over the https scheme on Android so the origin

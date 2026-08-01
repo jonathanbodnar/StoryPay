@@ -291,8 +291,30 @@ export default function ContactsPage() {
   );
 
   const scrollToLetter = useCallback((letter: string) => {
-    sectionRefs.current[letter]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // `auto` (not smooth) is far more reliable inside the iOS WKWebView and
+    // feels instant while dragging the index. scroll-margin-top on each section
+    // (scroll-mt-16) offsets the fixed app header so the letter isn't hidden.
+    sectionRefs.current[letter]?.scrollIntoView({ block: 'start' });
   }, []);
+
+  const scrubberRef = useRef<HTMLDivElement | null>(null);
+
+  // Map a touch/click Y position on the index to the nearest available letter
+  // and jump to it — mirrors the iPhone Contacts drag-to-scrub behaviour.
+  const scrubToClientY = useCallback((clientY: number) => {
+    const el = scrubberRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const ratio = (clientY - rect.top) / rect.height;
+    const idx = Math.max(0, Math.min(INDEX_LETTERS.length - 1, Math.floor(ratio * INDEX_LETTERS.length)));
+    // Walk outward from the targeted letter to the closest one that has contacts.
+    for (let d = 0; d < INDEX_LETTERS.length; d++) {
+      const down = INDEX_LETTERS[idx + d];
+      if (down && availableLetters.has(down)) { scrollToLetter(down); return; }
+      const up = INDEX_LETTERS[idx - d];
+      if (up && availableLetters.has(up)) { scrollToLetter(up); return; }
+    }
+  }, [availableLetters, scrollToLetter]);
 
   async function deleteContact(c: ContactRow) {
     if (!confirm(`Delete ${c.name || c.email}? This cannot be undone.`)) return;
@@ -513,7 +535,7 @@ export default function ContactsPage() {
                   <div
                     key={group.letter}
                     ref={(el) => { sectionRefs.current[group.letter] = el; }}
-                    className="scroll-mt-2"
+                    className="scroll-mt-16"
                   >
                     <div className="sticky top-0 z-10 bg-gray-50/95 px-4 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500 backdrop-blur">
                       {group.letter}
@@ -525,7 +547,10 @@ export default function ContactsPage() {
                             href={`/dashboard/contacts/${encodeURIComponent(String(c.id))}`}
                             className="flex items-center gap-3 px-4 py-2 active:bg-gray-50"
                           >
-                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-indigo-500 text-sm font-semibold text-white">
+                            <span
+                              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                              style={{ backgroundColor: '#1B1B1B' }}
+                            >
                               {initialsOf(c)}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-[17px] text-gray-900">
@@ -545,8 +570,13 @@ export default function ContactsPage() {
                 ))}
               </div>
 
-              {/* A–Z scrubber */}
-              <div className="fixed right-0.5 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center gap-px py-2 select-none">
+              {/* A–Z scrubber — tap a letter or drag along the index to scrub */}
+              <div
+                ref={scrubberRef}
+                className="fixed right-0.5 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center gap-0.5 px-1.5 py-2 select-none touch-none"
+                onTouchStart={(e) => { e.preventDefault(); scrubToClientY(e.touches[0].clientY); }}
+                onTouchMove={(e) => { e.preventDefault(); scrubToClientY(e.touches[0].clientY); }}
+              >
                 {INDEX_LETTERS.map((L) => {
                   const enabled = availableLetters.has(L);
                   return (
@@ -556,7 +586,7 @@ export default function ContactsPage() {
                       onClick={() => enabled && scrollToLetter(L)}
                       aria-label={`Jump to ${L}`}
                       className={classNames(
-                        'text-[10px] font-semibold leading-[1.15] w-4 text-center',
+                        'text-[12px] font-semibold leading-none w-5 text-center',
                         enabled ? 'text-brand-700' : 'text-gray-300',
                       )}
                     >

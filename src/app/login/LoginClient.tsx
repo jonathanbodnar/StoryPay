@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Eye, EyeOff, Building2, Heart } from 'lucide-react';
 import { getCoupleSupabase } from '@/lib/couple-browser';
+import { isNativeApp } from '@/lib/platform';
 
 /**
  * Unified login page.
@@ -29,12 +30,18 @@ export function LoginClient() {
 
   const [mode, setMode] = useState<AuthMode>(initialMode);
 
+  // The native app is venue-owner only — there is no wedding-couple flow there,
+  // so the role toggle is hidden and the mode is forced to 'venue'. Web keeps
+  // the toggle so couples can still sign in from the directory.
+  const native = isNativeApp();
+  const effectiveMode: AuthMode = native ? 'venue' : mode;
+
   const signupHref = useMemo(() => {
     const params = new URLSearchParams();
-    params.set('as', mode);
+    params.set('as', effectiveMode);
     if (nextParam) params.set('next', nextParam);
     return `/signup?${params.toString()}`;
-  }, [mode, nextParam]);
+  }, [effectiveMode, nextParam]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
@@ -46,13 +53,13 @@ export function LoginClient() {
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-7">
-          <ModeToggle mode={mode} onChange={setMode} />
+          {!native && <ModeToggle mode={mode} onChange={setMode} />}
 
-          {mode === 'venue' ? <VenueLoginForm /> : <CoupleLoginForm router={router} nextPath={nextParam} />}
+          {effectiveMode === 'venue' ? <VenueLoginForm /> : <CoupleLoginForm router={router} nextPath={nextParam} />}
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-5">
-          {mode === 'venue' ? (
+          {effectiveMode === 'venue' ? (
             <>
               New to StoryVenue?{' '}
               <Link href={signupHref} className="font-semibold text-gray-900 hover:underline">
@@ -325,8 +332,7 @@ function VenueLoginForm() {
 
   return (
     <>
-      <h1 className="text-xl font-bold text-gray-900 mb-1 text-center">Sign in to your venue</h1>
-      <p className="text-sm text-gray-500 mb-6 text-center">Manage leads, payments, and your listing.</p>
+      <h1 className="text-xl font-bold text-gray-900 mb-6 text-center">Sign in to your venue</h1>
 
       <form onSubmit={handleSignIn} className="space-y-4">
         <div>

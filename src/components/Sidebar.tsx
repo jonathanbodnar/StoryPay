@@ -513,7 +513,7 @@ export default function Sidebar({
 
   const subItem = (active: boolean) =>
     `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-      active ? 'font-semibold' : 'text-gray-400 hover:text-gray-800'
+      active ? 'font-semibold' : 'text-gray-500 hover:text-gray-900'
     }`;
 
   const subItemStyle = (active: boolean): React.CSSProperties =>
@@ -583,7 +583,7 @@ export default function Sidebar({
       ? `flex items-center gap-2 px-3 py-2 text-sm ${
           active && !locked
             ? 'font-semibold text-gray-900 bg-gray-50'
-            : 'text-gray-600 hover:bg-gray-50'
+            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
         }`
       : subItem(active && !locked);
 
