@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Search,
@@ -15,25 +15,9 @@ import {
   Upload,
   Trash2,
   RefreshCw,
-  Phone,
-  Mail,
-  MessageSquare,
-  CalendarPlus,
 } from 'lucide-react';
 import { classNames, toTitleCase } from '@/lib/utils';
 import { isNativeApp } from '@/lib/platform';
-
-function formatPhone(raw: string | null | undefined): string {
-  if (!raw) return '';
-  const digits = raw.replace(/\D/g, '');
-  if (digits.length === 10) {
-    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
-  }
-  if (digits.length === 11 && digits.startsWith('1')) {
-    return `1-${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
-  }
-  return raw;
-}
 import AddLeadModal, {
   NO_PIPELINE_STAGE,
   type LeadDraft,
@@ -47,6 +31,8 @@ const capitalizeName = (name: string) => toTitleCase(name);
 interface ContactRow {
   id: string | number;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   phone?: string;
   funnelStage?: string | null;
@@ -55,6 +41,42 @@ interface ContactRow {
 }
 
 const PAGE_SIZE = 20;
+// The native (iPhone-style) contacts tab shows one long alphabetical list with
+// an A–Z scrubber instead of paginating, so it pulls a large single page.
+const NATIVE_PAGE_SIZE = 1000;
+const INDEX_LETTERS = [
+  'A','B','C','D','E','F','G','H','I','J','K','L','M',
+  'N','O','P','Q','R','S','T','U','V','W','X','Y','Z','#',
+];
+
+/** Two-letter avatar initials, à la the iPhone Contacts app. */
+function initialsOf(c: ContactRow): string {
+  const fn = (c.firstName || '').trim();
+  const ln = (c.lastName || '').trim();
+  if (fn || ln) {
+    const s = `${fn.charAt(0)}${ln.charAt(0)}`.toUpperCase();
+    if (s) return s;
+  }
+  const parts = (c.name || '').trim().split(/\s+/).filter(Boolean);
+  const a = parts[0]?.charAt(0) ?? '';
+  const b = parts.length > 1 ? parts[parts.length - 1].charAt(0) : '';
+  const s = `${a}${b}`.toUpperCase();
+  return s || (c.email || '?').charAt(0).toUpperCase();
+}
+
+/** First name bold, remainder regular — matches the iPhone Contacts row. */
+function renderContactName(name: string) {
+  const clean = toTitleCase(name || '').trim();
+  if (!clean) return <span className="font-semibold">Unknown</span>;
+  const idx = clean.indexOf(' ');
+  if (idx === -1) return <span className="font-semibold">{clean}</span>;
+  return (
+    <>
+      <span className="font-semibold">{clean.slice(0, idx)}</span>
+      {clean.slice(idx)}
+    </>
+  );
+}
 
 type ContactSort = 'newest' | 'oldest' | 'az' | 'za';
 
@@ -76,11 +98,14 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<ContactRow[]>([]);
   // contactIds that have unread Venue Direct messages for the current viewer
   const [vdUnreadIds, setVdUnreadIds] = useState<Set<string>>(new Set());
+  const native = isNativeApp();
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<ContactSort>('newest');
-  const sortRef = useRef<ContactSort>('newest');
+  // Native uses the iPhone-style alphabetical list; web keeps the sortable table.
+  const [sort, setSort] = useState<ContactSort>(native ? 'az' : 'newest');
+  const sortRef = useRef<ContactSort>(native ? 'az' : 'newest');
   sortRef.current = sort;
   const [loading, setLoading] = useState(true);
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [showModal, setShowModal] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -132,9 +157,12 @@ export default function ContactsPage() {
 
   const fetchContacts = useCallback(async (q: string, p: number, s: ContactSort = sortRef.current) => {
     setLoading(true);
+    const effLimit = native ? NATIVE_PAGE_SIZE : PAGE_SIZE;
+    const effSort = native ? 'az' : s;
+    const effPage = native ? 1 : p;
     try {
       const res = await fetch(
-        `/api/customers?search=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&page=${p}&sort=${s}`,
+        `/api/customers?search=${encodeURIComponent(q)}&limit=${effLimit}&page=${effPage}&sort=${effSort}`,
       );
       if (res.ok) {
         const data = await res.json() as {
@@ -146,7 +174,7 @@ export default function ContactsPage() {
         const items = (Array.isArray(data) ? data : data.data ?? []) as ContactRow[];
         setContacts(items);
         const total = typeof data.total === 'number' ? data.total : items.length;
-        setTotalPages(Math.max(1, Math.ceil(total / PAGE_SIZE)));
+        setTotalPages(native ? 1 : Math.max(1, Math.ceil(total / PAGE_SIZE)));
         setTotalContacts(total);
         if (data.ghlConnected !== undefined) setGhlConnected(!!data.ghlConnected);
 
@@ -236,6 +264,35 @@ export default function ContactsPage() {
     setPage(newPage);
     fetchContacts(search, newPage);
   }
+
+  // iPhone-style alphabetical sections (native list only). Contacts arrive from
+  // the server already sorted A–Z, so we just bucket them by first letter.
+  const groupedContacts = useMemo(() => {
+    if (!native) return [] as { letter: string; items: ContactRow[] }[];
+    const map = new Map<string, ContactRow[]>();
+    for (const c of contacts) {
+      const ch = (c.name || c.email || '#').trim().charAt(0).toUpperCase();
+      const letter = /[A-Z]/.test(ch) ? ch : '#';
+      const bucket = map.get(letter) ?? [];
+      bucket.push(c);
+      map.set(letter, bucket);
+    }
+    const letters = [...map.keys()].sort((a, b) => {
+      if (a === '#') return 1;
+      if (b === '#') return -1;
+      return a.localeCompare(b);
+    });
+    return letters.map((letter) => ({ letter, items: map.get(letter)! }));
+  }, [contacts, native]);
+
+  const availableLetters = useMemo(
+    () => new Set(groupedContacts.map((g) => g.letter)),
+    [groupedContacts],
+  );
+
+  const scrollToLetter = useCallback((letter: string) => {
+    sectionRefs.current[letter]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
   async function deleteContact(c: ContactRow) {
     if (!confirm(`Delete ${c.name || c.email}? This cannot be undone.`)) return;
@@ -418,26 +475,29 @@ export default function ContactsPage() {
             className="h-10 w-full rounded-lg border border-gray-200 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900 outline-none"
           />
         </div>
-        <select
-          value={sort}
-          onChange={(e) => {
-            const next = e.target.value as ContactSort;
-            setSort(next);
-            setPage(1);
-            fetchContacts(search, 1, next);
-          }}
-          aria-label="Sort contacts"
-          className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-gray-400 focus:outline-none"
-        >
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+        {!native && (
+          <select
+            value={sort}
+            onChange={(e) => {
+              const next = e.target.value as ContactSort;
+              setSort(next);
+              setPage(1);
+              fetchContacts(search, 1, next);
+            }}
+            aria-label="Sort contacts"
+            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-gray-400 focus:outline-none"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        )}
       </div>
 
-      {/* Native list view — matches the Lead Inbox list style */}
-      {isNativeApp() ? (
-        <div className="rounded-3xl border border-gray-200 bg-white overflow-hidden">
+      {/* Native (iPhone-style) contacts: avatar badge + name, grouped A–Z with
+          a scrubber. Tapping a row opens the full contact profile. */}
+      {native ? (
+        <div className="relative">
           {loading ? (
             <div className="px-5 py-8 text-center text-gray-400">
               <Loader2 className="inline animate-spin" size={18} />
@@ -447,96 +507,65 @@ export default function ContactsPage() {
               {search ? 'No contacts match your search' : 'No contacts yet'}
             </div>
           ) : (
-            <ul className="divide-y divide-gray-100">
-              {contacts.map((c) => (
-                <li key={String(c.id)}>
-                  <div className="flex flex-col gap-3 px-5 py-4">
-                    <div className="flex-1 min-w-0">
-                      <Link
-                        href={`/dashboard/contacts/${encodeURIComponent(String(c.id))}`}
-                        className="inline-flex items-center gap-1.5 font-medium text-gray-900 hover:text-brand-900 hover:underline"
-                      >
-                        {capitalizeName(c.name || '')}
-                        {vdUnreadIds.has(String(c.id)) && (
-                          <span
-                            className="inline-block w-2 h-2 rounded-full bg-violet-500 shrink-0"
-                            title="Unread message from StoryVenue Support"
-                          />
-                        )}
-                      </Link>
-                      {c.funnelStage && (
-                        <span
-                          className={classNames(
-                            'ml-2 inline-flex max-w-[160px] truncate rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide align-middle',
-                            !c.funnelStageColor && 'border-gray-200 bg-gray-50 text-gray-700',
-                          )}
-                          style={
-                            c.funnelStageColor
-                              ? {
-                                  backgroundColor: `${c.funnelStageColor}22`,
-                                  color: c.funnelStageColor,
-                                  borderColor: `${c.funnelStageColor}44`,
-                                }
-                              : undefined
-                          }
-                          title={c.funnelStage}
-                        >
-                          {c.funnelStage}
-                        </span>
-                      )}
-                      <div className="mt-1 flex flex-col gap-1 text-xs text-gray-500">
-                        {c.phone && (
-                          <span className="flex items-center gap-1">
-                            <Phone className="w-3.5 h-3.5" /> {formatPhone(c.phone)}
-                          </span>
-                        )}
-                        {c.email && (
-                          <span className="flex items-center gap-1 truncate">
-                            <Mail className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{c.email}</span>
-                          </span>
-                        )}
-                      </div>
+            <>
+              <div className="pr-5">
+                {groupedContacts.map((group) => (
+                  <div
+                    key={group.letter}
+                    ref={(el) => { sectionRefs.current[group.letter] = el; }}
+                    className="scroll-mt-2"
+                  >
+                    <div className="sticky top-0 z-10 bg-gray-50/95 px-4 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500 backdrop-blur">
+                      {group.letter}
                     </div>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      {c.phone && (
-                        <a
-                          href={`tel:${c.phone.replace(/[^\d+]/g, '')}`}
-                          title={`Call ${formatPhone(c.phone)}`}
-                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-green-50 hover:text-green-600 transition-colors"
-                        >
-                          <Phone className="w-4 h-4" />
-                        </a>
-                      )}
-                      {c.email && (
-                        <Link
-                          href={`/dashboard/conversations?email=${encodeURIComponent(c.email)}&compose=sms`}
-                          title="Text this contact"
-                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
-                        >
-                          <MessageSquare className="w-4 h-4" />
-                        </Link>
-                      )}
-                      {c.email && (
-                        <Link
-                          href={`/dashboard/conversations?email=${encodeURIComponent(c.email)}&compose=email`}
-                          title="Send email"
-                          className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-600 transition-colors"
-                        >
-                          <Mail className="w-4 h-4" />
-                        </Link>
-                      )}
-                      <Link
-                        href={`/dashboard/calendar?new=1${c.email ? `&email=${encodeURIComponent(c.email)}` : ''}${c.name ? `&name=${encodeURIComponent(c.name)}` : ''}`}
-                        title="New appointment"
-                        className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
-                      >
-                        <CalendarPlus className="w-4 h-4" />
-                      </Link>
-                    </div>
+                    <ul>
+                      {group.items.map((c) => (
+                        <li key={String(c.id)} className="border-b border-gray-100 last:border-b-0">
+                          <Link
+                            href={`/dashboard/contacts/${encodeURIComponent(String(c.id))}`}
+                            className="flex items-center gap-3 px-4 py-2 active:bg-gray-50"
+                          >
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-indigo-500 text-sm font-semibold text-white">
+                              {initialsOf(c)}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-[17px] text-gray-900">
+                              {renderContactName(c.name)}
+                            </span>
+                            {vdUnreadIds.has(String(c.id)) && (
+                              <span
+                                className="h-2 w-2 shrink-0 rounded-full bg-violet-500"
+                                title="Unread message from StoryVenue Support"
+                              />
+                            )}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </li>
-              ))}
-            </ul>
+                ))}
+              </div>
+
+              {/* A–Z scrubber */}
+              <div className="fixed right-0.5 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center gap-px py-2 select-none">
+                {INDEX_LETTERS.map((L) => {
+                  const enabled = availableLetters.has(L);
+                  return (
+                    <button
+                      key={L}
+                      type="button"
+                      onClick={() => enabled && scrollToLetter(L)}
+                      aria-label={`Jump to ${L}`}
+                      className={classNames(
+                        'text-[10px] font-semibold leading-[1.15] w-4 text-center',
+                        enabled ? 'text-brand-700' : 'text-gray-300',
+                      )}
+                    >
+                      {L}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       ) : (
@@ -666,8 +695,8 @@ export default function ContactsPage() {
       </div>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {/* Pagination — hidden on the native alphabetical list */}
+      {!native && totalPages > 1 && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
             Page <span className="font-medium text-gray-700">{page}</span> of{' '}
