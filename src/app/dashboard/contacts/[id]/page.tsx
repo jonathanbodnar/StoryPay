@@ -1071,8 +1071,8 @@ export default function CustomerDetailPage() {
       <>
         {err && <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle size={12} />{err}</p>}
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onCancel} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-          <button type="button" onClick={onSave} disabled={saving} className="flex-1 rounded-xl py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50" style={{backgroundColor:'#1b1b1b'}}>
+          <button type="button" onClick={onCancel} className="flex-1 rounded-lg border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+          <button type="button" onClick={onSave} disabled={saving} className="flex-1 rounded-lg py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50" style={{backgroundColor:'#1b1b1b'}}>
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
@@ -1144,7 +1144,7 @@ export default function CustomerDetailPage() {
                 <div className="flex flex-wrap items-center gap-2 mt-3">
                   <Link
                     href={conversationsOutreach.emailHref}
-                    className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold text-white transition-colors"
+                    className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-white transition-colors"
                     style={{ backgroundColor: '#1b1b1b' }}
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
@@ -1156,7 +1156,7 @@ export default function CustomerDetailPage() {
                   </Link>
                   <Link
                     href={conversationsOutreach.smsHref}
-                    className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold text-white transition-colors"
+                    className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-white transition-colors"
                     style={{ backgroundColor: '#1b1b1b' }}
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#333333')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1b1b1b')}
@@ -1287,12 +1287,16 @@ export default function CustomerDetailPage() {
             )}
             </>)}
 
+            {/* Edit hidden on native — the Overview "Contact Info" card already
+                exposes an Edit action, so the header one is redundant there. */}
+            {!native && (
             <button
               onClick={startEditContact}
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
             >
               <Pencil size={14} /> Edit
             </button>
+            )}
             {!native && (
             <Link
               href={`/dashboard/payments/new?type=proposal&email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}
@@ -1328,7 +1332,7 @@ export default function CustomerDetailPage() {
                   </option>
                 ))}
               </select>
-              {venueCustomer.pipeline_context?.linkedLeadId && (
+              {!native && venueCustomer.pipeline_context?.linkedLeadId && (
                 <span className="text-[10px] text-gray-400">Linked to lead — stage syncs both ways</span>
               )}
             </div>
@@ -1609,7 +1613,7 @@ export default function CustomerDetailPage() {
                   type="button"
                   disabled={savingInquiry}
                   onClick={() => void saveInquiry()}
-                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
                   style={{ backgroundColor: '#1b1b1b' }}
                 >
                   {savingInquiry ? 'Saving…' : 'Save Inquiry Details'}
@@ -1747,7 +1751,7 @@ export default function CustomerDetailPage() {
                     placeholder="Capacity"
                     className="w-24 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
                   <button onClick={addSpace} disabled={!newSpaceName.trim() || savingSpace}
-                    className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-40"
+                    className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-40"
                     style={{ backgroundColor: '#1b1b1b' }}>
                     {savingSpace ? <Loader2 size={14} className="animate-spin inline" /> : 'Add'}
                   </button>
@@ -1917,7 +1921,7 @@ export default function CustomerDetailPage() {
               className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none resize-none mb-3" />
             {noteError && <p className="text-xs text-red-600 flex items-center gap-1 mb-2"><AlertCircle size={12} />{noteError}</p>}
             <button onClick={addNote} disabled={savingNote || !newNote.trim()}
-              className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-40"
+              className="rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-40"
               style={{backgroundColor:'#1b1b1b'}}>
               {savingNote ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null}
               {savingNote ? 'Saving…' : 'Add Note'}
@@ -2099,7 +2103,7 @@ export default function CustomerDetailPage() {
               <input type="date" value={newTaskDue} onChange={e => setNewTaskDue(e.target.value)}
                 className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none w-36" />
               <button onClick={addTask} disabled={savingTask || !newTask.trim()}
-                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-40"
+                className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-40"
                 style={{backgroundColor:'#1b1b1b'}}>
                 {savingTask ? <Loader2 size={14} className="animate-spin" /> : <Plus size={15} />}
               </button>
@@ -2224,7 +2228,7 @@ export default function CustomerDetailPage() {
                 className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none capitalize">
                 {FILE_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
               </select>
-              <label className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white cursor-pointer transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`} style={{backgroundColor:'#1b1b1b'}}>
+              <label className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white cursor-pointer transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`} style={{backgroundColor:'#1b1b1b'}}>
                 {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                 {uploading ? 'Uploading…' : 'Upload File'}
                 <input type="file" className="hidden" disabled={uploading} onChange={handleFileUpload}

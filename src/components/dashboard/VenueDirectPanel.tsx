@@ -218,15 +218,15 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
           rows={4}
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300"
         />
-        <div className="flex items-center justify-between mt-2">
-          <p className="text-[11px] text-gray-500">
+        <div className="flex items-center justify-between gap-3 mt-2">
+          <p className="text-[11px] text-gray-500 min-w-0">
             Replies go to the StoryVenue Support team. The bride doesn&apos;t see this thread.
           </p>
           <button
             type="button"
             onClick={send}
             disabled={!body.trim() || sending}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#1b1b1b' }}
           >
             {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
