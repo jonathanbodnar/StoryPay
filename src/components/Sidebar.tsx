@@ -167,10 +167,9 @@ const NATIVE_ALLOWED_NAV_IDS = new Set<string>([
   'nav_main_conversations',
   'nav_main_contacts',
   'nav_main_calendar',
-  // Settings — push notifications + team only; no billing/branding/general
+  // Settings — push notifications only. Email notifications and Team are
+  // managed on the desktop/web version, so they're hidden in the native app.
   'nav_settings_push',
-  'nav_settings_notifications',
-  'nav_settings_team',
 ]);
 
 export default function Sidebar({
