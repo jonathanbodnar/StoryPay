@@ -571,7 +571,7 @@ function StepLeadsModal({ stepLabel, leads, onClose }: {
                   {/* Profile link */}
                   {l.email && (
                     <a
-                      href={`/dashboard/conversations?email=${encodeURIComponent(l.email)}`}
+                      href={`/dashboard/conversations?customerFromEmail=${encodeURIComponent(l.email)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Open conversation thread"

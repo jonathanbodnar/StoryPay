@@ -1678,7 +1678,7 @@ function KanbanCard({
         {/* SMS */}
         {lead.email ? (
           <Link
-            href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=sms`}
+            href={`/dashboard/conversations?customerFromEmail=${encodeURIComponent(lead.email)}&compose=sms`}
             title="Send SMS"
             className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
           >
@@ -1693,7 +1693,7 @@ function KanbanCard({
         {/* Email */}
         {lead.email ? (
           <Link
-            href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=email`}
+            href={`/dashboard/conversations?customerFromEmail=${encodeURIComponent(lead.email)}&compose=email`}
             title="Send email"
             className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-600 transition-colors"
           >
@@ -1885,7 +1885,7 @@ function ListBoard({
                   )}
                   {lead.email && (
                     <Link
-                      href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=sms`}
+                      href={`/dashboard/conversations?customerFromEmail=${encodeURIComponent(lead.email)}&compose=sms`}
                       onClick={(e) => e.stopPropagation()}
                       title="Text this contact"
                       className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
@@ -1895,7 +1895,7 @@ function ListBoard({
                   )}
                   {lead.email && (
                     <Link
-                      href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=email`}
+                      href={`/dashboard/conversations?customerFromEmail=${encodeURIComponent(lead.email)}&compose=email`}
                       onClick={(e) => e.stopPropagation()}
                       title="Send email"
                       className="inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-sky-50 hover:text-sky-600 transition-colors"
@@ -2385,7 +2385,7 @@ function LeadDrawer({
           <div className="flex items-center gap-1">
             {lead.email && (
               <Link
-                href={`/dashboard/conversations?email=${encodeURIComponent(lead.email)}&compose=sms`}
+                href={`/dashboard/conversations?customerFromEmail=${encodeURIComponent(lead.email)}&compose=sms`}
                 title="Text this contact"
                 className="rounded-xl p-2 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
               >
