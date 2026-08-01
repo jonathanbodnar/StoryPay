@@ -7,7 +7,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, FileText, Loader2, ExternalLink,
   Receipt, Pencil, Copy, RefreshCw, RotateCcw, X as XIcon,
   Plus, Check, Trash2, Upload, Calendar, ClipboardList,
-  FileCheck, Activity, User, Heart, ChevronDown, ChevronUp, Info,
+  FileCheck, Activity, User, ChevronDown, ChevronUp, Info,
   AlertCircle, Undo2, Smartphone, Building2,
   Bot, Pause, BotOff, Play, Clock,
 } from 'lucide-react';
@@ -1510,7 +1510,7 @@ export default function CustomerDetailPage() {
           {/* Partner / Second Contact */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Heart size={15} /> Partner / Second Contact</h2>
+              <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><User size={15} /> Additional Contact</h2>
               <button onClick={startEditPartner} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {venueCustomer?.partner_first_name ? 'Edit' : 'Add'}</button>
             </div>
             {editingPartner ? (
@@ -1540,8 +1540,8 @@ export default function CustomerDetailPage() {
                 {venueCustomer.partner_phone && <a href={`tel:${venueCustomer.partner_phone.replace(/[^\d+]/g, '')}`} className="flex items-center gap-2 text-gray-700 hover:text-gray-900"><Phone size={13} className="text-gray-400" />{venueCustomer.partner_phone}</a>}
               </div>
             ) : (
-              <p className="text-xs text-gray-400">No partner info yet.{' '}
-                <button onClick={startEditPartner} className="text-blue-600 hover:underline">Add partner</button>
+              <p className="text-xs text-gray-400">No additional contact yet.{' '}
+                <button onClick={startEditPartner} className="text-blue-600 hover:underline">Add contact</button>
               </p>
             )}
           </div>
@@ -1625,7 +1625,7 @@ export default function CustomerDetailPage() {
           {/* Wedding details */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Calendar size={15} /> Wedding Details</h2>
+              <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Calendar size={15} /> Event Details</h2>
               {!editingWedding && (
                 <button onClick={startEditWedding} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {(venueCustomer?.wedding_date || venueCustomer?.guest_count) ? 'Edit' : 'Add'}</button>
               )}
@@ -1634,7 +1634,7 @@ export default function CustomerDetailPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[
-                    { k:'wedding_date',      l:'Wedding Date',    t:'date' },
+                    { k:'wedding_date',      l:'Event Date',    t:'date' },
                     { k:'rehearsal_date',    l:'Rehearsal Date',  t:'date' },
                     { k:'guest_count',       l:'Guest Count',     t:'number' },
                     { k:'coordinator_name',  l:'Day-of Coordinator Name', t:'text' },
@@ -1647,7 +1647,7 @@ export default function CustomerDetailPage() {
                     </div>
                   ))}
                   <div>
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Ceremony Type</label>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Event Type</label>
                     <select value={weddingForm.ceremony_type} onChange={e => setWeddingForm(p => ({...p,ceremony_type:e.target.value}))}
                       className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
                       <option value="">Not set</option>
@@ -1672,7 +1672,7 @@ export default function CustomerDetailPage() {
               </div>
             ) : venueCustomer && (venueCustomer.wedding_date || venueCustomer.guest_count || venueCustomer.ceremony_type) ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
-                {venueCustomer.wedding_date && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Wedding Date</p><p className="text-gray-900 font-medium">{formatDate(venueCustomer.wedding_date)}</p></div>}
+                {venueCustomer.wedding_date && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Event Date</p><p className="text-gray-900 font-medium">{formatDate(venueCustomer.wedding_date)}</p></div>}
                 {venueCustomer.ceremony_type && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Type</p><p className="text-gray-900 font-medium">{CEREMONY_TYPES.find(c => c.value === venueCustomer.ceremony_type)?.label ?? venueCustomer.ceremony_type}</p></div>}
                 {venueCustomer.guest_count && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Guests</p><p className="text-gray-900 font-medium">{venueCustomer.guest_count}</p></div>}
                 {venueCustomer.venue_spaces && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Space</p><p className="text-gray-900 font-medium flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{backgroundColor:venueCustomer.venue_spaces.color}} />{venueCustomer.venue_spaces.name}</p></div>}
@@ -1681,7 +1681,7 @@ export default function CustomerDetailPage() {
                 {venueCustomer.catering_notes && <div className="sm:col-span-2 lg:col-span-4"><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Notes</p><p className="text-gray-700">{venueCustomer.catering_notes}</p></div>}
               </div>
             ) : (
-              <p className="text-xs text-gray-400">No wedding details yet.{' '}
+              <p className="text-xs text-gray-400">No event details yet.{' '}
                 <button onClick={startEditWedding} className="text-blue-600 hover:underline">Add details</button>
               </p>
             )}
@@ -1691,7 +1691,7 @@ export default function CustomerDetailPage() {
           <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-heading text-base text-gray-900 flex items-center gap-2">
-                <Calendar size={15} /> Venue Spaces
+                <Calendar size={15} /> Event Spaces
               </h2>
               <button onClick={() => setShowSpaceManager(v => !v)}
                 className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors">
