@@ -134,7 +134,7 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
         <div>
           <h2 className="font-heading text-lg text-gray-900 inline-flex items-center gap-2">
             <Building2 size={16} className="text-violet-700" />
-            Venue Direct — StoryVenue Support
+            Concierge Team Support
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
             Private thread between StoryVenue Support and your venue team about{' '}
@@ -230,7 +230,7 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
             style={{ backgroundColor: '#1b1b1b' }}
           >
             {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-            {sending ? 'Sending…' : 'Send to Support'}
+            {sending ? 'Sending…' : 'Send message'}
           </button>
         </div>
       </div>

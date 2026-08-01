@@ -16,6 +16,7 @@ import ContactAiControls from '@/components/ai-concierge/ContactAiControls';
 import VenueDirectPanel from '@/components/dashboard/VenueDirectPanel';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
+import { isNativeApp } from '@/lib/platform';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Customer {
@@ -1079,6 +1080,17 @@ export default function CustomerDetailPage() {
     );
   }
 
+  // Black-bubble avatar initials: first + last (matches the Contacts tab).
+  const avatarInitials = (() => {
+    const fi = customer.firstName?.trim()?.[0] ?? '';
+    const li = customer.lastName?.trim()?.[0] ?? '';
+    if (fi || li) return (fi + li).toUpperCase();
+    const parts = (customer.name ?? '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  })();
+  const native = isNativeApp();
+
   return (
     <div>
       {/* Back */}
@@ -1090,10 +1102,10 @@ export default function CustomerDetailPage() {
       {/* ── Header card ── */}
       <div className="rounded-2xl border border-gray-200 bg-white mb-6">
         <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-full flex items-center justify-center text-lg font-semibold text-white flex-shrink-0"
+          <div className="flex items-start gap-3">
+            <div className="h-12 w-12 rounded-full flex items-center justify-center text-base font-semibold text-white flex-shrink-0"
               style={{ backgroundColor: '#1b1b1b' }}>
-              {customer.name?.charAt(0)?.toUpperCase() || '?'}
+              {avatarInitials}
             </div>
             <div>
               <div className="flex items-center gap-3 flex-wrap">
@@ -1115,9 +1127,10 @@ export default function CustomerDetailPage() {
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-3 mt-0.5">
-                {customer.email && <a href={`mailto:${customer.email}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"><Mail size={13} />{customer.email}</a>}
+              {/* Contact details — phone first, email below. */}
+              <div className="flex flex-col gap-1 mt-1">
                 {customer.phone && <a href={`tel:${customer.phone.replace(/[^\d+]/g, '')}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"><Phone size={13} />{customer.phone}</a>}
+                {customer.email && <a href={`mailto:${customer.email}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"><Mail size={13} />{customer.email}</a>}
                 {venueCustomer?.attributed_source && SOURCE_LABELS[venueCustomer.attributed_source] && (
                   <span
                     title="Traffic source, detected automatically from how this lead first arrived. Read-only."
@@ -1158,8 +1171,9 @@ export default function CustomerDetailPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            {/* AI Concierge quick-control — ALWAYS shown.
-                Server gates the actual actions on plan/addon eligibility. */}
+            {/* AI Concierge quick-control — hidden in the native app (no AI
+                on/off surface there). Web/PWA keeps it. */}
+            {!native && (<>
             <div className="relative" ref={aiHeaderMenuRef}>
               {(() => {
                 // Treat ai_active + future ai_next_send_at as "soft paused"
@@ -1271,6 +1285,7 @@ export default function CustomerDetailPage() {
             {aiHeaderMsg && (
               <span className="text-xs text-gray-500 italic max-w-[180px] truncate">{aiHeaderMsg}</span>
             )}
+            </>)}
 
             <button
               onClick={startEditContact}
@@ -1278,18 +1293,22 @@ export default function CustomerDetailPage() {
             >
               <Pencil size={14} /> Edit
             </button>
+            {!native && (
             <Link
               href={`/dashboard/payments/new?type=proposal&email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
             >
               <Plus size={18} /> New proposal
             </Link>
+            )}
+            {!native && (
             <Link
               href={`/dashboard/payments/new?type=invoice&email=${encodeURIComponent(customer.email || '')}&name=${encodeURIComponent(customer.name || '')}`}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
             >
               <Plus size={18} /> New invoice
             </Link>
+            )}
           </div>
         </div>
 
@@ -1315,28 +1334,41 @@ export default function CustomerDetailPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mr-1">Stage</span>
-              {pipelineUi.activeStages.map((st) => {
-                const active = pipelineUi.resolvedStageId === st.id;
-                return (
-                  <button
-                    key={st.id}
-                    type="button"
-                    onClick={() => void updateStage(st.id)}
-                    className="rounded-full px-3 py-1 text-xs font-medium border transition-colors"
-                    style={
-                      active
-                        ? {
-                          backgroundColor: `${st.color}22`,
-                          color: st.color,
-                          borderColor: `${st.color}55`,
-                        }
-                        : { borderColor: '#e5e7eb', color: '#6b7280' }
-                    }
-                  >
-                    {st.name}
-                  </button>
-                );
-              })}
+              {native ? (
+                /* Dropdown on mobile — easier than a wrapping row of pills. */
+                <select
+                  value={pipelineUi.resolvedStageId ?? ''}
+                  onChange={(e) => void updateStage(e.target.value)}
+                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-800 focus:border-gray-400 focus:outline-none max-w-[240px]"
+                >
+                  {pipelineUi.activeStages.map((st) => (
+                    <option key={st.id} value={st.id}>{st.name}</option>
+                  ))}
+                </select>
+              ) : (
+                pipelineUi.activeStages.map((st) => {
+                  const active = pipelineUi.resolvedStageId === st.id;
+                  return (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => void updateStage(st.id)}
+                      className="rounded-full px-3 py-1 text-xs font-medium border transition-colors"
+                      style={
+                        active
+                          ? {
+                            backgroundColor: `${st.color}22`,
+                            color: st.color,
+                            borderColor: `${st.color}55`,
+                          }
+                          : { borderColor: '#e5e7eb', color: '#6b7280' }
+                      }
+                    >
+                      {st.name}
+                    </button>
+                  );
+                })
+              )}
             </div>
             {pipelineActionError && (
               <p className="text-xs text-red-600 flex items-center gap-1">
