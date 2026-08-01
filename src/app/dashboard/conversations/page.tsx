@@ -1967,8 +1967,10 @@ export default function ConversationsPage() {
                   </p>
                 </div>
                 <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
-                  {/* AI Concierge quick-control — ALWAYS shown.
-                      Server gates the actual actions on plan/addon eligibility. */}
+                  {/* AI Concierge quick-control — hidden entirely in the native
+                      app (no AI on/off surface there). Web/PWA keeps it; the
+                      server still gates actions on plan/addon eligibility. */}
+                  {!isNativeApp() && (
                   <div className="relative" ref={aiMenuRef}>
                     {(() => {
                       // Treat ai_active + future ai_next_send_at as "soft paused"
@@ -2105,6 +2107,7 @@ export default function ConversationsPage() {
                     </>);
                     })()}
                   </div>
+                  )}
 
                   {/* Feedback toast */}
                   {aiActionMsg && (
@@ -3010,7 +3013,7 @@ export default function ConversationsPage() {
                             </button>
                           </div>
                         )}
-                        {(composerTab === 'email' || composerTab === 'sms') && (
+                        {(composerTab === 'email' || composerTab === 'sms') && (!isNativeApp() || composerTab === 'sms') && (
                           <div className="relative flex flex-wrap items-center gap-0.5 border-t border-gray-100 bg-white px-2 py-1">
                             <div className="relative">
                               <button
@@ -3096,6 +3099,7 @@ export default function ConversationsPage() {
                                 <BookOpen size={16} strokeWidth={1.75} />
                               </button>
                             )}
+                            {!isNativeApp() && (
                             <button
                               type="button"
                               onClick={() => setSavedRepliesOpen((v) => !v)}
@@ -3108,7 +3112,8 @@ export default function ConversationsPage() {
                             >
                               <FileText size={16} strokeWidth={1.75} />
                             </button>
-                            {selectedId && (
+                            )}
+                            {!isNativeApp() && selectedId && (
                               <CannedReplyPicker
                                 open={savedRepliesOpen}
                                 onClose={() => setSavedRepliesOpen(false)}
@@ -3120,6 +3125,7 @@ export default function ConversationsPage() {
                                 fullWidth
                               />
                             )}
+                            {!isNativeApp() && (
                             <button
                               type="button"
                               onClick={() => setShowDraftIntent((v) => !v)}
@@ -3132,6 +3138,8 @@ export default function ConversationsPage() {
                             >
                               <Wand2 size={16} strokeWidth={1.75} />
                             </button>
+                            )}
+                            {!isNativeApp() && (
                             <button
                               type="button"
                               onClick={() => void draftReply()}
@@ -3147,6 +3155,7 @@ export default function ConversationsPage() {
                               )}
                               {drafting ? 'Drafting…' : 'Suggest'}
                             </button>
+                            )}
                             {composerTab === 'sms' && (
                               <span className="ml-auto pr-1 text-[10px] tabular-nums text-gray-400">
                                 {body.length} chars
@@ -3174,6 +3183,8 @@ export default function ConversationsPage() {
                           'Send team note'
                         : composerTab === 'sms' ?
                           'Send SMS'
+                        : composerTab === 'concierge' ?
+                          'Send message'
                         : 'Send email'}
                       </button>
                     </div>

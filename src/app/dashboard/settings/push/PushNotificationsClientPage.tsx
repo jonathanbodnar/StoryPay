@@ -56,9 +56,6 @@ const NATIVE_TOGGLES = [
   { key: 'push_new_lead',    label: 'New lead',             description: 'Someone enquires about your venue.',    defaultOn: true },
   { key: 'push_new_message', label: 'New message',          description: 'A contact sends you a reply.',          defaultOn: true },
   { key: 'push_ai_handoff',  label: 'AI Concierge handoff', description: 'The AI hands a conversation to you.',   defaultOn: true },
-  { key: 'push_proposal_signed', label: 'Proposal signed',  description: 'A customer signs a proposal.',          defaultOn: true },
-  { key: 'push_document_viewed', label: 'Document opened',  description: 'A customer opens a proposal you sent.', defaultOn: false },
-  { key: 'push_new_customer',    label: 'New contact',      description: 'A new customer record is created.',     defaultOn: false },
 ];
 
 // Financial scenario keys disabled on native to satisfy App Store guidelines.
@@ -260,7 +257,7 @@ export default function PushNotificationsClientPage() {
         <div className="mb-8">
           <h1 className="font-heading text-2xl text-gray-900">Push Notifications</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Get instant alerts for new leads, messages, and more — right on your phone.
+            Get instant alerts for new leads, messages, and more right on your phone.
           </p>
         </div>
 

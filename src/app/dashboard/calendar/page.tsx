@@ -743,15 +743,15 @@ export default function CalendarPage() {
               aria-label="Calendar Settings"
               className={
                 isNativeApp()
-                  ? 'inline-flex items-center justify-center rounded-lg border border-gray-300 p-2 text-gray-700 hover:bg-gray-50 transition'
-                  : 'inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition'
+                  ? 'inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition'
+                  : 'inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition'
               }
             >
               <Settings size={isNativeApp() ? 18 : 15} /> {!isNativeApp() && 'Calendar Settings'}
             </Link>
             <button
               onClick={() => openNewEvent()}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-900 px-4 text-sm font-medium text-white transition hover:bg-brand-800"
             >
               <Plus size={18} /> Create event
             </button>
