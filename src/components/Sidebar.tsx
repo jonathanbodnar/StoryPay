@@ -822,6 +822,22 @@ export default function Sidebar({
 
         {renderMenuItems(topMenuItems, isMobile, rail, onCloseMobile)}
 
+        {/* Native app: a single "Analytics" entry that opens the full Bride
+            Booking System dashboard (/dashboard/listing). The listing group is
+            otherwise hidden in the native shell, so this is the one way in. The
+            page keeps its own "Bride Booking System" title. */}
+        {isNativeApp() && isMobile && (
+          <Link
+            href="/dashboard/listing"
+            onClick={onCloseMobile}
+            className={classNames(navItem(pathname.startsWith('/dashboard/listing'), rail), 'w-full')}
+            style={navItemStyle(pathname.startsWith('/dashboard/listing'))}
+          >
+            <BarChart2 size={16} className="shrink-0" />
+            {!rail && <span className="min-w-0 flex-1 truncate">Analytics</span>}
+          </Link>
+        )}
+
         <div className="my-2 border-t border-gray-200" />
 
         {(isMobile ? mobilePayments : paymentsFiltered).length > 0 ? (

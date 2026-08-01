@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { Home, MessageCircle, Inbox, Calendar, CreditCard, Users, LayoutDashboard } from 'lucide-react';
+import { Home, MessageCircle, Inbox, Calendar, CreditCard, Users } from 'lucide-react';
 import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
@@ -27,11 +27,11 @@ const PWA_TABS = [
 ];
 
 const NATIVE_TABS = [
-  { label: 'Dashboard',   href: '/dashboard',               icon: LayoutDashboard, match: ['/dashboard/home', '/dashboard'] },
-  { label: 'Lead Inbox',  href: '/dashboard/leads',         icon: Inbox,           match: ['/dashboard/leads'] },
-  { label: 'Messages',    href: '/dashboard/conversations', icon: MessageCircle,   match: ['/dashboard/conversations'] },
-  { label: 'Contacts',    href: '/dashboard/contacts',      icon: Users,           match: ['/dashboard/contacts'] },
-  { label: 'Calendar',    href: '/dashboard/calendar',      icon: Calendar,        match: ['/dashboard/calendar'] },
+  { label: 'Home',        href: '/dashboard/home',          icon: Home,          match: ['/dashboard/home', '/dashboard'] },
+  { label: 'Lead Inbox',  href: '/dashboard/leads',         icon: Inbox,         match: ['/dashboard/leads'] },
+  { label: 'Messages',    href: '/dashboard/conversations', icon: MessageCircle, match: ['/dashboard/conversations'] },
+  { label: 'Contacts',    href: '/dashboard/contacts',      icon: Users,         match: ['/dashboard/contacts'] },
+  { label: 'Calendar',    href: '/dashboard/calendar',      icon: Calendar,      match: ['/dashboard/calendar'] },
 ];
 
 export default function MobileTabBar({ venueId }: { venueId?: string | null }) {

@@ -1,195 +1,306 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  UserPlus, Phone, MessageCircle, CreditCard, FileText,
-  Calendar, Sparkles, Store, BarChart3, MailOpen, Inbox, ChevronRight,
+  MessageCircle, Inbox, Calendar, Phone, ChevronRight, Clock, MapPin, CheckCircle2,
 } from 'lucide-react';
 
 /**
- * Mobile / tablet home hub. Acts as the default landing screen for app-like
- * use. Above the breakpoint (`lg:`) it redirects to the standard dashboard.
+ * "Today" home screen — the default landing screen on mobile / the native app.
+ *
+ * Purpose-built to answer one question the moment a venue owner opens the app:
+ * "what needs me right now?" — unread conversations they can call/text in one
+ * tap, plus today's schedule. Reuses existing endpoints only (no new backend).
+ *
+ * Desktop redirects to the full dashboard, so this is intentionally mobile-first.
  */
 
-type MetricState = {
-  unreadMessages: number;
-  newLeadsThisWeek: number;
-  upcomingEventsToday: number;
+type Thread = {
+  thread_id: string;
+  venue_customer_id: string | null;
+  contact_first_name: string;
+  contact_last_name: string;
+  contact_phone: string | null;
+  contact_email: string;
+  last_message_preview: string | null;
+  last_message_at: string | null;
+  unread_count?: number;
 };
 
-export default function MobileHomePage() {
-  const [metrics, setMetrics] = useState<MetricState>({
-    unreadMessages: 0,
-    newLeadsThisWeek: 0,
-    upcomingEventsToday: 0,
+type CalEvent = {
+  id: string;
+  title: string;
+  start_at: string;
+  end_at: string;
+  all_day?: boolean;
+  event_type?: string | null;
+  venue_spaces?: { name?: string | null } | null;
+};
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function todayLabel(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric',
   });
+}
+
+function initials(first: string, last: string): string {
+  const a = (first || '').trim();
+  const b = (last || '').trim();
+  const i = (a[0] || '') + (b[0] || '');
+  return (i || '?').toUpperCase();
+}
+
+function formatPhone(raw: string | null): string | null {
+  if (!raw) return null;
+  const d = raw.replace(/\D/g, '');
+  const ten = d.length === 11 && d.startsWith('1') ? d.slice(1) : d;
+  if (ten.length === 10) return `${ten.slice(0, 3)}-${ten.slice(3, 6)}-${ten.slice(6)}`;
+  return raw;
+}
+
+function relTime(iso: string | null): string {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const mins = Math.round((Date.now() - then) / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.round(hrs / 24);
+  return `${days}d`;
+}
+
+function eventTime(ev: CalEvent): string {
+  if (ev.all_day) return 'All day';
+  const d = new Date(ev.start_at);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+export default function MobileHomePage() {
+  const [unread, setUnread] = useState(0);
+  const [newLeads, setNewLeads] = useState(0);
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Unread messages — same endpoint as the sidebar badge
+    let cancelled = false;
+
+    // Unread conversation count (metric card).
     fetch('/api/conversations/unread-count')
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { count?: number } | null) => {
-        if (d && typeof d.count === 'number') {
-          setMetrics((m) => ({ ...m, unreadMessages: d.count ?? 0 }));
-        }
+        if (!cancelled && d && typeof d.count === 'number') setUnread(d.count);
       })
       .catch(() => {});
 
-    // Leads count (best effort — endpoint may not exist on all plans)
-    fetch('/api/listing/leads/summary')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { newThisWeek?: number } | null) => {
-        if (d && typeof d.newThisWeek === 'number') {
-          setMetrics((m) => ({ ...m, newLeadsThisWeek: d.newThisWeek ?? 0 }));
-        }
-      })
-      .catch(() => {});
-
-    // Today's events (best effort — silently fails if no endpoint)
-    fetch('/api/calendar/today/count')
+    // New leads in the last 7 days (metric card).
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    fetch(`/api/leads/unread-count?since=${encodeURIComponent(weekAgo)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { count?: number } | null) => {
-        if (d && typeof d.count === 'number') {
-          setMetrics((m) => ({ ...m, upcomingEventsToday: d.count ?? 0 }));
-        }
+        if (!cancelled && d && typeof d.count === 'number') setNewLeads(d.count);
       })
       .catch(() => {});
+
+    // Unread threads → "Needs a reply" list.
+    fetch('/api/conversations/threads?unread=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rows: Thread[] | null) => {
+        if (!cancelled && Array.isArray(rows)) setThreads(rows.slice(0, 8));
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    // Today's calendar events → "Today's schedule".
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(); end.setHours(23, 59, 59, 999);
+    fetch(`/api/calendar?from=${encodeURIComponent(start.toISOString())}&to=${encodeURIComponent(end.toISOString())}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rows: CalEvent[] | null) => {
+        if (cancelled || !Array.isArray(rows)) return;
+        const s = start.getTime();
+        const e = end.getTime();
+        const todays = rows
+          .filter((ev) => {
+            const t = new Date(ev.start_at).getTime();
+            return !Number.isNaN(t) && t >= s && t <= e;
+          })
+          .sort((a, b) => a.start_at.localeCompare(b.start_at));
+        setEvents(todays);
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
   }, []);
 
+  const eventsToday = events.length;
+
+  const metrics = useMemo(
+    () => [
+      { label: 'Unread', value: unread, href: '/dashboard/conversations', icon: <MessageCircle size={16} />, tint: 'bg-rose-50 text-rose-700' },
+      { label: 'New leads', value: newLeads, href: '/dashboard/leads', icon: <Inbox size={16} />, tint: 'bg-amber-50 text-amber-700' },
+      { label: 'Today', value: eventsToday, href: '/dashboard/calendar', icon: <Calendar size={16} />, tint: 'bg-emerald-50 text-emerald-700' },
+    ],
+    [unread, newLeads, eventsToday],
+  );
+
   return (
-    <div className="lg:hidden -mx-6 sm:-mx-8 -mt-6">
-      {/* Hero greeting */}
-      <div className="px-6 pt-2 pb-4">
-        <h1 className="font-heading text-2xl text-gray-900">Good day</h1>
-        <p className="mt-0.5 text-sm text-gray-500">Here&apos;s what&apos;s happening at your venue.</p>
+    <div className="mx-auto max-w-2xl">
+      {/* Greeting */}
+      <div className="pb-1">
+        <h1 className="font-heading text-2xl text-gray-900">{greeting()}</h1>
+        <p className="mt-0.5 text-sm text-gray-500">{todayLabel()}</p>
       </div>
 
       {/* Metric cards */}
-      <div className="px-6 pb-4">
-        <div className="grid grid-cols-3 gap-2.5">
-          <MetricCard
-            icon={<MailOpen size={16} />}
-            label="Unread"
-            value={metrics.unreadMessages}
-            href="/dashboard/conversations"
-            tint="bg-rose-50 text-rose-700"
-          />
-          <MetricCard
-            icon={<Inbox size={16} />}
-            label="New leads"
-            value={metrics.newLeadsThisWeek}
-            href="/dashboard/leads"
-            tint="bg-amber-50 text-amber-700"
-          />
-          <MetricCard
-            icon={<Calendar size={16} />}
-            label="Today"
-            value={metrics.upcomingEventsToday}
-            href="/dashboard/calendar"
-            tint="bg-emerald-50 text-emerald-700"
-          />
-        </div>
+      <div className="mt-4 grid grid-cols-3 gap-2.5">
+        {metrics.map((m) => (
+          <Link
+            key={m.label}
+            href={m.href}
+            className="block rounded-2xl border border-gray-200 bg-white p-3 transition-colors active:bg-gray-50"
+          >
+            <div className={`mb-2 inline-flex h-8 w-8 items-center justify-center rounded-full ${m.tint}`}>
+              {m.icon}
+            </div>
+            <div className="font-heading text-xl text-gray-900 tabular-nums">{m.value}</div>
+            <div className="text-[11px] uppercase tracking-wide text-gray-500">{m.label}</div>
+          </Link>
+        ))}
       </div>
 
-      {/* Quick actions */}
-      <div className="rounded-t-3xl bg-gray-50 px-6 pb-32 pt-6">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">Quick Actions</h2>
-        <div className="grid grid-cols-4 gap-x-3 gap-y-5">
-          <Tile icon={<UserPlus      size={22} />} label="Add Contact"   href="/dashboard/contacts" />
-          <Tile icon={<Phone         size={22} />} label="Make a Call"   href="/dashboard/contacts" />
-          <Tile icon={<MessageCircle size={22} />} label="New Message"   href="/dashboard/conversations" />
-          <Tile icon={<CreditCard    size={22} />} label="New Payment"   href="/dashboard/payments/new" />
-          <Tile icon={<FileText      size={22} />} label="New Proposal"  href="/dashboard/proposals" />
-          <Tile icon={<Calendar      size={22} />} label="Book Event"    href="/dashboard/calendar" />
-          <Tile icon={<Store         size={22} />} label="Venue Listing" href="/dashboard/listing" />
-          <Tile
-            icon={<Sparkles size={22} />}
-            label="Ask AI"
-            onClick={() => window.dispatchEvent(new Event('open-ask-ai'))}
-          />
+      {/* Needs a reply */}
+      <section className="mt-6">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">Needs a reply</h2>
+          <Link href="/dashboard/conversations" className="text-xs font-medium text-gray-500 hover:text-gray-900">
+            View all
+          </Link>
         </div>
 
-        {/* Secondary navigation list */}
-        <h2 className="mb-3 mt-8 text-sm font-semibold text-gray-700">More</h2>
-        <ul className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-          <RowLink href="/dashboard/marketing/analytics" icon={<BarChart3 size={18} />} label="Marketing Analytics" />
-          <RowLink href="/dashboard/help" icon={<MessageCircle size={18} />} label="Help Center" />
-          <RowLink href="/dashboard/settings" icon={<Store size={18} />} label="Settings" />
-        </ul>
-      </div>
+        {loading ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-[68px] animate-pulse rounded-2xl border border-gray-200 bg-gray-50" />
+            ))}
+          </div>
+        ) : threads.length === 0 ? (
+          <div className="flex flex-col items-center rounded-2xl border border-gray-200 bg-white px-6 py-8 text-center">
+            <CheckCircle2 size={28} className="mb-2 text-emerald-500" />
+            <p className="text-sm font-semibold text-gray-800">You&apos;re all caught up</p>
+            <p className="mt-1 text-xs text-gray-500">No unread messages waiting on you.</p>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {threads.map((t) => {
+              const name = `${t.contact_first_name || ''} ${t.contact_last_name || ''}`.trim() || t.contact_email || 'Contact';
+              const phone = formatPhone(t.contact_phone);
+              const openHref = t.venue_customer_id
+                ? `/dashboard/conversations?customer=${t.venue_customer_id}`
+                : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(t.contact_email || '')}`;
+              const textHref = t.venue_customer_id
+                ? `/dashboard/conversations?customer=${t.venue_customer_id}&compose=sms`
+                : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(t.contact_email || '')}&compose=sms`;
+              return (
+                <li
+                  key={t.thread_id}
+                  className="rounded-2xl border border-gray-200 bg-white p-3 transition-colors active:bg-gray-50"
+                >
+                  <Link href={openHref} className="flex items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1B1B1B] text-[13px] font-semibold text-white">
+                      {initials(t.contact_first_name, t.contact_last_name)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold text-gray-900">{name}</span>
+                        <span className="shrink-0 text-[11px] text-gray-400">{relTime(t.last_message_at)}</span>
+                      </span>
+                      {t.last_message_preview ? (
+                        <span className="mt-0.5 line-clamp-1 block text-xs text-gray-500">{t.last_message_preview}</span>
+                      ) : null}
+                    </span>
+                  </Link>
+                  <div className="mt-2.5 flex items-center gap-2 pl-[52px]">
+                    {phone ? (
+                      <a
+                        href={`tel:${(t.contact_phone || '').replace(/[^\d+]/g, '')}`}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 active:bg-gray-100"
+                      >
+                        <Phone size={13} /> Call
+                      </a>
+                    ) : null}
+                    <Link
+                      href={textHref}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 active:bg-gray-100"
+                    >
+                      <MessageCircle size={13} /> Text
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* Today's schedule */}
+      <section className="mt-6 pb-32">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">Today&apos;s schedule</h2>
+          <Link href="/dashboard/calendar" className="text-xs font-medium text-gray-500 hover:text-gray-900">
+            Open calendar
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="h-[60px] animate-pulse rounded-2xl border border-gray-200 bg-gray-50" />
+        ) : events.length === 0 ? (
+          <div className="flex flex-col items-center rounded-2xl border border-gray-200 bg-white px-6 py-8 text-center">
+            <Calendar size={26} className="mb-2 text-gray-300" />
+            <p className="text-sm font-semibold text-gray-800">Nothing on the calendar today</p>
+            <Link href="/dashboard/calendar" className="mt-2 text-xs font-medium text-gray-500 hover:text-gray-900">
+              Book an event
+            </Link>
+          </div>
+        ) : (
+          <ul className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            {events.map((ev) => {
+              const spaceName = ev.venue_spaces?.name || null;
+              return (
+                <li key={ev.id} className="border-b border-gray-100 last:border-b-0">
+                  <Link href="/dashboard/calendar" className="flex items-center gap-3 px-4 py-3 active:bg-gray-50">
+                    <span className="flex w-16 shrink-0 flex-col items-start">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-900">
+                        <Clock size={12} className="text-gray-400" /> {eventTime(ev)}
+                      </span>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-gray-900">{ev.title || 'Event'}</span>
+                      {spaceName ? (
+                        <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-gray-500">
+                          <MapPin size={11} /> {spaceName}
+                        </span>
+                      ) : null}
+                    </span>
+                    <ChevronRight size={16} className="shrink-0 text-gray-300" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
     </div>
-  );
-}
-
-// ─── Sub-components ─────────────────────────────────────────────────────
-
-function MetricCard({
-  icon, label, value, href, tint,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  href: string;
-  tint: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="block rounded-2xl border border-gray-200 bg-white p-3 transition-colors active:bg-gray-50"
-    >
-      <div className={`mb-2 inline-flex h-8 w-8 items-center justify-center rounded-full ${tint}`}>
-        {icon}
-      </div>
-      <div className="font-heading text-xl text-gray-900 tabular-nums">{value}</div>
-      <div className="text-[11px] uppercase tracking-wide text-gray-500">{label}</div>
-    </Link>
-  );
-}
-
-function Tile({
-  icon, label, href, onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  href?: string;
-  onClick?: () => void;
-}) {
-  const inner = (
-    <>
-      <span className="flex h-14 w-14 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-800 shadow-sm transition-colors active:bg-gray-100">
-        {icon}
-      </span>
-      <span className="text-[11px] font-medium leading-tight text-gray-700">{label}</span>
-    </>
-  );
-  const className = 'flex flex-col items-center gap-2 text-center';
-
-  if (onClick) {
-    return (
-      <button type="button" onClick={onClick} className={className}>
-        {inner}
-      </button>
-    );
-  }
-  return (
-    <Link href={href ?? '#'} className={className}>
-      {inner}
-    </Link>
-  );
-}
-
-function RowLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
-  return (
-    <li className="border-b border-gray-100 last:border-b-0">
-      <Link
-        href={href}
-        className="flex items-center gap-3 px-4 py-3.5 text-sm text-gray-800 transition-colors active:bg-gray-50"
-      >
-        <span className="text-gray-500">{icon}</span>
-        <span className="flex-1">{label}</span>
-        <ChevronRight size={16} className="text-gray-300" />
-      </Link>
-    </li>
   );
 }
