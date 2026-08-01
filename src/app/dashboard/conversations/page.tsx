@@ -1550,7 +1550,7 @@ export default function ConversationsPage() {
           </button>
         </div>
         {/* Mobile app: collapse the whole pill row into a single dropdown so it
-            matches the standard rounded-xl control style and fits the narrow
+            matches the standard rounded-lg control style and fits the narrow
             screen. Desktop/PWA keeps the horizontally-scrolling pills. */}
         {isNativeApp() ? (
           <div className="relative min-w-0 flex-1">
@@ -1657,7 +1657,7 @@ export default function ConversationsPage() {
                 value={threadSearch}
                 onChange={(e) => setThreadSearch(e.target.value)}
                 placeholder="Search by name, email, or phone…"
-                className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400"
+                className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400"
                 style={{ fontSize: 16 }}
               />
             </div>
@@ -1994,7 +1994,7 @@ export default function ConversationsPage() {
                       disabled={aiActing}
                       title="AI Concierge controls"
                       className={classNames(
-                        'inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors',
+                        'inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
                         isPaused
                           ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
                           : contactLead?.ai_state === 'ai_active'
@@ -2118,7 +2118,7 @@ export default function ConversationsPage() {
                     <button
                       type="button"
                       onClick={openContactProfile}
-                      className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                      className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
                     >
                       <User size={14} />
                       Profile
@@ -2667,7 +2667,7 @@ export default function ConversationsPage() {
                         setSendError('');
                       }}
                       className={classNames(
-                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
+                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg py-2 text-[11px] font-semibold transition-colors sm:text-xs',
                         composerTab === 'sms'
                           ? 'bg-white text-gray-900 border border-gray-200'
                           : smsLocked
@@ -2688,7 +2688,7 @@ export default function ConversationsPage() {
                         setSendError('');
                       }}
                       className={classNames(
-                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
+                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg py-2 text-[11px] font-semibold transition-colors sm:text-xs',
                         composerTab === 'email'
                           ? 'bg-white text-gray-900 border border-gray-200'
                           : 'text-gray-600 hover:text-gray-900',
@@ -2704,7 +2704,7 @@ export default function ConversationsPage() {
                         setSendError('');
                       }}
                       className={classNames(
-                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
+                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg py-2 text-[11px] font-semibold transition-colors sm:text-xs',
                         composerTab === 'team'
                           ? 'bg-white text-gray-900 border border-gray-200'
                           : 'text-gray-600 hover:text-gray-900',
@@ -2722,7 +2722,7 @@ export default function ConversationsPage() {
                         setSendError('');
                       }}
                       className={classNames(
-                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-xs',
+                        'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg py-2 text-[11px] font-semibold transition-colors sm:text-xs',
                         composerTab === 'concierge'
                           ? 'bg-white text-violet-800 border border-violet-300'
                           : conciergeLocked
@@ -3176,7 +3176,7 @@ export default function ConversationsPage() {
                           sending ||
                           (composerTab === 'team' ? !body.trim() : !body.trim() && !selectedTriggerLinkId)
                         }
-                        className="inline-flex items-center gap-2 rounded-xl bg-[#171717] px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded-lg bg-[#171717] px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50"
                       >
                         {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send size={16} />}
                         {composerTab === 'team' ?
@@ -3368,7 +3368,7 @@ export default function ConversationsPage() {
                   <button
                     type="button"
                     onClick={() => { setShowCreateContact(true); setNewConversationError(''); }}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 py-2.5 text-sm font-medium text-gray-600 transition hover:border-gray-400 hover:bg-gray-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 py-2.5 text-sm font-medium text-gray-600 transition hover:border-gray-400 hover:bg-gray-50"
                   >
                     <Plus size={15} />
                     Create new contact
@@ -3455,7 +3455,7 @@ export default function ConversationsPage() {
                           setNewContactChannel('sms');
                         }}
                         className={classNames(
-                          'flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition',
+                          'flex items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-medium transition',
                           newContactChannel === 'sms'
                             ? 'border-brand-900 bg-brand-900 text-white'
                             : smsLocked
@@ -3470,7 +3470,7 @@ export default function ConversationsPage() {
                         type="button"
                         onClick={() => setNewContactChannel('email')}
                         className={classNames(
-                          'flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition',
+                          'flex items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-medium transition',
                           newContactChannel === 'email'
                             ? 'border-brand-900 bg-brand-900 text-white'
                             : 'border-gray-200 text-gray-700 hover:bg-gray-50',
@@ -3487,7 +3487,7 @@ export default function ConversationsPage() {
                     type="button"
                     onClick={() => void createContactAndThread()}
                     disabled={savingContact || creatingThread || !newContactFirstName.trim() || !newContactLastName.trim() || !newContactEmail.trim() || !newContactPhone.trim()}
-                    className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-900 py-3 text-sm font-semibold text-white transition hover:bg-brand-800 disabled:opacity-50"
+                    className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg bg-brand-900 py-3 text-sm font-semibold text-white transition hover:bg-brand-800 disabled:opacity-50"
                   >
                     {(savingContact || creatingThread) ? (
                       <Loader2 size={15} className="animate-spin" />
@@ -3987,7 +3987,7 @@ function CollapsedComposer({
       <button
         type="button"
         onClick={onToggleMenu}
-        className="flex h-8 items-center gap-1 rounded-xl px-2 text-gray-600 transition-colors hover:bg-gray-100"
+        className="flex h-8 items-center gap-1 rounded-lg px-2 text-gray-600 transition-colors hover:bg-gray-100"
         aria-label="Change channel"
         title={`Channel: ${composerTab === 'team' ? 'Team only' : composerTab === 'email' ? 'Email' : composerTab === 'concierge' ? 'Concierge' : 'SMS'}`}
       >
@@ -4043,7 +4043,7 @@ function CollapsedComposer({
       <button
         type="button"
         onClick={onExpand}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#171717] text-white transition-colors hover:bg-black"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#171717] text-white transition-colors hover:bg-black"
         aria-label="Open composer"
       >
         <Send size={14} />

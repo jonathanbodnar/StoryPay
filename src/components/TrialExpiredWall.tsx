@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Lock, Loader2, Sparkles, ArrowDownToLine } from 'lucide-react';
+import { Lock, Loader2, Sparkles, ArrowDownToLine, ExternalLink } from 'lucide-react';
 import { trackClient } from '@/lib/analytics-client';
+import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
 /**
  * Full-page blocking wall shown when a venue's 14-day Venue Pro trial has
@@ -58,6 +59,35 @@ export default function TrialExpiredWall({ venueName }: { venueName: string }) {
   }
 
   const disabled = busy !== null;
+
+  // Native app store shell: no checkout / plan choices inside the app (Apple
+  // 3.1.1). Neutral copy + a route-out to the browser, where the full trial
+  // wall (add card / downgrade) renders as normal.
+  if (isNativeApp()) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-[#1b1b1b] px-4 py-10">
+        <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-2xl">
+          <div className="mb-6 flex justify-center">
+            <Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={132} height={33} priority />
+          </div>
+          <h1 className="text-xl font-semibold text-gray-900">Your account needs attention</h1>
+          <p className="mt-2 text-sm leading-relaxed text-gray-500">
+            {venueName ? <strong className="text-gray-700">{venueName}</strong> : 'Your venue'} has an
+            account step that can only be completed on the web. Open your account in the
+            browser to continue, then come back to the app.
+          </p>
+          <button
+            type="button"
+            onClick={() => void openExternalBrowser('/dashboard')}
+            className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#1b1b1b] text-sm font-semibold text-white transition hover:bg-black"
+          >
+            Open in browser <ExternalLink size={15} />
+          </button>
+          <p className="mt-3 text-xs text-gray-400">app.storyvenue.com</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-[#1b1b1b] px-4 py-10">

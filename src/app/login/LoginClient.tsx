@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Eye, EyeOff, Building2, Heart } from 'lucide-react';
 import { getCoupleSupabase } from '@/lib/couple-browser';
-import { isNativeApp } from '@/lib/platform';
+import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
 /**
  * Unified login page.
@@ -62,7 +62,18 @@ export function LoginClient() {
           {effectiveMode === 'venue' ? (
             <>
               New to StoryVenue?{' '}
-              <Link href={signupHref} className="font-semibold text-gray-900 hover:underline">
+              {/* Native: account creation (and its card step) happens entirely
+                  in the system browser — never inside the app webview. */}
+              <Link
+                href={signupHref}
+                className="font-semibold text-gray-900 hover:underline"
+                onClick={(e) => {
+                  if (native) {
+                    e.preventDefault();
+                    void openExternalBrowser(signupHref);
+                  }
+                }}
+              >
                 Create a venue account
               </Link>
             </>

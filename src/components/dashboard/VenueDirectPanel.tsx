@@ -138,14 +138,14 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
             Private thread between StoryVenue Support and your venue team about{' '}
-            <span className="font-semibold text-gray-700">{contactName}</span>. The bride never sees these messages.
+            <span className="font-semibold text-gray-700">{contactName}</span>. The contact never sees these messages.
           </p>
         </div>
         <button
           type="button"
           onClick={load}
           disabled={loading}
-          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
         >
           <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
@@ -220,7 +220,7 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
         />
         <div className="flex items-center justify-between gap-3 mt-2">
           <p className="text-[11px] text-gray-500 min-w-0">
-            Replies go to the StoryVenue Support team. The bride doesn&apos;t see this thread.
+            Replies go to the StoryVenue Support team. The contact doesn&apos;t see this thread.
           </p>
           <button
             type="button"

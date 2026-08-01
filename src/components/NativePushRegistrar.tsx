@@ -41,6 +41,29 @@ export async function unregisterNativePush(): Promise<void> {
   try { window.localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
 }
 
+/**
+ * Fire the OS permission prompt and register for push. Called from an explicit
+ * user action (the "Enable push notifications" toggle in Settings → Push
+ * Notifications) — Apple's HIG wants the system prompt tied to user intent,
+ * not auto-fired on app launch. Returns the resulting permission state so the
+ * caller can reflect it in the UI.
+ */
+export async function requestNativePushPermission(): Promise<'granted' | 'denied'> {
+  if (!isNativeApp()) return 'denied';
+  try {
+    const { PushNotifications } = await import('@capacitor/push-notifications');
+    // On Android 13+ this also surfaces the POST_NOTIFICATIONS runtime prompt.
+    const perm = await PushNotifications.requestPermissions();
+    if (perm.receive === 'granted') {
+      await PushNotifications.register();
+      return 'granted';
+    }
+    return 'denied';
+  } catch {
+    return 'denied';
+  }
+}
+
 export default function NativePushRegistrar() {
   useEffect(() => {
     if (!isNativeApp()) return;
@@ -82,9 +105,11 @@ export default function NativePushRegistrar() {
           },
         );
 
-        // Permission prompt (iOS) then OS registration. On Android 13+ this also
-        // surfaces the POST_NOTIFICATIONS runtime prompt.
-        const perm = await PushNotifications.requestPermissions();
+        // Contextual permissions: NEVER auto-prompt here. Only (re-)register to
+        // refresh this device's token when the user has already granted push —
+        // the prompt itself fires from the Push Notifications settings toggle
+        // via requestNativePushPermission().
+        const perm = await PushNotifications.checkPermissions();
         if (perm.receive === 'granted') {
           await PushNotifications.register();
         }

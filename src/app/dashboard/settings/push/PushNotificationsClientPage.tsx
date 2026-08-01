@@ -6,6 +6,7 @@ import {
   ChevronRight, AlertTriangle, Monitor, RefreshCw,
 } from 'lucide-react';
 import { isNativeApp } from '@/lib/platform';
+import { requestNativePushPermission } from '@/components/NativePushRegistrar';
 
 // ── Platform detection ────────────────────────────────────────────────────────
 function getUA() { return typeof window !== 'undefined' ? window.navigator.userAgent : ''; }
@@ -92,6 +93,8 @@ export default function PushNotificationsClientPage() {
   const [subscription,  setSubscription]  = useState<PushSubscription | null>(null);
   const [testing,       setTesting]       = useState(false);
   const [testResult,    setTestResult]    = useState<{ sent: number } | null>(null);
+  // Native: OS notification permission was denied — show how to fix it.
+  const [nativePermDenied, setNativePermDenied] = useState(false);
   const [error,         setError]         = useState<string | null>(null);
   const [vapidMissing,  setVapidMissing]  = useState(false);
 
@@ -272,10 +275,21 @@ export default function PushNotificationsClientPage() {
               type="button"
               role="switch"
               aria-checked={nativeEnabled}
-              onClick={() => {
+              onClick={async () => {
+                const turningOn = !nativeEnabled;
+                if (turningOn) {
+                  // Contextual OS prompt: only fires here, on explicit user
+                  // intent — never automatically on app launch.
+                  const perm = await requestNativePushPermission();
+                  if (perm !== 'granted') {
+                    setNativePermDenied(true);
+                    return;
+                  }
+                  setNativePermDenied(false);
+                }
                 const next = {
                   ...settings,
-                  push_enabled: !nativeEnabled,
+                  push_enabled: turningOn,
                   // Keep financial scenarios disabled on native (App Store compliance).
                   ...NATIVE_DISABLED_FINANCIAL_KEYS,
                 };
@@ -292,6 +306,14 @@ export default function PushNotificationsClientPage() {
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${nativeEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
+          {nativePermDenied && (
+            <div className="border-t border-gray-100 bg-amber-50 px-5 py-3">
+              <p className="text-xs text-amber-800">
+                Notifications are blocked for StoryVenue. Allow them in your phone&apos;s
+                Settings &rarr; Notifications &rarr; StoryVenue, then flip this switch again.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Per-scenario toggles */}

@@ -1132,7 +1132,7 @@ function PipelineTabs({
   onChange: (id: string) => void;
 }) {
   // Mobile app: render as a compact dropdown so it matches the standard
-  // rounded-xl control style and doesn't overflow the narrow screen.
+  // rounded-lg control style and doesn't overflow the narrow screen.
   if (isNativeApp()) {
     return (
       <div className="relative">
@@ -1939,7 +1939,7 @@ function ListBoard({
                       value={lead.stage_id ?? ''}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => onQuickStageChange(lead.id, e.target.value)}
-                      className="rounded-xl border border-gray-200 bg-white px-3 min-h-[44px] text-xs focus:border-gray-400 focus:outline-none touch-manipulation"
+                      className="rounded-lg border border-gray-200 bg-white px-3 min-h-[44px] text-xs focus:border-gray-400 focus:outline-none touch-manipulation"
                     >
                       {stages.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>

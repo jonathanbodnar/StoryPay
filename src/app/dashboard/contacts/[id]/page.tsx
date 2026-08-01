@@ -116,6 +116,10 @@ const CEREMONY_TYPES   = [
   { value: 'ceremony_only',       label: 'Ceremony Only' },
   { value: 'reception_only',      label: 'Reception Only' },
   { value: 'ceremony_reception',  label: 'Ceremony & Reception' },
+  // Generic (non-wedding) event types.
+  { value: 'corporate_event',     label: 'Corporate Event' },
+  { value: 'private_party',       label: 'Private Party' },
+  { value: 'other_event',         label: 'Other Event' },
 ];
 
 const FILE_TYPES    = ['contract','floor_plan','vendor_agreement','insurance','photo','other'];

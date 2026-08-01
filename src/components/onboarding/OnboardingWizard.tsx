@@ -19,11 +19,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Search, Link2, Check, Copy, Share2, Sparkles, Loader2, X,
   ArrowRight, ArrowLeft, MapPin, Star, CheckCircle2, ImageIcon,
-  Mail, Send, Inbox, Lock,
+  Mail, Send, Inbox, Lock, Globe, ExternalLink,
 } from 'lucide-react';
 import InlineTrialCardForm from '@/components/billing/InlineTrialCardForm';
 import { VerifiedBadgeIcon } from '@/components/directory/DirectoryListingBadges';
 import { trackClient } from '@/lib/analytics-client';
+import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
 const SKIP_KEY = 'sv_onboarding_skipped';
 const BRAND = '#1b1b1b';
@@ -235,6 +236,45 @@ export default function OnboardingWizard({ adminView = false }: { adminView?: bo
   // The modal is the only thing this component renders; the persistent
   // launcher lives in <main> (OnboardingLauncher) so it aligns with the page.
   if (checking || complete || !open) return null;
+
+  // Native app store shell: NEVER render the setup wizard (and especially the
+  // inline card step) inside the app — Apple requires purchase flows to live
+  // outside the app. The whole onboarding experience happens in the phone's
+  // browser instead; the app is for already-active venues.
+  if (isNativeApp()) {
+    return (
+      <div className="fixed inset-0 z-[2000] flex items-center justify-center overscroll-contain bg-gray-900/40 backdrop-blur-[2px] p-4">
+        <div className="relative w-full max-w-sm rounded-2xl bg-white p-7 text-center shadow-2xl">
+          {(isLegacy || adminView) && (
+            <button
+              onClick={dismiss}
+              className="absolute right-3 top-3 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Close"
+            >
+              <X size={16} />
+            </button>
+          )}
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+            <Globe size={22} className="text-gray-700" />
+          </div>
+          <h2 className="font-heading text-lg text-gray-900">Finish setting up on the web</h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Your venue isn&apos;t fully set up yet. Complete your setup in your
+            browser, then come back to the app to manage leads, messages, and
+            your calendar.
+          </p>
+          <button
+            onClick={() => void openExternalBrowser('/dashboard')}
+            className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold text-white transition-colors"
+            style={{ backgroundColor: BRAND }}
+          >
+            Open in browser <ExternalLink size={15} />
+          </button>
+          <p className="mt-3 text-xs text-gray-400">app.storyvenue.com</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center overscroll-contain bg-gray-900/40 backdrop-blur-[2px] p-4">

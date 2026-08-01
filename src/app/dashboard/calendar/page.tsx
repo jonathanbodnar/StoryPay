@@ -772,7 +772,7 @@ export default function CalendarPage() {
             <button onClick={goToday}
               className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">Today</button>
           </div>
-          <div className="flex rounded-xl border border-gray-200 overflow-hidden" data-noprint="">
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden" data-noprint="">
             {(['month','week','day','revenue'] as CalView[]).map((v, i) => (
               <button key={v} onClick={() => switchView(v)}
                 className={`px-4 py-2 text-sm font-medium transition-colors capitalize ${i > 0 ? 'border-l border-gray-200' : ''} ${view === v ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
@@ -1023,7 +1023,7 @@ export default function CalendarPage() {
                   href={selectedEvent.html_link ?? 'https://calendar.google.com'}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                   Open in Google Calendar <ExternalLink size={12} />
                 </a>
               ) : (
@@ -1034,7 +1034,7 @@ export default function CalendarPage() {
                       <button
                         onClick={() => handleStatusChange(selectedEvent.id, 'confirmed')}
                         disabled={statusChanging}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-green-300 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50">
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50">
                         {statusChanging ? <Loader2 size={12} className="animate-spin" /> : null}
                         Confirm Event
                       </button>
@@ -1047,7 +1047,7 @@ export default function CalendarPage() {
                           }
                         }}
                         disabled={statusChanging}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50">
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50">
                         {statusChanging ? <Loader2 size={12} className="animate-spin" /> : null}
                         Cancel Event
                       </button>
@@ -1058,7 +1058,7 @@ export default function CalendarPage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => openEditEvent(selectedEvent)}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                       Edit
                     </button>
                     <button
@@ -1069,7 +1069,7 @@ export default function CalendarPage() {
                         if (window.confirm(msg)) handleDelete(selectedEvent.id);
                       }}
                       disabled={deleting}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
                       {deleting && <Loader2 size={13} className="animate-spin" />}
                       {selectedEvent.recurrence_rule ? 'Delete Series' : 'Delete Event'}
                     </button>
