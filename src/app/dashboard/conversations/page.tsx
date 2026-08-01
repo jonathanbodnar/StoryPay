@@ -2147,6 +2147,33 @@ export default function ConversationsPage() {
                   if (byName) activeId = byName.id;
                 }
 
+                // Native app: a dropdown is far easier to use than a long
+                // horizontally-scrolling row of pills on a phone.
+                if (isNativeApp()) {
+                  return (
+                    <div className="flex-shrink-0 border-b border-gray-100 px-3 py-2 sm:px-5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Stage</span>
+                        {allStages.length > 0 ? (
+                          <select
+                            value={activeId ?? ''}
+                            disabled={stageUpdating}
+                            onChange={(e) => void patchThreadStage(e.target.value)}
+                            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 focus:border-gray-400 focus:outline-none disabled:opacity-50 max-w-[240px]"
+                          >
+                            {!activeId && <option value="" disabled>Select stage</option>}
+                            {allStages.map((st) => (
+                              <option key={st.id} value={st.id}>{st.name}</option>
+                            ))}
+                          </select>
+                        ) : threadDetail.contact_stage?.name ? (
+                          <span className="text-xs font-medium text-gray-700">{threadDetail.contact_stage.name}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div className="flex-shrink-0 border-b border-gray-100 px-3 py-2 sm:px-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div className="flex flex-nowrap items-center gap-1.5 min-w-max sm:flex-wrap sm:min-w-0">
@@ -2270,7 +2297,7 @@ export default function ConversationsPage() {
                             <div className="flex items-center gap-2 text-[10px] text-violet-800 mb-1 flex-wrap">
                               <Building2 size={11} />
                               <span className="font-semibold uppercase tracking-wide">
-                                {isFromConcierge ? 'StoryVenue Concierge team' : 'You · to Concierge'}
+                                {isFromConcierge ? 'Venue Concierge Support' : 'You · to Concierge'}
                               </span>
                               <span className="rounded-full bg-violet-100 border border-violet-300 px-1.5 py-0.5 text-[9px] font-semibold">
                                 Venue Direct · contact hidden
@@ -2761,7 +2788,7 @@ export default function ConversationsPage() {
                   )}
                   {composerTab === 'concierge' && (
                     <p className="mb-2 text-[11px] text-violet-700 inline-flex items-center gap-1.5 rounded-md bg-violet-50 px-2.5 py-1 border border-violet-200 w-fit">
-                      <Building2 size={11} /> Direct line to the StoryVenue Concierge team. The contact never sees these messages.
+                      <Building2 size={11} /> Direct line to Venue Concierge Support. The contact never sees these messages.
                     </p>
                   )}
 

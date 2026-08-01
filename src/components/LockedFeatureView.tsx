@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock, X, ArrowRight, Sparkles, CalendarClock } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
+import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
 /**
  * Visual + copy primitives for "this feature isn't included in your current
@@ -280,7 +281,15 @@ function LockedFeatureBody({ featureName, navId, onNavigate }: LockedFeatureBody
         ) : (
           <Link
             href="/dashboard/directory-billing"
-            onClick={onNavigate}
+            onClick={(e) => {
+              // Native: upgrade/pricing lives in the system browser, never in
+              // the app webview (Apple 3.1.1).
+              if (isNativeApp()) {
+                e.preventDefault();
+                void openExternalBrowser('/dashboard/directory-billing');
+              }
+              onNavigate?.();
+            }}
             className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
           >
             <Sparkles size={14} />

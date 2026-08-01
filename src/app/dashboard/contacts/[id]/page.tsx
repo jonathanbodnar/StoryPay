@@ -1347,7 +1347,7 @@ export default function CustomerDetailPage() {
                 <select
                   value={pipelineUi.resolvedStageId ?? ''}
                   onChange={(e) => void updateStage(e.target.value)}
-                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-800 focus:border-gray-400 focus:outline-none max-w-[240px]"
+                  className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 focus:border-gray-400 focus:outline-none max-w-[240px]"
                 >
                   {pipelineUi.activeStages.map((st) => (
                     <option key={st.id} value={st.id}>{st.name}</option>

@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ChevronDown,
   CreditCard,
+  ExternalLink,
   Loader2,
   Lock,
   Megaphone,
@@ -534,6 +535,32 @@ export default function DirectoryBillingPage() {
     plans.forEach((p) => m.set(p.id, planRank(p)));
     return m;
   }, [plans]);
+
+  // Native app store shell: never render plan pricing / upgrade / cancel /
+  // update-card UI inside the app webview (Apple 3.1.1). All billing is
+  // managed in the system browser instead.
+  if (isNativeApp()) {
+    return (
+      <div className="mx-auto max-w-sm py-16 text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+          <CreditCard size={22} className="text-gray-700" />
+        </div>
+        <h1 className="font-heading text-xl text-gray-900">Manage billing on the web</h1>
+        <p className="mt-2 text-sm leading-relaxed text-gray-500">
+          Plans, billing, and payment details are managed from your account on the web.
+          Open your account in the browser to continue.
+        </p>
+        <button
+          type="button"
+          onClick={() => void openExternalBrowser('/dashboard/directory-billing')}
+          className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#1b1b1b] text-sm font-semibold text-white transition hover:bg-black"
+        >
+          Open in browser <ExternalLink size={15} />
+        </button>
+        <p className="mt-3 text-xs text-gray-400">app.storyvenue.com</p>
+      </div>
+    );
+  }
 
   if (loading && !summary) {
     return (

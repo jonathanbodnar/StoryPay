@@ -134,10 +134,10 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
         <div>
           <h2 className="font-heading text-lg text-gray-900 inline-flex items-center gap-2">
             <Building2 size={16} className="text-violet-700" />
-            Concierge Team Support
+            Venue Concierge Support
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Private thread between StoryVenue Support and your venue team about{' '}
+            Private thread between Venue Concierge Support and your venue team about{' '}
             <span className="font-semibold text-gray-700">{contactName}</span>. The contact never sees these messages.
           </p>
         </div>
@@ -167,7 +167,7 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
             <Building2 size={28} className="mx-auto text-violet-400 mb-2" />
             <p className="text-sm font-semibold text-gray-700">No messages yet</p>
             <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-              When StoryVenue Support has a question about {contactName}, their message will appear here. You can reply
+              When Venue Concierge Support has a question about {contactName}, their message will appear here. You can reply
               below at any time without ever leaving your dashboard.
             </p>
           </div>

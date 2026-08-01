@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import FeatureLockModal from '@/components/FeatureLockModal';
 import { useFeatureAccess } from '@/lib/use-feature-access';
-import { isNativeApp } from '@/lib/platform';
+import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 import NextLink from 'next/link';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -1592,11 +1592,19 @@ export default function ListingAnalyticsPage() {
             <div className="flex flex-col gap-3">
               <NextLink
                 href="/dashboard/directory-billing"
+                onClick={(e) => {
+                  // Native: upgrade/pricing lives in the system browser, never
+                  // in the app webview (Apple 3.1.1).
+                  if (isNativeApp()) {
+                    e.preventDefault();
+                    void openExternalBrowser('/dashboard/directory-billing');
+                  }
+                }}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-6 py-3 text-sm font-semibold text-white hover:bg-black transition-colors"
               >
                 <Lock size={14} /> {trialStillActive ? 'Upgrade now' : 'Upgrade to unlock'}
               </NextLink>
-              {!trialStillActive && (
+              {!trialStillActive && !isNativeApp() && (
                 <p className="text-[11px] text-gray-400">
                   14-day free trial · Cancel anytime
                 </p>
