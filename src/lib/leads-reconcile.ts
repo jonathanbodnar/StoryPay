@@ -119,6 +119,42 @@ export async function createLeadFromVenueCustomerIfMissing(
  * leads page — a lead stuck in the wrong place is preferable to no leads
  * showing up at all.
  */
+/**
+ * In-memory throttle so the (expensive) reconcile pass runs at most once per
+ * venue within RECONCILE_TTL_MS. The Leads GET endpoint called this on EVERY
+ * load, which — for venues with many contacts — meant selecting all leads +
+ * all venue_customers (and sometimes inserting a lead per un-mirrored contact)
+ * before the page could render. Reconcile is pure idempotent healing and every
+ * write path (lead create, contact stage edits) already mirrors state directly,
+ * so skipping it for a short window is safe and makes the tab load noticeably
+ * faster. Railway runs a persistent Node process, so this Map survives requests.
+ */
+const RECONCILE_TTL_MS = 90_000;
+const lastReconcileAt = new Map<string, number>();
+
+/**
+ * Throttled entry point for the read path. Runs the full reconcile only when it
+ * hasn't run for this venue in the last RECONCILE_TTL_MS; otherwise returns
+ * immediately. Use `reconcileLeadsForKanban` directly when a fresh pass is
+ * required regardless of the throttle.
+ */
+export async function reconcileLeadsForKanbanIfStale(venueId: string): Promise<void> {
+  const now = Date.now();
+  const last = lastReconcileAt.get(venueId) ?? 0;
+  if (now - last < RECONCILE_TTL_MS) return;
+  // Stamp BEFORE awaiting so concurrent requests don't all pile into a
+  // reconcile at once (they'll see the fresh timestamp and skip).
+  lastReconcileAt.set(venueId, now);
+  try {
+    await reconcileLeadsForKanban(venueId);
+  } catch (err) {
+    // On failure, clear the stamp so the next load retries rather than waiting
+    // out the full TTL with a potentially inconsistent kanban.
+    lastReconcileAt.delete(venueId);
+    throw err;
+  }
+}
+
 export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
   const defaultPipelineId = await ensureDefaultPipeline(venueId);
   const defFirst = await firstStageForPipeline(venueId, defaultPipelineId);

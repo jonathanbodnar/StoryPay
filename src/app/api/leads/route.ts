@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
-import { reconcileLeadsForKanban } from '@/lib/leads-reconcile';
+import { reconcileLeadsForKanbanIfStale } from '@/lib/leads-reconcile';
 import { fetchTagsForLeadIds, leadRowWithTags, setLeadTagIds } from '@/lib/lead-tags';
 import { fetchOpenDuplicateMatchesForLeads, recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     console.error('[GET /api/leads] ensureDefaultPipeline failed:', err);
   }
   try {
-    await reconcileLeadsForKanban(venueId);
+    await reconcileLeadsForKanbanIfStale(venueId);
   } catch (err) {
     console.error('[GET /api/leads] reconcileLeadsForKanban failed:', err);
   }

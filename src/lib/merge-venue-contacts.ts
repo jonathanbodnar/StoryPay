@@ -140,6 +140,22 @@ async function fetchAllRows<T>(
 const GHL_LIVE_FETCH_LIMIT = 100;
 
 /**
+ * The GHL live fetch + LunarPay list are third-party API round-trips that
+ * dominate the Contacts page's load time. For the common no-search load we
+ * cache their results per venue for EXTERNAL_TTL_MS so navigating to Contacts
+ * stays fast — venue_customers (kept current by the background/live sync) is
+ * the source of truth in between. A non-empty search always fetches live so
+ * search results are never stale. Railway runs a persistent Node process, so
+ * this Map survives across requests.
+ */
+type ExternalContactData = {
+  ghl: Array<Record<string, unknown>>;
+  lp: Array<Record<string, unknown>>;
+};
+const EXTERNAL_TTL_MS = 120_000;
+const externalContactsCache = new Map<string, { at: number; data: ExternalContactData }>();
+
+/**
  * Merged list for the dashboard: GHL + LunarPay + StoryVenue `venue_customers`,
  * deduplicated by email (GHL wins, then LP, then native rows without dup email).
  * Returns paginated `data` plus the un-sliced `total` for page count display.
@@ -228,67 +244,92 @@ export async function mergeVenueContacts(
     createdAtLookup.set(`uuid:${vid}`, createdAt);
   }
 
-  let ghlToken = venue.ghl_access_token;
-  if (venue.ghl_connected && venue.ghl_refresh_token) {
-    try {
-      const refreshed = await refreshAccessToken(venue.ghl_refresh_token);
-      if (refreshed.access_token) {
-        ghlToken = refreshed.access_token;
-        await supabaseAdmin.from('venues').update({
-          ghl_access_token: refreshed.access_token,
-          ghl_refresh_token: refreshed.refresh_token || venue.ghl_refresh_token,
-        }).eq('id', venueId);
+  // Paged — same 1,000-row cap applies to leads. Always fetched (DB, not a
+  // third-party round-trip) since leads-as-contacts must stay current.
+  const leadRowsPromise = fetchAllRows<{
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    stage_id: string | null;
+    pipeline_id: string | null;
+    status: string | null;
+    created_at: string;
+  }>(
+    (from, to) =>
+      supabaseAdmin
+        .from('leads')
+        .select('id, first_name, last_name, name, email, phone, stage_id, pipeline_id, status, created_at')
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: false })
+        .range(from, to),
+    'leads',
+  );
+
+  // Throttled third-party supplement (see externalContactsCache doc above).
+  const cachedExternal = search ? undefined : externalContactsCache.get(venueId);
+  const externalIsFresh = !!cachedExternal && Date.now() - cachedExternal.at < EXTERNAL_TTL_MS;
+
+  let ghlContacts: Array<Record<string, unknown>>;
+  let lpList: Array<Record<string, unknown>>;
+  let leadRows: Awaited<typeof leadRowsPromise>;
+
+  if (externalIsFresh && cachedExternal) {
+    leadRows = await leadRowsPromise;
+    ghlContacts = cachedExternal.data.ghl;
+    lpList = cachedExternal.data.lp;
+  } else {
+    let ghlToken = venue.ghl_access_token;
+    if (venue.ghl_connected && venue.ghl_refresh_token) {
+      try {
+        const refreshed = await refreshAccessToken(venue.ghl_refresh_token);
+        if (refreshed.access_token) {
+          ghlToken = refreshed.access_token;
+          await supabaseAdmin.from('venues').update({
+            ghl_access_token: refreshed.access_token,
+            ghl_refresh_token: refreshed.refresh_token || venue.ghl_refresh_token,
+          }).eq('id', venueId);
+        }
+      } catch (err) {
+        console.error('[mergeVenueContacts] GHL token refresh failed:', err);
       }
-    } catch (err) {
-      console.error('[mergeVenueContacts] GHL token refresh failed:', err);
+    }
+
+    const [ghlResult, lpResult, rows] = await Promise.all([
+      (venue.ghl_connected && ghlToken && venue.ghl_location_id)
+        ? ghlRequest(
+            `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${GHL_LIVE_FETCH_LIMIT}`,
+            ghlToken,
+            { locationId: venue.ghl_location_id },
+          ).catch(err => {
+            console.error('[mergeVenueContacts] GHL fetch error:', err);
+            return { contacts: [] };
+          })
+        : Promise.resolve({ contacts: [] }),
+      venue.lunarpay_secret_key
+        ? listCustomers(venue.lunarpay_secret_key, search, page, limit).catch(err => {
+            console.error('[mergeVenueContacts] LunarPay fetch error:', err);
+            return { data: [] };
+          })
+        : Promise.resolve({ data: [] }),
+      leadRowsPromise,
+    ]);
+    leadRows = rows;
+    ghlContacts = ((ghlResult as { contacts?: Array<Record<string, unknown>> })?.contacts || []);
+    const lpRaw = (lpResult as { data?: unknown })?.data ?? lpResult;
+    lpList = (Array.isArray(lpRaw) ? lpRaw : []) as Array<Record<string, unknown>>;
+    // Only cache the no-search load (the hot path); searches stay live.
+    if (!search) {
+      externalContactsCache.set(venueId, { at: Date.now(), data: { ghl: ghlContacts, lp: lpList } });
     }
   }
-
-  const [ghlResult, lpResult, leadRows] = await Promise.all([
-    (venue.ghl_connected && ghlToken && venue.ghl_location_id)
-      ? ghlRequest(
-          `/contacts/?locationId=${venue.ghl_location_id}&query=${encodeURIComponent(search)}&limit=${GHL_LIVE_FETCH_LIMIT}`,
-          ghlToken,
-          { locationId: venue.ghl_location_id },
-        ).catch(err => {
-          console.error('[mergeVenueContacts] GHL fetch error:', err);
-          return { contacts: [] };
-        })
-      : Promise.resolve({ contacts: [] }),
-    venue.lunarpay_secret_key
-      ? listCustomers(venue.lunarpay_secret_key, search, page, limit).catch(err => {
-          console.error('[mergeVenueContacts] LunarPay fetch error:', err);
-          return { data: [] };
-        })
-      : Promise.resolve({ data: [] }),
-    // Paged — same 1,000-row cap applies to leads.
-    fetchAllRows<{
-      id: string;
-      first_name: string | null;
-      last_name: string | null;
-      name: string | null;
-      email: string | null;
-      phone: string | null;
-      stage_id: string | null;
-      pipeline_id: string | null;
-      status: string | null;
-      created_at: string;
-    }>(
-      (from, to) =>
-        supabaseAdmin
-          .from('leads')
-          .select('id, first_name, last_name, name, email, phone, stage_id, pipeline_id, status, created_at')
-          .eq('venue_id', venueId)
-          .order('created_at', { ascending: false })
-          .range(from, to),
-      'leads',
-    ),
-  ]);
 
   const merged: MergedContact[] = [];
   const seenEmails = new Set<string>();
 
-  for (const c of ghlResult?.contacts || []) {
+  for (const c of ghlContacts) {
     const email = ((c.email as string) || '').toLowerCase();
     const id = c.id as string;
     merged.push({
@@ -303,8 +344,6 @@ export async function mergeVenueContacts(
     if (email) seenEmails.add(email);
   }
 
-  const lpRaw = lpResult?.data || lpResult;
-  const lpList = Array.isArray(lpRaw) ? lpRaw : [];
   for (const c of lpList) {
     const email = ((c.email as string) || '').toLowerCase();
     if (email && seenEmails.has(email)) continue;
