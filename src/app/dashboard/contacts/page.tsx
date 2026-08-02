@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { classNames, toTitleCase } from '@/lib/utils';
 import { isNativeApp } from '@/lib/platform';
+import { getClientCache, setClientCache } from '@/lib/client-cache';
 import AddLeadModal, {
   NO_PIPELINE_STAGE,
   type LeadDraft,
@@ -95,7 +96,9 @@ interface SyncProgress {
 }
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<ContactRow[]>([]);
+  // Seed from the session cache so re-opening this tab paints the previous
+  // list instantly while a silent refresh runs in the background.
+  const [contacts, setContacts] = useState<ContactRow[]>(() => getClientCache<ContactRow[]>('contacts:list') ?? []);
   // contactIds that have unread Venue Direct messages for the current viewer
   const [vdUnreadIds, setVdUnreadIds] = useState<Set<string>>(new Set());
   const native = isNativeApp();
@@ -104,7 +107,7 @@ export default function ContactsPage() {
   const [sort, setSort] = useState<ContactSort>(native ? 'az' : 'newest');
   const sortRef = useRef<ContactSort>(native ? 'az' : 'newest');
   sortRef.current = sort;
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => getClientCache<ContactRow[]>('contacts:list') === undefined);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [showModal, setShowModal] = useState(false);
   const [page, setPage] = useState(1);
@@ -156,7 +159,10 @@ export default function ContactsPage() {
   }, [loadModalData]);
 
   const fetchContacts = useCallback(async (q: string, p: number, s: ContactSort = sortRef.current) => {
-    setLoading(true);
+    // The default first-page load refreshes silently when cached data is
+    // already on screen; searches/pagination still show the loading state.
+    const isDefaultLoad = !q && p === 1;
+    if (!(isDefaultLoad && getClientCache<ContactRow[]>('contacts:list') !== undefined)) setLoading(true);
     const effLimit = native ? NATIVE_PAGE_SIZE : PAGE_SIZE;
     const effSort = native ? 'az' : s;
     const effPage = native ? 1 : p;
@@ -173,6 +179,7 @@ export default function ContactsPage() {
         };
         const items = (Array.isArray(data) ? data : data.data ?? []) as ContactRow[];
         setContacts(items);
+        if (isDefaultLoad) setClientCache('contacts:list', items);
         const total = typeof data.total === 'number' ? data.total : items.length;
         setTotalPages(native ? 1 : Math.max(1, Math.ceil(total / PAGE_SIZE)));
         setTotalContacts(total);

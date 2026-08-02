@@ -10,6 +10,7 @@ import {
 import { describeRule, type RecurrenceRule } from '@/lib/recurrence';
 import { toTitleCase } from '@/lib/utils';
 import { isNativeApp } from '@/lib/platform';
+import { getClientCache, setClientCache } from '@/lib/client-cache';
 import { formatInTimeZone, toDate } from 'date-fns-tz';
 import {
   addCalendarDaysYmd,
@@ -284,7 +285,15 @@ export default function CalendarPage() {
 
   // ── Data fetch — widens range for week/day views ─────────────────────────
   const fetchAll = useCallback(async () => {
-    setLoading(true);
+    // Month views paint from the session cache instantly (per month) and
+    // refresh silently; week/day views load normally.
+    const monthCacheKey = `cal:events:${year}-${month}`;
+    const cachedMonth = view === 'month' ? getClientCache<CalEvent[]>(monthCacheKey) : undefined;
+    if (cachedMonth) {
+      setEvents(cachedMonth);
+    } else {
+      setLoading(true);
+    }
     const tz = resolveVenueTimezone(venueTz);
     let from: string, to: string;
     if (view === 'week') {
@@ -326,7 +335,9 @@ export default function CalendarPage() {
     }));
 
     // Merge: local events take precedence; Google events are appended
-    setEvents([...enriched, ...googleEvents]);
+    const merged = [...enriched, ...googleEvents];
+    setEvents(merged);
+    if (view === 'month') setClientCache(monthCacheKey, merged);
     if (spRes.ok) setSpaces(await spRes.json());
     setLoading(false);
   }, [year, month, view, anchorDate, venueTz]);
@@ -865,7 +876,7 @@ export default function CalendarPage() {
                   onClick={() => openNewEvent(selectedYmd)}
                   className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 active:bg-gray-100"
                 >
-                  <Plus size={13} /> Add event
+                  <Plus size={13} /> Create event
                 </button>
               </div>
               {(() => {

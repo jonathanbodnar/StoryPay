@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { isNativeApp } from '@/lib/platform';
+import { getClientCache, setClientCache } from '@/lib/client-cache';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
 import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
@@ -241,8 +242,10 @@ function TeamContactButton({
 }
 
 export default function ConversationsPage() {
-  const [threads, setThreads] = useState<ThreadRow[]>([]);
-  const [loadingList, setLoadingList] = useState(true);
+  // Seed from the session cache so re-opening this tab paints the previous
+  // thread list instantly while a silent refresh runs in the background.
+  const [threads, setThreads] = useState<ThreadRow[]>(() => getClientCache<ThreadRow[]>('conv:threads') ?? []);
+  const [loadingList, setLoadingList] = useState(() => getClientCache<ThreadRow[]>('conv:threads') === undefined);
   const [threadListFilter, setThreadListFilter] = useState<ThreadListFilter>('all');
   // Icon-toggle overlays — combinable with any main pill filter.
   const [filterStarred, setFilterStarred] = useState(false);
@@ -352,7 +355,12 @@ export default function ConversationsPage() {
       const res = await fetch(`/api/conversations/threads${q}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        setThreads(Array.isArray(data) ? data : []);
+        const rows = Array.isArray(data) ? data : [];
+        setThreads(rows);
+        // Only the unfiltered list is reusable as the instant-paint seed.
+        if (threadListFilter === 'all' && !filterStarred && !filterPinned) {
+          setClientCache('conv:threads', rows);
+        }
         setListActionError('');
       }
     } finally {
@@ -363,8 +371,13 @@ export default function ConversationsPage() {
     }
   }, [threadListFilter, filterStarred, filterPinned]);
 
+  const firstThreadsLoad = useRef(true);
   useEffect(() => {
-    loadThreads();
+    // First load with cached data refreshes silently (no skeleton flash);
+    // filter changes and later loads behave exactly as before.
+    const silent = firstThreadsLoad.current && getClientCache<ThreadRow[]>('conv:threads') !== undefined;
+    firstThreadsLoad.current = false;
+    loadThreads({ silent });
   }, [loadThreads]);
 
   // Auto-hide scrollbar: add `is-scrolling` class while scrolling,

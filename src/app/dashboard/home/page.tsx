@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  MessageCircle, Inbox, Calendar, Phone, ChevronRight, Clock, MapPin, CheckCircle2,
+  MessageCircle, Inbox, Calendar, Phone, ChevronRight, Clock, MapPin, CheckCircle2, Check,
 } from 'lucide-react';
 import { getClientCache, setClientCache } from '@/lib/client-cache';
 
@@ -87,6 +87,122 @@ function eventTime(ev: CalEvent): string {
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
+/**
+ * One "Needs a reply" card — swipe it left (past ~40% of its width) or tap
+ * the check button to clear it. Clearing marks the thread read on the server
+ * so it stays gone and the unread badges update everywhere.
+ */
+function ReplyCard({
+  t,
+  onDismiss,
+}: {
+  t: Thread;
+  onDismiss: (t: Thread) => void;
+}) {
+  const [dx, setDx] = useState(0);
+  const [leaving, setLeaving] = useState(false);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const swiping = useRef(false);
+
+  const name = `${t.contact_first_name || ''} ${t.contact_last_name || ''}`.trim() || t.contact_email || 'Contact';
+  const phone = formatPhone(t.contact_phone);
+  const openHref = t.venue_customer_id
+    ? `/dashboard/conversations?customer=${t.venue_customer_id}`
+    : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(t.contact_email || '')}`;
+  const textHref = t.venue_customer_id
+    ? `/dashboard/conversations?customer=${t.venue_customer_id}&compose=sms`
+    : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(t.contact_email || '')}&compose=sms`;
+
+  function dismiss() {
+    if (leaving) return;
+    setLeaving(true);
+    // Let the slide-out animation play before removing from the list.
+    setTimeout(() => onDismiss(t), 200);
+  }
+
+  return (
+    <li className="relative overflow-hidden rounded-2xl">
+      {/* Backdrop revealed while swiping */}
+      <div className="absolute inset-0 flex items-center justify-end rounded-2xl bg-emerald-500 pr-5">
+        <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-white">
+          <Check size={16} /> Done
+        </span>
+      </div>
+      <div
+        className="relative rounded-2xl border border-gray-200 bg-white p-3"
+        style={{
+          transform: leaving ? 'translateX(-110%)' : `translateX(${dx}px)`,
+          opacity: leaving ? 0 : 1,
+          transition: swiping.current ? 'none' : 'transform 200ms ease, opacity 200ms ease',
+        }}
+        onTouchStart={(e) => {
+          startX.current = e.touches[0].clientX;
+          startY.current = e.touches[0].clientY;
+          swiping.current = false;
+        }}
+        onTouchMove={(e) => {
+          const moveX = e.touches[0].clientX - startX.current;
+          const moveY = e.touches[0].clientY - startY.current;
+          // Only hijack clear horizontal left-swipes; let vertical scrolling win.
+          if (!swiping.current && (Math.abs(moveX) < 10 || Math.abs(moveY) > Math.abs(moveX))) return;
+          swiping.current = true;
+          setDx(Math.min(0, moveX));
+        }}
+        onTouchEnd={(e) => {
+          if (!swiping.current) return;
+          const width = (e.currentTarget as HTMLElement).offsetWidth || 320;
+          if (dx < -width * 0.4) {
+            dismiss();
+          } else {
+            swiping.current = false;
+            setDx(0);
+          }
+        }}
+      >
+        <Link href={openHref} className="flex items-start gap-3" draggable={false}>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1B1B1B] text-[13px] font-semibold text-white">
+            {initials(t.contact_first_name, t.contact_last_name)}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center justify-between gap-2">
+              <span className="truncate text-sm font-semibold text-gray-900">{name}</span>
+              <span className="shrink-0 text-[11px] text-gray-400">{relTime(t.last_message_at)}</span>
+            </span>
+            {t.last_message_preview ? (
+              <span className="mt-0.5 line-clamp-1 block text-xs text-gray-500">{t.last_message_preview}</span>
+            ) : null}
+          </span>
+        </Link>
+        <div className="mt-2.5 flex items-center gap-2 pl-[52px]">
+          {phone ? (
+            <a
+              href={`tel:${(t.contact_phone || '').replace(/[^\d+]/g, '')}`}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 active:bg-gray-100"
+            >
+              <Phone size={13} /> Call
+            </a>
+          ) : null}
+          <Link
+            href={textHref}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 active:bg-gray-100"
+          >
+            <MessageCircle size={13} /> Text
+          </Link>
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="Mark as handled"
+            className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 active:bg-gray-100 active:text-emerald-600"
+          >
+            <Check size={15} />
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 export default function MobileHomePage() {
   // Seed everything from the session cache so returning to Home paints the
   // previous data instantly (no skeleton flash / card resize) while the
@@ -159,6 +275,25 @@ export default function MobileHomePage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Clearing a card marks the thread read server-side (so it stays cleared
+  // and reappears only if the contact messages again), removes it locally,
+  // and nudges the tab-bar badge to refresh.
+  function dismissThread(t: Thread) {
+    setThreads((prev) => {
+      const next = prev.filter((x) => x.thread_id !== t.thread_id);
+      setClientCache('home:threads', next);
+      return next;
+    });
+    setUnread((prev) => {
+      const next = Math.max(0, prev - 1);
+      setClientCache('home:unread', next);
+      return next;
+    });
+    fetch(`/api/conversations/threads/${t.thread_id}/read`, { method: 'POST' })
+      .then(() => window.dispatchEvent(new CustomEvent('storypay:conversations-unread')))
+      .catch(() => {});
+  }
+
   const eventsToday = events.length;
 
   const metrics = useMemo(
@@ -220,53 +355,9 @@ export default function MobileHomePage() {
           </div>
         ) : (
           <ul className="space-y-2">
-            {threads.map((t) => {
-              const name = `${t.contact_first_name || ''} ${t.contact_last_name || ''}`.trim() || t.contact_email || 'Contact';
-              const phone = formatPhone(t.contact_phone);
-              const openHref = t.venue_customer_id
-                ? `/dashboard/conversations?customer=${t.venue_customer_id}`
-                : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(t.contact_email || '')}`;
-              const textHref = t.venue_customer_id
-                ? `/dashboard/conversations?customer=${t.venue_customer_id}&compose=sms`
-                : `/dashboard/conversations?customerFromEmail=${encodeURIComponent(t.contact_email || '')}&compose=sms`;
-              return (
-                <li
-                  key={t.thread_id}
-                  className="rounded-2xl border border-gray-200 bg-white p-3 transition-colors active:bg-gray-50"
-                >
-                  <Link href={openHref} className="flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1B1B1B] text-[13px] font-semibold text-white">
-                      {initials(t.contact_first_name, t.contact_last_name)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-gray-900">{name}</span>
-                        <span className="shrink-0 text-[11px] text-gray-400">{relTime(t.last_message_at)}</span>
-                      </span>
-                      {t.last_message_preview ? (
-                        <span className="mt-0.5 line-clamp-1 block text-xs text-gray-500">{t.last_message_preview}</span>
-                      ) : null}
-                    </span>
-                  </Link>
-                  <div className="mt-2.5 flex items-center gap-2 pl-[52px]">
-                    {phone ? (
-                      <a
-                        href={`tel:${(t.contact_phone || '').replace(/[^\d+]/g, '')}`}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 active:bg-gray-100"
-                      >
-                        <Phone size={13} /> Call
-                      </a>
-                    ) : null}
-                    <Link
-                      href={textHref}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 active:bg-gray-100"
-                    >
-                      <MessageCircle size={13} /> Text
-                    </Link>
-                  </div>
-                </li>
-              );
-            })}
+            {threads.map((t) => (
+              <ReplyCard key={t.thread_id} t={t} onDismiss={dismissThread} />
+            ))}
           </ul>
         )}
       </section>

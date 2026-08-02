@@ -19,6 +19,7 @@ import {
 import LeadInsightsStrip, { type LeadInsightsPayload } from '@/components/leads/LeadInsightsStrip';
 import AddLeadModal, { NO_PIPELINE_STAGE } from '@/components/leads/AddLeadModal';
 import { isNativeApp } from '@/lib/platform';
+import { getClientCache, setClientCache } from '@/lib/client-cache';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone, wallClockToUtc } from '@/lib/venue-timezone';
 import { effectiveWinProbability } from '@/lib/pipelines';
@@ -316,10 +317,18 @@ interface VenueSpaceLite {
 // ─── Main page ───────────────────────────────────────────────────────────────
 
 export default function LeadsPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-  const [activePipelineId, setActivePipelineId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Seed pipelines + the active pipeline's leads from the session cache so
+  // re-opening this tab paints instantly while a silent refresh runs.
+  const [leads, setLeads] = useState<Lead[]>(() => {
+    const pid = getClientCache<string>('leads:activePid');
+    return (pid && getClientCache<Lead[]>(`leads:list:${pid}`)) || [];
+  });
+  const [pipelines, setPipelines] = useState<Pipeline[]>(() => getClientCache<Pipeline[]>('leads:pipelines') ?? []);
+  const [activePipelineId, setActivePipelineId] = useState<string | null>(() => getClientCache<string>('leads:activePid') ?? null);
+  const [loading, setLoading] = useState(() => {
+    const pid = getClientCache<string>('leads:activePid');
+    return !(pid && getClientCache<Lead[]>(`leads:list:${pid}`));
+  });
   const [view, setView] = useState<ViewMode>('kanban');
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<string | 'all'>('all');
@@ -448,6 +457,7 @@ export default function LeadsPage() {
     if (!res.ok) return;
     const data = await res.json();
     setPipelines(data.pipelines ?? []);
+    setClientCache('leads:pipelines', data.pipelines ?? []);
     setActivePipelineId((prev) => {
       if (prev && (data.pipelines ?? []).some((p: Pipeline) => p.id === prev)) return prev;
       const def = (data.pipelines ?? []).find((p: Pipeline) => p.is_default);
@@ -455,9 +465,23 @@ export default function LeadsPage() {
     });
   }, []);
 
+  // Remember which pipeline is active so the next visit can seed its leads.
+  useEffect(() => {
+    if (activePipelineId) setClientCache('leads:activePid', activePipelineId);
+  }, [activePipelineId]);
+
   const loadLeads = useCallback(async () => {
     if (!activePipelineId) return;
-    setLoading(true);
+    // Unfiltered pipeline views paint from cache immediately (including when
+    // switching pipelines) and refresh silently; searches / stage filters
+    // still show the loading state.
+    const isDefaultView = !query.trim() && stageFilter === 'all';
+    const cached = isDefaultView ? getClientCache<Lead[]>(`leads:list:${activePipelineId}`) : undefined;
+    if (cached) {
+      setLeads(cached);
+    } else {
+      setLoading(true);
+    }
     const params = new URLSearchParams();
     params.set('pipeline_id', activePipelineId);
     if (query.trim()) params.set('q', query.trim());
@@ -466,6 +490,7 @@ export default function LeadsPage() {
     if (res.ok) {
       const data = await res.json();
       setLeads(data.leads ?? []);
+      if (isDefaultView) setClientCache(`leads:list:${activePipelineId}`, data.leads ?? []);
     }
     setLoading(false);
   }, [activePipelineId, query, stageFilter]);
