@@ -245,15 +245,6 @@ export default function OnboardingWizard({ adminView = false }: { adminView?: bo
     return (
       <div className="fixed inset-0 z-[2000] flex items-center justify-center overscroll-contain bg-gray-900/40 backdrop-blur-[2px] p-4">
         <div className="relative w-full max-w-sm rounded-2xl bg-white p-7 text-center shadow-2xl">
-          {(isLegacy || adminView) && (
-            <button
-              onClick={dismiss}
-              className="absolute right-3 top-3 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              aria-label="Close"
-            >
-              <X size={16} />
-            </button>
-          )}
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
             <Globe size={22} className="text-gray-700" />
           </div>
@@ -270,7 +261,16 @@ export default function OnboardingWizard({ adminView = false }: { adminView?: bo
           >
             Open in browser <ExternalLink size={15} />
           </button>
-          <p className="mt-3 text-xs text-gray-400">app.storyvenue.com</p>
+          {/* Always allow dismiss on native — existing active venues may have a
+              null onboarding_completed_at from before the new flow was added,
+              and should never be trapped in a loop with no way out. */}
+          <button
+            onClick={dismiss}
+            className="mt-3 w-full py-2 text-xs text-gray-400 hover:text-gray-600"
+          >
+            Continue in app
+          </button>
+          <p className="mt-1 text-xs text-gray-400">app.storyvenue.com</p>
         </div>
       </div>
     );
