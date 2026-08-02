@@ -29,6 +29,19 @@ export function isNativeApp(): boolean {
   }
 }
 
+/**
+ * Safe-area top padding for any fixed/overlay header on mobile — floored at
+ * 44px on native so an app binary that hasn't yet picked up a contentInset
+ * config change (env() reporting 0) still renders below the status bar
+ * instead of flush against it. Regular mobile browsers get the real env()
+ * value (0 on non-notched devices) with no artificial floor.
+ */
+export function topBarSafeAreaPadding(): string {
+  return isNativeApp()
+    ? 'max(env(safe-area-inset-top, 0px), 44px)'
+    : 'env(safe-area-inset-top, 0px)';
+}
+
 /** 'ios' | 'android' when running natively; 'web' everywhere else. */
 export function getPlatform(): AppPlatform {
   if (typeof window === 'undefined') return 'web';

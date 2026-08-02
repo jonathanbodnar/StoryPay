@@ -28,7 +28,7 @@ import {
   Target,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
-import { isNativeApp } from '@/lib/platform';
+import { isNativeApp, topBarSafeAreaPadding } from '@/lib/platform';
 import { unregisterNativePush } from '@/components/NativePushRegistrar';
 import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
@@ -61,14 +61,6 @@ interface SidebarProps {
   /** True when the venue is on the free ($0) plan. */
   isFreePlan?: boolean;
 }
-
-// Floors the top-bar's safe-area padding at a sane status-bar height on
-// native so an app binary that hasn't picked up the latest contentInset
-// config change (env() reporting 0) still renders the header below the
-// status bar, instead of flush against it.
-const TOPBAR_SAFE_AREA_PADDING = isNativeApp()
-  ? 'max(env(safe-area-inset-top, 0px), 44px)'
-  : 'env(safe-area-inset-top, 0px)';
 
 const topMenuItems: NavItem[] = [
   { label: 'Lead Inbox', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
@@ -1091,7 +1083,7 @@ export default function Sidebar({
           so the web is unchanged. */}
       <div
         className="lg:hidden fixed top-0 left-0 right-0 z-40 border-b border-gray-200"
-        style={{ backgroundColor: '#ffffff', paddingTop: TOPBAR_SAFE_AREA_PADDING }}
+        style={{ backgroundColor: '#ffffff', paddingTop: topBarSafeAreaPadding() }}
       >
         <div className="flex items-center justify-between px-4 h-14">
           <Link href="/dashboard">
@@ -1130,7 +1122,7 @@ export default function Sidebar({
         className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[280px] transition-transform duration-300 border-r border-gray-200 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ backgroundColor: '#ffffff', paddingTop: TOPBAR_SAFE_AREA_PADDING }}
+        style={{ backgroundColor: '#ffffff', paddingTop: topBarSafeAreaPadding() }}
       >
         <NavContent rail={false} onCloseMobile={() => setMobileOpen(false)} isMobile />
       </aside>

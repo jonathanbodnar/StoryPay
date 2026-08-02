@@ -46,7 +46,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
-import { isNativeApp } from '@/lib/platform';
+import { isNativeApp, topBarSafeAreaPadding } from '@/lib/platform';
 import { getClientCache, setClientCache } from '@/lib/client-cache';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
 import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
@@ -1962,7 +1962,10 @@ export default function ConversationsPage() {
         >
           {selectedId && threadDetail ? (
             <>
-              <header className="flex flex-shrink-0 items-center gap-3 border-b border-gray-100 px-3 py-3 sm:px-5">
+              <header
+                className="flex flex-shrink-0 items-center gap-3 border-b border-gray-100 px-3 py-3 sm:px-5"
+                style={mobileShowThread ? { paddingTop: `calc(0.75rem + ${topBarSafeAreaPadding()})` } : undefined}
+              >
                 <button
                   type="button"
                   className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden"
