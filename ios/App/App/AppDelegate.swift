@@ -1,5 +1,7 @@
 import UIKit
 import Capacitor
+import FirebaseCore
+import FirebaseMessaging
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,8 +9,33 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        FirebaseApp.configure()
         return true
+    }
+
+    // Apple hands us a raw APNs device token here. Our backend sends push via
+    // the Firebase Cloud Messaging v1 API for both platforms, which requires
+    // an FCM registration token — not the raw APNs bytes — so we exchange it
+    // via FirebaseMessaging and hand Capacitor's push-notifications plugin
+    // the resulting FCM token instead of letting it use the raw token. The
+    // plugin already supports either shape on this same notification name
+    // (Data → hex string, String → used as-is), so this is a drop-in swap;
+    // nothing on the JS side (NativePushRegistrar.tsx) needs to change.
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Messaging.messaging().apnsToken = deviceToken
+        Messaging.messaging().token { token, error in
+            if let error = error {
+                NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+                return
+            }
+            if let token = token {
+                NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: token)
+            }
+        }
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
