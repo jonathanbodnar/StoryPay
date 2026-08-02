@@ -168,6 +168,9 @@ function VenueLoginForm() {
         body: JSON.stringify({ email: email.trim(), password, rememberMe }),
       });
       const data = await res.json();
+      // TEMP DEBUG — remove once the native-app "opens Chrome on login" issue
+      // is diagnosed. Shows up in Xcode's console (JS console.log is forwarded).
+      console.log('[sign-in DEBUG] native=', isNativeApp(), 'ok=', res.ok, 'data=', JSON.stringify(data));
       if (!res.ok) {
         setError(data.error || 'Invalid email or password.');
         return;
@@ -176,8 +179,11 @@ function VenueLoginForm() {
         setTwoFA(true);
         return;
       }
-      window.location.href = data.redirect || '/dashboard';
-    } catch {
+      const target = data.redirect || '/dashboard';
+      console.log('[sign-in DEBUG] navigating to', target, 'location.origin=', window.location.origin);
+      window.location.href = target;
+    } catch (err) {
+      console.log('[sign-in DEBUG] caught error', err);
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
