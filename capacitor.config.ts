@@ -33,8 +33,12 @@ const config: CapacitorConfig = {
     androidScheme: 'https',
   },
   ios: {
-    // Let the site's own theming drive the status bar; avoids a white gap.
-    contentInset: 'always',
+    // 'never' = the webview owns the full screen and the page handles safe
+    // areas itself via env(safe-area-inset-*). With 'always' iOS applied a
+    // native scroll inset instead, which let scrolled content paint in the
+    // status-bar strip ABOVE our fixed header and made the bottom tab bar
+    // shift during rubber-band overscroll.
+    contentInset: 'never',
   },
   plugins: {
     PushNotifications: {

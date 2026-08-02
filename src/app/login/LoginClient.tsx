@@ -355,7 +355,9 @@ function VenueLoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@yourvenue.com"
-            autoFocus
+            // Never steal focus on native — a native login screen shouldn't
+            // open the keyboard until the user taps a field.
+            autoFocus={!isNativeApp()}
             className={INPUT}
           />
         </div>

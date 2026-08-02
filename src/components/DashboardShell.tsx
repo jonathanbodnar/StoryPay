@@ -211,7 +211,11 @@ export default function DashboardShell({
           rail ? 'lg:ml-[60px]' : 'lg:ml-[260px]'
         }`}
       >
-        <div className="h-14 shrink-0 lg:hidden" />
+        {/* Spacer matching the fixed mobile top bar (3.5rem + status-bar inset). */}
+        <div
+          className="shrink-0 lg:hidden"
+          style={{ height: 'calc(3.5rem + env(safe-area-inset-top, 0px))' }}
+        />
         <AnnouncementTicker />
         <MobileDashboardRedirect />
         <main className={`mx-auto flex w-full flex-1 flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>

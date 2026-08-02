@@ -1073,38 +1073,37 @@ export default function Sidebar({
 
   return (
     <>
-      {/* Status-bar shield — in the native shell (Capacitor contentInset
-          "always") the layout viewport sits below the iOS status bar, so
-          scrolled page content is visible in the strip ABOVE the fixed
-          header. Paint that strip white so content disappears behind the
-          header like a normal iOS app. Offscreen/no-op on mobile web. */}
+      {/* Mobile top bar. padding-top absorbs the iOS status-bar safe area
+          (contentInset "never" in the native shell), so scrolled content
+          always disappears behind this bar — nothing can bleed above it.
+          env() is 0 in regular mobile browsers, so the web is unchanged. */}
       <div
-        aria-hidden
-        className="lg:hidden fixed left-0 right-0 z-40"
-        style={{ top: '-120px', height: '120px', backgroundColor: '#ffffff' }}
-      />
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 border-b border-gray-200" style={{ backgroundColor: '#ffffff' }}>
-        <Link href="/dashboard">
-          <Image src="/storyvenue-dark-logo.png" alt="StoryVenue" width={120} height={29} />
-        </Link>
-        <div className="flex items-center gap-2">
-          {!isNativeApp() && (
-            <a
-              href="/api/auth/logout"
-              onClick={handleLogoutClick}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-              title="Logout"
+        className="lg:hidden fixed top-0 left-0 right-0 z-40 border-b border-gray-200"
+        style={{ backgroundColor: '#ffffff', paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      >
+        <div className="flex items-center justify-between px-4 h-14">
+          <Link href="/dashboard">
+            <Image src="/storyvenue-dark-logo.png" alt="StoryVenue" width={120} height={29} />
+          </Link>
+          <div className="flex items-center gap-2">
+            {!isNativeApp() && (
+              <a
+                href="/api/auth/logout"
+                onClick={handleLogoutClick}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                title="Logout"
+              >
+                <LogOut size={17} />
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => setMobileOpen((v) => !v)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
             >
-              <LogOut size={17} />
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={() => setMobileOpen((v) => !v)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-          >
-            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+              {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1119,7 +1118,7 @@ export default function Sidebar({
         className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[280px] transition-transform duration-300 border-r border-gray-200 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ backgroundColor: '#ffffff' }}
+        style={{ backgroundColor: '#ffffff', paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <NavContent rail={false} onCloseMobile={() => setMobileOpen(false)} isMobile />
       </aside>
