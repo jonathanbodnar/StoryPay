@@ -171,6 +171,7 @@ export default function CustomerDetailPage() {
   const customerId   = params.id as string;
   const initialTabFromUrl = ((): Tab => {
     const t = (searchParams?.get('tab') || '').toLowerCase();
+    if (t === 'concierge' && isNativeApp()) return 'overview';
     if (t === 'concierge' || t === 'notes' || t === 'timeline' || t === 'payments' || t === 'tasks' || t === 'documents') {
       return t as Tab;
     }
@@ -1464,7 +1465,8 @@ export default function CustomerDetailPage() {
       <div className="flex flex-wrap gap-1 mb-6 border-b border-gray-200">
         {([
           { id: 'overview',   label: 'Overview',                                                      icon: User },
-          { id: 'concierge',  label: 'Concierge',                                                     icon: Building2 },
+          // AI Concierge tab is hidden in the native app (no AI surfaces on mobile).
+          ...(native ? [] : [{ id: 'concierge', label: 'Concierge', icon: Building2 }]),
           { id: 'notes',      label: `Notes${notes.length > 0 ? ` (${notes.length})` : ''}`,         icon: ClipboardList },
           { id: 'timeline',   label: 'Activity',                                                      icon: Activity },
           { id: 'payments',   label: 'Payments',                                                      icon: Receipt },
