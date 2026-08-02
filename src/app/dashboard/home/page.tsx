@@ -306,7 +306,9 @@ export default function MobileHomePage() {
   );
 
   return (
-    <div className="mx-auto max-w-2xl">
+    // No max-width cap — matches every other native tab (Messages, Contacts,
+    // Calendar), which all use the full available width with no inner cap.
+    <div>
       {/* Greeting */}
       <div className="pb-1">
         <h1 className="font-heading text-2xl text-gray-900">{greeting()}</h1>
