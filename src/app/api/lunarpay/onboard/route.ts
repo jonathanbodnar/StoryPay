@@ -53,28 +53,38 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json() as OnboardPayload;
 
+  // Fetch merchant id + contact fallbacks. The wizard resumes at Step 2 when
+  // the merchant already exists (status "registered"), so Step-1 contact
+  // fields may be empty in the payload — fill them from the venue record
+  // rather than rejecting a fully-completed banking form.
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('lunarpay_merchant_id, phone, email, owner_first_name, owner_last_name')
+    .eq('id', venueId)
+    .maybeSingle();
+
+  const merchantId = venue?.lunarpay_merchant_id as number | null | undefined;
+  if (!merchantId) {
+    return NextResponse.json({ error: 'Please complete Step 1 (business registration) first.' }, { status: 400 });
+  }
+
+  body.firstName = body.firstName?.trim() || venue?.owner_first_name || '';
+  body.lastName  = body.lastName?.trim()  || venue?.owner_last_name  || '';
+  body.phone     = body.phone?.trim()     || venue?.phone            || '';
+  body.email     = body.email?.trim()     || venue?.email            || '';
+
   // Validate required fields
   const required: (keyof OnboardPayload)[] = [
     'firstName','lastName','phone','email','dbaName','legalName',
     'addressLine1','city','state','postalCode',
     'routingNumber','accountNumber','accountHolderName',
   ];
-  for (const k of required) {
-    if (!String(body[k] ?? '').trim()) {
-      return NextResponse.json({ error: `"${k}" is required.` }, { status: 400 });
-    }
-  }
-
-  // Fetch merchant id
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('lunarpay_merchant_id')
-    .eq('id', venueId)
-    .maybeSingle();
-
-  const merchantId = (venue as { lunarpay_merchant_id?: number | null } | null)?.lunarpay_merchant_id;
-  if (!merchantId) {
-    return NextResponse.json({ error: 'Please complete Step 1 (business registration) first.' }, { status: 400 });
+  const missing = required.filter((k) => !String(body[k] ?? '').trim());
+  if (missing.length) {
+    return NextResponse.json(
+      { error: `Missing required field${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}.` },
+      { status: 400 },
+    );
   }
 
   const lpRes = await fetch(`${LP_BASE}/api/v1/agency/merchants/${merchantId}/onboard`, {

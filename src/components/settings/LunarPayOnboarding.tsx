@@ -212,6 +212,8 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
       const data = await res.json() as { error?: string; merchantId?: number; alreadyRegistered?: boolean };
       if (!res.ok) { setError(data.error ?? 'Registration failed.'); return; }
       setStep(2);
+    } catch {
+      setError('Network error — please check your connection and try again.');
     } finally {
       setSaving(false);
     }
@@ -256,6 +258,8 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
       if (!res.ok) { setError(data.error ?? 'Submission failed.'); return; }
       if (data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
       setStep(3);
+    } catch {
+      setError('Network error — please check your connection and try again.');
     } finally {
       setSaving(false);
     }
@@ -393,8 +397,12 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
               <Field label="Legal Name" value={s2.legalName} onChange={(v) => setS2(p=>({...p,legalName:v}))}
                 placeholder="Grand Ballroom LLC" required />
             </div>
-            <Field label="Contact Email" value={s2.email} onChange={(v) => setS2(p=>({...p,email:v}))}
-              type="email" placeholder="billing@yourvenue.com" required />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Contact Email" value={s2.email} onChange={(v) => setS2(p=>({...p,email:v}))}
+                type="email" placeholder="billing@yourvenue.com" required />
+              <Field label="Contact Phone" value={s1.phone} onChange={(v) => setS1(p=>({...p,phone:v}))}
+                type="tel" placeholder="(555) 010-0100" required />
+            </div>
 
             {/* Address */}
             <div className="pt-2 border-t border-gray-200">
