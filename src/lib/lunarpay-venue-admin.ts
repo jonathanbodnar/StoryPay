@@ -4,6 +4,7 @@
 
 export type LunarPayAdminCategory =
   | 'not_provisioned'
+  | 'provisioned_not_applied'
   | 'active_approved'
   | 'denied'
   | 'pending_review';
@@ -66,19 +67,29 @@ export function getLunarPayAdminSummary(venue: Record<string, unknown>): LunarPa
     };
   }
 
+  // Merchant record exists but no application was ever submitted. Merchants
+  // are auto-created the moment a venue verifies its email — before the
+  // paywall and before the wizard — so "registered" must NOT read as
+  // "started an application"; most of these venues never opened the wizard.
+  if (rawStatus === '' || rawStatus === 'not_started' || rawStatus === 'registered' || rawStatus === 'pending') {
+    return {
+      category: 'provisioned_not_applied',
+      label: 'Not applied',
+      payments_ready: false,
+      onboarding_status: rawStatus || 'registered',
+    };
+  }
+
   const labelMap: Record<string, string> = {
-    not_started: 'Not started',
-    registered: 'Registered',
-    pending: 'Registered',
-    bank_information_sent: 'Bank information sent',
+    bank_information_sent: 'Applied · awaiting signature',
     under_review: 'Under review',
   };
-  const pretty = labelMap[rawStatus] || (rawStatus ? rawStatus.replace(/_/g, ' ') : 'In progress');
+  const pretty = labelMap[rawStatus] || rawStatus.replace(/_/g, ' ');
 
   return {
     category: 'pending_review',
     label: pretty,
     payments_ready: false,
-    onboarding_status: rawStatus || 'pending',
+    onboarding_status: rawStatus,
   };
 }

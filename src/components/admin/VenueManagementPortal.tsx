@@ -77,7 +77,18 @@ function lunarPaySummaryForRow(v: AdminVenueRow): LunarPayAdminSummary {
   return getLunarPayAdminSummary(v as Record<string, unknown>);
 }
 
-function LunarPayStatusCell({ venue, summary }: { venue: AdminVenueRow; summary: LunarPayAdminSummary }) {
+function LunarPayStatusCell({
+  venue,
+  summary,
+  onLpAction,
+  lpBusyAction,
+}: {
+  venue: AdminVenueRow;
+  summary: LunarPayAdminSummary;
+  /** Wire up the admin Sync / Reset / Unlink actions (desktop rows only). */
+  onLpAction?: (action: 'sync' | 'reset' | 'unlink') => void;
+  lpBusyAction?: string | null;
+}) {
   const badgeClass =
     summary.category === 'active_approved'
       ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
@@ -85,16 +96,25 @@ function LunarPayStatusCell({ venue, summary }: { venue: AdminVenueRow; summary:
         ? 'border-red-200 bg-red-50 text-red-800'
         : summary.category === 'not_provisioned'
           ? 'border-gray-200 bg-gray-100 text-gray-600'
-          : 'border-amber-200 bg-amber-50 text-amber-800';
+          : summary.category === 'provisioned_not_applied'
+            ? 'border-slate-200 bg-slate-50 text-slate-500'
+            : 'border-amber-200 bg-amber-50 text-amber-800';
 
   const mid = venue.lunarpay_merchant_id;
   const sub = summary.payments_ready
     ? 'Can charge'
     : summary.category === 'not_provisioned'
       ? 'No merchant'
-      : summary.onboarding_status
-        ? summary.onboarding_status.charAt(0).toUpperCase() + summary.onboarding_status.slice(1)
-        : null;
+      : summary.category === 'provisioned_not_applied'
+        ? 'Merchant auto-created · no application'
+        : summary.onboarding_status
+          ? summary.onboarding_status.charAt(0).toUpperCase() + summary.onboarding_status.slice(1)
+          : null;
+
+  const hasMerchant = mid != null && String(mid).length > 0;
+  const applicationInFlight =
+    summary.onboarding_status === 'bank_information_sent' || summary.onboarding_status === 'under_review';
+  const busy = Boolean(lpBusyAction);
 
   return (
     <div className="space-y-0.5">
@@ -102,10 +122,43 @@ function LunarPayStatusCell({ venue, summary }: { venue: AdminVenueRow; summary:
         {summary.label}
       </span>
       <div className="text-[10px] text-gray-400 leading-none">
-        {mid != null && String(mid).length > 0
-          ? `#${String(mid)}${sub ? ` · ${sub}` : ''}`
-          : sub ?? '—'}
+        {hasMerchant ? `#${String(mid)}${sub ? ` · ${sub}` : ''}` : sub ?? '—'}
       </div>
+      {onLpAction && hasMerchant && (
+        <div className="flex items-center gap-2 pt-0.5">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onLpAction('sync')}
+            className="text-[10px] font-medium text-blue-600 hover:underline disabled:opacity-40"
+            title="Re-fetch live status and keys from LunarPay"
+          >
+            {lpBusyAction === 'sync' ? 'Syncing…' : 'Sync'}
+          </button>
+          {applicationInFlight && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onLpAction('reset')}
+              className="text-[10px] font-medium text-amber-700 hover:underline disabled:opacity-40"
+              title="Send the venue back to the banking step so they can resubmit their application"
+            >
+              {lpBusyAction === 'reset' ? 'Resetting…' : 'Reset app'}
+            </button>
+          )}
+          {summary.category !== 'active_approved' && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onLpAction('unlink')}
+              className="text-[10px] font-medium text-red-600 hover:underline disabled:opacity-40"
+              title="Detach the LunarPay merchant so the venue restarts the wizard from scratch"
+            >
+              {lpBusyAction === 'unlink' ? 'Unlinking…' : 'Unlink'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -343,6 +396,37 @@ export function VenueManagementPortal({
   const [suspending, setSuspending] = useState(false);
   const [suspendToast, setSuspendToast] = useState<{ id: string; msg: string; ok: boolean } | null>(null);
 
+  // Per-row LunarPay admin action state: `${venueId}:${action}` while running
+  const [lpActionKey, setLpActionKey] = useState<string | null>(null);
+
+  async function runLunarPayAction(venue: AdminVenueRow, action: 'sync' | 'reset' | 'unlink') {
+    if (action === 'reset' && !confirm(
+      `Reset the payment application for "${venue.name}"?\n\nTheir wizard goes back to the banking step so they can resubmit. If Fortis already issued their signing form, resubmitting returns the same form.`,
+    )) return;
+    if (action === 'unlink' && !confirm(
+      `Unlink the LunarPay merchant from "${venue.name}"?\n\nAll merchant ids/keys are cleared and they restart the wizard from scratch. Re-registering with the same email re-adopts this same merchant — a brand-new Fortis application needs a different email or deleting the merchant in LunarPay admin.`,
+    )) return;
+    setLpActionKey(`${venue.id}:${action}`);
+    try {
+      const res = await fetch(`/api/admin/venues/${venue.id}/lunarpay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!res.ok) {
+        alert(d.error || `LunarPay ${action} failed`);
+      } else if (d.message) {
+        alert(d.message);
+      }
+      await onRefresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Request failed');
+    } finally {
+      setLpActionKey(null);
+    }
+  }
+
   const loadPlans = useCallback(async () => {
     setPlansLoading(true);
     try {
@@ -422,6 +506,8 @@ export function VenueManagementPortal({
       if (filterLunarPay === 'not_ready' && lp.payments_ready) return false;
       if (filterLunarPay === 'denied' && lp.category !== 'denied') return false;
       if (filterLunarPay === 'not_provisioned' && lp.category !== 'not_provisioned') return false;
+      if (filterLunarPay === 'not_applied' && lp.category !== 'provisioned_not_applied') return false;
+      if (filterLunarPay === 'in_progress' && lp.category !== 'pending_review') return false;
       if (filterVerified !== 'any') {
         const vs = (v.directory_verified_status as string) || 'none';
         if (vs !== filterVerified) return false;
@@ -743,7 +829,10 @@ export function VenueManagementPortal({
         <p className="mt-1 text-sm text-gray-500 max-w-3xl">
           All registered venues: search, assign directory plans, approve verified / sponsored badges, copy magic login
           links, or open their dashboard as they see it (exit from the amber bar). LunarPay shows onboarding approval
-          and whether the venue can run card payments (active merchant + API credentials).
+          and whether the venue can run card payments (active merchant + API credentials). &ldquo;Not applied&rdquo;
+          means a merchant shell was auto-created when the venue verified its email — the venue has NOT submitted a
+          payment application. Amber pills mean a real application is in flight. Use Sync to pull live status from
+          LunarPay, Reset to send a stuck application back to the banking step, or Unlink to let a venue start over.
         </p>
       </div>
 
@@ -1064,6 +1153,8 @@ export function VenueManagementPortal({
               <option value="any">Any</option>
               <option value="ready">Active &amp; approved (can charge)</option>
               <option value="not_ready">Not approved / not ready</option>
+              <option value="in_progress">Application in progress</option>
+              <option value="not_applied">Not applied (merchant only)</option>
               <option value="denied">Denied</option>
               <option value="not_provisioned">No merchant</option>
             </select>
@@ -1197,7 +1288,12 @@ export function VenueManagementPortal({
 
               {/* ── Strip 2: status pills + dropdowns ── */}
               <div className="flex flex-wrap items-center gap-2">
-                <LunarPayStatusCell venue={venue} summary={lpSum} />
+                <LunarPayStatusCell
+                  venue={venue}
+                  summary={lpSum}
+                  onLpAction={(action) => void runLunarPayAction(venue, action)}
+                  lpBusyAction={lpActionKey?.startsWith(`${venue.id}:`) ? lpActionKey.split(':')[1] : null}
+                />
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] font-semibold text-gray-400">Plan</span>
                   <select
