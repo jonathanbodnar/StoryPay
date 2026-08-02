@@ -132,9 +132,6 @@ export default function AddLeadModal({
   });
   const [saving, setSaving] = useState(false);
 
-  const scrollBodyRef = useRef<HTMLDivElement>(null);
-  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const [manageSpaces, setManageSpaces] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
   const [newSpaceColor, setNewSpaceColor] = useState('#6366f1');
@@ -270,17 +267,9 @@ export default function AddLeadModal({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div
-            ref={scrollBodyRef}
-            className="p-6 overflow-y-auto space-y-3 scrollbar-autohide"
-            onScroll={() => {
-              const el = scrollBodyRef.current;
-              if (!el) return;
-              el.classList.add('is-scrolling');
-              if (scrollTimer.current) clearTimeout(scrollTimer.current);
-              scrollTimer.current = setTimeout(() => el.classList.remove('is-scrolling'), 800);
-            }}
-          >
+          {/* Vertical scroll only, no visible scrollbar — modals should feel
+              like a fixed native form, not a scrollable web page. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain no-scrollbar p-6 space-y-3">
             {pipelines.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>

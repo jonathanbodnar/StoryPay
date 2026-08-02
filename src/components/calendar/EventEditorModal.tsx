@@ -200,7 +200,6 @@ export default function EventEditorModal({
   }, [actingAsVenueId]);
 
   const modalBodyRef = useRef<HTMLDivElement>(null);
-  const modalScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
@@ -530,16 +529,11 @@ export default function EventEditorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
+      {/* Vertical scroll only, no visible scrollbar — modals should feel like
+          a fixed native form, not a scrollable web page. */}
       <div
         ref={modalBodyRef}
-        className="relative w-full max-w-lg rounded-2xl bg-white p-4 sm:p-6 max-h-[90vh] overflow-y-auto scrollbar-autohide"
-        onScroll={() => {
-          const el = modalBodyRef.current;
-          if (!el) return;
-          el.classList.add('is-scrolling');
-          if (modalScrollTimer.current) clearTimeout(modalScrollTimer.current);
-          modalScrollTimer.current = setTimeout(() => el.classList.remove('is-scrolling'), 800);
-        }}
+        className="relative w-full max-w-lg rounded-2xl bg-white p-4 sm:p-6 max-h-[90vh] overflow-y-auto overflow-x-hidden overscroll-contain no-scrollbar"
       >
         <button
           onClick={() => { onClose(); }}
