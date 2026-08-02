@@ -405,6 +405,16 @@ export default function ConversationsPage() {
     const customerFromEmail = params.get('customerFromEmail')?.trim();
     const uuidOk =
       !!customerId && /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(customerId);
+    // TEMP DIAGNOSTIC: persist what this page saw in the URL on mount so it
+    // can be checked via Safari Web Inspector after a push-notification tap.
+    // Remove once deep-link navigation is confirmed working.
+    try {
+      window.localStorage.setItem(
+        'sv_last_conv_deeplink_debug',
+        JSON.stringify({ at: new Date().toISOString(), search: window.location.search, threadIdParam: threadIdParam || null }),
+      );
+    } catch { /* ignore */ }
+
     if (!threadIdParam && !uuidOk && !customerFromEmail) return;
 
     deepLinkConsumed.current = true;

@@ -92,6 +92,16 @@ export default function NativePushRegistrar() {
           (action: { notification?: { data?: Record<string, unknown> } }) => {
             const raw = action.notification?.data?.url;
             const url = typeof raw === 'string' ? raw : '';
+            // TEMP DIAGNOSTIC (see AGENTS notes): persist what we actually
+            // received so it can be inspected after the fact via Safari Web
+            // Inspector, without needing the inspector open at tap-time.
+            // Remove once deep-link navigation is confirmed working.
+            try {
+              window.localStorage.setItem(
+                'sv_last_push_action_debug',
+                JSON.stringify({ at: new Date().toISOString(), data: action.notification?.data ?? null, url }),
+              );
+            } catch { /* ignore */ }
             if (!url) return;
             try {
               // Normalise to a same-origin path so we stay inside the webview.
