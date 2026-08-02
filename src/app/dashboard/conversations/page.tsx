@@ -398,11 +398,14 @@ export default function ConversationsPage() {
   useEffect(() => {
     if (deepLinkConsumed.current || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
+    // Push notifications (e.g. "new message") deep-link straight to a known
+    // thread id — no lookup needed, just open it directly.
+    const threadIdParam = params.get('thread')?.trim();
     const customerId = params.get('customer')?.trim();
     const customerFromEmail = params.get('customerFromEmail')?.trim();
     const uuidOk =
       !!customerId && /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(customerId);
-    if (!uuidOk && !customerFromEmail) return;
+    if (!threadIdParam && !uuidOk && !customerFromEmail) return;
 
     deepLinkConsumed.current = true;
 
@@ -412,9 +415,9 @@ export default function ConversationsPage() {
 
     void (async () => {
       try {
-        let threadId: string | undefined;
+        let threadId: string | undefined = threadIdParam || undefined;
 
-        if (uuidOk && customerId) {
+        if (!threadId && uuidOk && customerId) {
           const res = await fetch('/api/conversations/threads');
           if (!res.ok) return;
           const list = (await res.json()) as ThreadRow[];
@@ -432,7 +435,7 @@ export default function ConversationsPage() {
             const data = (await cre.json()) as { id?: string };
             threadId = data.id;
           }
-        } else if (customerFromEmail) {
+        } else if (!threadId && customerFromEmail) {
           const r = await fetch(
             `/api/conversations/open-or-create?email=${encodeURIComponent(customerFromEmail)}`,
           );

@@ -161,9 +161,15 @@ export async function sendNativePush(
             token: row.token,
             notification: { title, body },
             data: data_,
-            // iOS-specific: badge/sound so the alert presents on the lock screen.
+            // iOS-specific: sound so the alert presents on the lock screen.
+            // Custom keys (e.g. `url`) must ALSO be spread as siblings of
+            // `aps` here — explicitly setting `apns.payload` means FCM does
+            // NOT reliably auto-merge the top-level `data` object into what
+            // actually reaches the device on iOS, so without this the tap
+            // handler in NativePushRegistrar.tsx never sees `data.url` and
+            // falls back to opening the app with no deep link.
             apns: {
-              payload: { aps: { sound: 'default' } },
+              payload: { aps: { sound: 'default' }, ...data_ },
             },
             android: {
               priority: 'high',
