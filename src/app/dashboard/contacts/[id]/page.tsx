@@ -17,6 +17,7 @@ import VenueDirectPanel from '@/components/dashboard/VenueDirectPanel';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 import { isNativeApp } from '@/lib/platform';
+import { getClientCache, setClientCache } from '@/lib/client-cache';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Customer {
@@ -94,6 +95,16 @@ interface FileRow {
   id: string; filename: string; file_type: string; file_status: string;
   file_size: number | null; uploaded_by: string | null; created_at: string; url: string | null;
 }
+interface ContactProfileCache {
+  customer: Customer | null;
+  venueCustomer: VenueCustomer | null;
+  proposals: Proposal[];
+  notes: Note[];
+  tasks: Task[];
+  files: FileRow[];
+  activity: ActivityEntry[];
+}
+
 interface ActivityEntry {
   id: string; activity_type: string; title: string; description: string | null; created_at: string;
 }
@@ -166,18 +177,23 @@ export default function CustomerDetailPage() {
     return 'overview';
   })();
 
-  // Core data
-  const [customer,      setCustomer]      = useState<Customer | null>(null);
-  const [venueCustomer, setVenueCustomer] = useState<VenueCustomer | null>(null);
-  const [proposals,     setProposals]     = useState<Proposal[]>([]);
-  const [notes,         setNotes]         = useState<Note[]>([]);
-  const [tasks,         setTasks]         = useState<Task[]>([]);
-  const [files,         setFiles]         = useState<FileRow[]>([]);
-  const [activity,      setActivity]      = useState<ActivityEntry[]>([]);
+  const cacheKey = `contact:profile:${customerId}`;
+  const cached = getClientCache<ContactProfileCache>(cacheKey);
+
+  // Core data — seeded from the session cache so re-opening a profile you've
+  // already visited paints instantly instead of showing a blank spinner
+  // while the (still-triggered) background refresh catches up.
+  const [customer,      setCustomer]      = useState<Customer | null>(cached?.customer ?? null);
+  const [venueCustomer, setVenueCustomer] = useState<VenueCustomer | null>(cached?.venueCustomer ?? null);
+  const [proposals,     setProposals]     = useState<Proposal[]>(cached?.proposals ?? []);
+  const [notes,         setNotes]         = useState<Note[]>(cached?.notes ?? []);
+  const [tasks,         setTasks]         = useState<Task[]>(cached?.tasks ?? []);
+  const [files,         setFiles]         = useState<FileRow[]>(cached?.files ?? []);
+  const [activity,      setActivity]      = useState<ActivityEntry[]>(cached?.activity ?? []);
   const [spaces,        setSpaces]        = useState<{ id: string; name: string; color: string; capacity?: number | null }[]>([]);
   const [pipelines,     setPipelines]     = useState<VenuePipeline[]>([]);
 
-  const [loading,   setLoading]   = useState(true);
+  const [loading,   setLoading]   = useState(!cached);
   const [error,     setError]     = useState('');
   const [activeTab, setActiveTab] = useState<Tab>(initialTabFromUrl);
   const [pipelineActionError, setPipelineActionError] = useState('');
@@ -272,11 +288,16 @@ export default function CustomerDetailPage() {
   // ── Fetch all data ─────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     try {
-      const [cRes, pipeRes, venueRes] = await Promise.all([
+      // Everything independent of the resolved venue_customer fires together
+      // up front — spaces used to wait behind the whole lookup/create chain
+      // below for no reason, adding a full extra round trip to every open.
+      const [cRes, pipeRes, venueRes, spRes] = await Promise.all([
         fetch(`/api/customers/${customerId}`),
         fetch('/api/pipelines', { cache: 'no-store' }),
         fetch('/api/venues/me?fields=ghl_connected', { cache: 'no-store' }),
+        fetch('/api/spaces'),
       ]);
+      if (spRes.ok) setSpaces(await spRes.json());
       if (venueRes.ok) {
         const vd = await venueRes.json() as { ghl_connected?: boolean };
         setVenueGhlConnected(vd.ghl_connected === true);
@@ -340,47 +361,51 @@ export default function CustomerDetailPage() {
         }
       }
 
-      if (vc?.id) {
-        const detailRes = await fetch(`/api/venue-customers/${vc.id}`, { cache: 'no-store' });
-        if (detailRes.ok) {
-          vc = await detailRes.json();
-        }
-      }
-
+      // Note: `vc` already came from lookup/create above with a `select('*')`
+      // — it's the full row, so re-fetching `/api/venue-customers/${vc.id}`
+      // here was a guaranteed-redundant extra round trip on every open.
       setVenueCustomer(vc);
       // Seed local DND state from the fetched venue customer row
       if (vc?.ghl_dnd_settings !== undefined) setDndSettings(vc.ghl_dnd_settings ?? null);
       if (vc?.ghl_inbound_dnd_settings !== undefined) setInboundDndSettings(vc.ghl_inbound_dnd_settings ?? null);
 
-      // Pre-load inquiry fields from the linked lead
+      // Linked-lead inquiry fields + all the venue_customer sub-resources are
+      // mutually independent — fire everything together instead of the lead
+      // fetch blocking the notes/tasks/files/activity batch behind it.
       const linkedLeadId = vc?.pipeline_context?.linkedLeadId;
-      if (linkedLeadId) {
-        const leadRes = await fetch(`/api/leads/${linkedLeadId}`, { cache: 'no-store' });
-        if (leadRes.ok) {
-          const ld = await leadRes.json() as { lead?: { booking_timeline?: string | null; venue_matters?: string | null; opportunity_value?: number | null } };
-          setInquiryForm({
-            booking_timeline: ld.lead?.booking_timeline ?? '',
-            venue_matters:    ld.lead?.venue_matters    ?? '',
-            opportunity_value: ld.lead?.opportunity_value != null ? ld.lead.opportunity_value.toLocaleString('en-US') : '',
-          });
-        }
+      const [leadRes, notesRes, tasksRes, filesRes, actRes] = await Promise.all([
+        linkedLeadId ? fetch(`/api/leads/${linkedLeadId}`, { cache: 'no-store' }) : Promise.resolve(null),
+        vc?.id ? fetch(`/api/venue-customers/${vc.id}/notes`) : Promise.resolve(null),
+        vc?.id ? fetch(`/api/venue-customers/${vc.id}/tasks`) : Promise.resolve(null),
+        vc?.id ? fetch(`/api/venue-customers/${vc.id}/files`) : Promise.resolve(null),
+        vc?.id ? fetch(`/api/venue-customers/${vc.id}/activity`) : Promise.resolve(null),
+      ]);
+      if (leadRes?.ok) {
+        const ld = await leadRes.json() as { lead?: { booking_timeline?: string | null; venue_matters?: string | null; opportunity_value?: number | null } };
+        setInquiryForm({
+          booking_timeline: ld.lead?.booking_timeline ?? '',
+          venue_matters:    ld.lead?.venue_matters    ?? '',
+          opportunity_value: ld.lead?.opportunity_value != null ? ld.lead.opportunity_value.toLocaleString('en-US') : '',
+        });
       }
+      const notesData    = notesRes?.ok ? await notesRes.json() : [];
+      const tasksData    = tasksRes?.ok ? await tasksRes.json() : [];
+      const filesData    = filesRes?.ok ? await filesRes.json() : [];
+      const activityData = actRes?.ok  ? await actRes.json()   : [];
+      setNotes(notesData);
+      setTasks(tasksData);
+      setFiles(filesData);
+      setActivity(activityData);
 
-      const spRes = await fetch('/api/spaces');
-      if (spRes.ok) setSpaces(await spRes.json());
-
-      if (vc?.id) {
-        const [notesRes, tasksRes, filesRes, actRes] = await Promise.all([
-          fetch(`/api/venue-customers/${vc.id}/notes`),
-          fetch(`/api/venue-customers/${vc.id}/tasks`),
-          fetch(`/api/venue-customers/${vc.id}/files`),
-          fetch(`/api/venue-customers/${vc.id}/activity`),
-        ]);
-        if (notesRes.ok) setNotes(await notesRes.json());
-        if (tasksRes.ok) setTasks(await tasksRes.json());
-        if (filesRes.ok) setFiles(await filesRes.json());
-        if (actRes.ok)   setActivity(await actRes.json());
-      }
+      setClientCache<ContactProfileCache>(`contact:profile:${customerId}`, {
+        customer: cData.customer ?? null,
+        venueCustomer: vc,
+        proposals: cData.proposals || [],
+        notes: notesData,
+        tasks: tasksData,
+        files: filesData,
+        activity: activityData,
+      });
     } catch {
       setError('Failed to load customer');
     } finally {

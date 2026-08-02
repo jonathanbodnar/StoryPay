@@ -27,21 +27,6 @@ export async function GET(
 
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
-  // Auto-refresh GHL token
-  let ghlToken = venue.ghl_access_token;
-  if (venue.ghl_connected && venue.ghl_refresh_token) {
-    try {
-      const refreshed = await refreshAccessToken(venue.ghl_refresh_token);
-      if (refreshed.access_token) {
-        ghlToken = refreshed.access_token;
-        await supabaseAdmin.from('venues').update({
-          ghl_access_token: refreshed.access_token,
-          ghl_refresh_token: refreshed.refresh_token || venue.ghl_refresh_token,
-        }).eq('id', venueId);
-      }
-    } catch { /* use existing token */ }
-  }
-
   // Source detection: UUID → venue_customers (StoryVenue-native);
   // numeric → LunarPay; anything else alphanumeric → GHL.
   const isStoryVenueId = UUID_RE.test(id);
@@ -102,7 +87,23 @@ export async function GET(
     }
   }
 
-  // Try GHL if not found via LunarPay or if it's a GHL ID
+  // Try GHL if not found via LunarPay or if it's a GHL ID. Only refresh the
+  // GHL token lazily, right here — most opens are StoryVenue-native
+  // contacts that never reach this branch, so this avoids an unconditional
+  // third-party network round trip on every profile load.
+  let ghlToken = venue.ghl_access_token;
+  if (!customer && venue.ghl_connected && venue.ghl_refresh_token) {
+    try {
+      const refreshed = await refreshAccessToken(venue.ghl_refresh_token);
+      if (refreshed.access_token) {
+        ghlToken = refreshed.access_token;
+        await supabaseAdmin.from('venues').update({
+          ghl_access_token: refreshed.access_token,
+          ghl_refresh_token: refreshed.refresh_token || venue.ghl_refresh_token,
+        }).eq('id', venueId);
+      }
+    } catch { /* use existing token */ }
+  }
   if (!customer && ghlToken && venue.ghl_location_id) {
     try {
       const result = await ghlRequest(`/contacts/${id}`, ghlToken, { locationId: venue.ghl_location_id });
@@ -174,9 +175,14 @@ export async function PATCH(
 
   if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
-  // Refresh GHL token
+  const errors: string[] = [];
+  const isStoryVenueId = UUID_RE.test(id);
+  const isLunarPayId = /^\d+$/.test(id);
+
+  // Refresh GHL token only when we'll actually use it below (skips a wasted
+  // third-party round trip for StoryVenue-native / LunarPay-only updates).
   let ghlToken = venue.ghl_access_token;
-  if (venue.ghl_connected && venue.ghl_refresh_token) {
+  if (!isStoryVenueId && !isLunarPayId && venue.ghl_connected && venue.ghl_refresh_token) {
     try {
       const refreshed = await refreshAccessToken(venue.ghl_refresh_token);
       if (refreshed.access_token) {
@@ -185,10 +191,6 @@ export async function PATCH(
       }
     } catch { /* continue */ }
   }
-
-  const errors: string[] = [];
-  const isStoryVenueId = UUID_RE.test(id);
-  const isLunarPayId = /^\d+$/.test(id);
 
   // Update in our own venue_customers when the id is a UUID
   if (isStoryVenueId) {
