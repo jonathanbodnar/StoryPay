@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Eye, EyeOff, Building2, Heart } from 'lucide-react';
 import { getCoupleSupabase } from '@/lib/couple-browser';
-import { isNativeApp, openExternalBrowser } from '@/lib/platform';
+import { isNativeApp, openExternalBrowser, postAuthNavigate } from '@/lib/platform';
 
 /**
  * Unified login page.
@@ -137,6 +137,7 @@ export function ModeToggle({
 // ───────── Venue login ────────────────────────────────────────────────────
 
 function VenueLoginForm() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -168,9 +169,6 @@ function VenueLoginForm() {
         body: JSON.stringify({ email: email.trim(), password, rememberMe }),
       });
       const data = await res.json();
-      // TEMP DEBUG — remove once the native-app "opens Chrome on login" issue
-      // is diagnosed. Shows up in Xcode's console (JS console.log is forwarded).
-      console.log('[sign-in DEBUG] native=', isNativeApp(), 'ok=', res.ok, 'data=', JSON.stringify(data));
       if (!res.ok) {
         setError(data.error || 'Invalid email or password.');
         return;
@@ -179,11 +177,8 @@ function VenueLoginForm() {
         setTwoFA(true);
         return;
       }
-      const target = data.redirect || '/dashboard';
-      console.log('[sign-in DEBUG] navigating to', target, 'location.origin=', window.location.origin);
-      window.location.href = target;
-    } catch (err) {
-      console.log('[sign-in DEBUG] caught error', err);
+      postAuthNavigate(router, data.redirect || '/dashboard');
+    } catch {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
@@ -205,7 +200,7 @@ function VenueLoginForm() {
         setTwoFAError(data.error || 'Code is incorrect.');
         return;
       }
-      window.location.href = data.redirect || '/dashboard';
+      postAuthNavigate(router, data.redirect || '/dashboard');
     } catch {
       setTwoFAError('Network error. Please try again.');
     } finally {

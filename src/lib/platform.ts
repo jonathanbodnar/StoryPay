@@ -53,6 +53,26 @@ export function toAbsoluteAppUrl(pathOrUrl: string): string {
 }
 
 /**
+ * Navigate to a same-origin path after an action like sign-in. On the web this
+ * is a plain `window.location.href` full reload (needed so server components
+ * re-run with the fresh session cookie). On native, a full top-level reload
+ * can get intercepted by the WKWebView navigation delegate and handed off to
+ * the SYSTEM browser instead of staying in the app's webview — so instead we
+ * do a client-side route change via the Next.js router, which never triggers
+ * that top-level-navigation path. The freshly-set cookie is already in the
+ * webview's cookie jar (set by the preceding fetch response), so the RSC
+ * request the router makes still authenticates correctly.
+ */
+export function postAuthNavigate(router: { push: (href: string) => void }, target: string): void {
+  const isAbsolute = /^https?:\/\//i.test(target);
+  if (isNativeApp() && !isAbsolute) {
+    router.push(target);
+    return;
+  }
+  if (typeof window !== 'undefined') window.location.href = target;
+}
+
+/**
  * Open a URL in the EXTERNAL system browser when running natively (so Apple /
  * Google never see an in-app purchase flow), or fall back to normal in-webview
  * navigation on the web. Callers should only reach the native branch behind an
