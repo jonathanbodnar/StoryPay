@@ -1135,14 +1135,6 @@ export default function CustomerDetailPage() {
               <div className="flex flex-col gap-1 mt-1">
                 {customer.phone && <a href={`tel:${customer.phone.replace(/[^\d+]/g, '')}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"><Phone size={13} />{customer.phone}</a>}
                 {customer.email && <a href={`mailto:${customer.email}`} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"><Mail size={13} />{customer.email}</a>}
-                {venueCustomer?.attributed_source && SOURCE_LABELS[venueCustomer.attributed_source] && (
-                  <span
-                    title="Traffic source, detected automatically from how this lead first arrived. Read-only."
-                    className={`text-xs border rounded-full px-2 py-0.5 font-medium ${SOURCE_BADGE_STYLES[venueCustomer.attributed_source] ?? SOURCE_BADGE_STYLES.other}`}
-                  >
-                    {SOURCE_LABELS[venueCustomer.attributed_source]}
-                  </span>
-                )}
               </div>
               {conversationsOutreach && (
                 <div className="flex flex-wrap items-center gap-2 mt-3">

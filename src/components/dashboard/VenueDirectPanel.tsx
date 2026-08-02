@@ -130,24 +130,22 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="font-heading text-lg text-gray-900 inline-flex items-center gap-2">
-            <Building2 size={16} className="text-violet-700" />
-            Venue Concierge Support
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Private thread between Venue Concierge Support and your venue team about{' '}
-            <span className="font-semibold text-gray-700">{contactName}</span>. The contact never sees these messages.
-          </p>
-        </div>
+      <div className="mb-4">
+        <h2 className="font-heading text-lg text-gray-900 inline-flex items-center gap-2">
+          <Building2 size={16} className="text-violet-700" />
+          Venue Concierge Support
+        </h2>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Private thread between Venue Concierge Support and your venue team about{' '}
+          <span className="font-semibold text-gray-700">{contactName}</span>. The contact never sees these messages.
+        </p>
         <button
           type="button"
           onClick={load}
           disabled={loading}
-          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
         >
-          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} /> Refresh
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>
 
