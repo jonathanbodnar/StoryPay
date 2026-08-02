@@ -27,6 +27,21 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Native app shell only (class set by NativeViewportLock). iOS auto-zooms
+   the whole WKWebView in when a focused input's font-size is under 16px,
+   and — since Next.js client-side navigation never reloads the page — that
+   zoom then persists across every later tab/screen until manually pinched
+   back out. Flooring input font-size at 16px stops the zoom from ever
+   triggering in the first place. touch-action also blocks double-tap zoom. */
+.native-app-shell input,
+.native-app-shell select,
+.native-app-shell textarea {
+  font-size: max(16px, 1em) !important;
+}
+.native-app-shell {
+  touch-action: manipulation;
+}
+
 /* Open Sans is the canonical sitewide font. The next/font CSS variable
    --font-open-sans is set on the <html> element so it's available everywhere.
    We avoid !important so inline `font-family` styles can still override

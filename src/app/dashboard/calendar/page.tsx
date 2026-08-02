@@ -201,9 +201,13 @@ export default function CalendarPage() {
   // For week/day views: the anchor date
   const [anchorDate, setAnchorDate] = useState(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
 
-  const [events,  setEvents]  = useState<CalEvent[]>([]);
+  const [events,  setEvents]  = useState<CalEvent[]>(() =>
+    getClientCache<CalEvent[]>(`cal:events:${today.getFullYear()}-${today.getMonth()}`) ?? [],
+  );
   const [spaces,  setSpaces]  = useState<VenueSpace[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() =>
+    getClientCache<CalEvent[]>(`cal:events:${today.getFullYear()}-${today.getMonth()}`) === undefined,
+  );
 
   const [activeSpaceFilter, setActiveSpaceFilter] = useState<string>('all');
   const [view, setView] = useState<CalView>('month');
@@ -290,7 +294,11 @@ export default function CalendarPage() {
     const monthCacheKey = `cal:events:${year}-${month}`;
     const cachedMonth = view === 'month' ? getClientCache<CalEvent[]>(monthCacheKey) : undefined;
     if (cachedMonth) {
+      // Cache hit: paint immediately and stop "loading" right away — the
+      // fetch below still runs, but only to refresh silently in the
+      // background, so switching back to Calendar never shows a spinner.
       setEvents(cachedMonth);
+      setLoading(false);
     } else {
       setLoading(true);
     }

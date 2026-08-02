@@ -173,6 +173,7 @@ export default function DashboardShell({
 
   // Pages that need full-width content (no max-w constraint)
   const fullWidthPaths = [
+    '/dashboard/home',
     '/dashboard/contacts',
     '/dashboard/conversations',
     '/dashboard/calendar',
@@ -214,7 +215,11 @@ export default function DashboardShell({
         {/* Spacer matching the fixed mobile top bar (3.5rem + status-bar inset). */}
         <div
           className="shrink-0 lg:hidden"
-          style={{ height: 'calc(3.5rem + env(safe-area-inset-top, 0px))' }}
+          style={{
+            height: isNativeApp()
+              ? 'calc(3.5rem + max(env(safe-area-inset-top, 0px), 44px))'
+              : 'calc(3.5rem + env(safe-area-inset-top, 0px))',
+          }}
         />
         <AnnouncementTicker />
         <MobileDashboardRedirect />

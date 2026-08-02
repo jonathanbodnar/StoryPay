@@ -62,6 +62,14 @@ interface SidebarProps {
   isFreePlan?: boolean;
 }
 
+// Floors the top-bar's safe-area padding at a sane status-bar height on
+// native so an app binary that hasn't picked up the latest contentInset
+// config change (env() reporting 0) still renders the header below the
+// status bar, instead of flush against it.
+const TOPBAR_SAFE_AREA_PADDING = isNativeApp()
+  ? 'max(env(safe-area-inset-top, 0px), 44px)'
+  : 'env(safe-area-inset-top, 0px)';
+
 const topMenuItems: NavItem[] = [
   { label: 'Lead Inbox', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
@@ -1076,10 +1084,14 @@ export default function Sidebar({
       {/* Mobile top bar. padding-top absorbs the iOS status-bar safe area
           (contentInset "never" in the native shell), so scrolled content
           always disappears behind this bar — nothing can bleed above it.
-          env() is 0 in regular mobile browsers, so the web is unchanged. */}
+          On native we also floor it at 44px: a not-yet-rebuilt app binary
+          (still on the older contentInset "always") reports env()=0 here,
+          which would otherwise render the header flush against the status
+          bar with no offset at all. env() is 0 in regular mobile browsers,
+          so the web is unchanged. */}
       <div
         className="lg:hidden fixed top-0 left-0 right-0 z-40 border-b border-gray-200"
-        style={{ backgroundColor: '#ffffff', paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        style={{ backgroundColor: '#ffffff', paddingTop: TOPBAR_SAFE_AREA_PADDING }}
       >
         <div className="flex items-center justify-between px-4 h-14">
           <Link href="/dashboard">
@@ -1118,7 +1130,7 @@ export default function Sidebar({
         className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[280px] transition-transform duration-300 border-r border-gray-200 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ backgroundColor: '#ffffff', paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        style={{ backgroundColor: '#ffffff', paddingTop: TOPBAR_SAFE_AREA_PADDING }}
       >
         <NavContent rail={false} onCloseMobile={() => setMobileOpen(false)} isMobile />
       </aside>

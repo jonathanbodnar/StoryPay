@@ -545,7 +545,11 @@ export default function ContactsPage() {
                     // Offset for the fixed app header + the iOS status-bar
                     // safe area (native shell) so jumped-to letters land
                     // below the header, not under it.
-                    style={{ scrollMarginTop: 'calc(4rem + env(safe-area-inset-top, 0px))' }}
+                    style={{
+                      scrollMarginTop: native
+                        ? 'calc(4rem + max(env(safe-area-inset-top, 0px), 44px))'
+                        : 'calc(4rem + env(safe-area-inset-top, 0px))',
+                    }}
                   >
                     <div className="sticky top-0 z-10 bg-gray-50/95 px-4 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500 backdrop-blur">
                       {group.letter}
