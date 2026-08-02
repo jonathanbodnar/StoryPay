@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   MessageCircle, Inbox, Calendar, Phone, ChevronRight, Clock, MapPin, CheckCircle2,
 } from 'lucide-react';
+import { getClientCache, setClientCache } from '@/lib/client-cache';
 
 /**
  * "Today" home screen — the default landing screen on mobile / the native app.
@@ -87,11 +88,14 @@ function eventTime(ev: CalEvent): string {
 }
 
 export default function MobileHomePage() {
-  const [unread, setUnread] = useState(0);
-  const [newLeads, setNewLeads] = useState(0);
-  const [threads, setThreads] = useState<Thread[]>([]);
-  const [events, setEvents] = useState<CalEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Seed everything from the session cache so returning to Home paints the
+  // previous data instantly (no skeleton flash / card resize) while the
+  // fetches below refresh quietly in the background.
+  const [unread, setUnread] = useState(() => getClientCache<number>('home:unread') ?? 0);
+  const [newLeads, setNewLeads] = useState(() => getClientCache<number>('home:newLeads') ?? 0);
+  const [threads, setThreads] = useState<Thread[]>(() => getClientCache<Thread[]>('home:threads') ?? []);
+  const [events, setEvents] = useState<CalEvent[]>(() => getClientCache<CalEvent[]>('home:events') ?? []);
+  const [loading, setLoading] = useState(() => getClientCache<Thread[]>('home:threads') === undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,7 +104,10 @@ export default function MobileHomePage() {
     fetch('/api/conversations/unread-count')
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { count?: number } | null) => {
-        if (!cancelled && d && typeof d.count === 'number') setUnread(d.count);
+        if (!cancelled && d && typeof d.count === 'number') {
+          setUnread(d.count);
+          setClientCache('home:unread', d.count);
+        }
       })
       .catch(() => {});
 
@@ -109,7 +116,10 @@ export default function MobileHomePage() {
     fetch(`/api/leads/unread-count?since=${encodeURIComponent(weekAgo)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { count?: number } | null) => {
-        if (!cancelled && d && typeof d.count === 'number') setNewLeads(d.count);
+        if (!cancelled && d && typeof d.count === 'number') {
+          setNewLeads(d.count);
+          setClientCache('home:newLeads', d.count);
+        }
       })
       .catch(() => {});
 
@@ -117,7 +127,11 @@ export default function MobileHomePage() {
     fetch('/api/conversations/threads?unread=1')
       .then((r) => (r.ok ? r.json() : null))
       .then((rows: Thread[] | null) => {
-        if (!cancelled && Array.isArray(rows)) setThreads(rows.slice(0, 8));
+        if (!cancelled && Array.isArray(rows)) {
+          const top = rows.slice(0, 8);
+          setThreads(top);
+          setClientCache('home:threads', top);
+        }
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -138,6 +152,7 @@ export default function MobileHomePage() {
           })
           .sort((a, b) => a.start_at.localeCompare(b.start_at));
         setEvents(todays);
+        setClientCache('home:events', todays);
       })
       .catch(() => {});
 
@@ -191,8 +206,10 @@ export default function MobileHomePage() {
 
         {loading ? (
           <div className="space-y-2">
+            {/* Skeleton heights match the real card height so nothing visibly
+                grows/resizes when data arrives. */}
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-[68px] animate-pulse rounded-2xl border border-gray-200 bg-gray-50" />
+              <div key={i} className="h-[106px] animate-pulse rounded-2xl border border-gray-200 bg-gray-50" />
             ))}
           </div>
         ) : threads.length === 0 ? (
@@ -264,7 +281,7 @@ export default function MobileHomePage() {
         </div>
 
         {loading ? (
-          <div className="h-[60px] animate-pulse rounded-2xl border border-gray-200 bg-gray-50" />
+          <div className="h-[140px] animate-pulse rounded-2xl border border-gray-200 bg-gray-50" />
         ) : events.length === 0 ? (
           <div className="flex flex-col items-center rounded-2xl border border-gray-200 bg-white px-6 py-8 text-center">
             <Calendar size={26} className="mb-2 text-gray-300" />

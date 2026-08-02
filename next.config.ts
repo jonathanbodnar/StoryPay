@@ -25,6 +25,19 @@ const nextConfig: NextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
   },
 
+  // ── Client router cache ────────────────────────────────────────────────
+  // Keep visited page segments in the client cache for 2 minutes so
+  // back-and-forth navigation between dashboard tabs (especially in the
+  // native app) re-renders instantly instead of refetching the RSC payload
+  // on every switch. Page data is fetched client-side by each page anyway,
+  // so freshness is unaffected.
+  experimental: {
+    staleTimes: {
+      dynamic: 120,
+      static: 300,
+    },
+  },
+
   async headers() {
     return [
       // ── Global security headers (apply to every response) ─────────────────

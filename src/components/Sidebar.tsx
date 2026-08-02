@@ -1073,6 +1073,16 @@ export default function Sidebar({
 
   return (
     <>
+      {/* Status-bar shield — in the native shell (Capacitor contentInset
+          "always") the layout viewport sits below the iOS status bar, so
+          scrolled page content is visible in the strip ABOVE the fixed
+          header. Paint that strip white so content disappears behind the
+          header like a normal iOS app. Offscreen/no-op on mobile web. */}
+      <div
+        aria-hidden
+        className="lg:hidden fixed left-0 right-0 z-40"
+        style={{ top: '-120px', height: '120px', backgroundColor: '#ffffff' }}
+      />
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 border-b border-gray-200" style={{ backgroundColor: '#ffffff' }}>
         <Link href="/dashboard">
           <Image src="/storyvenue-dark-logo.png" alt="StoryVenue" width={120} height={29} />

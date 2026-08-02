@@ -137,6 +137,10 @@ export default function MobileTabBar({ venueId }: { venueId?: string | null }) {
             <li key={label}>
               <Link
                 href={href}
+                // Full prefetch: warms every tab's RSC payload up front so the
+                // first tap on each tab renders from the client cache instead
+                // of waiting on a network round-trip.
+                prefetch={true}
                 className={`flex flex-col items-center justify-center gap-1.5 py-3.5 text-[11px] font-medium transition-colors ${
                   active ? 'text-gray-900' : 'text-gray-400'
                 }`}

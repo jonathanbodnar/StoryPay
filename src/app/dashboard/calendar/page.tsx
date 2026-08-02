@@ -207,6 +207,13 @@ export default function CalendarPage() {
   const [activeSpaceFilter, setActiveSpaceFilter] = useState<string>('all');
   const [view, setView] = useState<CalView>('month');
 
+  // Native month view (iPhone Calendar style): tapping a day selects it and
+  // shows that day's agenda below the compact grid, instead of opening the
+  // event editor directly like the desktop grid does.
+  const [selectedYmd, setSelectedYmd] = useState(() =>
+    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
+  );
+
   const [venueTz, setVenueTz] = useState(DEFAULT_VENUE_TIMEZONE);
   const [venueLoaded, setVenueLoaded] = useState(false);
 
@@ -796,8 +803,111 @@ export default function CalendarPage() {
           </div>
         )}
 
-        {/* ── MONTH VIEW ── */}
-        {view === 'month' && (
+        {/* ── MONTH VIEW (native) — compact iPhone-style grid.
+             The whole month fits on screen without scrolling: small day cells
+             with event dots, and the selected day's agenda listed below. ── */}
+        {view === 'month' && isNativeApp() && (
+          <>
+            <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+              <div className="grid grid-cols-7 border-b border-gray-200">
+                {DAYS_SHORT.map(d => (
+                  <div key={d} className="py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400">{d[0]}</div>
+                ))}
+              </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-gray-300" size={24} /></div>
+              ) : (
+                <div className="grid grid-cols-7 py-1">
+                  {cells.map((day, idx) => {
+                    if (!day) return <div key={idx} className="h-12" />;
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const dayEvts = eventsForDay(year, month, day);
+                    const isToday = dateStr === formatInTimeZone(new Date(), tzResolved, 'yyyy-MM-dd');
+                    const isSelected = dateStr === selectedYmd;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSelectedYmd(dateStr)}
+                        className="flex h-12 flex-col items-center justify-center"
+                      >
+                        <span
+                          className={`flex h-8 w-8 items-center justify-center rounded-full text-[14px] ${
+                            isSelected
+                              ? 'bg-[#1b1b1b] font-semibold text-white'
+                              : isToday
+                                ? 'font-bold text-gray-900'
+                                : 'text-gray-700'
+                          }`}
+                        >
+                          {day}
+                        </span>
+                        <span className="mt-0.5 flex h-1.5 items-center gap-0.5">
+                          {dayEvts.slice(0, 3).map((evt) => (
+                            <span key={evt.id} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: evtColor(evt) }} />
+                          ))}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Selected-day agenda */}
+            <div className="mt-4 pb-8">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-700">
+                  {formatInTimeZone(toDate(`${selectedYmd}T12:00:00`, { timeZone: tzResolved }), tzResolved, 'EEEE, MMMM d')}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => openNewEvent(selectedYmd)}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-700 active:bg-gray-100"
+                >
+                  <Plus size={13} /> Add event
+                </button>
+              </div>
+              {(() => {
+                const dayEvts = eventsForDayYmd(selectedYmd);
+                if (dayEvts.length === 0) {
+                  return (
+                    <div className="rounded-2xl border border-gray-200 bg-white px-6 py-6 text-center text-sm text-gray-400">
+                      No events this day
+                    </div>
+                  );
+                }
+                return (
+                  <ul className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                    {dayEvts.map((evt) => (
+                      <li key={evt.id} className="border-b border-gray-100 last:border-b-0">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEvent(evt)}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-gray-50"
+                        >
+                          <span className="h-9 w-1 shrink-0 rounded-full" style={{ backgroundColor: evtColor(evt) }} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-gray-900">{evt.title || 'Event'}</span>
+                            <span className="mt-0.5 block text-xs text-gray-500">
+                              {evt.all_day
+                                ? 'All day'
+                                : `${formatInTimeZone(new Date(evt.start_at), tzResolved, 'h:mm a')} – ${formatInTimeZone(new Date(evt.end_at), tzResolved, 'h:mm a')}`}
+                            </span>
+                          </span>
+                          <ChevronRight size={16} className="shrink-0 text-gray-300" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
+            </div>
+          </>
+        )}
+
+        {/* ── MONTH VIEW (desktop / web) ── */}
+        {view === 'month' && !isNativeApp() && (
           <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
             <div className="grid grid-cols-7 border-b border-gray-200">
               {DAYS_SHORT.map(d => (
