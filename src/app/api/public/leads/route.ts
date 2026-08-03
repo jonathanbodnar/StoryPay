@@ -10,7 +10,6 @@ import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
-import { sendMetaLeadEvent } from '@/lib/meta-conversions-api';
 import { maybePushLeadToTripleseat } from '@/lib/tripleseat';
 
 export const dynamic = 'force-dynamic';
@@ -466,20 +465,9 @@ export async function POST(request: NextRequest) {
     utm_content:      payload.utm_content ?? null,
   }).catch(() => {});
 
-  // Meta (Facebook) Conversions API — server-side `Lead` event, fire-and-forget.
-  // No-ops if the venue hasn't configured meta_pixel_id + meta_capi_access_token.
-  // event_source_url points at the thank-you page (not the listing page) so a
-  // venue can set up a URL-based Custom Conversion in Meta Events Manager
-  // (rule: URL contains "/thankyou") that matches this server-side event —
-  // no client-side pixel/script required.
-  void sendMetaLeadEvent({
-    venueId:        venue.id,
-    email:          lr.email,
-    phone:          phone || null,
-    firstName:      firstName || null,
-    lastName:       lastName || null,
-    eventSourceUrl: venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}/thankyou` : DIRECTORY_URL,
-  }).catch(() => {});
+  // Meta (Facebook) ad tracking is handled entirely client-side by the Meta
+  // Pixel snippet rendered on the thank-you page (see MetaPixelScript), using
+  // the venue's meta_pixel_id — no server-side Conversions API call needed.
 
   // Fire form-submitted workflow trigger then kick the cron so any delay steps
   // that were just scheduled get picked up automatically.

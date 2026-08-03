@@ -83,6 +83,8 @@ export type PublicVenuePayload = {
     faq: PublicVenueFaqItem[];
     /** GA4 web Measurement ID; loaded on public pages when valid. */
     ga4_measurement_id: string | null;
+    /** Meta (Facebook) Pixel ID; loaded only on the thank-you page when valid. */
+    meta_pixel_id: string | null;
     /** Blue verified badge (admin-approved). */
     listing_verified: boolean;
     /** "Sponsored" label (admin-approved). */
@@ -178,6 +180,7 @@ export async function getPublicVenueBySlug(
         'social_links',
         'faq',
         'ga4_measurement_id',
+        'meta_pixel_id',
         'google_place_id',
         'google_reviews_cache',
         'google_reviews_fetched_at',
@@ -267,6 +270,9 @@ export async function getPublicVenueBySlug(
 
   const gaRaw = v.ga4_measurement_id != null ? String(v.ga4_measurement_id).trim() : '';
   const ga4_measurement_id = isValidGa4MeasurementId(gaRaw) ? gaRaw : null;
+
+  const pixelRaw = v.meta_pixel_id != null ? String(v.meta_pixel_id).trim() : '';
+  const meta_pixel_id = /^\d{5,20}$/.test(pixelRaw) ? pixelRaw : null;
 
   const verifiedRaw = v.directory_verified_status != null ? String(v.directory_verified_status) : 'none';
   const sponsoredRaw = v.directory_sponsored_status != null ? String(v.directory_sponsored_status) : 'none';
@@ -403,6 +409,7 @@ export async function getPublicVenueBySlug(
       social_links,
       faq,
       ga4_measurement_id,
+      meta_pixel_id,
       listing_verified,
       listing_sponsored,
       brand_website: v.brand_website != null ? String(v.brand_website) : null,

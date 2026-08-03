@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { MetaPixelScript } from '@/components/MetaPixelScript';
 
 export const metadata: Metadata = {
   title: 'Thank You — StoryVenue',
@@ -8,17 +9,22 @@ export const metadata: Metadata = {
 
 const API_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenue.com';
 
-async function fetchVenueBasics(slug: string): Promise<{ name: string; brand_website: string | null } | null> {
+async function fetchVenueBasics(
+  slug: string,
+): Promise<{ name: string; brand_website: string | null; meta_pixel_id: string | null } | null> {
   try {
     const res = await fetch(`${API_BASE}/api/public/venues/${encodeURIComponent(slug)}`, {
       next: { revalidate: 300 },
       headers: { Accept: 'application/json' },
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { venue?: { name?: string; brand_website?: string | null } };
+    const data = (await res.json()) as {
+      venue?: { name?: string; brand_website?: string | null; meta_pixel_id?: string | null };
+    };
     return {
       name: data.venue?.name ?? '',
       brand_website: data.venue?.brand_website ?? null,
+      meta_pixel_id: data.venue?.meta_pixel_id ?? null,
     };
   } catch {
     return null;
@@ -36,6 +42,7 @@ export default async function ThankyouPage({ params }: { params: Promise<{ slug:
 
   return (
     <div className="flex min-h-screen flex-col bg-[#fafaf9]">
+      <MetaPixelScript pixelId={venue?.meta_pixel_id} />
       <header className="border-b border-gray-200/80 bg-white/90 backdrop-blur-sm">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
           <Link

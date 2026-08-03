@@ -8,7 +8,6 @@ const DIRECTORY_URL = process.env.NEXT_PUBLIC_DIRECTORY_URL ?? 'https://storyven
 interface VenueInfo {
   slug: string | null;
   meta_pixel_id: string | null;
-  meta_capi_access_token: string | null; // masked '••••XXXX' or null on GET
 }
 
 export default function AdTrackingPage() {
@@ -19,11 +18,6 @@ export default function AdTrackingPage() {
   const [savingPixelId, setSavingPixelId] = useState(false);
   const [pixelIdSaved, setPixelIdSaved] = useState(false);
   const [pixelIdError, setPixelIdError] = useState('');
-
-  const [tokenInput, setTokenInput] = useState('');
-  const [savingToken, setSavingToken] = useState(false);
-  const [tokenSaved, setTokenSaved] = useState(false);
-  const [tokenError, setTokenError] = useState('');
 
   const [urlCopied, setUrlCopied] = useState(false);
 
@@ -61,27 +55,6 @@ export default function AdTrackingPage() {
       setTimeout(() => setPixelIdSaved(false), 3000);
     } catch { setPixelIdError('Failed to save. Please try again.'); }
     finally { setSavingPixelId(false); }
-  }
-
-  async function saveToken() {
-    const val = tokenInput.trim();
-    if (!val) return;
-    setSavingToken(true);
-    setTokenError('');
-    setTokenSaved(false);
-    try {
-      const res = await fetch('/api/venues/me', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meta_capi_access_token: val }),
-      });
-      if (!res.ok) { setTokenError('Failed to save. Please try again.'); return; }
-      setVenue(prev => prev ? { ...prev, meta_capi_access_token: `••••${val.slice(-4)}` } : prev);
-      setTokenSaved(true);
-      setTokenInput('');
-      setTimeout(() => setTokenSaved(false), 3000);
-    } catch { setTokenError('Failed to save. Please try again.'); }
-    finally { setSavingToken(false); }
   }
 
   const thankYouUrl = venue?.slug ? `${DIRECTORY_URL}/venue/${venue.slug}/thankyou` : '';
@@ -122,7 +95,7 @@ export default function AdTrackingPage() {
           <h1 className="text-[22px] font-bold text-gray-900 tracking-tight">Ad Tracking</h1>
         </div>
         <p className="text-[13px] text-gray-500 ml-10">
-          Turn every pricing guide download into a Meta conversion event, so your ad campaigns can optimize toward real leads.
+          Turn every pricing guide download into a Meta conversion, so your ad campaigns can optimize toward real leads.
         </p>
       </div>
 
@@ -130,29 +103,15 @@ export default function AdTrackingPage() {
         <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
           <div className="px-6 py-5 space-y-5">
             <p className="text-sm text-gray-500">
-              Connect your Meta Pixel and Conversions API access token to send guide-download leads
-              from your listing page to Meta as a <span className="font-mono text-xs">Lead</span> event.
-              This is entirely server-side — no tracking script is ever added to your listing page, and
-              nothing else about your existing guide delivery changes.
-            </p>
-            <p className="text-sm text-gray-500">
-              Find both values in{' '}
-              <a
-                href="https://business.facebook.com/events_manager2"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 font-medium text-violet-600 hover:text-violet-700 underline underline-offset-2"
-              >
-                Meta Events Manager <ExternalLink size={11} />
-              </a>{' '}
-              → select your pixel → <strong>Settings → Conversions API</strong>. The Pixel ID is shown at the
-              top of the Overview tab; the access token is generated further down the Settings page under
-              &ldquo;Conversions API&rdquo;.
+              Two quick steps: connect your Meta Pixel ID below, then copy the URL in the next section into
+              a Meta Custom Conversion. We add a small, invisible tracking snippet only to your private
+              thank-you page &mdash; never to your public listing page, and nothing else about your existing
+              guide delivery changes.
             </p>
 
             {/* Pixel ID */}
             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-              <p className="text-xs font-medium text-gray-700 mb-2">Meta Pixel ID</p>
+              <p className="text-xs font-medium text-gray-700 mb-2">Step 1 &middot; Meta Pixel ID</p>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -172,30 +131,18 @@ export default function AdTrackingPage() {
               </div>
               {pixelIdSaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
               {pixelIdError && <p className="mt-2 text-xs text-red-600">{pixelIdError}</p>}
-            </div>
-
-            {/* Conversions API Access Token */}
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-              <p className="text-xs font-medium text-gray-700 mb-2">Conversions API Access Token</p>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={tokenInput}
-                  onChange={e => setTokenInput(e.target.value)}
-                  placeholder={venue.meta_capi_access_token ? `${venue.meta_capi_access_token} (paste a new one to replace)` : 'Paste your Conversions API access token here'}
-                  className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none font-mono"
-                />
-                <button
-                  onClick={() => void saveToken()}
-                  disabled={savingToken || !tokenInput.trim()}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
+              <p className="mt-2 text-xs text-gray-400">
+                Find it in{' '}
+                <a
+                  href="https://business.facebook.com/events_manager2"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-medium text-violet-600 hover:text-violet-700 underline underline-offset-2"
                 >
-                  {savingToken ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                  {savingToken ? 'Saving…' : 'Save'}
-                </button>
-              </div>
-              {tokenSaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
-              {tokenError && <p className="mt-2 text-xs text-red-600">{tokenError}</p>}
+                  Meta Events Manager <ExternalLink size={10} />
+                </a>{' '}
+                &rarr; select your pixel &mdash; it&apos;s shown at the top of the Overview tab.
+              </p>
             </div>
           </div>
         </section>
@@ -204,7 +151,7 @@ export default function AdTrackingPage() {
           <div className="px-6 py-5 space-y-4">
             <div className="flex items-center gap-2">
               <Link2 size={15} className="text-violet-600" />
-              <h2 className="text-sm font-semibold text-gray-900">Custom Conversion URL</h2>
+              <h2 className="text-sm font-semibold text-gray-900">Step 2 &middot; Custom Conversion URL</h2>
             </div>
             <p className="text-sm text-gray-500">
               Every guide download lands on your venue&apos;s thank-you page below. Paste this URL into
