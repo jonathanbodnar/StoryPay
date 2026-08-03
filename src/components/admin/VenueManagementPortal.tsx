@@ -57,6 +57,8 @@ export type AdminVenueRow = Record<string, unknown> & {
   directory_addon_sponsored?: boolean | null;
   directory_addon_concierge?: boolean | null;
   ai_concierge_admin_disabled?: boolean | null;
+  /** Super-admin override: force-enables SMS regardless of plan tier. */
+  sms_admin_override?: boolean | null;
   directory_subscription_status?: string | null;
   directory_trial_ends_at?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
@@ -248,8 +250,10 @@ function AddonCheckboxes({
   const verifiedFromPlan  = planIncludesVerified(plan, plans);
   const sponsoredFromPlan = planIncludesSponsored(plan, plans);
   const conciergeFromPlan = planIncludesConcierge(plan);
+  const smsFromPlan = isLegacy || (plan?.slug ?? '').toLowerCase().includes('all-inclusive');
 
   const adminDisabled = venue.ai_concierge_admin_disabled === true;
+  const smsOverrideOn = venue.sms_admin_override === true;
 
   // Effective (displayed) states — plan-included addons show as checked
   // automatically (single source of truth with the plan assignment).
@@ -304,6 +308,31 @@ function AddonCheckboxes({
           )}
         </label>
       ))}
+
+      {/* SMS override — independent of the addon checkboxes above. Forces
+          hasSms true for a legacy client on a plan that normally excludes
+          SMS, without changing their plan/pricing. No-op (but left checkable)
+          if their plan already includes SMS. */}
+      <label
+        className={`inline-flex items-center gap-1 text-[11px] ${busy ? 'opacity-50' : 'cursor-pointer'}`}
+        title={
+          smsFromPlan
+            ? 'Their plan already includes SMS — override has no additional effect'
+            : 'Force-enable SMS for this venue through their existing A2P registration, without changing their plan'
+        }
+      >
+        <input
+          type="checkbox"
+          checked={smsOverrideOn}
+          disabled={busy}
+          onChange={(e) => void onPatch(venue.id, { sms_admin_override: e.target.checked })}
+          className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
+        />
+        <span className="font-medium text-gray-600">SMS Override</span>
+        {smsOverrideOn && (
+          <span className="rounded-full bg-purple-50 border border-purple-200 px-1 py-0 text-[8px] font-semibold text-purple-600 leading-tight">FORCED ON</span>
+        )}
+      </label>
     </div>
   );
 }

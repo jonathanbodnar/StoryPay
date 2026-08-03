@@ -28,6 +28,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     addon_verified?: boolean;
     addon_sponsored?: boolean;
     addon_ai_concierge?: boolean;
+    /** Super-admin override: force-enable SMS/A2P for this venue regardless
+     *  of plan tier. For legacy clients kept on a plan that normally has
+     *  no SMS (e.g. Bride Booking System) but still need it turned on. */
+    sms_admin_override?: boolean;
   };
   try {
     body = await request.json();
@@ -172,6 +176,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       updates.ai_concierge_admin_disabled = true;
       updates.ai_concierge_enabled        = false;
     }
+  }
+
+  // ── SMS override (legacy-client toggle) ───────────────────────────────────
+  // Independent of the plan-inclusion addons above: forces `hasSms` true in
+  // resolveVenueFeatureAccess() without touching directory_plan_id, so the
+  // venue keeps its current plan/pricing but gains SMS through their
+  // existing A2P registration.
+  if (typeof body.sms_admin_override === 'boolean') {
+    updates.sms_admin_override = body.sms_admin_override;
   }
 
   // If a plan change was applied via the helper but no other fields were

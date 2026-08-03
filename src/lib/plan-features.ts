@@ -5,10 +5,12 @@
  *
  *   hasSms       — can this venue use SMS features at all?
  *                  true  → plan slug contains "all-inclusive", OR legacy plan,
- *                          OR no plan at all (grandfathered legacy_full rows)
+ *                          OR no plan at all (grandfathered legacy_full rows),
+ *                          OR the super-admin sms_admin_override flag is set
  *                  false → bride-booking-system, free, or any non-all-inclusive
- *                          plan. These accounts never have A2P carrier
- *                          registration, so SMS can never be sent.
+ *                          plan without the override. These accounts normally
+ *                          have no A2P carrier registration, so SMS can't be
+ *                          sent unless an admin force-enables it.
  *
  *   hasConcierge — can this venue use the AI Venue Concierge, and should their
  *                  bride replies be routed to the super-admin concierge inbox?
@@ -29,6 +31,10 @@ export interface VenueFeatureRow {
   /** Super admin force-off: when true the venue has NO concierge access,
    *  even if the plan bundles it or the addon was purchased. */
   ai_concierge_admin_disabled?: boolean | null;
+  /** Super admin force-on: grants SMS regardless of plan tier. Used for
+   *  legacy clients kept on a non-SMS plan (e.g. Bride Booking System)
+   *  who still need SMS enabled through their existing A2P registration. */
+  sms_admin_override?: boolean | null;
 }
 
 export interface PlanFeatureRow {
@@ -54,7 +60,8 @@ export interface VenueFeatureAccess {
   planSlug: string | null;
 }
 
-export const VENUE_FEATURE_COLUMNS = 'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled';
+export const VENUE_FEATURE_COLUMNS =
+  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override';
 export const PLAN_FEATURE_COLUMNS  = 'slug, name, is_legacy, feature_flags';
 
 function isLegacyPlan(plan: PlanFeatureRow | null): boolean {
@@ -85,9 +92,12 @@ export function resolveVenueFeatureAccess(
   const conciergePurchased = venue?.directory_addon_concierge === true;
   // Super admin force-off beats everything — plan inclusion, addon, legacy.
   const conciergeAdminDisabled = venue?.ai_concierge_admin_disabled === true;
+  // Super admin force-on: grants SMS on a plan that wouldn't otherwise
+  // include it, without changing the venue's actual plan assignment.
+  const smsAdminOverride = venue?.sms_admin_override === true;
 
   return {
-    hasSms:              legacy || isAllInclusive,
+    hasSms:              legacy || isAllInclusive || smsAdminOverride,
     hasConcierge:        !conciergeAdminDisabled && (legacy || conciergeBundled || conciergePurchased),
     canMessageConcierge: legacy || isAllInclusive,
     isLegacy:            legacy,
