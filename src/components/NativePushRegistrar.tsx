@@ -21,6 +21,44 @@ import { isNativeApp, getPlatform } from '@/lib/platform';
 const TOKEN_KEY = 'sv_native_push_token';
 
 /**
+ * Navigate the webview to `target`, but only once the document is actually
+ * visible/foregrounded. Tapping a notification while the app is backgrounded
+ * or the phone is locked delivers `pushNotificationActionPerformed` to the
+ * still-running JS context slightly BEFORE WKWebView finishes resuming —
+ * calling `window.location.assign()` in that transitional window has been
+ * observed to silently no-op (no navigation, no error). Waiting for
+ * `visibilitychange` (with a small settle delay, and a safety-net timeout in
+ * case the event never fires) makes the navigation reliable.
+ */
+function navigateWhenVisible(target: string): void {
+  const go = () => window.location.assign(target);
+  if (typeof document === 'undefined') {
+    go();
+    return;
+  }
+  if (document.visibilityState === 'visible') {
+    // Even when already visible, the tap can land in the same transitional
+    // instant the resume happens — a tiny delay avoids the race.
+    window.setTimeout(go, 150);
+    return;
+  }
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    document.removeEventListener('visibilitychange', onVisible);
+    window.clearTimeout(safety);
+    window.setTimeout(go, 150);
+  };
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') finish();
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  // Safety net: navigate anyway after 2s even if visibilitychange never fires.
+  const safety = window.setTimeout(finish, 2000);
+}
+
+/**
  * Remove this device's token on logout so a signed-out phone stops receiving
  * pushes. Safe to call on the web (no-ops). Uses keepalive so the request
  * survives the navigation that logout triggers.
@@ -99,19 +137,23 @@ export default function NativePushRegistrar() {
             try {
               window.localStorage.setItem(
                 'sv_last_push_action_debug',
-                JSON.stringify({ at: new Date().toISOString(), data: action.notification?.data ?? null, url }),
+                JSON.stringify({
+                  at: new Date().toISOString(),
+                  data: action.notification?.data ?? null,
+                  url,
+                  visibilityState: typeof document !== 'undefined' ? document.visibilityState : 'n/a',
+                }),
               );
             } catch { /* ignore */ }
             if (!url) return;
+            // Normalise to a same-origin path so we stay inside the webview.
+            let target = url;
             try {
-              // Normalise to a same-origin path so we stay inside the webview.
-              const target = url.startsWith('http')
-                ? new URL(url).pathname + new URL(url).search
-                : url;
-              window.location.assign(target);
+              target = url.startsWith('http') ? new URL(url).pathname + new URL(url).search : url;
             } catch {
-              window.location.assign(url);
+              /* use raw url */
             }
+            navigateWhenVisible(target);
           },
         );
 
