@@ -16,30 +16,27 @@
  */
 
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { isNativeApp, getPlatform } from '@/lib/platform';
 
 const TOKEN_KEY = 'sv_native_push_token';
 
 /**
- * Navigate the webview to `target`, but only once the document is actually
- * visible/foregrounded. Tapping a notification while the app is backgrounded
- * or the phone is locked delivers `pushNotificationActionPerformed` to the
- * still-running JS context slightly BEFORE WKWebView finishes resuming —
- * calling `window.location.assign()` in that transitional window has been
- * observed to silently no-op (no navigation, no error). Waiting for
- * `visibilitychange` (with a small settle delay, and a safety-net timeout in
- * case the event never fires) makes the navigation reliable.
+ * Run `fn` once the document is actually visible/foregrounded. Tapping a
+ * notification while the app is backgrounded or the phone is locked delivers
+ * `pushNotificationActionPerformed` slightly BEFORE WKWebView finishes
+ * resuming; deferring until `visibilitychange` (with a small settle delay and
+ * a safety-net timeout) makes the follow-up navigation reliable.
  */
-function navigateWhenVisible(target: string): void {
-  const go = () => window.location.assign(target);
+function runWhenVisible(fn: () => void): void {
   if (typeof document === 'undefined') {
-    go();
+    fn();
     return;
   }
   if (document.visibilityState === 'visible') {
     // Even when already visible, the tap can land in the same transitional
     // instant the resume happens — a tiny delay avoids the race.
-    window.setTimeout(go, 150);
+    window.setTimeout(fn, 150);
     return;
   }
   let done = false;
@@ -48,13 +45,13 @@ function navigateWhenVisible(target: string): void {
     done = true;
     document.removeEventListener('visibilitychange', onVisible);
     window.clearTimeout(safety);
-    window.setTimeout(go, 150);
+    window.setTimeout(fn, 150);
   };
   const onVisible = () => {
     if (document.visibilityState === 'visible') finish();
   };
   document.addEventListener('visibilitychange', onVisible);
-  // Safety net: navigate anyway after 2s even if visibilitychange never fires.
+  // Safety net: run anyway after 2s even if visibilitychange never fires.
   const safety = window.setTimeout(finish, 2000);
 }
 
@@ -103,6 +100,8 @@ export async function requestNativePushPermission(): Promise<'granted' | 'denied
 }
 
 export default function NativePushRegistrar() {
+  const router = useRouter();
+
   useEffect(() => {
     if (!isNativeApp()) return;
     let cleanup: (() => void) | undefined;
@@ -153,7 +152,18 @@ export default function NativePushRegistrar() {
             } catch {
               /* use raw url */
             }
-            navigateWhenVisible(target);
+            // Navigate with the Next.js client router — NOT window.location.
+            // In this Capacitor shell, full-page window.location navigations
+            // are intercepted by the webview's navigation delegate and get
+            // silently dropped (same root cause as the sign-in button once
+            // opening Chrome, fixed via postAuthNavigate/router.push).
+            runWhenVisible(() => {
+              try {
+                router.push(target);
+              } catch {
+                window.location.assign(target);
+              }
+            });
           },
         );
 
@@ -177,7 +187,7 @@ export default function NativePushRegistrar() {
     })();
 
     return () => { cleanup?.(); };
-  }, []);
+  }, [router]);
 
   return null;
 }

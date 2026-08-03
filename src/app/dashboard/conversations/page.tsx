@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Check,
@@ -276,6 +276,11 @@ export default function ConversationsPage() {
   const threadPipelinesLoaded = useRef(false);
   const [stageUpdating, setStageUpdating] = useState(false);
   const [mobileShowThread, setMobileShowThread] = useState(false);
+  // Live search params — unlike a one-shot window.location read on mount,
+  // this updates on client-side router.push navigations too (the push
+  // notification tap handler navigates that way; see NativePushRegistrar).
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
   const [contactResults, setContactResults] = useState<{ id: string; first_name: string; last_name: string; customer_email: string; phone: string }[]>([]);
@@ -395,27 +400,40 @@ export default function ConversationsPage() {
     return () => { el.removeEventListener('scroll', onScroll); clearTimeout(timer); };
   }, []);
 
+  // Push-notification deep link: /dashboard/conversations?thread=<id>.
+  // Driven by useSearchParams (NOT a one-shot window.location read) so it
+  // fires both on a fresh mount AND when the push tap handler router.push()es
+  // here while this page is already on screen.
+  const pushThreadParam = searchParams.get('thread')?.trim() || null;
+  useEffect(() => {
+    if (!pushThreadParam) return;
+    // TEMP DIAGNOSTIC: persist what this page received so it can be checked
+    // via the on-screen debug overlay. Remove once confirmed working.
+    try {
+      window.localStorage.setItem(
+        'sv_last_conv_deeplink_debug',
+        JSON.stringify({ at: new Date().toISOString(), via: 'searchParams', threadIdParam: pushThreadParam }),
+      );
+    } catch { /* ignore */ }
+    setSelectedId(pushThreadParam);
+    setMobileShowThread(true);
+    void loadThreads({ silent: true });
+    // Strip the param through the router (not history.replaceState) so
+    // Next's internal URL state clears too — a later tap for the same
+    // thread then registers as a real param change and re-fires this.
+    router.replace('/dashboard/conversations');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pushThreadParam, loadThreads]);
+
   useEffect(() => {
     if (deepLinkConsumed.current || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    // Push notifications (e.g. "new message") deep-link straight to a known
-    // thread id — no lookup needed, just open it directly.
-    const threadIdParam = params.get('thread')?.trim();
     const customerId = params.get('customer')?.trim();
     const customerFromEmail = params.get('customerFromEmail')?.trim();
     const uuidOk =
       !!customerId && /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(customerId);
-    // TEMP DIAGNOSTIC: persist what this page saw in the URL on mount so it
-    // can be checked via Safari Web Inspector after a push-notification tap.
-    // Remove once deep-link navigation is confirmed working.
-    try {
-      window.localStorage.setItem(
-        'sv_last_conv_deeplink_debug',
-        JSON.stringify({ at: new Date().toISOString(), search: window.location.search, threadIdParam: threadIdParam || null }),
-      );
-    } catch { /* ignore */ }
 
-    if (!threadIdParam && !uuidOk && !customerFromEmail) return;
+    if (!uuidOk && !customerFromEmail) return;
 
     deepLinkConsumed.current = true;
 
@@ -425,9 +443,9 @@ export default function ConversationsPage() {
 
     void (async () => {
       try {
-        let threadId: string | undefined = threadIdParam || undefined;
+        let threadId: string | undefined;
 
-        if (!threadId && uuidOk && customerId) {
+        if (uuidOk && customerId) {
           const res = await fetch('/api/conversations/threads');
           if (!res.ok) return;
           const list = (await res.json()) as ThreadRow[];
@@ -445,7 +463,7 @@ export default function ConversationsPage() {
             const data = (await cre.json()) as { id?: string };
             threadId = data.id;
           }
-        } else if (!threadId && customerFromEmail) {
+        } else if (customerFromEmail) {
           const r = await fetch(
             `/api/conversations/open-or-create?email=${encodeURIComponent(customerFromEmail)}`,
           );
@@ -997,7 +1015,6 @@ export default function ConversationsPage() {
     : null;
 
   const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
-  const router = useRouter();
 
   // On the native app the contact profile is a full page (the richest view,
   // shared with Contacts / Leads). On web it stays an in-context drawer.
