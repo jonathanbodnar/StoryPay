@@ -10,7 +10,7 @@
  *   0 — Welcome / explainer
  *   1 — Business info  (name, contact)
  *   2 — Processing details  (address, banking, volume)
- *   3 — Sign the Fortis MPA (iframe embed from LunarPay)
+ *   3 — Sign the Fortis MPA (hand-off to the LunarPay-hosted signing page)
  *   4 — Pending review (auto-polls every 30 s)
  *   5 — Active ✓
  */
@@ -30,7 +30,36 @@ import {
   RefreshCw,
   ShieldCheck,
   BadgeCheck,
+  ExternalLink,
 } from 'lucide-react';
+
+/**
+ * Hand-off to the LunarPay-hosted signing page. Fortis whitelists ONLY
+ * app.lunarpay.com for its MPA iframe, so the agreement cannot render
+ * embedded on our domain — the merchant must open the LunarPay page.
+ * Fortis emails them a verification code to unlock the form there.
+ */
+function MpaSignCard({ url, compact }: { url: string; compact?: boolean }) {
+  return (
+    <div className={`rounded-2xl border border-indigo-200 bg-indigo-50/60 ${compact ? 'p-4' : 'p-6'} text-center`}>
+      {!compact && (
+        <p className="mb-1 font-semibold text-sm text-indigo-900">Sign your Merchant Processing Agreement</p>
+      )}
+      <p className={`text-xs text-indigo-800 ${compact ? 'mb-3' : 'mb-4'} max-w-md mx-auto`}>
+        The agreement opens on our payment partner&apos;s secure page. Fortis will email a
+        verification code to your business email — enter it there to unlock and sign the form.
+      </p>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+      >
+        <ExternalLink size={15} /> Open &amp; Sign the Agreement
+      </a>
+    </div>
+  );
+}
 
 // ── Volume range helpers ──────────────────────────────────────────────────────
 const VOLUME_RANGES = [
@@ -320,13 +349,10 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
         {mpaEmbedUrl && (
           <div>
             <p className="mb-2 text-xs text-gray-500 font-medium">
-              If you haven't yet signed the Merchant Processing Agreement, complete it below:
+              If you haven&apos;t yet signed the Merchant Processing Agreement, do it now — Fortis
+              can&apos;t approve your account without it:
             </p>
-            <iframe
-              src={mpaEmbedUrl}
-              className="h-[500px] w-full rounded-xl border border-gray-200"
-              title="Fortis Merchant Processing Agreement"
-            />
+            <MpaSignCard url={mpaEmbedUrl} compact />
           </div>
         )}
         <button
@@ -348,17 +374,13 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
           <div>
             <p className="font-semibold text-indigo-800 text-sm">One last step — sign your Merchant Agreement</p>
             <p className="mt-0.5 text-xs text-indigo-700">
-              Complete the Fortis Merchant Processing Agreement below. This authorises your account
+              Complete the Fortis Merchant Processing Agreement. This authorises your account
               to process credit cards and ACH payments. It takes about 2 minutes.
             </p>
           </div>
         </div>
         {mpaEmbedUrl ? (
-          <iframe
-            src={mpaEmbedUrl}
-            className="h-[540px] w-full rounded-xl border border-gray-200"
-            title="Fortis Merchant Processing Agreement"
-          />
+          <MpaSignCard url={mpaEmbedUrl} />
         ) : (
           <p className="text-sm text-gray-500">Loading agreement form…</p>
         )}
