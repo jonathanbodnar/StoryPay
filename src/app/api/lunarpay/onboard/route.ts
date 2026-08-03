@@ -29,6 +29,7 @@ export interface OnboardPayload {
   dbaName: string;
   legalName: string;
   website?: string;
+  fedTaxId?: string;
   addressLine1: string;
   city: string;
   state: string;

@@ -159,7 +159,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
 
   // Step 2 fields
   const [s2, setS2] = useState({
-    dbaName: '', legalName: '', website: '',
+    dbaName: '', legalName: '', website: '', fedTaxId: '',
     addressLine1: '', city: '', state: '', postalCode: '',
     routingNumber: '', accountNumber: '', accountHolderName: '',
     ccMonthlyVolumeRange: 3, ccAverageTicketRange: 3, ccHighTicket: '5000',
@@ -269,6 +269,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
         dbaName:               s2.dbaName,
         legalName:             s2.legalName,
         website:               s2.website,
+        fedTaxId:              s2.fedTaxId,
         addressLine1:          s2.addressLine1,
         city:                  s2.city,
         state:                 s2.state,
@@ -424,6 +425,9 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
               <Field label="Legal Name" value={s2.legalName} onChange={(v) => setS2(p=>({...p,legalName:v}))}
                 placeholder="Grand Ballroom LLC" required />
             </div>
+            <Field label="EIN (Federal Tax ID)" value={s2.fedTaxId} onChange={(v) => setS2(p=>({...p,fedTaxId:v}))}
+              placeholder="12-3456789" maxLength={20}
+              hint="Pre-fills your Fortis application — you can also enter it there" />
             <div className="grid grid-cols-2 gap-3">
               <Field label="Contact Email" value={s2.email} onChange={(v) => setS2(p=>({...p,email:v}))}
                 type="email" placeholder="billing@yourvenue.com" required />
