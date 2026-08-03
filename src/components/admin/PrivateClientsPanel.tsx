@@ -221,7 +221,9 @@ export function PrivateClientsPanel({
 function VenueDetail({ venue, supportUserId }: { venue: PrivateClientVenue; supportUserId?: string }) {
   const [history, setHistory] = useState<HistoryMessage[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  // Open by default per venue; once the user collapses it, it stays
+  // collapsed until they click it open again (no auto re-expand on refresh).
+  const [historyOpen, setHistoryOpen] = useState(true);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
