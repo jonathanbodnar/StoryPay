@@ -95,6 +95,39 @@ export function isFreeTier(v: VenueBillingState): boolean {
 }
 
 /**
+ * Full entitlement check, including the legacy-*plan* override.
+ *
+ * `canRunBookingSystem()` above only auto-allows when the venue has NO
+ * `directory_plan_id` at all. That misses grandfathered venues that DO carry
+ * a plan_id, but the plan row itself is flagged `is_legacy` in
+ * `directory_plans` (e.g. a plan literally named "Legacy Plan", assigned by
+ * an admin migrating an old customer). Those venues typically have
+ * `directory_subscription_status = 'none'` (no LunarPay subscription was
+ * ever created for them), which would otherwise hit NOT_ENTITLED_STATUSES
+ * and wrongly revoke access.
+ *
+ * Only does the extra `directory_plans` lookup when the fast synchronous
+ * check fails, so the common case (no plan / active / trialing) stays a
+ * single query.
+ */
+export async function resolveBookingSystemEntitlement(v: VenueBillingState): Promise<boolean> {
+  if (canRunBookingSystem(v)) return true;
+
+  const planId = v.directory_plan_id;
+  if (!planId) return false;
+  try {
+    const { data: planRow } = await supabaseAdmin
+      .from('directory_plans')
+      .select('is_legacy')
+      .eq('id', planId)
+      .maybeSingle();
+    return Boolean((planRow as { is_legacy?: boolean } | null)?.is_legacy);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Load billing state for a venue and decide entitlement in one call. Fails OPEN
  * (returns true) if the row can't be read, so a transient DB hiccup never
  * silently suppresses a paying venue's guide delivery.
@@ -107,7 +140,7 @@ export async function venueCanRunBookingSystem(venueId: string): Promise<boolean
       .eq('id', venueId)
       .maybeSingle();
     if (!data) return true;
-    return canRunBookingSystem(data as VenueBillingState);
+    return await resolveBookingSystemEntitlement(data as VenueBillingState);
   } catch {
     return true;
   }

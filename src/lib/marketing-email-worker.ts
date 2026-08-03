@@ -13,7 +13,7 @@ import { signMarketingOpenToken, signMarketingUnsubscribeToken } from '@/lib/mar
 import { addCalendarDaysYmd, resolveVenueTimezone, formatLeadOpportunityStamp } from '@/lib/venue-timezone';
 import { formatInTimeZone } from 'date-fns-tz';
 import { logStepExecution } from '@/lib/workflow-execution-logs';
-import { canRunBookingSystem, venueCanRunBookingSystem, VENUE_ENTITLEMENT_COLUMNS, type VenueBillingState } from '@/lib/venue-entitlements';
+import { resolveBookingSystemEntitlement, venueCanRunBookingSystem, VENUE_ENTITLEMENT_COLUMNS, type VenueBillingState } from '@/lib/venue-entitlements';
 import { setLeadAiState } from '@/lib/ai-concierge/state-control';
 import type { AiState, AiVenueResources } from '@/lib/ai-concierge/types';
 import { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, resolveDefaultStageIdByName } from '@/lib/booking-system-stages';
@@ -879,35 +879,16 @@ export async function sendBookingSystemGuide(
     }
 
     // Subscription gate: the paid Bride Booking System only fires for entitled
-    // venues (active/trialing/legacy). Downgraded-to-Free venues still capture
-    // the lead in the inbox, but the automated guide does not send — instead we
-    // nudge the owner (throttled) to win them back. `bypassEntitlement` is for
-    // the owner's own onboarding test inquiry (runs before the card is added).
-    if (!opts?.bypassEntitlement && !canRunBookingSystem(v as unknown as VenueBillingState)) {
-      // Before sending the win-back nudge, verify the venue is NOT on a legacy
-      // (manually-billed / grandfathered) plan. Legacy venues always have full
-      // booking-system access regardless of subscription_status.
-      const planId = v.directory_plan_id as string | null | undefined;
-      let isPlanLegacy = false;
-      if (planId) {
-        try {
-          const { data: planRow } = await supabaseAdmin
-            .from('directory_plans')
-            .select('is_legacy')
-            .eq('id', planId)
-            .maybeSingle();
-          isPlanLegacy = Boolean((planRow as { is_legacy?: boolean } | null)?.is_legacy);
-        } catch { /* ignore — fail open */ }
-      }
-
-      if (isPlanLegacy) {
-        // Legacy plan — they ARE entitled. Continue and send the guide normally.
-      } else {
-        void import('@/lib/saas-billing-notifications')
-          .then(({ maybeSendWinbackNudge }) => maybeSendWinbackNudge(venueId))
-          .catch(() => {});
-        return; // not entitled — Free tier
-      }
+    // venues (active/trialing/legacy — including a legacy *plan* row, not just
+    // "no plan at all"). Downgraded-to-Free venues still capture the lead in
+    // the inbox, but the automated guide does not send — instead we nudge the
+    // owner (throttled) to win them back. `bypassEntitlement` is for the
+    // owner's own onboarding test inquiry (runs before the card is added).
+    if (!opts?.bypassEntitlement && !(await resolveBookingSystemEntitlement(v as unknown as VenueBillingState))) {
+      void import('@/lib/saas-billing-notifications')
+        .then(({ maybeSendWinbackNudge }) => maybeSendWinbackNudge(venueId))
+        .catch(() => {});
+      return; // not entitled — Free tier
     }
 
     const systemOn = (v.booking_system_enabled as boolean | null) ?? true;
