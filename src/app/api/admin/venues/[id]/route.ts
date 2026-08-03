@@ -32,6 +32,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
      *  of plan tier. For legacy clients kept on a plan that normally has
      *  no SMS (e.g. Bride Booking System) but still need it turned on. */
     sms_admin_override?: boolean;
+    /** Concierge-team watch-list tag. Surfaces the venue in Support Inbox →
+     *  Private Clients; has no effect on plan/billing/entitlements. */
+    is_private_client?: boolean;
   };
   try {
     body = await request.json();
@@ -185,6 +188,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   // existing A2P registration.
   if (typeof body.sms_admin_override === 'boolean') {
     updates.sms_admin_override = body.sms_admin_override;
+  }
+
+  // ── Private Client watch-list tag ─────────────────────────────────────────
+  if (typeof body.is_private_client === 'boolean') {
+    updates.is_private_client = body.is_private_client;
   }
 
   // If a plan change was applied via the helper but no other fields were

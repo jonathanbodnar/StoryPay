@@ -20,8 +20,9 @@ import {
   Mail, MessageCircle, Building2, Loader2, AlertCircle, CheckCircle2,
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
   UserPlus, Flag, X, Radio, Sparkles, FileText, Maximize2, Minimize2,
-  Eye, EyeOff, ChevronDown, ChevronUp, BookOpen, Volume2, VolumeX,
+  Eye, EyeOff, ChevronDown, ChevronUp, BookOpen, Volume2, VolumeX, ShieldAlert,
 } from 'lucide-react';
+import { PrivateClientsPanel } from '@/components/admin/PrivateClientsPanel';
 import { trackClient } from '@/lib/analytics-client';
 import { useBroadcastChannel, useBroadcastChannels } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent, type VenueDirectInboxEvent } from '@/lib/realtime/channels';
@@ -36,7 +37,7 @@ import { SupportMentionPicker } from '@/components/support/SupportMentionPicker'
 
 const BRAND = '#1b1b1b';
 
-type SupportSubTab = 'bride-replies' | 'venue-direct' | 'tickets';
+type SupportSubTab = 'bride-replies' | 'venue-direct' | 'tickets' | 'private-clients';
 
 interface VenueDirectInboxRow {
   threadId:             string;
@@ -161,8 +162,9 @@ export function SupportInboxPanel() {
   // or after a hard refresh — preserves which thread was open).
   const initialTab = ((): SupportSubTab => {
     const t = searchParams.get('tab');
-    if (t === 'tickets')      return 'tickets';
-    if (t === 'venue-direct') return 'venue-direct';
+    if (t === 'tickets')          return 'tickets';
+    if (t === 'venue-direct')     return 'venue-direct';
+    if (t === 'private-clients') return 'private-clients';
     return 'bride-replies';
   })();
   const initialThread = searchParams.get('thread') || null;
@@ -391,9 +393,10 @@ export function SupportInboxPanel() {
   useEffect(() => {
     if (!pathname) return;
     const next = new URLSearchParams(searchParams.toString());
-    if (subTab === 'tickets')           next.set('tab', 'tickets');
-    else if (subTab === 'venue-direct') next.set('tab', 'venue-direct');
-    else                                next.delete('tab');
+    if (subTab === 'tickets')               next.set('tab', 'tickets');
+    else if (subTab === 'venue-direct')     next.set('tab', 'venue-direct');
+    else if (subTab === 'private-clients')  next.set('tab', 'private-clients');
+    else                                     next.delete('tab');
     if (activeThreadId) next.set('thread', activeThreadId);
     else next.delete('thread');
     const qs = next.toString();
@@ -999,7 +1002,17 @@ export function SupportInboxPanel() {
           label="Venue support"
           dot={ticketOpenCount}
         />
+        <SubTabButton
+          active={subTab === 'private-clients'}
+          onClick={() => setSubTab('private-clients')}
+          icon={<ShieldAlert size={14} />}
+          label="Private Clients"
+        />
       </div>
+
+      {subTab === 'private-clients' && (
+        <PrivateClientsPanel me={me} actAsId={actAsId} />
+      )}
 
       {subTab === 'tickets' && (
         <div className="flex-1 min-h-0">

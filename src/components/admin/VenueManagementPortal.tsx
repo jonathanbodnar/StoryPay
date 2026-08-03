@@ -59,6 +59,9 @@ export type AdminVenueRow = Record<string, unknown> & {
   ai_concierge_admin_disabled?: boolean | null;
   /** Super-admin override: force-enables SMS regardless of plan tier. */
   sms_admin_override?: boolean | null;
+  /** Flags this venue as a white-glove private client — surfaces the venue +
+   *  owner + team roster in Support Inbox → Private Clients. */
+  is_private_client?: boolean | null;
   directory_subscription_status?: string | null;
   directory_trial_ends_at?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
@@ -254,6 +257,7 @@ function AddonCheckboxes({
 
   const adminDisabled = venue.ai_concierge_admin_disabled === true;
   const smsOverrideOn = venue.sms_admin_override === true;
+  const privateClientOn = venue.is_private_client === true;
 
   // Effective (displayed) states — plan-included addons show as checked
   // automatically (single source of truth with the plan assignment).
@@ -331,6 +335,27 @@ function AddonCheckboxes({
         <span className="font-medium text-gray-600">SMS Override</span>
         {smsOverrideOn && (
           <span className="rounded-full bg-purple-50 border border-purple-200 px-1 py-0 text-[8px] font-semibold text-purple-600 leading-tight">FORCED ON</span>
+        )}
+      </label>
+
+      {/* Private Client — tags this venue for the concierge team's watch list.
+          Checking it surfaces the venue + owner + team roster in Support
+          Inbox → Private Clients for quick outbound contact. Purely a
+          support-side tag; has no effect on plan, billing, or entitlements. */}
+      <label
+        className={`inline-flex items-center gap-1 text-[11px] ${busy ? 'opacity-50' : 'cursor-pointer'}`}
+        title="Show this venue in Support Inbox → Private Clients (concierge team's watch list)"
+      >
+        <input
+          type="checkbox"
+          checked={privateClientOn}
+          disabled={busy}
+          onChange={(e) => void onPatch(venue.id, { is_private_client: e.target.checked })}
+          className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
+        />
+        <span className="font-medium text-gray-600">Private Client</span>
+        {privateClientOn && (
+          <span className="rounded-full bg-amber-50 border border-amber-200 px-1 py-0 text-[8px] font-semibold text-amber-700 leading-tight">WATCHED</span>
         )}
       </label>
     </div>
