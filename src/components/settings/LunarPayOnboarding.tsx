@@ -68,10 +68,10 @@ interface Props {
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 function Field({
-  label, value, onChange, placeholder, type = 'text', required, hint,
+  label, value, onChange, placeholder, type = 'text', required, hint, maxLength,
 }: {
   label: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; type?: string; required?: boolean; hint?: string;
+  placeholder?: string; type?: string; required?: boolean; hint?: string; maxLength?: number;
 }) {
   return (
     <div>
@@ -83,6 +83,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        maxLength={maxLength}
         className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-200"
       />
       {hint && <p className="mt-1 text-[11px] text-gray-400">{hint}</p>}
@@ -129,7 +130,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
 
   // Step 2 fields
   const [s2, setS2] = useState({
-    dbaName: '', legalName: '',
+    dbaName: '', legalName: '', website: '',
     addressLine1: '', city: '', state: '', postalCode: '',
     routingNumber: '', accountNumber: '', accountHolderName: '',
     ccMonthlyVolumeRange: 3, ccAverageTicketRange: 3, ccHighTicket: '5000',
@@ -228,13 +229,17 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
     }
     setSaving(true);
     try {
+      // Names intentionally come from Step 1 only — the server falls back to
+      // the venue owner on file. Never derived from accountHolderName here:
+      // that's usually a company name and blows Fortis's 20-char name limit.
       const payload = {
-        firstName:             s1.firstName || s2.accountHolderName.split(' ')[0] || '',
-        lastName:              s1.lastName  || s2.accountHolderName.split(' ').slice(1).join(' ') || '',
+        firstName:             s1.firstName,
+        lastName:              s1.lastName,
         phone:                 s1.phone,
         email:                 s2.email,
         dbaName:               s2.dbaName,
         legalName:             s2.legalName,
+        website:               s2.website,
         addressLine1:          s2.addressLine1,
         city:                  s2.city,
         state:                 s2.state,
@@ -403,6 +408,9 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
               <Field label="Contact Phone" value={s1.phone} onChange={(v) => setS1(p=>({...p,phone:v}))}
                 type="tel" placeholder="(555) 010-0100" required />
             </div>
+            <Field label="Business Website" value={s2.website} onChange={(v) => setS2(p=>({...p,website:v}))}
+              type="url" placeholder="https://yourvenue.com"
+              hint="Fortis requires a website — leave blank to use your StoryVenue listing page" />
 
             {/* Address */}
             <div className="pt-2 border-t border-gray-200">
@@ -415,8 +423,8 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
                     <Field label="City" value={s2.city} onChange={(v) => setS2(p=>({...p,city:v}))} required />
                   </div>
                   <div>
-                    <Field label="State" value={s2.state} onChange={(v) => setS2(p=>({...p,state:v}))}
-                      placeholder="TX" required />
+                    <Field label="State" value={s2.state} onChange={(v) => setS2(p=>({...p,state:v.toUpperCase()}))}
+                      placeholder="TX" required maxLength={2} hint="2-letter code" />
                   </div>
                   <div>
                     <Field label="ZIP" value={s2.postalCode} onChange={(v) => setS2(p=>({...p,postalCode:v}))}
@@ -434,7 +442,8 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
               </p>
               <div className="space-y-3">
                 <Field label="Account Holder Name" value={s2.accountHolderName}
-                  onChange={(v) => setS2(p=>({...p,accountHolderName:v}))} required />
+                  onChange={(v) => setS2(p=>({...p,accountHolderName:v}))} required maxLength={40}
+                  hint="As it appears on the bank account · max 40 characters" />
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Routing Number" value={s2.routingNumber}
                     onChange={(v) => setS2(p=>({...p,routingNumber:v}))} required
@@ -521,8 +530,8 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
           </div>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="First Name" value={s1.firstName} onChange={(v) => setS1(p=>({...p,firstName:v}))} required />
-              <Field label="Last Name"  value={s1.lastName}  onChange={(v) => setS1(p=>({...p,lastName:v}))}  required />
+              <Field label="First Name" value={s1.firstName} onChange={(v) => setS1(p=>({...p,firstName:v}))} required maxLength={20} />
+              <Field label="Last Name"  value={s1.lastName}  onChange={(v) => setS1(p=>({...p,lastName:v}))}  required maxLength={20} />
             </div>
             <Field label="Phone" value={s1.phone} onChange={(v) => setS1(p=>({...p,phone:v}))}
               placeholder="555-123-4567" type="tel" />

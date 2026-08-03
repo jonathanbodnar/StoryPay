@@ -28,6 +28,7 @@ export interface OnboardPayload {
   email: string;
   dbaName: string;
   legalName: string;
+  website?: string;
   addressLine1: string;
   city: string;
   state: string;
@@ -41,6 +42,41 @@ export interface OnboardPayload {
   ecMonthlyVolumeRange: number;
   ecAverageTicketRange: number;
   ecHighTicket: number;
+}
+
+// Fortis underwriting field limits (its API hard-rejects anything longer):
+// principal/contact last_name ≤ 20, state_province = 2-letter code,
+// bank account_holder_name ≤ 40, website must be non-empty.
+const NAME_MAX = 20;
+const ACCOUNT_HOLDER_MAX = 40;
+
+const STATE_CODES: Record<string, string> = {
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
+  colorado: 'CO', connecticut: 'CT', delaware: 'DE', florida: 'FL', georgia: 'GA',
+  hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA',
+  kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME', maryland: 'MD',
+  massachusetts: 'MA', michigan: 'MI', minnesota: 'MN', mississippi: 'MS', missouri: 'MO',
+  montana: 'MT', nebraska: 'NE', nevada: 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+  'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH',
+  oklahoma: 'OK', oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
+  virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI', wyoming: 'WY',
+  'district of columbia': 'DC', 'puerto rico': 'PR',
+};
+
+/** "Indiana" / "in" / " IN " → "IN"; anything unrecognized → ''. */
+function normalizeState(raw: string | undefined): string {
+  const s = (raw ?? '').trim();
+  if (!s) return '';
+  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
+  return STATE_CODES[s.toLowerCase()] ?? '';
+}
+
+/** Ensure the URL has a scheme so Fortis accepts it. */
+function normalizeWebsite(raw: string | undefined | null): string {
+  const s = (raw ?? '').trim();
+  if (!s) return '';
+  return /^https?:\/\//i.test(s) ? s : `https://${s}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -59,7 +95,7 @@ export async function POST(request: NextRequest) {
   // rather than rejecting a fully-completed banking form.
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_merchant_id, phone, email, owner_first_name, owner_last_name')
+    .select('lunarpay_merchant_id, phone, email, owner_first_name, owner_last_name, brand_website, slug')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -68,10 +104,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Please complete Step 1 (business registration) first.' }, { status: 400 });
   }
 
-  body.firstName = body.firstName?.trim() || venue?.owner_first_name || '';
-  body.lastName  = body.lastName?.trim()  || venue?.owner_last_name  || '';
+  // Signer name: prefer what the form sent, then the venue owner on file, and
+  // only as a last resort split the bank account holder name (which is often a
+  // company name, so it must never be the first choice). Clamp to Fortis's
+  // 20-char principal-name limit.
+  const holderParts = (body.accountHolderName ?? '').trim().split(/\s+/);
+  body.firstName = (body.firstName?.trim() || venue?.owner_first_name || holderParts[0] || '').slice(0, NAME_MAX);
+  body.lastName  = (body.lastName?.trim()  || venue?.owner_last_name  || holderParts.slice(1).join(' ') || '').slice(0, NAME_MAX);
   body.phone     = body.phone?.trim()     || venue?.phone            || '';
   body.email     = body.email?.trim()     || venue?.email            || '';
+
+  const state = normalizeState(body.state);
+  if (!state) {
+    return NextResponse.json(
+      { error: 'State must be a 2-letter code (e.g. IN for Indiana).' },
+      { status: 400 },
+    );
+  }
+  body.state = state;
+
+  // Fortis rejects an empty website. Fall back to the venue's site, then
+  // their public StoryVenue listing page (always exists).
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+  body.website = normalizeWebsite(body.website)
+    || normalizeWebsite(venue?.brand_website as string | null)
+    || (venue?.slug ? `${appUrl}/venue/${venue.slug}` : '');
+
+  body.accountHolderName = (body.accountHolderName ?? '').trim().slice(0, ACCOUNT_HOLDER_MAX);
 
   // Validate required fields
   const required: (keyof OnboardPayload)[] = [
