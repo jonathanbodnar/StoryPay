@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Target, Check, Loader2, ExternalLink } from 'lucide-react';
+import { Target, Check, Loader2, ExternalLink, Copy, Link2 } from 'lucide-react';
+
+const DIRECTORY_URL = process.env.NEXT_PUBLIC_DIRECTORY_URL ?? 'https://storyvenue.com';
 
 interface VenueInfo {
+  slug: string | null;
   meta_pixel_id: string | null;
   meta_capi_access_token: string | null; // masked '••••XXXX' or null on GET
 }
@@ -21,6 +24,8 @@ export default function AdTrackingPage() {
   const [savingToken, setSavingToken] = useState(false);
   const [tokenSaved, setTokenSaved] = useState(false);
   const [tokenError, setTokenError] = useState('');
+
+  const [urlCopied, setUrlCopied] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -77,6 +82,17 @@ export default function AdTrackingPage() {
       setTimeout(() => setTokenSaved(false), 3000);
     } catch { setTokenError('Failed to save. Please try again.'); }
     finally { setSavingToken(false); }
+  }
+
+  const thankYouUrl = venue?.slug ? `${DIRECTORY_URL}/venue/${venue.slug}/thankyou` : '';
+
+  async function copyThankYouUrl() {
+    if (!thankYouUrl) return;
+    try {
+      await navigator.clipboard.writeText(thankYouUrl);
+      setUrlCopied(true);
+      setTimeout(() => setUrlCopied(false), 3000);
+    } catch { /* clipboard permission denied — user can still select/copy manually */ }
   }
 
   if (loading) {
@@ -180,6 +196,63 @@ export default function AdTrackingPage() {
               </div>
               {tokenSaved && <p className="mt-2 text-xs text-emerald-600">Saved successfully.</p>}
               {tokenError && <p className="mt-2 text-xs text-red-600">{tokenError}</p>}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+          <div className="px-6 py-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Link2 size={15} className="text-violet-600" />
+              <h2 className="text-sm font-semibold text-gray-900">Custom Conversion URL</h2>
+            </div>
+            <p className="text-sm text-gray-500">
+              Every guide download lands on your venue&apos;s thank-you page below. Paste this URL into
+              Meta as a <span className="font-mono text-xs">URL</span>-based Custom Conversion so your ad
+              campaigns can track and optimize toward real guide downloads &mdash; no extra setup needed
+              beyond this one paste.
+            </p>
+
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs font-medium text-gray-700 mb-2">Your Thank-You Page URL</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={thankYouUrl}
+                  onFocus={e => e.currentTarget.select()}
+                  className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 font-mono"
+                />
+                <button
+                  onClick={() => void copyThankYouUrl()}
+                  disabled={!thankYouUrl}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                >
+                  {urlCopied ? <Check size={13} /> : <Copy size={13} />}
+                  {urlCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs font-medium text-gray-700 mb-2">How to set it up in Meta (one-time, ~1 min)</p>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-gray-500">
+                <li>
+                  Open{' '}
+                  <a
+                    href="https://business.facebook.com/events_manager2/custom_conversions"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-medium text-violet-600 hover:text-violet-700 underline underline-offset-2"
+                  >
+                    Meta Events Manager &rarr; Custom Conversions <ExternalLink size={11} />
+                  </a>
+                </li>
+                <li>Click <strong>Create Custom Conversion</strong></li>
+                <li>Choose rule type <strong>URL</strong>, then <strong>contains</strong></li>
+                <li>Paste the URL above, name it something like &ldquo;Guide Download&rdquo;, and save</li>
+                <li>Select it as the conversion event on your ad campaign</li>
+              </ol>
             </div>
           </div>
         </section>

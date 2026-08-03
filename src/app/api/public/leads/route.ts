@@ -468,13 +468,17 @@ export async function POST(request: NextRequest) {
 
   // Meta (Facebook) Conversions API — server-side `Lead` event, fire-and-forget.
   // No-ops if the venue hasn't configured meta_pixel_id + meta_capi_access_token.
+  // event_source_url points at the thank-you page (not the listing page) so a
+  // venue can set up a URL-based Custom Conversion in Meta Events Manager
+  // (rule: URL contains "/thankyou") that matches this server-side event —
+  // no client-side pixel/script required.
   void sendMetaLeadEvent({
     venueId:        venue.id,
     email:          lr.email,
     phone:          phone || null,
     firstName:      firstName || null,
     lastName:       lastName || null,
-    eventSourceUrl: venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}` : DIRECTORY_URL,
+    eventSourceUrl: venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}/thankyou` : DIRECTORY_URL,
   }).catch(() => {});
 
   // Fire form-submitted workflow trigger then kick the cron so any delay steps
