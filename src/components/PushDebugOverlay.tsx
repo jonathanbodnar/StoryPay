@@ -21,16 +21,12 @@ export default function PushDebugOverlay() {
   const [open, setOpen] = useState(false);
   const [pushDebug, setPushDebug] = useState<string | null>(null);
   const [convDebug, setConvDebug] = useState<string | null>(null);
+  const [navTrail, setNavTrail] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!isNativeApp()) return;
-    try {
-      setPushDebug(window.localStorage.getItem('sv_last_push_action_debug'));
-      setConvDebug(window.localStorage.getItem('sv_last_conv_deeplink_debug'));
-    } catch {
-      /* ignore */
-    }
+    refresh();
     setReady(true);
   }, []);
 
@@ -38,6 +34,7 @@ export default function PushDebugOverlay() {
     try {
       setPushDebug(window.localStorage.getItem('sv_last_push_action_debug'));
       setConvDebug(window.localStorage.getItem('sv_last_conv_deeplink_debug'));
+      setNavTrail(window.localStorage.getItem('sv_nav_trail_debug'));
     } catch {
       /* ignore */
     }
@@ -47,11 +44,13 @@ export default function PushDebugOverlay() {
     try {
       window.localStorage.removeItem('sv_last_push_action_debug');
       window.localStorage.removeItem('sv_last_conv_deeplink_debug');
+      window.localStorage.removeItem('sv_nav_trail_debug');
     } catch {
       /* ignore */
     }
     setPushDebug(null);
     setConvDebug(null);
+    setNavTrail(null);
   }
 
   if (!isNativeApp() || !ready) return null;
@@ -107,6 +106,11 @@ export default function PushDebugOverlay() {
             💬 Conversations page → URL seen on mount
           </div>
           <div>{convDebug ? formatJson(convDebug) : '(not visited yet)'}</div>
+
+          <div style={{ color: '#fff', fontWeight: 700, marginTop: 14, marginBottom: 6, fontSize: 12 }}>
+            🧭 Navigation trail (last 15 routes)
+          </div>
+          <div>{navTrail ? formatJson(navTrail) : '(none yet)'}</div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
             <button
