@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Building2, Search, RefreshCw, Loader2, AlertCircle, Mail, MessageSquare,
-  Send, ChevronDown, ChevronRight, Users, Crown, CheckCircle2, ShieldAlert,
+  Send, ChevronDown, ChevronRight, Users, Crown, CheckCircle2, ShieldAlert, Eye,
 } from 'lucide-react';
 
 interface SupportMe {
@@ -343,12 +343,35 @@ function ContactRow({
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<'ok' | 'error' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [viewingAs, setViewingAs] = useState(false);
+  const [viewAsError, setViewAsError] = useState<string | null>(null);
 
   const openCompose = (channel: 'email' | 'sms') => {
     setResult(null);
     setErrorMsg(null);
     setComposeChannel((cur) => (cur === channel ? null : channel));
   };
+
+  async function viewAsVenue() {
+    if (viewingAs) return;
+    setViewingAs(true);
+    setViewAsError(null);
+    try {
+      const res = await fetch('/api/admin/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venueId, returnUrl: '/admin/support?tab=private-clients' }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || 'Could not start preview');
+      }
+      window.location.href = '/dashboard';
+    } catch (e) {
+      setViewAsError(e instanceof Error ? e.message : 'Could not start preview');
+      setViewingAs(false);
+    }
+  }
 
   async function send() {
     if (!composeChannel || !body.trim() || sending) return;
@@ -415,8 +438,23 @@ function ContactRow({
           >
             <MessageSquare size={11} /> SMS
           </button>
+          {contact.recipientType === 'owner' && (
+            <button
+              type="button"
+              onClick={() => void viewAsVenue()}
+              disabled={viewingAs}
+              title="Log in as this venue's dashboard"
+              className="rounded-md border border-pink-200 bg-pink-50 px-2 py-1 text-[11px] font-semibold text-pink-900 hover:bg-pink-100 flex items-center gap-1 disabled:opacity-50"
+            >
+              {viewingAs ? <Loader2 size={11} className="animate-spin" /> : <Eye size={11} />}
+              View as venue
+            </button>
+          )}
         </div>
       </div>
+      {viewAsError && (
+        <p className="px-3 pb-2 -mt-1 text-[11px] text-red-600">{viewAsError}</p>
+      )}
 
       {composeChannel && (
         <div className="px-3 pb-3 pt-1 border-t border-gray-100 bg-gray-50/60 space-y-2">
