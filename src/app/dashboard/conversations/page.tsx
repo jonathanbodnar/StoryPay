@@ -407,14 +407,6 @@ export default function ConversationsPage() {
   const pushThreadParam = searchParams.get('thread')?.trim() || null;
   useEffect(() => {
     if (!pushThreadParam) return;
-    // TEMP DIAGNOSTIC: persist what this page received so it can be checked
-    // via the on-screen debug overlay. Remove once confirmed working.
-    try {
-      window.localStorage.setItem(
-        'sv_last_conv_deeplink_debug',
-        JSON.stringify({ at: new Date().toISOString(), via: 'searchParams', threadIdParam: pushThreadParam }),
-      );
-    } catch { /* ignore */ }
     setSelectedId(pushThreadParam);
     setMobileShowThread(true);
     void loadThreads({ silent: true });

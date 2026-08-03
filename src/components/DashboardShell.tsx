@@ -126,23 +126,6 @@ export default function DashboardShell({
   const router = useRouter();
   const isOnSettings = pathname.startsWith('/dashboard/settings');
 
-  // TEMP DIAGNOSTIC: record every route the app visits (pathname + full
-  // search string) into a small ring buffer so we can see the exact
-  // navigation trail after a push-notification tap — reveals whether an
-  // intermediate redirect drops query params before the target page mounts.
-  // Remove once the push deep-link issue is confirmed fixed.
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem('sv_nav_trail_debug');
-      const trail: { at: string; path: string }[] = raw ? JSON.parse(raw) : [];
-      const full = pathname + (searchParams.toString() ? `?${searchParams.toString()}` : '');
-      trail.push({ at: new Date().toISOString(), path: full });
-      window.localStorage.setItem('sv_nav_trail_debug', JSON.stringify(trail.slice(-15)));
-    } catch {
-      /* ignore */
-    }
-  }, [pathname, searchParams]);
-
   useEffect(() => {
     try {
       if (typeof window !== 'undefined' && window.localStorage.getItem(STORAGE_KEY) === '1') {

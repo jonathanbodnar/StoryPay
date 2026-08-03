@@ -95,6 +95,11 @@ export default function PushNotificationsClientPage() {
   const [testResult,    setTestResult]    = useState<{ sent: number } | null>(null);
   // Native: OS notification permission was denied — show how to fix it.
   const [nativePermDenied, setNativePermDenied] = useState(false);
+  // Native: whether THIS device's OS notification permission is granted.
+  // The master toggle requires it — push_enabled alone is a venue-wide flag,
+  // so without this check a fresh device (or first login) would show the
+  // toggle ON even though this phone never went through the enable flow.
+  const [nativePermGranted, setNativePermGranted] = useState(false);
   const [error,         setError]         = useState<string | null>(null);
   const [vapidMissing,  setVapidMissing]  = useState(false);
 
@@ -125,6 +130,17 @@ export default function PushNotificationsClientPage() {
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d) setSettings(d as Record<string, boolean>); })
       .catch(() => {});
+
+    // Native: check this device's OS notification permission.
+    if (isNativeApp()) {
+      void (async () => {
+        try {
+          const { PushNotifications } = await import('@capacitor/push-notifications');
+          const perm = await PushNotifications.checkPermissions();
+          setNativePermGranted(perm.receive === 'granted');
+        } catch { /* ignore */ }
+      })();
+    }
 
     // Capture install prompt
     const onPrompt = (e: Event) => {
@@ -254,7 +270,10 @@ export default function PushNotificationsClientPage() {
   // Show only the toggles; no install wizard or VAPID setup needed.
   // ─────────────────────────────────────────────────────────────────────────
   if (isNativeApp()) {
-    const nativeEnabled = settings.push_enabled === true;
+    // ON only when the venue-wide flag is set AND this device's OS permission
+    // is granted — a fresh device / first login starts OFF until the user
+    // explicitly flips the switch (which fires the OS prompt).
+    const nativeEnabled = settings.push_enabled === true && nativePermGranted;
     return (
       <div className="max-w-2xl">
         <div className="mb-8">
@@ -286,6 +305,7 @@ export default function PushNotificationsClientPage() {
                     return;
                   }
                   setNativePermDenied(false);
+                  setNativePermGranted(true);
                 }
                 const next = {
                   ...settings,
