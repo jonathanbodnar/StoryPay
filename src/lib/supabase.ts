@@ -23,13 +23,22 @@ function getSupabaseAdmin(): SupabaseClient {
       process.env.SUPABASE_SERVICE_KEY ||
       process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!serviceKey) {
-      console.error(
-        '[supabase] SUPABASE_SERVICE_ROLE_KEY is not set. ' +
-        'Falling back to anon key — new tables will hit PostgREST schema cache. ' +
-        'Add SUPABASE_SERVICE_ROLE_KEY to your hosting environment variables.'
-      );
-    }
+          if (!serviceKey) {
+            if (process.env.NODE_ENV === 'production') {
+              // Falling back to the anon key in prod would silently strip the
+              // service-role RLS bypass, denying access to every server-only
+              // table. Fail loudly instead of limping in an insecure state.
+              throw new Error(
+                '[supabase] SUPABASE_SERVICE_ROLE_KEY is not set in production. ' +
+                'Refusing to fall back to the anon key. Set SUPABASE_SERVICE_ROLE_KEY in Railway.'
+              );
+            }
+            console.error(
+              '[supabase] SUPABASE_SERVICE_ROLE_KEY is not set. ' +
+              'Falling back to anon key for local dev — server-only tables will be denied by RLS. ' +
+              'Add SUPABASE_SERVICE_ROLE_KEY to your environment for full access.'
+            );
+          }
 
     _supabaseAdmin = createClient(url, serviceKey ?? anonKey, {
       db: { schema: 'public' },

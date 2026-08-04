@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { checkPassword } from '@/lib/password-policy';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -37,8 +38,9 @@ export async function POST(request: NextRequest) {
   if (!email || !isEmail(email)) {
     return NextResponse.json({ error: 'A valid email is required.' }, { status: 400 });
   }
-  if (password.length < 12) {
-    return NextResponse.json({ error: 'Password must be at least 12 characters.' }, { status: 400 });
+  const pwCheck = checkPassword(password);
+  if (!pwCheck.valid) {
+    return NextResponse.json({ error: pwCheck.message }, { status: 400 });
   }
   if (!first_name) {
     return NextResponse.json({ error: 'First name is required.' }, { status: 400 });
