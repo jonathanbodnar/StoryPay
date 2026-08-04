@@ -368,9 +368,13 @@ export async function auditPlatformSubscriptionsAgainstLunarPay(): Promise<{
       if (isSynced) { inSyncCount += 1; continue; }
     }
 
-    // Only surface as a mismatch if the card has actually been charged —
-    // an LP 'active' subscription with 0 successful transactions is still
-    // in its trial window and the local 'trialing' status is correct.
+    // Only surface mismatches that are actionable:
+    //   • LP must be in a paying status (not cancelled/expired — nothing to do)
+    //   • The card must have actually been charged (successTrxns > 0 or
+    //     lastPaymentOn set) — LP 'active' with 0 charges is a trial window,
+    //     local 'trialing' is correct and should not be bumped to 'active'.
+    const payingLpStatuses = new Set(['active', 'past_due']);
+    if (!payingLpStatuses.has(lpStatus)) continue;
     if (!hasBeenCharged(sub)) continue;
 
     let venue = linkedVenue ?? (lpCustomerId ? byCustomerId.get(lpCustomerId) : undefined) ?? null;
