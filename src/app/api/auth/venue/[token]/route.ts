@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { safeRedirect } from '@/lib/safe-redirect';
+import { setSignedCookie } from '@/lib/venue-session';
 
 /** Generate a fresh URL-safe magic-link token (mirrors request-login). */
 function newLoginToken(): string {
@@ -65,7 +66,7 @@ export async function GET(
 
     const response = safeRedirect(destination);
 
-    response.cookies.set('venue_id', venue.id, {
+    setSignedCookie(response, 'venue_id', venue.id, {
       path: '/',
       httpOnly: true,
       secure: true,

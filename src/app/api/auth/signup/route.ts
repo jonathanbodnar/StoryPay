@@ -6,6 +6,7 @@ import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { issueAndSendVerificationEmail } from '@/lib/email-verification';
 import { checkPassword } from '@/lib/password-policy';
 import { resolveVenueProPlan } from '@/lib/trial-plans';
+import { setSignedCookie } from '@/lib/venue-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -372,7 +373,7 @@ export async function POST(request: NextRequest) {
   // and then lands them in the dashboard onboarding flow.
   const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30;
   const response = NextResponse.json({ ok: true, redirect: '/signup/success?plan=free' });
-  response.cookies.set('venue_id', venue.id, {
+  setSignedCookie(response, 'venue_id', venue.id, {
     path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
   });
   return response;

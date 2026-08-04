@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { CONTACT_TYPES, type ContactType } from '@/lib/admin-contacts';
+import { setSignedCookie, clearSignedCookie } from '@/lib/venue-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -56,8 +57,8 @@ export async function POST(
       redirect: '/dashboard',
       venueName: (venue as { name: string }).name,
     });
-    res.cookies.set('venue_id', id, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
-    res.cookies.set('member_id', '', { ...COOKIE_BASE, httpOnly: true, maxAge: 0 });
+    setSignedCookie(res, 'venue_id', id, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
+    clearSignedCookie(res, 'member_id', { ...COOKIE_BASE, httpOnly: true });
     res.cookies.set('admin_impersonating', '1', { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
     res.cookies.set('impersonate_return', returnUrl, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
     return res;
@@ -85,8 +86,8 @@ export async function POST(
           (member as { last_name?: string | null }).last_name,
         ].filter(Boolean).join(' '),
     });
-    res.cookies.set('venue_id', venueId, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
-    res.cookies.set('member_id', id, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
+    setSignedCookie(res, 'venue_id', venueId, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
+    setSignedCookie(res, 'member_id', id, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
     res.cookies.set('admin_impersonating', '1', { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
     res.cookies.set('impersonate_return', returnUrl, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
     return res;

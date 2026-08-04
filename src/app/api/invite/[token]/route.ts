@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { safeRedirect } from '@/lib/safe-redirect';
+import { setSignedCookie } from '@/lib/venue-session';
 
 export async function GET(
   _request: NextRequest,
@@ -25,11 +26,11 @@ export async function GET(
       .eq('id', member.id);
 
     const response = safeRedirect('/dashboard');
-    response.cookies.set('venue_id', member.venue_id, {
+    setSignedCookie(response, 'venue_id', member.venue_id, {
       path: '/', httpOnly: true, secure: true, sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 30,
     });
-    response.cookies.set('member_id', member.id, {
+    setSignedCookie(response, 'member_id', member.id, {
       path: '/', httpOnly: true, secure: true, sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 30,
     });

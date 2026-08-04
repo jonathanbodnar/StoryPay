@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyAdminCookie } from '@/lib/admin-auth';
+import { clearSignedCookie } from '@/lib/venue-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,8 +23,8 @@ export async function POST() {
 
   const res = NextResponse.json({ ok: true, redirect: returnUrl });
 
-  res.cookies.set('venue_id', '', { ...COOKIE_BASE, httpOnly: true, maxAge: 0 });
-  res.cookies.set('member_id', '', { ...COOKIE_BASE, httpOnly: true, maxAge: 0 });
+  clearSignedCookie(res, 'venue_id', { ...COOKIE_BASE, httpOnly: true });
+  clearSignedCookie(res, 'member_id', { ...COOKIE_BASE, httpOnly: true });
   res.cookies.set('admin_impersonating', '', { ...COOKIE_BASE, httpOnly: true, maxAge: 0 });
   res.cookies.set('impersonate_return', '', { ...COOKIE_BASE, httpOnly: true, maxAge: 0 });
 

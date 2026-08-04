@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { rateLimitAny, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { signPendingToken, TWO_FA_PENDING_COOKIE } from '@/lib/twofa-pending';
 import { buildVenueAuthSuccessResponse } from '@/lib/auth-success';
+import { setSignedCookie } from '@/lib/venue-session';
 import { TWOFA_ENABLED } from '@/lib/feature-flags';
 
 /**
@@ -174,10 +175,10 @@ export async function POST(request: NextRequest) {
 
       if (memberValid) {
         const response = NextResponse.json({ redirect: '/dashboard' });
-        response.cookies.set('venue_id', member.venue_id, {
+        setSignedCookie(response, 'venue_id', member.venue_id, {
           path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
         });
-        response.cookies.set('member_id', member.id, {
+        setSignedCookie(response, 'member_id', member.id, {
           path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
         });
         return response;

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { safeRedirect } from '@/lib/safe-redirect';
+import { setSignedCookie } from '@/lib/venue-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -44,7 +45,7 @@ export async function GET(
     const destination = isFirstLogin ? '/dashboard?welcome=1' : '/dashboard';
 
     const response = safeRedirect(destination);
-    response.cookies.set('venue_id', venue.id, {
+    setSignedCookie(response, 'venue_id', venue.id, {
       path: '/',
       httpOnly: true,
       secure: true,

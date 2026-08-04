@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { consumeVerificationToken } from '@/lib/email-verification';
 import { provisionVenueLunarPayMerchant } from '@/lib/venue-lunarpay-onboard';
 import { safeRedirect } from '@/lib/safe-redirect';
+import { setSignedCookie } from '@/lib/venue-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -52,7 +53,7 @@ export async function GET(
   }
 
   const response = safeRedirect('/verify-email/success');
-  response.cookies.set('venue_id', result.venueId, {
+  setSignedCookie(response, 'venue_id', result.venueId, {
     path: '/',
     httpOnly: true,
     secure: true,

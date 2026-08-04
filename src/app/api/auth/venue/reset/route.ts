@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { verifyResetToken } from '../forgot/route';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { checkPassword } from '@/lib/password-policy';
+import { setSignedCookie } from '@/lib/venue-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
 
   const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30;
   const response = NextResponse.json({ ok: true, redirect: '/dashboard' });
-  response.cookies.set('venue_id', venue.id as string, {
+  setSignedCookie(response, 'venue_id', venue.id as string, {
     path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
   });
   return response;

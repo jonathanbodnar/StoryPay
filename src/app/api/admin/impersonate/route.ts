@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
+import { setSignedCookie, clearSignedCookie } from '@/lib/venue-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -40,16 +41,15 @@ export async function POST(request: NextRequest) {
 
   const res = NextResponse.json({ ok: true, redirect: '/dashboard', venueName: (venue as { name: string }).name });
 
-  res.cookies.set('venue_id', venueId, {
+  setSignedCookie(res, 'venue_id', venueId, {
     ...COOKIE_BASE,
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 30,
   });
 
-  res.cookies.set('member_id', '', {
+  clearSignedCookie(res, 'member_id', {
     ...COOKIE_BASE,
     httpOnly: true,
-    maxAge: 0,
   });
 
   res.cookies.set('admin_impersonating', '1', {

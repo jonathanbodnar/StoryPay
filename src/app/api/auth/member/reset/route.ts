@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { checkPassword } from '@/lib/password-policy';
+import { setSignedCookie } from '@/lib/venue-session';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -77,10 +78,10 @@ export async function POST(req: NextRequest) {
 
   const maxAge = 60 * 60 * 24 * 30;
   const response = NextResponse.json({ ok: true, redirect: '/dashboard' });
-  response.cookies.set('venue_id', member.venue_id as string, {
+  setSignedCookie(response, 'venue_id', member.venue_id as string, {
     path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
   });
-  response.cookies.set('member_id', member.id as string, {
+  setSignedCookie(response, 'member_id', member.id as string, {
     path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
   });
   return response;
