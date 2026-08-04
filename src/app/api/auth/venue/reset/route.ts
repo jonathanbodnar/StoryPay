@@ -81,6 +81,6 @@ export async function POST(req: NextRequest) {
   const response = NextResponse.json({ ok: true, redirect: '/dashboard' });
   setSignedCookie(response, 'venue_id', venue.id as string, {
     path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
-  });
+  }, { rememberMe });
   return response;
 }

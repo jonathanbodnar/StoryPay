@@ -175,12 +175,13 @@ export async function POST(request: NextRequest) {
 
       if (memberValid) {
         const response = NextResponse.json({ redirect: '/dashboard' });
+        const session = { rememberMe: Boolean(rememberMe) };
         setSignedCookie(response, 'venue_id', member.venue_id, {
           path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
-        });
+        }, session);
         setSignedCookie(response, 'member_id', member.id, {
           path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
-        });
+        }, session);
         return response;
       }
       return NextResponse.json({ error: 'Incorrect email or password.' }, { status: 401 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyMasterAdminOnly } from '@/lib/admin-auth';
 import { getAdminIdentity } from '@/lib/admin-identity';
+import { revokeVenueSessions } from '@/lib/session-revoke';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -92,6 +93,10 @@ export async function POST(
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 });
     }
+
+    // Force-logout any active StoryPay sessions for this venue (the Supabase ban
+    // above only blocks fresh logins, not already-issued session cookies).
+    await revokeVenueSessions(venueId);
 
     console.log(`[admin/suspend] venue ${venueId} suspended by ${adminEmail}`);
     return NextResponse.json({ ok: true, action: 'suspended', venueName: (venue as { name: string }).name });
