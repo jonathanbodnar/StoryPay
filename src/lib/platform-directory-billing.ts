@@ -276,7 +276,7 @@ export type LunarPaySubscriptionMismatch = {
   lpStatus: string;
   lpAmountCents: number;
   lpFrequency: string;
-  matchedBy: 'customer_id' | 'email' | 'unmatched';
+  matchedBy: 'already_linked' | 'customer_id' | 'email' | 'unmatched';
   venue: { id: string; name: string; email: string | null } | null;
   currentStatus: string | null;
   currentExternalId: string | null;
@@ -346,19 +346,27 @@ export async function auditPlatformSubscriptionsAgainstLunarPay(): Promise<{
     const lpCustomerId = sub.customerId != null ? String(sub.customerId) : null;
 
     // Already correctly linked — fast path, no LP customer lookup needed.
+    // "In sync" must be strict: a venue whose LP subscription is already
+    // `active` (i.e. actually being charged) but is still sitting on a local
+    // `trialing`/`none` status is NOT in sync — that's precisely the drift
+    // this audit exists to catch. Local `active` always satisfies any LP
+    // paying status; otherwise the local status must match the LP status
+    // exactly (e.g. both `trialing`, or both `past_due`).
     const linkedVenue = byExternalId.get(lpId);
     if (linkedVenue) {
-      const wantActive = lpStatus === 'active' || lpStatus === 'trialing';
-      const isSynced = wantActive
-        ? linkedVenue.directory_subscription_status === 'active' || linkedVenue.directory_subscription_status === 'trialing'
-        : true;
+      const localStatus = linkedVenue.directory_subscription_status;
+      const isSynced = localStatus === 'active' || localStatus === lpStatus;
       if (isSynced) { inSyncCount += 1; continue; }
     }
 
     if (!payingLpStatuses.has(lpStatus)) continue;
 
     let venue = linkedVenue ?? (lpCustomerId ? byCustomerId.get(lpCustomerId) : undefined) ?? null;
-    let matchedBy: LunarPaySubscriptionMismatch['matchedBy'] = venue ? 'customer_id' : 'unmatched';
+    let matchedBy: LunarPaySubscriptionMismatch['matchedBy'] = linkedVenue
+      ? 'already_linked'
+      : venue
+        ? 'customer_id'
+        : 'unmatched';
 
     if (!venue && lpCustomerId) {
       try {

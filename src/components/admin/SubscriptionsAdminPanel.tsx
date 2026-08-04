@@ -75,7 +75,7 @@ type LpMismatch = {
   lpStatus: string;
   lpAmountCents: number;
   lpFrequency: string;
-  matchedBy: 'customer_id' | 'email' | 'unmatched';
+  matchedBy: 'already_linked' | 'customer_id' | 'email' | 'unmatched';
   venue: { id: string; name: string; email: string | null } | null;
   currentStatus: string | null;
   currentExternalId: string | null;
@@ -305,7 +305,11 @@ export function SubscriptionsAdminPanel() {
                             <div className="font-medium text-gray-900">{m.venue.name}</div>
                             <div className="text-[11px] text-gray-500">{m.venue.email || '—'}</div>
                             <div className="text-[10px] text-gray-400 mt-0.5">
-                              matched by {m.matchedBy === 'customer_id' ? 'LunarPay customer ID' : 'email lookup'}
+                              {m.matchedBy === 'already_linked'
+                                ? 'already linked — status just drifted'
+                                : m.matchedBy === 'customer_id'
+                                  ? 'matched by LunarPay customer ID'
+                                  : 'matched by email lookup'}
                             </div>
                           </div>
                         ) : (
