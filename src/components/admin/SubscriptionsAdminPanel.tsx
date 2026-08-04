@@ -10,6 +10,8 @@ import {
   XCircle,
   Search,
   AlertTriangle,
+  RefreshCw,
+  Wrench,
 } from 'lucide-react';
 
 const BRAND = '#1b1b1b';
@@ -67,6 +69,18 @@ type ApiResponse = {
   venues: VenueRow[];
 };
 
+type LpMismatch = {
+  lpSubscriptionId: string;
+  lpCustomerId: string | null;
+  lpStatus: string;
+  lpAmountCents: number;
+  lpFrequency: string;
+  matchedBy: 'customer_id' | 'email' | 'unmatched';
+  venue: { id: string; name: string; email: string | null } | null;
+  currentStatus: string | null;
+  currentExternalId: string | null;
+};
+
 type StatusFilter = 'all' | 'active' | 'past_due' | 'canceled' | 'none' | 'trialing';
 
 function formatCents(c: number): string {
@@ -109,6 +123,13 @@ export function SubscriptionsAdminPanel() {
   const [planFilter, setPlanFilter] = useState<'all' | string>('all');
   const [search, setSearch] = useState('');
 
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditRan, setAuditRan] = useState(false);
+  const [auditErr, setAuditErr] = useState('');
+  const [mismatches, setMismatches] = useState<LpMismatch[]>([]);
+  const [inSyncCount, setInSyncCount] = useState(0);
+  const [fixingId, setFixingId] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setErr('');
@@ -127,6 +148,49 @@ export function SubscriptionsAdminPanel() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  const runAudit = useCallback(async () => {
+    setAuditLoading(true);
+    setAuditErr('');
+    try {
+      const res = await fetch('/api/admin/subscriptions/lunarpay-audit', { cache: 'no-store' });
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string; mismatches?: LpMismatch[]; inSyncCount?: number;
+      };
+      if (!res.ok) {
+        setAuditErr(j.error || 'Could not reach LunarPay');
+        return;
+      }
+      setMismatches(j.mismatches || []);
+      setInSyncCount(j.inSyncCount || 0);
+      setAuditRan(true);
+    } finally {
+      setAuditLoading(false);
+    }
+  }, []);
+
+  const fixMismatch = useCallback(async (m: LpMismatch) => {
+    if (!m.venue) return;
+    setFixingId(m.lpSubscriptionId);
+    try {
+      const res = await fetch('/api/admin/subscriptions/lunarpay-audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          venueId: m.venue.id,
+          lpSubscriptionId: m.lpSubscriptionId,
+          lpCustomerId: m.lpCustomerId,
+          lpAmountCents: m.lpAmountCents,
+        }),
+      });
+      if (res.ok) {
+        setMismatches((prev) => prev.filter((x) => x.lpSubscriptionId !== m.lpSubscriptionId));
+        await load();
+      }
+    } finally {
+      setFixingId(null);
+    }
   }, [load]);
 
   const filteredVenues = useMemo(() => {
@@ -181,6 +245,116 @@ export function SubscriptionsAdminPanel() {
           changes are managed under <span className="font-semibold">Directory plans</span>.
         </p>
       </div>
+
+      {/* LunarPay reconciliation */}
+      <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <Wrench size={16} className="text-gray-700" /> LunarPay reconciliation
+            </h3>
+            <p className="mt-1 text-xs text-gray-500 max-w-2xl">
+              Checks StoryPay HQ&apos;s live LunarPay subscriptions against this table. If a venue is
+              actually being charged in LunarPay but never flipped to &quot;Active&quot; here (e.g. the
+              checkout success step was interrupted), it shows up below with a one-click fix.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void runAudit()}
+            disabled={auditLoading}
+            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            style={{ backgroundColor: BRAND }}
+          >
+            {auditLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            {auditLoading ? 'Checking LunarPay…' : 'Check LunarPay for out-of-sync subscriptions'}
+          </button>
+        </div>
+
+        {auditErr && (
+          <div className="mx-6 my-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {auditErr}
+          </div>
+        )}
+
+        {auditRan && !auditErr && (
+          mismatches.length === 0 ? (
+            <div className="px-6 py-8 text-center text-sm text-gray-500">
+              <CheckCircle2 size={22} className="mx-auto mb-2 text-emerald-500" />
+              Everything&apos;s in sync — {inSyncCount} paying subscription{inSyncCount === 1 ? '' : 's'} in LunarPay all match this table.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 border-b border-gray-100 bg-amber-50/60">
+                    <th className="px-6 py-3">Venue (matched)</th>
+                    <th className="px-6 py-3">LunarPay subscription</th>
+                    <th className="px-6 py-3">LP status</th>
+                    <th className="px-6 py-3 text-right">Amount</th>
+                    <th className="px-6 py-3">Local status</th>
+                    <th className="px-6 py-3 text-right">Fix</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {mismatches.map((m) => (
+                    <tr key={m.lpSubscriptionId} className="hover:bg-amber-50/30">
+                      <td className="px-6 py-3">
+                        {m.venue ? (
+                          <div>
+                            <div className="font-medium text-gray-900">{m.venue.name}</div>
+                            <div className="text-[11px] text-gray-500">{m.venue.email || '—'}</div>
+                            <div className="text-[10px] text-gray-400 mt-0.5">
+                              matched by {m.matchedBy === 'customer_id' ? 'LunarPay customer ID' : 'email lookup'}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-medium text-red-600">
+                            No matching venue found — needs manual review
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3 font-mono text-[11px] text-gray-600">
+                        {m.lpSubscriptionId}
+                        {m.lpCustomerId && <div className="text-[10px] text-gray-400">customer {m.lpCustomerId}</div>}
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${statusPill(m.lpStatus)}`}>
+                          {m.lpStatus}
+                        </span>
+                        <div className="text-[10px] text-gray-400 mt-0.5 capitalize">{m.lpFrequency}</div>
+                      </td>
+                      <td className="px-6 py-3 text-right font-mono text-gray-900">
+                        {formatCentsExact(m.lpAmountCents)}
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${statusPill(m.currentStatus || 'none')}`}>
+                          {(m.currentStatus || 'none').replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3 text-right">
+                        {m.venue ? (
+                          <button
+                            type="button"
+                            onClick={() => void fixMismatch(m)}
+                            disabled={fixingId === m.lpSubscriptionId}
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            {fixingId === m.lpSubscriptionId ? <Loader2 size={11} className="animate-spin" /> : null}
+                            Mark active
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+      </section>
 
       {/* MRR + status cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -1,4 +1,4 @@
-import { createCheckoutSession, getCheckoutSession } from '@/lib/lunarpay';
+import { createCheckoutSession, getCheckoutSession, listSubscriptions, getCustomer } from '@/lib/lunarpay';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getPlatformFortisMerchantId } from '@/lib/platform-billing';
 import { notifyVenueSubscriptionCharged, notifyVenueCardDeclined } from '@/lib/saas-billing-notifications';
@@ -268,6 +268,165 @@ export async function verifyDirectoryPlatformCheckoutAndSubscribe(
   });
 
   return { subscriptionId: subId };
+}
+
+export type LunarPaySubscriptionMismatch = {
+  lpSubscriptionId: string;
+  lpCustomerId: string | null;
+  lpStatus: string;
+  lpAmountCents: number;
+  lpFrequency: string;
+  matchedBy: 'customer_id' | 'email' | 'unmatched';
+  venue: { id: string; name: string; email: string | null } | null;
+  currentStatus: string | null;
+  currentExternalId: string | null;
+  inSync: boolean;
+};
+
+/**
+ * Cross-checks every subscription on file with StoryPay HQ's LunarPay
+ * merchant against `venues.directory_subscription_status` /
+ * `directory_subscription_external_id`.
+ *
+ * Why this can drift: the happy path writes those two columns from
+ * verifyDirectoryPlatformCheckoutAndSubscribe() right after checkout, and
+ * every renewal/failure webhook after that keys off
+ * directory_subscription_external_id (see
+ * handleLunarPayWebhookForPlatformLedger below). If that first write never
+ * lands — the browser closed before the success redirect finished, a
+ * network blip, a subscription created by hand in the LunarPay dashboard —
+ * the venue is stuck on its old status (often 'trialing' or 'none') forever,
+ * even though LunarPay is happily charging the card every cycle. This audit
+ * finds those out-of-sync venues so they can be fixed with a single click
+ * instead of a one-off SQL patch every time it happens.
+ *
+ * Read-only — call applyLunarPaySubscriptionFix() to actually write a fix.
+ */
+export async function auditPlatformSubscriptionsAgainstLunarPay(): Promise<{
+  mismatches: LunarPaySubscriptionMismatch[];
+  inSyncCount: number;
+  error?: string;
+}> {
+  const secret = getPlatformLunarPaySecretKey();
+  if (!secret) {
+    return { mismatches: [], inSyncCount: 0, error: 'STORYPAY_HQ_LUNARPAY_SK is not configured.' };
+  }
+
+  let subList: Record<string, unknown>[];
+  try {
+    const result = await listSubscriptions(secret);
+    subList = (Array.isArray(result) ? result : (result as { data?: unknown[] }).data ?? []) as Record<string, unknown>[];
+  } catch (e) {
+    return { mismatches: [], inSyncCount: 0, error: e instanceof Error ? e.message : 'LunarPay request failed' };
+  }
+
+  const { data: venuesRaw } = await supabaseAdmin
+    .from('venues')
+    .select('id, name, email, directory_subscription_status, directory_subscription_external_id, platform_lunarpay_customer_id');
+  const venues = (venuesRaw ?? []) as Array<{
+    id: string; name: string; email: string | null;
+    directory_subscription_status: string | null; directory_subscription_external_id: string | null;
+    platform_lunarpay_customer_id: string | null;
+  }>;
+  const byCustomerId = new Map(venues.filter((v) => v.platform_lunarpay_customer_id).map((v) => [String(v.platform_lunarpay_customer_id), v]));
+  const byEmail = new Map(venues.filter((v) => v.email).map((v) => [v.email!.toLowerCase(), v]));
+  const byExternalId = new Map(venues.filter((v) => v.directory_subscription_external_id).map((v) => [String(v.directory_subscription_external_id), v]));
+
+  // Only "paying" LP statuses matter here — a subscription LP itself has
+  // marked cancelled/expired shouldn't be force-activated locally.
+  const payingLpStatuses = new Set(['active', 'trialing', 'past_due']);
+
+  const mismatches: LunarPaySubscriptionMismatch[] = [];
+  let inSyncCount = 0;
+
+  for (const sub of subList) {
+    const lpId = String(sub.id ?? '');
+    if (!lpId) continue;
+    const lpStatus = String(sub.status ?? 'unknown').toLowerCase();
+    const lpCustomerId = sub.customerId != null ? String(sub.customerId) : null;
+
+    // Already correctly linked — fast path, no LP customer lookup needed.
+    const linkedVenue = byExternalId.get(lpId);
+    if (linkedVenue) {
+      const wantActive = lpStatus === 'active' || lpStatus === 'trialing';
+      const isSynced = wantActive
+        ? linkedVenue.directory_subscription_status === 'active' || linkedVenue.directory_subscription_status === 'trialing'
+        : true;
+      if (isSynced) { inSyncCount += 1; continue; }
+    }
+
+    if (!payingLpStatuses.has(lpStatus)) continue;
+
+    let venue = linkedVenue ?? (lpCustomerId ? byCustomerId.get(lpCustomerId) : undefined) ?? null;
+    let matchedBy: LunarPaySubscriptionMismatch['matchedBy'] = venue ? 'customer_id' : 'unmatched';
+
+    if (!venue && lpCustomerId) {
+      try {
+        const custResult = await getCustomer(secret, lpCustomerId);
+        const cust = ((custResult as { data?: Record<string, unknown> }).data ?? custResult) as Record<string, unknown>;
+        const email = typeof cust.email === 'string' ? cust.email.toLowerCase() : null;
+        if (email && byEmail.has(email)) {
+          venue = byEmail.get(email) ?? null;
+          matchedBy = 'email';
+        }
+      } catch {
+        // best-effort — leave unmatched, still surfaced below for manual review
+      }
+    }
+
+    mismatches.push({
+      lpSubscriptionId: lpId,
+      lpCustomerId,
+      lpStatus,
+      lpAmountCents: typeof sub.amount === 'number' ? Math.round(sub.amount) : 0,
+      lpFrequency: String(sub.frequency ?? 'monthly'),
+      matchedBy: venue ? matchedBy : 'unmatched',
+      venue: venue ? { id: venue.id, name: venue.name, email: venue.email } : null,
+      currentStatus: venue?.directory_subscription_status ?? null,
+      currentExternalId: venue?.directory_subscription_external_id ?? null,
+      inSync: false,
+    });
+  }
+
+  return { mismatches, inSyncCount };
+}
+
+/**
+ * Applies the fix a super-admin confirmed from the audit above: links the
+ * LunarPay subscription to the venue and flips it to 'active'. Also logs a
+ * platform_billing_events row so the reconciliation is auditable.
+ */
+export async function applyLunarPaySubscriptionFix(params: {
+  venueId: string;
+  lpSubscriptionId: string;
+  lpCustomerId: string | null;
+  lpAmountCents: number;
+}): Promise<void> {
+  await supabaseAdmin
+    .from('venues')
+    .update({
+      directory_subscription_status: 'active',
+      directory_subscription_external_id: params.lpSubscriptionId,
+      platform_lunarpay_customer_id: params.lpCustomerId ?? undefined,
+      directory_downgrade_at: null,
+    })
+    .eq('id', params.venueId);
+
+  const { data: venueRow } = await supabaseAdmin
+    .from('venues')
+    .select('directory_plan_id')
+    .eq('id', params.venueId)
+    .maybeSingle();
+
+  await supabaseAdmin.from('platform_billing_events').insert({
+    venue_id: params.venueId,
+    directory_plan_id: (venueRow as { directory_plan_id?: string } | null)?.directory_plan_id ?? null,
+    amount_cents: 0, // reconciliation marker only — real charge amounts already exist as separate events (or will on the next cycle)
+    currency: 'usd',
+    external_event_id: `resync:${params.lpSubscriptionId}:${Date.now()}`,
+    event_type: 'admin_resync',
+    metadata: { source: 'lunarpay_audit_fix', lp_subscription_id: params.lpSubscriptionId, lp_amount_cents: params.lpAmountCents },
+  });
 }
 
 export async function insertPlatformBillingEventFromWebhook(params: {
