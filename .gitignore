@@ -43,3 +43,4 @@ next-env.d.ts
 
 # graphify knowledge graph (rebuilt locally for free via git hook; not committed to avoid repo bloat)
 /graphify-out/
+play-store-assets/
