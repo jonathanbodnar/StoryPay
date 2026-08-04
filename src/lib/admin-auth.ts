@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSupportSession } from '@/lib/support/auth';
+import { secureCompare } from '@/lib/secure-compare';
 
 /**
  * Returns true iff the caller is authenticated as an admin — EITHER the
@@ -20,7 +21,7 @@ export async function verifyAdminCookie(): Promise<boolean> {
   const c = await cookies();
 
   const masterToken = c.get('admin_token')?.value;
-  if (masterToken && process.env.ADMIN_SECRET && masterToken === process.env.ADMIN_SECRET) {
+  if (masterToken && process.env.ADMIN_SECRET && secureCompare(masterToken, process.env.ADMIN_SECRET)) {
     return true;
   }
 
@@ -43,5 +44,5 @@ export async function verifyAdminCookie(): Promise<boolean> {
 export async function verifyMasterAdminOnly(): Promise<boolean> {
   const c = await cookies();
   const t = c.get('admin_token')?.value;
-  return Boolean(t && process.env.ADMIN_SECRET && t === process.env.ADMIN_SECRET);
+  return Boolean(t && process.env.ADMIN_SECRET && secureCompare(t, process.env.ADMIN_SECRET));
 }

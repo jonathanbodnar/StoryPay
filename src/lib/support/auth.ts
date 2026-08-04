@@ -9,6 +9,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
+import { secureCompare } from '@/lib/secure-compare';
 
 export const SUPPORT_SESSION_COOKIE = 'support_session';
 // Concierge/support team sessions last a full week of inactivity before
@@ -45,7 +46,7 @@ export function signSupportSession(payload: SupportSessionPayload): string {
 
 export function verifySupportSession(token: string): SupportSessionPayload | null {
   try {
-    const decoded = jwt.verify(token, jwtSecret()) as SupportSessionPayload & { iat?: number; exp?: number };
+    const decoded = jwt.verify(token, jwtSecret(), { algorithms: ['HS256'] }) as SupportSessionPayload & { iat?: number; exp?: number };
     if (!decoded?.sub || !decoded?.role) return null;
     return { sub: decoded.sub, email: decoded.email, name: decoded.name, role: decoded.role };
   } catch {
@@ -68,7 +69,7 @@ export async function getSupportSession(): Promise<SupportSessionPayload | null>
 export async function verifySupportAccess(): Promise<{ isSuperAdmin: boolean; agent: SupportSessionPayload | null }> {
   const c = await cookies();
   const adminToken = c.get('admin_token')?.value;
-  const isSuperAdmin = Boolean(adminToken && adminToken === process.env.ADMIN_SECRET);
+  const isSuperAdmin = Boolean(adminToken && secureCompare(adminToken, process.env.ADMIN_SECRET));
 
   const agent = isSuperAdmin ? null : await getSupportSession();
   return { isSuperAdmin, agent };

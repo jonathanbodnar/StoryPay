@@ -5,6 +5,8 @@ import {
   signSupportSession,
   verifySupportPassword,
 } from '@/lib/support/auth';
+import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { secureCompare } from '@/lib/secure-compare';
 
 /**
  * Admin login — email + password.
@@ -23,6 +25,18 @@ import {
 interface LoginBody { email?: string; password?: string; secret?: string }
 
 export async function POST(request: Request) {
+  // Brute-force protection: cap attempts per IP. The master admin password /
+  // secret is the keys-to-the-kingdom credential, so it must not be guessable
+  // at unlimited rate (venue sign-in already rate-limits; this closes the gap).
+  const ip = getClientIp(request);
+  const gate = rateLimit(`admin-login:${ip}`, 10, 10 * 60 * 1000);
+  if (!gate.allowed) {
+    return NextResponse.json(
+      { error: `Too many attempts. Try again in ${formatRetryAfter(gate.retryAfterMs)}.` },
+      { status: 429 },
+    );
+  }
+
   let body: LoginBody = {};
   try { body = (await request.json()) as LoginBody; } catch { /* empty */ }
 
@@ -36,12 +50,12 @@ export async function POST(request: Request) {
   let masterValid = false;
   if (body.email !== undefined || body.password !== undefined) {
     if (adminEmail && adminPassword) {
-      masterValid = inputEmail === adminEmail.toLowerCase() && inputPassword === adminPassword;
+      masterValid = inputEmail === adminEmail.toLowerCase() && secureCompare(inputPassword, adminPassword);
     } else if (adminSecret) {
-      masterValid = inputPassword === adminSecret;
+      masterValid = secureCompare(inputPassword, adminSecret);
     }
   } else if (body.secret !== undefined && adminSecret) {
-    masterValid = body.secret === adminSecret;
+    masterValid = secureCompare(body.secret, adminSecret);
   }
 
   if (masterValid) {
