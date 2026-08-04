@@ -88,8 +88,8 @@ export async function PATCH(request: NextRequest) {
   // and the row is themselves (basic safety: prevents accidental password takeover
   // if an attacker gets a stolen session cookie).
   if (typeof body.new_password === 'string' && body.new_password.length > 0) {
-    if (body.new_password.length < 8) {
-      return NextResponse.json({ error: 'New password must be at least 8 characters' }, { status: 400 });
+    if (body.new_password.length < 12) {
+      return NextResponse.json({ error: 'New password must be at least 12 characters' }, { status: 400 });
     }
     const current = body.current_password ?? '';
     const { data: row } = await supabaseAdmin

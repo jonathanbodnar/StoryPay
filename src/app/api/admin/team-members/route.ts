@@ -82,8 +82,8 @@ export async function POST(request: NextRequest) {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
   }
-  if (password.length < 8) {
-    return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+  if (password.length < 12) {
+    return NextResponse.json({ error: 'Password must be at least 12 characters' }, { status: 400 });
   }
 
   const role = body.role === 'support_admin' ? 'support_admin' : 'support_agent';

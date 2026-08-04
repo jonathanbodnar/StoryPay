@@ -40,7 +40,7 @@ export async function PATCH(req: NextRequest) {
     const newPass     = (body.new_password    ?? '').trim();
     const confirmPass = (body.confirm_password ?? '').trim();
     if (!newPass)              return NextResponse.json({ error: 'New password is required.' },                    { status: 400 });
-    if (newPass.length < 8)   return NextResponse.json({ error: 'Password must be at least 8 characters.' },     { status: 400 });
+    if (newPass.length < 12)   return NextResponse.json({ error: 'Password must be at least 12 characters.' },     { status: 400 });
     if (newPass !== confirmPass) return NextResponse.json({ error: 'Passwords do not match.' },                   { status: 400 });
 
     const newHash = await bcrypt.hash(newPass, 12);
@@ -114,7 +114,7 @@ export async function PATCH(req: NextRequest) {
     const confirmPass = (body.confirm_password  ?? '').trim();
 
     if (!newPass) return NextResponse.json({ error: 'New password is required.' }, { status: 400 });
-    if (newPass.length < 8) return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
+    if (newPass.length < 12) return NextResponse.json({ error: 'Password must be at least 12 characters.' }, { status: 400 });
     if (newPass !== confirmPass) return NextResponse.json({ error: 'Passwords do not match.' }, { status: 400 });
 
     const newHash = await bcrypt.hash(newPass, 12);

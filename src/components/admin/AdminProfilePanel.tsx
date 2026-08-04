@@ -81,7 +81,7 @@ export function AdminProfilePanel() {
 
   async function savePassword() {
     if (!currentPw) { setErr('Enter your current password'); return; }
-    if (newPw.length < 8) { setErr('New password must be at least 8 characters'); return; }
+    if (newPw.length < 12) { setErr('New password must be at least 12 characters'); return; }
     if (newPw !== confirmPw) { setErr('New passwords do not match'); return; }
     setPwBusy(true);
     setErr(null);

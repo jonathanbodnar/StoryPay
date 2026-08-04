@@ -408,7 +408,7 @@ export default function ProfilePage() {
                     type={showNewPass ? 'text' : 'password'}
                     value={passForm.new_password}
                     onChange={(e) => setPassForm((f) => ({ ...f, new_password: e.target.value }))}
-                    placeholder="At least 8 characters"
+                    placeholder="At least 12 characters"
                     className={INPUT + ' pr-10'}
                     minLength={8}
                   />
@@ -684,7 +684,7 @@ export default function ProfilePage() {
                   type={showNewPass ? 'text' : 'password'}
                   value={passForm.new_password}
                   onChange={(e) => setPassForm((f) => ({ ...f, new_password: e.target.value }))}
-                  placeholder="At least 8 characters"
+                  placeholder="At least 12 characters"
                   className={INPUT + ' pr-10'}
                   minLength={8}
                 />

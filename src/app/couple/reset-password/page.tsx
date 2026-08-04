@@ -42,8 +42,8 @@ export default function CoupleResetPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+    if (password.length < 12) {
+      setError('Password must be at least 12 characters.');
       return;
     }
     if (password !== confirm) {
@@ -108,7 +108,7 @@ export default function CoupleResetPasswordPage() {
                       autoFocus
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="At least 8 characters"
+                      placeholder="At least 12 characters"
                       className={`${INPUT} pr-10`}
                     />
                     <button type="button" onClick={() => setShowPass((v) => !v)}

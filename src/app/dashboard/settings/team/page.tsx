@@ -244,7 +244,7 @@ export default function TeamPage() {
  setEditPasswordError('');
  const { new_password, confirm_password, ...coreFields } = editForm;
  if (new_password || confirm_password) {
-  if (new_password.length < 8) { setEditPasswordError('Password must be at least 8 characters'); return; }
+  if (new_password.length < 12) { setEditPasswordError('Password must be at least 12 characters'); return; }
   if (new_password !== confirm_password) { setEditPasswordError('Passwords do not match'); return; }
  }
  setEditSaving(true);

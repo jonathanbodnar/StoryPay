@@ -241,8 +241,8 @@ export function CoupleManagementPortal() {
         }
         body.email = editEmail.trim().toLowerCase();
       } else if (editTab === 'password') {
-        if (editPassword.length < 8) {
-          setEditError('Password must be at least 8 characters');
+        if (editPassword.length < 12) {
+          setEditError('Password must be at least 12 characters');
           setEditSaving(false);
           return;
         }
@@ -599,7 +599,7 @@ export function CoupleManagementPortal() {
                       type={showEditPass ? 'text' : 'password'}
                       value={editPassword}
                       onChange={(e) => setEditPassword(e.target.value)}
-                      placeholder="At least 8 characters"
+                      placeholder="At least 12 characters"
                       className={`${INPUT} pr-9`}
                     />
                     <button type="button" onClick={() => setShowEditPass((v) => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
