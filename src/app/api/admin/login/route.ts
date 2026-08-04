@@ -7,6 +7,7 @@ import {
 } from '@/lib/support/auth';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { secureCompare } from '@/lib/secure-compare';
+import { issueMasterAdminToken } from '@/lib/admin-token';
 
 /**
  * Admin login — email + password.
@@ -15,7 +16,8 @@ import { secureCompare } from '@/lib/secure-compare';
  *
  *   1. Master super admin — env-based credentials (ADMIN_EMAIL/ADMIN_PASSWORD,
  *      or legacy single ADMIN_SECRET as password). On success sets the
- *      `admin_token` cookie containing ADMIN_SECRET (full access).
+ *      `admin_token` cookie to a signed JWT (issueMasterAdminToken) — the raw
+ *      ADMIN_SECRET never ships to the browser.
  *
  *   2. Team member — DB lookup against support_team_members. On success sets
  *      the `support_session` cookie (signed JWT). Tab access is enforced
@@ -60,7 +62,7 @@ export async function POST(request: Request) {
 
   if (masterValid) {
     const response = NextResponse.json({ success: true, identity: 'master' });
-    response.cookies.set('admin_token', adminSecret, {
+    response.cookies.set('admin_token', issueMasterAdminToken(), {
       httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 7,
     });
     // Clear any stale team member session so the env super admin takes over cleanly.

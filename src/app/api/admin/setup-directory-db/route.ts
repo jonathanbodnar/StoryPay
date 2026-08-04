@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
@@ -52,7 +53,7 @@ const STATEMENTS: { name: string; sql: string }[] = [
 async function requireAdmin(): Promise<boolean> {
   const cookieStore = await cookies();
   const token = cookieStore.get('admin_token')?.value;
-  return Boolean(token && token === process.env.ADMIN_SECRET);
+  return verifyMasterAdminToken(token);
 }
 
 export async function POST() {

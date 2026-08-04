@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
@@ -10,7 +11,7 @@ async function getVenueId() {
 async function isAdmin() {
   const c = await cookies();
   const token = c.get('admin_token')?.value;
-  return !!token && token === process.env.ADMIN_SECRET;
+  return verifyMasterAdminToken(token);
 }
 
 // PATCH — venue can edit their own title/description

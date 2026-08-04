@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from './supabase';
-import { secureCompare } from './secure-compare';
+import { verifyMasterAdminToken } from './admin-token';
 
 export type UserRole = 'owner' | 'admin' | 'member';
 
@@ -133,6 +133,6 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 export async function getAdminFromSession() {
   const cookieStore = await cookies();
   const adminToken = cookieStore.get('admin_token')?.value;
-  if (!adminToken || !secureCompare(adminToken, process.env.ADMIN_SECRET)) return null;
+  if (!verifyMasterAdminToken(adminToken)) return null;
   return { authenticated: true };
 }

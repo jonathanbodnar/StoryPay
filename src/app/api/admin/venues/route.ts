@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { agencyCreateMerchant } from '@/lib/lunarpay';
@@ -24,7 +25,7 @@ async function verifyVenuesRead(): Promise<boolean> {
 async function verifyMasterAdmin(): Promise<boolean> {
   const cookieStore = await cookies();
   const adminToken = cookieStore.get('admin_token')?.value;
-  return Boolean(adminToken && adminToken === process.env.ADMIN_SECRET);
+  return verifyMasterAdminToken(adminToken);
 }
 
 export async function GET() {

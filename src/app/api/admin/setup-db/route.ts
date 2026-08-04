@@ -1,11 +1,12 @@
 import { cookies } from 'next/headers';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
 async function requireAdmin() {
   const cookieStore = await cookies();
   const token = cookieStore.get('admin_token')?.value;
-  return token && token === process.env.ADMIN_SECRET;
+  return verifyMasterAdminToken(token);
 }
 
 // Tables that must exist in production — creates them if missing.

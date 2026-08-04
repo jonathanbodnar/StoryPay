@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { DIRECTORY_BADGE_STATUSES, isDirectoryBadgeStatus } from '@/lib/directory-badges';
@@ -9,7 +10,7 @@ export const runtime = 'nodejs';
 async function verifyAdmin() {
   const cookieStore = await cookies();
   const adminToken = cookieStore.get('admin_token')?.value;
-  return adminToken && adminToken === process.env.ADMIN_SECRET;
+  return verifyMasterAdminToken(adminToken);
 }
 
 export async function PATCH(

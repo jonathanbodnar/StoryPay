@@ -1,8 +1,9 @@
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { supabaseAdmin } from '@/lib/supabase';
 import { HELP_CATEGORIES } from '@/lib/help-articles';
+import { verifyAdminCookie } from '@/lib/admin-auth';
+import { isAdminSecretBearer } from '@/lib/admin-token';
 
 // One-time route to generate and store OpenAI embeddings for every help article.
 // Admin-only: requires either:
@@ -11,14 +12,13 @@ import { HELP_CATEGORIES } from '@/lib/help-articles';
 // NOT available to venue users — each call burns hundreds of OpenAI tokens.
 
 export async function POST(request: NextRequest) {
-  const cookieStore = await cookies();
   const authHeader  = request.headers.get('authorization') ?? '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  const adminSecret = process.env.ADMIN_SECRET;
 
-  // Accept the admin bearer token OR the admin session cookie.
-  const isBearerAdmin = !!(adminSecret && bearerToken === adminSecret);
-  const isSessionAdmin = cookieStore.get('admin_session')?.value === '1';
+  // Accept the admin bearer token (CI / server-side seeding) OR a real admin
+  // session cookie (master JWT or support team member).
+  const isBearerAdmin  = isAdminSecretBearer(bearerToken);
+  const isSessionAdmin = await verifyAdminCookie();
 
   if (!isBearerAdmin && !isSessionAdmin) {
     return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });

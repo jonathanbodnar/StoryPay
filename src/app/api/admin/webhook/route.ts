@@ -1,11 +1,12 @@
 import { cookies } from 'next/headers';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgencyWebhook, setAgencyWebhook, deleteAgencyWebhook } from '@/lib/lunarpay';
 
 async function verifyAdmin() {
   const cookieStore = await cookies();
   const adminToken = cookieStore.get('admin_token')?.value;
-  return adminToken && adminToken === process.env.ADMIN_SECRET;
+  return verifyMasterAdminToken(adminToken);
 }
 
 export async function GET() {

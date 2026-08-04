@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
@@ -11,7 +12,7 @@ const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'ima
 async function requireAdmin(): Promise<boolean> {
   const cookieStore = await cookies();
   const token = cookieStore.get('admin_token')?.value;
-  return Boolean(token && token === process.env.ADMIN_SECRET);
+  return verifyMasterAdminToken(token);
 }
 
 /**

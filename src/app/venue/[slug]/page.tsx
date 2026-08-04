@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { MapPin, Sparkles } from 'lucide-react';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { getPublicVenueBySlug } from '@/lib/public-venue-directory';
 import { ListingReviewsBlock } from '@/components/directory/ListingReviewsBlock';
 import { DirectoryListingBadges } from '@/components/directory/DirectoryListingBadges';
@@ -68,9 +69,7 @@ const DIRECTORY_SITE =
 async function viewerOpts(searchParams: Record<string, string | string[] | undefined>) {
   const cookieStore = await cookies();
   const adminToken  = cookieStore.get('admin_token')?.value ?? null;
-  const viewerIsAdmin = Boolean(
-    adminToken && process.env.ADMIN_SECRET && adminToken === process.env.ADMIN_SECRET,
-  );
+  const viewerIsAdmin = verifyMasterAdminToken(adminToken);
   const viewerVenueId = cookieStore.get('venue_id')?.value ?? null;
   const previewToken  = (typeof searchParams.preview === 'string' ? searchParams.preview : null);
   return { viewerIsAdmin, viewerVenueId, previewToken };

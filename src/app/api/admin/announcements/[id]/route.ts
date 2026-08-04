@@ -1,11 +1,12 @@
 import { cookies } from 'next/headers';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
 async function verifyAdmin() {
   const cookieStore = await cookies();
   const token = cookieStore.get('admin_token')?.value;
-  return token && token === process.env.ADMIN_SECRET;
+  return verifyMasterAdminToken(token);
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

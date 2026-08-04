@@ -9,7 +9,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
-import { secureCompare } from '@/lib/secure-compare';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 
 export const SUPPORT_SESSION_COOKIE = 'support_session';
 // Concierge/support team sessions last a full week of inactivity before
@@ -69,7 +69,7 @@ export async function getSupportSession(): Promise<SupportSessionPayload | null>
 export async function verifySupportAccess(): Promise<{ isSuperAdmin: boolean; agent: SupportSessionPayload | null }> {
   const c = await cookies();
   const adminToken = c.get('admin_token')?.value;
-  const isSuperAdmin = Boolean(adminToken && secureCompare(adminToken, process.env.ADMIN_SECRET));
+  const isSuperAdmin = verifyMasterAdminToken(adminToken);
 
   const agent = isSuperAdmin ? null : await getSupportSession();
   return { isSuperAdmin, agent };

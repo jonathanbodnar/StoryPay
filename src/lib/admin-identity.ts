@@ -19,7 +19,7 @@ import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSupportSession } from '@/lib/support/auth';
 import { resolveAllowedAdminTabs, ADMIN_TAB_KEY_SET } from '@/lib/admin-tabs-registry';
-import { secureCompare } from '@/lib/secure-compare';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 
 export interface AdminIdentity {
   /** True iff the master env-based super admin is logged in (has full access). */
@@ -53,7 +53,7 @@ export async function getAdminIdentity(): Promise<AdminIdentity> {
 
   // Master super admin (env-based) — full access.
   const adminToken = c.get('admin_token')?.value;
-  if (adminToken && process.env.ADMIN_SECRET && secureCompare(adminToken, process.env.ADMIN_SECRET)) {
+  if (verifyMasterAdminToken(adminToken)) {
     return {
       isMasterSuperAdmin: true,
       member: null,

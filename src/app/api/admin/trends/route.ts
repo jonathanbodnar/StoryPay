@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -7,7 +8,7 @@ const googleTrends = require('google-trends-api');
 async function verifyAdmin() {
   const cookieStore = await cookies();
   const token = cookieStore.get('admin_token')?.value;
-  return token && token === process.env.ADMIN_SECRET;
+  return verifyMasterAdminToken(token);
 }
 
 export interface TrendPoint {
