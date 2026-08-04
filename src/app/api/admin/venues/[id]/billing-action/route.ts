@@ -37,7 +37,10 @@ export async function POST(
   const { id: venueId } = await params;
   if (!venueId) return NextResponse.json({ error: 'Missing venue id' }, { status: 400 });
 
-  let body: { action?: string; charge_id?: string; amount_cents?: number };
+  const ALLOWED_MANUAL_STATUSES = ['active', 'trialing', 'past_due', 'canceled', 'pending'] as const;
+type AllowedStatus = typeof ALLOWED_MANUAL_STATUSES[number];
+
+let body: { action?: string; charge_id?: string; amount_cents?: number; status?: string };
   try {
     body = await request.json();
   } catch {
@@ -164,6 +167,37 @@ export async function POST(
         { status: 502 },
       );
     }
+  }
+
+  // ── set_status ────────────────────────────────────────────────────────────
+  // Manual override for when LP data and local DB have drifted.  Does NOT
+  // touch LunarPay — only adjusts the local directory_subscription_status so
+  // the admin panel and entitlement gates reflect reality.
+  if (action === 'set_status') {
+    const newStatus = (body.status ?? '').trim() as AllowedStatus;
+    if (!ALLOWED_MANUAL_STATUSES.includes(newStatus)) {
+      return NextResponse.json(
+        { error: `Invalid status. Must be one of: ${ALLOWED_MANUAL_STATUSES.join(', ')}` },
+        { status: 400 },
+      );
+    }
+    await supabaseAdmin
+      .from('venues')
+      .update({ directory_subscription_status: newStatus })
+      .eq('id', venueId);
+
+    await supabaseAdmin.from('platform_billing_events').insert({
+      venue_id:          venueId,
+      directory_plan_id: (v.directory_plan_id as string | null) ?? null,
+      amount_cents:      0,
+      currency:          'usd',
+      external_event_id: `admin_set_status:${venueId}:${Date.now()}`,
+      event_type:        'admin_status_override',
+      metadata:          { new_status: newStatus, previous_status: v.directory_subscription_status, admin_action: true },
+    });
+
+    console.log('[admin/billing-action] set_status', newStatus, 'for venue', venueId);
+    return NextResponse.json({ ok: true, status: newStatus });
   }
 
   return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });

@@ -332,9 +332,18 @@ export async function auditPlatformSubscriptionsAgainstLunarPay(): Promise<{
   const byEmail = new Map(venues.filter((v) => v.email).map((v) => [v.email!.toLowerCase(), v]));
   const byExternalId = new Map(venues.filter((v) => v.directory_subscription_external_id).map((v) => [String(v.directory_subscription_external_id), v]));
 
-  // Only "paying" LP statuses matter here — a subscription LP itself has
-  // marked cancelled/expired shouldn't be force-activated locally.
-  const payingLpStatuses = new Set(['active', 'trialing', 'past_due']);
+  // A subscription is only truly "paying" if LunarPay has recorded at least
+  // one successful transaction on it (successTrxns > 0 or lastPaymentOn set).
+  // LP status='active' alone is not sufficient — it just means the subscription
+  // record exists and isn't cancelled; it does NOT mean the card has been
+  // charged. A brand-new subscription within its 14-day trial window will show
+  // status='active' with successTrxns=0 and no lastPaymentOn — those are
+  // correctly 'trialing' locally and must NOT be bumped to 'active'.
+  function hasBeenCharged(sub: Record<string, unknown>): boolean {
+    const trxns = typeof sub.successTrxns === 'number' ? sub.successTrxns : 0;
+    const lastPmt = sub.lastPaymentOn ?? sub.lastPaymentDate ?? null;
+    return trxns > 0 || (lastPmt !== null && lastPmt !== undefined);
+  }
 
   const mismatches: LunarPaySubscriptionMismatch[] = [];
   let inSyncCount = 0;
@@ -359,7 +368,10 @@ export async function auditPlatformSubscriptionsAgainstLunarPay(): Promise<{
       if (isSynced) { inSyncCount += 1; continue; }
     }
 
-    if (!payingLpStatuses.has(lpStatus)) continue;
+    // Only surface as a mismatch if the card has actually been charged —
+    // an LP 'active' subscription with 0 successful transactions is still
+    // in its trial window and the local 'trialing' status is correct.
+    if (!hasBeenCharged(sub)) continue;
 
     let venue = linkedVenue ?? (lpCustomerId ? byCustomerId.get(lpCustomerId) : undefined) ?? null;
     let matchedBy: LunarPaySubscriptionMismatch['matchedBy'] = linkedVenue
