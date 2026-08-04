@@ -18,10 +18,17 @@ BEGIN
   END IF;
 END $$;
 
+-- After the move, the `vector` type lives in `extensions`. Put it on the session
+-- search_path so the ALTER FUNCTION signatures below resolve — without this, a
+-- SQL-editor session whose search_path is just `public` fails with
+-- "type vector does not exist".
+SET search_path = public, extensions;
+
 ALTER FUNCTION public.match_help_articles(vector, integer, double precision)
   SET search_path = public, extensions;
 
 ALTER FUNCTION public.upsert_help_embedding(text, vector, timestamptz)
   SET search_path = public, extensions;
 
+RESET search_path;
 NOTIFY pgrst, 'reload schema';
