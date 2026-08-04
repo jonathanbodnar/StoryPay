@@ -5,10 +5,9 @@ import { notFound } from 'next/navigation';
 import { MapPin } from 'lucide-react';
 import { stateFromSlug } from '@/lib/us-states';
 import { fetchHubVenues, fetchCitiesForState } from '@/lib/hub-data';
+import { siteUrl } from '@/lib/site-url';
 
-const SITE_URL = (
-  process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL || 'https://storyvenue.com'
-).replace(/\/$/, '');
+const SITE_URL = siteUrl(process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL, 'https://storyvenue.com').replace(/\/$/, '');
 
 export const revalidate = 3600;
 

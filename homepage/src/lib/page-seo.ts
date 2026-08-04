@@ -1,7 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { Metadata } from 'next';
+import { siteUrl } from '@/lib/site-url';
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+const APP_URL = siteUrl(process.env.NEXT_PUBLIC_APP_URL, 'https://storypay.io');
 
 interface PageSeoRow {
   page_key: string;

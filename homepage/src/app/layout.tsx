@@ -4,8 +4,9 @@ import './globals.css';
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? '';
 import { getPageSeo } from '@/lib/page-seo';
+import { siteUrl } from '@/lib/site-url';
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+const APP_URL = siteUrl(process.env.NEXT_PUBLIC_APP_URL, 'https://storypay.io');
 
 export async function generateMetadata(): Promise<Metadata> {
   const seo = await getPageSeo('home');

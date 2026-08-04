@@ -12,10 +12,10 @@ import { DirectoryListingBadges } from '@/components/DirectoryListingBadges';
 import { ListingTracker } from '@/components/ListingTracker';
 import { ListingLeadModal } from '@/components/ListingLeadModal';
 import { VenueSeoFooter } from '@/components/VenueSeoFooter';
+import { siteUrl } from '@/lib/site-url';
 
-const API_BASE = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://app.storyvenue.com';
-const DIRECTORY_SITE =
-  process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL || 'https://storyvenue.com';
+const API_BASE = siteUrl(process.env.NEXT_PUBLIC_DASHBOARD_URL, 'https://app.storyvenue.com');
+const DIRECTORY_SITE = siteUrl(process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL, 'https://storyvenue.com');
 
 /**
  * Convert a raw Nominatim display_name into a clean US-style address:
