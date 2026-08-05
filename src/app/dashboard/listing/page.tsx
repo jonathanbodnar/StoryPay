@@ -19,7 +19,7 @@ import {
   ArrowUpRight, ArrowDownRight, Minus, Search,
   Radio, DollarSign, CalendarDays, UserCheck,
   Link2, Mail, Bell, Copy, Download, Check, X,
-  Send, Zap, TrendingDown, Inbox, MessageCircle, CalendarCheck, Heart,
+  Send, Zap, TrendingDown, Inbox, MessageCircle, CalendarCheck,
   Gem, Lock, BarChart2, Sparkles, Reply, Percent, UserX, BadgeCheck,
 } from 'lucide-react';
 import FeatureLockModal from '@/components/FeatureLockModal';
@@ -256,7 +256,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 // ── Booking funnel (top-of-dashboard) ─────────────────────────────────────────
-const FUNNEL_ICONS = [Inbox, MessageCircle, BadgeCheck, CalendarCheck, Heart];
+const FUNNEL_ICONS = [Inbox, MessageCircle, BadgeCheck, CalendarCheck, Gem];
 const FUNNEL_FALLBACK: LeadFunnelStep[] = [
   { key: 'leads', label: 'Leads', count: 0 },
   { key: 'conversations', label: 'Conversations Started', count: 0 },
