@@ -5,8 +5,8 @@ import { supabaseAdmin } from '@/lib/supabase';
  *
  * Two pieces the app relies on:
  *   1. A default template that every new venue starts with (customers get the
- *      pipeline the user described — Lead, Conversations Started, Lead
- *      Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not
+ *      pipeline the user described — Lead, Conversations Started,
+ *      Qualified, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not
  *      Interested).
  *   2. A "lazy provision" helper: when a venue hits the Leads page for the
  *      first time we make sure they have a default pipeline with the template
@@ -30,7 +30,7 @@ export const DEFAULT_PIPELINE_NAME = 'Sales Pipeline';
 export const DEFAULT_STAGE_TEMPLATE: StageTemplate[] = [
   { name: 'Lead',                 color: '#3b82f6', kind: 'open' },  // blue
   { name: 'Conversations Started',color: '#0ea5e9', kind: 'open' },  // sky
-  { name: 'Lead Contacted',       color: '#f59e0b', kind: 'open' },  // amber
+  { name: 'Qualified',            color: '#f59e0b', kind: 'open' },  // amber
   { name: 'Tour Booked',          color: '#6366f1', kind: 'open' },  // indigo
   { name: 'Proposal Sent',        color: '#8b5cf6', kind: 'open' },  // violet
   { name: 'Wedding Booked',       color: '#10b981', kind: 'won'  },  // emerald
@@ -43,7 +43,7 @@ export const DEFAULT_STAGE_TEMPLATE: StageTemplate[] = [
 // time so the cards land in the right Kanban column.
 export const LEGACY_STATUS_TO_STAGE: Record<string, string> = {
   new:             'Lead',
-  contacted:       'Lead Contacted',
+  contacted:       'Qualified',
   tour_booked:     'Tour Booked',
   proposal_sent:   'Proposal Sent',
   booked_wedding:  'Wedding Booked',
@@ -66,6 +66,12 @@ export function legacyStatusForStageName(stageName: string): LegacyLeadStatus {
   if (n.includes('tour booked') || n === 'tour') return 'tour_booked';
   if (n.includes('contacted')) return 'contacted';
   if (n.includes('follow up')) return 'contacted';
+  // "Qualified" replaced the old "Lead Contacted" stage — map to the same
+  // legacy status ('contacted') since that's the closest existing value in
+  // the leads.status CHECK constraint (no 'qualified' value exists there,
+  // and this is intentionally decoupled from the separate `qualified` system
+  // tag in lib/system-tags.ts).
+  if (n.includes('qualified')) return 'contacted';
   if (n.includes('conversation')) return 'new';
   if (n === 'lead' || n.startsWith('lead ')) return 'new';
   if (n.includes('booked')) return 'booked_wedding';

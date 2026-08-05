@@ -74,6 +74,10 @@ export async function GET(
   // leads per email (uses .limit(1) + array access, not .maybeSingle()).
   let contact_stage: StagePill | null = null;
   let resolvedStageId: string | null = null;
+  // Resolved via the same venue_customers → email → most-recent leads chain
+  // used everywhere else (see enrichWithStages() in threads/route.ts). Feeds
+  // the "Mark Qualified" pill so it knows which lead row to toggle.
+  let resolvedLeadId: string | null = null;
 
   if (email || c?.stage_id || c?.pipeline_id) {
     const ctx = await resolveVenueCustomerPipelineContext(venueId, {
@@ -86,6 +90,7 @@ export async function GET(
       resolvedStageId = ctx.stageId;
       contact_stage = await stageById(venueId, ctx.stageId);
     }
+    resolvedLeadId = ctx?.linkedLeadId ?? null;
   }
 
   // Slug-only fallback for very old contacts with no stage/pipeline IDs.
@@ -99,6 +104,7 @@ export async function GET(
     venue_customers: contact ?? null,
     contact_stage,
     contact_stage_id: resolvedStageId,
+    lead_id: resolvedLeadId,
   });
 }
 

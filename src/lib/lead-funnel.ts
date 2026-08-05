@@ -1,13 +1,15 @@
 /**
  * Shared, venue-agnostic lead-funnel bucketing helpers.
  *
- * Buckets a lead's pipeline stage into one of 4 milestones:
- *   1 = Lead, 2 = Conversations Started, 3 = Booked Tours, 4 = Booked Weddings
+ * Buckets a lead's pipeline stage into one of 5 milestones:
+ *   1 = Lead, 2 = Conversations Started, 3 = Qualified, 4 = Booked Tours,
+ *   5 = Booked Weddings
  *
  * Extracted from src/app/api/listing-analytics/lead-funnel/route.ts (the
  * venue-facing Bride Booking System funnel) so the exact same bucketing +
  * cumulative-count/step-conversion math can be reused by cohort-level admin
- * analytics (see src/app/api/admin/support/cohort-funnels/route.ts) without
+ * analytics (see src/app/api/admin/support/cohort-funnels/route.ts) and the
+ * monthly booking report (src/lib/booking-report-data.ts) without
  * duplicating the logic. Pure functions — no Supabase calls, no I/O.
  */
 
@@ -26,18 +28,21 @@ export interface LeadFunnelLeadRow {
   stage_id: string | null;
 }
 
-/** Which of the 4 funnel milestones a lead has reached, and whether it's lost. */
+/** Which of the 5 funnel milestones a lead has reached, and whether it's lost. */
 export function leadRank(
   status: string,
   stage: LeadFunnelStageInfo | undefined,
-): { rank: 1 | 2 | 3 | 4; lost: boolean } {
+): { rank: 1 | 2 | 3 | 4 | 5; lost: boolean } {
   const name = (stage?.name ?? '').toLowerCase();
   const kind = stage?.kind ?? '';
   const lost = kind === 'lost' || status === 'not_interested';
   const won = kind === 'won' || status === 'booked_wedding';
 
-  if (won) return { rank: 4, lost: false };
+  if (won) return { rank: 5, lost: false };
   if (name.includes('tour') || name.includes('proposal') || status === 'tour_booked' || status === 'proposal_sent') {
+    return { rank: 4, lost };
+  }
+  if (name.includes('qualified')) {
     return { rank: 3, lost };
   }
   if (name.includes('conversation') || name.includes('contacted') || name.includes('follow up') || status === 'contacted') {
@@ -46,7 +51,7 @@ export function leadRank(
   return { rank: 1, lost };
 }
 
-export type LeadFunnelStepKey = 'leads' | 'conversations' | 'tours' | 'weddings';
+export type LeadFunnelStepKey = 'leads' | 'conversations' | 'qualified' | 'tours' | 'weddings';
 
 export interface LeadFunnelStep {
   key: LeadFunnelStepKey;
@@ -63,6 +68,7 @@ export interface LeadFunnelShape {
 const STEP_DEFS: Array<{ key: LeadFunnelStepKey; label: string }> = [
   { key: 'leads', label: 'Leads' },
   { key: 'conversations', label: 'Conversations Started' },
+  { key: 'qualified', label: 'Qualified' },
   { key: 'tours', label: 'Booked Tours' },
   { key: 'weddings', label: 'Booked Weddings' },
 ];
@@ -80,9 +86,9 @@ function conversionsFromSteps(steps: LeadFunnelStep[]): (number | null)[] {
 }
 
 /**
- * Cumulative 4-step funnel (Leads → Conversations Started → Booked Tours →
- * Booked Weddings) + step-to-step conversion %, for one set of leads (one
- * venue's leads, or any other pre-scoped slice).
+ * Cumulative 5-step funnel (Leads → Conversations Started → Qualified →
+ * Booked Tours → Booked Weddings) + step-to-step conversion %, for one set
+ * of leads (one venue's leads, or any other pre-scoped slice).
  */
 export function computeLeadFunnel(
   leads: LeadFunnelLeadRow[],
@@ -90,22 +96,25 @@ export function computeLeadFunnel(
 ): LeadFunnelShape {
   let leadsCount = 0;
   let conversations = 0;
+  let qualified = 0;
   let tours = 0;
   let weddings = 0;
 
   for (const row of leads) {
     leadsCount += 1;
     const { rank, lost } = leadRank(row.status ?? 'new', row.stage_id ? stageById.get(row.stage_id) : undefined);
-    if (rank >= 4) weddings += 1;
-    if (rank >= 3 && !lost) tours += 1;
+    if (rank >= 5) weddings += 1;
+    if (rank >= 4 && !lost) tours += 1;
+    if (rank >= 3 && !lost) qualified += 1;
     if (rank >= 2 && !lost) conversations += 1;
   }
 
   const steps: LeadFunnelStep[] = [
     { key: 'leads', label: STEP_DEFS[0].label, count: leadsCount },
     { key: 'conversations', label: STEP_DEFS[1].label, count: conversations },
-    { key: 'tours', label: STEP_DEFS[2].label, count: tours },
-    { key: 'weddings', label: STEP_DEFS[3].label, count: weddings },
+    { key: 'qualified', label: STEP_DEFS[2].label, count: qualified },
+    { key: 'tours', label: STEP_DEFS[3].label, count: tours },
+    { key: 'weddings', label: STEP_DEFS[4].label, count: weddings },
   ];
 
   return { steps, conversions: conversionsFromSteps(steps) };

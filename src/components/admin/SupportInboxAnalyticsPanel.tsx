@@ -154,7 +154,7 @@ function MetricCard({ icon, label, value, sub }: { icon: React.ReactNode; label:
 }
 
 const SLA_COLORS = { green: '#10b981', yellow: '#f59e0b', red: '#f97316', critical: '#dc2626' };
-const STAGE_COLORS = ['#1b1b1b', '#4338ca', '#7c3aed', '#16a34a'];
+const STAGE_COLORS = ['#1b1b1b', '#4338ca', '#f59e0b', '#7c3aed', '#16a34a'];
 
 // ─── Main panel ─────────────────────────────────────────────────────────────
 

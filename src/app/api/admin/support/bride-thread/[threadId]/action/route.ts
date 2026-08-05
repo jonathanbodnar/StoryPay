@@ -5,9 +5,10 @@
  * support agent can move the funnel forward without flipping tabs.
  *
  * Request body:
- *   { action: 'set_stage',     stageId: string }
- *   { action: 'add_tag',       tagId:   string }
- *   { action: 'remove_tag',    tagId:   string }
+ *   { action: 'set_stage',        stageId: string }
+ *   { action: 'add_tag',          tagId:   string }
+ *   { action: 'remove_tag',       tagId:   string }
+ *   { action: 'toggle_qualified' }
  *   { action: 're_enable_ai' }
  *   { action: 'pause_ai' }
  *
@@ -26,15 +27,17 @@ import { ensureVenueAiResources } from '@/lib/ai-concierge/venue-resources';
 import { recordAiStateTransition } from '@/lib/ai-concierge/state-transitions';
 import { broadcastStageChanged, broadcastTagsChanged } from '@/lib/realtime/broadcast';
 import { findMatchingLeadIds } from '@/lib/find-matching-leads';
+import { toggleLeadQualified } from '@/lib/lead-qualified-toggle';
 import type { AiState } from '@/lib/ai-concierge/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 type ActionBody =
-  | { action: 'set_stage';    stageId: string }
-  | { action: 'add_tag';      tagId:   string }
-  | { action: 'remove_tag';   tagId:   string }
+  | { action: 'set_stage';        stageId: string }
+  | { action: 'add_tag';          tagId:   string }
+  | { action: 'remove_tag';       tagId:   string }
+  | { action: 'toggle_qualified' }
   | { action: 're_enable_ai' }
   | { action: 'activate_ai' }
   | { action: 'pause_ai' };
@@ -352,6 +355,57 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
       });
 
       return NextResponse.json({ ok: true, stage: { id: s.id, name: s.name } });
+    }
+
+    case 'toggle_qualified': {
+      if (!venueCustomerId) return NextResponse.json({ error: 'No contact linked to this thread' }, { status: 422 });
+
+      let leadId: string | undefined = lead?.id;
+      if (!leadId) {
+        const created = await ensureLeadForVenueCustomer(venueId, venueCustomerId);
+        if (!created) {
+          return NextResponse.json({ error: 'Could not create a lead for this contact yet, needs at least a name, email, or phone.' }, { status: 422 });
+        }
+        leadId = created;
+      }
+
+      const result = await toggleLeadQualified(venueId, leadId);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: result.status });
+      }
+
+      // Mirror onto venue_customers — canonical source for chat threads —
+      // same as set_stage above.
+      const { error: vcErr } = await supabaseAdmin
+        .from('venue_customers')
+        .update({
+          stage_id:    result.stage.id,
+          pipeline_id: result.stage.pipeline_id,
+          updated_at:  new Date().toISOString(),
+        })
+        .eq('id', venueCustomerId)
+        .eq('venue_id', venueId);
+      if (vcErr) console.error('[support toggle_qualified] venue_customers update failed', vcErr);
+
+      void supabaseAdmin.from('lead_activity_log').insert({
+        lead_id:  leadId,
+        venue_id: venueId,
+        action:   'stage_changed_by_support',
+        details:  { stage_id: result.stage.id, stage_name: result.stage.name, by: triggeredBy, via: 'mark_qualified_pill' },
+      }).then(() => {}, () => {});
+
+      void broadcastStageChanged({
+        threadId,
+        venueId,
+        vcId:       venueCustomerId,
+        stageId:    result.stage.id,
+        stageName:  result.stage.name,
+        stageColor: result.stage.color,
+        pipelineId: result.stage.pipeline_id,
+        source:     'support',
+      });
+
+      return NextResponse.json({ ok: true, qualified: result.qualified, stage: { id: result.stage.id, name: result.stage.name } });
     }
 
     case 'add_tag': {

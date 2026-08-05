@@ -3,7 +3,8 @@
  *
  * Powers the "Support Analytics" admin tab's "Funnel Health by Plan Type"
  * section: the venue-facing lead funnel (Leads → Conversations Started →
- * Booked Tours → Booked Weddings), aggregated across 3 venue cohorts:
+ * Qualified → Booked Tours → Booked Weddings), aggregated across 3 venue
+ * cohorts:
  *
  *   private_client  venues.is_private_client = true
  *   all_inclusive   directory_plans.slug = 'all-inclusive' AND is_private_client = false
@@ -92,11 +93,12 @@ function toNum(v: number | string | null): number {
 }
 
 /** Mirrors computeLeadFunnel's per-step inclusion rules (see lib/lead-funnel.ts). */
-function reachesStep(rank: 1 | 2 | 3 | 4, lost: boolean, stepKey: LeadFunnelStepKey): boolean {
+function reachesStep(rank: 1 | 2 | 3 | 4 | 5, lost: boolean, stepKey: LeadFunnelStepKey): boolean {
   if (stepKey === 'leads') return true;
   if (stepKey === 'conversations') return rank >= 2 && !lost;
-  if (stepKey === 'tours') return rank >= 3 && !lost;
-  return rank >= 4; // weddings
+  if (stepKey === 'qualified') return rank >= 3 && !lost;
+  if (stepKey === 'tours') return rank >= 4 && !lost;
+  return rank >= 5; // weddings
 }
 
 export async function GET(req: NextRequest) {
@@ -174,7 +176,7 @@ export async function GET(req: NextRequest) {
     // ── Drill-down branch: venues in a cohort at/past a given stage ─────────
     if (cohortParam && COHORT_KEY_SET.has(cohortParam) && stageParam) {
       const cohortKey = cohortParam as CohortKey;
-      const validStages: LeadFunnelStepKey[] = ['leads', 'conversations', 'tours', 'weddings'];
+      const validStages: LeadFunnelStepKey[] = ['leads', 'conversations', 'qualified', 'tours', 'weddings'];
       if (!(validStages as string[]).includes(stageParam)) {
         return NextResponse.json({ error: 'Invalid stage' }, { status: 400 });
       }
@@ -217,12 +219,13 @@ export async function GET(req: NextRequest) {
       const shape = aggregateLeadFunnels(perVenueShapes.length ? perVenueShapes : [{ steps: [
         { key: 'leads', label: 'Leads', count: 0 },
         { key: 'conversations', label: 'Conversations Started', count: 0 },
+        { key: 'qualified', label: 'Qualified', count: 0 },
         { key: 'tours', label: 'Booked Tours', count: 0 },
         { key: 'weddings', label: 'Booked Weddings', count: 0 },
-      ], conversions: [null, null, null] }]);
+      ], conversions: [null, null, null, null] }]);
 
       const leadsCount = shape.steps[0]?.count ?? 0;
-      const wonCount = shape.steps[3]?.count ?? 0;
+      const wonCount = shape.steps.find((s) => s.key === 'weddings')?.count ?? 0;
       const leadToWonPct = leadsCount > 0 ? Math.round((wonCount / leadsCount) * 1000) / 10 : null;
 
       // Biggest drop-off: largest absolute count drop between consecutive steps.

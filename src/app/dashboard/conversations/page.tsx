@@ -90,6 +90,8 @@ interface ThreadDetail {
   contact_stage?: { name: string; color: string | null } | null;
   /** Authoritative DB stage_id — use this to highlight the correct pill. */
   contact_stage_id?: string | null;
+  /** Resolved lead id (venue_customers → email → most-recent lead), used by the "Mark Qualified" pill. */
+  lead_id?: string | null;
   venue_customers: {
     id: string;
     first_name: string;
@@ -275,6 +277,7 @@ export default function ConversationsPage() {
   const [threadPipelines, setThreadPipelines] = useState<{id:string;name:string;is_default:boolean;stages:{id:string;name:string;color:string;position:number}[]}[]>([]);
   const threadPipelinesLoaded = useRef(false);
   const [stageUpdating, setStageUpdating] = useState(false);
+  const [qualifiedPending, setQualifiedPending] = useState(false);
   const [mobileShowThread, setMobileShowThread] = useState(false);
   // Live search params — unlike a one-shot window.location read on mount,
   // this updates on client-side router.push navigations too (the push
@@ -1410,6 +1413,40 @@ export default function ConversationsPage() {
     setStageUpdating(false);
   }
 
+  /** "Mark Qualified" pill — reversible; server enforces the past-Qualified guard. */
+  async function toggleQualified() {
+    const leadId = threadDetail?.lead_id;
+    if (!leadId || qualifiedPending) return;
+    setQualifiedPending(true);
+    try {
+      const res = await fetch(`/api/leads/${leadId}/toggle-qualified`, { method: 'POST' });
+      const data = await res.json().catch(() => ({} as { error?: string; stage?: { id: string; name: string; color: string | null } }));
+      if (!res.ok) {
+        setSendError((data as { error?: string }).error || 'Could not update Qualified status');
+        return;
+      }
+      const stage = (data as { stage?: { id: string; name: string; color: string | null } }).stage;
+      if (stage && threadDetail) {
+        setThreadDetail((prev) => prev ? {
+          ...prev,
+          contact_stage: { name: stage.name, color: stage.color },
+          contact_stage_id: stage.id,
+        } : prev);
+        const vcId = threadDetail.venue_customer_id;
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.venue_customer_id === vcId
+              ? { ...t, contact_stage: { name: stage.name, color: stage.color }, contact_stage_id: stage.id }
+              : t,
+          ),
+        );
+        dispatchStageChange({ vcId, pipelineId: '', stageId: stage.id, stageName: stage.name, stageColor: stage.color ?? '' });
+      }
+    } finally {
+      setQualifiedPending(false);
+    }
+  }
+
   async function markThreadUnread(threadId: string, e: React.MouseEvent) {
     e.stopPropagation(); e.preventDefault();
     setListActionError('');
@@ -2185,6 +2222,34 @@ export default function ConversationsPage() {
                   if (byName) activeId = byName.id;
                 }
 
+                // "Mark Qualified" pill — reversible; hidden once the lead has
+                // progressed past Qualified (Tour Booked / Proposal Sent /
+                // Wedding Booked). Server-side guard is authoritative; this is
+                // just a best-effort name check for display.
+                const activeStageName = (
+                  (activeId ? allStages.find((s) => s.id === activeId)?.name : null) ??
+                  threadDetail.contact_stage?.name ??
+                  ''
+                ).toLowerCase();
+                const pastQualified = activeStageName.includes('tour') || activeStageName.includes('proposal') || activeStageName.includes('wedding booked');
+                const isQualifiedNow = activeStageName.includes('qualified');
+                const qualifiedPill = threadDetail.lead_id && !pastQualified ? (
+                  <button
+                    type="button"
+                    disabled={qualifiedPending}
+                    onClick={() => void toggleQualified()}
+                    title={isQualifiedNow ? 'Click to move back to Conversations Started' : 'Mark this lead as Qualified'}
+                    className={classNames(
+                      'inline-flex flex-shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50',
+                      isQualifiedNow
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                        : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-700',
+                    )}
+                  >
+                    {isQualifiedNow ? (<><Check size={11} /> Qualified</>) : 'Mark Qualified'}
+                  </button>
+                ) : null;
+
                 // Native app: a dropdown is far easier to use than a long
                 // horizontally-scrolling row of pills on a phone.
                 if (isNativeApp()) {
@@ -2207,6 +2272,7 @@ export default function ConversationsPage() {
                         ) : threadDetail.contact_stage?.name ? (
                           <span className="text-xs font-medium text-gray-700">{threadDetail.contact_stage.name}</span>
                         ) : null}
+                        {qualifiedPill}
                       </div>
                     </div>
                   );
@@ -2253,6 +2319,7 @@ export default function ConversationsPage() {
                           {threadDetail.contact_stage.name}
                         </span>
                       ) : null}
+                      {qualifiedPill}
                     </div>
                   </div>
                 );

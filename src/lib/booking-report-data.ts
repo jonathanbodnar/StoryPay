@@ -13,9 +13,9 @@ import {
   LEAD_SOURCE_ORDER,
   type LeadSourceBucket,
 } from '@/lib/lead-source';
+import { buildStageById, computeLeadFunnel, type LeadFunnelStageRow } from '@/lib/lead-funnel';
 import type {
   BookingReportData,
-  FunnelStep,
   SourceRow,
   ReferrerRow,
   GeoCityRow,
@@ -27,17 +27,6 @@ import type {
 } from '@/lib/booking-report-email';
 
 type StageInfo = { name: string; kind: string; position: number };
-
-function leadRank(status: string, stage: StageInfo | undefined): { rank: 1|2|3|4; lost: boolean } {
-  const name = (stage?.name ?? '').toLowerCase();
-  const kind = stage?.kind ?? '';
-  const lost = kind === 'lost' || status === 'not_interested';
-  const won  = kind === 'won'  || status === 'booked_wedding';
-  if (won) return { rank: 4, lost: false };
-  if (name.includes('tour') || name.includes('proposal') || status === 'tour_booked' || status === 'proposal_sent') return { rank: 3, lost };
-  if (name.includes('conversation') || name.includes('contacted') || name.includes('follow up') || status === 'contacted') return { rank: 2, lost };
-  return { rank: 1, lost };
-}
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -139,6 +128,7 @@ export async function compileBookingReport(venueId: string, days = 30): Promise<
     ((stagesRaw ?? []) as Array<{ id: string; name: string; kind: string; position: number }>)
       .map(s => [s.id, { name: s.name, kind: s.kind, position: s.position }])
   );
+  const funnelStageById = buildStageById((stagesRaw ?? []) as LeadFunnelStageRow[]);
 
   const allLeads    = (allTimeLeadsRaw ?? []) as LeadRow[];
   const periodLeads = allLeads.filter(r => r.created_at >= since && r.created_at <= until);
@@ -146,9 +136,10 @@ export async function compileBookingReport(venueId: string, days = 30): Promise<
   const priorEvents   = allEvents.filter(e => e.created_at <  since);
 
   // ── Booking funnel (period leads) ─────────────────────────────────────────
+  // Shares the exact bucketing + cumulative-count math with the live
+  // dashboard widget and cohort admin analytics (see lib/lead-funnel.ts) so
+  // all three consumers stay in lockstep — including the 5th "Qualified" step.
   const sourceCounts: Record<LeadSourceBucket, number> = { meta: 0, google: 0, direct: 0, other: 0 };
-  let leadsCount = 0, conversations = 0, tours = 0, weddings = 0;
-
   for (const row of periodLeads) {
     const bucket = bucketLeadSource({
       first_touch_utm: row.first_touch_utm,
@@ -156,23 +147,10 @@ export async function compileBookingReport(venueId: string, days = 30): Promise<
       referral_source: row.referral_source,
     });
     sourceCounts[bucket] += 1;
-    leadsCount += 1;
-    const { rank, lost } = leadRank(row.status ?? 'new', row.stage_id ? stageById.get(row.stage_id) : undefined);
-    if (rank >= 4) weddings += 1;
-    if (rank >= 3 && !lost) tours += 1;
-    if (rank >= 2 && !lost) conversations += 1;
   }
 
-  const steps: FunnelStep[] = [
-    { key: 'leads',         label: 'Leads',                count: leadsCount    },
-    { key: 'conversations', label: 'Conversations Started', count: conversations },
-    { key: 'tours',         label: 'Booked Tours',          count: tours         },
-    { key: 'weddings',      label: 'Booked Weddings',       count: weddings      },
-  ];
-  const conversions = steps.slice(1).map((step, i) => {
-    const from = steps[i].count;
-    return from > 0 ? Math.round((step.count / from) * 100) : null;
-  });
+  const { steps, conversions } = computeLeadFunnel(periodLeads, funnelStageById);
+  const leadsCount = steps[0]?.count ?? periodLeads.length;
 
   const sources: SourceRow[] = LEAD_SOURCE_ORDER.map(key => ({
     key,

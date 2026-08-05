@@ -378,6 +378,28 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                   );
                 }}
               />
+              <QualifiedPill
+                stageName={data.pipeline?.name ?? null}
+                disabled={actionPending}
+                onToggle={(nowQualified) =>
+                  runAction(
+                    { action: 'toggle_qualified' },
+                    () => {
+                      setData(prev => prev ? {
+                        ...prev,
+                        pipeline: {
+                          id:            prev.pipeline?.id ?? '',
+                          name:          nowQualified ? 'Qualified' : 'Conversations Started',
+                          color:         prev.pipeline?.color ?? null,
+                          pipeline_id:   prev.pipeline?.pipeline_id ?? '',
+                          pipeline_name: prev.pipeline?.pipeline_name ?? '',
+                        },
+                      } : prev);
+                    },
+                    nowQualified ? 'Marked Qualified' : 'Moved back to Conversations Started',
+                  )
+                }
+              />
               {data.bride.lead_status && (
                 <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-700">
                   {data.bride.lead_status}
@@ -752,6 +774,44 @@ function StagePickerChip({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * "Mark Qualified" pill — mirrors the venue-owner pill in
+ * src/app/dashboard/conversations/page.tsx. Reversible: click again to move
+ * back to "Conversations Started". Hidden once the lead has progressed past
+ * Qualified (Tour Booked / Proposal Sent / Wedding Booked) — the server-side
+ * toggle_qualified action enforces this too, this is just the display check.
+ */
+function QualifiedPill({
+  stageName,
+  disabled,
+  onToggle,
+}: {
+  stageName: string | null;
+  disabled: boolean;
+  onToggle: (nowQualified: boolean) => void;
+}) {
+  const n = (stageName ?? '').toLowerCase();
+  const pastQualified = n.includes('tour') || n.includes('proposal') || n.includes('wedding booked');
+  if (pastQualified) return null;
+  const isQualified = n.includes('qualified');
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onToggle(!isQualified)}
+      title={isQualified ? 'Click to move back to Conversations Started' : 'Mark this lead as Qualified'}
+      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors disabled:opacity-50 ${
+        isQualified
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-400 hover:text-gray-700'
+      }`}
+    >
+      {isQualified ? <><CheckCircle2 size={9} /> Qualified</> : 'Mark Qualified'}
+    </button>
   );
 }
 

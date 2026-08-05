@@ -20,7 +20,7 @@ import {
   Radio, DollarSign, CalendarDays, UserCheck,
   Link2, Mail, Bell, Copy, Download, Check, X,
   Send, Zap, TrendingDown, Inbox, MessageCircle, CalendarCheck, Heart,
-  Gem, Lock, BarChart2, Sparkles, Reply, Percent, UserX,
+  Gem, Lock, BarChart2, Sparkles, Reply, Percent, UserX, BadgeCheck,
 } from 'lucide-react';
 import FeatureLockModal from '@/components/FeatureLockModal';
 import { useFeatureAccess } from '@/lib/use-feature-access';
@@ -256,10 +256,11 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 // ── Booking funnel (top-of-dashboard) ─────────────────────────────────────────
-const FUNNEL_ICONS = [Inbox, MessageCircle, CalendarCheck, Heart];
+const FUNNEL_ICONS = [Inbox, MessageCircle, BadgeCheck, CalendarCheck, Heart];
 const FUNNEL_FALLBACK: LeadFunnelStep[] = [
   { key: 'leads', label: 'Leads', count: 0 },
   { key: 'conversations', label: 'Conversations Started', count: 0 },
+  { key: 'qualified', label: 'Qualified', count: 0 },
   { key: 'tours', label: 'Booked Tours', count: 0 },
   { key: 'weddings', label: 'Booked Weddings', count: 0 },
 ];
@@ -279,7 +280,7 @@ function FunnelMetrics({
   onSourceFilterChange: (v: LeadSourceBucket | null) => void;
 }) {
   const steps = funnel?.steps?.length ? funnel.steps : FUNNEL_FALLBACK;
-  const conversions = funnel?.conversions ?? [null, null, null];
+  const conversions = funnel?.conversions ?? [null, null, null, null];
   const sources = funnel?.sources ?? [];
   const totalSourced = sources.reduce((a, s) => a + s.count, 0);
 

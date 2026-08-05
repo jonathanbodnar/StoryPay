@@ -1293,7 +1293,7 @@ Every lead shows:
 
 Click any card (or list row) to open the full lead drawer — edit any field, add timestamped notes, schedule an appointment, create a customer from the lead, or delete it.
 
-The pipeline picker (top-right) lets you switch between multiple pipelines. Everyone starts with a default "Sales Pipeline" with 8 stages: Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can rename, add, remove, and reorder stages — or create a brand-new pipeline — with the Edit button.
+The pipeline picker (top-right) lets you switch between multiple pipelines. Everyone starts with a default "Sales Pipeline" with 8 stages: Lead, Conversations Started, Qualified, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can rename, add, remove, and reorder stages — or create a brand-new pipeline — with the Edit button.
 
 When a customer profile exists with the same email as a lead, updating the stage on the customer profile or moving the card on the Kanban can keep both in sync (see the customer profile pipeline section).
 
@@ -1354,7 +1354,7 @@ If a lead has no stage assigned (e.g. a brand-new inquiry from the directory tha
         id: 'leads-edit-pipelines',
         title: 'Editing and creating pipelines',
         tags: ['edit pipeline', 'rename stage', 'add stage', 'delete stage', 'multiple pipelines', 'custom pipeline', 'default pipeline', 'locked pipeline', 'protected pipeline'],
-        body: `Every account has a default pipeline (the "Bride Booking System™" pipeline) that comes pre-built with 8 stages: Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can also create additional custom pipelines for different brands, properties, or sales processes.
+        body: `Every account has a default pipeline (the "Bride Booking System™" pipeline) that comes pre-built with 8 stages: Lead, Conversations Started, Qualified, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can also create additional custom pipelines for different brands, properties, or sales processes.
 
 Open the editor:
 - Top-right of the Leads page, pipeline dropdown → Edit button
@@ -1672,7 +1672,7 @@ On the Contacts list page itself, each row also has "Create Proposal" and "Creat
         id: 'cust-pipeline',
         title: 'Sales pipeline, stages, and referral source',
         tags: ['pipeline', 'stage', 'lead', 'referral', 'source', 'funnel', 'crm', 'kanban', 'sales pipeline'],
-        body: `Customer profiles use the same configurable sales pipelines as the Leads page (Kanban). Your venue can have one or more pipelines; each pipeline has ordered stages with names and colors (the default template often includes stages like Lead, Conversations Started, Lead Contacted, Tour Booked, Proposal Sent, Wedding Booked, Follow up, and Not Interested — you can rename, add, remove, or reorder them from Leads).
+        body: `Customer profiles use the same configurable sales pipelines as the Leads page (Kanban). Your venue can have one or more pipelines; each pipeline has ordered stages with names and colors (the default template often includes stages like Lead, Conversations Started, Qualified, Tour Booked, Proposal Sent, Wedding Booked, Follow up, and Not Interested — you can rename, add, remove, or reorder them from Leads).
 
 On the customer profile:
 1. Choose the Pipeline from the dropdown (e.g. "Sales Pipeline").
