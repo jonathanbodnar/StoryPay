@@ -12,10 +12,35 @@ import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/ro
 import { handleInboundAiMessage } from '@/lib/ai-concierge/inbound-handler';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
 import { recordSmsReplyAttribution } from '@/lib/sms-reply-tracking';
+import { verifyGhlWebhookSignature } from '@/lib/ghl-webhook-verify';
+
+// Rollout switch for GHL webhook signature enforcement. Starts OFF
+// (monitor-only: every request is verified and logged, but nothing is
+// rejected) so we can confirm real GHL traffic actually carries a valid
+// X-GHL-Signature/X-WH-Signature header before we start dropping requests.
+// Flip GHL_WEBHOOK_ENFORCE_SIGNATURE=true once the logs below show
+// "signature valid" on real incoming traffic for a few days with zero
+// "missing"/"invalid" entries.
+const ENFORCE_GHL_SIGNATURE = process.env.GHL_WEBHOOK_ENFORCE_SIGNATURE === 'true';
 
 export async function POST(request: NextRequest) {
   try {
     const raw = await request.text();
+
+    const verification = verifyGhlWebhookSignature(raw, request.headers);
+    if (verification.status !== 'valid') {
+      const detail =
+        verification.status === 'invalid'
+          ? `invalid (${verification.header}: ${verification.reason})`
+          : 'missing (no x-ghl-signature or x-wh-signature header)';
+      console.warn(
+        `[ghl webhook] signature ${detail} — ${ENFORCE_GHL_SIGNATURE ? 'REJECTING' : 'monitor-only, still processing'}`
+      );
+      if (ENFORCE_GHL_SIGNATURE) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+    }
+
     let payload: Record<string, unknown>;
     try {
       payload = JSON.parse(raw) as Record<string, unknown>;

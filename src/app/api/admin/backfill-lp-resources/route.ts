@@ -10,10 +10,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { listPaymentSchedules, listSubscriptions } from '@/lib/lunarpay';
+import { getAdminIdentity } from '@/lib/admin-identity';
 
 export const dynamic = 'force-dynamic';
 
+async function isAdmin(): Promise<boolean> {
+  const id = await getAdminIdentity();
+  return id.isMasterSuperAdmin || !!id.member;
+}
+
 export async function POST(_request: NextRequest) {
+  if (!(await isAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   // Find paid installment/subscription proposals missing their LP resource IDs
   const { data: orphans } = await supabaseAdmin
     .from('proposals')

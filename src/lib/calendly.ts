@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 const CALENDLY_BASE = 'https://api.calendly.com';
 
 export interface CalendlyUser {
@@ -81,10 +83,26 @@ export async function getEventInvitees(
   return collection ?? [];
 }
 
+/**
+ * Creates a Calendly webhook subscription.
+ *
+ * `signingKey` is generated and supplied BY US (Calendly does not generate or
+ * return one — confirmed via Calendly's OpenAPI schema and their own support
+ * team: "We don't send the signing key with each webhook payload... you'll
+ * need to do this same computation on your end", community.calendly.com,
+ * thread "Why does the webhook callback signing key change with every call").
+ * Calendly stores whatever key we pass here and uses it to sign every future
+ * delivery to this subscription in the `Calendly-Webhook-Signature` header
+ * (HMAC-SHA256). Callers MUST persist `signingKey` themselves — Calendly
+ * never echoes it back in any response, so if you don't store what you sent,
+ * you can't verify deliveries later (you'd need to delete + recreate the
+ * subscription with a new key).
+ */
 export async function createWebhook(
   token: string,
   orgUri: string,
-  callbackUrl: string
+  callbackUrl: string,
+  signingKey: string
 ): Promise<string> {
   const res = await calendlyFetch('/webhook_subscriptions', token, {
     method: 'POST',
@@ -93,6 +111,7 @@ export async function createWebhook(
       events: ['invitee.created', 'invitee.canceled'],
       organization: orgUri,
       scope: 'organization',
+      signing_key: signingKey,
     }),
   });
   if (!res.ok) {
@@ -106,6 +125,54 @@ export async function createWebhook(
 export async function deleteWebhook(token: string, webhookUri: string): Promise<void> {
   const webhookId = webhookUri.split('/').pop();
   await calendlyFetch(`/webhook_subscriptions/${webhookId}`, token, { method: 'DELETE' });
+}
+
+export interface CalendlySignatureResult {
+  valid: boolean;
+  reason?: 'missing_header' | 'malformed_header' | 'bad_signature' | 'stale_timestamp';
+}
+
+/**
+ * Verifies the `Calendly-Webhook-Signature` header per Calendly's documented
+ * scheme (same shape as Stripe): header is `t=<unix_seconds>,v1=<hex hmac>`,
+ * and the signed content is `${t}.${rawBody}` (raw JSON text, not re-serialized).
+ * `signingKey` must be exactly what was passed to `createWebhook` for this
+ * subscription — Calendly never generates or returns one on its own.
+ */
+export function verifyCalendlySignature(
+  rawBody: string,
+  headerValue: string | null,
+  signingKey: string,
+  maxAgeSeconds = 5 * 60
+): CalendlySignatureResult {
+  if (!headerValue) return { valid: false, reason: 'missing_header' };
+
+  const parts = Object.fromEntries(
+    headerValue.split(',').map((p) => {
+      const [k, v] = p.split('=');
+      return [k?.trim(), v?.trim()];
+    })
+  );
+  const t = parts.t;
+  const v1 = parts.v1;
+  if (!t || !v1) return { valid: false, reason: 'malformed_header' };
+
+  const tsSeconds = Number(t);
+  if (!Number.isFinite(tsSeconds)) return { valid: false, reason: 'malformed_header' };
+  if (Math.abs(Date.now() / 1000 - tsSeconds) > maxAgeSeconds) {
+    return { valid: false, reason: 'stale_timestamp' };
+  }
+
+  const expected = createHmac('sha256', signingKey)
+    .update(`${t}.${rawBody}`)
+    .digest('hex');
+
+  const expectedBuf = Buffer.from(expected, 'hex');
+  const actualBuf = Buffer.from(v1, 'hex');
+  const isValid =
+    expectedBuf.length === actualBuf.length && timingSafeEqual(expectedBuf, actualBuf);
+
+  return isValid ? { valid: true } : { valid: false, reason: 'bad_signature' };
 }
 
 /**

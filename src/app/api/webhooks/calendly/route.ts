@@ -1,16 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getDb } from '@/lib/db';
-import { mapEventType } from '@/lib/calendly';
+import { mapEventType, verifyCalendlySignature } from '@/lib/calendly';
+
+// Soft-enforcement rollout: existing subscriptions predate signing-key support
+// and won't have a stored key until /api/admin/resubscribe-calendly-signing-keys
+// has run for them. Until that backfill is confirmed complete, log-only so
+// calendar sync doesn't silently break; flip to '1' once confirmed.
+const ENFORCE_SIGNATURE = process.env.CALENDLY_WEBHOOK_ENFORCE_SIGNATURE === '1';
 
 export async function GET() {
   return NextResponse.json({ status: 'ok' });
 }
 
 export async function POST(request: NextRequest) {
+  const rawBody = await request.text();
+
   let payload: Record<string, unknown>;
   try {
-    payload = await request.json();
+    payload = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
@@ -37,10 +45,31 @@ export async function POST(request: NextRequest) {
 
   // venues table is fine via supabaseAdmin (not a new table)
   const { data: venue } = await supabaseAdmin
-    .from('venues').select('id').eq('calendly_org_uri', orgUri).eq('calendly_connected', true).maybeSingle();
+    .from('venues')
+    .select('id, calendly_webhook_signing_key')
+    .eq('calendly_org_uri', orgUri)
+    .eq('calendly_connected', true)
+    .maybeSingle();
 
   if (!venue) return NextResponse.json({ received: true });
   const venueId = venue.id;
+
+  const signingKey = venue.calendly_webhook_signing_key as string | null;
+  if (signingKey) {
+    const result = verifyCalendlySignature(
+      rawBody,
+      request.headers.get('calendly-webhook-signature'),
+      signingKey
+    );
+    if (!result.valid) {
+      console.warn(`[calendly webhook] signature check failed for venue ${venueId}: ${result.reason}`);
+      if (ENFORCE_SIGNATURE) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+    }
+  } else {
+    console.warn(`[calendly webhook] venue ${venueId} has no signing key on file — accepting unverified (pending resubscribe backfill)`);
+  }
 
   try {
     const sql = getDb();

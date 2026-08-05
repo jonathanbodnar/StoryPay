@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomBytes } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { getCalendlyUser, createWebhook } from '@/lib/calendly';
@@ -30,9 +31,16 @@ export async function POST(request: NextRequest) {
 
   const callbackUrl = `${appUrl}/api/webhooks/calendly`;
 
+  // Calendly does not generate/return a signing key — WE choose one and pass it
+  // when creating the subscription; Calendly then uses it to sign future
+  // deliveries. We must store it ourselves to verify those signatures later.
+  const signingKey = randomBytes(32).toString('hex');
+
   let webhookUri = '';
+  let webhookSigningKey: string | null = null;
   try {
-    webhookUri = await createWebhook(token, user.current_organization, callbackUrl);
+    webhookUri = await createWebhook(token, user.current_organization, callbackUrl, signingKey);
+    webhookSigningKey = signingKey;
   } catch (err) {
     // Non-fatal: webhook registration can fail if the URL isn't publicly reachable (local dev).
     // The venue is still connected; they can use the manual sync button.
@@ -46,6 +54,7 @@ export async function POST(request: NextRequest) {
       calendly_user_uri:     user.uri,
       calendly_org_uri:      user.current_organization,
       calendly_webhook_id:   webhookUri || null,
+      calendly_webhook_signing_key: webhookSigningKey,
       calendly_connected:    true,
     })
     .eq('id', venueId);

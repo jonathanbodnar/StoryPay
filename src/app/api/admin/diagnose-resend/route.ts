@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
+import { getAdminIdentity } from '@/lib/admin-identity';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+async function isAdmin(): Promise<boolean> {
+  const id = await getAdminIdentity();
+  return id.isMasterSuperAdmin || !!id.member;
+}
 
 interface DiagnoseResult {
   healthy: boolean;
@@ -46,6 +52,8 @@ interface DiagnoseResult {
  *   issues                            — Human-readable list of detected problems
  */
 export async function GET() {
+  if (!(await isAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   const apiKey = process.env.RESEND_API_KEY ?? '';
   const defaultFrom = process.env.RESEND_DEFAULT_FROM ?? '';
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
