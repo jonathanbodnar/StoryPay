@@ -7,6 +7,7 @@ import {
   LEAD_SOURCE_ORDER,
   type LeadSourceBucket,
 } from '@/lib/lead-source';
+import { buildStageById, computeLeadFunnel, type LeadFunnelStageRow } from '@/lib/lead-funnel';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -33,27 +34,6 @@ export const runtime = 'nodejs';
  * from, and an optional `?source=` filter re-runs the entire funnel over just
  * the leads from that one source.
  */
-
-type StageInfo = { name: string; kind: string; position: number };
-
-function leadRank(
-  status: string,
-  stage: StageInfo | undefined,
-): { rank: 1 | 2 | 3 | 4; lost: boolean } {
-  const name = (stage?.name ?? '').toLowerCase();
-  const kind = stage?.kind ?? '';
-  const lost = kind === 'lost' || status === 'not_interested';
-  const won = kind === 'won' || status === 'booked_wedding';
-
-  if (won) return { rank: 4, lost: false };
-  if (name.includes('tour') || name.includes('proposal') || status === 'tour_booked' || status === 'proposal_sent') {
-    return { rank: 3, lost };
-  }
-  if (name.includes('conversation') || name.includes('contacted') || name.includes('follow up') || status === 'contacted') {
-    return { rank: 2, lost };
-  }
-  return { rank: 1, lost };
-}
 
 export async function GET(req: Request) {
   const c = await cookies();
@@ -105,17 +85,7 @@ export async function GET(req: Request) {
       .eq('venue_id', venueId),
   ]);
 
-  const stageById = new Map<string, StageInfo>(
-    ((stages ?? []) as Array<{ id: string; name: string; kind: string; position: number }>).map((s) => [
-      s.id,
-      { name: s.name, kind: s.kind, position: s.position },
-    ]),
-  );
-
-  let leadsCount = 0;
-  let conversations = 0;
-  let tours = 0;
-  let weddings = 0;
+  const stageById = buildStageById((stages ?? []) as LeadFunnelStageRow[]);
 
   // Per-source lead tallies for the whole range (unaffected by the active
   // filter) so the dashboard can render the "where leads came from" breakdown.
@@ -129,6 +99,9 @@ export async function GET(req: Request) {
     referral_source: string | null;
   };
 
+  // When a source filter is active, only that source's leads flow through
+  // the funnel math — every step and conversion % reflects just that slice.
+  const filteredLeads: LeadRow[] = [];
   for (const row of (leads ?? []) as LeadRow[]) {
     const bucket = bucketLeadSource({
       first_touch_utm: row.first_touch_utm,
@@ -136,16 +109,8 @@ export async function GET(req: Request) {
       referral_source: row.referral_source,
     });
     sourceCounts[bucket] += 1;
-
-    // When a source filter is active, only that source's leads flow through
-    // the funnel math — every step and conversion % reflects just that slice.
     if (sourceFilter && bucket !== sourceFilter) continue;
-
-    leadsCount += 1;
-    const { rank, lost } = leadRank(row.status ?? 'new', row.stage_id ? stageById.get(row.stage_id) : undefined);
-    if (rank >= 4) weddings += 1;
-    if (rank >= 3 && !lost) tours += 1;
-    if (rank >= 2 && !lost) conversations += 1;
+    filteredLeads.push(row);
   }
 
   const sources = LEAD_SOURCE_ORDER.map((key) => ({
@@ -154,18 +119,7 @@ export async function GET(req: Request) {
     count: sourceCounts[key],
   }));
 
-  const steps = [
-    { key: 'leads', label: 'Leads', count: leadsCount },
-    { key: 'conversations', label: 'Conversations Started', count: conversations },
-    { key: 'tours', label: 'Booked Tours', count: tours },
-    { key: 'weddings', label: 'Booked Weddings', count: weddings },
-  ];
-
-  // Conversion % between each consecutive milestone (to / from).
-  const conversions = steps.slice(1).map((step, i) => {
-    const from = steps[i].count;
-    return from > 0 ? Math.round((step.count / from) * 100) : null;
-  });
+  const { steps, conversions } = computeLeadFunnel(filteredLeads, stageById);
 
   return NextResponse.json({ steps, conversions, sources, source: sourceFilter });
 }

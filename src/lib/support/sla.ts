@@ -62,7 +62,13 @@ const DOT_RING: Record<SlaLevel, string> = {
   critical: 'ring-red-200 animate-pulse',
 };
 
-export function classifySla(iso: string | null | undefined): SlaInfo {
+/**
+ * Classify SLA level for `iso` as of `asOf` (defaults to now). Passing an
+ * explicit `asOf` lets callers reconstruct HISTORICAL SLA status — e.g. "what
+ * was this thread's SLA level at the end of last Tuesday" — for trend charts,
+ * without changing behavior for the many existing 1-arg call sites.
+ */
+export function classifySla(iso: string | null | undefined, asOf: Date | number = Date.now()): SlaInfo {
   if (!iso) {
     return { level: 'green', hours: 0, label: '—', description: 'No activity yet' };
   }
@@ -70,7 +76,8 @@ export function classifySla(iso: string | null | undefined): SlaInfo {
   if (!Number.isFinite(t)) {
     return { level: 'green', hours: 0, label: '—', description: 'Unknown' };
   }
-  const hours = Math.max(0, (Date.now() - t) / HOUR);
+  const nowMs = typeof asOf === 'number' ? asOf : asOf.getTime();
+  const hours = Math.max(0, (nowMs - t) / HOUR);
 
   let level: SlaLevel = 'green';
   if (hours >= THRESHOLDS.critical) level = 'critical';
