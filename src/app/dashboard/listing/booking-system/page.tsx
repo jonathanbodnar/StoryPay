@@ -72,7 +72,7 @@ function Toggle({
 
 function PhaseCard({
   number, title, subtitle, icon, enabled, onToggle, disabled, children, accent, noPadding, defaultOpen,
-  locked, lockTooltip, hideNumber, disabledTooltip, onLockedClick,
+  locked, lockTooltip, hideNumber, disabledTooltip, onLockedClick, headerPill,
 }: {
   number: number; title: string; subtitle: string;
   icon: React.ReactNode; enabled: boolean; onToggle: (v: boolean) => void;
@@ -80,6 +80,9 @@ function PhaseCard({
   locked?: boolean; lockTooltip?: string; hideNumber?: boolean; disabledTooltip?: string;
   /** When set, clicking the locked control opens this instead of the demo modal. */
   onLockedClick?: () => void;
+  /** Optional pill rendered between the title/subtitle block and the toggle —
+   *  e.g. a clickable "active leads" count for this stage. */
+  headerPill?: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
   const effectiveEnabled = locked ? false : enabled;
@@ -100,6 +103,7 @@ function PhaseCard({
               <h3 className="text-[15px] font-semibold text-gray-900 leading-tight">{title}</h3>
               <p className="mt-0.5 text-[12px] text-gray-500">{subtitle}</p>
             </div>
+            {headerPill && <span onClick={(e) => e.stopPropagation()} className="shrink-0">{headerPill}</span>}
             {locked
               ? <LockedPhaseControl tooltip={lockTooltip ?? 'This is an upgraded plan tier. Schedule a demo to learn more.'} onClick={onLockedClick} />
               : (disabled && disabledTooltip)
@@ -466,30 +470,37 @@ function AiHandoffBlock({
 
 // ── LeadsPill + Modal ─────────────────────────────────────────────────────────
 
-function LeadsPill({ stepLabel, leads, variant = 'default' }: {
+function LeadsPill({ stepLabel, leads, variant = 'default', kicker, size = 'sm' }: {
   stepLabel: string;
   leads: StepLeadInfo[];
   variant?: 'default' | 'emerald';
+  /** Overrides the modal's "Waiting at step" header kicker — e.g. "Active in stage". */
+  kicker?: string;
+  /** 'md' is used for the stage-header summary pill; 'sm' (default) for per-step pills. */
+  size?: 'sm' | 'md';
 }) {
   const [open, setOpen] = useState(false);
   const cls = variant === 'emerald'
     ? 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200'
     : 'bg-violet-100 text-violet-700 border-violet-200 hover:bg-violet-200';
+  const sizeCls = size === 'md' ? 'px-2.5 py-1 text-[11px]' : 'px-2 py-0.5 text-[10px]';
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-colors ${cls}`}
+        title="View active leads"
+        className={`inline-flex items-center gap-1 rounded-full border font-semibold transition-colors ${sizeCls} ${cls}`}
       >
-        <Users size={9} />
+        <Users size={size === 'md' ? 10 : 9} />
         {leads.length}
       </button>
       {open && (
         <StepLeadsModal
           stepLabel={stepLabel}
           leads={leads}
+          kicker={kicker}
           onClose={() => setOpen(false)}
         />
       )}
@@ -497,10 +508,11 @@ function LeadsPill({ stepLabel, leads, variant = 'default' }: {
   );
 }
 
-function StepLeadsModal({ stepLabel, leads, onClose }: {
+function StepLeadsModal({ stepLabel, leads, onClose, kicker = 'Waiting at step' }: {
   stepLabel: string;
   leads: StepLeadInfo[];
   onClose: () => void;
+  kicker?: string;
 }) {
   const [advancing, setAdvancing] = useState<string | null>(null);
   const [advanced,  setAdvanced]  = useState<Set<string>>(new Set());
@@ -540,7 +552,7 @@ function StepLeadsModal({ stepLabel, leads, onClose }: {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Waiting at step</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{kicker}</p>
             <p className="text-[14px] font-semibold text-gray-900">{stepLabel}</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
@@ -1343,6 +1355,14 @@ export default function BookingSystemPage() {
           onToggle={(v) => void save({ sequenceEnabled: v })}
           disabled={!cfg.masterEnabled}
           disabledTooltip={!cfg.masterEnabled ? 'Turn the Speed to Lead System on to enable this stage.' : undefined}
+          headerPill={leadsData?.total ? (
+            <LeadsPill
+              stepLabel="14-Day Sequence"
+              kicker="Active in stage"
+              leads={Object.values(leadsData.byStep).flat()}
+              size="md"
+            />
+          ) : undefined}
         >
           <StageDefaultActions
             stageKey="phase2"
