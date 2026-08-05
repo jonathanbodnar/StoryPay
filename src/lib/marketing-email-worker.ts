@@ -16,7 +16,8 @@ import { logStepExecution } from '@/lib/workflow-execution-logs';
 import { resolveBookingSystemEntitlement, venueCanRunBookingSystem, VENUE_ENTITLEMENT_COLUMNS, type VenueBillingState } from '@/lib/venue-entitlements';
 import { setLeadAiState } from '@/lib/ai-concierge/state-control';
 import type { AiState, AiVenueResources } from '@/lib/ai-concierge/types';
-import { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, resolveDefaultStageIdByName } from '@/lib/booking-system-stages';
+import { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, QUALIFIED_STAGE_NAME, resolveDefaultStageIdByName } from '@/lib/booking-system-stages';
+import { STL_NAME } from '@/lib/booking-system-sequences';
 import { isSystemTagInert } from '@/lib/system-tag-visibility';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
 
@@ -207,6 +208,47 @@ async function cancelStageEnrollmentsOnExit(
 }
 
 /**
+ * Cancels any active enrollment in the "Speed to Lead — Booking System"
+ * 14-day nurture sequence for this lead. Fired when a lead enters the
+ * "Qualified" stage — the concierge/venue's own team has taken over, so the
+ * automated drip should stop. Scoped strictly to the STL automation by name;
+ * Phase 4/5 (Tour Booked / Wedding Booked) and any other `stage_changed`
+ * automation are untouched.
+ *
+ * One-way, same as the other cancellation helpers in this file — there is no
+ * auto-resume. A lead that un-qualifies later needs to be manually
+ * re-enrolled (the existing "Enroll" button), consistent with how
+ * `halted_by_reply` already behaves.
+ *
+ * Best-effort / fire-and-forget: never throws into the caller's stage-change
+ * flow — every failure is caught and logged as a warning.
+ */
+async function cancelNurtureSequenceOnQualified(venueId: string, leadId: string): Promise<void> {
+  try {
+    const { data: autos } = await supabaseAdmin
+      .from('marketing_automations')
+      .select('id')
+      .eq('venue_id', venueId)
+      .eq('name', STL_NAME);
+    const automationIds = (autos ?? []).map((row) => (row as { id: string }).id);
+    if (!automationIds.length) return;
+
+    const { error } = await supabaseAdmin
+      .from('marketing_automation_enrollments')
+      .update({ status: 'cancelled' })
+      .eq('venue_id', venueId)
+      .eq('lead_id', leadId)
+      .in('automation_id', automationIds)
+      .eq('status', 'active');
+    if (error) {
+      console.warn('[marketing-automation] cancelNurtureSequenceOnQualified update failed (non-fatal):', error);
+    }
+  } catch (e) {
+    console.warn('[marketing-automation] cancelNurtureSequenceOnQualified failed (non-fatal):', e instanceof Error ? e.message : e);
+  }
+}
+
+/**
  * Returns the venue's master Speed-to-Lead switch. When this is OFF, all
  * stage-triggered automation enrollment stops immediately — it's the emergency
  * kill switch. Missing column / null is treated as ON (default behavior).
@@ -232,7 +274,21 @@ export async function onMarketingStageChanged(
   previousStageId?: string | null,
 ): Promise<void> {
   // ── AI Concierge: auto-activate when entering Followup, pause when leaving ──
-  void handleAiConciergeOnStageChange(venueId, leadId, newStageId, previousStageId);
+  // Awaited (not fire-and-forget) so the Qualified-stage hook right below —
+  // which reads/writes the same lead's ai_state — always sees the
+  // Followup-hook's result first instead of racing it. Neither hook throws
+  // (both are wrapped in their own try/catch), and none of this function's
+  // callers await it either, so this doesn't add latency anywhere that matters.
+  await handleAiConciergeOnStageChange(venueId, leadId, newStageId, previousStageId);
+
+  // ── Qualified: "the venue's own team has taken over" — stop both automated
+  // outbound systems for this lead. Entering Qualified cancels the 14-day
+  // nurture sequence and pauses AI Concierge (if active/handoff); leaving
+  // Qualified resumes AI Concierge only if it was paused specifically for
+  // that reason. Deliberately independent of the Followup-stage hook above
+  // (different stage, different automation), but sequenced after it so the
+  // two can't double-write conflicting ai_state transitions for the same lead.
+  await handleQualifiedStageChange(venueId, leadId, newStageId, previousStageId);
 
   // ── Cancel the previous stage's sequence on exit ──────────────────────────
   // Moving a lead OUT of any stage (backwards or forwards) cancels whatever
@@ -564,6 +620,130 @@ async function handleAiConciergeOnStageChange(
   } catch (e) {
     // Never let AI side-effects break the stage-change response.
     console.warn('[ai-concierge] handleAiConciergeOnStageChange failed:', e instanceof Error ? e.message : e);
+  }
+}
+
+const AI_PAUSE_REASON_QUALIFIED = 'stage_moved_to_qualified';
+
+/**
+ * "Qualified" (formerly "Lead Contacted", see lib/pipelines.ts) means the
+ * concierge/venue's own team has taken over — stop all outbound automation
+ * for that lead:
+ *   - Entering Qualified: cancel any active 14-day nurture enrollment
+ *     (cancelNurtureSequenceOnQualified) and pause AI Concierge, but only if
+ *     it's currently ai_active/handoff (mirrors handleAiConciergeOnStageChange's
+ *     movingOut/pause branch above — dormant/exhausted/opted_out are left alone).
+ *   - Leaving Qualified: resume AI Concierge, but ONLY if it's still paused
+ *     AND the most recent pause transition was specifically tagged
+ *     `AI_PAUSE_REASON_QUALIFIED` — i.e. it was paused *because* it entered
+ *     Qualified, not for some unrelated reason (manual pause, inbound-reply
+ *     halt, etc.) that happened to be in effect while it sat in this stage.
+ *     This mirrors the "check the last transition's reason" pattern already
+ *     used elsewhere (see the handoff-reason lookup in
+ *     /api/admin/support/bride-context/[threadId]/route.ts).
+ *
+ * The nurture-sequence side is intentionally one-way (see
+ * cancelNurtureSequenceOnQualified) — only the AI Concierge side has a
+ * resume, and only under the guard above.
+ *
+ * Deliberately independent of the Followup-stage hook (different stage,
+ * different automation) but always run right after it from
+ * onMarketingStageChanged (awaited, not fire-and-forget) so the two never
+ * race on the same lead's ai_state.
+ */
+async function handleQualifiedStageChange(
+  venueId: string,
+  leadId: string,
+  newStageId: string | null,
+  previousStageId?: string | null,
+): Promise<void> {
+  try {
+    const qualifiedStageId = await resolveDefaultStageIdByName(venueId, QUALIFIED_STAGE_NAME);
+    if (!qualifiedStageId) return;
+
+    const movingIn  = newStageId      === qualifiedStageId;
+    const movingOut = previousStageId === qualifiedStageId && !movingIn;
+    if (!movingIn && !movingOut) return;
+
+    if (movingIn) {
+      // Stop the automated drip — independent of ai_state, always fires.
+      void cancelNurtureSequenceOnQualified(venueId, leadId);
+
+      const { data: lead } = await supabaseAdmin
+        .from('leads')
+        .select('ai_state')
+        .eq('id', leadId)
+        .maybeSingle();
+
+      const currentState = ((lead as { ai_state?: AiState | null } | null)?.ai_state) ?? null;
+      if (currentState === 'ai_active' || currentState === 'handoff') {
+        const result = await setLeadAiState({
+          leadId,
+          venueId,
+          newState:    'paused',
+          reason:      AI_PAUSE_REASON_QUALIFIED,
+          triggeredBy: 'pipeline:stage_change',
+        });
+
+        if (result.ok && !result.noop) {
+          const { broadcastAiStateChanged } = await import('@/lib/realtime/broadcast');
+          void broadcastAiStateChanged({ leadId, venueId, newState: 'paused', nextSendAt: null });
+        }
+      }
+    } else if (movingOut) {
+      const { data: lead } = await supabaseAdmin
+        .from('leads')
+        .select('ai_state')
+        .eq('id', leadId)
+        .maybeSingle();
+
+      const currentState = ((lead as { ai_state?: AiState | null } | null)?.ai_state) ?? null;
+      // Only ever a candidate for resume if it's still sitting exactly where
+      // the Qualified-entry pause left it — anything else (already reactivated
+      // by another path, exhausted, opted out, dormant, etc.) is left untouched.
+      if (currentState !== 'paused') return;
+
+      const { data: lastPause } = await supabaseAdmin
+        .from('ai_state_transitions')
+        .select('reason')
+        .eq('lead_id', leadId)
+        .eq('to_state', 'paused')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const lastPauseReason = (lastPause as { reason?: string | null } | null)?.reason ?? null;
+      if (lastPauseReason !== AI_PAUSE_REASON_QUALIFIED) return;
+
+      // Resuming is functionally a re-activation, so it goes through the same
+      // venue-level gates as the Followup movingIn/activate branch above
+      // (concierge feature enabled + plan/addon access) — if either is off,
+      // leave the lead paused rather than silently re-starting outreach.
+      const { data: venue } = await supabaseAdmin
+        .from('venues')
+        .select('ai_concierge_enabled')
+        .eq('id', venueId)
+        .maybeSingle();
+      if (!(venue as { ai_concierge_enabled?: boolean | null } | null)?.ai_concierge_enabled) return;
+      const access = await loadVenueFeatureAccess(venueId);
+      if (!access.hasConcierge) return;
+
+      const result = await setLeadAiState({
+        leadId,
+        venueId,
+        newState:    'ai_active',
+        reason:      'stage_moved_out_of_qualified',
+        triggeredBy: 'pipeline:stage_change',
+      });
+
+      if (result.ok && !result.noop) {
+        const nextSendAt = new Date(Date.now() + 60_000).toISOString();
+        const { broadcastAiStateChanged } = await import('@/lib/realtime/broadcast');
+        void broadcastAiStateChanged({ leadId, venueId, newState: 'ai_active', nextSendAt });
+      }
+    }
+  } catch (e) {
+    // Never let AI side-effects break the stage-change response.
+    console.warn('[ai-concierge] handleQualifiedStageChange failed:', e instanceof Error ? e.message : e);
   }
 }
 

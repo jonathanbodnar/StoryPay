@@ -28,6 +28,7 @@ import { recordAiStateTransition } from '@/lib/ai-concierge/state-transitions';
 import { broadcastStageChanged, broadcastTagsChanged } from '@/lib/realtime/broadcast';
 import { findMatchingLeadIds } from '@/lib/find-matching-leads';
 import { toggleLeadQualified } from '@/lib/lead-qualified-toggle';
+import { onMarketingStageChanged } from '@/lib/marketing-email-worker';
 import type { AiState } from '@/lib/ai-concierge/types';
 
 export const dynamic = 'force-dynamic';
@@ -317,6 +318,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
       }
       if (leadIdsToUpdate.size > 0) {
         const ids = Array.from(leadIdsToUpdate);
+
+        // Capture each lead's stage before the update so we can fire the
+        // stage-changed workflow hook below with the correct previousStageId
+        // per lead (same hook the venue-owner pill / Kanban / AI Concierge /
+        // venue_customer sync already call — this admin action was the gap).
+        const { data: prevRows } = await supabaseAdmin
+          .from('leads')
+          .select('id, stage_id')
+          .in('id', ids);
+        const previousStageById = new Map<string, string | null>(
+          (prevRows ?? []).map((r) => {
+            const row = r as { id: string; stage_id: string | null };
+            return [row.id, row.stage_id];
+          }),
+        );
+
         const { error: leadsErr } = await supabaseAdmin
           .from('leads')
           .update({
@@ -329,6 +346,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
         if (leadsErr) {
           console.error('[support set_stage] leads update failed', leadsErr);
           // non-fatal: stage already saved on venue_customer
+        } else {
+          // Fire the standard stage-change side-effects (nurture-sequence
+          // cancel/enroll, AI Concierge activate/pause) for every lead that
+          // actually moved — matching how the other 5 call sites do it.
+          for (const id of ids) {
+            const previousStageId = previousStageById.get(id) ?? null;
+            if (previousStageId !== s.id) {
+              void onMarketingStageChanged(venueId, id, s.id, previousStageId);
+            }
+          }
         }
       }
 
@@ -373,6 +400,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
       if (!result.ok) {
         return NextResponse.json({ error: result.error }, { status: result.status });
       }
+
+      // Fire the standard stage-change side-effects (nurture-sequence
+      // cancel/enroll, AI Concierge activate/pause) — same call the
+      // venue-owner "Mark Qualified" pill makes
+      // (src/app/api/leads/[id]/toggle-qualified/route.ts). This was the gap:
+      // a concierge marking someone Qualified from the support inbox is
+      // likely the primary real-world path for this stage.
+      void onMarketingStageChanged(venueId, leadId, result.stage.id, result.previousStageId);
 
       // Mirror onto venue_customers — canonical source for chat threads —
       // same as set_stage above.

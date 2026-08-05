@@ -13,6 +13,12 @@ import { ensureDefaultPipeline } from '@/lib/pipelines';
 export const PHASE4_STAGE_NAME = 'Tour Booked';
 export const PHASE5_STAGE_NAME = 'Wedding Booked';
 
+// The stage that means "the concierge/venue's own team has taken over" —
+// entering it stops the automated Speed-to-Lead nurture + pauses AI Concierge
+// follow-up for that lead (see onMarketingStageChanged / handleQualifiedStageChange
+// in marketing-email-worker.ts). Formerly named "Lead Contacted".
+export const QUALIFIED_STAGE_NAME = 'Qualified';
+
 /**
  * Resolves the per-venue stage UUID for a named stage in the venue's
  * default/locked pipeline (see src/lib/pipelines.ts — that pipeline's stage
