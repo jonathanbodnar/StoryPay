@@ -173,21 +173,22 @@ interface CandidateThread {
   venueCustomerId: string;
 }
 
-/** Threads with the most recent SMS activity first, capped. */
-async function findActiveSmsThreads(
-  venueIds: string[],
-  activeDays: number,
-  maxThreads: number
-): Promise<CandidateThread[]> {
-  const cutoff = new Date(Date.now() - activeDays * 24 * 60 * 60 * 1000).toISOString();
-
+/**
+ * Ordered (most-recent-activity-first) distinct thread ids with SMS-channel
+ * message activity since `cutoffIso`. One indexed select — this is the cheap
+ * probe the hot tier runs every few seconds, so it must stay a single query.
+ */
+async function threadIdsWithSmsActivitySince(
+  cutoffIso: string,
+  scanLimit: number
+): Promise<string[]> {
   const { data: msgs } = await supabaseAdmin
     .from('conversation_messages')
     .select('thread_id, created_at')
     .eq('channel', 'sms')
-    .gte('created_at', cutoff)
+    .gte('created_at', cutoffIso)
     .order('created_at', { ascending: false })
-    .limit(3000);
+    .limit(scanLimit);
 
   const orderedThreadIds: string[] = [];
   const seen = new Set<string>();
@@ -198,7 +199,15 @@ async function findActiveSmsThreads(
       orderedThreadIds.push(tid);
     }
   }
+  return orderedThreadIds;
+}
 
+/** Resolve ordered thread ids to syncable candidates (GHL venue + customer). */
+async function resolveCandidateThreads(
+  orderedThreadIds: string[],
+  venueIds: string[],
+  maxThreads: number
+): Promise<CandidateThread[]> {
   const out: CandidateThread[] = [];
   for (let i = 0; i < orderedThreadIds.length && out.length < maxThreads; i += 100) {
     const chunk = orderedThreadIds.slice(i, i + 100);
@@ -223,6 +232,18 @@ async function findActiveSmsThreads(
   return out;
 }
 
+/** Threads with the most recent SMS activity first, capped. */
+async function findActiveSmsThreads(
+  venueIds: string[],
+  activeDays: number,
+  maxThreads: number
+): Promise<CandidateThread[]> {
+  const cutoff = new Date(Date.now() - activeDays * 24 * 60 * 60 * 1000).toISOString();
+  const orderedThreadIds = await threadIdsWithSmsActivitySince(cutoff, 3000);
+  if (orderedThreadIds.length === 0) return [];
+  return resolveCandidateThreads(orderedThreadIds, venueIds, maxThreads);
+}
+
 /** Threads belonging to just-backfilled customers — always scanned, since
  *  these are exactly the contacts whose replies have been piling up unseen. */
 async function threadsForCustomers(customerIds: string[]): Promise<CandidateThread[]> {
@@ -238,10 +259,101 @@ async function threadsForCustomers(customerIds: string[]): Promise<CandidateThre
   }));
 }
 
+// ── Hot tier ────────────────────────────────────────────────────────────────
+
+export interface GhlHotSyncResult {
+  /** Hot candidates found (before the per-tick cap). */
+  hotThreads: number;
+  threadsScanned: number;
+  messagesImported: number;
+  importedByVenue: Record<string, { venueName: string; imported: number; threads: number }>;
+}
+
+export interface GhlHotSyncOptions {
+  /** Activity recency that makes a thread "hot". Default 60 minutes. */
+  windowMinutes?: number;
+  /** Safety valve: max hot threads polled per tick, most-recent first. Default 5. */
+  maxThreads?: number;
+}
+
+/**
+ * Hot-tier sync: poll ONLY threads with SMS activity in the last
+ * `windowMinutes` (any direction — an outbound from the dashboard makes the
+ * thread hot, so the bride's reply lands within seconds). Designed to run
+ * every few seconds, so the idle path is a single indexed select and zero
+ * GHL calls. Dedupe by ghl_message_id in syncInboundSmsFromGhlForThread
+ * makes overlap with the baseline sweep harmless.
+ */
+export async function runGhlHotThreadSync(
+  opts: GhlHotSyncOptions = {}
+): Promise<GhlHotSyncResult> {
+  const windowMinutes = Math.max(1, Math.min(24 * 60, opts.windowMinutes ?? 60));
+  const maxThreads = Math.max(1, Math.min(20, opts.maxThreads ?? 5));
+
+  const result: GhlHotSyncResult = {
+    hotThreads: 0,
+    threadsScanned: 0,
+    messagesImported: 0,
+    importedByVenue: {},
+  };
+
+  const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
+  const hotIds = await threadIdsWithSmsActivitySince(cutoff, 200);
+  if (hotIds.length === 0) return result; // idle tick: 1 DB query, 0 GHL calls
+
+  const venues = await loadGhlVenues();
+  if (venues.length === 0) return result;
+  const venueById = new Map(venues.map((v) => [v.id, v]));
+
+  const candidates = await resolveCandidateThreads(
+    hotIds,
+    venues.map((v) => v.id),
+    maxThreads
+  );
+  result.hotThreads = candidates.length;
+
+  for (const t of candidates) {
+    try {
+      const { imported } = await syncInboundSmsFromGhlForThread({
+        venueId: t.venueId,
+        threadId: t.threadId,
+        venueCustomerId: t.venueCustomerId,
+      });
+      result.threadsScanned++;
+      if (imported > 0) {
+        result.messagesImported += imported;
+        const bucket = (result.importedByVenue[t.venueId] ??= {
+          venueName: venueById.get(t.venueId)?.name || 'Unknown venue',
+          imported: 0,
+          threads: 0,
+        });
+        bucket.imported += imported;
+        bucket.threads++;
+      }
+    } catch (e) {
+      console.error('[ghl-hot-sync] thread sync failed', {
+        threadId: t.threadId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  return result;
+}
+
+// ── Baseline sweep ──────────────────────────────────────────────────────────
+
 export async function runGhlInboundSyncCron(opts: {
   maxThreads?: number;
   activeDays?: number;
   backfillLimit?: number;
+  /**
+   * When set, threads the hot tier already covers (activity within
+   * windowMinutes, top `cap` most-recent) are dropped from this sweep so the
+   * baseline spends its GHL budget on colder threads instead of re-polling
+   * conversations that are already synced every few seconds.
+   */
+  excludeHotTier?: { windowMinutes: number; cap: number };
 } = {}): Promise<GhlInboundSyncResult> {
   const maxThreads = Math.max(1, Math.min(500, opts.maxThreads ?? 40));
   const activeDays = Math.max(1, Math.min(90, opts.activeDays ?? 14));
@@ -270,10 +382,27 @@ export async function runGhlInboundSyncCron(opts: {
     maxThreads
   );
 
+  // Threads the hot tier is already polling every few seconds — recompute the
+  // exact hot set (same window + cap) so we exclude only what's truly covered.
+  const hotCovered = new Set<string>();
+  if (opts.excludeHotTier) {
+    const cutoff = new Date(Date.now() - opts.excludeHotTier.windowMinutes * 60 * 1000).toISOString();
+    const hotIds = await threadIdsWithSmsActivitySince(cutoff, 200);
+    if (hotIds.length > 0) {
+      const hotCandidates = await resolveCandidateThreads(
+        hotIds,
+        venues.map((v) => v.id),
+        opts.excludeHotTier.cap
+      );
+      for (const t of hotCandidates) hotCovered.add(t.threadId);
+    }
+  }
+
   const queued = new Set<string>();
   const queue: CandidateThread[] = [];
   for (const t of [...recoveryThreads, ...activeThreads]) {
     if (queued.has(t.threadId)) continue;
+    if (hotCovered.has(t.threadId)) continue;
     queued.add(t.threadId);
     queue.push(t);
   }

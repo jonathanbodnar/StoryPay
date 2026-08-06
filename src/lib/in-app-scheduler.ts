@@ -10,8 +10,12 @@
  * double trigger is harmless.
  *
  * Jobs:
- *   - ghl-inbound-sync  every 60s   inbound SMS poll for PIT-connected venues
- *   - ai-send           every 10min AI Concierge follow-up SMS dispatch
+ *   - ghl-inbound-sync-hot  every 7s   inbound SMS poll for HOT threads only
+ *                                      (SMS activity within the last hour) so
+ *                                      active conversations feel instant
+ *   - ghl-inbound-sync      every 60s  baseline sweep for colder threads
+ *                                      (excludes what the hot tier covers)
+ *   - ai-send               every 10m  AI Concierge follow-up SMS dispatch
  *
  * Guarantees:
  *   - Overlap guard: a tick is skipped when the previous run of that job is
@@ -35,11 +39,39 @@ interface ScheduledJob {
   intervalMs: number;
   /** Delay before the first run so a booting/restarting deploy isn't slammed. */
   initialDelayMs: number;
-  /** Returns a short human-readable summary of items processed. */
-  run: () => Promise<string>;
+  /**
+   * Returns a short human-readable summary of items processed, or null for an
+   * uneventful tick that shouldn't be logged (high-frequency jobs only —
+   * a 7s job logging every idle tick would flood Railway logs).
+   */
+  run: () => Promise<string | null>;
 }
 
+/** Hot-tier config, shared by the hot job and the baseline's exclusion. */
+const HOT_WINDOW_MINUTES = 60;
+const HOT_MAX_THREADS = 5;
+
 const JOBS: ScheduledJob[] = [
+  {
+    // Hot tier: threads with SMS activity in the last hour get polled every
+    // ~7s so active conversations feel instant. Idle ticks cost one indexed
+    // DB select and zero GHL calls; typically 0-3 threads are hot.
+    name: 'ghl-inbound-sync-hot',
+    intervalMs: 7 * 1000,
+    initialDelayMs: 10 * 1000,
+    run: async () => {
+      const { runGhlHotThreadSync } = await import('@/lib/ghl-inbound-sync-cron');
+      const r = await runGhlHotThreadSync({
+        windowMinutes: HOT_WINDOW_MINUTES,
+        maxThreads: HOT_MAX_THREADS,
+      });
+      if (r.threadsScanned === 0) return null; // idle — stay quiet
+      // Only worth a log line when something was actually imported; a plain
+      // "polled N hot threads, nothing new" every 7s would still flood.
+      if (r.messagesImported === 0) return null;
+      return `hot=${r.hotThreads} threads=${r.threadsScanned} imported=${r.messagesImported}`;
+    },
+  },
   {
     name: 'ghl-inbound-sync',
     intervalMs: 60 * 1000,
@@ -47,8 +79,15 @@ const JOBS: ScheduledJob[] = [
     run: async () => {
       const { runGhlInboundSyncCron } = await import('@/lib/ghl-inbound-sync-cron');
       // Light per-run scope: this now ticks every 60s (vs every 5min on GitHub
-      // Actions), so each run scans fewer, more recent threads.
-      const r = await runGhlInboundSyncCron({ maxThreads: 25, activeDays: 7, backfillLimit: 10 });
+      // Actions), so each run scans fewer, more recent threads. Threads the
+      // hot tier already polls every 7s are excluded so the baseline budget
+      // goes to colder threads (catching first inbound messages within ≤60s).
+      const r = await runGhlInboundSyncCron({
+        maxThreads: 25,
+        activeDays: 7,
+        backfillLimit: 10,
+        excludeHotTier: { windowMinutes: HOT_WINDOW_MINUTES, cap: HOT_MAX_THREADS },
+      });
       return `venues=${r.venuesConsidered} threads=${r.threadsScanned} imported=${r.messagesImported} backfilled=${r.contactIdsBackfilled}`;
     },
   },
@@ -70,15 +109,38 @@ const JOBS: ScheduledJob[] = [
 
 const inFlight = new Set<string>();
 
+/** Throttled log state so high-frequency jobs can't flood Railway logs. */
+const idleTicks = new Map<string, number>();
+const lastIdleLogAt = new Map<string, number>();
+const lastOverlapLogAt = new Map<string, number>();
+const IDLE_LOG_EVERY_MS = 5 * 60 * 1000;
+const OVERLAP_LOG_EVERY_MS = 60 * 1000;
+
 async function tick(job: ScheduledJob): Promise<void> {
   if (inFlight.has(job.name)) {
-    console.log(`[in-app-cron] job=${job.name} skipped=overlap (previous run still in flight)`);
+    // Skip rather than stack; log at most once per minute per job.
+    const last = lastOverlapLogAt.get(job.name) ?? 0;
+    if (Date.now() - last > OVERLAP_LOG_EVERY_MS) {
+      lastOverlapLogAt.set(job.name, Date.now());
+      console.log(`[in-app-cron] job=${job.name} skipped=overlap (previous run still in flight)`);
+    }
     return;
   }
   inFlight.add(job.name);
   const startedAt = Date.now();
   try {
     const summary = await job.run();
+    if (summary === null) {
+      // Uneventful tick — aggregate into a periodic "alive" line instead.
+      idleTicks.set(job.name, (idleTicks.get(job.name) ?? 0) + 1);
+      const last = lastIdleLogAt.get(job.name) ?? 0;
+      if (Date.now() - last > IDLE_LOG_EVERY_MS) {
+        lastIdleLogAt.set(job.name, Date.now());
+        console.log(`[in-app-cron] job=${job.name} alive idle_ticks_since_last_log=${idleTicks.get(job.name)}`);
+        idleTicks.set(job.name, 0);
+      }
+      return;
+    }
     console.log(`[in-app-cron] job=${job.name} ok duration_ms=${Date.now() - startedAt} ${summary}`);
   } catch (e) {
     const durationMs = Date.now() - startedAt;
