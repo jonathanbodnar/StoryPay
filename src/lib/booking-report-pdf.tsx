@@ -14,6 +14,10 @@ import {
 const LOGO_PATH = path.join(process.cwd(), 'public', 'storyvenue-light-logo.png');
 import type { BookingReportData } from '@/lib/booking-report-email';
 
+// ── Lead value assumptions (tweak here, used by "Lead Value" & "Wedding Opportunity" sections) ──
+const LEAD_REPLACEMENT_COST_PER_LEAD = 75;    // USD — cost to acquire one qualified wedding-venue inquiry independently
+const NATIONAL_AVG_VENUE_RENTAL_VALUE = 7500; // USD — national average venue rental/booking value
+
 // ── Palette (matches dashboard) ───────────────────────────────────────────────
 const C = {
   ink:      '#111827',
@@ -108,6 +112,13 @@ const s = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingTop: 8,
   },
   footerText: { fontSize: 7, color: C.gray400 },
+
+  // Line-item value rows (Lead Value / Wedding Opportunity sections)
+  valueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 },
+  valueRowLabel: { flex: 1, paddingRight: 10, fontSize: 8.5, color: C.gray700 },
+  valueRowValue: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.ink },
+  valueRowValueHeadline: { fontSize: 16, fontFamily: 'Helvetica-Bold' },
+  footnote: { fontSize: 7, fontStyle: 'italic', color: C.gray400, marginTop: 6, lineHeight: 1.35 },
 });
 
 function fmtNum(n: number): string { return n.toLocaleString('en-US'); }
@@ -141,6 +152,15 @@ function BarRow({ label, count, max, color, suffix }: { label: string; count: nu
         <View style={[s.barFill, { width: `${w}%`, backgroundColor: color }]} />
       </View>
       <Text style={s.barValue}>{fmtNum(count)}{suffix ?? ''}</Text>
+    </View>
+  );
+}
+
+function ValueRow({ label, value, headline, accent }: { label: string; value: string; headline?: boolean; accent?: string }) {
+  return (
+    <View style={s.valueRow}>
+      <Text style={s.valueRowLabel}>{label}</Text>
+      <Text style={headline ? [s.valueRowValue, s.valueRowValueHeadline, { color: accent ?? C.ink }] : s.valueRowValue}>{value}</Text>
     </View>
   );
 }
@@ -212,6 +232,37 @@ function ReportDoc({ d }: { d: BookingReportData }) {
           <Text style={s.headerVenue}>{d.venueName}</Text>
           <Text style={s.headerDate}>{d.periodLabel}</Text>
         </View>
+
+        {/* Lead Value This Period */}
+        <Section title="Lead Value This Period" sub="What these leads would cost to generate independently" />
+        <View style={s.card} wrap={false}>
+          <ValueRow label="Leads delivered this period" value={fmtNum(d.totalLeads)} />
+          <ValueRow
+            label={`Cost to generate independently ($${LEAD_REPLACEMENT_COST_PER_LEAD}/lead)`}
+            value={`$${fmtNum(d.totalLeads * LEAD_REPLACEMENT_COST_PER_LEAD)}`}
+            headline
+            accent={C.indigo}
+          />
+        </View>
+        <Text style={s.footnote}>
+          Based on a $75 average cost to acquire a single qualified wedding-venue inquiry through independent marketing (ads, SEO, directories). This reflects what it would cost to generate this same volume of leads without your Bride Booking System.
+        </Text>
+
+        {/* Wedding Opportunity In Your Pipeline */}
+        <Section title="Wedding Opportunity In Your Pipeline" sub="Estimated wedding-spend potential of your leads this period" />
+        <View style={s.card} wrap={false}>
+          <ValueRow label="Leads delivered this period" value={fmtNum(d.totalLeads)} />
+          <ValueRow label="Average venue rental value (national average)" value={`$${fmtNum(NATIONAL_AVG_VENUE_RENTAL_VALUE)}`} />
+          <ValueRow
+            label="Total opportunity represented"
+            value={`$${fmtNum(d.totalLeads * NATIONAL_AVG_VENUE_RENTAL_VALUE)}`}
+            headline
+            accent={C.green}
+          />
+        </View>
+        <Text style={s.footnote}>
+          Reflects the combined wedding-spend potential of the inquiries in your pipeline this period, based on $7,500, the national average venue rental value.
+        </Text>
 
         {/* 1. Booking Funnel — boxes + dashed connectors with conversion % */}
         <Section title="Booking Funnel" sub="How leads progress from inquiry to a booked wedding" />
