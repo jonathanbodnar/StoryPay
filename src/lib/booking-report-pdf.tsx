@@ -234,164 +234,184 @@ function ReportDoc({ d }: { d: BookingReportData }) {
         </View>
 
         {/* Lead Value This Period */}
-        <Section title="Lead Value This Period" sub="What these leads would cost to generate independently" />
-        <View style={s.card} wrap={false}>
-          <ValueRow label="Leads delivered this period" value={fmtNum(d.totalLeads)} />
-          <ValueRow
-            label={`Cost to generate independently ($${LEAD_REPLACEMENT_COST_PER_LEAD}/lead)`}
-            value={`$${fmtNum(d.totalLeads * LEAD_REPLACEMENT_COST_PER_LEAD)}`}
-            headline
-            accent={C.indigo}
-          />
+        <View wrap={false}>
+          <Section title="Lead Value This Period" sub="What these leads would cost to generate independently" />
+          <View style={s.card} wrap={false}>
+            <ValueRow label="Leads delivered this period" value={fmtNum(d.totalLeads)} />
+            <ValueRow
+              label={`Cost to generate independently ($${LEAD_REPLACEMENT_COST_PER_LEAD}/lead)`}
+              value={`$${fmtNum(d.totalLeads * LEAD_REPLACEMENT_COST_PER_LEAD)}`}
+              headline
+              accent={C.indigo}
+            />
+          </View>
         </View>
         <Text style={s.footnote}>
           Based on a $75 average cost to acquire a single qualified wedding-venue inquiry through independent marketing (ads, SEO, directories). This reflects what it would cost to generate this same volume of leads without your Bride Booking System.
         </Text>
 
         {/* Wedding Opportunity In Your Pipeline */}
-        <Section title="Wedding Opportunity In Your Pipeline" sub="Estimated wedding-spend potential of your leads this period" />
-        <View style={s.card} wrap={false}>
-          <ValueRow label="Leads delivered this period" value={fmtNum(d.totalLeads)} />
-          <ValueRow label="Average venue rental value (national average)" value={`$${fmtNum(NATIONAL_AVG_VENUE_RENTAL_VALUE)}`} />
-          <ValueRow
-            label="Total opportunity represented"
-            value={`$${fmtNum(d.totalLeads * NATIONAL_AVG_VENUE_RENTAL_VALUE)}`}
-            headline
-            accent={C.green}
-          />
+        <View wrap={false}>
+          <Section title="Wedding Opportunity In Your Pipeline" sub="Estimated wedding-spend potential of your leads this period" />
+          <View style={s.card} wrap={false}>
+            <ValueRow label="Leads delivered this period" value={fmtNum(d.totalLeads)} />
+            <ValueRow label="Average venue rental value (national average)" value={`$${fmtNum(NATIONAL_AVG_VENUE_RENTAL_VALUE)}`} />
+            <ValueRow
+              label="Total opportunity represented"
+              value={`$${fmtNum(d.totalLeads * NATIONAL_AVG_VENUE_RENTAL_VALUE)}`}
+              headline
+              accent={C.green}
+            />
+          </View>
         </View>
         <Text style={s.footnote}>
           Reflects the combined wedding-spend potential of the inquiries in your pipeline this period, based on $7,500, the national average venue rental value.
         </Text>
 
         {/* 1. Booking Funnel — boxes + dashed connectors with conversion % */}
-        <Section title="Booking Funnel" sub="How leads progress from inquiry to a booked wedding" />
-        <View style={s.funnelRow} wrap={false}>
-          {d.steps.map((step, i) => (
-            <React.Fragment key={step.key}>
-              {i > 0 && (
-                <View style={s.funnelConnector}>
-                  <View style={s.funnelDash} />
-                  <Text style={s.funnelPct}>{d.conversions[i - 1] != null ? `${d.conversions[i - 1]}%` : '—'}</Text>
-                  <Text style={s.funnelPctLabel}>conversion</Text>
+        <View wrap={false}>
+          <Section title="Booking Funnel" sub="How leads progress from inquiry to a booked wedding" />
+          <View style={s.funnelRow} wrap={false}>
+            {d.steps.map((step, i) => (
+              <React.Fragment key={step.key}>
+                {i > 0 && (
+                  <View style={s.funnelConnector}>
+                    <View style={s.funnelDash} />
+                    <Text style={s.funnelPct}>{d.conversions[i - 1] != null ? `${d.conversions[i - 1]}%` : '—'}</Text>
+                    <Text style={s.funnelPctLabel}>conversion</Text>
+                  </View>
+                )}
+                <View style={s.funnelBox}>
+                  <Text style={s.funnelCount}>{fmtNum(step.count)}</Text>
+                  <Text style={s.funnelLabel}>{step.label}</Text>
                 </View>
-              )}
-              <View style={s.funnelBox}>
-                <Text style={s.funnelCount}>{fmtNum(step.count)}</Text>
-                <Text style={s.funnelLabel}>{step.label}</Text>
-              </View>
-            </React.Fragment>
-          ))}
+              </React.Fragment>
+            ))}
+          </View>
         </View>
 
         {/* 2. Lead Sources */}
-        <Section title="Lead Sources" sub="Where your leads came from" />
-        <View style={s.card} wrap={false}>
-          {d.sources.filter(x => x.count > 0).length === 0 ? (
-            <Text style={{ fontSize: 8, color: C.gray400 }}>No source data for this period.</Text>
-          ) : (
-            d.sources.filter(x => x.count > 0).sort((a, b) => b.count - a.count).map(src => (
-              <BarRow key={src.key} label={src.label} count={src.count} max={totalSrc} color={SOURCE_COLOR[src.key] ?? C.violet} />
-            ))
-          )}
+        <View wrap={false}>
+          <Section title="Lead Sources" sub="Where your leads came from" />
+          <View style={s.card} wrap={false}>
+            {d.sources.filter(x => x.count > 0).length === 0 ? (
+              <Text style={{ fontSize: 8, color: C.gray400 }}>No source data for this period.</Text>
+            ) : (
+              d.sources.filter(x => x.count > 0).sort((a, b) => b.count - a.count).map(src => (
+                <BarRow key={src.key} label={src.label} count={src.count} max={totalSrc} color={SOURCE_COLOR[src.key] ?? C.violet} />
+              ))
+            )}
+          </View>
         </View>
 
         {/* 3. Listing Analytics KPIs */}
-        <Section title="Listing Analytics" sub="Visitor & traffic metrics" />
-        <View style={s.kpiRow} wrap={false}>
-          <KpiCard label="Listing Views"   value={fmtNum(d.totalViews)}     accent={C.blue}   badge={delta(d.totalViews, d.priorViews)} />
-          <KpiCard label="Unique Visitors" value={fmtNum(d.uniqueVisitors)} accent={C.violet} badge={delta(d.uniqueVisitors, d.priorUniqueVisitors)} />
-          <KpiCard label="Form Submits"    value={fmtNum(d.formSubmits)}    accent={C.green} />
-          <KpiCard label="Avg Session"     value={fmtDuration(d.avgSessionDuration)} accent={C.amber} />
+        <View wrap={false}>
+          <Section title="Listing Analytics" sub="Visitor & traffic metrics" />
+          <View style={s.kpiRow} wrap={false}>
+            <KpiCard label="Listing Views"   value={fmtNum(d.totalViews)}     accent={C.blue}   badge={delta(d.totalViews, d.priorViews)} />
+            <KpiCard label="Unique Visitors" value={fmtNum(d.uniqueVisitors)} accent={C.violet} badge={delta(d.uniqueVisitors, d.priorUniqueVisitors)} />
+            <KpiCard label="Form Submits"    value={fmtNum(d.formSubmits)}    accent={C.green} />
+            <KpiCard label="Avg Session"     value={fmtDuration(d.avgSessionDuration)} accent={C.amber} />
+          </View>
         </View>
 
         {/* 4. Engagement + Scroll depth */}
-        <Section title="Engagement Breakdown" sub="What visitors interacted with" />
-        <View style={s.twoCol} wrap={false}>
-          <View style={s.col}>
-            <View style={s.card}>
-              <Text style={s.cardTitle}>Engagement</Text>
-              <BarRow label="Photo views"   count={d.photoViews}   max={maxEngage} color={C.amber} />
-              <BarRow label="Form opens"    count={d.formOpens}    max={maxEngage} color={C.green} />
-              <BarRow label="Form submits"  count={d.formSubmits}  max={maxEngage} color={C.blue} />
-              <BarRow label="FAQ opens"     count={d.faqOpens}     max={maxEngage} color={C.violet} />
-              <BarRow label="Map clicks"    count={d.mapClicks}    max={maxEngage} color={C.pink} />
-              <BarRow label="Social clicks" count={d.socialClicks} max={maxEngage} color={C.gray500} />
+        <View wrap={false}>
+          <Section title="Engagement Breakdown" sub="What visitors interacted with" />
+          <View style={s.twoCol} wrap={false}>
+            <View style={s.col}>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>Engagement</Text>
+                <BarRow label="Photo views"   count={d.photoViews}   max={maxEngage} color={C.amber} />
+                <BarRow label="Form opens"    count={d.formOpens}    max={maxEngage} color={C.green} />
+                <BarRow label="Form submits"  count={d.formSubmits}  max={maxEngage} color={C.blue} />
+                <BarRow label="FAQ opens"     count={d.faqOpens}     max={maxEngage} color={C.violet} />
+                <BarRow label="Map clicks"    count={d.mapClicks}    max={maxEngage} color={C.pink} />
+                <BarRow label="Social clicks" count={d.socialClicks} max={maxEngage} color={C.gray500} />
+              </View>
             </View>
-          </View>
-          <View style={s.col}>
-            <View style={s.card}>
-              <Text style={s.cardTitle}>Scroll Depth</Text>
-              <BarRow label="25% of page" count={d.scrollDepth.pct_25}  max={100} color={C.blue} suffix="%" />
-              <BarRow label="50% of page" count={d.scrollDepth.pct_50}  max={100} color={C.blue} suffix="%" />
-              <BarRow label="75% of page" count={d.scrollDepth.pct_75}  max={100} color={C.blue} suffix="%" />
-              <BarRow label="Bottom"      count={d.scrollDepth.pct_100} max={100} color={C.blue} suffix="%" />
+            <View style={s.col}>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>Scroll Depth</Text>
+                <BarRow label="25% of page" count={d.scrollDepth.pct_25}  max={100} color={C.blue} suffix="%" />
+                <BarRow label="50% of page" count={d.scrollDepth.pct_50}  max={100} color={C.blue} suffix="%" />
+                <BarRow label="75% of page" count={d.scrollDepth.pct_75}  max={100} color={C.blue} suffix="%" />
+                <BarRow label="Bottom"      count={d.scrollDepth.pct_100} max={100} color={C.blue} suffix="%" />
+              </View>
             </View>
           </View>
         </View>
 
         {/* 5. Traffic sources + devices */}
-        <Section title="Traffic Sources & Devices" />
-        <View style={s.twoCol} wrap={false}>
-          <View style={s.col}>
-            <View style={s.card}>
-              <Text style={s.cardTitle}>Traffic Sources</Text>
-              {d.referrers.length === 0
-                ? <Text style={{ fontSize: 8, color: C.gray400 }}>No data yet.</Text>
-                : d.referrers.slice(0, 6).map((r, i) => (
-                    <BarRow key={i} label={r.source} count={r.count} max={maxRef} color={C.indigo} />
-                  ))}
+        <View wrap={false}>
+          <Section title="Traffic Sources & Devices" />
+          <View style={s.twoCol} wrap={false}>
+            <View style={s.col}>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>Traffic Sources</Text>
+                {d.referrers.length === 0
+                  ? <Text style={{ fontSize: 8, color: C.gray400 }}>No data yet.</Text>
+                  : d.referrers.slice(0, 6).map((r, i) => (
+                      <BarRow key={i} label={r.source} count={r.count} max={maxRef} color={C.indigo} />
+                    ))}
+              </View>
             </View>
-          </View>
-          <View style={s.col}>
-            <View style={s.card}>
-              <Text style={s.cardTitle}>Devices</Text>
-              {devices.length === 0
-                ? <Text style={{ fontSize: 8, color: C.gray400 }}>No data yet.</Text>
-                : devices.map(([dev, cnt], i) => (
-                    <BarRow key={i} label={dev.charAt(0).toUpperCase() + dev.slice(1)} count={cnt} max={totalDev} color={C.gray500} />
-                  ))}
+            <View style={s.col}>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>Devices</Text>
+                {devices.length === 0
+                  ? <Text style={{ fontSize: 8, color: C.gray400 }}>No data yet.</Text>
+                  : devices.map(([dev, cnt], i) => (
+                      <BarRow key={i} label={dev.charAt(0).toUpperCase() + dev.slice(1)} count={cnt} max={totalDev} color={C.gray500} />
+                    ))}
+              </View>
             </View>
           </View>
         </View>
 
         {/* 6. Inquiries by day of week */}
-        <Section title="Inquiries by Day of Week" sub="When people send you inquiries" />
-        <View style={s.card} wrap={false}>
-          <VBarChart items={d.inquiryDow.map((c, i) => ({ label: DOW[i], count: c }))} color={C.blue} />
+        <View wrap={false}>
+          <Section title="Inquiries by Day of Week" sub="When people send you inquiries" />
+          <View style={s.card} wrap={false}>
+            <VBarChart items={d.inquiryDow.map((c, i) => ({ label: DOW[i], count: c }))} color={C.blue} />
+          </View>
         </View>
 
         {/* 7. Geography */}
-        <Section title="Geography" sub="Where your visitors are coming from" />
-        <View style={s.twoCol} wrap={false}>
-          <View style={s.col}>
-            <View style={s.card}>
-              <Text style={s.cardTitle}>Top Cities</Text>
-              {d.topCities.length === 0
-                ? <Text style={{ fontSize: 8, color: C.gray400 }}>No data yet.</Text>
-                : d.topCities.slice(0, 5).map((r, i) => (
-                    <BarRow key={i} label={`${r.city}${r.region ? `, ${r.region}` : ''}`} count={r.count} max={maxCity} color={C.ink} />
-                  ))}
+        <View wrap={false}>
+          <Section title="Geography" sub="Where your visitors are coming from" />
+          <View style={s.twoCol} wrap={false}>
+            <View style={s.col}>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>Top Cities</Text>
+                {d.topCities.length === 0
+                  ? <Text style={{ fontSize: 8, color: C.gray400 }}>No data yet.</Text>
+                  : d.topCities.slice(0, 5).map((r, i) => (
+                      <BarRow key={i} label={`${r.city}${r.region ? `, ${r.region}` : ''}`} count={r.count} max={maxCity} color={C.ink} />
+                    ))}
+              </View>
             </View>
-          </View>
-          <View style={s.col}>
-            <View style={s.card}>
-              <Text style={s.cardTitle}>Top States / Regions</Text>
-              {d.topStates.length === 0
-                ? <Text style={{ fontSize: 8, color: C.gray400 }}>No data yet.</Text>
-                : d.topStates.slice(0, 5).map((r, i) => (
-                    <BarRow key={i} label={`${r.region} · ${r.country}`} count={r.count} max={maxState} color={C.ink} />
-                  ))}
+            <View style={s.col}>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>Top States / Regions</Text>
+                {d.topStates.length === 0
+                  ? <Text style={{ fontSize: 8, color: C.gray400 }}>No data yet.</Text>
+                  : d.topStates.slice(0, 5).map((r, i) => (
+                      <BarRow key={i} label={`${r.region} · ${r.country}`} count={r.count} max={maxState} color={C.ink} />
+                    ))}
+              </View>
             </View>
           </View>
         </View>
 
         {/* 8. Lead insights */}
-        <Section title="Lead Insights" sub="All-time from your inquiries" />
-        <View style={s.kpiRow} wrap={false}>
-          <KpiCard label="Total Leads"    value={fmtNum(d.totalLeads)}         accent={C.indigo} />
-          <KpiCard label="Avg Deal Value" value={fmtDollars(d.avgDealValue)}   accent={C.green} />
-          <KpiCard label="Avg Guests"     value={d.avgGuestCount ? fmtNum(d.avgGuestCount) : '—'} accent={C.amber} />
+        <View wrap={false}>
+          <Section title="Lead Insights" sub="All-time from your inquiries" />
+          <View style={s.kpiRow} wrap={false}>
+            <KpiCard label="Total Leads"    value={fmtNum(d.totalLeads)}         accent={C.indigo} />
+            <KpiCard label="Avg Deal Value" value={fmtDollars(d.avgDealValue)}   accent={C.green} />
+            <KpiCard label="Avg Guests"     value={d.avgGuestCount ? fmtNum(d.avgGuestCount) : '—'} accent={C.amber} />
+          </View>
         </View>
 
         <View style={[s.twoCol, { marginTop: 8 }]} wrap={false}>
@@ -441,9 +461,11 @@ function ReportDoc({ d }: { d: BookingReportData }) {
         </View>
 
         {/* 9. Wedding month popularity */}
-        <Section title="Wedding Month Popularity" sub="When your leads plan to get married" />
-        <View style={s.card} wrap={false}>
-          <VBarChart items={d.eventMonths.map(m => ({ label: m.month, count: m.count }))} color={C.blue} />
+        <View wrap={false}>
+          <Section title="Wedding Month Popularity" sub="When your leads plan to get married" />
+          <View style={s.card} wrap={false}>
+            <VBarChart items={d.eventMonths.map(m => ({ label: m.month, count: m.count }))} color={C.blue} />
+          </View>
         </View>
 
         {/* Footer on every page */}
