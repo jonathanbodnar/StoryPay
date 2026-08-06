@@ -6,12 +6,9 @@ import {
   isGhlInboundMessageWebhookPayload,
   parseGhlInboundSmsPayload,
 } from '@/lib/ghl-sms-conversations';
-import { applySmsDndForVenueCustomer, applySmsOptInForVenueCustomer, isSmsOptOutKeyword, isSmsOptInKeyword } from '@/lib/sms-compliance';
 import { syncSingleGhlContact } from '@/lib/ghl-contacts-sync';
 import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
-import { handleInboundAiMessage } from '@/lib/ai-concierge/inbound-handler';
-import { loadVenueFeatureAccess } from '@/lib/plan-features';
-import { recordSmsReplyAttribution } from '@/lib/sms-reply-tracking';
+import { runInboundGhlSmsSideEffects } from '@/lib/ghl-inbound-sms-side-effects';
 import { verifyGhlWebhookSignature } from '@/lib/ghl-webhook-verify';
 import { logError } from '@/lib/error-log';
 
@@ -87,63 +84,18 @@ export async function POST(request: NextRequest) {
             route: '/api/webhooks/ghl',
             context: { locationId: inboundSms.locationId, contactId: inboundSms.contactId, error: r.error },
           });
-        } else {
-          // TCPA keyword routing — runs FIRST so the AI inbound handler sees
-          // the correct dnd state. Both STOP and START sync bidirectionally
-          // with GHL so the venue/concierge team only ever has to manage the
-          // contact in the SaaS (DND boxes mirror automatically).
-          if (r.venueCustomerId) {
-            if (isSmsOptOutKeyword(inboundSms.body)) {
-              await applySmsDndForVenueCustomer({
-                venueId: venue.id as string,
-                venueCustomerId: r.venueCustomerId,
-                source: 'inbound_stop_keyword',
-              });
-            } else if (isSmsOptInKeyword(inboundSms.body)) {
-              await applySmsOptInForVenueCustomer({
-                venueId: venue.id as string,
-                venueCustomerId: r.venueCustomerId,
-                source: 'inbound_start_keyword',
-              });
-            }
-          }
-
-          // SMS reply attribution: credit the last automated SMS step this
-          // bride was sent with a first-reply so we can measure which messages
-          // in the standard sequence actually earn responses. Runs for every
-          // venue (no-ops when there was no prior SMS send). Fire-and-forget.
-          if (r.inserted && r.venueCustomerId) {
-            void recordSmsReplyAttribution({
-              venueId:         venue.id as string,
-              venueCustomerId: r.venueCustomerId,
-            }).catch((err) => {
-              console.error('[ghl webhook] SMS reply attribution failed:', err);
-            });
-          }
-
-          // AI Concierge: classify the reply + drive the lead's AI state machine.
-          // Only runs when the message was newly inserted (not a duplicate
-          // re-delivery from GHL) AND we resolved a venue_customer.
-          //
-          // Plan gate: venues without SMS (no A2P — $97 / free) never route
-          // inbound replies through the AI Concierge or to the super-admin
-          // inbox. The message is still stored above so it appears in their
-          // conversation thread (locked state), but nothing is auto-sent.
-          if (r.inserted && r.venueCustomerId) {
-            const access = await loadVenueFeatureAccess(venue.id as string);
-            if (access.hasSms) {
-              void handleInboundAiMessage({
-                venueId:         venue.id as string,
-                venueCustomerId: r.venueCustomerId,
-                messageBody:     inboundSms.body,
-                ghlMessageId:    inboundSms.messageId ?? null,
-              }).catch((err) => {
-                console.error('[ghl webhook] AI inbound handler failed:', err);
-              });
-            } else {
-              console.log(`[ghl webhook] inbound SMS stored but AI routing skipped for venue ${venue.id}: plan has no SMS`);
-            }
-          }
+        } else if (r.venueCustomerId) {
+          // TCPA keywords, SMS reply attribution, AI Concierge — shared with
+          // the per-location workflow webhook (/api/webhooks/ghl-workflow-inbound)
+          // so the two inbound paths can't drift.
+          await runInboundGhlSmsSideEffects({
+            venueId:         venue.id as string,
+            venueCustomerId: r.venueCustomerId,
+            messageBody:     inboundSms.body,
+            ghlMessageId:    inboundSms.messageId ?? null,
+            inserted:        r.inserted === true,
+            logPrefix:       '[ghl webhook]',
+          });
         }
       } else {
         console.warn('[ghl webhook] inbound SMS: no venue for locationId', inboundSms.locationId);

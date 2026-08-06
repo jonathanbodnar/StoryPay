@@ -210,6 +210,7 @@ export async function POST(
       body:       text,
       createdAt:  (msg as { created_at?: string }).created_at || new Date().toISOString(),
       status:     finalStatus,
+      attachments: attachments.length ? attachments : null,
     });
   }
 

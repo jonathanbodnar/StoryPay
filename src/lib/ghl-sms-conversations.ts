@@ -566,6 +566,13 @@ function syntheticGhlSyncMessageId(params: {
   return `ghl-sync:${h}`;
 }
 
+export interface SyncedInboundSmsMessage {
+  body: string;
+  ghlMessageId: string;
+  venueCustomerId: string;
+  createdAt: string | null;
+}
+
 /**
  * Pull inbound SMS from GHL for this thread (covers missing / misconfigured InboundMessage webhooks).
  * Best-effort: errors are logged, never thrown.
@@ -574,12 +581,14 @@ export async function syncInboundSmsFromGhlForThread(params: {
   venueId: string;
   threadId: string;
   venueCustomerId: string;
-}): Promise<{ imported: number }> {
-  const { venueId, threadId, venueCustomerId } = params;
+  /** Display name for newly-imported messages (e.g. from a workflow webhook payload). */
+  contactName?: string | null;
+}): Promise<{ imported: number; insertedMessages: SyncedInboundSmsMessage[] }> {
+  const { venueId, threadId, venueCustomerId, contactName } = params;
 
   const logSkip = (reason: string, extra?: Record<string, unknown>) => {
     console.log('[ghl-sms sync] skip', { threadId, reason, ...extra });
-    return { imported: 0 } as const;
+    return { imported: 0, insertedMessages: [] as SyncedInboundSmsMessage[] };
   };
 
   try {
@@ -617,7 +626,7 @@ export async function syncInboundSmsFromGhlForThread(params: {
         contactId,
         error: e instanceof Error ? e.message : String(e),
       });
-      return { imported: 0 };
+      return { imported: 0, insertedMessages: [] };
     }
     if (convIds.length === 0) {
       return logSkip('no_conversations_for_contact', { contactId });
@@ -640,6 +649,7 @@ export async function syncInboundSmsFromGhlForThread(params: {
     });
 
     let imported = 0;
+    const insertedMessages: SyncedInboundSmsMessage[] = [];
     let inboundCandidates = 0;
     let totalMsgs = 0;
     let inboundCount = 0;
@@ -710,10 +720,19 @@ export async function syncInboundSmsFromGhlForThread(params: {
           contactId,
           messageBody: body,
           ghlMessageId,
+          contactName: contactName ?? null,
           threadId,
           createdAt,
         });
-        if (r.inserted) imported++;
+        if (r.inserted) {
+          imported++;
+          insertedMessages.push({
+            body,
+            ghlMessageId,
+            venueCustomerId: r.venueCustomerId || venueCustomerId,
+            createdAt,
+          });
+        }
         else if (!r.ok) {
           console.warn('[ghl-sms sync] insert skipped', {
             ghlConversationId,
@@ -746,9 +765,9 @@ export async function syncInboundSmsFromGhlForThread(params: {
         sample: JSON.stringify(firstNonInboundSample).slice(0, 500),
       });
     }
-    return { imported };
+    return { imported, insertedMessages };
   } catch (e) {
     console.error('[ghl-sms] syncInboundSmsFromGhlForThread', e);
-    return { imported: 0 };
+    return { imported: 0, insertedMessages: [] };
   }
 }

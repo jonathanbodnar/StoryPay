@@ -212,6 +212,7 @@ async function appendMessage(params: {
       body:       bodyText,
       createdAt:  (msg as { created_at?: string }).created_at || new Date().toISOString(),
       status:     nextStatus,
+      attachments: attachments?.length ? attachments : null,
     });
 
     // This is exactly the "follow-up reply on an already-open ticket" case —
@@ -323,6 +324,7 @@ export async function ingestNewInboundSupportEmail(params: {
       body,
       createdAt:  (msg as { created_at?: string }).created_at || new Date().toISOString(),
       status:     'open',
+      attachments: attachments?.length ? attachments : null,
     });
 
     void notifySupportTicket({

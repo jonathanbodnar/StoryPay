@@ -387,6 +387,7 @@ ${attachmentsListHtml}
     sentByVenueSupport: true,
     supportAgentId:     supportUserId,
     createdAt:          new Date().toISOString(),
+    attachments:        attachments.length ? attachments : null,
   });
 
   return { ok: true, threadId, messageId };

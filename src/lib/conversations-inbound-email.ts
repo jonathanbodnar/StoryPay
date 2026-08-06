@@ -301,6 +301,7 @@ export async function insertInboundConversationEmail(params: {
           sentByVenueSupport: false,
           supportAgentId:     null,
           createdAt:          (inserted as { created_at?: string }).created_at || new Date().toISOString(),
+          attachments:        attachments?.length ? attachments : null,
         });
       } catch (e) {
         console.warn('[inbound-email] broadcast failed', e);
@@ -474,22 +475,31 @@ export async function insertInboundVenueDirectEmail(params: {
   if (inserted) {
     void (async () => {
       try {
-        const { broadcastBrideMessageAdminOnly } = await import('@/lib/realtime/broadcast');
-        await broadcastBrideMessageAdminOnly({
-          inbound:                 false,
-          threadId,
-          venueId,
-          venueCustomerId:         t.venue_customer_id,
-          messageId:               (inserted as { id: string }).id,
-          body,
-          channel:                 'email',
-          senderKind:              memberId ? 'team' : 'owner',
-          sentByVenueSupport:      false,
-          supportAgentId:          null,
-          createdAt:               (inserted as { created_at?: string }).created_at || new Date().toISOString(),
-          supportOnly:             false,
-          mentionedSupportUserIds: [],
-        });
+        // Full fanout (not admin-only): venueDirectMessage=true means the admin
+        // inbox won't drop the thread from "Needs Reply", and the venue's own
+        // VenueDirectPanel refreshes live when a teammate replies by email.
+        const { broadcastBrideMessage, broadcastVenueDirectInboxUpdate } = await import('@/lib/realtime/broadcast');
+        await Promise.allSettled([
+          broadcastBrideMessage({
+            inbound:                 false,
+            venueDirectMessage:      true,
+            threadId,
+            venueId,
+            venueCustomerId:         t.venue_customer_id,
+            messageId:               (inserted as { id: string }).id,
+            body,
+            channel:                 'email',
+            senderKind:              memberId ? 'team' : 'owner',
+            sentByVenueSupport:      false,
+            supportAgentId:          null,
+            createdAt:               (inserted as { created_at?: string }).created_at || new Date().toISOString(),
+            supportOnly:             false,
+            mentionedSupportUserIds: [],
+            attachments:             attachments?.length ? attachments : null,
+          }),
+          // VenueDirectInboxView (admin) refreshes instantly instead of on the 30s poll.
+          broadcastVenueDirectInboxUpdate({ threadId, venueId, direction: 'inbound' }),
+        ]);
       } catch (e) {
         console.warn('[venue-direct-inbound] broadcast failed', e);
       }

@@ -278,7 +278,7 @@ export function SupportPanel({ onClose, onUnreadCount }: { onClose?: () => void;
             sender_member_id:       null,
             sender_support_user_id: null,
             body:                   m.body,
-            attachments:            [],
+            attachments:            m.attachments ?? [],
             created_at:             m.createdAt,
           };
           // Venue is actively viewing — mark as read immediately

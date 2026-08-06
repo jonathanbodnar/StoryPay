@@ -237,6 +237,7 @@ export async function POST(req: NextRequest) {
   void broadcastBrideMessage({
     inbound:                 false,
     venueDirectMessage:      true,
+    attachments:             attachments.length ? attachments : null,
     threadId,
     venueId:                 t.venue_id,
     venueCustomerId:         t.venue_customer_id,
@@ -252,6 +253,7 @@ export async function POST(req: NextRequest) {
   void broadcastBrideMessageAdminOnly({
     inbound:                 false,
     venueDirectMessage:      true,
+    attachments:             attachments.length ? attachments : null,
     threadId,
     venueId:                 t.venue_id,
     venueCustomerId:         t.venue_customer_id,

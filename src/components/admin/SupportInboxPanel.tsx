@@ -715,6 +715,7 @@ export function SupportInboxPanel() {
           audience:                    isVenueDirect ? 'venue_direct' : (isNote ? 'support_only' : 'external'),
           mentioned_support_user_ids:  evt.mentionedSupportUserIds || [],
           created_at:                  evt.createdAt,
+          attachments:                 evt.attachments ?? null,
         };
         return {
           ...prev,
@@ -2883,7 +2884,7 @@ function TicketsView({
             sender_member_id:       null,
             sender_support_user_id: null,
             body:                   m.body,
-            attachments:            [],
+            attachments:            m.attachments ?? [],
             created_at:             m.createdAt,
           };
           return {

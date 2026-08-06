@@ -26,6 +26,8 @@
  *                                          up live in the venue's own inbox).
  */
 
+import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
+
 export const supportChannels = {
   brideInbox:       () => 'support:bride-inbox',
   brideThread:      (threadId: string) => `support:thread:${threadId}`,
@@ -91,6 +93,9 @@ export interface BrideMessageEvent {
   venueDirectMessage?:   boolean;
   /** Optional list of support_team_members.id mentioned in a note. */
   mentionedSupportUserIds?: string[];
+  /** Attachments on the message, so live-appended bubbles render them without
+   *  waiting for a refetch. */
+  attachments?:          SupportAttachment[] | null;
 }
 
 // ─── Support ticket events ──────────────────────────────────────────────────
@@ -105,6 +110,9 @@ export interface TicketMessageEvent {
   /** Status of the ticket *after* this message was inserted (server bumps
    *  status on reply: support → 'pending', venue → 'open'). */
   status:        'open' | 'pending' | 'closed';
+  /** Attachments on the message, so live-appended bubbles render them without
+   *  waiting for a refetch. */
+  attachments?:  SupportAttachment[] | null;
 }
 
 export interface TicketStatusEvent {

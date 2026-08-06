@@ -83,11 +83,11 @@ export default function VenueDirectPanel({ contactId, contactName }: { contactId
   );
   useBroadcastChannel(
     realtimeChannel,
-    ['bride:message'],
+    ['message'],
     (_evt, payload) => {
       const p = payload as BrideMessageEvent;
       // Only refresh on venue_direct messages arriving on this thread
-      if (!p || p.threadId !== threadId) return;
+      if (!p || p.threadId !== threadId || p.venueDirectMessage !== true) return;
       void load();
     },
   );

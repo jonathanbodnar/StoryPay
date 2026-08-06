@@ -727,6 +727,10 @@ export default function ConversationsPage() {
       }
       const evt = payload as BrideMessageEvent;
       if (!evt) return;
+      // Venue Direct + support-only messages are internal side-channels — they
+      // must never appear inline in the bride conversation view. (The
+      // VenueDirectPanel has its own subscription for venue_direct events.)
+      if (evt.supportOnly || evt.venueDirectMessage) return;
       setMessages(prev => {
         if (prev.some(m => m.id === evt.messageId)) return prev;
         const newMsg: Msg = {
