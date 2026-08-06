@@ -1,3 +1,9 @@
+# NOTE: This workflow is now a REDUNDANT BACKUP. The primary trigger is the
+# in-app scheduler (src/lib/in-app-scheduler.ts, started from
+# src/instrumentation.ts) which runs this sync every 60s inside the Railway
+# server process. GitHub Actions schedules proved too throttled/unreliable.
+# The sync is idempotent (dedupe by ghl_message_id), so overlap is harmless.
+#
 # GHL inbound SMS sync cron — runs every 5 minutes.
 # Pings /api/cron/ghl-inbound-sync which polls GHL for inbound SMS replies on
 # recently-active threads. Required because venues connected via a pasted

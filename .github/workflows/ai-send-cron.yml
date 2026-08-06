@@ -1,3 +1,11 @@
+# NOTE: This workflow is now a REDUNDANT BACKUP. The primary trigger is the
+# in-app scheduler (src/lib/in-app-scheduler.ts, started from
+# src/instrumentation.ts) which runs the send cron every 10 minutes inside the
+# Railway server process. GitHub Actions schedules proved too throttled and
+# unreliable. Double-triggering is safe: runAiSendCron atomically reserves
+# leads (UPDATE ... WHERE ai_next_send_at <= NOW() RETURNING), so concurrent
+# runs claim disjoint sets and can never double-send.
+#
 # AI Concierge send cron — runs every 10 minutes.
 # Pings /api/cron/ai-send which picks up any leads whose ai_next_send_at has passed
 # and dispatches the next AI SMS via GHL.
