@@ -51,6 +51,10 @@ interface ScheduledJob {
 const HOT_WINDOW_MINUTES = 60;
 const HOT_MAX_THREADS = 5;
 
+/** Last observed hot-thread count, so we log transitions (0→N, N→0) instead
+ *  of every 7s scan — visible "locked on / released" evidence w/o flooding. */
+let lastHotCount = 0;
+
 const JOBS: ScheduledJob[] = [
   {
     // Hot tier: threads with SMS activity in the last hour get polled every
@@ -65,11 +69,18 @@ const JOBS: ScheduledJob[] = [
         windowMinutes: HOT_WINDOW_MINUTES,
         maxThreads: HOT_MAX_THREADS,
       });
-      if (r.threadsScanned === 0) return null; // idle — stay quiet
-      // Only worth a log line when something was actually imported; a plain
-      // "polled N hot threads, nothing new" every 7s would still flood.
-      if (r.messagesImported === 0) return null;
-      return `hot=${r.hotThreads} threads=${r.threadsScanned} imported=${r.messagesImported}`;
+      const hotCountChanged = r.hotThreads !== lastHotCount;
+      lastHotCount = r.hotThreads;
+      // Always log imports; log when the hot set changes size (a thread just
+      // became hot or aged out); stay quiet on steady-state scans — a plain
+      // "polled N hot threads, nothing new" every 7s would flood the logs.
+      if (r.messagesImported > 0) {
+        return `hot=${r.hotThreads} threads=${r.threadsScanned} imported=${r.messagesImported}`;
+      }
+      if (hotCountChanged) {
+        return `hot-set-changed hot=${r.hotThreads} threads=${r.threadsScanned} imported=0`;
+      }
+      return null;
     },
   },
   {
