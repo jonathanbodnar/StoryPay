@@ -8,6 +8,7 @@ import {
   normalizePhone,
 } from '@/lib/ghl';
 import { notifyOwnerNewMessage } from '@/lib/owner-notifications';
+import { logError } from '@/lib/error-log';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-sms.storypay.placeholder';
 
@@ -229,6 +230,14 @@ export async function upsertVenueCustomerFromGhl(params: {
   const token = venue ? getGhlToken(venue as { ghl_access_token?: string | null }) : null;
   if (!token) {
     console.error('[ghl-sms] no GHL token for venue', venueId);
+    void logError({
+      level: 'error',
+      source: 'sms',
+      category: 'ghl_inbound_no_token',
+      message: `Inbound GHL SMS for venue ${venueId} could not be linked to a contact — venue has no usable GHL access token. Reply was dropped instead of reaching a thread.`,
+      venueId,
+      context: { locationId, contactId },
+    });
     return null;
   }
 

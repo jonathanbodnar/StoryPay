@@ -20,6 +20,7 @@ import { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, QUALIFIED_STAGE_NAME, resolveDefa
 import { STL_NAME } from '@/lib/booking-system-sequences';
 import { isSystemTagInert } from '@/lib/system-tag-visibility';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
+import { logError } from '@/lib/error-log';
 
 const BATCH = 25;
 
@@ -1840,11 +1841,90 @@ async function sendAutomationSmsToLead(
       lastName: vars.last_name,
     });
     if (!contactId) return { ok: false, error: 'no_contact' };
+    // Backfill ghl_contact_id onto the venue_customer immediately, rather than
+    // relying on a GHL webhook to self-heal it later. GHL sub-accounts
+    // connected via a pasted Private Integration Token (Settings → StoryVenue
+    // Legacy — the standard connection method for self-serve SaaS venues)
+    // never receive marketplace-app webhooks (ContactCreate/InboundMessage
+    // etc.) at all, since PIT tokens bypass the OAuth app-install flow that
+    // GHL uses to decide which locations to push webhook events to. Without
+    // this immediate backfill, the customer's ghl_contact_id stays NULL
+    // forever, which breaks BOTH the webhook inbound-SMS handler's fast path
+    // AND the `syncInboundSmsFromGhlForThread` polling fallback (it requires
+    // ghl_contact_id too) — so the contact's inbound replies silently never
+    // reach the conversation thread, indefinitely, on every plan tier.
+    void backfillGhlContactIdForLead(venueId, leadId, contactId).catch((e) => {
+      console.error('[worker] backfillGhlContactIdForLead failed (non-fatal):', e);
+    });
     await sendSms(token, loc, contactId, mergedBody, mediaUrls?.length ? mediaUrls : undefined);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'sms_failed' };
   }
   return { ok: true, mergedBody };
+}
+
+/**
+ * Ensures the venue_customer matching this lead has `ghl_contact_id` set to
+ * the GHL contact we just sent SMS through. Best-effort, never throws to the
+ * caller — but DOES log a visible warning (surfaces in the admin Error Log)
+ * when the venue_customer can't be resolved at all, since a silent failure
+ * here means inbound replies for this contact will never reach any thread.
+ */
+async function backfillGhlContactIdForLead(
+  venueId: string,
+  leadId: string,
+  ghlContactId: string,
+): Promise<void> {
+  const { data: lead } = await supabaseAdmin
+    .from('leads')
+    .select('email')
+    .eq('id', leadId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  const email = String((lead as { email?: string | null } | null)?.email || '').trim().toLowerCase();
+  if (!email) {
+    await logError({
+      level: 'warning',
+      source: 'sms',
+      category: 'ghl_contact_backfill_no_email',
+      message: `Sent automation SMS for lead ${leadId} but the lead has no email — cannot link ghl_contact_id to a venue_customer, so inbound replies for this contact may never reach a thread.`,
+      venueId,
+      context: { leadId, ghlContactId },
+    });
+    return;
+  }
+
+  const { data: vc } = await supabaseAdmin
+    .from('venue_customers')
+    .select('id, ghl_contact_id')
+    .eq('venue_id', venueId)
+    .ilike('customer_email', email)
+    .maybeSingle();
+
+  if (!vc?.id) {
+    await logError({
+      level: 'warning',
+      source: 'sms',
+      category: 'ghl_contact_backfill_no_customer',
+      message: `Sent automation SMS for lead ${leadId} but found no matching venue_customer for email — cannot link ghl_contact_id, so inbound replies for this contact may never reach a thread.`,
+      venueId,
+      context: { leadId, ghlContactId },
+    });
+    return;
+  }
+
+  const existing = (vc as { ghl_contact_id?: string | null }).ghl_contact_id;
+  if (existing === ghlContactId) return; // already linked — no-op
+
+  const { error } = await supabaseAdmin
+    .from('venue_customers')
+    .update({ ghl_contact_id: ghlContactId })
+    .eq('id', (vc as { id: string }).id)
+    .eq('venue_id', venueId);
+
+  if (error) {
+    console.error('[worker] backfillGhlContactIdForLead update failed:', error);
+  }
 }
 
 /**

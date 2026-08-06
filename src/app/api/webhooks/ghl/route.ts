@@ -13,6 +13,7 @@ import { handleInboundAiMessage } from '@/lib/ai-concierge/inbound-handler';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
 import { recordSmsReplyAttribution } from '@/lib/sms-reply-tracking';
 import { verifyGhlWebhookSignature } from '@/lib/ghl-webhook-verify';
+import { logError } from '@/lib/error-log';
 
 // Rollout switch for GHL webhook signature enforcement. Starts OFF
 // (monitor-only: every request is verified and logged, but nothing is
@@ -77,6 +78,15 @@ export async function POST(request: NextRequest) {
         });
         if (!r.ok) {
           console.error('[ghl webhook] inbound SMS ingest failed:', r.error);
+          void logError({
+            level: 'error',
+            source: 'webhook',
+            category: 'ghl_inbound_sms_ingest_failed',
+            message: `GHL inbound SMS could not be stored for venue ${venue.id} (locationId ${inboundSms.locationId}): ${r.error}. The customer's reply was received by GHL but never reached a conversation thread.`,
+            venueId: venue.id as string,
+            route: '/api/webhooks/ghl',
+            context: { locationId: inboundSms.locationId, contactId: inboundSms.contactId, error: r.error },
+          });
         } else {
           // TCPA keyword routing — runs FIRST so the AI inbound handler sees
           // the correct dnd state. Both STOP and START sync bidirectionally
@@ -137,6 +147,14 @@ export async function POST(request: NextRequest) {
         }
       } else {
         console.warn('[ghl webhook] inbound SMS: no venue for locationId', inboundSms.locationId);
+        void logError({
+          level: 'warning',
+          source: 'webhook',
+          category: 'ghl_inbound_no_venue_match',
+          message: `GHL sent an inbound SMS webhook for locationId ${inboundSms.locationId}, but no venue in our DB has that ghl_location_id. The message was silently dropped instead of reaching any thread.`,
+          route: '/api/webhooks/ghl',
+          context: { locationId: inboundSms.locationId, contactId: inboundSms.contactId },
+        });
       }
     }
 
