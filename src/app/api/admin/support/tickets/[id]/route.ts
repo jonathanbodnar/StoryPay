@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
 
 interface ThreadRow {
   id:                       string;
-  venue_id:                 string;
+  venue_id:                 string | null;
   opened_by_profile_id:     string | null;
   opened_by_member_id:      string | null;
   subject:                  string;
@@ -24,6 +24,10 @@ interface ThreadRow {
   last_message_preview:     string | null;
   created_at:               string;
   updated_at:               string;
+  source:                   'dashboard' | 'inbound_email';
+  contact_email:            string | null;
+  contact_name:             string | null;
+  is_unmatched:             boolean;
 }
 
 interface MessageRow {
@@ -35,6 +39,8 @@ interface MessageRow {
   sender_support_user_id: string | null;
   body:                   string;
   attachments:            unknown;
+  contact_from_name:      string | null;
+  contact_from_email:     string | null;
   created_at:             string;
 }
 
@@ -56,7 +62,7 @@ export async function GET(
       id, venue_id, opened_by_profile_id, opened_by_member_id,
       subject, status, priority, assigned_support_user_id,
       last_message_at, last_message_preview,
-      created_at, updated_at
+      created_at, updated_at, source, contact_email, contact_name, is_unmatched
     `)
     .eq('id', id)
     .maybeSingle();
@@ -66,14 +72,16 @@ export async function GET(
   if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
 
   const [{ data: venueRow }, { data: msgs }, { data: profileRow }, { data: memberRow }] = await Promise.all([
-    supabaseAdmin
-      .from('venues')
-      .select('id, name, email, notification_email, contact_email, phone, timezone')
-      .eq('id', ticket.venue_id)
-      .maybeSingle(),
+    ticket.venue_id
+      ? supabaseAdmin
+          .from('venues')
+          .select('id, name, email, notification_email, phone, timezone')
+          .eq('id', ticket.venue_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     supabaseAdmin
       .from('support_thread_messages')
-      .select('id, support_thread_id, sender_type, sender_profile_id, sender_member_id, sender_support_user_id, body, attachments, created_at')
+      .select('id, support_thread_id, sender_type, sender_profile_id, sender_member_id, sender_support_user_id, body, attachments, contact_from_name, contact_from_email, created_at')
       .eq('support_thread_id', id)
       .order('created_at', { ascending: true }),
     ticket.opened_by_profile_id
@@ -129,6 +137,15 @@ export async function GET(
       const m = memberRow as { id: string; first_name: string | null; last_name: string | null; email: string | null };
       const name = [m.first_name, m.last_name].filter(Boolean).join(' ').trim();
       return { kind: 'team_member' as const, label: name || m.email || 'Team member', email: m.email };
+    }
+    // Ticket arrived via support@storyvenue.com (no logged-in venue user) —
+    // the real "opener" is the emailer, matched or not.
+    if (ticket.source === 'inbound_email') {
+      return {
+        kind:  'inbound_email' as const,
+        label: ticket.contact_name || ticket.contact_email || 'Unknown sender',
+        email: ticket.contact_email,
+      };
     }
     // Neither profile nor member: venue owner authenticated via password
     // hash without an auth.users row. Fall back to venue email/name.

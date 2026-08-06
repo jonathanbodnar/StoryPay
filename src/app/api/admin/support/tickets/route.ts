@@ -26,7 +26,7 @@ export const runtime = 'nodejs';
 
 interface TicketListRow {
   id:                       string;
-  venue_id:                 string;
+  venue_id:                 string | null;
   venue_name:               string;
   subject:                  string;
   status:                   'open' | 'pending' | 'closed';
@@ -39,6 +39,12 @@ interface TicketListRow {
   opener_email:             string | null;
   message_count:            number;
   created_at:               string;
+  /** True when this ticket arrived via email from a sender we couldn't
+   *  match to a known venue/team member (cold inquiry / unknown sender). */
+  is_unmatched:             boolean;
+  /** 'dashboard' (opened by a logged-in venue user) or 'inbound_email'
+   *  (arrived via support@storyvenue.com). */
+  source:                   'dashboard' | 'inbound_email';
 }
 
 const DEFAULT_STATUSES = ['open', 'pending'];
@@ -79,7 +85,7 @@ export async function GET(req: NextRequest) {
     // ── 1. Fetch support_threads ─────────────────────────────────────────────
     let q = supabaseAdmin
       .from('support_threads')
-      .select('id, venue_id, subject, status, priority, assigned_support_user_id, last_message_at, last_message_preview, opened_by_profile_id, opened_by_member_id, created_at')
+      .select('id, venue_id, subject, status, priority, assigned_support_user_id, last_message_at, last_message_preview, opened_by_profile_id, opened_by_member_id, created_at, source, contact_email, contact_name, is_unmatched')
       .in('status', statuses)
       .order('last_message_at', { ascending: false })
       .order('id', { ascending: false })
@@ -104,20 +110,23 @@ export async function GET(req: NextRequest) {
     if (tErr) throw new Error(tErr.message);
 
     const rows = (threads ?? []) as Array<{
-      id: string; venue_id: string; subject: string;
+      id: string; venue_id: string | null; subject: string;
       status: string; priority: string;
       assigned_support_user_id: string | null;
       last_message_at: string; last_message_preview: string | null;
       opened_by_profile_id: string | null; opened_by_member_id: string | null;
       created_at: string;
+      source: 'dashboard' | 'inbound_email';
+      contact_email: string | null; contact_name: string | null;
+      is_unmatched: boolean;
     }>;
 
     if (rows.length === 0) {
       return NextResponse.json({ tickets: [], nextCursor: null });
     }
 
-    // ── 2. Collect IDs for batch lookups ─────────────────────────────────────
-    const venueIds       = Array.from(new Set(rows.map(r => r.venue_id)));
+    // ── 2. Collect IDs for batch lookups (unmatched tickets have no venue) ──
+    const venueIds       = Array.from(new Set(rows.map(r => r.venue_id).filter((id): id is string => Boolean(id))));
     const profileIds     = Array.from(new Set(rows.map(r => r.opened_by_profile_id).filter(Boolean))) as string[];
     const memberIds      = Array.from(new Set(rows.map(r => r.opened_by_member_id).filter(Boolean))) as string[];
     const supportUserIds = Array.from(new Set(rows.map(r => r.assigned_support_user_id).filter(Boolean))) as string[];
@@ -125,7 +134,9 @@ export async function GET(req: NextRequest) {
 
     // ── 3. Batch fetches ─────────────────────────────────────────────────────
     const [venueRes, profileRes, memberRes, supportRes, countRes] = await Promise.all([
-      supabaseAdmin.from('venues').select('id, name, email').in('id', venueIds),
+      venueIds.length
+        ? supabaseAdmin.from('venues').select('id, name, email').in('id', venueIds)
+        : Promise.resolve({ data: [] as { id: string; name: string | null; email: string | null }[] }),
       profileIds.length
         ? supabaseAdmin.from('profiles').select('id, full_name').in('id', profileIds)
         : Promise.resolve({ data: [] }),
@@ -152,7 +163,7 @@ export async function GET(req: NextRequest) {
 
     // ── 5. Hydrate rows ───────────────────────────────────────────────────────
     const hydrated: TicketListRow[] = rows.map(t => {
-      const venue   = venueMap[t.venue_id] as { name: string | null; email: string | null } | undefined;
+      const venue   = t.venue_id ? venueMap[t.venue_id] as { name: string | null; email: string | null } | undefined : undefined;
       const profile = t.opened_by_profile_id ? profileMap[t.opened_by_profile_id] as { full_name: string | null } | undefined : null;
       const member  = t.opened_by_member_id  ? memberMap[t.opened_by_member_id]   as { first_name: string | null; last_name: string | null; email: string | null } | undefined : null;
       const support = t.assigned_support_user_id ? supportMap[t.assigned_support_user_id] as { name: string } | undefined : null;
@@ -163,15 +174,19 @@ export async function GET(req: NextRequest) {
           const n = [member.first_name, member.last_name].filter(Boolean).join(' ').trim();
           return n || member.email || 'Team member';
         }
+        if (t.source === 'inbound_email') return t.contact_name || t.contact_email || 'Unknown sender';
         return venue?.name || venue?.email || 'Venue owner';
       })();
 
-      const openerEmail = member?.email ?? venue?.email ?? null;
+      const openerEmail = member?.email ?? venue?.email ?? t.contact_email ?? null;
+
+      const venueName = venue?.name
+        ?? (t.is_unmatched ? `Unmatched sender (${t.contact_email || 'unknown'})` : 'Unknown venue');
 
       return {
         id:                       t.id,
         venue_id:                 t.venue_id,
-        venue_name:               venue?.name ?? 'Unknown venue',
+        venue_name:               venueName,
         subject:                  t.subject,
         status:                   t.status as TicketListRow['status'],
         priority:                 t.priority as TicketListRow['priority'],
@@ -183,6 +198,8 @@ export async function GET(req: NextRequest) {
         opener_email:             openerEmail,
         message_count:            countMap[t.id] ?? 0,
         created_at:               t.created_at,
+        is_unmatched:             t.is_unmatched,
+        source:                   t.source,
       };
     });
 

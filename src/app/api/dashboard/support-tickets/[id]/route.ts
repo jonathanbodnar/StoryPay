@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { resolveVenueAttribution } from '@/lib/support/venue-attribution';
 import { broadcastTicketMessage, broadcastTicketStatus } from '@/lib/realtime/broadcast';
+import { notifyTicketReply } from '@/lib/slack-notify';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -119,12 +120,13 @@ export async function POST(
 
   const { data: tRow } = await supabaseAdmin
     .from('support_threads')
-    .select('id, venue_id, status, priority, assigned_support_user_id')
+    .select('id, venue_id, subject, status, priority, assigned_support_user_id')
     .eq('id', id)
     .maybeSingle();
   const ticket = tRow as {
     id: string;
     venue_id: string;
+    subject: string;
     status: string;
     priority?: 'low' | 'normal' | 'high';
     assigned_support_user_id?: string | null;
@@ -173,6 +175,27 @@ export async function POST(
     createdAt:  (msg as { created_at?: string }).created_at || new Date().toISOString(),
     status:     nextStatus,
   });
+
+  // Slack alert for a follow-up reply on an already-open ticket — fire-and-
+  // forget, never blocks the response to the venue. Fixes the previous gap
+  // where only brand-new tickets (not follow-ups) pinged Slack.
+  void (async () => {
+    try {
+      const { data: v } = await supabaseAdmin
+        .from('venues')
+        .select('name')
+        .eq('id', attr.venueId)
+        .maybeSingle();
+      await notifyTicketReply({
+        venueName:      (v as { name?: string } | null)?.name || 'Unknown venue',
+        subject:        ticket.subject,
+        messagePreview: text,
+        ticketId:       id,
+      });
+    } catch (e) {
+      console.warn('[support-tickets] slack notify failed', e);
+    }
+  })();
 
   // If the ticket was previously closed, also broadcast a status change so any
   // open admin/venue UI listening for ticket_status events updates immediately.

@@ -117,3 +117,31 @@ export async function notifySupportTicket(opts: {
     text,
   );
 }
+
+/**
+ * Follow-up reply on an ALREADY-OPEN Venue Support ticket (venue/client
+ * replied again, whether via the dashboard or by emailing support@ back).
+ * Distinct from notifySupportTicket (brand-new ticket) so every inbound
+ * message — new ticket or follow-up — pings the shared channel.
+ */
+export async function notifyTicketReply(opts: {
+  venueName: string;
+  subject: string;
+  messagePreview: string;
+  ticketId: string;
+}): Promise<void> {
+  const link = ticketLink(opts.ticketId);
+  const text = `🎫 Ticket reply — ${opts.venueName}`;
+  await postToSlack(
+    [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `🎫 *Ticket reply* — *${opts.venueName}*\n*${opts.subject}:* ${truncate(opts.messagePreview)}\n<${link}|Open in Support Inbox>`,
+        },
+      },
+    ],
+    text,
+  );
+}

@@ -2236,7 +2236,7 @@ function MessageBubble({
 
 interface TicketListRow {
   id:                       string;
-  venue_id:                 string;
+  venue_id:                 string | null;
   venue_name:               string;
   subject:                  string;
   status:                   'open' | 'pending' | 'closed';
@@ -2249,11 +2249,15 @@ interface TicketListRow {
   opener_email:             string | null;
   message_count:            number;
   created_at:               string;
+  /** True when this ticket arrived via email from a sender we couldn't
+   *  match to a known venue/team member (cold inquiry / unknown sender). */
+  is_unmatched:             boolean;
+  source:                   'dashboard' | 'inbound_email';
 }
 
 interface TicketDetail {
   ticket: {
-    id: string; venue_id: string; subject: string;
+    id: string; venue_id: string | null; subject: string;
     status: 'open' | 'pending' | 'closed';
     priority: 'low' | 'normal' | 'high';
     assigned_support_user_id: string | null;
@@ -2262,9 +2266,13 @@ interface TicketDetail {
     opened_by_profile_id: string | null;
     opened_by_member_id: string | null;
     created_at: string;
+    source: 'dashboard' | 'inbound_email';
+    contact_email: string | null;
+    contact_name: string | null;
+    is_unmatched: boolean;
   };
-  venue: { id: string; name: string; notification_email: string | null; contact_email: string | null; phone: string | null } | null;
-  opener: { kind: 'owner' | 'team_member' | 'unknown'; label: string; email: string | null };
+  venue: { id: string; name: string; notification_email: string | null; phone: string | null } | null;
+  opener: { kind: 'owner' | 'team_member' | 'inbound_email' | 'unknown'; label: string; email: string | null };
   messages: {
     id: string; sender_type: 'venue' | 'support';
     sender_profile_id: string | null;
@@ -2272,6 +2280,8 @@ interface TicketDetail {
     sender_support_user_id: string | null;
     body: string;
     attachments: unknown;
+    contact_from_name?: string | null;
+    contact_from_email?: string | null;
     created_at: string;
   }[];
   senders: {
@@ -2864,6 +2874,11 @@ function TicketsView({
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <Building2 size={11} className="text-gray-400 shrink-0" />
                       <span className="text-[11px] text-gray-500 truncate">{t.venue_name}</span>
+                      {t.is_unmatched && (
+                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 shrink-0">
+                          Unmatched
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2931,6 +2946,11 @@ function TicketsView({
                     <StatusPill status={detail.ticket.status} />
                     <PriorityPill priority={detail.ticket.priority} />
                     {detail.ticket.status !== 'closed' && <SlaPill iso={detail.ticket.last_message_at} size="sm" />}
+                    {detail.ticket.is_unmatched && (
+                      <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                        Unmatched sender
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-gray-500">
                     {detail.venue && (
@@ -3010,6 +3030,12 @@ function TicketsView({
                   } else if (m.sender_member_id) {
                     const mem = detail.senders.members[m.sender_member_id];
                     label = mem ? ([mem.first_name, mem.last_name].filter(Boolean).join(' ').trim() || mem.email || 'Team member') : 'Team member';
+                  } else if (m.contact_from_name || m.contact_from_email) {
+                    // Inbound email reply (support@storyvenue.com) or an owner
+                    // without a profiles row — attribute to the actual sender.
+                    label = m.contact_from_name || m.contact_from_email || 'Venue owner';
+                  } else {
+                    label = 'Venue owner';
                   }
                 } else if (m.sender_support_user_id) {
                   label = detail.senders.support[m.sender_support_user_id]?.name || 'Support';

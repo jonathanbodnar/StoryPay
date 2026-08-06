@@ -14,6 +14,12 @@ import {
   verifyReplySignature,
 } from '@/lib/conversations-inbound-email';
 import { haltAutomationEnrollmentsForReply } from '@/lib/marketing-email-worker';
+import {
+  SUPPORT_TICKET_INBOUND_LOCAL_PART,
+  ingestNewInboundSupportEmail,
+  ingestTicketReplyEmail,
+  parseTicketReplyLocalPart,
+} from '@/lib/support/ticket-inbound-email';
 
 /**
  * Resend webhooks are signed using the Svix scheme:
@@ -205,6 +211,9 @@ async function ingestFromParsedFields(params: {
   const local = toEmail.split('@')[0] ?? '';
   const parsedBride = parseReplyLocalPart(local);
   const parsedVD = !parsedBride ? parseVenueDirectLocalPart(local) : null;
+  const parsedTicket = !parsedBride && !parsedVD ? parseTicketReplyLocalPart(local) : null;
+  const isSupportCatchAll =
+    !parsedBride && !parsedVD && !parsedTicket && local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART;
   const parsed = parsedBride ?? parsedVD;
   console.warn('[inbound-email] parse', {
     fromRawPreview: fromRaw.slice(0, 80),
@@ -212,7 +221,57 @@ async function ingestFromParsedFields(params: {
     local: local.slice(0, 72),
     matchedBride: !!parsedBride,
     matchedVD: !!parsedVD,
+    matchedTicket: !!parsedTicket,
+    matchedSupportCatchAll: isSupportCatchAll,
   });
+
+  const mid =
+    (messageId && messageId.replace(/^<|>$/g, '')) ||
+    (resendEmailId ? `resend:${resendEmailId}` : null);
+  const smtpId =
+    mid ||
+    (text ? hashInboundDedupeFallback(fromEmail, subject ?? '', text, toRaw) : null);
+
+  // Venue Support ticket path: a client replying to an agent's outbound
+  // ticket email (signed ticket+{id}+{sig}@ address).
+  if (parsedTicket) {
+    const r = await ingestTicketReplyEmail({
+      ticketId:      parsedTicket.ticketId,
+      sig:           parsedTicket.sig,
+      fromEmail,
+      fromName,
+      bodyText:      text || '(no body)',
+      smtpMessageId: smtpId,
+    });
+    if (!r.ok) {
+      console.error('[inbound-email] ticket reply ingest failed', r.error);
+      return NextResponse.json({ error: r.error ?? 'insert_failed' }, { status: 500 });
+    }
+    if (r.skipped) {
+      console.warn('[inbound-email] ticket reply skipped:', r.skipped, { ticketId: parsedTicket.ticketId });
+      return NextResponse.json({ ok: true, skipped: r.skipped });
+    }
+    return NextResponse.json({ ok: true, inserted: r.inserted ?? false, audience: 'support_ticket' });
+  }
+
+  // Venue Support ticket path: brand-new mail (or a cold/unmatched inquiry)
+  // forwarded from the support@storyvenue.com Workspace Group to the fixed
+  // support@{CONVERSATIONS_INBOUND_DOMAIN} catch-all address.
+  if (isSupportCatchAll) {
+    const r = await ingestNewInboundSupportEmail({
+      fromEmail,
+      fromName,
+      subject,
+      bodyText:      text || '(no body)',
+      smtpMessageId: smtpId,
+    });
+    if (!r.ok) {
+      console.error('[inbound-email] new support ticket ingest failed', r.error);
+      return NextResponse.json({ error: r.error ?? 'insert_failed' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, inserted: r.inserted ?? false, audience: 'support_ticket' });
+  }
+
   if (!parsed) {
     console.warn('[inbound-email] skipped: not_reply_address', { local: local.slice(0, 72) });
     return NextResponse.json({ ok: true, skipped: 'not_reply_address' });
@@ -237,13 +296,6 @@ async function ingestFromParsedFields(params: {
     });
     return NextResponse.json({ ok: true, skipped: 'bad_token' });
   }
-
-  const mid =
-    (messageId && messageId.replace(/^<|>$/g, '')) ||
-    (resendEmailId ? `resend:${resendEmailId}` : null);
-  const smtpId =
-    mid ||
-    (text ? hashInboundDedupeFallback(fromEmail, subject ?? '', text, toRaw) : null);
 
   // Venue Direct path: replies from venue staff to a `vd+...@` address are
   // routed into the venue_direct audience so they show up in the support
@@ -397,7 +449,10 @@ export async function POST(request: NextRequest) {
   };
 
   const fromRaw = email.from ?? '';
-  const replyRoute = pickReplyRoutingAddressFromInboundEmail(email);
+  const replyRoute = pickReplyRoutingAddressFromInboundEmail(
+    email,
+    (local) => !!parseTicketReplyLocalPart(local) || local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART,
+  );
   const toRaw =
     replyRoute ||
     (Array.isArray(email.to) && email.to.length ? String(email.to[0]) : '');
@@ -415,7 +470,11 @@ export async function POST(request: NextRequest) {
   });
   if (toRaw) {
     const local = firstEmailFromList(toRaw).split('@')[0] ?? '';
-    if (!parseReplyLocalPart(local)) {
+    const recognized =
+      parseReplyLocalPart(local) ||
+      parseTicketReplyLocalPart(local) ||
+      local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART;
+    if (!recognized) {
       console.warn('[inbound-email] no reply+thread+sig in to/cc/headers', {
         usedFallbackTo: !replyRoute,
         toPreview: JSON.stringify(email.to ?? []).slice(0, 160),

@@ -137,12 +137,19 @@ const INBOUND_HEADER_KEYS = [
 /**
  * Resend's `to` array is not always ordered with our `reply+{thread}+{sig}@...` first.
  * Scan To, Cc, and common envelope headers for the routing local part.
+ *
+ * `extraLocalPartMatch` lets callers recognize additional local-part schemes
+ * (e.g. the Venue Support ticket `ticket+{id}+{sig}` / fixed `support`
+ * catch-all local parts) without this module needing to import them.
  */
-export function pickReplyRoutingAddressFromInboundEmail(email: {
-  to?: unknown;
-  cc?: unknown;
-  headers?: unknown;
-}): string {
+export function pickReplyRoutingAddressFromInboundEmail(
+  email: {
+    to?: unknown;
+    cc?: unknown;
+    headers?: unknown;
+  },
+  extraLocalPartMatch?: (local: string) => boolean,
+): string {
   const chunks: string[] = [];
   const push = (u: unknown) => chunks.push(...normalizeRecipientChunks(u));
 
@@ -164,7 +171,9 @@ export function pickReplyRoutingAddressFromInboundEmail(email: {
   for (const raw of chunks) {
     const addr = firstEmailFromList(raw);
     const local = addr.split('@')[0] ?? '';
-    if (parseReplyLocalPart(local) || parseVenueDirectLocalPart(local)) return raw.trim();
+    if (parseReplyLocalPart(local) || parseVenueDirectLocalPart(local) || extraLocalPartMatch?.(local)) {
+      return raw.trim();
+    }
   }
   return '';
 }
