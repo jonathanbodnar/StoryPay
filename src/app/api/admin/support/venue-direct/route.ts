@@ -33,17 +33,20 @@ import { sendEmail } from '@/lib/email';
 import { broadcastBrideMessage, broadcastBrideMessageAdminOnly, broadcastVenueDirectInboxUpdate } from '@/lib/realtime/broadcast';
 import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
 import { buildVenueDirectReplyToEmail } from '@/lib/conversations-inbound-email';
+import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const MAX_CHARS = 5000;
+const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
 interface Body {
   threadId?:       string;
   body?:           string;
   recipientIds?:   string[];
   supportUserId?:  string;
+  attachments?:    SupportAttachment[];
 }
 
 interface ThreadRow {
@@ -97,6 +100,7 @@ export async function POST(req: NextRequest) {
   if (text.length > MAX_CHARS) {
     return NextResponse.json({ error: `Message exceeds ${MAX_CHARS} chars` }, { status: 400 });
   }
+  const attachments = (Array.isArray(body.attachments) ? body.attachments : []).slice(0, MAX_ATTACHMENTS_PER_MESSAGE);
 
   // Resolve acting agent
   let actingAgentId = auth.agent?.sub || (body.supportUserId?.trim() || '');
@@ -213,6 +217,7 @@ export async function POST(req: NextRequest) {
       support_only:            false,
       audience:                'venue_direct',
       external_email_sent:     true,  // we send our own email below
+      ...(attachments.length ? { attachments } : {}),
     })
     .select('id, created_at')
     .single();
@@ -290,6 +295,12 @@ export async function POST(req: NextRequest) {
     ['Last message', lastBrideMessage?.body ? (lastBrideMessage.body.length > 200 ? `${lastBrideMessage.body.slice(0, 200)}…` : lastBrideMessage.body) : null],
   ].filter(([, val]) => val) as [string, string][];
 
+  const attachmentsListHtml = attachments.length
+    ? `<p style="font-size:13px;color:#374151;margin:12px 0 0">${attachments.length} attachment(s): ${attachments
+        .map((a) => `<a href="${a.url}" style="color:#1b1b1b">${escapeHtml(a.filename)}</a>`)
+        .join(', ')}</p>`
+    : '';
+
   const brideInfoHtml = brideInfoRows.length > 0 ? `
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:20px;">
       ${brideInfoRows.map(([label, val], i) => `
@@ -328,6 +339,7 @@ export async function POST(req: NextRequest) {
           <div style="border-left:3px solid #7c3aed;padding:12px 16px;background:#f5f3ff;color:#1f2937;white-space:pre-wrap;font-size:14px;line-height:1.6;border-radius:0 8px 8px 0;">
             ${escapeHtml(previewSnippet)}
           </div>
+          ${attachmentsListHtml}
         </td></tr>
 
         <!-- CTA -->
@@ -351,7 +363,7 @@ export async function POST(req: NextRequest) {
 </body></html>`;
 
   // Send to each unique recipient (team members + owner, deduped).
-  await Promise.allSettled(
+  const emailResults = await Promise.allSettled(
     recipients.map(r =>
       sendEmail({
         to: r.email,
@@ -360,13 +372,33 @@ export async function POST(req: NextRequest) {
         replyTo,
         from: { email: fromEmail, name: 'StoryVenue Concierge team' },
         headers: { 'X-Entity-Ref-ID': `storyvenue-venue-direct-${msg.id}` },
+        attachments: attachments.length
+          ? attachments.map((a) => ({ filename: a.filename, path: a.url }))
+          : undefined,
       })
         .then(res => {
           if (!res.success) console.warn('[venue-direct] email failed', r.email, res.error);
+          return res;
         })
-        .catch(err => console.warn('[venue-direct] email exception', r.email, err)),
+        .catch(err => {
+          console.warn('[venue-direct] email exception', r.email, err);
+          return { success: false } as { success: boolean; id?: string };
+        }),
     ),
   );
+
+  // Correlate delivery/read status for the Resend webhook. There's one row
+  // per venue_direct message but potentially multiple recipient sends — we
+  // store the first successful send's id as a best-effort correlation key.
+  const firstResendId = emailResults
+    .map(r => (r.status === 'fulfilled' ? r.value.id : undefined))
+    .find((id): id is string => !!id);
+  if (firstResendId) {
+    await supabaseAdmin
+      .from('conversation_messages')
+      .update({ resend_email_id: firstResendId })
+      .eq('id', msg.id);
+  }
 
   return NextResponse.json({
     ok: true,

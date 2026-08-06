@@ -50,6 +50,10 @@ export const supportChannels = {
    * even when the message arrived in a thread other than the one currently open.
    */
   venueConversations: (venueId: string) => `venue:${venueId}:conversations`,
+  /** Ephemeral "X is viewing this thread/ticket" presence — pure broadcast,
+   *  no DB table. Scoped per thread/ticket so only agents looking at the
+   *  same conversation see each other. */
+  presence: (kind: 'thread' | 'ticket', id: string) => `presence:${kind}:${id}`,
 } as const;
 
 /** Fired when a new lead is created so the Lead Inbox badge updates live. */
@@ -163,6 +167,19 @@ export interface AiStateChangedEvent {
 }
 
 /** Fired when tags on a contact's lead(s) change (added or removed). */
+/**
+ * Ephemeral presence broadcast — "X is viewing this thread/ticket". Sent on
+ * `supportChannels.presence(kind, id)`. Never persisted; receivers should
+ * expire an agent's pill after ~15s without a fresh 'ping', and senders
+ * should fire a 'leave' on unmount so other agents clear it immediately.
+ */
+export interface ThreadPresenceEvent {
+  agentId:   string;
+  agentName: string;
+  /** 'ping' = still viewing (sent on mount + heartbeat). 'leave' = closed/navigated away. */
+  kind:      'ping' | 'leave';
+}
+
 export interface TagsChangedEvent {
   threadId:    string;
   venueId:     string;

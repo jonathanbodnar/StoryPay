@@ -20,6 +20,7 @@ import {
   ingestTicketReplyEmail,
   parseTicketReplyLocalPart,
 } from '@/lib/support/ticket-inbound-email';
+import { fetchAndStoreInboundEmailAttachments } from '@/lib/support/support-attachments-bucket';
 
 /**
  * Resend webhooks are signed using the Svix scheme:
@@ -235,6 +236,9 @@ async function ingestFromParsedFields(params: {
   // Venue Support ticket path: a client replying to an agent's outbound
   // ticket email (signed ticket+{id}+{sig}@ address).
   if (parsedTicket) {
+    const attachments = resendEmailId
+      ? await fetchAndStoreInboundEmailAttachments(resendEmailId, `ticket/${parsedTicket.ticketId}`)
+      : [];
     const r = await ingestTicketReplyEmail({
       ticketId:      parsedTicket.ticketId,
       sig:           parsedTicket.sig,
@@ -242,6 +246,7 @@ async function ingestFromParsedFields(params: {
       fromName,
       bodyText:      text || '(no body)',
       smtpMessageId: smtpId,
+      attachments,
     });
     if (!r.ok) {
       console.error('[inbound-email] ticket reply ingest failed', r.error);
@@ -258,12 +263,16 @@ async function ingestFromParsedFields(params: {
   // forwarded from the support@storyvenue.com Workspace Group to the fixed
   // support@{CONVERSATIONS_INBOUND_DOMAIN} catch-all address.
   if (isSupportCatchAll) {
+    const attachments = resendEmailId
+      ? await fetchAndStoreInboundEmailAttachments(resendEmailId, `ticket/new/${smtpId ?? 'unknown'}`)
+      : [];
     const r = await ingestNewInboundSupportEmail({
       fromEmail,
       fromName,
       subject,
       bodyText:      text || '(no body)',
       smtpMessageId: smtpId,
+      attachments,
     });
     if (!r.ok) {
       console.error('[inbound-email] new support ticket ingest failed', r.error);
@@ -301,6 +310,9 @@ async function ingestFromParsedFields(params: {
   // routed into the venue_direct audience so they show up in the support
   // inbox + the venue's Concierge tab.
   if (parsedVD) {
+    const attachments = resendEmailId
+      ? await fetchAndStoreInboundEmailAttachments(resendEmailId, `thread/${parsedVD.threadId}`)
+      : [];
     const r = await insertInboundVenueDirectEmail({
       threadId:      parsedVD.threadId,
       venueId,
@@ -309,6 +321,7 @@ async function ingestFromParsedFields(params: {
       subject,
       bodyText:      text || '(no body)',
       smtpMessageId: smtpId,
+      attachments,
     });
     if (!r.ok) {
       const skippable = new Set(['sender_not_authorized', 'thread_not_found']);
@@ -322,6 +335,9 @@ async function ingestFromParsedFields(params: {
     return NextResponse.json({ ok: true, inserted: r.inserted ?? false, audience: 'venue_direct' });
   }
 
+  const attachments = resendEmailId
+    ? await fetchAndStoreInboundEmailAttachments(resendEmailId, `thread/${parsed.threadId}`)
+    : [];
   const r = await insertInboundConversationEmail({
     threadId: parsed.threadId,
     venueId,
@@ -330,6 +346,7 @@ async function ingestFromParsedFields(params: {
     subject,
     bodyText: text || '(no body)',
     smtpMessageId: smtpId,
+    attachments,
   });
 
   if (!r.ok) {

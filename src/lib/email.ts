@@ -248,9 +248,9 @@ export async function sendEmail({
   from?: { email?: string; name?: string };
   /** Custom headers (e.g. List-Unsubscribe, Precedence). */
   headers?: Record<string, string>;
-  /** File attachments — content is base64-encoded. */
-  attachments?: { filename: string; content: string }[];
-}): Promise<{ success: boolean; error?: string }> {
+  /** File attachments. Either base64-encoded `content`, or a `path` URL Resend fetches directly. */
+  attachments?: { filename: string; content?: string; path?: string }[];
+}): Promise<{ success: boolean; error?: string; id?: string }> {
   const resendKey = process.env.RESEND_API_KEY?.trim();
   if (!resendKey) {
     console.warn('[email] RESEND_API_KEY is not set');
@@ -297,7 +297,7 @@ export async function sendEmail({
   // and transactional senders virtually always include both parts.
   const textBody = (text && text.trim().length > 0) ? text : htmlToPlainText(html);
 
-  const sendOnce = async (fromHdr: string): Promise<{ success: boolean; error?: string }> => {
+  const sendOnce = async (fromHdr: string): Promise<{ success: boolean; error?: string; id?: string }> => {
     try {
       const body: Record<string, unknown> = {
         from: fromHdr,
@@ -325,7 +325,7 @@ export async function sendEmail({
       const data = (await res.json()) as { id?: string; message?: string; name?: string };
       if (res.ok) {
         console.log(`[email] Resend sent (from=${fromHdr}) to ${to}, id:`, data.id);
-        return { success: true };
+        return { success: true, id: data.id };
       }
       const errMsg = typeof data.message === 'string' ? data.message : JSON.stringify(data);
       console.error(`[email] Resend failed (from=${fromHdr}):`, res.status, errMsg);
@@ -354,7 +354,7 @@ export async function sendEmail({
     const retryFromHeader = fromName ? `${fromName} <${def.email}>` : def.email;
     // Make sure the retry preserves the venue's email as Reply-To.
     const restoredReplyTo = effectiveReplyTo || requestedFromEmail || undefined;
-    result = await (async () => {
+    result = await (async (): Promise<{ success: boolean; error?: string; id?: string }> => {
       try {
         const body: Record<string, unknown> = {
           from: retryFromHeader,
@@ -381,7 +381,7 @@ export async function sendEmail({
         const data = (await res.json()) as { id?: string; message?: string };
         if (res.ok) {
           console.log(`[email] Resend retry-with-default sent to ${to}, id:`, data.id);
-          return { success: true };
+          return { success: true, id: data.id };
         }
         const errMsg = typeof data.message === 'string' ? data.message : JSON.stringify(data);
         console.error('[email] Resend retry-with-default failed:', res.status, errMsg);

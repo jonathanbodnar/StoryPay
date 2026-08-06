@@ -19,12 +19,14 @@ import { sendEmail } from '@/lib/email';
 import { broadcastTicketMessage } from '@/lib/realtime/broadcast';
 import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
 import { buildTicketReplyToEmail } from '@/lib/support/ticket-inbound-email';
+import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const SUPPORT_FROM_EMAIL = 'support@storyvenue.com';
 const SUPPORT_FROM_NAME  = 'StoryVenue Support';
+const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
 function escapeHtml(s: string): string {
   return s
@@ -85,7 +87,16 @@ export async function POST(
   const { id: ticketId } = await ctx.params;
   if (!ticketId) return NextResponse.json({ error: 'Missing ticket id' }, { status: 400 });
 
-  let body: { body?: string; supportUserId?: string; status?: 'open' | 'pending' | 'closed' };
+  let body: {
+    body?:          string;
+    /** Optional pre-rendered HTML for the outbound email (rich-text composer
+     *  toolbar output) — falls back to auto paragraph-split plain text below
+     *  when omitted, so older/other callers keep working unchanged. */
+    bodyHtml?:      string;
+    supportUserId?: string;
+    status?:        'open' | 'pending' | 'closed';
+    attachments?:   SupportAttachment[];
+  };
   try {
     body = await req.json();
   } catch {
@@ -94,6 +105,7 @@ export async function POST(
 
   const text = (body.body || '').trim();
   if (!text) return NextResponse.json({ error: 'Empty message body' }, { status: 400 });
+  const attachments = (Array.isArray(body.attachments) ? body.attachments : []).slice(0, MAX_ATTACHMENTS_PER_MESSAGE);
 
   // Resolve support user id with the same fallback as bride-reply: real
   // agent session → explicit body id → synthetic Super Admin (auto-created).
@@ -132,14 +144,19 @@ export async function POST(
   if (!ticketRow) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
 
   // Insert message
+  const insertRow: Record<string, unknown> = {
+    support_thread_id:      ticketId,
+    sender_type:            'support',
+    sender_support_user_id: supportUserId,
+    body:                   text,
+  };
+  if (attachments.length) {
+    insertRow.attachments = attachments;
+  }
+
   const { data: msg, error: msgErr } = await supabaseAdmin
     .from('support_thread_messages')
-    .insert({
-      support_thread_id:      ticketId,
-      sender_type:            'support',
-      sender_support_user_id: supportUserId,
-      body:                   text,
-    })
+    .insert(insertRow)
     .select('id, created_at')
     .single();
 
@@ -225,12 +242,23 @@ export async function POST(
     const subjectBase = ticketFull.subject || 'Support request';
     const subject = /^re:/i.test(subjectBase) ? subjectBase : `Re: ${subjectBase}`;
 
+    const attachmentsListHtml = attachments.length
+      ? `<p style="font-size:13px;color:#374151;margin:12px 0 0">${attachments.length} attachment(s): ${attachments
+          .map((a) => `<a href="${a.url}" style="color:#1b1b1b">${escapeHtml(a.filename)}</a>`)
+          .join(', ')}</p>`
+      : '';
+
+    const bodyHtmlContent = body.bodyHtml?.trim()
+      ? body.bodyHtml
+      : escapeHtml(text)
+          .split(/\n+/)
+          .map((p) => `<p style="margin:0 0 12px">${p}</p>`)
+          .join('');
+
     const html = `
 <div style="font-family:'Open Sans',Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827">
-${escapeHtml(text)
-  .split(/\n+/)
-  .map((p) => `<p style="margin:0 0 12px">${p}</p>`)
-  .join('')}
+${bodyHtmlContent}
+${attachmentsListHtml}
 <p style="margin:20px 0 0">Thanks,<br/>${escapeHtml(agentName)}<br/>StoryVenue Support</p>
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0" />
 <p style="font-size:12px;color:#6b7280">Reply to this email to continue this conversation with our support team.</p>
@@ -242,11 +270,18 @@ ${escapeHtml(text)
       subject,
       html,
       from: { name: SUPPORT_FROM_NAME, email: SUPPORT_FROM_EMAIL },
+      attachments: attachments.length
+        ? attachments.map((a) => ({ filename: a.filename, path: a.url }))
+        : undefined,
     });
 
     await supabaseAdmin
       .from('support_thread_messages')
-      .update({ external_email_sent: result.success, send_error: result.error ?? null })
+      .update({
+        external_email_sent: result.success,
+        send_error: result.error ?? null,
+        ...(result.id ? { resend_email_id: result.id } : {}),
+      })
       .eq('id', (msg as { id: string }).id);
 
     if (!result.success) {

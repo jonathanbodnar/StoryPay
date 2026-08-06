@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
-import { classifySla, slaDotClass, slaDotRing, slaPillClass, type SlaInfo } from '@/lib/support/sla';
+import { classifySla, slaDotClass, slaDotRing, slaPillClass, type SlaInfo, type SlaKind } from '@/lib/support/sla';
 
 /** Auto-tick every 60s so the SLA dots/pills update without a page refresh. */
 function useNow(intervalMs: number = 60_000): number {
@@ -30,13 +30,16 @@ export function SlaDot({
   iso,
   withLabel = false,
   className = '',
+  kind = 'thread',
 }: {
   iso: string | null | undefined;
   withLabel?: boolean;
   className?: string;
+  /** 'ticket' uses the tighter Venue Support SLA scale — see lib/support/sla.ts. */
+  kind?: SlaKind;
 }) {
   useNow();
-  const sla: SlaInfo = classifySla(iso);
+  const sla: SlaInfo = classifySla(iso, Date.now(), kind);
 
   return (
     <span
@@ -57,13 +60,16 @@ export function SlaPill({
   iso,
   size = 'md',
   className = '',
+  kind = 'thread',
 }: {
   iso: string | null | undefined;
   size?: 'sm' | 'md';
   className?: string;
+  /** 'ticket' uses the tighter Venue Support SLA scale — see lib/support/sla.ts. */
+  kind?: SlaKind;
 }) {
   useNow();
-  const sla: SlaInfo = classifySla(iso);
+  const sla: SlaInfo = classifySla(iso, Date.now(), kind);
 
   const sizeCls = size === 'sm'
     ? 'px-1.5 py-0.5 text-[10px]'

@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { notifyOwnerNewMessage } from '@/lib/owner-notifications';
+import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
 
 function hexToBuf(hex: string): Buffer | null {
   if (!/^[a-f0-9]+$/i.test(hex) || hex.length % 2) return null;
@@ -200,8 +201,9 @@ export async function insertInboundConversationEmail(params: {
   subject: string | null;
   bodyText: string;
   smtpMessageId: string | null;
+  attachments?: SupportAttachment[];
 }): Promise<{ ok: boolean; error?: string; inserted?: boolean }> {
-  const { threadId, venueId, fromEmail, fromName, subject, bodyText, smtpMessageId } = params;
+  const { threadId, venueId, fromEmail, fromName, subject, bodyText, smtpMessageId, attachments } = params;
   const body = bodyText.trim();
   if (!body) return { ok: true, inserted: false };
 
@@ -260,6 +262,7 @@ export async function insertInboundConversationEmail(params: {
     external_email_sent: false,
     send_error: null,
   };
+  if (attachments?.length) row.attachments = attachments;
 
   const { data: inserted, error: insErr } = await supabaseAdmin
     .from('conversation_messages')
@@ -363,8 +366,9 @@ export async function insertInboundVenueDirectEmail(params: {
   subject: string | null;
   bodyText: string;
   smtpMessageId: string | null;
+  attachments?: SupportAttachment[];
 }): Promise<{ ok: boolean; error?: string; inserted?: boolean; messageId?: string; venueCustomerId?: string }> {
-  const { threadId, venueId, fromEmail, fromName, subject, bodyText, smtpMessageId } = params;
+  const { threadId, venueId, fromEmail, fromName, subject, bodyText, smtpMessageId, attachments } = params;
   const body = bodyText.trim();
   if (!body) return { ok: true, inserted: false };
 
@@ -452,6 +456,7 @@ export async function insertInboundVenueDirectEmail(params: {
     external_email_sent:     false,
     send_error:              null,
   };
+  if (attachments?.length) row.attachments = attachments;
 
   const { data: inserted, error: insErr } = await supabaseAdmin
     .from('conversation_messages')

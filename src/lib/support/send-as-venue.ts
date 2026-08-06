@@ -24,8 +24,12 @@ import {
 } from '@/lib/ghl';
 import { buildConversationsReplyToEmail } from '@/lib/conversations-inbound-email';
 import { broadcastBrideMessage } from '@/lib/realtime/broadcast';
+import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
 
 const PLACEHOLDER_SMS_EMAIL_DOMAIN = 'ghl-sms.storypay.placeholder';
+
+/** Server-side cap — extras are silently dropped, never an error. */
+const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
 export type SupportReplyChannel = 'sms' | 'email';
 
@@ -44,6 +48,13 @@ export interface SendAsVenueInput {
   emailSubject?:  string;
   /** Optional thread id to use directly. When omitted, we look up by lead/email. */
   threadId?:      string;
+  /** Capped at 10 server-side — extras are silently dropped. */
+  attachments?:   SupportAttachment[];
+  /** Optional pre-rendered HTML for the outbound email (rich-text composer
+   *  toolbar output). Ignored for SMS — SMS always sends plain `body` as-is,
+   *  since it can't render HTML. Falls back to a plain-paragraph render of
+   *  `body` when omitted. */
+  bodyHtml?:      string;
 }
 
 export type SendAsVenueResult =
@@ -88,6 +99,7 @@ export async function sendAsVenue(input: SendAsVenueInput): Promise<SendAsVenueR
   const { venueId, leadId, supportUserId, channel } = input;
   const body = (input.body || '').trim();
   if (!body) return { ok: false, error: 'Empty message body' };
+  const attachments = (input.attachments ?? []).slice(0, MAX_ATTACHMENTS_PER_MESSAGE);
 
   // 1. Load lead (optional)
   let lead: LeadRow | null = null;
@@ -201,6 +213,7 @@ export async function sendAsVenue(input: SendAsVenueInput): Promise<SendAsVenueR
   // 5. Send via the chosen channel
   let externalSent = false;
   let sendError: string | null = null;
+  let resendEmailId: string | null = null;
 
   if (channel === 'sms') {
     if (!venue.ghl_connected || !venue.ghl_location_id) {
@@ -237,7 +250,13 @@ export async function sendAsVenue(input: SendAsVenueInput): Promise<SendAsVenueR
       if (!contactId) {
         return { ok: false, error: 'Could not resolve a GHL contact for this lead', threadId };
       }
-      await ghlSendSms(token, venue.ghl_location_id, contactId, body);
+      await ghlSendSms(
+        token,
+        venue.ghl_location_id,
+        contactId,
+        body,
+        attachments.length ? attachments.map((a) => a.url) : undefined,
+      );
       externalSent = true;
     } catch (e) {
       sendError = e instanceof Error ? e.message : 'SMS send failed';
@@ -252,12 +271,23 @@ export async function sendAsVenue(input: SendAsVenueInput): Promise<SendAsVenueR
     const venueName = venue.name || 'Venue';
     const brandEmail = venue.brand_email?.trim() || undefined;
 
+    const attachmentsListHtml = attachments.length
+      ? `<p style="font-size:13px;color:#374151;margin:12px 0 0">${attachments.length} attachment(s): ${attachments
+          .map((a) => `<a href="${a.url}" style="color:#1b1b1b">${escapeHtml(a.filename)}</a>`)
+          .join(', ')}</p>`
+      : '';
+
+    const bodyHtmlContent = input.bodyHtml?.trim()
+      ? input.bodyHtml
+      : escapeHtml(body)
+          .split(/\n+/)
+          .map((p) => `<p style="margin:0 0 12px">${p}</p>`)
+          .join('');
+
     const html = `
 <div style="font-family:'Open Sans',Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827">
-${escapeHtml(body)
-  .split(/\n+/)
-  .map((p) => `<p style="margin:0 0 12px">${p}</p>`)
-  .join('')}
+${bodyHtmlContent}
+${attachmentsListHtml}
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0" />
 <p style="font-size:12px;color:#6b7280">Sent via StoryVenue Conversations — reply to this email to continue the thread.</p>
 </div>`;
@@ -271,12 +301,16 @@ ${escapeHtml(body)
       subject,
       html,
       from: { name: venueName, email: brandEmail },
+      attachments: attachments.length
+        ? attachments.map((a) => ({ filename: a.filename, path: a.url }))
+        : undefined,
     });
 
     if (!result.success) {
       return { ok: false, error: result.error || 'Email send failed', threadId };
     }
     externalSent = true;
+    resendEmailId = result.id ?? null;
   }
 
   // 6. Log conversation_messages row
@@ -291,11 +325,17 @@ ${escapeHtml(body)
     external_email_sent:       externalSent,
     send_error:                sendError,
   };
+  if (attachments.length) {
+    insertRow.attachments = attachments;
+  }
   if (input.internalNote && input.internalNote.trim()) {
     insertRow.support_internal_note = input.internalNote.trim();
   }
   if (channel === 'email') {
     insertRow.email_subject = input.emailSubject?.trim() || threadSubject;
+    if (resendEmailId) {
+      insertRow.resend_email_id = resendEmailId;
+    }
   }
 
   const { data: msgRow, error: insErr } = await supabaseAdmin

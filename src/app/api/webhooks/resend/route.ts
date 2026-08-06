@@ -3,15 +3,27 @@
  *
  * Setup in Resend dashboard → Webhooks → Add endpoint:
  *   URL:    https://app.storyvenue.com/api/webhooks/resend?secret=<RESEND_WEBHOOK_SECRET>
- *   Events: email.bounced, email.complained, email.opened, email.clicked
+ *   Events: email.delivered, email.bounced, email.complained, email.opened, email.clicked
+ *
+ * MANUAL DASHBOARD STEP: `email.delivered` was NOT previously subscribed —
+ * enable it in the Resend dashboard's webhook config alongside the existing
+ * event types above, or delivery ticks in the support inbox will never
+ * appear (opened/bounced already worked before this change).
  *
  * Required env var: RESEND_WEBHOOK_SECRET (any random string you generate)
  *
  * Handles:
- *   email.bounced    → suppress address, disable marketing opt-in
- *   email.complained → suppress address as spam complaint
- *   email.opened     → apply email_opened system tag to matching lead
- *   email.clicked    → apply email_clicked system tag to matching lead
+ *   email.delivered  → sets delivery_status='delivered' + delivered_at on the
+ *                       matching conversation_messages/support_thread_messages
+ *                       row (matched via resend_email_id), for the support
+ *                       inbox's sent→delivered→bounced status icon.
+ *   email.bounced    → suppress address, disable marketing opt-in, AND sets
+ *                       delivery_status='bounced' on the matching message row.
+ *   email.complained → suppress address as spam complaint.
+ *   email.opened     → apply email_opened system tag to matching lead, AND
+ *                       sets opened_at on the matching message row (agent-only
+ *                       "seen" signal — never shown to the customer).
+ *   email.clicked    → apply email_clicked system tag to matching lead.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -35,6 +47,33 @@ interface ResendWebhookPayload {
 
 function getHeader(headers: Array<{ name: string; value: string }> | undefined, name: string): string | undefined {
   return headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value;
+}
+
+/**
+ * Support-inbox delivery/read status: both conversation_messages (bride
+ * replies + venue direct) and support_thread_messages (Venue Support
+ * tickets) stamp `resend_email_id` on send (see sendAsVenue / ticket reply
+ * route), so a single Resend event can be correlated to whichever table
+ * actually sent it. Tries both — a given email_id only ever matches one.
+ */
+async function updateMessageDeliveryStatusByResendId(
+  emailId: string,
+  fields: { delivery_status?: string; delivered_at?: string; opened_at?: string; bounced_at?: string },
+): Promise<void> {
+  const { data: convoMatch } = await supabaseAdmin
+    .from('conversation_messages')
+    .update(fields)
+    .eq('resend_email_id', emailId)
+    .select('id')
+    .maybeSingle();
+  if (convoMatch) return;
+
+  await supabaseAdmin
+    .from('support_thread_messages')
+    .update(fields)
+    .eq('resend_email_id', emailId)
+    .select('id')
+    .maybeSingle();
 }
 
 async function suppressByEmail(
@@ -114,6 +153,7 @@ export async function POST(request: NextRequest) {
   const { type, data } = payload;
   const recipient = data?.to?.[0]?.trim() ?? '';
   const emailHeaders = data?.headers;
+  const emailId = data?.email_id;
 
   // Pull correlation IDs we stamped on send (X-Venue-Id, X-Lead-Id).
   const venueId = getHeader(emailHeaders, 'X-Venue-Id');
@@ -121,12 +161,28 @@ export async function POST(request: NextRequest) {
 
   console.log(`[webhooks/resend] event=${type} to=${recipient} venueId=${venueId ?? 'unknown'} leadId=${leadId ?? 'unknown'}`);
 
+  if (type === 'email.delivered') {
+    if (emailId) {
+      await updateMessageDeliveryStatusByResendId(emailId, {
+        delivery_status: 'delivered',
+        delivered_at: new Date().toISOString(),
+      });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   if (type === 'email.bounced') {
     // Hard bounces mean the address does not exist or is permanently unreachable.
     // Suppress immediately to protect sender reputation.
     if (recipient) {
       await suppressByEmail(recipient, 'bounce', venueId, leadId);
       console.log(`[webhooks/resend] suppressed bounce: ${recipient}`);
+    }
+    if (emailId) {
+      await updateMessageDeliveryStatusByResendId(emailId, {
+        delivery_status: 'bounced',
+        bounced_at: new Date().toISOString(),
+      });
     }
     return NextResponse.json({ ok: true });
   }
@@ -143,6 +199,9 @@ export async function POST(request: NextRequest) {
 
   if (type === 'email.opened' || type === 'email.clicked') {
     const tagKey = type === 'email.opened' ? 'email_opened' : 'email_clicked';
+    if (type === 'email.opened' && emailId) {
+      await updateMessageDeliveryStatusByResendId(emailId, { opened_at: new Date().toISOString() });
+    }
     if (venueId && leadId) {
       // Fast path: headers carry the exact venue + lead
       const { applySystemTag, ensureSystemTagsForVenue } = await import('@/lib/system-tags');

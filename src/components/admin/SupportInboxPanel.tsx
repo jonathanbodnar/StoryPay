@@ -21,6 +21,7 @@ import {
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
   UserPlus, Flag, X, Radio, Sparkles, FileText, Maximize2, Minimize2,
   Eye, EyeOff, ChevronDown, ChevronUp, BookOpen, Volume2, VolumeX, ShieldAlert,
+  Check, CheckCheck, MailOpen, XCircle, Clock,
 } from 'lucide-react';
 import { PrivateClientsPanel } from '@/components/admin/PrivateClientsPanel';
 import { trackClient } from '@/lib/analytics-client';
@@ -34,6 +35,14 @@ import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 import { SupportContextSidebar } from '@/components/admin/SupportContextSidebar';
 import { SlaDot, SlaPill } from '@/components/support/SlaIndicator';
 import { SupportMentionPicker } from '@/components/support/SupportMentionPicker';
+import { AgentAvatar } from '@/components/support/AgentAvatar';
+import { AttachmentComposerBar, AttachmentGallery, type SupportAttachment } from '@/components/support/InboxAttachments';
+import { RichTextToolbar } from '@/components/support/RichTextToolbar';
+import { markdownLiteToHtml } from '@/lib/support/rich-text-lite';
+import { splitEmailSignature } from '@/lib/support/email-signature';
+import { firstUrlIn, LinkPreviewCard } from '@/components/support/LinkPreviewCard';
+import { PresencePill } from '@/components/support/PresencePill';
+import { useThreadPresence } from '@/lib/realtime/use-thread-presence';
 
 const BRAND = '#1b1b1b';
 
@@ -90,6 +99,11 @@ interface ThreadMessage {
   audience?:                   'external' | 'support_only' | 'venue_direct' | null;
   mentioned_support_user_ids?: string[] | null;
   created_at:                  string;
+  attachments?:                SupportAttachment[] | null;
+  delivery_status?:            string | null;
+  delivered_at?:               string | null;
+  opened_at?:                  string | null;
+  bounced_at?:                 string | null;
 }
 
 interface ThreadDetail {
@@ -750,6 +764,9 @@ export function SupportInboxPanel() {
   const [noteBody, setNoteBody] = useState('');
   const [noteMentionIds, setNoteMentionIds] = useState<string[]>([]);
   const [venueDirectBody, setVenueDirectBody] = useState('');
+  /** Shared by reply + venue_direct composer modes (mutually exclusive UI) —
+   *  cleared on thread switch and after a successful send. */
+  const [composerAttachments, setComposerAttachments] = useState<SupportAttachment[]>([]);
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [drafting, setDrafting] = useState(false);
@@ -766,6 +783,7 @@ export function SupportInboxPanel() {
     setNoteBody('');
     setNoteMentionIds([]);
     setVenueDirectBody('');
+    setComposerAttachments([]);
     setSendStatus(null);
     setDrafting(false);
     setDraftIntent('');
@@ -842,6 +860,10 @@ export function SupportInboxPanel() {
           // Super Admin or a teammate they're acting-as). Agent sessions
           // omit so the server falls through to agent.sub.
           supportUserId: me?.superAdmin ? (actAsId || me?.member?.id) : undefined,
+          attachments:   composerAttachments.length ? composerAttachments : undefined,
+          // Rich-text toolbar only affects EMAIL sends — SMS always goes out
+          // as the raw plain text (can't render HTML).
+          bodyHtml:      effectiveChannel === 'email' ? markdownLiteToHtml(replyBody.trim()) : undefined,
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -850,6 +872,7 @@ export function SupportInboxPanel() {
       setReplyBody('');
       setInternalNote('');
       setShowInternalNote(false);
+      setComposerAttachments([]);
       await loadDetail(detail.thread.id);
       // Remove this thread from the inbox (it's no longer "needs attention")
       setThreads(prev => prev.filter(t => t.thread_id !== detail.thread.id));
@@ -917,6 +940,7 @@ export function SupportInboxPanel() {
           threadId:      detail.thread.id,
           body:          venueDirectBody.trim(),
           supportUserId: me?.superAdmin ? (actAsId || me?.member?.id) : undefined,
+          attachments:   composerAttachments.length ? composerAttachments : undefined,
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -929,6 +953,7 @@ export function SupportInboxPanel() {
           : 'Sent — no active venue teammates yet, billing email used as fallback',
       });
       setVenueDirectBody('');
+      setComposerAttachments([]);
       await loadDetail(detail.thread.id);
     } catch (e) {
       setSendStatus({ ok: false, msg: e instanceof Error ? e.message : 'Send failed' });
@@ -1214,6 +1239,8 @@ export function SupportInboxPanel() {
                 onNoteMentionIdsChange={setNoteMentionIds}
                 venueDirectBody={venueDirectBody}
                 onVenueDirectBodyChange={setVenueDirectBody}
+                composerAttachments={composerAttachments}
+                onComposerAttachmentsChange={setComposerAttachments}
                 teamMembers={teamMembers}
                 selfId={(me?.superAdmin ? actAsId : null) || me?.member?.id || null}
                 onSwitchActiveThread={setActiveThreadId}
@@ -1484,6 +1511,7 @@ function ThreadDetailView({
   noteBody, onNoteBodyChange,
   noteMentionIds, onNoteMentionIdsChange,
   venueDirectBody, onVenueDirectBodyChange,
+  composerAttachments, onComposerAttachmentsChange,
   teamMembers, selfId,
   onSwitchActiveThread,
   onDismiss,
@@ -1510,6 +1538,7 @@ function ThreadDetailView({
   noteBody: string; onNoteBodyChange: (v: string) => void;
   noteMentionIds: string[]; onNoteMentionIdsChange: (ids: string[]) => void;
   venueDirectBody: string; onVenueDirectBodyChange: (v: string) => void;
+  composerAttachments: SupportAttachment[]; onComposerAttachmentsChange: (a: SupportAttachment[]) => void;
   teamMembers: SupportTeamMember[];
   selfId: string | null;
   onSwitchActiveThread: (threadId: string) => void;
@@ -1538,6 +1567,9 @@ function ThreadDetailView({
   );
   const isNoteMode = composerMode === 'note';
   const isVenueDirectMode = composerMode === 'venue_direct';
+  const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const presenceSelf = selfId ? { agentId: selfId, agentName: actAsName || 'A teammate' } : null;
+  const othersViewing = useThreadPresence('thread', detail.thread.id, presenceSelf);
 
   return (
     <>
@@ -1596,6 +1628,16 @@ function ThreadDetailView({
           siblings={detail.siblings}
           onSwitchActive={onSwitchActiveThread}
         />
+      )}
+
+      {/* Subject pinned at the top, email-client style — only meaningful once
+          the thread has ever gone through email. */}
+      {detail.thread.subject && detail.messages.some(m => m.channel === 'email') && (
+        <div className="border-b border-gray-100 bg-white px-4 py-2">
+          <p className="text-[13px] font-semibold text-gray-800 truncate" title={detail.thread.subject}>
+            {detail.thread.subject}
+          </p>
+        </div>
       )}
 
       {/* Messages */}
@@ -1683,6 +1725,7 @@ function ThreadDetailView({
             label="Venue Direct"
             tone="venue_direct"
           />
+          <span className="ml-auto"><PresencePill agents={othersViewing} /></span>
           {isNoteMode && (
             <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
               <ShieldCheck size={10} /> Support team only
@@ -1776,8 +1819,13 @@ function ThreadDetailView({
               </div>
             )}
 
+            {effectiveChannel === 'email' && (
+              <RichTextToolbar textareaRef={replyTextareaRef} value={replyBody} onChange={onReplyBodyChange} />
+            )}
+
             <div className="relative">
               <textarea
+                ref={replyTextareaRef}
                 value={replyBody}
                 onChange={e => onReplyBodyChange(e.target.value)}
                 placeholder={`Reply on behalf of ${detail.venue?.name || 'the venue'}… or click Suggest for an AI draft.`}
@@ -1847,6 +1895,14 @@ function ThreadDetailView({
                 />
               </div>
             </div>
+
+            <AttachmentComposerBar
+              scope="thread"
+              scopeId={detail.thread.id}
+              attachments={composerAttachments}
+              onChange={onComposerAttachmentsChange}
+              disabled={sending}
+            />
           </>
         )}
 
@@ -1890,6 +1946,13 @@ function ThreadDetailView({
               placeholder={`Ask the venue team about ${contactName}… e.g. "We booked a tour Saturday 2pm — anything we should mention?"`}
               rows={4}
               className="w-full text-sm border border-violet-200 bg-white rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300"
+            />
+            <AttachmentComposerBar
+              scope="thread"
+              scopeId={detail.thread.id}
+              attachments={composerAttachments}
+              onChange={onComposerAttachmentsChange}
+              disabled={sending}
             />
           </>
         )}
@@ -2023,6 +2086,59 @@ function ComposerTabButton({
  * defaults expanded so the concierge always sees the newest reply, while
  * older emails stay tidy until clicked.
  */
+/** Renders body text with any URLs turned into clickable links (never raw
+ *  unlinked text), plus a single unfurled preview card for the first URL
+ *  found — keeps the chat readable when there's more than one link. */
+function LinkifiedText({ text, className }: { text: string; className: string }) {
+  const url = firstUrlIn(text);
+  if (!url) return <p className={`whitespace-pre-wrap break-words ${className}`}>{text}</p>;
+
+  const idx = text.indexOf(url);
+  const before = text.slice(0, idx);
+  const after = text.slice(idx + url.length);
+  return (
+    <div>
+      <p className={`whitespace-pre-wrap break-words ${className}`}>
+        {before}
+        <a href={url} target="_blank" rel="noreferrer" className="underline decoration-current/40 underline-offset-2 hover:decoration-current break-all">
+          {url}
+        </a>
+        {after}
+      </p>
+      <LinkPreviewCard url={url} />
+    </div>
+  );
+}
+
+/** Small sent → delivered → bounced / opened status icon for outbound messages. */
+function DeliveryStatusIcon({
+  deliveryStatus, openedAt, channel,
+}: {
+  deliveryStatus?: string | null;
+  openedAt?: string | null;
+  channel: 'sms' | 'email';
+}) {
+  if (deliveryStatus === 'bounced') {
+    return <span title="Bounced — did not reach the recipient" className="inline-flex items-center text-red-500"><XCircle size={11} /></span>;
+  }
+  if (openedAt) {
+    // Agent-facing only — deliberately understated (no color, tiny icon) since
+    // "seen" tracking has minor privacy trade-offs we don't surface to the customer.
+    return <span title={`Opened ${relativeTime(openedAt)} ago`} className="inline-flex items-center text-blue-400"><MailOpen size={11} /></span>;
+  }
+  if (deliveryStatus === 'delivered') {
+    return <span title="Delivered" className="inline-flex items-center text-gray-400"><CheckCheck size={11} /></span>;
+  }
+  if (deliveryStatus === 'sent' || deliveryStatus === 'queued') {
+    return <span title="Sent" className="inline-flex items-center text-gray-300"><Check size={11} /></span>;
+  }
+  if (channel === 'email') {
+    // No delivery_status recorded yet (older message, or webhook hasn't landed).
+    return <span title="Sent" className="inline-flex items-center text-gray-300"><Clock size={10} /></span>;
+  }
+  return null;
+}
+
 function CollapsibleBody({
   body,
   channel,
@@ -2037,9 +2153,10 @@ function CollapsibleBody({
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [sigExpanded, setSigExpanded] = useState(false);
 
   if (channel !== 'email') {
-    return <p className={`whitespace-pre-wrap break-words ${className}`}>{body}</p>;
+    return <LinkifiedText text={body} className={className} />;
   }
 
   // Strip whitespace and pull a 110-char single-line preview for the
@@ -2064,13 +2181,40 @@ function CollapsibleBody({
     );
   }
 
+  // Fold a trailing signature block (sign-off + contact/marketing lines) by
+  // default, same "collapsed until clicked" pattern as the whole-body fold.
+  const { main, signature } = splitEmailSignature(body);
+
   return (
     <div>
-      <p className={`whitespace-pre-wrap break-words ${className}`}>{body}</p>
+      <LinkifiedText text={main} className={className} />
+      {signature && (
+        sigExpanded ? (
+          <div className="mt-1.5 border-t border-current/10 pt-1.5">
+            <p className={`whitespace-pre-wrap break-words opacity-70 ${className}`}>{signature}</p>
+            <button
+              type="button"
+              onClick={() => setSigExpanded(false)}
+              className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-semibold ${toneClass}`}
+            >
+              <ChevronUp size={10} /> Hide signature
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSigExpanded(true)}
+            className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-semibold opacity-70 ${toneClass}`}
+            title="Show signature block"
+          >
+            <ChevronDown size={10} /> Show signature
+          </button>
+        )
+      )}
       <button
         type="button"
         onClick={() => setExpanded(false)}
-        className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneClass}`}
+        className={`mt-2 ml-1.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneClass}`}
       >
         <ChevronUp size={11} /> Hide
       </button>
@@ -2122,6 +2266,7 @@ function MessageBubble({
           toneClass="border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-200"
           defaultExpanded={msg.channel !== 'email'}
         />
+        <AttachmentGallery attachments={msg.attachments} />
       </div>
     );
   }
@@ -2159,6 +2304,8 @@ function MessageBubble({
   }
 
   const bubbleSide = isInbound ? 'justify-start' : 'justify-end';
+  const isSms = msg.channel === 'sms' && !isAi;
+  const isEmail = msg.channel === 'email' && !isAi;
 
   let label = 'Venue';
   if (isInbound) label = msg.contact_from_name || 'Bride';
@@ -2170,16 +2317,24 @@ function MessageBubble({
 
   const bubbleClass = (() => {
     if (isInternal) return 'bg-amber-50 border border-amber-200 text-amber-900';
-    if (isInbound) return 'bg-white border border-gray-200 text-gray-900';
+    if (isInbound) return isSms ? 'bg-gray-100 text-gray-900' : 'bg-white border border-gray-200 text-gray-900';
     if (isAi) return 'bg-purple-50 border border-purple-200 text-purple-900';
-    if (isConcierge) return 'bg-emerald-50 border border-emerald-300 text-emerald-900';
-    return 'bg-gray-900 text-white';
+    if (isConcierge) return isSms ? 'bg-emerald-500 text-white' : 'bg-emerald-50 border border-emerald-300 text-emerald-900';
+    return isSms ? 'bg-blue-500 text-white' : 'bg-gray-900 text-white';
   })();
+
+  // SMS: tight iMessage/WhatsApp-style pill, no border, timestamp on hover.
+  // Email: keep the boxier "email client" card shape (rounded-2xl) so the
+  // subject/avatar treatment below reads like a real message, not a chat bubble.
+  const shapeClass = isSms ? 'rounded-3xl' : 'rounded-2xl';
 
   return (
     <div className={`flex ${bubbleSide}`}>
-      <div className="max-w-[75%] space-y-1">
+      <div className={`max-w-[75%] space-y-1 ${isSms ? 'group' : ''}`}>
         <div className="flex items-center gap-2 text-[10px] text-gray-500">
+          {isEmail && !isInbound && (
+            <AgentAvatar id={msg.sent_by_support_user_id} name={supportName || label} size="xs" />
+          )}
           <span className="font-semibold">{label}</span>
           {isConcierge && (
             <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">
@@ -2191,15 +2346,20 @@ function MessageBubble({
               <Building2 size={10} /> Sent by Venue
             </span>
           )}
-          <ChannelChip channel={msg.channel} />
+          {!isAi && <ChannelChip channel={msg.channel} />}
           {isInternal && (
             <span className="rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-semibold uppercase">
               Internal
             </span>
           )}
-          <span className="text-gray-400">{relativeTime(msg.created_at)}</span>
+          <span className={`text-gray-400 ${isSms ? 'opacity-0 group-hover:opacity-100 transition-opacity' : ''}`}>
+            {relativeTime(msg.created_at)}
+          </span>
+          {!isInbound && !isInternal && (
+            <DeliveryStatusIcon deliveryStatus={msg.delivery_status} openedAt={msg.opened_at} channel={msg.channel} />
+          )}
         </div>
-        <div className={`rounded-2xl px-3 py-2 text-sm ${bubbleClass}`}>
+        <div className={`px-3 py-2 text-sm ${shapeClass} ${bubbleClass}`}>
           <CollapsibleBody
             body={msg.body}
             channel={msg.channel}
@@ -2217,6 +2377,7 @@ function MessageBubble({
             }
             defaultExpanded={msg.channel !== 'email'}
           />
+          <AttachmentGallery attachments={msg.attachments} />
         </div>
         {msg.support_internal_note && (
           <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1.5 text-[11px] text-amber-800">
@@ -2279,10 +2440,14 @@ interface TicketDetail {
     sender_member_id: string | null;
     sender_support_user_id: string | null;
     body: string;
-    attachments: unknown;
+    attachments: SupportAttachment[] | null;
     contact_from_name?: string | null;
     contact_from_email?: string | null;
     created_at: string;
+    delivery_status?: string | null;
+    delivered_at?: string | null;
+    opened_at?: string | null;
+    bounced_at?: string | null;
   }[];
   senders: {
     profiles: Record<string, { id: string; full_name: string | null }>;
@@ -2743,15 +2908,21 @@ function TicketsView({
 
   // Reply
   const [replyBody, setReplyBody] = useState('');
+  const [ticketAttachments, setTicketAttachments] = useState<SupportAttachment[]>([]);
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const ticketReplyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     setReplyBody('');
+    setTicketAttachments([]);
     setSendStatus(null);
   }, [activeTicketId]);
 
   const supportUserId = me?.member?.id || actAsId;
+  const actAsName = teamMembers.find(m => m.id === actAsId)?.name || me?.member?.name || null;
+  const presenceSelf = supportUserId ? { agentId: supportUserId, agentName: actAsName || 'A teammate' } : null;
+  const othersViewingTicket = useThreadPresence('ticket', activeTicketId, presenceSelf);
   const canSend = Boolean(detail && replyBody.trim() && supportUserId && !sending && detail.ticket.status !== 'closed');
 
   async function send() {
@@ -2764,13 +2935,16 @@ function TicketsView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           body:          replyBody.trim(),
+          bodyHtml:      markdownLiteToHtml(replyBody.trim()),
           supportUserId: me?.superAdmin ? supportUserId : undefined,
+          attachments:   ticketAttachments.length ? ticketAttachments : undefined,
         }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || `Send failed (${r.status})`);
       setSendStatus({ ok: true, msg: 'Reply sent' });
       setReplyBody('');
+      setTicketAttachments([]);
       await loadDetail(detail.ticket.id);
       // Refresh list so status pill / preview updates
       fetchTickets();
@@ -2868,7 +3042,7 @@ function TicketsView({
             >
               <div className="flex items-start justify-between gap-2 mb-1">
                 <div className="flex items-start gap-2 flex-1 min-w-0">
-                  {t.status !== 'closed' && <SlaDot iso={t.last_message_at} className="mt-1.5" />}
+                  {t.status !== 'closed' && <SlaDot iso={t.last_message_at} className="mt-1.5" kind="ticket" />}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate">{t.subject}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
@@ -2945,7 +3119,7 @@ function TicketsView({
                     <p className="text-sm font-semibold text-gray-900 truncate">{detail.ticket.subject}</p>
                     <StatusPill status={detail.ticket.status} />
                     <PriorityPill priority={detail.ticket.priority} />
-                    {detail.ticket.status !== 'closed' && <SlaPill iso={detail.ticket.last_message_at} size="sm" />}
+                    {detail.ticket.status !== 'closed' && <SlaPill iso={detail.ticket.last_message_at} size="sm" kind="ticket" />}
                     {detail.ticket.is_unmatched && (
                       <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
                         Unmatched sender
@@ -3016,12 +3190,14 @@ function TicketsView({
               </div>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto bg-gray-50/30 px-4 py-4 space-y-3">
+            {/* Timeline — Venue Support tickets are transactional (agent ↔
+                venue on a specific request), so this reads as an activity
+                log with a colored vertical rail rather than chat bubbles. */}
+            <div className="flex-1 overflow-y-auto bg-gray-50/30 px-4 py-4">
               {detail.messages.length === 0 && (
                 <p className="text-center text-xs text-gray-400 py-8">No messages.</p>
               )}
-              {detail.messages.map(m => {
+              {detail.messages.map((m, idx) => {
                 const isVenue = m.sender_type === 'venue';
                 let label = 'Support';
                 if (isVenue) {
@@ -3040,20 +3216,39 @@ function TicketsView({
                 } else if (m.sender_support_user_id) {
                   label = detail.senders.support[m.sender_support_user_id]?.name || 'Support';
                 }
+                const railColor = isVenue ? 'bg-indigo-300' : 'bg-gray-900';
+                const isLast = idx === detail.messages.length - 1;
 
                 return (
-                  <div key={m.id} className={`flex ${isVenue ? 'justify-start' : 'justify-end'}`}>
-                    <div className="max-w-[75%] space-y-1">
-                      <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                        <span className="font-semibold">{label}</span>
+                  <div key={m.id} className="flex gap-3">
+                    <div className="flex flex-col items-center shrink-0 w-5">
+                      <AgentAvatar
+                        id={isVenue ? undefined : m.sender_support_user_id}
+                        name={label}
+                        size="xs"
+                      />
+                      {!isLast && <div className={`w-0.5 flex-1 mt-1 rounded-full ${railColor} opacity-30`} />}
+                    </div>
+                    <div className="flex-1 min-w-0 pb-4">
+                      <div className="flex items-center gap-2 text-[10px] text-gray-500 mb-0.5">
+                        <span className="font-semibold text-gray-700">{label}</span>
+                        {isVenue ? (
+                          <span className="rounded-full bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[9px] font-semibold uppercase">Venue</span>
+                        ) : (
+                          <span className="rounded-full bg-gray-100 text-gray-700 px-1.5 py-0.5 text-[9px] font-semibold uppercase">Support</span>
+                        )}
                         <span className="text-gray-400">{relativeTime(m.created_at)}</span>
+                        {!isVenue && (
+                          <DeliveryStatusIcon deliveryStatus={m.delivery_status} openedAt={m.opened_at} channel="email" />
+                        )}
                       </div>
-                      <div className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
+                      <div className={`rounded-lg px-3 py-2 text-sm border ${
                         isVenue
-                          ? 'bg-white border border-gray-200 text-gray-900'
-                          : 'bg-gray-900 text-white'
+                          ? 'bg-white border-gray-200 text-gray-900'
+                          : 'bg-gray-50 border-gray-200 text-gray-900'
                       }`}>
-                        {m.body}
+                        <LinkifiedText text={m.body} className="" />
+                        <AttachmentGallery attachments={m.attachments} />
                       </div>
                     </div>
                   </div>
@@ -3084,7 +3279,14 @@ function TicketsView({
                   {sendStatus.msg}
                 </div>
               )}
+              <div className="flex items-center justify-between">
+                {detail.ticket.status !== 'closed'
+                  ? <RichTextToolbar textareaRef={ticketReplyTextareaRef} value={replyBody} onChange={setReplyBody} />
+                  : <span />}
+                <PresencePill agents={othersViewingTicket} />
+              </div>
               <textarea
+                ref={ticketReplyTextareaRef}
                 value={replyBody}
                 onChange={e => setReplyBody(e.target.value)}
                 placeholder={detail.ticket.status === 'closed' ? 'Ticket is closed' : 'Reply to this ticket…'}
@@ -3092,6 +3294,15 @@ function TicketsView({
                 disabled={detail.ticket.status === 'closed'}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300 disabled:bg-gray-50 disabled:cursor-not-allowed"
               />
+              {detail.ticket.status !== 'closed' && (
+                <AttachmentComposerBar
+                  scope="ticket"
+                  scopeId={detail.ticket.id}
+                  attachments={ticketAttachments}
+                  onChange={setTicketAttachments}
+                  disabled={sending}
+                />
+              )}
               <div className="flex items-center justify-end">
                 <button
                   type="button"

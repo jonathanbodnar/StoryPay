@@ -1,11 +1,22 @@
 /**
  * SLA traffic-light helper.
  *
- * Rule (per product spec):
+ * Rule (per product spec) for bride/venue-direct threads:
  *   <24h since last activity → GREEN  (fresh)
  *   24–48h                   → YELLOW (needs attention)
  *   48–72h                   → RED    (overdue)
  *   >72h                     → CRITICAL (deeply overdue)
+ *
+ * Venue Support tickets use a TIGHTER scale — these are paying venues
+ * actively blocked on us, so the urgency bar is much lower than a bride
+ * follow-up cadence:
+ *   <4h  → GREEN
+ *   4–12h  → YELLOW
+ *   12–24h → RED
+ *   >24h   → CRITICAL
+ *
+ * Adjust the two THRESHOLD tables below if these defaults don't match your
+ * team's actual SLA commitments.
  *
  * The "last activity" we measure is the last message timestamp on the thread/
  * ticket — whoever sent it. In the bride inbox the latest message is always
@@ -16,6 +27,9 @@
  */
 
 export type SlaLevel = 'green' | 'yellow' | 'red' | 'critical';
+
+/** 'thread' = bride/venue-direct conversations (default). 'ticket' = Venue Support tickets. */
+export type SlaKind = 'thread' | 'ticket';
 
 export interface SlaInfo {
   level:       SlaLevel;
@@ -28,17 +42,36 @@ export interface SlaInfo {
 
 const HOUR = 3_600_000;
 
-const THRESHOLDS = {
+const THREAD_THRESHOLDS = {
   yellow:   24,
   red:      48,
   critical: 72,
 } as const;
 
-const LABELS: Record<SlaLevel, string> = {
-  green:    'Fresh — under 24h',
-  yellow:   '24–48h since last activity',
-  red:      '48–72h since last activity',
-  critical: 'Over 72h since last activity',
+/** Tighter SLA scale for Venue Support tickets — see file header for rationale. */
+const TICKET_THRESHOLDS = {
+  yellow:   4,
+  red:      12,
+  critical: 24,
+} as const;
+
+function thresholdsFor(kind: SlaKind) {
+  return kind === 'ticket' ? TICKET_THRESHOLDS : THREAD_THRESHOLDS;
+}
+
+const LABELS: Record<SlaKind, Record<SlaLevel, string>> = {
+  thread: {
+    green:    'Fresh — under 24h',
+    yellow:   '24–48h since last activity',
+    red:      '48–72h since last activity',
+    critical: 'Over 72h since last activity',
+  },
+  ticket: {
+    green:    'Fresh — under 4h',
+    yellow:   '4–12h since last activity',
+    red:      '12–24h since last activity',
+    critical: 'Over 24h since last activity',
+  },
 };
 
 const DOT_BG: Record<SlaLevel, string> = {
@@ -68,7 +101,11 @@ const DOT_RING: Record<SlaLevel, string> = {
  * was this thread's SLA level at the end of last Tuesday" — for trend charts,
  * without changing behavior for the many existing 1-arg call sites.
  */
-export function classifySla(iso: string | null | undefined, asOf: Date | number = Date.now()): SlaInfo {
+export function classifySla(
+  iso: string | null | undefined,
+  asOf: Date | number = Date.now(),
+  kind: SlaKind = 'thread',
+): SlaInfo {
   if (!iso) {
     return { level: 'green', hours: 0, label: '—', description: 'No activity yet' };
   }
@@ -78,6 +115,7 @@ export function classifySla(iso: string | null | undefined, asOf: Date | number 
   }
   const nowMs = typeof asOf === 'number' ? asOf : asOf.getTime();
   const hours = Math.max(0, (nowMs - t) / HOUR);
+  const THRESHOLDS = thresholdsFor(kind);
 
   let level: SlaLevel = 'green';
   if (hours >= THRESHOLDS.critical) level = 'critical';
@@ -88,7 +126,7 @@ export function classifySla(iso: string | null | undefined, asOf: Date | number 
     level,
     hours,
     label:       formatLabel(hours),
-    description: LABELS[level],
+    description: LABELS[kind][level],
   };
 }
 

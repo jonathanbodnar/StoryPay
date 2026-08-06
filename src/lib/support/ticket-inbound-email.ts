@@ -23,6 +23,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { notifySupportTicket, notifyTicketReply } from '@/lib/slack-notify';
 import { broadcastTicketMessage } from '@/lib/realtime/broadcast';
+import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
 
 /** Fixed local part the Google Group (support@storyvenue.com) forwards to. */
 export const SUPPORT_TICKET_INBOUND_LOCAL_PART =
@@ -156,8 +157,9 @@ async function appendMessage(params: {
   smtpMessageId: string | null;
   isNewTicket: boolean;
   venueName: string;
+  attachments?: SupportAttachment[];
 }): Promise<{ ok: true; ticketId: string; inserted: boolean }> {
-  const { ticket, fromEmail, fromName, bodyText, smtpMessageId, isNewTicket, venueName } = params;
+  const { ticket, fromEmail, fromName, bodyText, smtpMessageId, isNewTicket, venueName, attachments } = params;
 
   if (!isNewTicket) {
     if (smtpMessageId) {
@@ -169,16 +171,19 @@ async function appendMessage(params: {
       if (dup) return { ok: true, ticketId: ticket.id, inserted: false };
     }
 
+    const insertRow: Record<string, unknown> = {
+      support_thread_id:   ticket.id,
+      sender_type:         'venue',
+      body:                bodyText,
+      contact_from_name:   fromName?.trim() || null,
+      contact_from_email:  fromEmail.trim().toLowerCase(),
+      smtp_message_id:     smtpMessageId || null,
+    };
+    if (attachments?.length) insertRow.attachments = attachments;
+
     const { data: msg, error: mErr } = await supabaseAdmin
       .from('support_thread_messages')
-      .insert({
-        support_thread_id:   ticket.id,
-        sender_type:         'venue',
-        body:                bodyText,
-        contact_from_name:   fromName?.trim() || null,
-        contact_from_email:  fromEmail.trim().toLowerCase(),
-        smtp_message_id:     smtpMessageId || null,
-      })
+      .insert(insertRow)
       .select('id, created_at')
       .single();
 
@@ -234,8 +239,9 @@ export async function ingestNewInboundSupportEmail(params: {
   subject: string | null;
   bodyText: string;
   smtpMessageId: string | null;
+  attachments?: SupportAttachment[];
 }): Promise<{ ok: boolean; ticketId?: string; inserted?: boolean; error?: string }> {
-  const { fromEmail, fromName, subject, bodyText, smtpMessageId } = params;
+  const { fromEmail, fromName, subject, bodyText, smtpMessageId, attachments } = params;
   const body = bodyText.trim();
   if (!body) return { ok: true, inserted: false };
 
@@ -260,6 +266,7 @@ export async function ingestNewInboundSupportEmail(params: {
       smtpMessageId,
       isNewTicket:   false,
       venueName:     resolved?.venueName ?? existing.subject,
+      attachments,
     });
     return { ok: true, ticketId: r.ticketId, inserted: r.inserted };
   }
@@ -291,16 +298,19 @@ export async function ingestNewInboundSupportEmail(params: {
   const ticketId = (ticket as { id: string }).id;
   const ticketSubject = (ticket as { subject: string }).subject;
 
+  const newMsgRow: Record<string, unknown> = {
+    support_thread_id:  ticketId,
+    sender_type:        'venue',
+    body,
+    contact_from_name:  fromName?.trim() || null,
+    contact_from_email: fromEmail.trim().toLowerCase(),
+    smtp_message_id:    smtpMessageId || null,
+  };
+  if (attachments?.length) newMsgRow.attachments = attachments;
+
   const { data: msg } = await supabaseAdmin
     .from('support_thread_messages')
-    .insert({
-      support_thread_id:  ticketId,
-      sender_type:        'venue',
-      body,
-      contact_from_name:  fromName?.trim() || null,
-      contact_from_email: fromEmail.trim().toLowerCase(),
-      smtp_message_id:    smtpMessageId || null,
-    })
+    .insert(newMsgRow)
     .select('id, created_at')
     .single();
 
@@ -338,8 +348,9 @@ export async function ingestTicketReplyEmail(params: {
   fromName: string | null;
   bodyText: string;
   smtpMessageId: string | null;
+  attachments?: SupportAttachment[];
 }): Promise<{ ok: boolean; skipped?: string; ticketId?: string; inserted?: boolean; error?: string }> {
-  const { ticketId, sig, fromEmail, fromName, bodyText, smtpMessageId } = params;
+  const { ticketId, sig, fromEmail, fromName, bodyText, smtpMessageId, attachments } = params;
   const body = bodyText.trim();
   if (!body) return { ok: true, inserted: false };
 
@@ -375,6 +386,7 @@ export async function ingestTicketReplyEmail(params: {
     smtpMessageId,
     isNewTicket: false,
     venueName,
+    attachments,
   });
   return { ok: true, ticketId: r.ticketId, inserted: r.inserted };
 }

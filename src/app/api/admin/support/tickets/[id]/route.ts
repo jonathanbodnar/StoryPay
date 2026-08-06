@@ -42,6 +42,10 @@ interface MessageRow {
   contact_from_name:      string | null;
   contact_from_email:     string | null;
   created_at:             string;
+  delivery_status:        string | null;
+  delivered_at:           string | null;
+  opened_at:              string | null;
+  bounced_at:             string | null;
 }
 
 export async function GET(
@@ -81,7 +85,7 @@ export async function GET(
       : Promise.resolve({ data: null }),
     supabaseAdmin
       .from('support_thread_messages')
-      .select('id, support_thread_id, sender_type, sender_profile_id, sender_member_id, sender_support_user_id, body, attachments, contact_from_name, contact_from_email, created_at')
+      .select('id, support_thread_id, sender_type, sender_profile_id, sender_member_id, sender_support_user_id, body, attachments, contact_from_name, contact_from_email, created_at, delivery_status, delivered_at, opened_at, bounced_at')
       .eq('support_thread_id', id)
       .order('created_at', { ascending: true }),
     ticket.opened_by_profile_id

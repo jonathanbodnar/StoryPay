@@ -20,6 +20,7 @@ import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendAsVenue } from '@/lib/support/send-as-venue';
 import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
+import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -36,6 +37,9 @@ export async function POST(req: NextRequest) {
     channel?:       'sms' | 'email';
     internalNote?:  string;
     supportUserId?: string;
+    attachments?:   SupportAttachment[];
+    /** Optional pre-rendered HTML (rich-text composer output) — email only. */
+    bodyHtml?:      string;
   };
   try {
     body = await req.json();
@@ -141,6 +145,8 @@ export async function POST(req: NextRequest) {
     channel,
     threadId:      thread.id,
     internalNote:  body.internalNote,
+    attachments:   Array.isArray(body.attachments) ? body.attachments : undefined,
+    bodyHtml:      channel === 'email' ? body.bodyHtml : undefined,
   });
 
   if (!result.ok) {
