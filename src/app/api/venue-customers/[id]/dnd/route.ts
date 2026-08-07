@@ -129,7 +129,6 @@ export async function PUT(
   }
 
   if (!vc) return NextResponse.json({ error: 'Contact not found — this contact may not be linked to your account. Try refreshing the page.' }, { status: 404 });
-  if (!venue?.ghl_connected) return NextResponse.json({ error: 'Legacy messaging not connected' }, { status: 400 });
 
   // Build the new dndSettings from the `channels` shorthand if provided
   let newDndSettings: GhlDndSettings;
@@ -197,8 +196,9 @@ export async function PUT(
     return NextResponse.json({ error: 'DB update failed' }, { status: 500 });
   }
 
-  // 2. Push to GHL (fire-and-forget style — we already saved locally)
-  if (vc.ghl_contact_id && venue.ghl_access_token && venue.ghl_location_id) {
+  // 2. Push to GHL if connected (fire-and-forget — DB is already saved).
+  //    Non-GHL venues skip this block; changes still persist locally.
+  if (venue?.ghl_connected && vc.ghl_contact_id && venue.ghl_access_token && venue.ghl_location_id) {
     const token = getGhlToken(venue as { ghl_access_token: string | null });
     if (token) {
       try {

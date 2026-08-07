@@ -1,16 +1,15 @@
 /**
- * GHL → StoryVenue DND polling sync.
+ * GHL ↔ StoryVenue DND polling sync (bidirectional).
  *
  * WHY THIS EXISTS: GHL contact DND is set per-channel (SMS, Email, Call,
  * Inbound). StoryVenue needs those flags in venue_customers so the messaging
  * layer can enforce them without hitting GHL every time a message is sent.
  *
  * Design decisions:
- *   - One-way sync: GHL is the source of truth for DND. StoryVenue never clears
- *     a DND flag based on GHL state — if GHL doesn't have the channel marked
- *     active, we leave the existing StoryVenue value untouched. This prevents
- *     a GHL polling gap from accidentally re-enabling messaging to a contact
- *     who opted out inside StoryVenue.
+ *   - Bidirectional: GHL and StoryVenue checkboxes are the single source of
+ *     truth. When GHL marks a channel active, the SaaS flag is set. When GHL
+ *     marks a channel inactive (e.g. contact texted START), the SaaS flag is
+ *     cleared. This ensures "Allow SMS again" in GHL is always reflected here.
  *   - Per-channel, not blanket: each of sms_dnd, conversation_dnd_email,
  *     conversation_dnd_calls, conversation_dnd_inbound_sms, and
  *     conversation_dnd_all is derived independently from GHL's dndSettings.
@@ -105,10 +104,10 @@ async function fetchDndContactPage(
 // ── Per-contact update ────────────────────────────────────────────────────────
 
 /**
- * Build a partial update object containing only the DND fields where GHL
- * says the channel is active. Fields where GHL is inactive/absent are
- * intentionally omitted — Supabase will leave the existing column value
- * untouched, preserving any flags the venue operator set manually.
+ * Build a full DND update object mirroring GHL's current state for this contact.
+ * All boolean columns are always written (true or false) so the SaaS stays in
+ * lockstep with GHL — including clearing flags when GHL marks a channel inactive
+ * (e.g. the contact texted START or an admin unchecked the box in GHL).
  */
 function buildDndUpdate(
   c: GhlContactDnd,
@@ -122,22 +121,21 @@ function buildDndUpdate(
   // Master DND: GHL's top-level `dnd` boolean means "all channels blocked".
   const masterDnd = c.dnd === true;
 
-  // At minimum always freshen the raw JSON blobs so the UI reflects GHL state.
+  // Always freshen the raw JSON blobs so the UI reflects GHL state,
+  // and always write the boolean columns (both true AND false) so the SaaS
+  // stays in lockstep with GHL across all channels.
   const update: Record<string, unknown> = {
     ghl_dnd_settings:         c.dndSettings         ?? null,
     ghl_inbound_dnd_settings: c.inboundDndSettings  ?? null,
-  };
 
-  // Only set boolean columns to true — never set to false from this poller.
-  if (flags.sms_dnd) {
-    update.sms_dnd        = true;
-    update.sms_dnd_source = 'ghl_sync';
-    update.sms_dnd_at     = nowIso;
-  }
-  if (flags.conversation_dnd_email)        update.conversation_dnd_email        = true;
-  if (flags.conversation_dnd_calls)        update.conversation_dnd_calls        = true;
-  if (flags.conversation_dnd_inbound_sms)  update.conversation_dnd_inbound_sms  = true;
-  if (flags.conversation_dnd_all || masterDnd) update.conversation_dnd_all      = true;
+    sms_dnd:                      flags.sms_dnd,
+    sms_dnd_source:               flags.sms_dnd ? 'ghl_sync' : null,
+    sms_dnd_at:                   flags.sms_dnd ? nowIso     : null,
+    conversation_dnd_email:       flags.conversation_dnd_email,
+    conversation_dnd_calls:       flags.conversation_dnd_calls,
+    conversation_dnd_inbound_sms: flags.conversation_dnd_inbound_sms,
+    conversation_dnd_all:         flags.conversation_dnd_all || masterDnd,
+  };
 
   return update;
 }

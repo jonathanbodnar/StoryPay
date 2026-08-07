@@ -600,14 +600,20 @@ export default function CustomerDetailPage() {
     if (!venueCustomer?.id) return;
     setClearingSmsDnd(true);
     try {
-      const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
-        method: 'PATCH',
+      // Use the dedicated DND endpoint so the change is pushed to GHL as well,
+      // keeping both systems in sync (sets SMS channel to inactive in GHL + SaaS).
+      const res = await fetch(`/api/venue-customers/${venueCustomer.id}/dnd`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sms_dnd: false }),
+        body: JSON.stringify({ channels: { SMS: false } }),
       });
       if (res.ok) {
-        const row = (await res.json()) as VenueCustomer;
-        setVenueCustomer(row);
+        const data = await res.json() as { dndSettings?: GhlDndSettings; inboundDndSettings?: GhlInboundDndSettings };
+        if (data.dndSettings) setDndSettings(data.dndSettings);
+        if (data.inboundDndSettings !== undefined) setInboundDndSettings(data.inboundDndSettings ?? null);
+        setVenueCustomer((p) =>
+          p ? { ...p, sms_dnd: false, sms_dnd_at: null, sms_dnd_source: null } : p,
+        );
         setCustomer((p) =>
           p ? { ...p, sms_dnd: false, sms_dnd_at: null, sms_dnd_source: null } : p,
         );
