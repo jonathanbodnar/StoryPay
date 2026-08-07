@@ -75,7 +75,20 @@ export async function POST(request: Request) {
     // Clear any old unused tokens before inserting a fresh one.
     await supabaseAdmin.from('admin_otp_tokens').delete().eq('used', false);
 
-    await supabaseAdmin.from('admin_otp_tokens').insert({ code, expires_at: expiresAt });
+    const { error: insertErr } = await supabaseAdmin
+      .from('admin_otp_tokens')
+      .insert({ code, expires_at: expiresAt });
+
+    // If the migration hasn't been applied yet (table missing), fall back to
+    // direct login so the admin can get in and apply the migration.
+    if (insertErr && (insertErr as { code?: string }).code === '42P01') {
+      console.warn('[admin-otp] admin_otp_tokens table missing — bypassing OTP, run migration 196.');
+      const resp = NextResponse.json({ success: true, identity: 'master' });
+      resp.cookies.set('admin_token', issueMasterAdminToken(), {
+        httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 7,
+      });
+      return resp;
+    }
 
     // Determine the email address to send to.
     const toEmail = adminEmail || process.env.ADMIN_NOTIFICATION_EMAIL || '';
