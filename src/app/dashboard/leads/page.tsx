@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import LeadInsightsStrip, { type LeadInsightsPayload } from '@/components/leads/LeadInsightsStrip';
 import AddLeadModal, { NO_PIPELINE_STAGE } from '@/components/leads/AddLeadModal';
+import ContactProfilePanel from '@/components/contacts/ContactProfilePanel';
 import { isNativeApp } from '@/lib/platform';
 import { getClientCache, setClientCache } from '@/lib/client-cache';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
@@ -374,6 +375,7 @@ export default function LeadsPage() {
   const [stageFilter, setStageFilter] = useState<string | 'all'>('all');
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [addingOpen, setAddingOpen] = useState(false);
   const [allTags, setAllTags] = useState<MarketingTag[]>([]);
@@ -390,8 +392,41 @@ export default function LeadsPage() {
   // page (the richest view — same one Contacts / Messages open) instead of the
   // lead drawer. We resolve/create the lead's venue_customer, then navigate.
   const openLead = useCallback(async (l: Lead) => {
-    if (!isNativeApp()) { setSelectedLead(l); return; }
     const email = (l.email || '').trim().toLowerCase();
+    if (isNativeApp()) {
+      // Native: navigate to the contact profile page.
+      try {
+        if (email) {
+          const lookup = await fetch('/api/venue-customers/lookup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+          if (lookup.ok) {
+            const vc = (await lookup.json()) as { id?: string } | null;
+            if (vc?.id) { router.push(`/dashboard/contacts/${vc.id}`); return; }
+          }
+        }
+        const create = await fetch('/api/venue-customers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_email: email || null,
+            first_name: l.first_name || l.name || '',
+            last_name: l.last_name || '',
+            phone: l.phone || null,
+            external_id: l.id,
+          }),
+        });
+        if (create.ok) {
+          const vc = (await create.json()) as { id?: string };
+          if (vc?.id) { router.push(`/dashboard/contacts/${vc.id}`); return; }
+        }
+      } catch { /* fall through to drawer */ }
+      setSelectedLead(l);
+      return;
+    }
+    // Desktop: resolve venue customer and open the full contact profile modal.
     try {
       if (email) {
         const lookup = await fetch('/api/venue-customers/lookup', {
@@ -401,10 +436,9 @@ export default function LeadsPage() {
         });
         if (lookup.ok) {
           const vc = (await lookup.json()) as { id?: string } | null;
-          if (vc?.id) { router.push(`/dashboard/contacts/${vc.id}`); return; }
+          if (vc?.id) { setSelectedContactId(vc.id); return; }
         }
       }
-      // No mirror yet — create one from the lead so the profile can load.
       const create = await fetch('/api/venue-customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -418,11 +452,10 @@ export default function LeadsPage() {
       });
       if (create.ok) {
         const vc = (await create.json()) as { id?: string };
-        if (vc?.id) { router.push(`/dashboard/contacts/${vc.id}`); return; }
+        if (vc?.id) { setSelectedContactId(vc.id); return; }
       }
-    } catch {
-      /* fall through to the drawer */
-    }
+    } catch { /* fall through to drawer */ }
+    // Fallback: open the LeadDrawer when venue customer lookup/create fails.
     setSelectedLead(l);
   }, [router]);
 
@@ -993,6 +1026,26 @@ export default function LeadsPage() {
           onCreateTagForLead={createTagAndAssignToLead}
           venueTz={venueTz}
         />
+      )}
+
+      {/* Contact profile modal (desktop) */}
+      {selectedContactId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-y-auto">
+            <button
+              onClick={() => setSelectedContactId(null)}
+              className="absolute top-4 right-4 z-10 rounded-full bg-white/90 p-2 shadow hover:bg-gray-100"
+            >
+              <X className="h-5 w-5 text-gray-600" />
+            </button>
+            <div className="p-6">
+              <ContactProfilePanel
+                customerId={selectedContactId}
+                onBack={() => setSelectedContactId(null)}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Lead detail drawer */}
