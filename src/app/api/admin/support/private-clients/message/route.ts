@@ -91,9 +91,9 @@ export async function POST(req: NextRequest) {
     await ensureSuperAdminSupportMember();
   }
 
-  // Look up agent name for the outbound signature (best-effort — never crashes).
-  let agentDisplayName = 'StoryVenue Concierge Team';
-  {
+  // Look up agent name for the outbound signature. Super Admin gets a generic label.
+  let agentDisplayName = 'StoryVenue Support';
+  if (actingAgentId !== SUPER_ADMIN_SUPPORT_USER_ID) {
     const { data: stmRow } = await supabaseAdmin
       .from('support_team_members')
       .select('name')
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827;max-width:560px">
   <p style="margin:0 0 6px;font-size:11px;letter-spacing:1.5px;color:#7c3aed;text-transform:uppercase;font-weight:700;">StoryVenue Concierge Team</p>
   ${text.split(/\n+/).map((p) => `<p style="margin:0 0 12px">${escapeHtml(p)}</p>`).join('')}
-  <p style="margin:20px 0 0">– ${escapeHtml(agentDisplayName)}<br/>StoryVenue Venue Concierge Team<br/>support@storyvenue.com</p>
+  <p style="margin:20px 0 0">– ${escapeHtml(actingAgentId === SUPER_ADMIN_SUPPORT_USER_ID ? 'StoryVenue Support' : agentDisplayName)}${actingAgentId === SUPER_ADMIN_SUPPORT_USER_ID ? '' : '<br/>StoryVenue Venue Concierge Team'}<br/>support@storyvenue.com</p>
   <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0" />
   <p style="font-size:12px;color:#6b7280">Sent to ${escapeHtml(recipientLabel)} at ${escapeHtml(venueName)} — reply to this email to reach the concierge team directly.</p>
 </div>`;
@@ -216,8 +216,12 @@ export async function POST(req: NextRequest) {
         firstName: recipientLabel,
       });
       if (!contactId) return NextResponse.json({ error: 'Could not resolve a GHL contact for the owner' }, { status: 502 });
-      const agentFirstName = agentDisplayName.split(/\s+/)[0] || agentDisplayName;
-      const smsBody = `${text}\n– ${agentFirstName}, StoryVenue Concierge Team`;
+      const agentFirstName = actingAgentId === SUPER_ADMIN_SUPPORT_USER_ID
+        ? 'StoryVenue Support'
+        : (agentDisplayName.split(/\s+/)[0] || agentDisplayName);
+      const smsBody = actingAgentId === SUPER_ADMIN_SUPPORT_USER_ID
+        ? `${text}\n– StoryVenue Support`
+        : `${text}\n– ${agentFirstName}, StoryVenue Concierge Team`;
       await ghlSendSms(token, venue.ghl_location_id, contactId, smsBody, undefined, phoneE164);
       externalSent = true;
     } catch (e) {
