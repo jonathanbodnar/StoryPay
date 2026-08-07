@@ -27,13 +27,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { venueId } = await params;
   const { data } = await supabaseAdmin
     .from('venues')
-    .select('name')
+    .select('name, logo_url')
     .eq('id', venueId)
     .maybeSingle();
   const name = data?.name ?? 'Venue';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
+  const ogImage = (data?.logo_url as string | null) || `${appUrl}/storyvenue-dark-logo.png`;
   return {
     title: `${name} — Pricing & Availability Guide`,
     description: `View and download the Pricing & Availability Guide for ${name}.`,
+    openGraph: {
+      title: `${name} — Pricing & Availability Guide`,
+      description: `View and download the Pricing & Availability Guide for ${name}.`,
+      images: [{ url: ogImage }],
+    },
   };
 }
 
