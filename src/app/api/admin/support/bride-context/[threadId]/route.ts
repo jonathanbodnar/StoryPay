@@ -499,7 +499,7 @@ export async function GET(
           name:  ownerName,
           role:  'Owner',
           email: (v.email as string | null) ?? null,
-          phone: (v.notification_phone as string | null) ?? (v.phone as string | null) ?? null,
+          phone: (v.notification_phone as string | null) ?? (v.phone as string | null) ?? (c?.phone as string | null) ?? null,
         });
         for (const m of (teamMemberRows ?? []) as Array<{
           id: string; first_name: string | null; last_name: string | null;
