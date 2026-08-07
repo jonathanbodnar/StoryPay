@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -778,6 +778,11 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   const [adminPass, setAdminPass]   = useState('');
   const [showAdminPass, setShowAdminPass] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [otpStep, setOtpStep]       = useState(false);
+  const [otpDigits, setOtpDigits]   = useState(['', '', '', '', '', '']);
+  const [otpError, setOtpError]     = useState('');
+  const [otpSubmitting, setOtpSubmitting] = useState(false);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Admin identity (master super admin OR team member) and tab access set.
@@ -1413,11 +1418,79 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
       body: JSON.stringify({ email: adminEmail.trim(), password: adminPass }),
     });
     if (!res.ok) { setLoginError('Invalid email or password.'); return; }
+    const data = await res.json() as { step?: string; success?: boolean };
+    if (data.step === 'otp_required') {
+      setOtpStep(true);
+      setOtpDigits(['', '', '', '', '', '']);
+      setOtpError('');
+      setTimeout(() => otpRefs.current[0]?.focus(), 50);
+      return;
+    }
     // Full page reload after login so the browser starts a fresh request
     // with the newly-set httpOnly session cookie. Calling fetchMe() inline
     // can race with cookie propagation in some browsers and cause the admin
     // to appear immediately logged-out.
     window.location.href = window.location.pathname;
+  }
+
+  async function handleOtpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setOtpError('');
+    setOtpSubmitting(true);
+    try {
+      const code = otpDigits.join('');
+      const res = await fetch('/api/admin/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        setOtpError(d.error ?? 'Invalid or expired code. Try again.');
+        setOtpDigits(['', '', '', '', '', '']);
+        setTimeout(() => otpRefs.current[0]?.focus(), 50);
+        return;
+      }
+      window.location.href = window.location.pathname;
+    } finally {
+      setOtpSubmitting(false);
+    }
+  }
+
+  function handleOtpDigitChange(index: number, value: string) {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    const next = [...otpDigits];
+    next[index] = digit;
+    setOtpDigits(next);
+    if (digit && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  }
+
+  function handleOtpKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  }
+
+  function handleOtpPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      e.preventDefault();
+      setOtpDigits(pasted.split(''));
+      otpRefs.current[5]?.focus();
+    }
+  }
+
+  async function handleResendOtp() {
+    setOtpError('');
+    await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: adminEmail.trim(), password: adminPass }),
+    });
+    setOtpDigits(['', '', '', '', '', '']);
+    setTimeout(() => otpRefs.current[0]?.focus(), 50);
   }
 
   async function handleLogout() {
@@ -1475,56 +1548,116 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
           <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-6 transition-colors">
             <Home size={14} /> Back to homepage
           </Link>
-          <form onSubmit={handleLogin} className="bg-white rounded-2xl p-8">
-            <div className="flex justify-center mb-5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/storyvenue-dark-logo.png" alt="StoryVenue" className="h-8 object-contain" />
-            </div>
-            <h2 className="font-heading text-xl text-gray-900 mb-6 text-center">Admin Login</h2>
-            {loginError && <div className="bg-red-50 text-red-700 text-sm rounded-xl px-4 py-2 mb-4">{loginError}</div>}
-            <div className="space-y-3 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  value={adminEmail}
-                  onChange={e => setAdminEmail(e.target.value)}
-                  className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
-                  placeholder="admin@storyvenue.com"
-                />
+
+          {otpStep ? (
+            /* ── OTP step ─────────────────────────────────────────────────── */
+            <form onSubmit={handleOtpSubmit} className="bg-white rounded-2xl p-8">
+              <div className="flex justify-center mb-5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/storyvenue-dark-logo.png" alt="StoryVenue" className="h-8 object-contain" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <div className="relative">
+              <h2 className="font-heading text-xl text-gray-900 mb-2 text-center">Check your email</h2>
+              <p className="text-sm text-gray-500 text-center mb-6">Enter the 6-digit code sent to your email address.</p>
+              {otpError && (
+                <div className="bg-red-50 text-red-700 text-sm rounded-xl px-4 py-2 mb-4">{otpError}</div>
+              )}
+              <div className="flex gap-2 justify-center mb-6">
+                {otpDigits.map((digit, i) => (
                   <input
-                    type={showAdminPass ? 'text' : 'password'}
-                    required
-                    value={adminPass}
-                    onChange={e => setAdminPass(e.target.value)}
-                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none pr-10"
-                    placeholder="••••••••"
+                    key={i}
+                    ref={el => { otpRefs.current[i] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={e => handleOtpDigitChange(i, e.target.value)}
+                    onKeyDown={e => handleOtpKeyDown(i, e)}
+                    onPaste={handleOtpPaste}
+                    className="w-11 h-14 border border-gray-300 rounded-xl text-center text-xl font-bold text-gray-900 focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminPass(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    {showAdminPass ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
+                ))}
+              </div>
+              <button
+                type="submit"
+                disabled={otpSubmitting || otpDigits.join('').length < 6}
+                className="w-full text-white font-semibold py-2.5 rounded-xl transition-colors hover:opacity-85 disabled:opacity-50 mb-3"
+                style={{ backgroundColor: BRAND }}
+              >
+                {otpSubmitting ? 'Verifying…' : 'Verify Code'}
+              </button>
+              <p className="text-center text-sm text-gray-500">
+                Didn&apos;t receive it?{' '}
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  className="text-gray-700 underline hover:text-gray-900 transition-colors"
+                >
+                  Resend code
+                </button>
+              </p>
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => { setOtpStep(false); setOtpError(''); }}
+                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  ← Back to sign in
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* ── Password step ────────────────────────────────────────────── */
+            <form onSubmit={handleLogin} className="bg-white rounded-2xl p-8">
+              <div className="flex justify-center mb-5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/storyvenue-dark-logo.png" alt="StoryVenue" className="h-8 object-contain" />
+              </div>
+              <h2 className="font-heading text-xl text-gray-900 mb-6 text-center">Admin Login</h2>
+              {loginError && <div className="bg-red-50 text-red-700 text-sm rounded-xl px-4 py-2 mb-4">{loginError}</div>}
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    required
+                    autoFocus
+                    value={adminEmail}
+                    onChange={e => setAdminEmail(e.target.value)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none"
+                    placeholder="admin@storyvenue.com"
+                  />
                 </div>
-                <div className="mt-1.5 text-right">
-                  <Link href="/reset-password/admin" className="text-xs text-gray-500 hover:text-gray-800 transition-colors">
-                    Forgot password?
-                  </Link>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showAdminPass ? 'text' : 'password'}
+                      required
+                      value={adminPass}
+                      onChange={e => setAdminPass(e.target.value)}
+                      className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-brand-900 focus:border-brand-900 outline-none pr-10"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminPass(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      {showAdminPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                  <div className="mt-1.5 text-right">
+                    <Link href="/reset-password/admin" className="text-xs text-gray-500 hover:text-gray-800 transition-colors">
+                      Forgot password?
+                    </Link>
+                  </div>
                 </div>
               </div>
-            </div>
-            <button type="submit" className="w-full text-white font-semibold py-2.5 rounded-xl transition-colors hover:opacity-85" style={{ backgroundColor: BRAND }}>
-              Sign In
-            </button>
-          </form>
+              <button type="submit" className="w-full text-white font-semibold py-2.5 rounded-xl transition-colors hover:opacity-85" style={{ backgroundColor: BRAND }}>
+                Sign In
+              </button>
+            </form>
+          )}
         </div>
       </div>
       {children}
