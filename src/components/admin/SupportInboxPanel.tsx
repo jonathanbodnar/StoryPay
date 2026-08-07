@@ -13,6 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { capitalizeName } from '@/lib/format-name';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import {
@@ -160,7 +161,8 @@ function relativeTime(iso: string): string {
 }
 
 function fullName(first: string | null, last: string | null, fallback = 'Unknown'): string {
-  return [first, last].filter(Boolean).join(' ').trim() || fallback;
+  const composed = [first, last].filter(Boolean).join(' ').trim();
+  return capitalizeName(composed) || fallback;
 }
 
 // Mirrors SUPER_ADMIN_SUPPORT_USER_ID in src/lib/support/super-admin-member.ts.
@@ -3326,10 +3328,10 @@ function TicketsView({
                 let label = 'Support';
                 if (isVenue) {
                   if (m.sender_profile_id) {
-                    label = detail.senders.profiles[m.sender_profile_id]?.full_name || 'Venue owner';
+                    label = capitalizeName(detail.senders.profiles[m.sender_profile_id]?.full_name) || 'Venue owner';
                   } else if (m.sender_member_id) {
                     const mem = detail.senders.members[m.sender_member_id];
-                    label = mem ? ([mem.first_name, mem.last_name].filter(Boolean).join(' ').trim() || mem.email || 'Team member') : 'Team member';
+                    label = mem ? (capitalizeName([mem.first_name, mem.last_name].filter(Boolean).join(' ').trim()) || mem.email || 'Team member') : 'Team member';
                   } else if (m.contact_from_name || m.contact_from_email) {
                     // Inbound email reply (support@storyvenue.com) or an owner
                     // without a profiles row — attribute to the actual sender.

@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { filterConciergeManagedVenueIds } from '@/lib/plan-features';
+import { capitalizeName } from '@/lib/format-name';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -194,8 +195,8 @@ export async function GET(req: NextRequest) {
           venue_id:                t.venue_id,
           venue_name:              v?.name ?? '(deleted venue)',
           venue_customer_id:       t.venue_customer_id,
-          contact_first_name:      c?.first_name ?? null,
-          contact_last_name:       c?.last_name ?? null,
+          contact_first_name:      capitalizeName(c?.first_name ?? null) || null,
+          contact_last_name:       capitalizeName(c?.last_name ?? null) || null,
           contact_email:           c?.customer_email ?? null,
           contact_phone:           c?.phone ?? null,
           subject:                 (t.subject ?? '').trim() || 'Conversation',
@@ -325,8 +326,8 @@ export async function GET(req: NextRequest) {
           venue_id:                t.venue_id,
           venue_name:              v?.name ?? '(deleted venue)',
           venue_customer_id:       t.venue_customer_id,
-          contact_first_name:      c?.first_name ?? null,
-          contact_last_name:       c?.last_name ?? null,
+          contact_first_name:      capitalizeName(c?.first_name ?? null) || null,
+          contact_last_name:       capitalizeName(c?.last_name ?? null) || null,
           contact_email:           c?.customer_email ?? null,
           contact_phone:           c?.phone ?? null,
           subject:                 (t.subject ?? '').trim() || 'Conversation',

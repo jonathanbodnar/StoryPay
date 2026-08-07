@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { capitalizeName } from '@/lib/format-name';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -111,10 +112,10 @@ export async function GET() {
   const result = venues.map((v) => {
     const ownerEmail =
       (v.owner_id ? ownerEmailById.get(v.owner_id) : null) || v.notification_email || v.email || null;
-    const ownerName = (v.owner_id ? profileNameById.get(v.owner_id) : null) || null;
+    const ownerName = capitalizeName((v.owner_id ? profileNameById.get(v.owner_id) : null) || null) || null;
     const team = (teamByVenue.get(v.id) ?? []).map((t) => ({
       id: t.id,
-      name: t.name || [t.first_name, t.last_name].filter(Boolean).join(' ').trim() || t.email || 'Team member',
+      name: capitalizeName(t.name || [t.first_name, t.last_name].filter(Boolean).join(' ').trim()) || t.email || 'Team member',
       email: t.email,
       role: t.role,
       status: t.status,

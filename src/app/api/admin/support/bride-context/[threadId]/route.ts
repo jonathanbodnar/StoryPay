@@ -32,6 +32,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { findMatchingLeadIds } from '@/lib/find-matching-leads';
+import { capitalizeName } from '@/lib/format-name';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -439,8 +440,8 @@ export async function GET(
 
   return NextResponse.json({
     bride: {
-      first_name:    (c?.first_name as string | null) ?? null,
-      last_name:     (c?.last_name  as string | null) ?? null,
+      first_name:    capitalizeName((c?.first_name as string | null) ?? null) || null,
+      last_name:     capitalizeName((c?.last_name  as string | null) ?? null) || null,
       email:         (c?.customer_email as string | null) ?? null,
       phone:         (c?.phone as string | null) ?? null,
       sms_dnd:       Boolean(c?.sms_dnd),
@@ -491,8 +492,8 @@ export async function GET(
       concierge_notify_emails: (v.ai_concierge_notify_emails as string[] | null) ?? [],
       contacts: (() => {
         const list: Array<{ id: string; name: string; role: string; email: string | null; phone: string | null }> = [];
-        const ownerFirst = ((v.owner_first_name as string | null) ?? '').trim();
-        const ownerLast  = ((v.owner_last_name  as string | null) ?? '').trim();
+        const ownerFirst = capitalizeName((v.owner_first_name as string | null) ?? '');
+        const ownerLast  = capitalizeName((v.owner_last_name  as string | null) ?? '');
         const ownerName  = [ownerFirst, ownerLast].filter(Boolean).join(' ') || (v.name as string);
         list.push({
           id:    `owner:${v.id as string}`,
@@ -505,8 +506,8 @@ export async function GET(
           id: string; first_name: string | null; last_name: string | null;
           email: string | null; phone: string | null; role: string | null;
         }>) {
-          const fn2 = (m.first_name ?? '').trim();
-          const ln2 = (m.last_name  ?? '').trim();
+          const fn2 = capitalizeName(m.first_name ?? '');
+          const ln2 = capitalizeName(m.last_name  ?? '');
           list.push({
             id:    m.id,
             name:  [fn2, ln2].filter(Boolean).join(' ') || m.email || 'Team member',

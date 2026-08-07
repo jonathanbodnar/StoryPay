@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { capitalizeName } from '@/lib/format-name';
 import { createPortal } from 'react-dom';
 import {
   Loader2, AlertCircle, User, Building2, Mail, Phone, ShieldCheck, ShieldAlert,
@@ -536,7 +537,7 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
             </div>
             <div className="space-y-1">
               <p className="text-sm font-semibold text-gray-900">
-                {[data.bride.first_name, data.bride.last_name].filter(Boolean).join(' ') || data.bride.email || 'Unknown'}
+                {capitalizeName([data.bride.first_name, data.bride.last_name].filter(Boolean).join(' ')) || data.bride.email || 'Unknown'}
               </p>
               {data.bride.email && (
                 <p className="flex items-center gap-1.5 text-[11px] text-gray-600 truncate">
@@ -672,7 +673,7 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                 <CalendarButton
                   venueId={data.venue.id}
                   customerId={data.venue_customer_id}
-                  contactName={[data.bride.first_name, data.bride.last_name].filter(Boolean).join(' ') || data.bride.email || 'Contact'}
+                  contactName={capitalizeName([data.bride.first_name, data.bride.last_name].filter(Boolean).join(' ')) || data.bride.email || 'Contact'}
                   contactEmail={data.bride.email}
                   venueTimezone={data.venue.timezone}
                 />
