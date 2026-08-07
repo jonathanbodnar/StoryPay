@@ -16,7 +16,7 @@ import {
   Loader2, AlertCircle, User, Building2, Mail, Phone, ShieldCheck, ShieldAlert,
   Sparkles, CircleDot, AlertTriangle, Calendar, Clock, Tag, Tags,
   Activity, Inbox, BellOff, RefreshCw, ExternalLink, ChevronDown, CheckCircle2,
-  StickyNote, CalendarPlus, Plus, Trash2, X,
+  StickyNote, CalendarPlus, Plus, Trash2, X, MessageSquare, Send,
 } from 'lucide-react';
 import { SlaPill } from '@/components/support/SlaIndicator';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
@@ -173,6 +173,162 @@ function ImpersonateButton({
       }
       {loading ? 'Entering…' : `Open venue dashboard`}
     </button>
+  );
+}
+
+// ─── Venue contact inline compose ───────────────────────────────────────────
+
+/**
+ * Inline email/SMS compose row for venue contacts in the context sidebar.
+ * Mirrors the ContactRow pattern from PrivateClientsPanel but compact for
+ * the narrow sidebar width. Posts to the same shared endpoint.
+ *
+ * Contact ID convention (from bride-context route):
+ *   owner      → "owner:<venueId>"
+ *   team member → the team member UUID
+ */
+function VenueContactComposeRow({
+  venueId,
+  contact,
+  ghlConnected,
+}: {
+  venueId: string;
+  contact: { id: string; name: string; role: string; email: string | null; phone: string | null };
+  ghlConnected: boolean;
+}) {
+  const isOwner = contact.id.startsWith('owner:');
+  const recipientType = isOwner ? 'owner' : 'team_member';
+  const teamMemberId  = isOwner ? undefined : contact.id;
+  // SMS: owner-only AND venue must have GHL connected AND phone on file
+  const smsAvailable  = isOwner && ghlConnected && Boolean(contact.phone);
+
+  const [composeChannel, setComposeChannel] = useState<'email' | 'sms' | null>(null);
+  const [subject, setSubject]   = useState('');
+  const [body, setBody]         = useState('');
+  const [sending, setSending]   = useState(false);
+  const [result, setResult]     = useState<'ok' | 'error' | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const openCompose = (ch: 'email' | 'sms') => {
+    setResult(null);
+    setErrorMsg(null);
+    setSubject('');
+    setBody('');
+    setComposeChannel(cur => cur === ch ? null : ch);
+  };
+
+  async function send() {
+    if (!composeChannel || !body.trim() || sending) return;
+    setSending(true);
+    setResult(null);
+    setErrorMsg(null);
+    try {
+      const res = await fetch('/api/admin/support/private-clients/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          venueId,
+          recipientType,
+          teamMemberId,
+          channel: composeChannel,
+          body: body.trim(),
+          subject: composeChannel === 'email' ? subject.trim() || undefined : undefined,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((d as { error?: string }).error || `Failed (${res.status})`);
+      setResult('ok');
+      setBody('');
+      setSubject('');
+      setTimeout(() => setComposeChannel(null), 1200);
+    } catch (e) {
+      setResult('error');
+      setErrorMsg(e instanceof Error ? e.message : 'Send failed');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-100 overflow-hidden">
+      <div className="space-y-1 px-2 py-1.5">
+        <p className="text-[11px] font-semibold text-gray-800 leading-tight">
+          {contact.name}
+          <span className="ml-1 font-normal text-gray-400">· {contact.role}</span>
+        </p>
+        {contact.email && (
+          <p className="flex items-center gap-1 text-[10px] text-gray-500 truncate">
+            <Mail size={9} className="text-gray-400 shrink-0" />
+            <span className="truncate">{contact.email}</span>
+          </p>
+        )}
+        <div className="flex items-center gap-1 flex-wrap">
+          {contact.email && (
+            <button
+              type="button"
+              onClick={() => openCompose('email')}
+              className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                composeChannel === 'email'
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Mail size={8} /> Email
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => openCompose('sms')}
+            disabled={!smsAvailable}
+            title={smsAvailable ? 'SMS' : 'SMS unavailable for this contact'}
+            className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              composeChannel === 'sms'
+                ? 'bg-gray-900 text-white border-gray-900'
+                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <MessageSquare size={8} /> SMS
+          </button>
+        </div>
+      </div>
+
+      {composeChannel && (
+        <div className="px-2 pb-2 pt-1 border-t border-gray-100 bg-gray-50/60 space-y-1.5">
+          {composeChannel === 'email' && (
+            <input
+              type="text"
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              placeholder="Subject…"
+              className="w-full rounded border border-gray-200 px-2 py-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-gray-900/20"
+            />
+          )}
+          <textarea
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            placeholder={composeChannel === 'email' ? `Email ${contact.name}…` : `Text ${contact.name}…`}
+            rows={3}
+            className="w-full rounded border border-gray-200 px-2 py-1.5 text-[11px] resize-none focus:outline-none focus:ring-1 focus:ring-gray-900/20"
+          />
+          <div className="flex items-center justify-between gap-1">
+            {result === 'ok' ? (
+              <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1"><CheckCircle2 size={11} /> Sent</span>
+            ) : result === 'error' ? (
+              <span className="text-[10px] text-red-600 font-medium flex items-center gap-1"><AlertCircle size={11} /> {errorMsg}</span>
+            ) : <span />}
+            <button
+              type="button"
+              onClick={() => void send()}
+              disabled={sending || !body.trim()}
+              className="rounded bg-gray-900 text-white px-2 py-1 text-[10px] font-semibold flex items-center gap-1 disabled:opacity-50"
+            >
+              {sending ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+              Send
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -641,43 +797,19 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                 </p>
               </div>
 
-              {/* Venue contacts (owner + team members) */}
+              {/* Venue contacts (owner + team members) — in-app compose */}
               {data.venue.contacts.length > 0 && (
-                <div className="pt-1 space-y-2">
+                <div className="pt-1 space-y-1.5">
                   <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
                     <User size={9} /> Contacts
                   </div>
                   {data.venue.contacts.map(contact => (
-                    <div key={contact.id} className="space-y-1">
-                      <p className="text-[11px] font-semibold text-gray-800 leading-tight">
-                        {contact.name}
-                        <span className="ml-1 font-normal text-gray-400">· {contact.role}</span>
-                      </p>
-                      {contact.email && (
-                        <p className="flex items-center gap-1 text-[10px] text-gray-500 truncate">
-                          <Mail size={9} className="text-gray-400 shrink-0" />
-                          <span className="truncate">{contact.email}</span>
-                        </p>
-                      )}
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {contact.email && (
-                          <a
-                            href={`mailto:${contact.email}`}
-                            className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <Mail size={8} /> Email
-                          </a>
-                        )}
-                        {contact.phone && (
-                          <a
-                            href={`sms:${contact.phone}`}
-                            className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <Phone size={8} /> SMS
-                          </a>
-                        )}
-                      </div>
-                    </div>
+                    <VenueContactComposeRow
+                      key={contact.id}
+                      venueId={data.venue!.id}
+                      contact={contact}
+                      ghlConnected={data.venue!.ghl_connected}
+                    />
                   ))}
                 </div>
               )}

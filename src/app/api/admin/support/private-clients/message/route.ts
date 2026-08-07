@@ -42,6 +42,7 @@ interface Body {
   teamMemberId?:  string;
   channel?:       'email' | 'sms';
   body?:          string;
+  subject?:       string;
   supportUserId?: string;
 }
 
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
   const recipientType = body.recipientType;
   const channel = body.channel;
   const text = (body.body || '').trim();
+  const subject = (body.subject || '').trim() || 'Message from StoryVenue Support';
 
   if (!venueId) return NextResponse.json({ error: 'venueId required' }, { status: 400 });
   if (recipientType !== 'owner' && recipientType !== 'team_member') {
@@ -102,9 +104,6 @@ export async function POST(req: NextRequest) {
     ghl_access_token: string | null; ghl_location_id: string | null; ghl_connected: boolean | null;
     owner_id: string | null; is_private_client: boolean | null;
   };
-  if (!venue.is_private_client) {
-    return NextResponse.json({ error: 'Venue is not flagged as a Private Client' }, { status: 400 });
-  }
 
   // Resolve recipient
   let recipientLabel = '';
@@ -168,7 +167,7 @@ export async function POST(req: NextRequest) {
     const result = await sendEmail({
       to: recipientEmail,
       replyTo,
-      subject: `A message from your StoryVenue Concierge team`,
+      subject,
       html,
       from: { email: fromEmail, name: 'StoryVenue Concierge team' },
     });

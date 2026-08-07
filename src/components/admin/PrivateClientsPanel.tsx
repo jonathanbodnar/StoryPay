@@ -340,6 +340,7 @@ function ContactRow({
 }) {
   const [composeChannel, setComposeChannel] = useState<'email' | 'sms' | null>(null);
   const [body, setBody] = useState('');
+  const [subject, setSubject] = useState('');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<'ok' | 'error' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -349,6 +350,7 @@ function ContactRow({
   const openCompose = (channel: 'email' | 'sms') => {
     setResult(null);
     setErrorMsg(null);
+    setSubject('');
     setComposeChannel((cur) => (cur === channel ? null : channel));
   };
 
@@ -388,6 +390,7 @@ function ContactRow({
           teamMemberId: contact.teamMemberId,
           channel: composeChannel,
           body: body.trim(),
+          subject: composeChannel === 'email' ? subject.trim() || undefined : undefined,
           supportUserId,
         }),
       });
@@ -395,6 +398,7 @@ function ContactRow({
       if (!res.ok) throw new Error(d.error || `Failed (${res.status})`);
       setResult('ok');
       setBody('');
+      setSubject('');
       onSent();
       setTimeout(() => setComposeChannel(null), 1200);
     } catch (e) {
@@ -458,6 +462,15 @@ function ContactRow({
 
       {composeChannel && (
         <div className="px-3 pb-3 pt-1 border-t border-gray-100 bg-gray-50/60 space-y-2">
+          {composeChannel === 'email' && (
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Subject…"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            />
+          )}
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
