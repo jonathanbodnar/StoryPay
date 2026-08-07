@@ -34,38 +34,31 @@ export async function findMatchingLeadIds(input: MatchInput): Promise<Set<string
   const rawPhone = (input.phone ?? '').trim();
   const phoneDigits = normalizePhoneDigits(rawPhone);
 
-  if (email) {
-    const { data } = await supabaseAdmin
-      .from('leads')
-      .select('id')
-      .eq('venue_id', venueId)
-      .ilike('email', email);
-    for (const r of (data ?? []) as Array<{ id: string }>) ids.add(r.id);
-  }
+  // All three queries are independent — fire them in parallel instead of
+  // awaiting them sequentially (was 3 sequential roundtrips before).
+  const [emailData, phoneData, digitData] = await Promise.all([
+    email
+      ? supabaseAdmin.from('leads').select('id').eq('venue_id', venueId).ilike('email', email).then(r => r.data)
+      : Promise.resolve(null),
 
-  if (rawPhone) {
-    const { data } = await supabaseAdmin
-      .from('leads')
-      .select('id')
-      .eq('venue_id', venueId)
-      .eq('phone', rawPhone);
-    for (const r of (data ?? []) as Array<{ id: string }>) ids.add(r.id);
-  }
+    rawPhone
+      ? supabaseAdmin.from('leads').select('id').eq('venue_id', venueId).eq('phone', rawPhone).then(r => r.data)
+      : Promise.resolve(null),
 
-  // Loose digit-only fallback so format differences ("(555) 123-4567" vs
-  // "+15551234567") still resolve to the same person. We can't do this in a
-  // single SQL query because we don't have a generated digits column, so we
-  // pull a small candidate set keyed off email/venue and filter in memory.
-  if (phoneDigits) {
-    const { data } = await supabaseAdmin
-      .from('leads')
-      .select('id, phone')
-      .eq('venue_id', venueId)
-      .not('phone', 'is', null);
-    for (const r of (data ?? []) as Array<{ id: string; phone: string | null }>) {
-      const d = normalizePhoneDigits(r.phone);
-      if (d && d === phoneDigits) ids.add(r.id);
-    }
+    // Loose digit-only fallback so format differences ("(555) 123-4567" vs
+    // "+15551234567") still resolve to the same person. We can't do this in a
+    // single SQL query because we don't have a generated digits column, so we
+    // pull a small candidate set scoped to the venue and filter in memory.
+    phoneDigits
+      ? supabaseAdmin.from('leads').select('id, phone').eq('venue_id', venueId).not('phone', 'is', null).then(r => r.data)
+      : Promise.resolve(null),
+  ]);
+
+  for (const r of (emailData ?? []) as Array<{ id: string }>) ids.add(r.id);
+  for (const r of (phoneData ?? []) as Array<{ id: string }>) ids.add(r.id);
+  for (const r of (digitData ?? []) as Array<{ id: string; phone: string | null }>) {
+    const d = normalizePhoneDigits(r.phone);
+    if (d && d === phoneDigits) ids.add(r.id);
   }
 
   return ids;
