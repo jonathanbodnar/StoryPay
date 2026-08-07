@@ -90,8 +90,8 @@ export async function PATCH(
   }
 
   if (typeof body.password === 'string' && body.password.length > 0) {
-    if (body.password.length < 12) {
-      return NextResponse.json({ error: 'Password must be at least 12 characters' }, { status: 400 });
+    if (body.password.length < 8) {
+      return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
     }
     update.password_hash = await hashSupportPassword(body.password);
   }

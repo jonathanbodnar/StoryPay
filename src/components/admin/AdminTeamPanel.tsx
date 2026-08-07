@@ -21,6 +21,7 @@ import {
   defaultAdminTabsAllTrue,
   type AdminTabDef,
 } from '@/lib/admin-tabs-registry';
+import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 
 interface TeamMember {
   id: string;
@@ -338,7 +339,7 @@ function InviteModal({ onClose, onSaved }: { onClose: () => void; onSaved: (emai
       setErr('Please enter a valid email address');
       return;
     }
-    if (password.length < 12) { setErr('Password must be at least 12 characters'); return; }
+    if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
 
     setBusy(true);
     try {
@@ -400,8 +401,9 @@ function InviteModal({ onClose, onSaved }: { onClose: () => void; onSaved: (emai
           <input
             type="text" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)}
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono"
-            placeholder="At least 12 characters"
+            placeholder="at least 8 characters"
           />
+          {password && <PasswordStrengthBar password={password} className="mt-1.5" />}
         </Field>
 
         <label className="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-3 cursor-pointer hover:bg-gray-50">
@@ -548,7 +550,7 @@ function PasswordResetModal({ member, onClose, onSaved }: { member: TeamMember; 
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    if (pw.length < 12) { setErr('Password must be at least 12 characters'); return; }
+    if (pw.length < 8) { setErr('Password must be at least 8 characters'); return; }
     setBusy(true);
     setErr(null);
     const res = await fetch(`/api/admin/team-members/${member.id}`, {
@@ -573,9 +575,10 @@ function PasswordResetModal({ member, onClose, onSaved }: { member: TeamMember; 
           <input
             type="text" value={pw} onChange={(e) => setPw(e.target.value)}
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono"
-            placeholder="At least 12 characters"
+            placeholder="at least 8 characters"
             autoFocus
           />
+          {pw && <PasswordStrengthBar password={pw} className="mt-1.5" />}
         </Field>
         <p className="text-xs text-gray-500">
           Send the new password to the team member through a secure channel. They can change it themselves
@@ -584,7 +587,7 @@ function PasswordResetModal({ member, onClose, onSaved }: { member: TeamMember; 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:underline">Cancel</button>
           <button
-            type="button" disabled={busy || pw.length < 12} onClick={() => void submit()}
+            type="button" disabled={busy || pw.length < 8} onClick={() => void submit()}
             className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}

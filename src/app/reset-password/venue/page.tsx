@@ -91,7 +91,7 @@ function ResetForm() {
                       type={showPw ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="At least 12 characters"
+                      placeholder="at least 8 characters"
                       required
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 pr-10 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300"
                     />

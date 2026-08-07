@@ -10,6 +10,7 @@ import {
   KeyRound, Eye, EyeOff, AtSign, Lock,
 } from 'lucide-react';
 import TwoFactorSection from '@/components/profile/TwoFactorSection';
+import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const INPUT = 'w-full rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors';
@@ -408,7 +409,7 @@ export default function ProfilePage() {
                     type={showNewPass ? 'text' : 'password'}
                     value={passForm.new_password}
                     onChange={(e) => setPassForm((f) => ({ ...f, new_password: e.target.value }))}
-                    placeholder="At least 12 characters"
+                    placeholder="At least 8 characters"
                     className={INPUT + ' pr-10'}
                     minLength={8}
                   />
@@ -416,6 +417,9 @@ export default function ProfilePage() {
                     {showNewPass ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
+                {passForm.new_password && (
+                  <PasswordStrengthBar password={passForm.new_password} className="mt-2" />
+                )}
               </div>
               <div>
                 <label className={LABEL}>Confirm New Password</label>
@@ -684,7 +688,7 @@ export default function ProfilePage() {
                   type={showNewPass ? 'text' : 'password'}
                   value={passForm.new_password}
                   onChange={(e) => setPassForm((f) => ({ ...f, new_password: e.target.value }))}
-                  placeholder="At least 12 characters"
+                  placeholder="At least 8 characters"
                   className={INPUT + ' pr-10'}
                   minLength={8}
                 />
@@ -693,6 +697,9 @@ export default function ProfilePage() {
                   {showNewPass ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
+              {passForm.new_password && (
+                <PasswordStrengthBar password={passForm.new_password} className="mt-2" />
+              )}
             </div>
             <div>
               <label className={LABEL}>Confirm New Password</label>

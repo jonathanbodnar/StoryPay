@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Loader2, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { getCoupleSupabase } from '@/lib/couple-browser';
+import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 
 const INPUT =
   'w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300 transition-colors';
@@ -42,8 +43,8 @@ export default function CoupleResetPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (password.length < 12) {
-      setError('Password must be at least 12 characters.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
       return;
     }
     if (password !== confirm) {
@@ -108,7 +109,7 @@ export default function CoupleResetPasswordPage() {
                       autoFocus
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="At least 12 characters"
+                      placeholder="at least 8 characters"
                       className={`${INPUT} pr-10`}
                     />
                     <button type="button" onClick={() => setShowPass((v) => !v)}
@@ -116,6 +117,7 @@ export default function CoupleResetPasswordPage() {
                       {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
+                  {password && <PasswordStrengthBar password={password} className="mt-2" />}
                 </div>
 
                 <div>

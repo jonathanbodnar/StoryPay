@@ -38,8 +38,8 @@ export async function PATCH(
     if (session.memberId !== null) {
       return NextResponse.json({ error: 'Only the venue owner can set a team member password' }, { status: 403 });
     }
-    if (body.password.length < 12) {
-      return NextResponse.json({ error: 'Password must be at least 12 characters' }, { status: 400 });
+    if (body.password.length < 8) {
+      return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
     }
     updates.password_hash = await hash(body.password, 10);
   }

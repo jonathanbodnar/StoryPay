@@ -241,7 +241,7 @@ function VenueSignupForm() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min. 12 characters"
+              placeholder="Min. 8 characters"
               className={`${INPUT} pr-10`}
             />
             <button
@@ -456,7 +456,7 @@ function CoupleSignupForm() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 12 characters"
+              placeholder="At least 8 characters"
               className={`${INPUT} pr-10`}
             />
             <button

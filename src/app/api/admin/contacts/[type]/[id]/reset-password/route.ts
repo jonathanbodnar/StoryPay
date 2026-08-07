@@ -54,8 +54,8 @@ export async function POST(
 
     if (mode === 'set') {
       const pw = body.newPassword ?? '';
-      if (pw.length < 12) {
-        return NextResponse.json({ error: 'Password must be at least 12 characters.' }, { status: 400 });
+      if (pw.length < 8) {
+        return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
       }
       const { error: upErr } = await supabaseAdmin.auth.admin.updateUserById(id, { password: pw });
       if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
@@ -88,8 +88,8 @@ export async function POST(
   if (t === 'admin_team') {
     if (mode === 'set') {
       const pw = body.newPassword ?? '';
-      if (pw.length < 12) {
-        return NextResponse.json({ error: 'Password must be at least 12 characters.' }, { status: 400 });
+      if (pw.length < 8) {
+        return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
       }
       const password_hash = await hashSupportPassword(pw);
       const { error } = await supabaseAdmin

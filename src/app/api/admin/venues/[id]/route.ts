@@ -50,8 +50,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   // ── Set venue password ────────────────────────────────────────────────────
   if (typeof body.password === 'string') {
-    if (body.password.trim().length < 12) {
-      return NextResponse.json({ error: 'Password must be at least 12 characters.' }, { status: 400 });
+    if (body.password.trim().length < 8) {
+      return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
     }
     updates.password_hash = await bcrypt.hash(body.password.trim(), 12);
     // Only updating the password — skip the rest of the field validation

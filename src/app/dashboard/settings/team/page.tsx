@@ -5,6 +5,7 @@ import {
  Plus, Trash2, Loader2, Users, Mail, Shield, ChevronDown,
  CheckCircle2, Pencil, Send, MoreHorizontal, X, KeyRound,
 } from 'lucide-react';
+import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 
 interface TeamMember {
  id: string;
@@ -244,7 +245,7 @@ export default function TeamPage() {
  setEditPasswordError('');
  const { new_password, confirm_password, ...coreFields } = editForm;
  if (new_password || confirm_password) {
-  if (new_password.length < 12) { setEditPasswordError('Password must be at least 12 characters'); return; }
+  if (new_password.length < 8) { setEditPasswordError('Password must be at least 8 characters'); return; }
   if (new_password !== confirm_password) { setEditPasswordError('Passwords do not match'); return; }
  }
  setEditSaving(true);
@@ -455,6 +456,9 @@ export default function TeamPage() {
       className={INPUT}
       autoComplete="new-password"
      />
+     {editForm.new_password && (
+      <PasswordStrengthBar password={editForm.new_password} />
+     )}
      <input
       type="password"
       value={editForm.confirm_password}

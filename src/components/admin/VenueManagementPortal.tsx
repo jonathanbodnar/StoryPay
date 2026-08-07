@@ -34,6 +34,7 @@ import {
   type LunarPayAdminSummary,
 } from '@/lib/lunarpay-venue-admin';
 import { furthestStage } from '@/lib/funnel-stage';
+import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 
 const BRAND = '#1b1b1b';
 
@@ -1600,18 +1601,19 @@ export function VenueManagementPortal({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">New password</label>
-                <div className="relative">
+                  <div className="relative">
                   <input
                     type={showPw ? 'text' : 'password'}
                     value={pwValue}
                     onChange={(e) => setPwValue(e.target.value)}
-                    placeholder="At least 12 characters"
+                    placeholder="at least 8 characters"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300"
                   />
                   <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                     {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
+                {pwValue && <PasswordStrengthBar password={pwValue} className="mt-1.5" />}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Confirm password</label>
@@ -1634,7 +1636,7 @@ export function VenueManagementPortal({
                   disabled={pwSaving}
                   onClick={async () => {
                     setPwError('');
-                    if (pwValue.length < 12) { setPwError('Password must be at least 12 characters.'); return; }
+                    if (pwValue.length < 8) { setPwError('Password must be at least 8 characters.'); return; }
                     if (pwValue !== pwConfirm) { setPwError('Passwords do not match.'); return; }
                     setPwSaving(true);
                     try {

@@ -2,15 +2,15 @@
  * Password policy shared between server-side API routes and client-side UI.
  *
  * Rules (in order of display):
- *  1. At least 12 characters
+ *  1. At least 8 characters
  *  2. At least one letter
  *  3. At least one number
  *  4. Not in the common-passwords list
  *
- * Baseline chosen to align with industry standards: 12-character minimum with
- * letters + numbers (PCI-DSS v4) plus a common/breached-password block (NIST
- * 800-63B). Supabase Auth is configured to match (min length 12, letters +
- * digits required, HaveIBeenPwned breach check enabled) for any auth.users.
+ * Strength levels:
+ *  weak   — < 8 chars OR only one character type
+ *  fair   — 8+ chars with exactly 2 character types
+ *  strong — 8+ chars with 3+ character types
  *
  * Designed to be importable in both Node.js API routes and browser
  * React components (no Node-only APIs used).
@@ -49,8 +49,8 @@ export interface PasswordCheckResult {
 export function checkPassword(password: string): PasswordCheckResult {
   const errors: string[] = [];
 
-  if (password.length < 12) {
-    errors.push('At least 12 characters');
+  if (password.length < 8) {
+    errors.push('At least 8 characters');
   }
   if (!/[a-zA-Z]/.test(password)) {
     errors.push('At least one letter');
@@ -64,9 +64,6 @@ export function checkPassword(password: string): PasswordCheckResult {
 
   const valid = errors.length === 0;
 
-  // Strength meter (length is the dominant factor). Character-class variety
-  // (lower / upper / digit / symbol) is encouraged for a "strong" rating but
-  // not required to pass.
   const classes = [
     /[a-z]/.test(password),
     /[A-Z]/.test(password),
@@ -75,8 +72,8 @@ export function checkPassword(password: string): PasswordCheckResult {
   ].filter(Boolean).length;
 
   let strength: 'weak' | 'fair' | 'strong' = 'weak';
-  if (valid && (password.length >= 16 || (password.length >= 14 && classes >= 3))) strength = 'strong';
-  else if (valid) strength = 'fair';
+  if (password.length >= 8 && classes >= 3) strength = 'strong';
+  else if (password.length >= 8 && classes >= 2) strength = 'fair';
 
   const message = errors.length > 0
     ? `Password must have: ${errors.join(', ').toLowerCase()}.`

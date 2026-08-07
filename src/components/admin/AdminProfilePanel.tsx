@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Camera, ShieldCheck, AlertCircle, CheckCircle2, User } from 'lucide-react';
+import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 
 interface MeResponse {
   isMasterSuperAdmin: boolean;
@@ -81,7 +82,7 @@ export function AdminProfilePanel() {
 
   async function savePassword() {
     if (!currentPw) { setErr('Enter your current password'); return; }
-    if (newPw.length < 12) { setErr('New password must be at least 12 characters'); return; }
+    if (newPw.length < 8) { setErr('New password must be at least 8 characters'); return; }
     if (newPw !== confirmPw) { setErr('New passwords do not match'); return; }
     setPwBusy(true);
     setErr(null);
@@ -245,6 +246,7 @@ export function AdminProfilePanel() {
           <Field label="New password">
             <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+            {newPw && <PasswordStrengthBar password={newPw} className="mt-1.5" />}
           </Field>
           <Field label="Confirm new password">
             <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)}

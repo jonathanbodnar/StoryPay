@@ -21,6 +21,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 
 const BRAND = '#1b1b1b';
 
@@ -630,7 +631,7 @@ function ContactEditModal({
         }
         body.email = newEmail.trim();
       } else if (tab === 'password') {
-        if (newPassword.length < 12) { setErrorMsg('Password must be at least 12 characters'); setSaving(false); return; }
+        if (newPassword.length < 8) { setErrorMsg('Password must be at least 8 characters'); setSaving(false); return; }
         if (newPassword !== confirmPassword) { setErrorMsg('Passwords do not match'); setSaving(false); return; }
         body.password = newPassword;
       } else if (tab === 'notes') {
@@ -849,13 +850,14 @@ function ContactEditModal({
                   type={showPw ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="At least 12 characters"
+                  placeholder="at least 8 characters"
                   className={`${INPUT_CLS} pr-9`}
                 />
                 <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
+              {newPassword && <PasswordStrengthBar password={newPassword} className="mt-1.5" />}
             </div>
             <div>
               <label className={LABEL_CLS}>Confirm password</label>
@@ -1032,7 +1034,7 @@ function ResetPasswordModal({
     setDone('');
     try {
       if (mode === 'set') {
-        if (pw.length < 12) { setErrorMsg('Password must be at least 12 characters'); setWorking(false); return; }
+        if (pw.length < 8) { setErrorMsg('Password must be at least 8 characters'); setWorking(false); return; }
         if (pw !== confirm) { setErrorMsg('Passwords do not match'); setWorking(false); return; }
       }
       const res = await fetch(`/api/admin/contacts/${contact.type}/${contact.id}/reset-password`, {
@@ -1095,7 +1097,8 @@ function ResetPasswordModal({
           <div className="space-y-3">
             <div>
               <label className={LABEL_CLS}>New password</label>
-              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} className={INPUT_CLS} placeholder="At least 12 characters" />
+              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} className={INPUT_CLS} placeholder="at least 8 characters" />
+              {pw && <PasswordStrengthBar password={pw} className="mt-1.5" />}
             </div>
             <div>
               <label className={LABEL_CLS}>Confirm</label>

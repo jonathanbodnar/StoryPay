@@ -17,6 +17,7 @@ import {
   EyeOff,
   CheckCircle2,
 } from 'lucide-react';
+import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 
 const BRAND = '#1b1b1b';
 
@@ -241,8 +242,8 @@ export function CoupleManagementPortal() {
         }
         body.email = editEmail.trim().toLowerCase();
       } else if (editTab === 'password') {
-        if (editPassword.length < 12) {
-          setEditError('Password must be at least 12 characters');
+        if (editPassword.length < 8) {
+          setEditError('Password must be at least 8 characters');
           setEditSaving(false);
           return;
         }
@@ -599,13 +600,14 @@ export function CoupleManagementPortal() {
                       type={showEditPass ? 'text' : 'password'}
                       value={editPassword}
                       onChange={(e) => setEditPassword(e.target.value)}
-                      placeholder="At least 12 characters"
+                      placeholder="at least 8 characters"
                       className={`${INPUT} pr-9`}
                     />
                     <button type="button" onClick={() => setShowEditPass((v) => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       {showEditPass ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
+                  {editPassword && <PasswordStrengthBar password={editPassword} className="mt-1.5" />}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Confirm password</label>
