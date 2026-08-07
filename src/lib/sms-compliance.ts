@@ -146,6 +146,9 @@ export async function applySmsDndForVenueCustomer(params: {
     sms_dnd: true,
     sms_dnd_at: now,
     sms_dnd_source: source,
+    // Halt AI follow-ups — symmetrical with opt-in which restores to 'paused'
+    ai_state: 'opted_out',
+    ai_next_send_at: null as string | null,
   };
 
   if (email && !email.endsWith(PLACEHOLDER_SMS_EMAIL)) {
