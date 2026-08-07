@@ -40,6 +40,8 @@ export async function POST(req: NextRequest) {
     attachments?:   SupportAttachment[];
     /** Optional pre-rendered HTML (rich-text composer output) — email only. */
     bodyHtml?:      string;
+    /** Optional override for email subject line — email only. */
+    emailSubject?:  string;
   };
   try {
     body = await req.json();
@@ -147,6 +149,7 @@ export async function POST(req: NextRequest) {
     internalNote:  body.internalNote,
     attachments:   Array.isArray(body.attachments) ? body.attachments : undefined,
     bodyHtml:      channel === 'email' ? body.bodyHtml : undefined,
+    emailSubject:  channel === 'email' ? (body.emailSubject?.trim() || undefined) : undefined,
   });
 
   if (!result.ok) {

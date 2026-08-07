@@ -759,6 +759,7 @@ export function SupportInboxPanel() {
   //   'venue_direct' — message to venue staff (concierge ↔ venue, hidden from bride)
   const [composerMode, setComposerMode] = useState<'reply' | 'note' | 'venue_direct'>('reply');
   const [replyBody, setReplyBody] = useState('');
+  const [replySubject, setReplySubject] = useState('');
   const [replyChannel, setReplyChannel] = useState<'auto' | 'sms' | 'email'>('auto');
   const [internalNote, setInternalNote] = useState('');
   const [showInternalNote, setShowInternalNote] = useState(false);
@@ -778,6 +779,7 @@ export function SupportInboxPanel() {
   useEffect(() => {
     setComposerMode('reply');
     setReplyBody('');
+    setReplySubject('');
     setReplyChannel('auto');
     setInternalNote('');
     setShowInternalNote(false);
@@ -865,12 +867,14 @@ export function SupportInboxPanel() {
           // Rich-text toolbar only affects EMAIL sends — SMS always goes out
           // as the raw plain text (can't render HTML).
           bodyHtml:      effectiveChannel === 'email' ? markdownLiteToHtml(replyBody.trim()) : undefined,
+          emailSubject:  effectiveChannel === 'email' ? (replySubject.trim() || undefined) : undefined,
         }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || `Send failed (${r.status})`);
       setSendStatus({ ok: true, msg: `Sent via ${d.channel}` });
       setReplyBody('');
+      setReplySubject('');
       setInternalNote('');
       setShowInternalNote(false);
       setComposerAttachments([]);
@@ -1226,6 +1230,8 @@ export function SupportInboxPanel() {
                 onComposerModeChange={setComposerMode}
                 replyBody={replyBody}
                 onReplyBodyChange={setReplyBody}
+                replySubject={replySubject}
+                onReplySubjectChange={setReplySubject}
                 replyChannel={replyChannel}
                 onReplyChannelChange={setReplyChannel}
                 effectiveChannel={effectiveChannel}
@@ -1505,6 +1511,7 @@ function ThreadDetailView({
   detail,
   composerMode, onComposerModeChange,
   replyBody, onReplyBodyChange,
+  replySubject, onReplySubjectChange,
   replyChannel, onReplyChannelChange,
   effectiveChannel, lastInboundChannel,
   internalNote, onInternalNoteChange,
@@ -1530,6 +1537,7 @@ function ThreadDetailView({
   composerMode: 'reply' | 'note' | 'venue_direct';
   onComposerModeChange: (m: 'reply' | 'note' | 'venue_direct') => void;
   replyBody: string; onReplyBodyChange: (v: string) => void;
+  replySubject: string; onReplySubjectChange: (v: string) => void;
   replyChannel: 'auto' | 'sms' | 'email';
   onReplyChannelChange: (v: 'auto' | 'sms' | 'email') => void;
   effectiveChannel: 'sms' | 'email';
@@ -1774,15 +1782,17 @@ function ThreadDetailView({
                 ))}
               </div>
               <span className="text-gray-400">→ as <span className="font-semibold text-gray-700">{effectiveChannel.toUpperCase()}</span></span>
-              <button
-                type="button"
-                onClick={onToggleIntent}
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                  showIntent ? 'bg-violet-100 text-violet-800' : 'text-gray-500 hover:bg-gray-100'
-                }`}
-              >
-                <Sparkles size={11} /> {showIntent ? 'Hide intent' : 'Steer AI'}
-              </button>
+              {effectiveChannel === 'email' && (
+                <button
+                  type="button"
+                  onClick={onToggleIntent}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                    showIntent ? 'bg-violet-100 text-violet-800' : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  <Sparkles size={11} /> {showIntent ? 'Hide intent' : 'Steer AI'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onToggleInternalNote}
@@ -1818,6 +1828,16 @@ function ThreadDetailView({
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-center gap-2">
                 <AlertCircle size={12} /> {draftError}
               </div>
+            )}
+
+            {effectiveChannel === 'email' && (
+              <input
+                type="text"
+                value={replySubject}
+                onChange={e => onReplySubjectChange(e.target.value)}
+                placeholder="Subject"
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300"
+              />
             )}
 
             {effectiveChannel === 'email' && (
@@ -1862,28 +1882,32 @@ function ThreadDetailView({
                     {guideAdded ? 'Added!' : 'Guide'}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setPickerOpen(v => !v)}
-                  title="Insert a saved reply"
-                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
-                    pickerOpen
-                      ? 'border-violet-300 bg-violet-100 text-violet-800'
-                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <FileText size={11} /> Saved
-                </button>
-                <button
-                  type="button"
-                  onClick={onDraft}
-                  disabled={drafting}
-                  title="Generate a reply with AI using venue voice + bride context"
-                  className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white hover:bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 disabled:opacity-50"
-                >
-                  {drafting ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-                  {drafting ? 'Drafting…' : 'Suggest'}
-                </button>
+                {effectiveChannel === 'email' && (
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(v => !v)}
+                    title="Insert a saved reply"
+                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                      pickerOpen
+                        ? 'border-violet-300 bg-violet-100 text-violet-800'
+                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <FileText size={11} /> Saved
+                  </button>
+                )}
+                {effectiveChannel === 'email' && (
+                  <button
+                    type="button"
+                    onClick={onDraft}
+                    disabled={drafting}
+                    title="Generate a reply with AI using venue voice + bride context"
+                    className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white hover:bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 disabled:opacity-50"
+                  >
+                    {drafting ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                    {drafting ? 'Drafting…' : 'Suggest'}
+                  </button>
+                )}
                 <CannedReplyPicker
                   open={pickerOpen}
                   onClose={() => setPickerOpen(false)}
