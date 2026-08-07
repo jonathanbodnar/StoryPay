@@ -33,41 +33,33 @@ export async function POST(_req: Request) {
     return NextResponse.json({ message: 'No GHL-connected venues found.', venues: 0 });
   }
 
-  const results: Array<{
-    venueId: string;
-    venueName: string;
-    contactsScanned: number;
-    contactsUpdated: number;
-    errors: number;
-  }> = [];
+  // Run the sync in the background — don't block the HTTP response.
+  // Results are logged to Railway logs; the request returns immediately.
+  (async () => {
+    let totalScanned = 0, totalUpdated = 0, totalErrors = 0;
+    for (const row of rows) {
+      const token = getGhlToken(row as { ghl_access_token: string | null });
+      if (!token || !row.ghl_location_id) continue;
+      try {
+        const result = await syncGhlDndForVenue(
+          { id: row.id, name: row.name, locationId: row.ghl_location_id, token },
+          { maxContacts: 10_000 },
+        );
+        totalScanned  += result.contactsScanned;
+        totalUpdated  += result.contactsUpdated;
+        totalErrors   += result.errors;
+        console.log(`[dnd-backfill] ${row.name}: scanned=${result.contactsScanned} updated=${result.contactsUpdated} errors=${result.errors}`);
+      } catch (e) {
+        console.error(`[dnd-backfill] ${row.name} failed:`, e);
+        totalErrors++;
+      }
+    }
+    console.log(`[dnd-backfill] DONE — venues=${rows.length} scanned=${totalScanned} updated=${totalUpdated} errors=${totalErrors}`);
+  })().catch(console.error);
 
-  for (const row of rows) {
-    const token = getGhlToken(row as { ghl_access_token: string | null });
-    if (!token || !row.ghl_location_id) continue;
-
-    const result = await syncGhlDndForVenue(
-      { id: row.id, name: row.name, locationId: row.ghl_location_id, token },
-      { maxContacts: 10_000 }, // no practical cap for the backfill
-    );
-
-    results.push({
-      venueId:  row.id,
-      venueName: row.name,
-      ...result,
-    });
-
-    console.log(`[dnd-backfill] ${row.name}: scanned=${result.contactsScanned} updated=${result.contactsUpdated} errors=${result.errors}`);
-  }
-
-  const totals = results.reduce(
-    (acc, r) => {
-      acc.totalScanned  += r.contactsScanned;
-      acc.totalUpdated  += r.contactsUpdated;
-      acc.totalErrors   += r.errors;
-      return acc;
-    },
-    { totalScanned: 0, totalUpdated: 0, totalErrors: 0 },
-  );
-
-  return NextResponse.json({ ok: true, venues: results.length, ...totals, breakdown: results });
+  return NextResponse.json({
+    ok: true,
+    message: `Backfill started for ${rows.length} venue(s). Check Railway logs for progress — results appear as each venue finishes.`,
+    venues: rows.length,
+  });
 }
