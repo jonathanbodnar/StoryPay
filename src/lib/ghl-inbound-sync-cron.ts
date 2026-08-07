@@ -29,6 +29,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getGhlToken, ghlRequest, normalizePhone, resolveLocationToken } from '@/lib/ghl';
 import { syncInboundSmsFromGhlForThread } from '@/lib/ghl-sms-conversations';
 import { logError } from '@/lib/error-log';
+import { syncGhlDndForVenueSafe } from '@/lib/ghl-dnd-sync';
 
 const PLACEHOLDER_EMAIL_RE = /@(ghl-sms\.storypay|ghl-import\.storyvenue)\.placeholder$/i;
 
@@ -372,6 +373,25 @@ export async function runGhlInboundSyncCron(opts: {
   result.venuesConsidered = venues.length;
   if (venues.length === 0) return result;
   const venueById = new Map(venues.map((v) => [v.id, v]));
+
+  // DND sync: run per-venue in parallel (fire-and-forget relative to the SMS
+  // sweep below — failures are swallowed by syncGhlDndForVenueSafe so they
+  // can't abort the inbound message import).
+  await Promise.all(
+    venues.map((v) =>
+      syncGhlDndForVenueSafe(v, { maxContacts: 500 }).then((r) => {
+        if (r.contactsUpdated > 0 || r.errors > 0) {
+          console.log('[ghl-inbound-cron] dnd-sync', {
+            venueId: v.id,
+            venueName: v.name,
+            scanned: r.contactsScanned,
+            updated: r.contactsUpdated,
+            errors: r.errors,
+          });
+        }
+      })
+    )
+  );
 
   const backfilledCustomerIds = await backfillMissingContactIds(venues, backfillLimit, result);
 
