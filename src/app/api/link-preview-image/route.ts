@@ -41,10 +41,15 @@ function isPrivateIp(ip: string): boolean {
   return lower === '::1' || lower.startsWith('fe80:') || lower.startsWith('fc') || lower.startsWith('fd');
 }
 
+const TRUSTED_HOSTNAMES = ['storyvenue.com', 'app.storyvenue.com'];
+
 async function isSafeUrl(u: URL): Promise<boolean> {
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
   const hostname = u.hostname.toLowerCase();
   if (hostname === 'localhost' || hostname.endsWith('.local') || hostname.endsWith('.internal')) return false;
+  // Always allow our own domain — Railway's internal DNS resolves storyvenue.com
+  // subdomains to private IPs, which would otherwise trip the SSRF guard.
+  if (TRUSTED_HOSTNAMES.includes(hostname) || hostname.endsWith('.storyvenue.com')) return true;
   if (net.isIP(hostname)) return !isPrivateIp(hostname);
   try {
     const addrs = await dns.lookup(hostname, { all: true });
