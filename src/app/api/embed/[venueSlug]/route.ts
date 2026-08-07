@@ -234,15 +234,36 @@ export async function GET(
       var errEl  = document.getElementById('svError');
       var succEl = document.getElementById('svSuccess');
 
-      // Capture fbclid from the parent page URL if present (Meta ad attribution).
-      var fbclid = '';
-      try {
-        var pUrl = (window.location !== window.parent.location)
-          ? document.referrer
-          : window.location.href;
-        var m = pUrl.match(/[?&]fbclid=([^&]+)/);
-        if (m) fbclid = decodeURIComponent(m[1]);
-      } catch (_) {}
+      // First-touch attribution (Meta / UTM). This form is normally embedded as
+      // a cross-origin <iframe> on the venue's own site, where the browser
+      // forbids reading the parent page's URL directly (window.parent.location
+      // throws) and strips document.referrer down to the bare origin. The
+      // paste-in snippet therefore forwards any fbclid / utm_* from the parent
+      // page onto THIS iframe's own query string, which we read here. For
+      // same-origin embeds we also fall back to the parent URL in the referrer.
+      var ATTR_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid'];
+      function readAttr(qs) {
+        var out = {};
+        try {
+          var p = new URLSearchParams(qs || '');
+          for (var i = 0; i < ATTR_KEYS.length; i++) {
+            var v = p.get(ATTR_KEYS[i]);
+            if (v) out[ATTR_KEYS[i]] = v;
+          }
+        } catch (_) {}
+        return out;
+      }
+      var attribution = readAttr(window.location.search);
+      if (!attribution.fbclid && !attribution.utm_source) {
+        try {
+          var ref = document.referrer || '';
+          var qi = ref.indexOf('?');
+          if (qi >= 0) {
+            var fromRef = readAttr(ref.slice(qi));
+            for (var k in fromRef) { if (!attribution[k]) attribution[k] = fromRef[k]; }
+          }
+        } catch (_) {}
+      }
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
@@ -251,7 +272,7 @@ export async function GET(
         btn.textContent = 'Sending…';
 
         var data = new FormData(form);
-        var payload = {
+        var payload = Object.assign({
           venue_id:         '${esc(venueId)}',
           first_name:       data.get('first_name'),
           last_name:        data.get('last_name'),
@@ -262,8 +283,7 @@ export async function GET(
           message:          data.get('message') || undefined,
           source:           'embed',
           referrer:         document.referrer || undefined,
-          fbclid:           fbclid || undefined,
-        };
+        }, attribution);
 
         fetch('${APP_URL}/api/public/embed-leads', {
           method: 'POST',
