@@ -49,7 +49,7 @@ import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/l
 import { isNativeApp, topBarSafeAreaPadding } from '@/lib/platform';
 import { getClientCache, setClientCache } from '@/lib/client-cache';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
-import ContactProfileDrawer from '@/components/conversations/ContactProfileDrawer';
+import ContactProfilePanel from '@/components/contacts/ContactProfilePanel';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type AiStateChangedEvent, type BrideMessageEvent, type StageChangedEvent } from '@/lib/realtime/channels';
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
@@ -3639,24 +3639,24 @@ export default function ConversationsPage() {
         </div>
       )}
 
-      {/* Contact profile drawer */}
+      {/* Contact profile modal — full-screen, shared with Leads pipeline */}
       {profileDrawerOpen && threadDetail?.venue_customer_id && (
-        <ContactProfileDrawer
-          venueCustomerId={threadDetail.venue_customer_id}
-          onClose={() => setProfileDrawerOpen(false)}
-          initialContact={
-            threadDetail.venue_customers
-              ? {
-                  id: threadDetail.venue_customers.id,
-                  first_name: threadDetail.venue_customers.first_name,
-                  last_name: threadDetail.venue_customers.last_name,
-                  customer_email: threadDetail.venue_customers.customer_email,
-                  phone: threadDetail.venue_customers.phone,
-                  contact_stage: threadDetail.contact_stage ?? null,
-                }
-              : null
-          }
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-y-auto">
+            <button
+              onClick={() => setProfileDrawerOpen(false)}
+              className="absolute top-4 right-4 z-10 rounded-full bg-white/90 p-2 shadow hover:bg-gray-100"
+            >
+              <X className="h-5 w-5 text-gray-600" />
+            </button>
+            <div className="p-6">
+              <ContactProfilePanel
+                customerId={threadDetail.venue_customer_id}
+                onBack={() => setProfileDrawerOpen(false)}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {lockModal && (
