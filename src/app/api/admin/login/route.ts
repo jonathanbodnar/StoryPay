@@ -9,6 +9,8 @@ import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { secureCompare } from '@/lib/secure-compare';
 import { issueMasterAdminToken } from '@/lib/admin-token';
 import { sendEmail } from '@/lib/email';
+import { buildEmailHtml, fillTemplate, type EmailTemplateRow } from '@/lib/email-templates';
+import { SYSTEM_EMAIL_BY_KEY } from '@/lib/system-email-registry';
 import crypto from 'crypto';
 
 /**
@@ -93,21 +95,49 @@ export async function POST(request: Request) {
     // Determine the email address to send to.
     const toEmail = adminEmail || process.env.ADMIN_NOTIFICATION_EMAIL || '';
     if (toEmail) {
-      const html = `
-        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
-          <img src="https://www.storyvenue.com/storyvenue-dark-logo.png" alt="StoryVenue" style="height:32px;margin-bottom:32px" />
-          <h1 style="font-size:22px;font-weight:700;color:#111827;margin:0 0 8px">Your admin login code</h1>
-          <p style="color:#6b7280;font-size:14px;margin:0 0 28px">Use this code to complete your StoryVenue admin sign-in.</p>
-          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:28px;text-align:center;margin-bottom:24px">
-            <span style="font-size:40px;font-weight:800;letter-spacing:10px;color:#111827;font-family:monospace">${code}</span>
-          </div>
-          <p style="color:#6b7280;font-size:13px;margin:0 0 6px">This code expires in <strong>10 minutes</strong>.</p>
-          <p style="color:#9ca3af;font-size:12px;margin:0">If you didn&rsquo;t request this, you can safely ignore this email.</p>
-        </div>
-      `;
+      const def = SYSTEM_EMAIL_BY_KEY['admin_otp'];
+      let subject     = def?.defaults.subject     ?? 'Your StoryVenue admin login code';
+      let heading     = def?.defaults.heading     ?? 'Your admin login code';
+      let bodyText    = def?.defaults.body        ?? '{{otp_code}}';
+      let button_text = def?.defaults.button_text ?? null;
+
+      // Load saved override from system_email_templates (if any).
+      const { data: override } = await supabaseAdmin
+        .from('system_email_templates')
+        .select('subject, heading, body, button_text')
+        .eq('key', 'admin_otp')
+        .maybeSingle();
+      if (override) {
+        subject     = (override as any).subject     || subject;
+        heading     = (override as any).heading     || heading;
+        bodyText    = (override as any).body        || bodyText;
+        button_text = (override as any).button_text !== undefined
+          ? (override as any).button_text
+          : button_text;
+      }
+
+      const tplRow: EmailTemplateRow = {
+        type: 'admin_otp',
+        subject,
+        heading,
+        body: bodyText,
+        button_text: button_text ?? null,
+        footer: null,
+        enabled: true,
+      };
+
+      const html = buildEmailHtml({
+        template: tplRow,
+        vars: { otp_code: code },
+        brandColor: '#1b1b1b',
+        venueName: 'StoryVenue',
+      });
+
+      const resolvedSubject = fillTemplate(subject, { otp_code: code });
+
       await sendEmail({
         to: toEmail,
-        subject: 'Your StoryVenue admin login code',
+        subject: resolvedSubject,
         html,
       }).catch(err => console.error('[admin-otp] email send failed:', err));
     } else {

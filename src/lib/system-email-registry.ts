@@ -488,6 +488,24 @@ Here's your one-click login link for {{venue_name}} on StoryVenue. It expires af
     },
   },
   {
+    key: 'admin_otp',
+    label: 'Admin Login Code (OTP)',
+    description: 'Sent to the super admin when they log in to the StoryVenue admin area. Contains a 6-digit one-time code valid for 10 minutes.',
+    trigger: 'Fires on every successful super admin password entry at /api/admin/login.',
+    category: 'auth',
+    editable: true,
+    defaults: {
+      subject: 'Your StoryVenue admin login code',
+      heading: 'Your admin login code',
+      body: `Use the code below to complete your StoryVenue admin sign-in. It expires in 10 minutes.
+
+{{otp_code}}
+
+If you didn't request this, you can safely ignore this email.`,
+      button_text: undefined,
+    },
+  },
+  {
     key: 'admin_created_venue_welcome',
     label: 'Admin-Created Venue Welcome',
     description: 'Welcome email sent when a super admin creates a venue account on someone\'s behalf.',
@@ -635,6 +653,9 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
   admin_login_link: {
     venue_name: 'Meadowbrook Estate',
     action_url: `${APP_URL}/login`,
+  },
+  admin_otp: {
+    otp_code: '847291',
   },
   admin_created_venue_welcome: {
     owner_first_name: 'Sarah',
