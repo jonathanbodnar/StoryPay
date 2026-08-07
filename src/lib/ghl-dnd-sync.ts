@@ -81,9 +81,6 @@ async function fetchDndContactPage(
   if (startAfter)   qs.set('startAfter',   startAfter);
   if (startAfterId) qs.set('startAfterId', startAfterId);
 
-  // Request only the DND-relevant fields to keep payloads small.
-  qs.set('fields', 'id,dnd,dndSettings,inboundDndSettings');
-
   const result = await ghlRequest(`/contacts/?${qs.toString()}`, token, { locationId }) as {
     contacts?: GhlContactDnd[];
     meta?: {
