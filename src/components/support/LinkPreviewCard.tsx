@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Image as ImageIcon } from 'lucide-react';
 
 const URL_RE = /(https?:\/\/[^\s<]+)/i;
 
@@ -23,6 +23,11 @@ interface PreviewData {
 
 const cache = new Map<string, PreviewData>();
 
+/** Proxy an OG image URL through our server to avoid hotlink/CORS failures. */
+function proxyImageUrl(src: string): string {
+  return `/api/link-preview-image?url=${encodeURIComponent(src)}`;
+}
+
 /**
  * Fetches OG metadata for the first URL in a message body via the
  * server-side /api/link-preview route and renders a small card. Falls back
@@ -31,8 +36,10 @@ const cache = new Map<string, PreviewData>();
  */
 export function LinkPreviewCard({ url }: { url: string }) {
   const [data, setData] = useState<PreviewData | null>(() => cache.get(url) ?? null);
+  const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => {
+    setImgFailed(false);
     let cancelled = false;
     const cached = cache.get(url);
     if (cached) {
@@ -78,9 +85,19 @@ export function LinkPreviewCard({ url }: { url: string }) {
       rel="noreferrer"
       className="mt-1.5 flex items-stretch gap-2 overflow-hidden rounded-lg border border-black/10 bg-white/70 hover:bg-white transition-colors max-w-sm"
     >
-      {data.image && (
+      {data.image && !imgFailed && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={data.image} alt="" className="h-16 w-16 shrink-0 object-cover" />
+        <img
+          src={proxyImageUrl(data.image)}
+          alt=""
+          className="h-16 w-16 shrink-0 object-cover"
+          onError={() => setImgFailed(true)}
+        />
+      )}
+      {data.image && imgFailed && (
+        <div className="h-16 w-16 shrink-0 flex items-center justify-center bg-gray-100 text-gray-300">
+          <ImageIcon size={20} />
+        </div>
       )}
       <div className="min-w-0 py-1.5 pr-2 flex flex-col justify-center">
         {data.title && <p className="truncate text-[12px] font-semibold text-gray-800">{data.title}</p>}

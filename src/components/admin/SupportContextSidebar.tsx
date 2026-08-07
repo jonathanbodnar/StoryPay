@@ -63,6 +63,7 @@ interface ContextResponse {
     ai_persona:         string | null;
     open_tickets_count: number;
     concierge_notify_emails: string[];
+    contacts:           Array<{ id: string; name: string; role: string; email: string | null; phone: string | null }>;
   } | null;
   recent_activity: Array<{ action: string; at: string; details: unknown }>;
   lead_id: string | null;
@@ -639,6 +640,47 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                   <span className="font-semibold text-gray-700">{data.venue.created_at ? relativeTime(data.venue.created_at) : '—'}</span>
                 </p>
               </div>
+
+              {/* Venue contacts (owner + team members) */}
+              {data.venue.contacts.length > 0 && (
+                <div className="pt-1 space-y-2">
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                    <User size={9} /> Contacts
+                  </div>
+                  {data.venue.contacts.map(contact => (
+                    <div key={contact.id} className="space-y-1">
+                      <p className="text-[11px] font-semibold text-gray-800 leading-tight">
+                        {contact.name}
+                        <span className="ml-1 font-normal text-gray-400">· {contact.role}</span>
+                      </p>
+                      {contact.email && (
+                        <p className="flex items-center gap-1 text-[10px] text-gray-500 truncate">
+                          <Mail size={9} className="text-gray-400 shrink-0" />
+                          <span className="truncate">{contact.email}</span>
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {contact.email && (
+                          <a
+                            href={`mailto:${contact.email}`}
+                            className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <Mail size={8} /> Email
+                          </a>
+                        )}
+                        {contact.phone && (
+                          <a
+                            href={`sms:${contact.phone}`}
+                            className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <Phone size={8} /> SMS
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="pt-1 flex flex-col gap-1.5">
                 <ImpersonateButton venueId={data.venue.id} venueName={data.venue.name} returnThreadId={threadId} />

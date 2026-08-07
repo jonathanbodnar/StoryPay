@@ -38,15 +38,16 @@ export async function GET(
 
   const t = thread as { id: string; venue_id: string; venue_customer_id: string; last_message_at: string; created_at: string };
 
-  const [{ data: venue, error: venueErr }, { data: customer, error: customerErr }] = await Promise.all([
+  const [{ data: venue, error: venueErr }, { data: customer, error: customerErr }, { data: teamMemberRows }] = await Promise.all([
     supabaseAdmin.from('venues')
       .select(`
-        id, name, notification_email, timezone, created_at,
+        id, name, notification_email, notification_phone, timezone, created_at,
         directory_plan_id, directory_addon_concierge, directory_addon_verified, directory_addon_sponsored,
         a2p_verified, a2p_brand_status, a2p_campaign_status,
         ghl_connected,
         ai_concierge_enabled, ai_assistant_persona_name,
-        ai_concierge_notify_emails
+        ai_concierge_notify_emails,
+        owner_first_name, owner_last_name, email, phone
       `)
       .eq('id', t.venue_id).maybeSingle(),
     // Use * so a missing column never silently zeros stage_id/pipeline_id
@@ -54,6 +55,10 @@ export async function GET(
     supabaseAdmin.from('venue_customers')
       .select('*')
       .eq('id', t.venue_customer_id).maybeSingle(),
+    supabaseAdmin.from('venue_team_members')
+      .select('id, first_name, last_name, email, phone, role')
+      .eq('venue_id', t.venue_id)
+      .order('created_at', { ascending: true }),
   ]);
 
   if (venueErr) console.error('[bride-context] venues select failed', { threadId, err: venueErr.message });
@@ -430,6 +435,33 @@ export async function GET(
       ai_persona:           (v.ai_assistant_persona_name as string | null) ?? null,
       open_tickets_count:   openTicketsCount ?? 0,
       concierge_notify_emails: (v.ai_concierge_notify_emails as string[] | null) ?? [],
+      contacts: (() => {
+        const list: Array<{ id: string; name: string; role: string; email: string | null; phone: string | null }> = [];
+        // Primary owner (from venues table)
+        const ownerFirst = ((v.owner_first_name as string | null) ?? '').trim();
+        const ownerLast  = ((v.owner_last_name  as string | null) ?? '').trim();
+        const ownerName  = [ownerFirst, ownerLast].filter(Boolean).join(' ') || (v.name as string);
+        list.push({
+          id:    `owner:${v.id as string}`,
+          name:  ownerName,
+          role:  'Owner',
+          email: (v.email as string | null) ?? null,
+          phone: (v.notification_phone as string | null) ?? (v.phone as string | null) ?? null,
+        });
+        // Team members
+        for (const m of (teamMemberRows ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null; role: string | null }>) {
+          const fn = (m.first_name ?? '').trim();
+          const ln = (m.last_name  ?? '').trim();
+          list.push({
+            id:    m.id,
+            name:  [fn, ln].filter(Boolean).join(' ') || m.email || 'Team member',
+            role:  m.role ?? 'Team',
+            email: m.email ?? null,
+            phone: m.phone ?? null,
+          });
+        }
+        return list;
+      })(),
     } : null,
     recent_activity: recentActivity,
     lead_id: (lead?.id as string | null) ?? null,
