@@ -17,6 +17,7 @@ import {
   Link2,
   Unlink,
   Send,
+  CalendarClock,
 } from 'lucide-react';
 
 interface ApiKey {
@@ -283,6 +284,241 @@ function TripleseatCard() {
   );
 }
 
+// ── Calendly Integration Card ─────────────────────────────────────────────────
+
+interface CalendlyStatus {
+  connected: boolean;
+  user_name?: string;
+  user_email?: string;
+  event_count?: number;
+  webhook_registered?: boolean;
+  error?: string;
+}
+
+function CalendlyCard() {
+  const [status, setStatus] = useState<'loading' | 'connected' | 'disconnected'>('loading');
+  const [info, setInfo] = useState<CalendlyStatus>({ connected: false });
+  const [token, setToken] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const flash = (ok: boolean, text: string) => {
+    setMsg({ ok, text });
+    setTimeout(() => setMsg(null), 4000);
+  };
+
+  const load = useCallback(async () => {
+    setStatus('loading');
+    try {
+      const r = await fetch('/api/integrations/calendly/status', { cache: 'no-store' });
+      const d = await r.json() as CalendlyStatus;
+      setInfo(d);
+      setStatus(d.connected ? 'connected' : 'disconnected');
+    } catch {
+      setStatus('disconnected');
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function connect() {
+    if (!token.trim()) { flash(false, 'Paste your Calendly Personal Access Token first.'); return; }
+    setConnecting(true); setMsg(null);
+    try {
+      const r = await fetch('/api/integrations/calendly/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: token.trim() }),
+      });
+      const d = await r.json() as { connected?: boolean; user_name?: string; user_email?: string; error?: string };
+      if (!r.ok) { flash(false, d.error ?? 'Connection failed.'); return; }
+      setToken('');
+      setInfo({ connected: true, user_name: d.user_name, user_email: d.user_email });
+      setStatus('connected');
+      flash(true, 'Calendly connected successfully.');
+    } catch {
+      flash(false, 'Network error — check your connection and try again.');
+    } finally { setConnecting(false); }
+  }
+
+  async function syncNow() {
+    setSyncing(true); setMsg(null);
+    try {
+      const r = await fetch('/api/integrations/calendly/sync', { method: 'POST' });
+      if (r.ok) { flash(true, 'Sync complete — your calendar is up to date.'); void load(); }
+      else { const d = await r.json() as { error?: string }; flash(false, d.error ?? 'Sync failed.'); }
+    } catch {
+      flash(false, 'Network error.');
+    } finally { setSyncing(false); }
+  }
+
+  async function disconnect() {
+    if (!confirm('Disconnect Calendly? Bookings will no longer sync in real time.')) return;
+    setDisconnecting(true);
+    try {
+      await fetch('/api/integrations/calendly/disconnect', { method: 'POST' });
+      setInfo({ connected: false });
+      setStatus('disconnected');
+      flash(true, 'Calendly disconnected.');
+    } finally { setDisconnecting(false); }
+  }
+
+  const isLoading = status === 'loading';
+  const isConnected = status === 'connected';
+
+  return (
+    <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      {/* Header row */}
+      <div className="px-6 py-5 flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50">
+          <CalendarClock size={22} className="text-blue-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Calendly</h2>
+            {isLoading ? (
+              <Loader2 size={13} className="animate-spin text-gray-400" />
+            ) : isConnected ? (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">Connected</span>
+            ) : (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">Not connected</span>
+            )}
+          </div>
+
+          {/* Connected state */}
+          {isConnected && (
+            <div className="mt-3 space-y-3">
+              <div className="space-y-1 text-xs text-gray-500">
+                {info.user_name && (
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck size={13} className="text-emerald-500 shrink-0" />
+                    <span>Account: <strong className="text-gray-700">{info.user_name}</strong></span>
+                  </div>
+                )}
+                {info.user_email && (
+                  <div className="flex items-center gap-2">
+                    <span className="ml-[21px] text-gray-400">{info.user_email}</span>
+                  </div>
+                )}
+                {typeof info.event_count === 'number' && (
+                  <div className="flex items-center gap-2">
+                    <span className="ml-[21px]">{info.event_count} upcoming event{info.event_count !== 1 ? 's' : ''} synced</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => void syncNow()}
+                  disabled={syncing}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-all"
+                >
+                  {syncing ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                  Sync now
+                </button>
+                <button
+                  onClick={() => void disconnect()}
+                  disabled={disconnecting}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60 transition-all"
+                >
+                  {disconnecting ? <Loader2 size={13} className="animate-spin" /> : <Unlink size={13} />}
+                  Disconnect
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Disconnected state */}
+          {!isConnected && !isLoading && (
+            <div className="mt-3 space-y-3">
+              <p className="text-sm text-gray-500 leading-relaxed">
+                Automatically sync tour bookings from Calendly into your calendar and lead pipeline.
+                When a bride books a tour, her lead moves to Booked Tours and AI follow-up pauses.
+              </p>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Personal Access Token
+                  <a
+                    href="https://calendly.com/integrations/api_webhooks"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-2 font-normal text-sky-600 hover:text-sky-800 inline-flex items-center gap-0.5"
+                  >
+                    Find your token <ExternalLink size={10} />
+                  </a>
+                </label>
+                <input
+                  type="text"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="Paste your Calendly Personal Access Token"
+                  className="w-full max-w-md rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors font-mono"
+                />
+                <p className="mt-1 text-[11px] text-gray-400">
+                  Find your token at{' '}
+                  <a
+                    href="https://calendly.com/integrations/api_webhooks"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sky-600 hover:underline"
+                  >
+                    calendly.com/integrations/api_webhooks
+                  </a>{' '}
+                  → Personal Access Tokens
+                </p>
+              </div>
+              <button
+                onClick={() => void connect()}
+                disabled={connecting || !token.trim()}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-all"
+              >
+                {connecting ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
+                {connecting ? 'Connecting…' : 'Connect Calendly'}
+              </button>
+            </div>
+          )}
+
+          {/* Feedback message */}
+          {msg && (
+            <div className={`mt-3 flex items-center gap-1.5 text-sm font-medium ${msg.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+              {msg.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+              {msg.text}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Capabilities */}
+      <div className="border-t border-gray-100 px-6 py-4 text-sm text-gray-500">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-2">What Calendly does</span>
+        <ul className="space-y-1.5">
+          <li className="flex items-start gap-2">
+            <CheckCircle2 size={13} className="text-emerald-500 mt-0.5 shrink-0" />
+            <span><strong className="text-gray-700">Real-time booking sync</strong> — new bookings appear in your Calendar instantly</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 size={13} className="text-emerald-500 mt-0.5 shrink-0" />
+            <span><strong className="text-gray-700">Lead pipeline update</strong> — matching leads auto-advance to &ldquo;Booked Tours&rdquo;</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 size={13} className="text-emerald-500 mt-0.5 shrink-0" />
+            <span><strong className="text-gray-700">AI pause</strong> — follow-up sequences pause when a tour is booked</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <AlertCircle size={13} className="text-gray-400 mt-0.5 shrink-0" />
+            <span className="text-gray-400">Cannot block dates in Calendly from StoryVenue (Calendly read-only)</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <AlertCircle size={13} className="text-gray-400 mt-0.5 shrink-0" />
+            <span className="text-gray-400">Cannot reschedule or create bookings from StoryVenue</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function IntegrationsPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -376,6 +612,9 @@ export default function IntegrationsPage() {
 
       {/* ── Tripleseat card ──────────────────────────────────────────── */}
       <TripleseatCard />
+
+      {/* ── Calendly card ────────────────────────────────────────────── */}
+      <CalendlyCard />
 
       {/* ── Zapier card ──────────────────────────────────────────────── */}
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">

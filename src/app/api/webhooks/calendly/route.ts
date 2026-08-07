@@ -109,6 +109,70 @@ export async function POST(request: NextRequest) {
                       ${`${eventName ?? 'Event'} on ${new Date(startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`})
             `;
           }
+
+          // Feature 1: Lead matching + pipeline stage move
+          const [matchingLead] = await sql`
+            SELECT l.id AS lead_id, l.stage_id, l.pipeline_id, l.ai_state
+            FROM leads l
+            JOIN lead_pipeline_stages lps ON lps.id = l.stage_id
+            WHERE l.venue_id = ${venueId}
+              AND lower(l.email) = lower(${inviteeEmail})
+              AND lps.kind NOT IN ('won', 'lost')
+            ORDER BY l.updated_at DESC
+            LIMIT 1
+          `;
+
+          if (matchingLead) {
+            // Find the "Booked Tours" stage in this venue's default pipeline
+            const [bookedToursStage] = await sql`
+              SELECT lps.id
+              FROM lead_pipeline_stages lps
+              JOIN lead_pipelines lp ON lp.id = lps.pipeline_id
+              WHERE lp.venue_id = ${venueId}
+                AND lp.is_default = true
+                AND (
+                  lps.name ILIKE '%booked%tour%'
+                  OR lps.name ILIKE '%tour%booked%'
+                )
+              LIMIT 1
+            `;
+
+            if (bookedToursStage) {
+              await sql`
+                UPDATE leads
+                SET stage_id = ${bookedToursStage.id}, updated_at = now()
+                WHERE id = ${matchingLead.lead_id} AND venue_id = ${venueId}
+              `;
+
+              await sql`
+                INSERT INTO lead_activity_log (venue_id, lead_id, actor_member_id, actor_is_owner, action, details)
+                VALUES (
+                  ${venueId}, ${matchingLead.lead_id}, NULL, false,
+                  'stage_changed',
+                  ${JSON.stringify({ notes: 'Stage moved to Booked Tours — tour booked via Calendly', via: 'calendly_webhook' })}::jsonb
+                )
+              `;
+            }
+
+            // Feature 2: Pause AI sequence if not already in a terminal state
+            const terminalStates = ['opted_out', 'paused', 'exhausted', 'handoff'];
+            if (!terminalStates.includes(matchingLead.ai_state as string)) {
+              await sql`
+                UPDATE leads
+                SET ai_state = 'paused', ai_next_send_at = NULL, updated_at = now()
+                WHERE id = ${matchingLead.lead_id} AND venue_id = ${venueId}
+              `;
+
+              await sql`
+                INSERT INTO lead_activity_log (venue_id, lead_id, actor_member_id, actor_is_owner, action, details)
+                VALUES (
+                  ${venueId}, ${matchingLead.lead_id}, NULL, false,
+                  'ai_paused',
+                  ${JSON.stringify({ notes: 'AI follow-up paused — tour booked via Calendly', via: 'calendly_webhook' })}::jsonb
+                )
+              `;
+            }
+          }
         }
       }
     } else if (eventType === 'invitee.canceled') {
