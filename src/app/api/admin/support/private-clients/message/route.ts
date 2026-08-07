@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
 
   const { data: venueRow } = await supabaseAdmin
     .from('venues')
-    .select('id, name, slug, email, notification_email, notification_phone, phone, ghl_access_token, ghl_location_id, ghl_connected, owner_id, is_private_client')
+    .select('id, name, slug, email, notification_email, notification_phone, phone, ghl_access_token, ghl_location_id, ghl_connected, owner_id, is_private_client, venue_concierge')
     .eq('id', venueId)
     .maybeSingle();
   if (!venueRow) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
@@ -113,8 +113,16 @@ export async function POST(req: NextRequest) {
     id: string; name: string | null; slug: string | null; email: string | null;
     notification_email: string | null; notification_phone: string | null; phone: string | null;
     ghl_access_token: string | null; ghl_location_id: string | null; ghl_connected: boolean | null;
-    owner_id: string | null; is_private_client: boolean | null;
+    owner_id: string | null; is_private_client: boolean | null; venue_concierge: boolean | null;
   };
+
+  // Feature gate: concierge routing requires BOTH is_private_client AND venue_concierge.
+  if (!venue.is_private_client || !venue.venue_concierge) {
+    return NextResponse.json(
+      { error: 'Venue Concierge is not enabled for this venue. Both Private Client and Venue Concierge flags must be active.' },
+      { status: 403 },
+    );
+  }
 
   // Resolve recipient
   let recipientLabel = '';

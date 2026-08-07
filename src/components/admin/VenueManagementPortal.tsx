@@ -62,6 +62,9 @@ export type AdminVenueRow = Record<string, unknown> & {
   /** Flags this venue as a white-glove private client — surfaces the venue +
    *  owner + team roster in Support Inbox → Private Clients. */
   is_private_client?: boolean | null;
+  /** Feature flag: enables full concierge routing (bride replies → support
+   *  inbox). Requires BOTH is_private_client AND venue_concierge = true. */
+  venue_concierge?: boolean | null;
   directory_subscription_status?: string | null;
   directory_trial_ends_at?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
@@ -258,6 +261,7 @@ function AddonCheckboxes({
   const adminDisabled = venue.ai_concierge_admin_disabled === true;
   const smsOverrideOn = venue.sms_admin_override === true;
   const privateClientOn = venue.is_private_client === true;
+  const venueConciergeOn = venue.venue_concierge === true;
 
   // Effective (displayed) states — plan-included addons show as checked
   // automatically (single source of truth with the plan assignment).
@@ -340,22 +344,56 @@ function AddonCheckboxes({
 
       {/* Private Client — tags this venue for the concierge team's watch list.
           Checking it surfaces the venue + owner + team roster in Support
-          Inbox → Private Clients for quick outbound contact. Purely a
-          support-side tag; has no effect on plan, billing, or entitlements. */}
+          Inbox → Private Clients for quick outbound contact. Also auto-enables
+          Landing Page Mode. Purely a tracking tag; does not activate concierge
+          routing on its own (also requires Venue Concierge). */}
       <label
         className={`inline-flex items-center gap-1 text-[11px] ${busy ? 'opacity-50' : 'cursor-pointer'}`}
-        title="Show this venue in Support Inbox → Private Clients (concierge team's watch list)"
+        title="Show this venue in Support Inbox → Private Clients (concierge team's watch list). Auto-enables Landing Page Mode."
       >
         <input
           type="checkbox"
           checked={privateClientOn}
           disabled={busy}
-          onChange={(e) => void onPatch(venue.id, { is_private_client: e.target.checked })}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            void onPatch(venue.id, {
+              is_private_client: checked,
+              ...(checked ? { landing_page_mode: true } : {}),
+            });
+          }}
           className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
         />
         <span className="font-medium text-gray-600">Private Client</span>
         {privateClientOn && (
           <span className="rounded-full bg-amber-50 border border-amber-200 px-1 py-0 text-[8px] font-semibold text-amber-700 leading-tight">WATCHED</span>
+        )}
+      </label>
+
+      {/* Venue Concierge — feature flag that enables full concierge routing.
+          BOTH Private Client AND Venue Concierge must be on for concierge
+          features to activate (bride replies → support inbox, team handoffs). */}
+      <label
+        className={`inline-flex items-center gap-1 text-[11px] ${busy ? 'opacity-50' : 'cursor-pointer'}`}
+        title={
+          !privateClientOn
+            ? 'Enable Private Client first — Venue Concierge requires both flags'
+            : 'Enable full concierge routing: bride replies route to support inbox, team can manage/handoff conversations'
+        }
+      >
+        <input
+          type="checkbox"
+          checked={venueConciergeOn}
+          disabled={busy}
+          onChange={(e) => void onPatch(venue.id, { venue_concierge: e.target.checked })}
+          className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
+        />
+        <span className={`font-medium ${!privateClientOn ? 'text-gray-400' : 'text-gray-600'}`}>Venue Concierge</span>
+        {venueConciergeOn && privateClientOn && (
+          <span className="rounded-full bg-emerald-50 border border-emerald-200 px-1 py-0 text-[8px] font-semibold text-emerald-700 leading-tight">ACTIVE</span>
+        )}
+        {venueConciergeOn && !privateClientOn && (
+          <span className="rounded-full bg-orange-50 border border-orange-200 px-1 py-0 text-[8px] font-semibold text-orange-600 leading-tight">NEEDS PC</span>
         )}
       </label>
     </div>

@@ -35,6 +35,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     /** Concierge-team watch-list tag. Surfaces the venue in Support Inbox →
      *  Private Clients; has no effect on plan/billing/entitlements. */
     is_private_client?: boolean;
+    /** Feature enablement: enables full concierge routing (bride replies →
+     *  support inbox, concierge team can manage/handoff). Requires BOTH
+     *  is_private_client AND venue_concierge to be true to activate. */
+    venue_concierge?: boolean;
   };
   try {
     body = await request.json();
@@ -191,8 +195,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   // ── Private Client watch-list tag ─────────────────────────────────────────
+  // Side effect: enabling Private Client also auto-enables Landing Page Mode.
   if (typeof body.is_private_client === 'boolean') {
     updates.is_private_client = body.is_private_client;
+    if (body.is_private_client === true) {
+      updates.landing_page_mode = true;
+    }
+  }
+
+  // ── Venue Concierge feature flag ──────────────────────────────────────────
+  // Requires BOTH is_private_client AND venue_concierge to activate routing.
+  if (typeof body.venue_concierge === 'boolean') {
+    updates.venue_concierge = body.venue_concierge;
   }
 
   // If a plan change was applied via the helper but no other fields were

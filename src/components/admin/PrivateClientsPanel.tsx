@@ -47,6 +47,7 @@ interface PrivateClientVenue {
   planName: string | null;
   subscriptionStatus: string | null;
   ghlConnected: boolean;
+  venueConcierge: boolean;
   owner: OwnerInfo;
   teamMembers: TeamMemberInfo[];
 }
@@ -191,7 +192,14 @@ export function PrivateClientsPanel({
                     {initials(v.name)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{v.name}</p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{v.name}</p>
+                      {v.venueConcierge ? (
+                        <span className="shrink-0 rounded-full bg-emerald-100 border border-emerald-200 px-1.5 py-0 text-[9px] font-semibold text-emerald-700 leading-tight whitespace-nowrap">Concierge ✓</span>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-gray-100 border border-gray-200 px-1.5 py-0 text-[9px] font-medium text-gray-400 leading-tight whitespace-nowrap">No Concierge</span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-gray-500 truncate">
                       {v.planName || 'No plan'}
                       {v.teamMembers.length > 0 && <> · {v.teamMembers.length} team member{v.teamMembers.length === 1 ? '' : 's'}</>}
@@ -270,6 +278,11 @@ function VenueDetail({ venue, supportUserId }: { venue: PrivateClientVenue; supp
           <h3 className="font-heading text-base text-gray-900">{venue.name}</h3>
           {venue.planName && (
             <span className="rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-[10px] font-semibold">{venue.planName}</span>
+          )}
+          {venue.venueConcierge ? (
+            <span className="rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 text-[10px] font-semibold">Concierge ✓</span>
+          ) : (
+            <span className="rounded-full bg-gray-50 border border-gray-200 text-gray-400 px-2 py-0.5 text-[10px] font-medium">No Concierge</span>
           )}
           {!venue.ghlConnected && (
             <span className="rounded-full bg-gray-50 border border-gray-200 text-gray-500 px-2 py-0.5 text-[10px] font-medium">No GHL connection · SMS unavailable</span>

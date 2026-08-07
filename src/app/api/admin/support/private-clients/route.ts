@@ -28,6 +28,7 @@ interface VenueRow {
   owner_id: string | null;
   directory_plan_id: string | null;
   directory_subscription_status: string | null;
+  venue_concierge: boolean | null;
 }
 
 interface TeamMemberRow {
@@ -50,7 +51,7 @@ export async function GET() {
   const { data: venuesRaw, error } = await supabaseAdmin
     .from('venues')
     .select(
-      'id, name, slug, email, notification_email, notification_phone, ghl_connected, owner_id, directory_plan_id, directory_subscription_status',
+      'id, name, slug, email, notification_email, notification_phone, ghl_connected, owner_id, directory_plan_id, directory_subscription_status, venue_concierge',
     )
     .eq('is_private_client', true)
     .order('name', { ascending: true });
@@ -125,6 +126,7 @@ export async function GET() {
       planName: v.directory_plan_id ? planNameById.get(v.directory_plan_id) ?? null : null,
       subscriptionStatus: v.directory_subscription_status,
       ghlConnected: Boolean(v.ghl_connected),
+      venueConcierge: Boolean(v.venue_concierge),
       owner: {
         name: ownerName,
         email: ownerEmail,
