@@ -96,6 +96,14 @@ export async function POST(
     supportUserId?: string;
     status?:        'open' | 'pending' | 'closed';
     attachments?:   SupportAttachment[];
+    /** Email subject override — when set, replaces the auto-derived "Re: {ticket subject}" */
+    subject?:       string;
+    /** Override the outbound To: recipients (array of email addresses) */
+    to?:            string[];
+    /** CC recipients */
+    cc?:            string[];
+    /** BCC recipients */
+    bcc?:           string[];
   };
   try {
     body = await req.json();
@@ -227,8 +235,16 @@ export async function POST(
       contact_email: string | null;
       opened_by_member_id: string | null;
     };
-    const to = await resolveTicketRecipientEmail(ticketFull);
-    if (!to) {
+
+    // Resolve To: — caller-supplied override takes precedence, then fall back
+    // to the ticket's contact email resolved from the DB.
+    const callerTo = Array.isArray(body.to) ? body.to.map(s => s.trim()).filter(Boolean) : [];
+    let resolvedTo: string | null = null;
+    if (callerTo.length === 0) {
+      resolvedTo = await resolveTicketRecipientEmail(ticketFull);
+    }
+    const toAddresses: string[] = callerTo.length > 0 ? callerTo : (resolvedTo ? [resolvedTo] : []);
+    if (toAddresses.length === 0) {
       console.warn('[tickets/reply] no recipient email resolved — skipping outbound email', { ticketId });
       return;
     }
@@ -240,8 +256,14 @@ export async function POST(
       );
     }
 
-    const subjectBase = ticketFull.subject || 'Support request';
-    const subject = /^re:/i.test(subjectBase) ? subjectBase : `Re: ${subjectBase}`;
+    // Subject: use caller-supplied value if non-empty, otherwise auto-derive from ticket subject.
+    const subjectBase = body.subject?.trim() || ticketFull.subject || 'Support request';
+    const subject = body.subject?.trim()
+      ? body.subject.trim()
+      : (/^re:/i.test(subjectBase) ? subjectBase : `Re: ${subjectBase}`);
+
+    const ccAddresses = Array.isArray(body.cc) ? body.cc.map(s => s.trim()).filter(Boolean) : [];
+    const bccAddresses = Array.isArray(body.bcc) ? body.bcc.map(s => s.trim()).filter(Boolean) : [];
 
     const attachmentsListHtml = attachments.length
       ? `<p style="font-size:13px;color:#374151;margin:12px 0 0">${attachments.length} attachment(s): ${attachments
@@ -266,7 +288,9 @@ ${attachmentsListHtml}
 </div>`;
 
     const result = await sendEmail({
-      to,
+      to: toAddresses.length === 1 ? toAddresses[0] : toAddresses,
+      cc: ccAddresses.length ? ccAddresses : undefined,
+      bcc: bccAddresses.length ? bccAddresses : undefined,
       replyTo,
       subject,
       html,

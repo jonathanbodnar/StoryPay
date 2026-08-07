@@ -235,7 +235,7 @@ export async function sendEmail({
   headers,
   attachments,
 }: {
-  to: string;
+  to: string | string[];
   cc?: string[];
   bcc?: string[];
   replyTo?: string;
@@ -301,7 +301,7 @@ export async function sendEmail({
     try {
       const body: Record<string, unknown> = {
         from: fromHdr,
-        to: [to.trim()],
+        to: Array.isArray(to) ? to.map(t => t.trim()).filter(Boolean) : [to.trim()],
         subject,
         html,
         text: textBody,
@@ -358,7 +358,7 @@ export async function sendEmail({
       try {
         const body: Record<string, unknown> = {
           from: retryFromHeader,
-          to: [to.trim()],
+          to: Array.isArray(to) ? to.map(t => t.trim()).filter(Boolean) : [to.trim()],
           subject,
           html,
           text: textBody,

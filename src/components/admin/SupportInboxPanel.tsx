@@ -2076,6 +2076,80 @@ function CrossChannelBanner({
   );
 }
 
+/**
+ * Simple tag-style email input. Type an address, press Enter or comma (or blur)
+ * to convert to a removable pill. Used for To/CC/BCC in the ticket reply composer.
+ */
+function TagInput({
+  tags,
+  onChange,
+  placeholder,
+  disabled,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function addTag(val: string) {
+    const email = val.trim().toLowerCase();
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    if (!tags.includes(email)) onChange([...tags, email]);
+    setInputValue('');
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTag(inputValue);
+    } else if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
+      onChange(tags.slice(0, -1));
+    }
+  }
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1 min-h-[24px] flex-1 cursor-text"
+      onClick={() => !disabled && inputRef.current?.focus()}
+    >
+      {tags.map(tag => (
+        <span
+          key={tag}
+          className="inline-flex items-center gap-0.5 rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[11px] text-gray-800"
+        >
+          {tag}
+          {!disabled && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onChange(tags.filter(t => t !== tag)); }}
+              className="ml-0.5 text-gray-400 hover:text-gray-700 leading-none"
+              aria-label={`Remove ${tag}`}
+            >
+              <X size={10} />
+            </button>
+          )}
+        </span>
+      ))}
+      {!disabled && (
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          onChange={e => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => { if (inputValue.trim()) addTag(inputValue); }}
+          placeholder={tags.length === 0 ? (placeholder ?? '') : ''}
+          className="flex-1 min-w-[140px] text-sm outline-none bg-transparent placeholder-gray-400"
+        />
+      )}
+    </div>
+  );
+}
+
 function ComposerTabButton({
   active, onClick, icon, label, tone,
 }: {
@@ -2933,6 +3007,11 @@ function TicketsView({
 
   // Reply
   const [replyBody, setReplyBody] = useState('');
+  const [replySubject, setReplySubject] = useState('');
+  const [replyTo, setReplyTo] = useState<string[]>([]);
+  const [replyCc, setReplyCc] = useState<string[]>([]);
+  const [replyBcc, setReplyBcc] = useState<string[]>([]);
+  const [showCcBcc, setShowCcBcc] = useState(false);
   const [ticketAttachments, setTicketAttachments] = useState<SupportAttachment[]>([]);
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -2940,9 +3019,24 @@ function TicketsView({
 
   useEffect(() => {
     setReplyBody('');
+    setReplySubject('');
+    setReplyTo([]);
+    setReplyCc([]);
+    setReplyBcc([]);
+    setShowCcBcc(false);
     setTicketAttachments([]);
     setSendStatus(null);
   }, [activeTicketId]);
+
+  // Pre-fill subject and To when ticket detail loads
+  useEffect(() => {
+    if (!detail) return;
+    const sub = detail.ticket.subject || '';
+    setReplySubject(/^re:/i.test(sub) ? sub : `Re: ${sub}`);
+    const toEmail = detail.ticket.contact_email?.trim() || detail.opener.email?.trim() || '';
+    setReplyTo(toEmail ? [toEmail] : []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.ticket.id]);
 
   const supportUserId = me?.member?.id || actAsId;
   const actAsName = teamMembers.find(m => m.id === actAsId)?.name || me?.member?.name || null;
@@ -2961,6 +3055,10 @@ function TicketsView({
         body: JSON.stringify({
           body:          replyBody.trim(),
           bodyHtml:      markdownLiteToHtml(replyBody.trim()),
+          subject:       replySubject.trim() || undefined,
+          to:            replyTo.length ? replyTo : undefined,
+          cc:            replyCc.length ? replyCc : undefined,
+          bcc:           replyBcc.length ? replyBcc : undefined,
           supportUserId: me?.superAdmin ? supportUserId : undefined,
           attachments:   ticketAttachments.length ? ticketAttachments : undefined,
         }),
@@ -3283,62 +3381,131 @@ function TicketsView({
             </div>
 
             {/* Reply box */}
-            <div className="border-t border-gray-200 bg-white p-3 space-y-2">
-              {detail.ticket.status === 'closed' && (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                  This ticket is closed. Reopen it to send a reply.
-                </div>
-              )}
-              {!supportUserId && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-center gap-2">
-                  <AlertCircle size={12} /> Pick a support identity above before sending.
-                </div>
-              )}
-              {sendStatus && (
-                <div className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 ${
-                  sendStatus.ok
-                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-                    : 'border border-red-200 bg-red-50 text-red-700'
-                }`}>
-                  {sendStatus.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-                  {sendStatus.msg}
-                </div>
-              )}
-              <div className="flex items-center justify-between">
-                {detail.ticket.status !== 'closed'
-                  ? <RichTextToolbar textareaRef={ticketReplyTextareaRef} value={replyBody} onChange={setReplyBody} />
-                  : <span />}
-                <PresencePill agents={othersViewingTicket} />
-              </div>
-              <textarea
-                ref={ticketReplyTextareaRef}
-                value={replyBody}
-                onChange={e => setReplyBody(e.target.value)}
-                placeholder={detail.ticket.status === 'closed' ? 'Ticket is closed' : 'Reply to this ticket…'}
-                rows={3}
-                disabled={detail.ticket.status === 'closed'}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300 disabled:bg-gray-50 disabled:cursor-not-allowed"
-              />
+            <div className="border-t border-gray-200 bg-white">
+              {/* Email client–style header rows */}
               {detail.ticket.status !== 'closed' && (
-                <AttachmentComposerBar
-                  scope="ticket"
-                  scopeId={detail.ticket.id}
-                  attachments={ticketAttachments}
-                  onChange={setTicketAttachments}
-                  disabled={sending}
-                />
+                <div className="text-sm select-none">
+                  {/* From */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-100">
+                    <span className="w-14 shrink-0 text-[11px] font-medium text-gray-400">From</span>
+                    <span className="text-xs text-gray-500">support@storyvenue.com</span>
+                  </div>
+                  {/* To */}
+                  <div className="flex items-start gap-2 px-3 py-1.5 border-b border-gray-100">
+                    <span className="w-14 shrink-0 text-[11px] font-medium text-gray-400 pt-0.5">To</span>
+                    <TagInput
+                      tags={replyTo}
+                      onChange={setReplyTo}
+                      placeholder="recipient@example.com"
+                      disabled={sending}
+                    />
+                  </div>
+                  {/* Subject */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-100">
+                    <span className="w-14 shrink-0 text-[11px] font-medium text-gray-400">Subject</span>
+                    <input
+                      type="text"
+                      value={replySubject}
+                      onChange={e => setReplySubject(e.target.value)}
+                      disabled={sending}
+                      className="flex-1 text-sm outline-none bg-transparent disabled:opacity-60"
+                    />
+                  </div>
+                  {/* CC / BCC toggle */}
+                  {!showCcBcc ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-100">
+                      <span className="w-14 shrink-0" />
+                      <button
+                        type="button"
+                        onClick={() => setShowCcBcc(true)}
+                        className="text-[11px] text-gray-400 hover:text-gray-700 transition-colors"
+                      >
+                        CC BCC
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start gap-2 px-3 py-1.5 border-b border-gray-100">
+                        <span className="w-14 shrink-0 text-[11px] font-medium text-gray-400 pt-0.5">CC</span>
+                        <TagInput
+                          tags={replyCc}
+                          onChange={setReplyCc}
+                          placeholder="cc@example.com"
+                          disabled={sending}
+                        />
+                      </div>
+                      <div className="flex items-start gap-2 px-3 py-1.5 border-b border-gray-100">
+                        <span className="w-14 shrink-0 text-[11px] font-medium text-gray-400 pt-0.5">BCC</span>
+                        <TagInput
+                          tags={replyBcc}
+                          onChange={setReplyBcc}
+                          placeholder="bcc@example.com"
+                          disabled={sending}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
-              <div className="flex items-center justify-end">
-                <button
-                  type="button"
-                  onClick={send}
-                  disabled={!canSend}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ backgroundColor: BRAND }}
-                >
-                  {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                  {sending ? 'Sending…' : 'Send reply'}
-                </button>
+
+              {/* Compose area */}
+              <div className="p-3 space-y-2">
+                {detail.ticket.status === 'closed' && (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                    This ticket is closed. Reopen it to send a reply.
+                  </div>
+                )}
+                {!supportUserId && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-center gap-2">
+                    <AlertCircle size={12} /> Pick a support identity above before sending.
+                  </div>
+                )}
+                {sendStatus && (
+                  <div className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 ${
+                    sendStatus.ok
+                      ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'border border-red-200 bg-red-50 text-red-700'
+                  }`}>
+                    {sendStatus.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                    {sendStatus.msg}
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  {detail.ticket.status !== 'closed'
+                    ? <RichTextToolbar textareaRef={ticketReplyTextareaRef} value={replyBody} onChange={setReplyBody} />
+                    : <span />}
+                  <PresencePill agents={othersViewingTicket} />
+                </div>
+                <textarea
+                  ref={ticketReplyTextareaRef}
+                  value={replyBody}
+                  onChange={e => setReplyBody(e.target.value)}
+                  placeholder={detail.ticket.status === 'closed' ? 'Ticket is closed' : 'Reply to this ticket…'}
+                  rows={3}
+                  disabled={detail.ticket.status === 'closed'}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300 disabled:bg-gray-50 disabled:cursor-not-allowed"
+                />
+                {detail.ticket.status !== 'closed' && (
+                  <AttachmentComposerBar
+                    scope="ticket"
+                    scopeId={detail.ticket.id}
+                    attachments={ticketAttachments}
+                    onChange={setTicketAttachments}
+                    disabled={sending}
+                  />
+                )}
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={send}
+                    disabled={!canSend}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: BRAND }}
+                  >
+                    {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                    {sending ? 'Sending…' : 'Send reply'}
+                  </button>
+                </div>
               </div>
             </div>
           </>
