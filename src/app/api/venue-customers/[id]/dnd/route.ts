@@ -12,6 +12,7 @@ import { getVenueId } from '@/lib/auth-helpers';
 import {
   getGhlToken,
   updateGhlContactDnd,
+  isGhlDndOn,
   type GhlDndSettings,
   type GhlDndChannelSetting,
   type GhlInboundDndSettings,
@@ -39,10 +40,10 @@ export function ghlDndToConversationFlags(
   conversation_dnd_inbound_sms: boolean;
   conversation_dnd_all: boolean;
 } {
-  const emailDnd   = dndSettings?.['Email']?.status === 'active';
-  const smsDnd     = dndSettings?.['SMS']?.status   === 'active';
-  const callDnd    = dndSettings?.['Call']?.status  === 'active';
-  const inboundDnd = inboundDndSettings?.all?.status === 'active';
+  const emailDnd   = isGhlDndOn(dndSettings?.['Email']?.status);
+  const smsDnd     = isGhlDndOn(dndSettings?.['SMS']?.status);
+  const callDnd    = isGhlDndOn(dndSettings?.['Call']?.status);
+  const inboundDnd = isGhlDndOn(inboundDndSettings?.all?.status);
   const allDnd     = emailDnd && smsDnd && callDnd && inboundDnd;
   return {
     sms_dnd: smsDnd,
@@ -225,8 +226,8 @@ export async function PUT(
   // Auto-apply system tags when DND is enabled
   const contactEmail = (vc as { email?: string | null } | null)?.email;
   if (contactEmail) {
-    const smsDndActive = (newDndSettings as GhlDndSettings)?.SMS?.status === 'active';
-    const allDndActive = (newDndSettings as GhlDndSettings)?.Email?.status === 'active' && smsDndActive;
+    const smsDndActive = isGhlDndOn((newDndSettings as GhlDndSettings)?.SMS?.status);
+    const allDndActive = isGhlDndOn((newDndSettings as GhlDndSettings)?.Email?.status) && smsDndActive;
     ensureSystemTagsForVenue(venueId).then(() => {
       if (smsDndActive) applySystemTagByEmail(venueId, contactEmail, 'sms_opted_out').catch(() => {});
       if (allDndActive) applySystemTagByEmail(venueId, contactEmail, 'ghl_dnd_active').catch(() => {});

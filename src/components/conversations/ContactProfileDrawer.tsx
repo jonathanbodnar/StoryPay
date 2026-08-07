@@ -953,7 +953,7 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
                                 <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center text-gray-400 text-base leading-none">⊞</span> GBP
                               </span>
                               <input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-gray-900"
-                                checked={vc.ghl_dnd_settings?.['GMB']?.status === 'active'} disabled={dndSaving}
+                                checked={['active', 'permanent'].includes((vc.ghl_dnd_settings?.['GMB']?.status ?? '').toLowerCase())} disabled={dndSaving}
                                 onChange={async (e) => {
                                   setDndSaving(true);
                                   try {

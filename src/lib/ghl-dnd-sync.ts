@@ -186,11 +186,6 @@ export async function syncGhlDndForVenue(
       result.contactsScanned++;
       if (result.contactsScanned > maxContacts) break;
 
-      const hasDndData =
-        c.dnd === true ||
-        (c.dndSettings && Object.values(c.dndSettings).some((ch) => ch?.status === 'active')) ||
-        c.inboundDndSettings?.all?.status === 'active';
-
       // Always freshen the raw blobs for contacts that *have* any dnd object at all,
       // even if no channel is active (so the UI can show "no DND set in GHL").
       const hasAnyDndObject = c.dnd != null || c.dndSettings != null || c.inboundDndSettings != null;

@@ -589,11 +589,17 @@ export default function ContactProfilePanel({
   }
 
   // ── GHL DND helpers ─────────────────────────────────────────────────────────
+  // GHL reports STOP-keyword opt-outs as status "permanent" (not "active"),
+  // so treat both as DND-on.
+  function ghlDndOn(status?: string | null): boolean {
+    const s = (status ?? '').toLowerCase();
+    return s === 'active' || s === 'permanent';
+  }
   function isDndActive(channel: 'Call' | 'Email' | 'SMS' | 'WhatsApp' | 'GMB' | 'FB'): boolean {
-    return dndSettings?.[channel]?.status === 'active';
+    return ghlDndOn(dndSettings?.[channel]?.status);
   }
   function isInboundDndActive(): boolean {
-    return inboundDndSettings?.all?.status === 'active';
+    return ghlDndOn(inboundDndSettings?.all?.status);
   }
   function isAllDndActive(): boolean {
     const channels = ['Call', 'Email', 'SMS', 'WhatsApp', 'GMB', 'FB'] as const;

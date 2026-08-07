@@ -19,6 +19,7 @@ import {
   resolveLocationToken,
   classifyToken,
   fetchV1LocationApiKey,
+  isGhlDndOn,
 } from '@/lib/ghl';
 import { ensureLocationToken } from '@/lib/ghl-auth';
 import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
@@ -255,7 +256,7 @@ async function upsertContact(venueId: string, c: GhlContact): Promise<UpsertResu
   const fallbackFirst = firstName || (c.contactName?.split(' ')[0] ?? '') || 'Contact';
 
   // DND — derive our sms_dnd flag from GHL's SMS channel status
-  const smsDndFromGhl = c.dndSettings?.SMS?.status === 'active' || c.dnd === true;
+  const smsDndFromGhl = isGhlDndOn(c.dndSettings?.SMS?.status) || c.dnd === true;
   const ghlDndSettings = c.dndSettings ?? null;
   const ghlInboundDndSettings = c.inboundDndSettings ?? null;
 

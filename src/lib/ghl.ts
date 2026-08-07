@@ -1227,6 +1227,19 @@ export interface GhlInboundDndSettings {
 }
 
 /**
+ * Returns true if a GHL DND channel status means "blocked".
+ * GHL reports several non-"inactive" states as DND-on:
+ *   - "active"    — manually toggled DND
+ *   - "permanent" — permanent opt-out from a STOP keyword (TCPA)
+ * Anything else (including "inactive" or undefined) is treated as DND-off.
+ */
+export function isGhlDndOn(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toLowerCase();
+  return s === 'active' || s === 'permanent';
+}
+
+/**
  * Push DND changes for a single contact to GHL.
  *
  * Pass the full desired state of `dndSettings` and/or `inboundDndSettings`.
@@ -1241,9 +1254,9 @@ export async function updateGhlContactDnd(
 ): Promise<void> {
   const token = await resolveLocationToken(accessToken, locationId);
 
-  // Derive the master dnd flag: true when any outbound channel has status "active"
+  // Derive the master dnd flag: true when any outbound channel is DND-on
   const dndMaster = Object.values(dndSettings).some(
-    (ch) => (ch as GhlDndChannelSetting | undefined)?.status === 'active'
+    (ch) => isGhlDndOn((ch as GhlDndChannelSetting | undefined)?.status)
   );
 
   const body: Record<string, unknown> = {

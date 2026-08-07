@@ -7,6 +7,7 @@ import {
   parseGhlInboundSmsPayload,
 } from '@/lib/ghl-sms-conversations';
 import { syncSingleGhlContact } from '@/lib/ghl-contacts-sync';
+import { isGhlDndOn } from '@/lib/ghl';
 import { ghlDndToConversationFlags } from '@/app/api/venue-customers/[id]/dnd/route';
 import { runInboundGhlSmsSideEffects } from '@/lib/ghl-inbound-sms-side-effects';
 import { verifyGhlWebhookSignature } from '@/lib/ghl-webhook-verify';
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest) {
               if (!vc?.id) return;
 
               const nowIso = new Date().toISOString();
-              const smsDnd = (dndSettings as { SMS?: { status?: string } } | undefined)?.SMS?.status === 'active';
+              const smsDnd = isGhlDndOn((dndSettings as { SMS?: { status?: string } } | undefined)?.SMS?.status);
 
               const update: Record<string, unknown> = {
                 updated_at: nowIso,
