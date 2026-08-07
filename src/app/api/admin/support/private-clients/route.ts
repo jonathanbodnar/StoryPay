@@ -24,6 +24,7 @@ interface VenueRow {
   email: string | null;
   notification_email: string | null;
   notification_phone: string | null;
+  phone: string | null;
   ghl_connected: boolean | null;
   owner_id: string | null;
   directory_plan_id: string | null;
@@ -51,7 +52,7 @@ export async function GET() {
   const { data: venuesRaw, error } = await supabaseAdmin
     .from('venues')
     .select(
-      'id, name, slug, email, notification_email, notification_phone, ghl_connected, owner_id, directory_plan_id, directory_subscription_status, venue_concierge',
+      'id, name, slug, email, notification_email, notification_phone, phone, ghl_connected, owner_id, directory_plan_id, directory_subscription_status, venue_concierge',
     )
     .eq('is_private_client', true)
     .order('name', { ascending: true });
@@ -130,11 +131,11 @@ export async function GET() {
       owner: {
         name: ownerName,
         email: ownerEmail,
-        phone: v.notification_phone || null,
+        phone: v.notification_phone || v.phone || null,
         // SMS only works for the owner today — it rides the venue's own
         // GHL/A2P connection, and only the owner's phone is on file
         // (venue_team_members has no phone column yet).
-        smsAvailable: Boolean(v.ghl_connected && v.notification_phone),
+        smsAvailable: Boolean(v.ghl_connected && (v.notification_phone || v.phone)),
       },
       teamMembers: team,
     };
