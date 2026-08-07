@@ -550,6 +550,12 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                   <a href={`tel:${data.bride.phone}`} className="hover:underline">{data.bride.phone}</a>
                 </p>
               )}
+              {data.bride.lead_source && (
+                <p className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                  <span className="text-gray-400 shrink-0">Source:</span>
+                  <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">{data.bride.lead_source}</span>
+                </p>
+              )}
             </div>
 
             <div className="flex items-center gap-1 flex-wrap pt-1">
@@ -725,13 +731,8 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
               />
             )}
 
-            {data.bride.lead_source && (
-              <p className="text-[10px] text-gray-500">
-                <span className="text-gray-400">Source:</span> <span className="font-medium text-gray-700">{data.bride.lead_source}</span>
-              </p>
-            )}
             <p className="flex items-center gap-1 text-[10px] text-gray-500">
-              <Calendar size={9} /> Submitted {data.bride.submitted_at ? relativeTime(data.bride.submitted_at) : 'unknown'}
+              <Calendar size={9} /> Lead created {data.bride.submitted_at ? relativeTime(data.bride.submitted_at) : 'unknown'}
               {(() => {
                 const d = daysSince(data.bride.submitted_at);
                 if (d === null || d < 1) return null;

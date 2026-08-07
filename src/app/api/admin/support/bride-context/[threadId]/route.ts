@@ -217,7 +217,7 @@ export async function GET(
 
   // ── Phase 4: Lead rows ───────────────────────────────────────────────────
   const LEAD_FIELDS = `
-    id, first_name, last_name, email, phone, status, lead_source, created_at,
+    id, first_name, last_name, email, phone, status, source, referral_source, first_touch_utm, created_at,
     ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at,
     ai_attempt_count, ai_re_enable_count, ai_re_enabled_at,
     last_inbound_at, last_outbound_at,
@@ -417,6 +417,26 @@ export async function GET(
     is_system?: boolean; system_key?: string | null; category?: string | null;
   }>);
 
+  // Resolve a human-readable attribution label from the lead's raw source fields.
+  function resolveLeadSource(l: Record<string, unknown> | null): string | null {
+    if (!l) return null;
+    const utm = (l.first_touch_utm ?? {}) as Record<string, string>;
+    if (utm.fbclid)     return 'Facebook Ads';
+    if (utm.utm_source) return utm.utm_source.charAt(0).toUpperCase() + utm.utm_source.slice(1);
+    const ref = (l.referral_source as string | null) ?? null;
+    if (ref) {
+      try {
+        const host = new URL(ref).hostname.replace(/^www\./, '');
+        return host || ref;
+      } catch {
+        return ref;
+      }
+    }
+    const src = (l.source as string | null) ?? null;
+    if (!src || src === 'contact') return 'Direct';
+    return src.charAt(0).toUpperCase() + src.slice(1).replace(/_/g, ' ');
+  }
+
   return NextResponse.json({
     bride: {
       first_name:    (c?.first_name as string | null) ?? null,
@@ -426,7 +446,7 @@ export async function GET(
       sms_dnd:       Boolean(c?.sms_dnd),
       conversation_dnd_all: Boolean(c?.conversation_dnd_all),
       submitted_at:  (lead?.created_at as string | null) ?? (c?.created_at as string | null) ?? null,
-      lead_source:   (lead?.lead_source as string | null) ?? null,
+      lead_source:   resolveLeadSource(lead),
       lead_status:   (lead?.status as string | null) ?? null,
       message_count: messageCount ?? 0,
     },
