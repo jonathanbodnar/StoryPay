@@ -195,12 +195,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   // ── Private Client watch-list tag ─────────────────────────────────────────
-  // Side effect: enabling Private Client also auto-enables Landing Page Mode.
   if (typeof body.is_private_client === 'boolean') {
     updates.is_private_client = body.is_private_client;
-    if (body.is_private_client === true) {
-      updates.landing_page_mode = true;
-    }
   }
 
   // ── Venue Concierge feature flag ──────────────────────────────────────────
