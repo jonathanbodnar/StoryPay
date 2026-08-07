@@ -140,6 +140,11 @@ export function PrivateClientsPanel({
             <h3 className="font-heading text-sm text-gray-900 inline-flex items-center gap-1.5">
               <ShieldAlert size={14} className="text-amber-600" />
               Private Clients
+              {venues.length > 0 && (
+                <span className="inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold w-4 h-4 leading-none">
+                  {venues.length}
+                </span>
+              )}
             </h3>
             <button
               type="button"
