@@ -13,7 +13,12 @@ import {
   LEAD_SOURCE_ORDER,
   type LeadSourceBucket,
 } from '@/lib/lead-source';
-import { buildStageById, computeLeadFunnel, type LeadFunnelStageRow } from '@/lib/lead-funnel';
+import {
+  buildStageById,
+  computeLeadFunnel,
+  isUnworkedImportedContact,
+  type LeadFunnelStageRow,
+} from '@/lib/lead-funnel';
 import type {
   BookingReportData,
   SourceRow,
@@ -141,6 +146,9 @@ export async function compileBookingReport(venueId: string, days = 30): Promise<
   // all three consumers stay in lockstep — including the 5th "Qualified" step.
   const sourceCounts: Record<LeadSourceBucket, number> = { meta: 0, google: 0, direct: 0, other: 0 };
   for (const row of periodLeads) {
+    // Skip bulk-imported CRM contacts that were never worked so the report's
+    // lead count (and the $/lead value math) reflects genuine inquiries only.
+    if (isUnworkedImportedContact(row, funnelStageById)) continue;
     const bucket = bucketLeadSource({
       first_touch_utm: row.first_touch_utm,
       source: row.source,

@@ -7,6 +7,10 @@ export function isRealLeadEmail(email: string): boolean {
   if (!e || !e.includes('@')) return false;
   if (e.endsWith('@storypay.internal')) return false;
   if (e.includes('@ghl-sms.storypay.placeholder')) return false;
+  // GHL bulk-import placeholder addresses (contacts synced from a venue's CRM
+  // that had no real email). These are not genuine inquiries and must never be
+  // manufactured into pipeline leads.
+  if (e.includes('@ghl-import.storyvenue.placeholder')) return false;
   return true;
 }
 
@@ -169,8 +173,8 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
   // venue_customers gained pipeline_id + stage_id in migration 016. On older
   // databases those columns may not exist yet so we try with them first and
   // fall back to the basic contact fields if PostgREST rejects the query.
-  const vcSelectFull = 'customer_email, first_name, last_name, phone, pipeline_id, stage_id';
-  const vcSelectBasic = 'customer_email, first_name, last_name, phone';
+  const vcSelectFull = 'customer_email, first_name, last_name, phone, pipeline_id, stage_id, ghl_contact_id, ghl_synced_at';
+  const vcSelectBasic = 'customer_email, first_name, last_name, phone, ghl_contact_id, ghl_synced_at';
 
   const [{ data: pipelineRows }, { data: stageRows }, leadsResult, vcResult] =
     await Promise.all([
@@ -203,6 +207,8 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
     phone: string | null;
     pipeline_id?: string | null;
     stage_id?: string | null;
+    ghl_contact_id?: string | null;
+    ghl_synced_at?: string | null;
   }> | null;
   if (vcResult.error && /column .*pipeline_id|column .*stage_id/i.test(vcResult.error.message)) {
     const fallback = await supabaseAdmin
@@ -410,9 +416,21 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
     phone: string | null;
     pipeline_id?: string | null;
     stage_id?: string | null;
+    ghl_contact_id?: string | null;
+    ghl_synced_at?: string | null;
   }>) {
     const em = String(vc.customer_email || '').trim().toLowerCase();
     if (!isRealLeadEmail(em) || emailSet.has(em)) continue;
+
+    // Do NOT manufacture a pipeline lead out of a bulk-imported GHL contact.
+    // Genuine form/inquiry leads always own their own `leads` row (already
+    // skipped above via emailSet), so a contact that exists only because of the
+    // GHL contacts sync should stay a contact — otherwise every synced CRM
+    // record becomes a brand-new "lead" stamped with today's date and floods
+    // the funnel. Contacts that get deliberately worked (a stage assigned on
+    // the contact profile) still become leads via
+    // createLeadFromVenueCustomerIfMissing.
+    if (vc.ghl_contact_id || vc.ghl_synced_at) continue;
 
     let pid = (vc.pipeline_id ?? null) as string | null;
     let sid = (vc.stage_id ?? null) as string | null;

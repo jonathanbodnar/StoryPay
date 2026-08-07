@@ -26,6 +26,9 @@ export interface LeadFunnelStageRow extends LeadFunnelStageInfo {
 export interface LeadFunnelLeadRow {
   status: string | null;
   stage_id: string | null;
+  /** Origin of the lead. 'contact' rows are synthesized from imported CRM
+   *  contacts (GHL sync / kanban reconcile) and only count once worked. */
+  source?: string | null;
 }
 
 /** Which of the 5 funnel milestones a lead has reached, and whether it's lost. */
@@ -49,6 +52,26 @@ export function leadRank(
     return { rank: 2, lost };
   }
   return { rank: 1, lost };
+}
+
+/**
+ * True when a lead is a bulk-imported CRM contact that was never actually
+ * worked. These are synthesized (source='contact') from GHL contact imports /
+ * kanban reconcile with `created_at = now()`, so counting them massively
+ * inflates "Leads" (and dumps them all into "Today"). A contact only counts as
+ * a genuine funnel lead once it has advanced past the default Lead stage or
+ * been explicitly marked lost/not-interested (i.e. it was worked).
+ */
+export function isUnworkedImportedContact(
+  row: LeadFunnelLeadRow,
+  stageById: Map<string, LeadFunnelStageInfo>,
+): boolean {
+  if (row.source !== 'contact') return false;
+  const { rank, lost } = leadRank(
+    row.status ?? 'new',
+    row.stage_id ? stageById.get(row.stage_id) : undefined,
+  );
+  return rank < 2 && !lost;
 }
 
 export type LeadFunnelStepKey = 'leads' | 'conversations' | 'qualified' | 'tours' | 'weddings';
@@ -101,6 +124,7 @@ export function computeLeadFunnel(
   let weddings = 0;
 
   for (const row of leads) {
+    if (isUnworkedImportedContact(row, stageById)) continue;
     leadsCount += 1;
     const { rank, lost } = leadRank(row.status ?? 'new', row.stage_id ? stageById.get(row.stage_id) : undefined);
     if (rank >= 5) weddings += 1;

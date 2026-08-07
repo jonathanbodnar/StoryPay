@@ -7,7 +7,12 @@ import {
   LEAD_SOURCE_ORDER,
   type LeadSourceBucket,
 } from '@/lib/lead-source';
-import { buildStageById, computeLeadFunnel, type LeadFunnelStageRow } from '@/lib/lead-funnel';
+import {
+  buildStageById,
+  computeLeadFunnel,
+  isUnworkedImportedContact,
+  type LeadFunnelStageRow,
+} from '@/lib/lead-funnel';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -103,6 +108,9 @@ export async function GET(req: Request) {
   // the funnel math — every step and conversion % reflects just that slice.
   const filteredLeads: LeadRow[] = [];
   for (const row of (leads ?? []) as LeadRow[]) {
+    // Bulk-imported CRM contacts that were never worked are not genuine
+    // inquiries — exclude them from both the source breakdown and the funnel.
+    if (isUnworkedImportedContact(row, stageById)) continue;
     const bucket = bucketLeadSource({
       first_touch_utm: row.first_touch_utm,
       source: row.source,
