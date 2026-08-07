@@ -286,6 +286,46 @@ function formatBookingPillText(iso: string, variant: 'wedding' | 'appointment'):
   return `${month} ${day}${ord}, ${t}`;
 }
 
+// ─── Attribution helper ───────────────────────────────────────────────────────
+
+function resolveLeadSource(lead: Lead): string {
+  const utm = lead.first_touch_utm as Record<string, unknown> | null | undefined;
+
+  // 1. fbclid → paid Facebook / Instagram ad
+  if (utm && typeof utm.fbclid === 'string' && utm.fbclid) return 'Facebook Ads';
+
+  // 2. utm_source present → capitalize it
+  if (utm && typeof utm.utm_source === 'string' && utm.utm_source) {
+    const raw = utm.utm_source.trim();
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
+  // 3. referral_source → strip to hostname
+  if (lead.referral_source) {
+    try {
+      const url = new URL(
+        lead.referral_source.startsWith('http') ? lead.referral_source : `https://${lead.referral_source}`,
+      );
+      return url.hostname.replace(/^www\./, '');
+    } catch {
+      return lead.referral_source;
+    }
+  }
+
+  // 4. source field → humanize
+  const src = (lead.source ?? '').toLowerCase();
+  if (src === 'directory')     return 'Directory';
+  if (src === 'manual')        return 'Manual Entry';
+  if (src === 'form')          return 'Contact Form';
+  if (src === 'test_inquiry')  return 'Test';
+  if (src && src !== 'inquiry' && src !== 'direct') {
+    return src.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  // 5. fallback
+  return 'Direct';
+}
+
 // ─── Default empty draft for the new-lead form ───────────────────────────────
 
 type LeadDraft = {
@@ -1638,47 +1678,6 @@ function KanbanCard({
         </div>
       )}
 
-      {/* ── Source badge ────────────────────────────────────────────── */}
-      {(() => {
-        const utm = lead.first_touch_utm as Record<string, unknown> | null | undefined;
-        const fbclid = utm && typeof utm.fbclid === 'string' && utm.fbclid;
-        const utmSrc = utm && typeof utm.utm_source === 'string' ? utm.utm_source.toLowerCase() : '';
-        const utmMed = utm && typeof utm.utm_medium === 'string' ? utm.utm_medium.toLowerCase() : '';
-        const ref = utm && typeof utm.referrer === 'string' ? utm.referrer.toLowerCase() : '';
-        const src = lead.source?.toLowerCase() ?? '';
-
-        let bucket: string | null = null;
-        let label = '';
-        let cls = '';
-
-        if (fbclid) {
-          bucket = 'meta_paid';
-        } else if (utmSrc.includes('facebook') || utmSrc.includes('fb') || utmMed.includes('facebook') || utmSrc.includes('instagram') || utmMed.includes('instagram') || utmMed.includes('paid_social')) {
-          bucket = 'meta';
-        } else if (utmSrc.includes('google') || utmMed === 'cpc' || utmMed === 'ppc' || utmMed === 'search') {
-          bucket = 'google';
-        } else if (!utmSrc && (ref.includes('facebook.com') || ref.includes('instagram.com') || ref.includes('fb.com') || ref.includes('l.facebook'))) {
-          bucket = 'meta';
-        } else if (!utmSrc && ref.includes('google.')) {
-          bucket = 'google';
-        } else if (utmSrc || src === 'form' || src === 'directory') {
-          bucket = 'direct';
-        }
-
-        if (!bucket) return null;
-
-        if (bucket === 'meta_paid') { label = 'Meta — Paid Ad'; cls = 'border-blue-300 bg-blue-100 text-blue-800'; }
-        else if (bucket === 'meta')  { label = 'Meta';            cls = 'border-blue-200 bg-blue-50 text-blue-700'; }
-        else if (bucket === 'google'){ label = 'Google';          cls = 'border-amber-200 bg-amber-50 text-amber-700'; }
-        else                         { label = 'Direct';          cls = 'border-gray-200 bg-gray-50 text-gray-500'; }
-
-        void cls;
-        return (
-          <p className="mt-1 text-[10px] text-gray-400">
-            Source: {label}
-          </p>
-        );
-      })()}
 
       {/* ── Action buttons ──────────────────────────────────────────── */}
       <div
@@ -1792,6 +1791,9 @@ function KanbanCard({
       )}
       <div className="mt-1.5 text-[10px] text-gray-400">
         Lead Created: {formatShortDate(lead.created_at, venueTz)}
+      </div>
+      <div className="mt-0.5 text-[10px] text-gray-400">
+        Source: {resolveLeadSource(lead)}
       </div>
     </div>
   );
