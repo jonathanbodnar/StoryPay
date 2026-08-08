@@ -828,7 +828,7 @@ export default function ListingAnalyticsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/listing-analytics?from=${range.from}&to=${range.to}`, { cache: 'no-store' });
+      const res = await fetch(`/api/listing-analytics?from=${range.from}&to=${range.to}&tzOffset=${new Date().getTimezoneOffset()}`, { cache: 'no-store' });
       if (!res.ok) { setError('Could not load analytics'); return; }
       setData(await res.json() as AnalyticsPayload);
     } catch {
@@ -862,7 +862,7 @@ export default function ListingAnalyticsPage() {
 
   async function loadFunnel(range: DateRange, source: LeadSourceBucket | null = sourceFilterRef.current) {
     try {
-      const params = new URLSearchParams({ from: range.from, to: range.to });
+      const params = new URLSearchParams({ from: range.from, to: range.to, tzOffset: String(new Date().getTimezoneOffset()) });
       if (source) params.set('source', source);
       const res = await fetch(`/api/listing-analytics/lead-funnel?${params.toString()}`, { cache: 'no-store' });
       if (res.ok) setFunnel(await res.json() as LeadFunnelPayload);

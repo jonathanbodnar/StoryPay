@@ -67,11 +67,13 @@ export async function GET(req: Request) {
   let days = 30;
 
   if (fromParam && toParam) {
-    // Treat the input dates as local dates (e.g. 2026-05-24 means start of that day in local time)
-    // but since we don't know the user's timezone here, we'll just use UTC for consistency
-    // with how the chart renders.
-    const fromDate = new Date(fromParam + 'T00:00:00Z');
-    const toDate = new Date(toParam + 'T23:59:59.999Z');
+    // The picker sends the viewer's LOCAL calendar dates (YYYY-MM-DD). Shift the
+    // UTC day bounds by the viewer's timezone offset so day buckets line up with
+    // the venue's local day instead of UTC midnight.
+    const tzOffsetMin = parseInt(url.searchParams.get('tzOffset') || '0', 10);
+    const shiftMs = (Number.isFinite(tzOffsetMin) ? tzOffsetMin : 0) * 60_000;
+    const fromDate = new Date(Date.parse(fromParam + 'T00:00:00.000Z') + shiftMs);
+    const toDate = new Date(Date.parse(toParam + 'T23:59:59.999Z') + shiftMs);
     since = fromDate.toISOString();
     until = toDate.toISOString();
     

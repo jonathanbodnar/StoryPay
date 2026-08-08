@@ -60,10 +60,14 @@ export async function GET(req: Request) {
   let days = 30;
 
   if (fromParam && toParam) {
-    const fromDate = new Date(fromParam + 'T00:00:00Z');
-    const toDate = new Date(toParam + 'T23:59:59.999Z');
-    since = fromDate.toISOString();
-    until = toDate.toISOString();
+    // The date picker sends the viewer's LOCAL calendar dates (YYYY-MM-DD). Shift
+    // the UTC day bounds by the viewer's timezone offset so "Today"/"Last 7 days"
+    // reflect the venue's local day, not UTC midnight (which for US venues leaks
+    // several hours of the previous/next day into the wrong bucket).
+    const tzOffsetMin = parseInt(url.searchParams.get('tzOffset') || '0', 10);
+    const shiftMs = (Number.isFinite(tzOffsetMin) ? tzOffsetMin : 0) * 60_000;
+    since = new Date(Date.parse(fromParam + 'T00:00:00.000Z') + shiftMs).toISOString();
+    until = new Date(Date.parse(toParam + 'T23:59:59.999Z') + shiftMs).toISOString();
     days = 1; // Just to trigger the gte/lte logic
   } else {
     days = Math.min(parseInt(url.searchParams.get('days') || '30', 10), 365);
