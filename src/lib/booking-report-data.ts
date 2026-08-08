@@ -78,6 +78,8 @@ type LeadRow = {
   wedding_date: string | null;
   opportunity_value: number | null;
   booking_timeline: string | null;
+  is_ghl_migration: boolean | null;
+  last_inbound_at: string | null;
 };
 
 export interface CompiledReport {
@@ -105,7 +107,7 @@ export async function compileBookingReport(venueId: string, days = 30): Promise<
     for (let page = 0; page < 200; page++) {
       const { data, error } = await supabaseAdmin
         .from('leads')
-        .select('id, created_at, status, stage_id, first_touch_utm, source, referral_source, guest_count, wedding_date, opportunity_value, booking_timeline')
+        .select('id, created_at, status, stage_id, first_touch_utm, source, referral_source, guest_count, wedding_date, opportunity_value, booking_timeline, is_ghl_migration, last_inbound_at')
         .eq('venue_id', venueId)
         .order('created_at', { ascending: true })
         .range(page * PAGE, page * PAGE + PAGE - 1);

@@ -1,6 +1,11 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import {
+  buildStageById,
+  isUnworkedImportedContact,
+  type LeadFunnelStageRow,
+} from '@/lib/lead-funnel';
 
 export const dynamic = 'force-dynamic';
 
@@ -122,23 +127,36 @@ export async function GET(req: Request) {
   const current = rows.filter(r => r.created_at >= since);
   const prior    = rows.filter(r => r.created_at < since);
 
-  // Also fetch leads created in period (for funnel bottom)
+  // Also fetch leads created in period (for funnel bottom). We exclude
+  // bulk-imported CRM contacts that never genuinely engaged post-import so the
+  // "Leads created" KPI reflects real inquiries, not migrated reference rows.
+  const leadSelect =
+    'id, created_at, status, source, stage_id, is_ghl_migration, last_inbound_at';
   let leadsQuery = supabaseAdmin
     .from('leads')
-    .select('id, created_at, source')
+    .select(leadSelect)
     .eq('venue_id', venueId)
     .gte('created_at', since);
   if (until) {
     leadsQuery = leadsQuery.lte('created_at', until);
   }
-  const { data: leads } = await leadsQuery;
-  
-  const { data: priorLeads } = await supabaseAdmin
-    .from('leads')
-    .select('id')
-    .eq('venue_id', venueId)
-    .gte('created_at', priorFrom)
-    .lt('created_at', since);
+  const [{ data: leadsRaw }, { data: priorLeadsRaw }, { data: stageRows }] = await Promise.all([
+    leadsQuery,
+    supabaseAdmin
+      .from('leads')
+      .select(leadSelect)
+      .eq('venue_id', venueId)
+      .gte('created_at', priorFrom)
+      .lt('created_at', since),
+    supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('id, name, kind, position')
+      .eq('venue_id', venueId),
+  ]);
+
+  const stageById = buildStageById((stageRows ?? []) as LeadFunnelStageRow[]);
+  const leads = (leadsRaw ?? []).filter((l) => !isUnworkedImportedContact(l, stageById));
+  const priorLeads = (priorLeadsRaw ?? []).filter((l) => !isUnworkedImportedContact(l, stageById));
 
   const galleryImages = Array.isArray((venue as Record<string,unknown>).gallery_images)
     ? (venue as Record<string,unknown>).gallery_images as string[]

@@ -27,8 +27,15 @@ export interface LeadFunnelLeadRow {
   status: string | null;
   stage_id: string | null;
   /** Origin of the lead. 'contact' rows are synthesized from imported CRM
-   *  contacts (GHL sync / kanban reconcile) and only count once worked. */
+   *  contacts (GHL sync / kanban reconcile) and don't count until the contact
+   *  genuinely engages with us post-import. */
   source?: string | null;
+  /** True when the lead was brought in via the GHL migration wizard. */
+  is_ghl_migration?: boolean | null;
+  /** Last time the contact replied to us (inbound message). */
+  last_inbound_at?: string | null;
+  /** For imported contacts this is the import/sync timestamp. */
+  created_at?: string | null;
 }
 
 /** Which of the 5 funnel milestones a lead has reached, and whether it's lost. */
@@ -55,23 +62,42 @@ export function leadRank(
 }
 
 /**
- * True when a lead is a bulk-imported CRM contact that was never actually
- * worked. These are synthesized (source='contact') from GHL contact imports /
- * kanban reconcile with `created_at = now()`, so counting them massively
- * inflates "Leads" (and dumps them all into "Today"). A contact only counts as
- * a genuine funnel lead once it has advanced past the default Lead stage or
- * been explicitly marked lost/not-interested (i.e. it was worked).
+ * True when a lead is a bulk-imported CRM contact that hasn't genuinely engaged
+ * with us since we started tracking it — and therefore should NOT count in the
+ * funnel/dashboard. It should exist only as a reference contact.
+ *
+ * Imported contacts (source='contact' from GHL contact sync / kanban reconcile,
+ * or is_ghl_migration from the migration wizard) come over with `created_at` set
+ * to the import time and often a mapped pipeline stage — so keying off the stage
+ * would count history that predates our tracking. Instead we require a genuine
+ * post-import signal:
+ *   - the contact REPLIED to us after import (last_inbound_at > created_at), or
+ *   - the lead reached a "won"/booked-wedding stage (never hide a real booking).
+ *
+ * A reply that was carried over from CRM history (last_inbound_at <= created_at)
+ * does NOT count, matching "only count data since we tracked it".
  */
 export function isUnworkedImportedContact(
   row: LeadFunnelLeadRow,
   stageById: Map<string, LeadFunnelStageInfo>,
 ): boolean {
-  if (row.source !== 'contact') return false;
-  const { rank, lost } = leadRank(
+  const imported = row.source === 'contact' || row.is_ghl_migration === true;
+  if (!imported) return false;
+
+  // A booked wedding is always real — never hide it, even if the reply history
+  // wasn't captured.
+  const { rank } = leadRank(
     row.status ?? 'new',
     row.stage_id ? stageById.get(row.stage_id) : undefined,
   );
-  return rank < 2 && !lost;
+  if (rank >= 5) return false;
+
+  const inbound = row.last_inbound_at ? new Date(row.last_inbound_at).getTime() : NaN;
+  const created = row.created_at ? new Date(row.created_at).getTime() : NaN;
+  const repliedAfterImport =
+    Number.isFinite(inbound) && (!Number.isFinite(created) || inbound > created);
+
+  return !repliedAfterImport;
 }
 
 export type LeadFunnelStepKey = 'leads' | 'conversations' | 'qualified' | 'tours' | 'weddings';

@@ -81,6 +81,10 @@ interface LeadRow {
   status: string | null;
   stage_id: string | null;
   opportunity_value: number | string | null;
+  source: string | null;
+  is_ghl_migration: boolean | null;
+  last_inbound_at: string | null;
+  created_at: string | null;
 }
 interface VenueStageRow extends LeadFunnelStageRow {
   venue_id: string;
@@ -149,7 +153,7 @@ export async function GET(req: NextRequest) {
       fetchAll<LeadRow>((from, to) => {
         let q = supabaseAdmin
           .from('leads')
-          .select('id, venue_id, status, stage_id, opportunity_value')
+          .select('id, venue_id, status, stage_id, opportunity_value, source, is_ghl_migration, last_inbound_at, created_at')
           .in('venue_id', allCohortVenueIds.length ? allCohortVenueIds : ['00000000-0000-0000-0000-000000000000']);
         if (sinceIso) q = q.gte('created_at', sinceIso);
         if (untilIso) q = q.lte('created_at', untilIso);
