@@ -146,6 +146,10 @@ export default function GhlMigrationPanel() {
   const [dataRows, setDataRows]       = useState<string[][]>([]);
   const [columnMap, setColumnMap]     = useState<Record<number, ColumnKey>>({});
 
+  // One-click "Pull from GHL" — when set, these override the CSV-derived rows
+  const [pulledContacts, setPulledContacts] = useState<GhlContact[] | null>(null);
+  const [pulling, setPulling]               = useState(false);
+
   // Stage mapping step
   const [svStages, setSvStages]       = useState<PipelineStage[]>([]);
   const [svPipelineName, setSvPipelineName] = useState<string | null>(null);
@@ -203,6 +207,7 @@ export default function GhlMigrationPanel() {
     const rows = parseCsv(csvText);
     if (rows.length < 2) { setError('CSV must have a header row and at least one data row.'); return; }
     const [headerRow, ...rest] = rows;
+    setPulledContacts(null); // CSV path overrides any prior GHL pull
     setHeaders(headerRow);
     setDataRows(rest);
     const autoMap: Record<number, ColumnKey> = {};
@@ -226,6 +231,7 @@ export default function GhlMigrationPanel() {
   // Build GhlContact objects from rows + column map
   // ---------------------------------------------------------------------------
   function buildContacts(): GhlContact[] {
+    if (pulledContacts) return pulledContacts;
     return dataRows
       .map((row) => {
         const get = (key: ColumnKey): string => {
@@ -255,12 +261,11 @@ export default function GhlMigrationPanel() {
   // ---------------------------------------------------------------------------
   // Advance from column map → stage mapping step
   // ---------------------------------------------------------------------------
-  const advanceToStageMap = useCallback(() => {
+  const goToStageMap = useCallback((contacts: GhlContact[]) => {
     if (!venueId) { setError('Please select a venue first.'); return; }
-    const contacts = buildContacts();
     if (!contacts.length) { setError('No valid contacts found (email required).'); return; }
 
-    // Collect unique GHL stage names from the CSV
+    // Collect unique GHL stage names present on the contacts
     const uniqueGhlStages = Array.from(
       new Set(contacts.map((c) => c.ghlStage).filter((s): s is string => !!s?.trim())),
     ).sort();
@@ -270,10 +275,8 @@ export default function GhlMigrationPanel() {
     const autoMapping: Record<string, string | null> = {};
     for (const ghlStage of uniqueGhlStages) {
       const lower = ghlStage.toLowerCase().trim();
-      // Try exact match
       const exact = svStages.find((s) => s.name.toLowerCase().trim() === lower);
       if (exact) { autoMapping[ghlStage] = exact.name; continue; }
-      // Fuzzy: any SV stage whose name is contained in or contains the GHL stage
       const fuzzy = svStages.find((s) =>
         lower.includes(s.name.toLowerCase().trim()) || s.name.toLowerCase().trim().includes(lower),
       );
@@ -283,8 +286,34 @@ export default function GhlMigrationPanel() {
     setStageMapping(autoMapping);
     setError(null);
     setStep('map-stages');
+  }, [venueId, svStages]);
+
+  const advanceToStageMap = useCallback(() => {
+    goToStageMap(buildContacts());
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venueId, columnMap, dataRows, svStages]);
+  }, [goToStageMap, pulledContacts, columnMap, dataRows]);
+
+  // ---------------------------------------------------------------------------
+  // One-click: pull contacts straight from the venue's GHL sub-account
+  // ---------------------------------------------------------------------------
+  const pullFromGhl = useCallback(async () => {
+    if (!venueId) { setError('Please select a venue first.'); return; }
+    setPulling(true); setError(null);
+    try {
+      const r = await fetch(`/api/admin/migrate-ghl/pull?venueId=${venueId}`, { cache: 'no-store' });
+      const d = await r.json();
+      if (!r.ok) { setError(d.error ?? 'Could not pull contacts from GHL.'); return; }
+      const contacts = (d.contacts ?? []) as GhlContact[];
+      if (!contacts.length) { setError('No contacts found in GHL for this venue.'); return; }
+      setPulledContacts(contacts);
+      setCsvText(''); setHeaders([]); setDataRows([]); setColumnMap({});
+      goToStageMap(contacts);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPulling(false);
+    }
+  }, [venueId, goToStageMap]);
 
   // ---------------------------------------------------------------------------
   // Preview
@@ -335,6 +364,7 @@ export default function GhlMigrationPanel() {
   // ---------------------------------------------------------------------------
   const reset = () => {
     setCsvText(''); setHeaders([]); setDataRows([]); setColumnMap({});
+    setPulledContacts(null);
     setStageMapping({}); setPreviewContacts([]); setCommitResult(null);
     setError(null); setStep('upload');
   };
@@ -440,6 +470,35 @@ export default function GhlMigrationPanel() {
                 {svStages.length} stages: {svStages.map((s) => s.name).join(', ')}
               </p>
             )}
+          </div>
+
+          {/* One-click pull from GHL */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Pull contacts directly from GHL</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Fetches every contact from this venue&apos;s connected GHL sub-account — no CSV export needed.
+                  Stages are assigned from each contact&apos;s tags in the next step.
+                </p>
+              </div>
+              <button
+                onClick={pullFromGhl}
+                disabled={!venueId || pulling}
+                style={{ backgroundColor: BRAND }}
+                className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                <RefreshCw size={13} className={pulling ? 'animate-spin' : ''} />
+                {pulling ? 'Pulling…' : 'Pull from GHL'}
+              </button>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 text-xs text-gray-400">
+            <span className="h-px flex-1 bg-gray-200" />
+            or paste a CSV export
+            <span className="h-px flex-1 bg-gray-200" />
           </div>
 
           {/* CSV input */}
@@ -559,7 +618,7 @@ export default function GhlMigrationPanel() {
                 Smart defaults are pre-filled — adjust any that look wrong.
               </p>
             </div>
-            <button onClick={() => setStep('map-columns')} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+            <button onClick={() => setStep(pulledContacts ? 'upload' : 'map-columns')} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
               <RefreshCw size={11} /> Back
             </button>
           </div>
@@ -632,7 +691,7 @@ export default function GhlMigrationPanel() {
               {loading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
               Preview import
             </button>
-            <button onClick={() => setStep('map-columns')} className="text-xs text-gray-400 hover:text-gray-600">← Back</button>
+            <button onClick={() => setStep(pulledContacts ? 'upload' : 'map-columns')} className="text-xs text-gray-400 hover:text-gray-600">← Back</button>
           </div>
         </div>
       )}

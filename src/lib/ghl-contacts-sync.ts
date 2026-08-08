@@ -241,6 +241,113 @@ async function fetchContactPage(
   return { contacts, nextStartAfter, nextStartAfterId, total };
 }
 
+// ── Migration fetch (one-click "Pull from GHL") ──────────────────────────────
+
+/** Shape consumed by the GHL migration wizard (mirrors GhlContact in
+ *  src/app/api/admin/migrate-ghl/route.ts). */
+export interface GhlMigrationContactRow {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  ghlStage: string | null;
+  tags: string[];
+  weddingDate: string | null;
+  guestCount: number | null;
+  notes: string | null;
+}
+
+/**
+ * Pull every contact from a venue's GHL sub-account and return them in the
+ * shape the migration wizard expects — so a super admin can migrate with a
+ * single click instead of exporting/uploading a CSV. Stage assignment relies on
+ * the contact's tags (the reliable signal on GHL contacts); the wizard's tag
+ * fallback then maps those to StoryVenue stages. Read-only: touches nothing in
+ * our DB and creates no leads (the wizard's commit step does that).
+ */
+export async function fetchGhlContactsForMigration(
+  venueId: string,
+  opts: { maxContacts?: number } = {},
+): Promise<{ contacts: GhlMigrationContactRow[]; total: number }> {
+  const maxContacts = opts.maxContacts ?? 20_000;
+
+  const { data: venueRaw, error: venueErr } = await supabaseAdmin
+    .from('venues')
+    .select('id, ghl_location_id, ghl_access_token, ghl_refresh_token, ghl_connected')
+    .eq('id', venueId)
+    .maybeSingle();
+  if (venueErr || !venueRaw) throw new Error(venueErr?.message ?? 'venue not found');
+  const venue = venueRaw as VenueRow;
+  if (!venue.ghl_location_id) throw new Error('This venue is not connected to GHL.');
+
+  let token = await ensureLocationToken({
+    id: venue.id,
+    ghl_location_id: venue.ghl_location_id,
+    ghl_access_token: venue.ghl_access_token,
+  });
+  if (classifyToken(token) === 'v2-oauth') {
+    try {
+      token = await resolveLocationToken(token, venue.ghl_location_id);
+    } catch (err) {
+      const agencyKey = process.env.GHL_AGENCY_API_KEY || process.env.GHL_PRIVATE_KEY || null;
+      if (!agencyKey || agencyKey === token) throw err;
+      token = await resolveLocationToken(agencyKey, venue.ghl_location_id);
+    }
+  }
+
+  const out: GhlMigrationContactRow[] = [];
+  let startAfter: string | null = null;
+  let startAfterId: string | null = null;
+  let total = 0;
+
+  for (let page = 0; page < MAX_PAGES && out.length < maxContacts; page++) {
+    let pageData: { contacts: GhlContact[]; nextStartAfter: string | null; nextStartAfterId: string | null; total: number | null };
+    try {
+      pageData = await fetchContactPage(token, venue.ghl_location_id, startAfter, startAfterId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown';
+      if (isGhlAuthError(msg)) {
+        token = await bootstrapFallbackLocationToken(venue, venue.ghl_location_id);
+        pageData = await fetchContactPage(token, venue.ghl_location_id, startAfter, startAfterId);
+      } else {
+        throw err;
+      }
+    }
+
+    if (pageData.contacts.length === 0) break;
+    if (pageData.total !== null && total === 0) total = pageData.total;
+
+    for (const c of pageData.contacts) {
+      let first = (c.firstName ?? '').trim();
+      let last = (c.lastName ?? '').trim();
+      const full = (c.contactName ?? '').trim();
+      if (!first && !last && full) {
+        const parts = full.split(/\s+/);
+        first = parts[0] ?? '';
+        last = parts.slice(1).join(' ');
+      }
+      out.push({
+        firstName: first,
+        lastName: last,
+        email: (c.email ?? '').trim(),
+        phone: (c.phone ?? '').trim(),
+        ghlStage: null,
+        tags: Array.isArray(c.tags) ? c.tags.filter((t): t is string => !!t) : [],
+        weddingDate: null,
+        guestCount: null,
+        notes: null,
+      });
+      if (out.length >= maxContacts) break;
+    }
+
+    startAfter = pageData.nextStartAfter;
+    startAfterId = pageData.nextStartAfterId;
+    if (!startAfter && !startAfterId) break;
+  }
+
+  return { contacts: out, total: total || out.length };
+}
+
 // ── Upsert ───────────────────────────────────────────────────────────────────
 
 interface UpsertResult { kind: 'created' | 'updated' | 'linked' | 'error'; }
