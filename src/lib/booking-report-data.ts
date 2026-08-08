@@ -95,7 +95,28 @@ export async function compileBookingReport(venueId: string, days = 30): Promise<
   const until     = new Date(now).toISOString();
   const priorFrom = new Date(now - days * 2 * 86_400_000).toISOString();
 
-  const [{ data: venueRow }, { data: stagesRaw }, { data: allTimeLeadsRaw }] = await Promise.all([
+  const PAGE = 1000;
+
+  // Paginate leads past the PostgREST 1000-row cap. A single `.limit(10000)` is
+  // silently truncated to 1000 rows server-side, so venues with a large
+  // imported CRM had their report computed on an arbitrary slice.
+  async function fetchAllLeads(): Promise<LeadRow[]> {
+    const out: LeadRow[] = [];
+    for (let page = 0; page < 200; page++) {
+      const { data, error } = await supabaseAdmin
+        .from('leads')
+        .select('id, created_at, status, stage_id, first_touch_utm, source, referral_source, guest_count, wedding_date, opportunity_value, booking_timeline')
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: true })
+        .range(page * PAGE, page * PAGE + PAGE - 1);
+      if (error || !data?.length) break;
+      out.push(...(data as LeadRow[]));
+      if (data.length < PAGE) break;
+    }
+    return out;
+  }
+
+  const [{ data: venueRow }, { data: stagesRaw }, allTimeLeadsRaw] = await Promise.all([
     supabaseAdmin
       .from('venues')
       .select('name, report_schedule_enabled, report_schedule_emails, report_schedule_next_at')
@@ -105,15 +126,10 @@ export async function compileBookingReport(venueId: string, days = 30): Promise<
       .from('lead_pipeline_stages')
       .select('id, name, kind, position')
       .eq('venue_id', venueId),
-    supabaseAdmin
-      .from('leads')
-      .select('id, created_at, status, stage_id, first_touch_utm, source, referral_source, guest_count, wedding_date, opportunity_value, booking_timeline')
-      .eq('venue_id', venueId)
-      .limit(10000),
+    fetchAllLeads(),
   ]);
 
   // Paginate listing_events past the PostgREST 1000-row cap
-  const PAGE = 1000;
   const allEvents: FullEventRow[] = [];
   for (let page = 0; page < 100; page++) {
     const { data, error } = await supabaseAdmin

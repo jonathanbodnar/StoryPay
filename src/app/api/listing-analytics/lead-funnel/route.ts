@@ -70,20 +70,40 @@ export async function GET(req: Request) {
     since = new Date(Date.now() - days * 86400000).toISOString();
   }
 
-  let leadsQuery = supabaseAdmin
-    .from('leads')
-    .select('id, status, stage_id, first_touch_utm, source, referral_source')
-    .eq('venue_id', venueId);
-    
-  if (days > 0) {
-    leadsQuery = leadsQuery.gte('created_at', since);
-  }
-  if (until) {
-    leadsQuery = leadsQuery.lte('created_at', until);
+  type LeadRow = {
+    status: string;
+    stage_id: string | null;
+    first_touch_utm: Record<string, unknown> | null;
+    source: string | null;
+    referral_source: string | null;
+  };
+
+  // Paginate past PostgREST's 1000-row server cap. A single `.limit(5000)` is
+  // silently truncated to 1000 rows, and — with no stable order — that slice is
+  // arbitrary. For venues with a large imported CRM this made a wider date
+  // range return FEWER leads than a narrow one (the truncated slice happened to
+  // be dominated by one day's import batch). Fetch every matching row instead.
+  const PAGE = 1000;
+  async function fetchAllLeads(): Promise<LeadRow[]> {
+    const out: LeadRow[] = [];
+    for (let offset = 0; offset < 200_000; offset += PAGE) {
+      let q = supabaseAdmin
+        .from('leads')
+        .select('id, status, stage_id, first_touch_utm, source, referral_source')
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: false });
+      if (days > 0) q = q.gte('created_at', since);
+      if (until) q = q.lte('created_at', until);
+      const { data, error } = await q.range(offset, offset + PAGE - 1);
+      if (error || !data?.length) break;
+      out.push(...(data as LeadRow[]));
+      if (data.length < PAGE) break;
+    }
+    return out;
   }
 
-  const [{ data: leads }, { data: stages }] = await Promise.all([
-    leadsQuery.limit(5000),
+  const [leads, { data: stages }] = await Promise.all([
+    fetchAllLeads(),
     supabaseAdmin
       .from('lead_pipeline_stages')
       .select('id, name, kind, position')
@@ -95,14 +115,6 @@ export async function GET(req: Request) {
   // Per-source lead tallies for the whole range (unaffected by the active
   // filter) so the dashboard can render the "where leads came from" breakdown.
   const sourceCounts: Record<LeadSourceBucket, number> = { meta: 0, google: 0, direct: 0, other: 0 };
-
-  type LeadRow = {
-    status: string;
-    stage_id: string | null;
-    first_touch_utm: Record<string, unknown> | null;
-    source: string | null;
-    referral_source: string | null;
-  };
 
   // When a source filter is active, only that source's leads flow through
   // the funnel math — every step and conversion % reflects just that slice.
