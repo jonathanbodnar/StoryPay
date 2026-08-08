@@ -375,10 +375,15 @@ export default function GhlMigrationPanel() {
   const duplicateCount = previewContacts.filter((c) => c.isDuplicate).length;
   const newCount       = previewContacts.length - duplicateCount;
   const uniqueGhlStages = Array.from(
-    new Set(dataRows.map((row) => {
-      const idx = Object.entries(columnMap).find(([, v]) => v === 'ghlStage')?.[0];
-      return idx !== undefined ? row[Number(idx)]?.trim() : '';
-    }).filter(Boolean)),
+    new Set(
+      (pulledContacts
+        ? pulledContacts.map((c) => (c.ghlStage ?? '').trim())
+        : dataRows.map((row) => {
+            const idx = Object.entries(columnMap).find(([, v]) => v === 'ghlStage')?.[0];
+            return idx !== undefined ? row[Number(idx)]?.trim() : '';
+          })
+      ).filter(Boolean),
+    ),
   ).sort();
   const hasStageColumn = Object.values(columnMap).includes('ghlStage');
 
@@ -614,7 +619,7 @@ export default function GhlMigrationPanel() {
             <div>
               <h3 className="text-sm font-semibold text-gray-800">Map GHL Stages → StoryVenue Stages</h3>
               <p className="mt-0.5 text-xs text-gray-500">
-                {uniqueGhlStages.length} unique stage{uniqueGhlStages.length !== 1 ? 's' : ''} found in this CSV.
+                {uniqueGhlStages.length} unique stage{uniqueGhlStages.length !== 1 ? 's' : ''} found in {pulledContacts ? 'GHL' : 'this CSV'}.
                 Smart defaults are pre-filled — adjust any that look wrong.
               </p>
             </div>
@@ -640,10 +645,12 @@ export default function GhlMigrationPanel() {
               </div>
               <div className="divide-y divide-gray-100">
                 {uniqueGhlStages.map((ghlStage) => {
-                  const count = dataRows.filter((row) => {
-                    const idx = Object.entries(columnMap).find(([, v]) => v === 'ghlStage')?.[0];
-                    return idx !== undefined && row[Number(idx)]?.trim() === ghlStage;
-                  }).length;
+                  const count = pulledContacts
+                    ? pulledContacts.filter((c) => (c.ghlStage ?? '') === ghlStage).length
+                    : dataRows.filter((row) => {
+                        const idx = Object.entries(columnMap).find(([, v]) => v === 'ghlStage')?.[0];
+                        return idx !== undefined && row[Number(idx)]?.trim() === ghlStage;
+                      }).length;
                   return (
                     <div key={ghlStage} className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-3">
                       <div>

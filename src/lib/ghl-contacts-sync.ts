@@ -258,12 +258,81 @@ export interface GhlMigrationContactRow {
 }
 
 /**
+ * Best-effort: build a contactId → current pipeline stage NAME map from the
+ * venue's GHL opportunities. Returns an empty map (and logs) on any failure —
+ * e.g. legacy v1 keys or PITs without opportunities scope — so the caller
+ * gracefully falls back to tag-based staging.
+ */
+async function fetchGhlStageByContact(
+  token: string,
+  locationId: string,
+): Promise<Map<string, string>> {
+  // 1. Resolve pipeline stage IDs → human names.
+  const stageIdToName = new Map<string, string>();
+  try {
+    const pipeRes = (await ghlRequest(
+      `/opportunities/pipelines?locationId=${encodeURIComponent(locationId)}`,
+      token,
+      { locationId },
+    )) as { pipelines?: Array<{ id?: string; name?: string; stages?: Array<{ id?: string; name?: string }> }> };
+    for (const p of pipeRes.pipelines ?? []) {
+      for (const s of p.stages ?? []) {
+        if (s.id && s.name) stageIdToName.set(s.id, s.name);
+      }
+    }
+  } catch (err) {
+    console.warn('[migrate-ghl pull] pipelines fetch failed — stage enrichment skipped:', err instanceof Error ? err.message : err);
+    return new Map();
+  }
+  if (stageIdToName.size === 0) return new Map();
+
+  // 2. Page through opportunities; keep the most recently updated one per contact.
+  const byContact = new Map<string, { stageName: string; ts: number }>();
+  try {
+    for (let page = 1; page <= 200; page++) {
+      const qs = new URLSearchParams({ location_id: locationId, limit: '100', page: String(page) });
+      const res = (await ghlRequest(`/opportunities/search?${qs.toString()}`, token, { locationId })) as {
+        opportunities?: Array<{
+          contactId?: string | null;
+          contact?: { id?: string | null } | null;
+          pipelineStageId?: string | null;
+          updatedAt?: string | null;
+          createdAt?: string | null;
+        }>;
+      };
+      const opps = res.opportunities ?? [];
+      if (opps.length === 0) break;
+      for (const o of opps) {
+        const cid = (o.contactId ?? o.contact?.id ?? '') || '';
+        const sid = o.pipelineStageId ?? '';
+        if (!cid || !sid) continue;
+        const name = stageIdToName.get(sid);
+        if (!name) continue;
+        const ts = Date.parse(o.updatedAt ?? o.createdAt ?? '') || 0;
+        const existing = byContact.get(cid);
+        if (!existing || ts >= existing.ts) byContact.set(cid, { stageName: name, ts });
+      }
+      if (opps.length < 100) break;
+    }
+  } catch (err) {
+    console.warn('[migrate-ghl pull] opportunities fetch failed — partial stage enrichment:', err instanceof Error ? err.message : err);
+  }
+
+  const out = new Map<string, string>();
+  for (const [cid, v] of byContact) out.set(cid, v.stageName);
+  return out;
+}
+
+/**
  * Pull every contact from a venue's GHL sub-account and return them in the
  * shape the migration wizard expects — so a super admin can migrate with a
- * single click instead of exporting/uploading a CSV. Stage assignment relies on
- * the contact's tags (the reliable signal on GHL contacts); the wizard's tag
- * fallback then maps those to StoryVenue stages. Read-only: touches nothing in
- * our DB and creates no leads (the wizard's commit step does that).
+ * single click instead of exporting/uploading a CSV.
+ *
+ * Stage assignment is exact when possible: each contact's current GHL pipeline
+ * stage (from their opportunity) is attached as `ghlStage`, which the wizard
+ * maps 1:1 to a StoryVenue stage. Contacts with no opportunity fall back to the
+ * wizard's tag-based staging. Read-only: touches nothing in our DB and creates
+ * no leads (the wizard's commit step does that).
  */
 export async function fetchGhlContactsForMigration(
   venueId: string,
@@ -294,6 +363,9 @@ export async function fetchGhlContactsForMigration(
       token = await resolveLocationToken(agencyKey, venue.ghl_location_id);
     }
   }
+
+  // Best-effort exact stage enrichment from opportunities (falls back to tags).
+  const stageByContact = await fetchGhlStageByContact(token, venue.ghl_location_id);
 
   const out: GhlMigrationContactRow[] = [];
   let startAfter: string | null = null;
@@ -331,7 +403,7 @@ export async function fetchGhlContactsForMigration(
         lastName: last,
         email: (c.email ?? '').trim(),
         phone: (c.phone ?? '').trim(),
-        ghlStage: null,
+        ghlStage: (c.id && stageByContact.get(c.id)) || null,
         tags: Array.isArray(c.tags) ? c.tags.filter((t): t is string => !!t) : [],
         weddingDate: null,
         guestCount: null,
