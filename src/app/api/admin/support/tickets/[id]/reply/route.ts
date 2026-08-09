@@ -21,6 +21,7 @@ import { sendEmail } from '@/lib/email';
 import { broadcastTicketMessage } from '@/lib/realtime/broadcast';
 import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
 import { buildTicketReplyToEmail } from '@/lib/support/ticket-inbound-email';
+import { CLIENT_SERVICES_SIGNATURE_HTML } from '@/lib/support/client-services-signature';
 import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
 
 export const dynamic = 'force-dynamic';
@@ -287,7 +288,8 @@ export async function POST(
 <div style="font-family:'Open Sans',Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827">
 ${bodyHtmlContent}
 ${attachmentsListHtml}
-<p style="margin:20px 0 0">Thanks,<br/>${escapeHtml(agentName)}<br/>StoryVenue Support</p>
+<p style="margin:20px 0 0">Thanks,<br/>${escapeHtml(agentName)}</p>
+${CLIENT_SERVICES_SIGNATURE_HTML}
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0" />
 <p style="font-size:12px;color:#6b7280">Reply to this email to continue this conversation with our support team.</p>
 </div>`;
