@@ -2,16 +2,14 @@
 
 /**
  * BrideInboxBadgeSync — always-on realtime listener that refreshes the
- * sidebar badge count whenever an inbound bride message arrives.
+ * sidebar "Support inbox" badge count the instant new bride replies, venue
+ * support tickets, or Venue Direct activity arrives — regardless of which
+ * admin page/tab is currently open.
  *
  * The admin layout only polls /api/admin/support/inbox-count every 60 s, and
- * dispatches storypay:support-count-refresh when the SupportInboxPanel
- * marks a thread read/unread.  That means an inbound bride SMS or email
- * reply would go unnoticed in the badge for up to 60 s.
- *
- * This component subscribes to the shared 'support:bride-inbox' broadcast
- * channel unconditionally (regardless of which tab is active) and triggers
- * a badge refresh the moment an inbound message arrives.
+ * dispatches storypay:support-count-refresh when the SupportInboxPanel marks
+ * a thread read/unread. Without this, any of the three event types below
+ * would go unnoticed in the sidebar badge for up to 60 s.
  */
 import { useCallback } from 'react';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
@@ -29,6 +27,23 @@ export function BrideInboxBadgeSync() {
       if (evt.inbound && !evt.supportOnly) {
         window.dispatchEvent(new Event('storypay:support-count-refresh'));
       }
+    }, []),
+  );
+
+  // New/updated Venue Support tickets and new Venue Direct messages both
+  // feed into the same sidebar total (see /api/admin/support/inbox-count).
+  useBroadcastChannel(
+    supportChannels.tickets(),
+    ['message', 'status'],
+    useCallback(() => {
+      window.dispatchEvent(new Event('storypay:support-count-refresh'));
+    }, []),
+  );
+  useBroadcastChannel(
+    supportChannels.venueDirectInbox(),
+    ['message'],
+    useCallback(() => {
+      window.dispatchEvent(new Event('storypay:support-count-refresh'));
     }, []),
   );
 

@@ -370,21 +370,74 @@ export function SupportInboxPanel() {
 
   // Background fetch of venue_direct unread count so the tab badge reflects
   // reality even when the user is on a different sub-tab. Cheap query.
+  // The 30s interval is a safety net; the broadcast listener below (near the
+  // other tab-badge realtime subscriptions) triggers an instant refetch the
+  // moment a venue-direct message arrives, regardless of which tab is active.
+  const fetchVenueDirectCount = useCallback(() => {
+    void fetch('/api/admin/support/inbox-count', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { venueReplies?: number } | null) => {
+        if (d && typeof d.venueReplies === 'number') setVenueDirectUnreadCount(d.venueReplies);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
-    const fetchCount = () => {
-      void fetch('/api/admin/support/inbox-count', { cache: 'no-store' })
+    fetchVenueDirectCount();
+    const id = setInterval(fetchVenueDirectCount, 30_000);
+    return () => clearInterval(id);
+  }, [fetchVenueDirectCount]);
+
+  // Lightweight "needs reply" bride count + "open" ticket count, kept
+  // accurate regardless of active sub-tab (mirrors fetchVenueDirectCount
+  // above). While a tab IS active, its own view already keeps these in sync
+  // more precisely (grouped threads / loaded ticket list) — these debounced
+  // refetches exist purely so the *other* tabs' badges update instantly
+  // instead of only on next page load.
+  const needsReplyRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshNeedsReplyCount = useCallback(() => {
+    if (needsReplyRefreshTimerRef.current) clearTimeout(needsReplyRefreshTimerRef.current);
+    needsReplyRefreshTimerRef.current = setTimeout(() => {
+      fetch('/api/admin/support/bride-inbox?filter=open&limit=200', { cache: 'no-store' })
         .then(r => r.ok ? r.json() : null)
-        .then((d: { venueReplies?: number } | null) => {
-          if (cancelled) return;
-          if (d && typeof d.venueReplies === 'number') setVenueDirectUnreadCount(d.venueReplies);
+        .then((d: { threads?: BrideInboxRow[] } | null) => {
+          if (!d?.threads) return;
+          const groups = new Set(d.threads.map(t => `${t.venue_id}:${t.venue_customer_id}`));
+          setNeedsReplyCount(groups.size);
         })
         .catch(() => {});
-    };
-    fetchCount();
-    const id = setInterval(fetchCount, 30_000);
-    return () => { cancelled = true; clearInterval(id); };
+    }, 400);
   }, []);
+
+  useEffect(() => { refreshNeedsReplyCount(); }, [refreshNeedsReplyCount]);
+
+  const ticketCountRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshTicketOpenCount = useCallback(() => {
+    if (ticketCountRefreshTimerRef.current) clearTimeout(ticketCountRefreshTimerRef.current);
+    ticketCountRefreshTimerRef.current = setTimeout(() => {
+      fetch('/api/admin/support/tickets?status=open,pending&limit=200', { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null)
+        .then((d: { tickets?: TicketListRow[] } | null) => {
+          if (d?.tickets) setTicketOpenCount(d.tickets.filter(t => t.status !== 'closed').length);
+        })
+        .catch(() => {});
+    }, 400);
+  }, []);
+
+  // Instant push for all three tab badges, regardless of which sub-tab is
+  // active — previously only the *active* tab's own view kept its badge
+  // live; switching away (or never having visited a tab this session) left
+  // that badge stale until a full page refresh.
+  useBroadcastChannel(
+    supportChannels.tickets(),
+    ['message', 'status'],
+    useCallback(() => { refreshTicketOpenCount(); }, [refreshTicketOpenCount]),
+  );
+  useBroadcastChannel(
+    supportChannels.venueDirectInbox(),
+    ['message'],
+    useCallback(() => { fetchVenueDirectCount(); }, [fetchVenueDirectCount]),
+  );
 
   // When viewing a non-open filter, fetch a live open count in the background
   // so the badge reflects reality (e.g. a new bride message arrives while
@@ -661,13 +714,20 @@ export function SupportInboxPanel() {
   );
 
   // Same bride-inbox stream, but active only while a DIFFERENT sub-tab is
-  // shown (the subscription above already covers sound when 'bride-replies'
-  // is active) — keeps the admin's ears on new bride/venue messages even
-  // while browsing Tickets or Venue Direct.
+  // shown (the subscription above already covers sound + badge when
+  // 'bride-replies' is active) — keeps the admin's ears on new bride/venue
+  // messages, AND the "Bride replies" tab badge count instantly accurate,
+  // even while browsing Tickets, Venue Direct, or Private Clients.
   useBroadcastChannel(
     subTab !== 'bride-replies' ? supportChannels.brideInbox() : null,
     ['message'],
-    useCallback((_evt, payload) => handleBrideInboxSoundEvent(payload), [handleBrideInboxSoundEvent]),
+    useCallback((_evt, payload) => {
+      handleBrideInboxSoundEvent(payload);
+      const evt = payload as BrideMessageEvent | null;
+      if (evt?.inbound && !evt.supportOnly && !evt.venueDirectMessage) {
+        refreshNeedsReplyCount();
+      }
+    }, [handleBrideInboxSoundEvent, refreshNeedsReplyCount]),
   );
 
   // Active thread realtime — append new messages immediately. Subscribes to
