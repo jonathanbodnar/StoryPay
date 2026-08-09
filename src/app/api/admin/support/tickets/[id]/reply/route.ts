@@ -147,7 +147,6 @@ export async function POST(
   if (!stm || !(stm as { active: boolean }).active) {
     return NextResponse.json({ error: 'Support user not found or inactive' }, { status: 400 });
   }
-  const agentName = (stm as { name?: string }).name?.trim() || 'StoryVenue Support';
 
   // Ensure the ticket exists
   const { data: ticketRow } = await supabaseAdmin
@@ -288,7 +287,6 @@ export async function POST(
 <div style="font-family:'Open Sans',Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827">
 ${bodyHtmlContent}
 ${attachmentsListHtml}
-<p style="margin:20px 0 0">Thanks,<br/>${escapeHtml(agentName)}</p>
 ${CLIENT_SERVICES_SIGNATURE_HTML}
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0" />
 <p style="font-size:12px;color:#6b7280">Reply to this email to continue this conversation with our support team.</p>
