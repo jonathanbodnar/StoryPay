@@ -14,7 +14,18 @@
  *     channel:       'email' | 'sms';
  *     body:          string;
  *     supportUserId?: string;  // identity-picker fallback for super admin
+ *     context?:      'private_client' | 'venue_contact';
  *   }
+ *
+ * `context` picks the outbound branding/signature:
+ *   - 'private_client' (default) — Private Clients tab. Signed
+ *     "StoryVenue Client Services", From/Reply-To stay on support@.
+ *     Requires the venue to be flagged is_private_client.
+ *   - 'venue_contact' — the venue owner/team contact card shown on a
+ *     bride/lead thread's context sidebar. Signed "– {Agent}, StoryVenue
+ *     Concierge" (or just "– StoryVenue Concierge" for super admin), and
+ *     routes From/Reply-To to clients@storyvenue.com. Works for any venue,
+ *     not just Private Clients.
  *
  * SMS only works for the owner today: it rides the venue's own GHL/A2P
  * connection (same as owner push/SMS notifications). Phone is resolved as
@@ -29,7 +40,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms as ghlSendSms } from '@/lib/ghl';
 import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
-import { CLIENT_SERVICES_SIGNATURE_HTML } from '@/lib/support/client-services-signature';
+import { CLIENT_SERVICES_SIGNATURE_HTML, CLIENT_SERVICES_EMAIL } from '@/lib/support/client-services-signature';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -44,6 +55,7 @@ interface Body {
   body?:          string;
   subject?:       string;
   supportUserId?: string;
+  context?:       'private_client' | 'venue_contact';
 }
 
 function escapeHtml(s: string): string {
@@ -79,6 +91,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Message exceeds ${MAX_CHARS} chars` }, { status: 400 });
   }
 
+  const isVenueContact = body.context === 'venue_contact';
+
   // Resolve acting agent (same identity-picker fallback pattern as Venue Direct).
   let actingAgentId = auth.agent?.sub || (body.supportUserId?.trim() || '');
   if (!actingAgentId && auth.isSuperAdmin) {
@@ -90,6 +104,20 @@ export async function POST(req: NextRequest) {
   }
   if (actingAgentId === SUPER_ADMIN_SUPPORT_USER_ID) {
     await ensureSuperAdminSupportMember();
+  }
+
+  // Agent first name for the "– {Agent}, StoryVenue Concierge" signature —
+  // only needed for the venue-contact context, and only for named agents
+  // (Super Admin gets the generic "StoryVenue Concierge" sign-off).
+  let agentFirstName: string | null = null;
+  if (isVenueContact && actingAgentId !== SUPER_ADMIN_SUPPORT_USER_ID) {
+    const { data: stmRow } = await supabaseAdmin
+      .from('support_team_members')
+      .select('name')
+      .eq('id', actingAgentId)
+      .maybeSingle();
+    const n = (stmRow as { name?: string | null } | null)?.name?.trim();
+    if (n) agentFirstName = n.split(/\s+/)[0];
   }
 
   const { data: venueRow } = await supabaseAdmin
@@ -105,8 +133,10 @@ export async function POST(req: NextRequest) {
     owner_id: string | null; is_private_client: boolean | null;
   };
 
-  // Gate: venue must be a private client to send from this panel.
-  if (!venue.is_private_client) {
+  // Gate: venue must be a private client to send from the Private Clients
+  // panel. The venue-contact context (contact card on a bride/lead thread)
+  // is open to any venue.
+  if (!isVenueContact && !venue.is_private_client) {
     return NextResponse.json(
       { error: 'Venue is not a Private Client.' },
       { status: 403 },
@@ -163,12 +193,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No email address on file for this recipient' }, { status: 400 });
     }
     const venueName = venue.name || 'your venue';
-    const fromEmail = process.env.SUPPORT_FROM_EMAIL?.trim() || 'support@storyvenue.com';
-    const replyTo = process.env.SUPPORT_REPLY_TO?.trim() || fromEmail;
+    const fromEmail = isVenueContact
+      ? CLIENT_SERVICES_EMAIL
+      : (process.env.SUPPORT_FROM_EMAIL?.trim() || 'support@storyvenue.com');
+    const replyTo = isVenueContact
+      ? CLIENT_SERVICES_EMAIL
+      : (process.env.SUPPORT_REPLY_TO?.trim() || fromEmail);
+    const fromName = isVenueContact ? 'StoryVenue Concierge' : 'StoryVenue Client Services';
+    const signOff = isVenueContact
+      ? `<p style="margin:20px 0 0">– ${escapeHtml(agentFirstName ? `${agentFirstName}, StoryVenue Concierge` : 'StoryVenue Concierge')}</p>`
+      : CLIENT_SERVICES_SIGNATURE_HTML;
     const html = `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827;max-width:560px">
   ${text.split(/\n+/).map((p) => `<p style="margin:0 0 12px">${escapeHtml(p)}</p>`).join('')}
-  ${CLIENT_SERVICES_SIGNATURE_HTML}
+  ${signOff}
   <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0" />
   <p style="font-size:12px;color:#6b7280">Sent to ${escapeHtml(recipientLabel)} at ${escapeHtml(venueName)} — reply to this email to reach the concierge team directly.</p>
 </div>`;
@@ -177,7 +215,7 @@ export async function POST(req: NextRequest) {
       replyTo,
       subject,
       html,
-      from: { email: fromEmail, name: 'StoryVenue Client Services' },
+      from: { email: fromEmail, name: fromName },
     });
     if (!result.success) {
       sendError = result.error || 'Email send failed';
@@ -204,7 +242,10 @@ export async function POST(req: NextRequest) {
         firstName: recipientLabel,
       });
       if (!contactId) return NextResponse.json({ error: 'Could not resolve a GHL contact for the owner' }, { status: 502 });
-      const smsBody = `${text}\n– StoryVenue Client Services`;
+      const smsSignOff = isVenueContact
+        ? (agentFirstName ? `${agentFirstName}, StoryVenue Concierge` : 'StoryVenue Concierge')
+        : 'StoryVenue Client Services';
+      const smsBody = `${text}\n– ${smsSignOff}`;
       await ghlSendSms(token, venue.ghl_location_id, contactId, smsBody, undefined, phoneE164);
       externalSent = true;
     } catch (e) {

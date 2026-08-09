@@ -235,6 +235,7 @@ function VenueContactComposeRow({
           channel: composeChannel,
           body: body.trim(),
           subject: composeChannel === 'email' ? subject.trim() || undefined : undefined,
+          context: 'venue_contact',
         }),
       });
       const d = await res.json().catch(() => ({}));

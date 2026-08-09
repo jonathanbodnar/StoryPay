@@ -411,6 +411,7 @@ function ContactRow({
           body: body.trim(),
           subject: composeChannel === 'email' ? subject.trim() || undefined : undefined,
           supportUserId,
+          context: 'private_client',
         }),
       });
       const d = await res.json().catch(() => ({}));
