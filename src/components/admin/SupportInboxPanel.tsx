@@ -14,6 +14,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { capitalizeName } from '@/lib/format-name';
+import { formatMessageTimestamp } from '@/lib/format-message-timestamp';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import {
@@ -2359,7 +2360,7 @@ function MessageBubble({
             Concierge ↔ Venue · bride hidden
           </span>
           {supportName && <span className="text-violet-700">— {supportName}</span>}
-          <span className="ml-auto text-violet-600">{relativeTime(msg.created_at)}</span>
+          <span className="ml-auto text-violet-600">{formatMessageTimestamp(msg.created_at)}</span>
         </div>
         <CollapsibleBody
           body={msg.body}
@@ -2388,7 +2389,7 @@ function MessageBubble({
             Support team only
           </span>
           {supportName && <span className="text-amber-700">— {supportName}</span>}
-          <span className="ml-auto text-amber-600">{relativeTime(msg.created_at)}</span>
+          <span className="ml-auto text-amber-600">{formatMessageTimestamp(msg.created_at)}</span>
         </div>
         <p className="text-sm text-amber-900 whitespace-pre-wrap break-words">{msg.body}</p>
         {mentionedNames.length > 0 && (
@@ -2454,8 +2455,8 @@ function MessageBubble({
               Internal
             </span>
           )}
-          <span className={`text-gray-400 ${isSms ? 'opacity-0 group-hover:opacity-100 transition-opacity' : ''}`}>
-            {relativeTime(msg.created_at)}
+          <span className="text-gray-400">
+            {formatMessageTimestamp(msg.created_at)}
           </span>
           {!isInbound && !isInternal && (
             <DeliveryStatusIcon deliveryStatus={msg.delivery_status} openedAt={msg.opened_at} channel={msg.channel} />

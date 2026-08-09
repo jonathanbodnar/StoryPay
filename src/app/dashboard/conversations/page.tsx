@@ -46,6 +46,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
+import { formatMessageTimestamp, formatAbsoluteStamp } from '@/lib/format-message-timestamp';
 import { isNativeApp, topBarSafeAreaPadding } from '@/lib/platform';
 import { getClientCache, setClientCache } from '@/lib/client-cache';
 import { EmojiPickerPopover } from '@/components/EmojiPickerPopover';
@@ -2383,9 +2384,7 @@ export default function ConversationsPage() {
                       // venue and the StoryVenue Concierge team.
                       if (m.audience === 'venue_direct') {
                         const isFromConcierge = m.sender_kind === 'concierge';
-                        const ts = new Date(m.created_at).toLocaleString(undefined, {
-                          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-                        });
+                        const ts = formatMessageTimestamp(m.created_at);
                         const isVdEmail = m.channel === 'email';
                         const vdExpanded = expandedEmailIds.has(m.id);
                         const toggleVd = () =>
@@ -2514,12 +2513,7 @@ export default function ConversationsPage() {
                         : m.channel === 'sms'
                           ? 'border-gray-300 bg-gray-100 text-gray-600'
                           : 'border-gray-300 bg-gray-100 text-gray-600';
-                      const timestamp = new Date(m.created_at).toLocaleString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      });
+                      const timestamp = formatMessageTimestamp(m.created_at);
                       return (
                         <div
                           key={m.id}
@@ -2554,13 +2548,7 @@ export default function ConversationsPage() {
                                 cc={m.email_cc || null}
                                 bcc={m.email_bcc || null}
                                 timestamp={timestamp}
-                                fullTimestamp={new Date(m.created_at).toLocaleString(undefined, {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric',
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                })}
+                                fullTimestamp={formatAbsoluteStamp(m.created_at)}
                                 authorLabel={m.author_label}
                                 fromName={
                                   fromUs
