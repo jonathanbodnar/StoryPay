@@ -100,12 +100,13 @@ export async function ghlRequest(
   // useful piece of context when GHL returns "missing X" / "X doesn't match".
   const bodyPreview = body ? JSON.stringify(body).slice(0, 500) : '';
 
-  // Transient failures (network hiccups, GHL 5xx) get one automatic retry
-  // after a short delay — cheap insurance against brief contention (e.g. our
-  // own every-7s hot-tier poller hitting the same host, see
-  // src/lib/in-app-scheduler.ts) turning into a user-facing send failure.
-  // 4xx is never retried — those are real validation/auth problems.
-  const MAX_ATTEMPTS = 2;
+  // Transient failures (network hiccups, GHL 5xx, and GHL 429 rate-limit)
+  // get automatic retries with a short delay — cheap insurance against brief
+  // contention (e.g. our own every-7s hot-tier poller hitting the same host
+  // and location, see src/lib/in-app-scheduler.ts) turning into a
+  // user-facing send failure. Other 4xx are never retried — those are real
+  // validation/auth problems.
+  const MAX_ATTEMPTS = 3;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     console.log(
       `[ghl] -> ${method} ${url} (tokenKind=${kind}${attempt > 1 ? `, retry=${attempt}` : ''})` +
@@ -123,7 +124,7 @@ export async function ghlRequest(
     } catch (e) {
       if (attempt < MAX_ATTEMPTS) {
         console.warn(`[ghl] network error, retrying: ${e instanceof Error ? e.message : String(e)}`);
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 500 * attempt));
         continue;
       }
       throw e;
@@ -132,8 +133,16 @@ export async function ghlRequest(
     if (!res.ok) {
       const errorText = await res.text();
       console.warn(`[ghl] <- ${method} ${url} :: ${res.status} ${errorText.slice(0, 500)}`);
-      if (res.status >= 500 && attempt < MAX_ATTEMPTS) {
-        await new Promise((r) => setTimeout(r, 500));
+      const isRateLimited = res.status === 429;
+      if ((res.status >= 500 || isRateLimited) && attempt < MAX_ATTEMPTS) {
+        // Honor Retry-After (seconds) when GHL sends one for a 429; otherwise
+        // back off a bit more aggressively each attempt.
+        const retryAfterSec = Number(res.headers.get('retry-after'));
+        const delayMs = isRateLimited && Number.isFinite(retryAfterSec) && retryAfterSec > 0
+          ? Math.min(retryAfterSec * 1000, 5000)
+          : 500 * attempt;
+        console.warn(`[ghl] ${isRateLimited ? 'rate-limited' : 'server error'}, retrying in ${delayMs}ms`);
+        await new Promise((r) => setTimeout(r, delayMs));
         continue;
       }
       throw new Error(`GHL API error ${res.status}: ${errorText}`);
