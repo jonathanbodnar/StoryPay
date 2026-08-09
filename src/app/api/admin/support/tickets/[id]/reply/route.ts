@@ -3,7 +3,9 @@
  *
  * Appends a support-agent reply to a support ticket. Auto-bumps status from
  * 'open' → 'pending' (waiting on venue) unless the caller passes status='open'.
- * Also emails the reply to the client via Resend — From: support@storyvenue.com,
+ * Also emails the reply to the client via Resend — From: SUPPORT_FROM_EMAIL
+ * (defaults to support@storyvenue.com; set to e.g. clients@storyvenue.com to
+ * change the client-facing address with no code change),
  * Reply-To: the signed ticket+{id}+{sig}@{inbound domain} address so a client
  * reply routes back into this exact ticket. The email includes the replying
  * agent's name as a signature (Venue Support tickets only — never on
@@ -24,7 +26,10 @@ import type { SupportAttachment } from '@/lib/support/support-attachments-bucket
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const SUPPORT_FROM_EMAIL = 'support@storyvenue.com';
+// Configurable so the client-facing support address can change (e.g. to
+// clients@storyvenue.com) without a code deploy — see venue-direct and
+// private-clients/message routes, which already read this same env var.
+const SUPPORT_FROM_EMAIL = process.env.SUPPORT_FROM_EMAIL?.trim() || 'support@storyvenue.com';
 const SUPPORT_FROM_NAME  = 'StoryVenue Support';
 const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
