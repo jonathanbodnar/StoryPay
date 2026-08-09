@@ -93,33 +93,57 @@ export async function ghlRequest(
 
   const base = isV1 ? GHL_API_V1_BASE : GHL_API_BASE;
   const effectivePath = isV1 ? translateV2PathToV1(path) : path;
+  const url = `${base}${effectivePath}`;
 
   // Log every call so we can correlate request → response in Railway logs.
   // Body is included for non-GETs (truncated for safety) since it's the most
   // useful piece of context when GHL returns "missing X" / "X doesn't match".
   const bodyPreview = body ? JSON.stringify(body).slice(0, 500) : '';
-  console.log(
-    `[ghl] -> ${method} ${base}${effectivePath} (tokenKind=${kind})` +
-    (bodyPreview ? ` body=${bodyPreview}` : ''),
-  );
 
-  const res = await fetch(`${base}${effectivePath}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(30_000),
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.warn(
-      `[ghl] <- ${method} ${base}${effectivePath} :: ${res.status} ${errorText.slice(0, 500)}`,
+  // Transient failures (network hiccups, GHL 5xx) get one automatic retry
+  // after a short delay — cheap insurance against brief contention (e.g. our
+  // own every-7s hot-tier poller hitting the same host, see
+  // src/lib/in-app-scheduler.ts) turning into a user-facing send failure.
+  // 4xx is never retried — those are real validation/auth problems.
+  const MAX_ATTEMPTS = 2;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    console.log(
+      `[ghl] -> ${method} ${url} (tokenKind=${kind}${attempt > 1 ? `, retry=${attempt}` : ''})` +
+      (bodyPreview ? ` body=${bodyPreview}` : ''),
     );
-    throw new Error(`GHL API error ${res.status}: ${errorText}`);
-  }
 
-  console.log(`[ghl] <- ${method} ${base}${effectivePath} :: ${res.status} OK`);
-  return res.json();
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch (e) {
+      if (attempt < MAX_ATTEMPTS) {
+        console.warn(`[ghl] network error, retrying: ${e instanceof Error ? e.message : String(e)}`);
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+      throw e;
+    }
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.warn(`[ghl] <- ${method} ${url} :: ${res.status} ${errorText.slice(0, 500)}`);
+      if (res.status >= 500 && attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+      throw new Error(`GHL API error ${res.status}: ${errorText}`);
+    }
+
+    console.log(`[ghl] <- ${method} ${url} :: ${res.status} OK`);
+    return res.json();
+  }
+  // Unreachable — every loop path either returns or throws — but keeps TS happy.
+  throw new Error('GHL request failed after retries');
 }
 
 /**

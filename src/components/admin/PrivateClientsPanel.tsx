@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchWithGatewayRetry } from '@/lib/fetch-retry';
 import {
   Building2, Search, RefreshCw, Loader2, AlertCircle, Mail, MessageSquare,
   Send, ChevronDown, ChevronRight, Users, Crown, CheckCircle2, ShieldAlert, Eye,
@@ -399,7 +400,7 @@ function ContactRow({
     setResult(null);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/admin/support/private-clients/message', {
+      const res = await fetchWithGatewayRetry('/api/admin/support/private-clients/message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

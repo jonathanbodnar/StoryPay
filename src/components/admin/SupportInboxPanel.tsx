@@ -15,6 +15,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { capitalizeName } from '@/lib/format-name';
 import { formatMessageTimestamp } from '@/lib/format-message-timestamp';
+import { fetchWithGatewayRetry } from '@/lib/fetch-retry';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import {
@@ -854,7 +855,7 @@ export function SupportInboxPanel() {
     setSending(true);
     setSendStatus(null);
     try {
-      const r = await fetch('/api/admin/support/bride-reply', {
+      const r = await fetchWithGatewayRetry('/api/admin/support/bride-reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

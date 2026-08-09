@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { capitalizeName } from '@/lib/format-name';
+import { fetchWithGatewayRetry } from '@/lib/fetch-retry';
 import { createPortal } from 'react-dom';
 import {
   Loader2, AlertCircle, User, Building2, Mail, Phone, ShieldCheck, ShieldAlert,
@@ -224,7 +225,7 @@ function VenueContactComposeRow({
     setResult(null);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/admin/support/private-clients/message', {
+      const res = await fetchWithGatewayRetry('/api/admin/support/private-clients/message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
