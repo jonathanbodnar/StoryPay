@@ -3393,7 +3393,7 @@ function TicketsView({
                   {/* From */}
                   <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-100">
                     <span className="w-14 shrink-0 text-[11px] font-medium text-gray-400">From</span>
-                    <span className="text-xs text-gray-500">support@storyvenue.com</span>
+                    <span className="text-xs text-gray-500">clients@storyvenue.com</span>
                   </div>
                   {/* To */}
                   <div className="flex items-start gap-2 px-3 py-1.5 border-b border-gray-100">

@@ -337,7 +337,7 @@ function legacyInviteEmailHtml(args: {
       <li>Confirm your venue details and connect your calendar</li>
       <li>Import or sync your contacts</li>
       <li>Set up payment processing if you take deposits</li>
-      <li>Reach out to support@storyvenue.com if you need anything</li>
+      <li>Reach out to clients@storyvenue.com if you need anything</li>
     </ul>
     <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
       You&apos;re receiving this because the StoryVenue concierge team set up your subaccount.

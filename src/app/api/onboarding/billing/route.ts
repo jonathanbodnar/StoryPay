@@ -49,7 +49,7 @@ function holdGate(reason: string): NextResponse | null {
   return NextResponse.json(
     {
       error:
-        'Billing is temporarily unavailable, so we can’t finish setting up your listing. Please try again in a few minutes or contact support@storyvenue.com.',
+        'Billing is temporarily unavailable, so we can’t finish setting up your listing. Please try again in a few minutes or contact clients@storyvenue.com.',
     },
     { status: 503 },
   );

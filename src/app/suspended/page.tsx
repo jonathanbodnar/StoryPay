@@ -21,17 +21,17 @@ export default function SuspendedPage() {
             Your account access has been suspended. If you believe this is an
             error, please contact support at{' '}
             <a
-              href="mailto:support@storyvenue.com"
+              href="mailto:clients@storyvenue.com"
               className="text-blue-600 hover:underline font-medium"
             >
-              support@storyvenue.com
+              clients@storyvenue.com
             </a>
             .
           </p>
         </div>
 
         <a
-          href="mailto:support@storyvenue.com"
+          href="mailto:clients@storyvenue.com"
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white hover:bg-gray-800 transition-colors"
         >
           Contact Support

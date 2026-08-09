@@ -87,8 +87,8 @@ export default function PastDueWall({
           </button>
           <p className="mt-4 text-xs text-gray-400">
             Need help? Email{' '}
-            <a href="mailto:support@storyvenue.com" className="underline hover:text-gray-600">
-              support@storyvenue.com
+            <a href="mailto:clients@storyvenue.com" className="underline hover:text-gray-600">
+              clients@storyvenue.com
             </a>
           </p>
         </div>
@@ -167,8 +167,8 @@ export default function PastDueWall({
 
         <p className="mt-6 text-center text-xs text-gray-400">
           Need help? Email us at{' '}
-          <a href="mailto:support@storyvenue.com" className="underline hover:text-gray-600">
-            support@storyvenue.com
+          <a href="mailto:clients@storyvenue.com" className="underline hover:text-gray-600">
+            clients@storyvenue.com
           </a>
         </p>
       </div>
