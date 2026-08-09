@@ -8,9 +8,11 @@
  * so the concierge team can reach any of them by email or SMS without ever
  * leaving the Support Inbox.
  *
- * SMS is owner-only: it rides the venue's own GHL/A2P connection and only
- * the owner's phone (venues.notification_phone) is on file today —
- * venue_team_members has no phone column yet.
+ * SMS rides the venue's own GHL/A2P connection and requires a phone on
+ * file — venues.notification_phone/phone for the owner, or
+ * venue_team_members.phone for a team member (team members set this on
+ * their Team settings page; required for new adds, optional/backfillable
+ * for existing ones).
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -37,6 +39,8 @@ interface TeamMemberInfo {
   id: string;
   name: string;
   email: string | null;
+  phone: string | null;
+  smsAvailable: boolean;
   role: string | null;
   status: string | null;
 }
@@ -269,8 +273,8 @@ function VenueDetail({ venue, supportUserId }: { venue: PrivateClientVenue; supp
       label: m.name,
       role: m.role || 'Team',
       email: m.email,
-      phone: null,
-      smsAvailable: false,
+      phone: m.phone,
+      smsAvailable: m.smsAvailable,
       recipientType: 'team_member' as const,
       teamMemberId: m.id,
     })),

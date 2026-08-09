@@ -201,8 +201,10 @@ function VenueContactComposeRow({
   const isOwner = contact.id.startsWith('owner:');
   const recipientType = isOwner ? 'owner' : 'team_member';
   const teamMemberId  = isOwner ? undefined : contact.id;
-  // SMS: owner-only AND venue must have GHL connected AND phone on file
-  const smsAvailable  = isOwner && ghlConnected && Boolean(contact.phone);
+  // SMS rides the venue's own GHL/A2P connection — works for the owner or
+  // any team member, as long as the venue is connected and this contact
+  // has a phone on file.
+  const smsAvailable  = ghlConnected && Boolean(contact.phone);
 
   const [composeChannel, setComposeChannel] = useState<'email' | 'sms' | null>(null);
   const [subject, setSubject]   = useState('');

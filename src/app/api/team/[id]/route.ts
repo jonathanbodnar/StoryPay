@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSessionUser } from '@/lib/session';
+import { normalizePhone } from '@/lib/ghl';
 
 async function getVenueId() {
   const c = await cookies();
@@ -22,12 +23,24 @@ export async function PATCH(
   const session = await getSessionUser();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const updates: Record<string, string | boolean> = {};
+  const updates: Record<string, string | boolean | null> = {};
   if (body.first_name != null) updates.first_name = body.first_name;
   if (body.last_name  != null) updates.last_name  = body.last_name;
   if (body.email      != null) updates.email      = body.email;
   if (body.role       != null) updates.role       = body.role;
   if (body.status     != null) updates.status     = body.status;
+  if (body.phone      != null) {
+    const trimmed = String(body.phone).trim();
+    if (!trimmed) {
+      updates.phone = null;
+    } else {
+      const normalized = normalizePhone(trimmed);
+      if (!normalized) {
+        return NextResponse.json({ error: 'Enter a valid mobile phone number' }, { status: 400 });
+      }
+      updates.phone = normalized;
+    }
+  }
   if (body.hide_revenue !== undefined && typeof body.hide_revenue === 'boolean') {
     if (session.memberId !== null) {
       return NextResponse.json({ error: 'Only the venue owner can change revenue visibility' }, { status: 403 });

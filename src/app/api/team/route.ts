@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { getEffectiveVenueId } from '@/lib/effective-venue';
+import { normalizePhone } from '@/lib/ghl';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,10 +128,18 @@ export async function POST(request: NextRequest) {
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const { first_name, last_name, email, role } = body;
+  const { first_name, last_name, email, role, phone } = body;
 
   if (!first_name?.trim() || !email?.trim()) {
     return NextResponse.json({ error: 'First name and email are required' }, { status: 400 });
+  }
+
+  // Required going forward so the concierge team can always reach a team
+  // member by SMS (existing members added before this requirement keep
+  // whatever they have on file — see PATCH /api/team/[id] for updates).
+  const normalizedPhone = normalizePhone(phone);
+  if (!phone?.trim() || !normalizedPhone) {
+    return NextResponse.json({ error: 'A valid mobile phone number is required' }, { status: 400 });
   }
 
   const { data: existing } = await supabaseAdmin
@@ -159,6 +168,7 @@ export async function POST(request: NextRequest) {
       last_name:  (last_name || '').trim(),
       name:       [first_name.trim(), (last_name || '').trim()].filter(Boolean).join(' '),
       email:      email.trim().toLowerCase(),
+      phone:      normalizedPhone,
       role:       role || 'member',
       status:     'invited',
       invited_at: new Date().toISOString(),

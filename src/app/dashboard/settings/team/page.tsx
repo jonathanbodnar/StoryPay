@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import {
- Plus, Trash2, Loader2, Users, Mail, Shield, ChevronDown,
+ Plus, Trash2, Loader2, Users, Mail, Phone, Shield, ChevronDown,
  CheckCircle2, Pencil, Send, MoreHorizontal, X, KeyRound,
 } from 'lucide-react';
 import PasswordStrengthBar from '@/components/PasswordStrengthBar';
@@ -13,6 +13,7 @@ interface TeamMember {
  first_name: string;
  last_name: string;
  email: string;
+ phone: string | null;
  role: 'owner' | 'admin' | 'member';
  status: 'active' | 'invited' | 'inactive';
  created_at: string;
@@ -64,7 +65,7 @@ export default function TeamPage() {
  const [deletingId, setDeletingId] = useState<string | null>(null);
  const [resendingId, setResendingId] = useState<string | null>(null);
  const [editingId, setEditingId] = useState<string | null>(null);
- const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', role: 'member', new_password: '', confirm_password: '' });
+ const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '', role: 'member', new_password: '', confirm_password: '' });
  const [editSaving, setEditSaving] = useState(false);
  const [editError, setEditError] = useState('');
  const [editPasswordError, setEditPasswordError] = useState('');
@@ -74,7 +75,7 @@ export default function TeamPage() {
  const [venueOwnerSession, setVenueOwnerSession] = useState(false);
  const [resetPasswordId, setResetPasswordId] = useState<string | null>(null);
 
- const [form, setForm] = useState({ first_name: '', last_name: '', email: '', role: 'member' });
+ const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '', role: 'member' });
 
  const fetchMembers = useCallback(async () => {
  try {
@@ -152,7 +153,7 @@ export default function TeamPage() {
  const data = await res.json();
  if (!res.ok) { setError(data.error || 'Failed to add member'); return; }
  setMembers(prev => [...prev, data]);
- setForm({ first_name: '', last_name: '', email: '', role: 'member' });
+ setForm({ first_name: '', last_name: '', email: '', phone: '', role: 'member' });
  setShowForm(false);
  showSaved('Member invited successfully');
  } catch { setError('Network error — please try again'); }
@@ -233,7 +234,7 @@ export default function TeamPage() {
 
  function startEdit(m: TeamMember) {
  setEditingId(m.id);
- setEditForm({ first_name: m.first_name || '', last_name: m.last_name || '', email: m.email, role: m.role, new_password: '', confirm_password: '' });
+ setEditForm({ first_name: m.first_name || '', last_name: m.last_name || '', email: m.email, phone: m.phone || '', role: m.role, new_password: '', confirm_password: '' });
  setEditError('');
  setEditPasswordError('');
  setMenuOpenId(null);
@@ -345,6 +346,19 @@ export default function TeamPage() {
  />
  </div>
  <div>
+ <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+ Mobile Phone <span className="text-red-400">*</span>
+ </label>
+ <input
+ type="tel"
+ required
+ value={form.phone}
+ onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+ placeholder="(555) 555-5555"
+ className={INPUT}
+ />
+ </div>
+ <div>
  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Role</label>
  <div className="relative">
  <select
@@ -358,6 +372,7 @@ export default function TeamPage() {
  </div>
  </div>
  </div>
+ <p className="text-[11px] text-gray-400">We use their mobile number to send SMS updates from the concierge team.</p>
  {error && <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
  <div className="flex justify-end gap-2 pt-1">
  <button
@@ -431,6 +446,19 @@ export default function TeamPage() {
  onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))}
  className={INPUT}
  />
+ </div>
+ <div>
+ <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+ Mobile Phone
+ </label>
+ <input
+ type="tel"
+ value={editForm.phone}
+ onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))}
+ placeholder="(555) 555-5555"
+ className={INPUT}
+ />
+ <p className="text-[11px] text-gray-400 mt-1">So the concierge team can reach them by SMS.</p>
  </div>
  <div>
  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Role</label>
@@ -610,6 +638,20 @@ export default function TeamPage() {
  <div className="flex items-center gap-1.5 mt-0.5">
  <Mail size={11} className="text-gray-400"/>
  <p className="text-xs text-gray-500 truncate">{m.email}</p>
+ </div>
+ <div className="flex items-center gap-1.5 mt-0.5">
+ <Phone size={11} className={m.phone ? 'text-gray-400' : 'text-amber-400'}/>
+ {m.phone ? (
+ <p className="text-xs text-gray-500 truncate">{m.phone}</p>
+ ) : (
+ <button
+ type="button"
+ onClick={() => startEdit(m)}
+ className="text-xs text-amber-600 hover:underline"
+ >
+ Add phone number
+ </button>
+ )}
  </div>
  </div>
 

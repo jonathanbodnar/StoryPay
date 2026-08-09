@@ -5,7 +5,7 @@
  * (venues.is_private_client = true — toggled from the Venue Management
  * card), together with the account's primary owner and active team members,
  * so the concierge team can see their whole watch list — and reach any
- * contact on it — without leaving the Support Inbox.
+ * contact on it, by email or SMS — without leaving the Support Inbox.
  *
  * Auth: super admin OR support agent (same gate as the rest of /admin/support).
  */
@@ -40,6 +40,7 @@ interface TeamMemberRow {
   first_name: string | null;
   last_name: string | null;
   email: string | null;
+  phone: string | null;
   role: string | null;
   status: string | null;
 }
@@ -70,7 +71,7 @@ export async function GET() {
   const [{ data: teamRows }, { data: planRows }, { data: profileRows }] = await Promise.all([
     supabaseAdmin
       .from('venue_team_members')
-      .select('id, venue_id, name, first_name, last_name, email, role, status')
+      .select('id, venue_id, name, first_name, last_name, email, phone, role, status')
       .in('venue_id', venueIds)
       .neq('status', 'inactive'),
     planIds.length > 0
@@ -117,6 +118,10 @@ export async function GET() {
       id: t.id,
       name: capitalizeName(t.name || [t.first_name, t.last_name].filter(Boolean).join(' ').trim()) || t.email || 'Team member',
       email: t.email,
+      phone: t.phone || null,
+      // SMS rides the venue's own GHL/A2P connection — same requirement as
+      // the owner, just keyed off this member's own phone on file.
+      smsAvailable: Boolean(v.ghl_connected && t.phone),
       role: t.role,
       status: t.status,
     }));
@@ -133,9 +138,8 @@ export async function GET() {
         name: ownerName,
         email: ownerEmail,
         phone: v.notification_phone || v.phone || null,
-        // SMS only works for the owner today — it rides the venue's own
-        // GHL/A2P connection, and only the owner's phone is on file
-        // (venue_team_members has no phone column yet).
+        // SMS rides the venue's own GHL/A2P connection — owner's number
+        // comes from venues.notification_phone/phone.
         smsAvailable: Boolean(v.ghl_connected && (v.notification_phone || v.phone)),
       },
       teamMembers: team,

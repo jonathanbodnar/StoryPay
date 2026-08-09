@@ -27,9 +27,10 @@
  *     routes From/Reply-To to clients@storyvenue.com. Works for any venue,
  *     not just Private Clients.
  *
- * SMS only works for the owner today: it rides the venue's own GHL/A2P
- * connection (same as owner push/SMS notifications). Phone is resolved as
- * venues.notification_phone falling back to venues.phone.
+ * SMS works for the owner or any team member with a phone on file — it
+ * rides the venue's own GHL/A2P connection. Owner phone is resolved as
+ * venues.notification_phone falling back to venues.phone; team member
+ * phone comes from venue_team_members.phone.
  *
  * Auth: super admin OR support agent.
  */
@@ -173,16 +174,16 @@ export async function POST(req: NextRequest) {
     if (!teamMemberId) return NextResponse.json({ error: 'teamMemberId required for recipientType=team_member' }, { status: 400 });
     const { data: tmRow } = await supabaseAdmin
       .from('venue_team_members')
-      .select('id, name, first_name, last_name, email')
+      .select('id, name, first_name, last_name, email, phone')
       .eq('id', teamMemberId)
       .eq('venue_id', venueId)
       .maybeSingle();
     if (!tmRow) return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
-    const tm = tmRow as { id: string; name: string | null; first_name: string | null; last_name: string | null; email: string | null };
+    const tm = tmRow as { id: string; name: string | null; first_name: string | null; last_name: string | null; email: string | null; phone: string | null };
     recipientTeamMemberId = tm.id;
     recipientLabel = tm.name || [tm.first_name, tm.last_name].filter(Boolean).join(' ').trim() || tm.email || 'Team member';
     recipientEmail = tm.email || null;
-    // SMS is owner-only — team member sends go via email only.
+    recipientPhone = tm.phone || null;
   }
 
   let externalSent = false;
@@ -223,25 +224,26 @@ export async function POST(req: NextRequest) {
     }
     externalSent = true;
   } else {
-    // sms
-    if (recipientType !== 'owner') {
-      return NextResponse.json({ error: 'SMS is only available for the account owner' }, { status: 400 });
-    }
+    // sms — works for the owner or any team member with a phone on file,
+    // riding the venue's own GHL/A2P connection.
     if (!venue.ghl_connected || !venue.ghl_location_id) {
       return NextResponse.json({ error: 'Venue has not connected GHL — cannot send SMS' }, { status: 400 });
     }
     const token = getGhlToken({ ghl_access_token: venue.ghl_access_token });
     if (!token) return NextResponse.json({ error: 'No GHL access token available for this venue' }, { status: 400 });
     const phoneE164 = normalizePhone(recipientPhone);
-    if (!phoneE164) return NextResponse.json({ error: 'No usable phone number on file for this owner' }, { status: 400 });
+    if (!phoneE164) return NextResponse.json({ error: 'No usable phone number on file for this recipient' }, { status: 400 });
 
     try {
+      const placeholderEmail = recipientType === 'owner'
+        ? `owner.${venue.id}@storyvenue.concierge.placeholder`
+        : `team.${recipientTeamMemberId}@storyvenue.concierge.placeholder`;
       const contactId = await findOrCreateContact(token, venue.ghl_location_id, {
-        email: recipientEmail || `owner.${venue.id}@storyvenue.concierge.placeholder`,
+        email: recipientEmail || placeholderEmail,
         phone: phoneE164,
         firstName: recipientLabel,
       });
-      if (!contactId) return NextResponse.json({ error: 'Could not resolve a GHL contact for the owner' }, { status: 502 });
+      if (!contactId) return NextResponse.json({ error: 'Could not resolve a GHL contact for this recipient' }, { status: 502 });
       const smsSignOff = isVenueContact
         ? (agentFirstName ? `${agentFirstName}, StoryVenue Concierge` : 'StoryVenue Concierge')
         : 'StoryVenue Client Services';
