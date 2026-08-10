@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
       if (!contactId) {
         try {
           const search = await ghlRequest(
-            `/contacts/search/duplicate?locationId=${locationId}&phone=${encodeURIComponent(normalizedPhone)}`,
+            `/contacts/search/duplicate?locationId=${locationId}&number=${encodeURIComponent(normalizedPhone)}`,
             ghlToken,
             { locationId },
           );

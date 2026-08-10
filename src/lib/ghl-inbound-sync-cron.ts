@@ -80,7 +80,9 @@ async function lookupGhlContactId(
 ): Promise<string | null> {
   const attempts: Array<[string, string]> = [];
   const e164 = normalizePhone(phone);
-  if (e164) attempts.push(['phone', e164]);
+  // GHL's duplicate-search endpoint takes `number` for phone lookups
+  // (`phone` is rejected with a 422).
+  if (e164) attempts.push(['number', e164]);
   if (email && !PLACEHOLDER_EMAIL_RE.test(email)) attempts.push(['email', email]);
   if (attempts.length === 0) return null;
 

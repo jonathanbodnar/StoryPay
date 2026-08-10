@@ -303,7 +303,7 @@ async function findGhlContactIdByPhone(
 ): Promise<string | null> {
   try {
     const res = (await ghlRequest(
-      `/contacts/search/duplicate?locationId=${encodeURIComponent(locationId)}&phone=${encodeURIComponent(phoneE164)}`,
+      `/contacts/search/duplicate?locationId=${encodeURIComponent(locationId)}&number=${encodeURIComponent(phoneE164)}`,
       v2Token,
       { locationId },
     )) as { contact?: { id?: string } };

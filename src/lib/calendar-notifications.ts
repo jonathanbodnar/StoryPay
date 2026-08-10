@@ -394,7 +394,7 @@ async function dispatchSms(
       try {
         const norm = normalizePhone(phone) || phone;
         const search = await ghlRequest(
-          `/contacts/search/duplicate?locationId=${locationId}&phone=${encodeURIComponent(norm)}`,
+          `/contacts/search/duplicate?locationId=${locationId}&number=${encodeURIComponent(norm)}`,
           token,
           { locationId },
         );

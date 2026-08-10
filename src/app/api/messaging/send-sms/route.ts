@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     if (!resolvedContactId) {
       const searchRes = await ghlRequest(
-        `/contacts/search/duplicate?locationId=${venue.ghl_location_id}&phone=${encodeURIComponent(phone)}`,
+        `/contacts/search/duplicate?locationId=${venue.ghl_location_id}&number=${encodeURIComponent(phone)}`,
         venue.ghl_access_token,
         { locationId: venue.ghl_location_id }
       );

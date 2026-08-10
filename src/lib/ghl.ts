@@ -1052,15 +1052,38 @@ export async function findOrCreateContact(
   if (!identifier) throw new Error('findOrCreateContact: email or phone required');
 
   // ── 1. Look up existing contact ─────────────────────────────────────────
-  const searchKey = contact.email ? 'email' : 'phone';
-  let existingId: string | null = null;
-  try {
-    const searchRes = await ghlRequest(
-      `/contacts/search/duplicate?locationId=${encodeURIComponent(locationId)}&${searchKey}=${encodeURIComponent(identifier)}`,
+  // The duplicate-search endpoint takes `email` or `number` (NOT `phone` —
+  // GHL 422s on that param). Email match is tried first; but if the
+  // email-matched record has no phone stored and we have one, prefer a
+  // contact that already owns that number: locations with duplicate-contact
+  // protection refuse to copy the phone onto the email-only record, which
+  // permanently blocks SMS sends through it.
+  const searchDuplicate = async (params: string): Promise<{ id?: string; phone?: string | null } | null> => {
+    const res = await ghlRequest(
+      `/contacts/search/duplicate?locationId=${encodeURIComponent(locationId)}&${params}`,
       token,
       { locationId }
     );
-    existingId = searchRes.contact?.id ?? null;
+    return res.contact ?? null;
+  };
+  let existingId: string | null = null;
+  try {
+    if (contact.email) {
+      const byEmail = await searchDuplicate(`email=${encodeURIComponent(contact.email)}`);
+      existingId = byEmail?.id ?? null;
+      if (existingId && normalizedPhone && !byEmail?.phone) {
+        const byPhone = await searchDuplicate(`number=${encodeURIComponent(normalizedPhone)}`).catch(() => null);
+        if (byPhone?.id && byPhone.id !== existingId) {
+          console.log(
+            `[ghl] findOrCreateContact: email match ${existingId} has no phone — using phone-owning contact ${byPhone.id} instead`,
+          );
+          existingId = byPhone.id;
+        }
+      }
+    } else if (normalizedPhone) {
+      const byPhone = await searchDuplicate(`number=${encodeURIComponent(normalizedPhone)}`);
+      existingId = byPhone?.id ?? null;
+    }
   } catch {
     // Non-fatal — fall through to creation
   }
