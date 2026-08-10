@@ -1225,10 +1225,12 @@ export async function updateOpportunityStage(
   opportunityId: string,
   pipelineStageId: string,
   monetaryValue?: number,
+  status?: 'open' | 'won' | 'lost' | 'abandoned',
 ): Promise<void> {
   const token = await resolveLocationToken(accessToken, locationId);
   const body: Record<string, unknown> = { pipelineStageId };
   if (monetaryValue !== undefined) body.monetaryValue = monetaryValue;
+  if (status !== undefined) body.status = status;
   await ghlRequest(`/opportunities/${encodeURIComponent(opportunityId)}`, token, {
     method: 'PUT',
     body,

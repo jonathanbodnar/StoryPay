@@ -49,8 +49,15 @@ const OWNER_GHL_TAG = 'saas-client';
  * Lifecycle stages in the owner's "SaaS Clients" pipeline. Resolved to GHL
  * stage IDs by NAME at runtime (see resolveOwnerPipeline) so the owner can
  * reorder/rename with no code change as long as these display names match.
+ *
+ * NOTE: this MUST match the live GHL stage name exactly (case-insensitive).
+ * The pipeline stage is named "Paid Listing" in GHL — it was originally
+ * built against "Pro Listing" and silently broken (resolveOwnerPipeline
+ * requires ALL 4 names to match, so a mismatch on this stage was skipping
+ * opportunity placement for every venue, not just paid ones) until this
+ * name was corrected.
  */
-const STAGE_NAMES = ['New Listing', 'Trial Started', 'Free Listing', 'Pro Listing'] as const;
+const STAGE_NAMES = ['New Listing', 'Trial Started', 'Free Listing', 'Paid Listing'] as const;
 type StageName = (typeof STAGE_NAMES)[number];
 
 interface OwnerGhlConfig {
@@ -93,10 +100,15 @@ interface VenueSyncRow {
   directory_subscription_status: string | null;
   directory_subscription_external_id: string | null;
   directory_card_on_file: boolean | null;
+  // Last-synced snapshot so the periodic reconciler can skip venues whose
+  // target stage/status hasn't changed since the last successful sync
+  // instead of round-tripping GHL for all 80+ venues on every run.
+  owner_ghl_synced_stage: string | null;
+  owner_ghl_synced_status: string | null;
 }
 
 const VENUE_SYNC_COLUMNS =
-  'id, name, email, phone, owner_first_name, owner_last_name, slug, city, state, owner_ghl_contact_id, owner_ghl_opportunity_id, directory_subscription_status, directory_subscription_external_id, directory_card_on_file';
+  'id, name, email, phone, owner_first_name, owner_last_name, slug, city, state, owner_ghl_contact_id, owner_ghl_opportunity_id, directory_subscription_status, directory_subscription_external_id, directory_card_on_file, owner_ghl_synced_stage, owner_ghl_synced_status';
 
 async function loadVenueForSync(venueId: string): Promise<VenueSyncRow | null> {
   const { data, error } = await supabaseAdmin
@@ -189,18 +201,19 @@ async function resolveOwnerPipeline(cfg: OwnerGhlConfig): Promise<ResolvedOwnerP
   return ownerPipelineInFlight;
 }
 
-/** Monthly value in dollars for each pipeline stage. Free = $0, Pro tiers = $97/mo. */
+/** Monthly value in dollars for each pipeline stage. Free = $0, paid tiers = $97/mo. */
 const STAGE_VALUE: Record<StageName, number> = {
   'New Listing':    0,
   'Free Listing':   0,
   'Trial Started':  97,
-  'Pro Listing':    97,
+  'Paid Listing':   97,
 };
 
 /**
  * Map a venue's lifecycle to its target stage in the owner's pipeline, reusing
  * the shared funnel-stage logic (single source of truth):
- *   - Pro Listing   — active paid subscription.
+ *   - Paid Listing  — active paid subscription, OR past_due (still a paying
+ *     customer with a payment problem — not the same as a fresh trial).
  *   - Trial Started — Pro trial (card on file + subscription external id), not active-paid.
  *   - Free Listing  — Free plan (card vaulted, no subscription external id).
  *   - New Listing   — everything else (listing exists, no card yet).
@@ -212,11 +225,25 @@ function targetStageName(v: VenueSyncRow): StageName {
     directory_subscription_external_id: v.directory_subscription_external_id,
     directory_card_on_file: v.directory_card_on_file,
   };
-  const paidActive = String(v.directory_subscription_status ?? '').toLowerCase() === 'active';
-  if (paidActive) return 'Pro Listing';
+  const status = String(v.directory_subscription_status ?? '').toLowerCase();
+  const paidActive = status === 'active' || status === 'past_due';
+  if (paidActive) return 'Paid Listing';
   if (choseProPlan(funnelState)) return 'Trial Started';
   if (choseFreePlan(funnelState)) return 'Free Listing';
   return 'New Listing';
+}
+
+/**
+ * GHL opportunity `status` (separate from pipeline stage) — flips a canceled
+ * venue's opportunity to "lost" so churn is visible in GHL's own win/loss
+ * reporting without needing a dedicated "Canceled" stage. The stage itself
+ * is left as whichever lifecycle stage the venue's current fields resolve
+ * to (e.g. a canceled Pro trial that never converted stays "Trial Started",
+ * marked lost) — see targetStageName.
+ */
+function targetOpportunityStatus(v: VenueSyncRow): 'open' | 'lost' {
+  const status = String(v.directory_subscription_status ?? '').toLowerCase();
+  return status === 'canceled' || status === 'cancelled' ? 'lost' : 'open';
 }
 
 /**
@@ -235,31 +262,41 @@ async function syncVenueOpportunity(
   const stageName = targetStageName(venue);
   const stageId = resolved.stageIds[stageName];
   const monetaryValue = STAGE_VALUE[stageName];
+  const oppStatus = targetOpportunityStatus(venue);
   const oppName = (venue.name ?? '').trim() || 'StoryVenue Venue';
 
   try {
     if (venue.owner_ghl_opportunity_id) {
-      await updateOpportunityStage(cfg.token, cfg.locationId, venue.owner_ghl_opportunity_id, stageId, monetaryValue);
+      await updateOpportunityStage(cfg.token, cfg.locationId, venue.owner_ghl_opportunity_id, stageId, monetaryValue, oppStatus);
       console.log(
-        `[owner-ghl-sync] moved opportunity ${venue.owner_ghl_opportunity_id} → "${stageName}" ($${monetaryValue}/mo) for venue ${venue.id}`,
+        `[owner-ghl-sync] moved opportunity ${venue.owner_ghl_opportunity_id} → "${stageName}" ($${monetaryValue}/mo, status=${oppStatus}) for venue ${venue.id}`,
       );
-      return;
-    }
-
-    const oppId = await createOpportunity(cfg.token, cfg.locationId, {
-      pipelineId: resolved.pipelineId,
-      pipelineStageId: stageId,
-      name: oppName,
-      contactId,
-      monetaryValue,
-    });
-    if (oppId) {
+    } else {
+      const oppId = await createOpportunity(cfg.token, cfg.locationId, {
+        pipelineId: resolved.pipelineId,
+        pipelineStageId: stageId,
+        name: oppName,
+        contactId,
+        monetaryValue,
+        status: oppStatus,
+      });
+      if (!oppId) return;
       await supabaseAdmin.from('venues').update({ owner_ghl_opportunity_id: oppId }).eq('id', venue.id);
       venue.owner_ghl_opportunity_id = oppId;
       console.log(
-        `[owner-ghl-sync] created opportunity ${oppId} in "${stageName}" for venue ${venue.id}`,
+        `[owner-ghl-sync] created opportunity ${oppId} in "${stageName}" (status=${oppStatus}) for venue ${venue.id}`,
       );
     }
+
+    // Best-effort snapshot so the periodic reconciler can skip this venue
+    // next run if nothing has changed (never blocks — a failed write here
+    // just means the next run re-checks this venue against GHL again).
+    await supabaseAdmin
+      .from('venues')
+      .update({ owner_ghl_synced_stage: stageName, owner_ghl_synced_status: oppStatus })
+      .eq('id', venue.id);
+    venue.owner_ghl_synced_stage = stageName;
+    venue.owner_ghl_synced_status = oppStatus;
   } catch (err) {
     console.warn(
       '[owner-ghl-sync] syncVenueOpportunity failed for',
@@ -331,6 +368,105 @@ export async function pushVenueToOwnerGhl(
     console.warn('[owner-ghl-sync] pushVenueToOwnerGhl failed for', venue.id, err instanceof Error ? err.message : err);
     return venue.owner_ghl_contact_id;
   }
+}
+
+// ── Periodic reconciliation (SaaS → GHL "SaaS Clients" pipeline) ───────────
+
+interface ReconcileResult {
+  totalEligible: number;
+  alreadyInSync: number;
+  synced: number;
+  failed: number;
+  skippedNoIdentifier: number;
+  byTargetStage: Record<StageName, number>;
+  failedVenueIds: string[];
+}
+
+async function fetchAllNonDemoVenues(): Promise<VenueSyncRow[]> {
+  // Paginate past Supabase's 1,000-row cap (defensive — we're nowhere near it
+  // today, but this mirrors every other full-table venue scan in the app).
+  const rows: VenueSyncRow[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabaseAdmin
+      .from('venues')
+      .select(VENUE_SYNC_COLUMNS)
+      .neq('is_demo', true)
+      .order('created_at', { ascending: true })
+      .range(from, from + page - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as VenueSyncRow[];
+    rows.push(...batch);
+    if (batch.length < page) break;
+  }
+  return rows;
+}
+
+/** Does this venue's current lifecycle already match what's stored in GHL? */
+function isAlreadyInSync(v: VenueSyncRow): boolean {
+  if (!v.owner_ghl_contact_id || !v.owner_ghl_opportunity_id) return false;
+  return (
+    v.owner_ghl_synced_stage === targetStageName(v) &&
+    v.owner_ghl_synced_status === targetOpportunityStatus(v)
+  );
+}
+
+/**
+ * Reconcile every non-demo venue's contact + opportunity stage/status against
+ * its CURRENT lifecycle fields, so the owner's "SaaS Clients" pipeline in GHL
+ * stays a 1:1 mirror of the SaaS venue list — new venues get pushed, and any
+ * venue whose trial/paid/canceled status has changed since the last sync
+ * gets moved to the correct stage automatically.
+ *
+ * Cheap to run often: venues already in sync (contact + opportunity exist and
+ * match the last-synced stage/status) are skipped with ZERO GHL calls, so a
+ * steady-state run only round-trips the handful of venues that actually
+ * changed since the previous run.
+ */
+export async function reconcileOwnerGhlStages(opts?: { dryRun?: boolean }): Promise<ReconcileResult> {
+  const dryRun = opts?.dryRun === true;
+  const out: ReconcileResult = {
+    totalEligible: 0,
+    alreadyInSync: 0,
+    synced: 0,
+    failed: 0,
+    skippedNoIdentifier: 0,
+    byTargetStage: { 'New Listing': 0, 'Trial Started': 0, 'Free Listing': 0, 'Paid Listing': 0 },
+    failedVenueIds: [],
+  };
+
+  const cfg = getOwnerGhlConfig();
+  if (!cfg) return out;
+
+  const venues = await fetchAllNonDemoVenues();
+  for (const v of venues) {
+    const hasIdentifier = Boolean((v.email ?? '').trim() || normalizePhone(v.phone));
+    if (!hasIdentifier) {
+      out.skippedNoIdentifier += 1;
+      continue;
+    }
+    out.totalEligible += 1;
+    out.byTargetStage[targetStageName(v)] += 1;
+
+    if (isAlreadyInSync(v)) {
+      out.alreadyInSync += 1;
+      continue;
+    }
+    if (dryRun) continue; // report-only — don't touch GHL.
+
+    const contactId = await pushVenueToOwnerGhl(v);
+    if (contactId && v.owner_ghl_opportunity_id) {
+      out.synced += 1;
+    } else {
+      out.failed += 1;
+      out.failedVenueIds.push(v.id);
+    }
+    // Small pacing gap — this is a background reconciliation job, not a
+    // user-facing action, so there's no reason to hammer GHL back-to-back.
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  return out;
 }
 
 /** Public listing URL for a venue slug (used in the owner alert). */

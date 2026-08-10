@@ -21,6 +21,12 @@
  *                                      (separate from the bride/lead thread
  *                                      model above — see concierge-sms-sync.ts)
  *   - ai-send               every 10m  AI Concierge follow-up SMS dispatch
+ *   - owner-ghl-stage-sync  every 30m  keeps the platform owner's "SaaS
+ *                                      Clients" GHL pipeline in sync with
+ *                                      every venue's trial/paid/canceled
+ *                                      lifecycle (see owner-ghl-sync.ts).
+ *                                      Cheap steady-state: venues already in
+ *                                      sync cost zero GHL calls per run.
  *
  * Guarantees:
  *   - Overlap guard: a tick is skipped when the previous run of that job is
@@ -135,6 +141,24 @@ const JOBS: ScheduledJob[] = [
       const r = await runAiSendCron();
       if (r.killSwitchEngaged) return 'kill-switch engaged; skipped';
       return `scanned=${r.scanned} sent=${r.sent} expired=${r.expired} retried=${r.retried} optedOut=${r.optedOut} errors=${r.errors.length}`;
+    },
+  },
+  {
+    // Not urgent — trial/paid/cancel transitions moving a CRM opportunity a
+    // few minutes late is a non-issue, so a light 30m cadence keeps this off
+    // GHL's rate limits entirely. No-op (zero GHL calls) if OWNER_GHL_* env
+    // vars aren't set, or if nothing has changed since the last run.
+    name: 'owner-ghl-stage-sync',
+    intervalMs: 30 * 60 * 1000,
+    initialDelayMs: 45 * 1000,
+    run: async () => {
+      const { reconcileOwnerGhlStages } = await import('@/lib/owner-ghl-sync');
+      const r = await reconcileOwnerGhlStages();
+      if (r.totalEligible === 0) return null; // not configured
+      if (r.synced > 0 || r.failed > 0) {
+        return `eligible=${r.totalEligible} in_sync=${r.alreadyInSync} synced=${r.synced} failed=${r.failed}`;
+      }
+      return null;
     },
   },
 ];
