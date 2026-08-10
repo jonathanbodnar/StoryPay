@@ -488,11 +488,13 @@ async function safeWriteV2ContactPhone(
   }
 
   // Step 2: Build PUT body. Echo back every "data" field GHL gave us, then
-  // overlay the new phone. Drop GHL-managed fields (id, dateAdded, etc.)
-  // that shouldn't be in an update.
+  // overlay the new phone. Drop GHL-managed/computed fields (id, dateAdded,
+  // *LowerCase mirrors, etc.) — GHL's v2 PUT validator hard-rejects them with
+  // 422 "property X should not exist", which silently blocked the phone
+  // write (and therefore the SMS send) for any contact GHL returned them on.
   const SKIP = new Set([
     'id',
-    'locationId',
+    'locationId', // rejected by the v2 PUT validator — the header + contact binding already scope it
     'dateAdded',
     'dateUpdated',
     'createdBy',
@@ -500,29 +502,51 @@ async function safeWriteV2ContactPhone(
     'attributionSource',
     'lastAttributionSource',
     'contactName',
-    'fullNameLowerCase',
+    'searchAfter',
+    'additionalEmails',
+    'additionalPhones',
   ]);
   const putBody: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(existing)) {
     if (SKIP.has(k)) continue;
+    if (k.endsWith('LowerCase')) continue; // computed mirrors (email/firstName/lastName/fullName…)
     if (v === undefined || v === null) continue;
     putBody[k] = v;
   }
   putBody.phone = phone;
-  putBody.locationId = locationId;
 
-  // Step 3: PUT and verify.
-  try {
-    await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, {
+  // Step 3: PUT and verify. If GHL still rejects specific properties, it
+  // names them exactly ("property X should not exist") — strip those and
+  // retry once, so unknown computed fields on other account configs can't
+  // permanently block the write.
+  const doPut = () =>
+    ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, {
       method: 'PUT',
       body: putBody,
       locationId,
     });
+  try {
+    await doPut();
     console.log(`[ghl] safeWriteV2ContactPhone: PUT succeeded for ${contactId}`);
   } catch (putErr) {
     const m = putErr instanceof Error ? putErr.message : String(putErr);
-    console.warn(`[ghl] safeWriteV2ContactPhone: PUT failed:`, m);
-    return false;
+    const offenders = [...m.matchAll(/property (\w+) should not exist/g)].map((x) => x[1]);
+    if (offenders.length === 0) {
+      console.warn(`[ghl] safeWriteV2ContactPhone: PUT failed:`, m);
+      return false;
+    }
+    for (const k of offenders) delete putBody[k];
+    console.warn(
+      `[ghl] safeWriteV2ContactPhone: PUT rejected properties [${offenders.join(', ')}] — retrying without them`,
+    );
+    try {
+      await doPut();
+      console.log(`[ghl] safeWriteV2ContactPhone: retry PUT succeeded for ${contactId}`);
+    } catch (retryErr) {
+      const rm = retryErr instanceof Error ? retryErr.message : String(retryErr);
+      console.warn(`[ghl] safeWriteV2ContactPhone: retry PUT failed:`, rm);
+      return false;
+    }
   }
 
   // Step 4: Confirm via re-GET (GHL is eventually consistent on writes;
@@ -580,9 +604,12 @@ async function ensureV2ContactHasPhone(
   }
 
   try {
+    // NOTE: no locationId in the body — GHL's v2 PUT validator rejects it
+    // ("property locationId should not exist"); the X-Location-Id header
+    // set by ghlRequest scopes the call.
     await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, accessToken, {
       method: 'PUT',
-      body: { phone, locationId },
+      body: { phone },
       locationId,
     });
     console.log(`[ghl] v2 PUT /contacts/${contactId} — wrote phone=${phone}`);
@@ -1105,9 +1132,10 @@ export async function findOrCreateContact(
   // ── 3. Patch phone if contact was created without it ────────────────────
   if (contactId && normalizedPhone && !cleanPayload.phone) {
     try {
+      // No locationId in the body — GHL's v2 PUT validator rejects it.
       await ghlRequest(`/contacts/${encodeURIComponent(contactId)}`, token, {
         method: 'PUT',
-        body: { phone: normalizedPhone, locationId },
+        body: { phone: normalizedPhone },
         locationId,
       });
     } catch {
