@@ -56,6 +56,10 @@ export const supportChannels = {
    *  no DB table. Scoped per thread/ticket so only agents looking at the
    *  same conversation see each other. */
   presence: (kind: 'thread' | 'ticket', id: string) => `presence:${kind}:${id}`,
+  /** Fired whenever a concierge <-> venue owner/team direct message is sent
+   *  or an SMS reply is synced in, so the Private Clients panel's message
+   *  history and "needs reply" state update live instead of only on open. */
+  privateClients: () => 'support:private-clients',
 } as const;
 
 /** Fired when a new lead is created so the Lead Inbox badge updates live. */
@@ -186,6 +190,17 @@ export interface ThreadPresenceEvent {
   agentName: string;
   /** 'ping' = still viewing (sent on mount + heartbeat). 'leave' = closed/navigated away. */
   kind:      'ping' | 'leave';
+}
+
+/** Fired on support:private-clients whenever a concierge <-> venue
+ *  owner/team direct message is sent or an SMS reply is synced in from
+ *  GHL. Payload is intentionally small (like VenueDirectInboxEvent) — the
+ *  panel just refetches the venue's message history on any event. */
+export interface PrivateClientMessageEvent {
+  venueId:   string;
+  /** 'outbound' = concierge sent it, 'inbound' = owner/team member replied */
+  direction: 'outbound' | 'inbound';
+  channel:   'email' | 'sms';
 }
 
 export interface TagsChangedEvent {

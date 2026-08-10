@@ -15,6 +15,11 @@
  *                                      active conversations feel instant
  *   - ghl-inbound-sync      every 60s  baseline sweep for colder threads
  *                                      (excludes what the hot tier covers)
+ *   - concierge-sms-sync    every 20s  inbound SMS replies to venue owner/
+ *                                      team members from Private Clients /
+ *                                      venue-contact-card direct messages
+ *                                      (separate from the bride/lead thread
+ *                                      model above — see concierge-sms-sync.ts)
  *   - ai-send               every 10m  AI Concierge follow-up SMS dispatch
  *
  * Guarantees:
@@ -100,6 +105,22 @@ const JOBS: ScheduledJob[] = [
         excludeHotTier: { windowMinutes: HOT_WINDOW_MINUTES, cap: HOT_MAX_THREADS },
       });
       return `venues=${r.venuesConsidered} threads=${r.threadsScanned} imported=${r.messagesImported} backfilled=${r.contactIdsBackfilled}`;
+    },
+  },
+  {
+    // Small, bounded contact set (only owners/team members the concierge
+    // team has actually texted), so a lighter cadence than the bride
+    // hot-tier is plenty while staying well clear of GHL rate limits.
+    name: 'concierge-sms-sync',
+    intervalMs: 20 * 1000,
+    initialDelayMs: 15 * 1000,
+    run: async () => {
+      const { runConciergeSmsReplySync } = await import('@/lib/concierge-sms-sync');
+      const r = await runConciergeSmsReplySync();
+      if (r.messagesImported > 0) {
+        return `contacts=${r.contactsChecked} imported=${r.messagesImported}`;
+      }
+      return null;
     },
   },
   {

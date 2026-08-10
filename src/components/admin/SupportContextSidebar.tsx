@@ -18,7 +18,7 @@ import {
   Loader2, AlertCircle, User, Building2, Mail, Phone, ShieldCheck, ShieldAlert,
   Sparkles, CircleDot, AlertTriangle, Calendar, Clock, Tag, Tags,
   Activity, Inbox, BellOff, RefreshCw, ExternalLink, ChevronDown, CheckCircle2,
-  StickyNote, CalendarPlus, Plus, Trash2, X, MessageSquare, Send,
+  StickyNote, CalendarPlus, Plus, Trash2, X, MessageSquare, Send, Reply,
 } from 'lucide-react';
 import { SlaPill } from '@/components/support/SlaIndicator';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
@@ -213,6 +213,37 @@ function VenueContactComposeRow({
   const [result, setResult]     = useState<'ok' | 'error' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Latest message for THIS contact (either direction) — surfaces an SMS
+  // reply right where it was texted from, even for venues that aren't on
+  // the Private Clients watch list (see src/lib/concierge-sms-sync.ts for
+  // how inbound replies get synced in from GHL).
+  const [lastMsg, setLastMsg] = useState<{ direction: 'outbound' | 'inbound'; body: string; created_at: string } | null>(null);
+
+  const loadLastMsg = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/admin/support/private-clients/${venueId}/messages`, { cache: 'no-store' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return;
+      const rows = (d.messages ?? []) as Array<{
+        recipient_type: string; recipient_team_member_id: string | null;
+        direction: 'outbound' | 'inbound'; body: string; created_at: string;
+      }>;
+      const mine = rows.find((m) =>
+        isOwner ? m.recipient_type === 'owner' : m.recipient_team_member_id === teamMemberId,
+      );
+      setLastMsg(mine ? { direction: mine.direction, body: mine.body, created_at: mine.created_at } : null);
+    } catch {
+      // best-effort
+    }
+  }, [venueId, isOwner, teamMemberId]);
+
+  useEffect(() => { void loadLastMsg(); }, [loadLastMsg]);
+
+  useBroadcastChannel(supportChannels.privateClients(), ['message'], (_event, payload) => {
+    const evt = payload as { venueId?: string } | null;
+    if (evt?.venueId === venueId) void loadLastMsg();
+  });
+
   const openCompose = (ch: 'email' | 'sms') => {
     setResult(null);
     setErrorMsg(null);
@@ -245,6 +276,7 @@ function VenueContactComposeRow({
       setResult('ok');
       setBody('');
       setSubject('');
+      void loadLastMsg();
       setTimeout(() => setComposeChannel(null), 1200);
     } catch (e) {
       setResult('error');
@@ -265,6 +297,12 @@ function VenueContactComposeRow({
           <p className="flex items-center gap-1 text-[10px] text-gray-500 truncate">
             <Mail size={9} className="text-gray-400 shrink-0" />
             <span className="truncate">{contact.email}</span>
+          </p>
+        )}
+        {lastMsg?.direction === 'inbound' && (
+          <p className="flex items-start gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-1 text-[10px] text-emerald-800">
+            <Reply size={9} className="text-emerald-600 shrink-0 mt-0.5" />
+            <span className="line-clamp-2">Replied: {lastMsg.body}</span>
           </p>
         )}
         <div className="flex items-center gap-1 flex-wrap">

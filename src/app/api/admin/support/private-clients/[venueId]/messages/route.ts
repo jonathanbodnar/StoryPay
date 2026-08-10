@@ -1,11 +1,13 @@
 /**
  * GET /api/admin/support/private-clients/[venueId]/messages
  *
- * Recent ad hoc concierge → owner/team messages for one Private Client
- * venue, across all recipients (outbound-only log — see
- * private_client_messages). Used by the Support Inbox → Private Clients
- * detail pane so the team can see "who already reached out and when"
- * before sending another message.
+ * Recent ad hoc concierge <-> owner/team messages for one Private Client
+ * venue, across all recipients — see private_client_messages. Includes
+ * both outbound concierge sends AND inbound SMS replies synced in from GHL
+ * (src/lib/concierge-sms-sync.ts), distinguished by `direction`. Used by
+ * the Support Inbox → Private Clients detail pane so the team can see "who
+ * already reached out and whether they replied" before sending another
+ * message.
  *
  * Auth: super admin OR support agent.
  */
@@ -29,7 +31,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ven
   const { data: rows, error } = await supabaseAdmin
     .from('private_client_messages')
     .select(
-      'id, recipient_type, recipient_team_member_id, recipient_label, recipient_email, recipient_phone, channel, body, external_sent, send_error, sent_by_support_user_id, created_at',
+      'id, recipient_type, recipient_team_member_id, recipient_label, recipient_email, recipient_phone, channel, body, direction, external_sent, send_error, sent_by_support_user_id, created_at',
     )
     .eq('venue_id', venueId)
     .order('created_at', { ascending: false })
@@ -56,11 +58,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ven
   const messages = ((rows ?? []) as Array<{
     id: string; recipient_type: string; recipient_team_member_id: string | null;
     recipient_label: string; recipient_email: string | null; recipient_phone: string | null;
-    channel: string; body: string; external_sent: boolean; send_error: string | null;
+    channel: string; body: string; direction: string | null; external_sent: boolean; send_error: string | null;
     sent_by_support_user_id: string | null; created_at: string;
   }>).map((r) => ({
     ...r,
-    sentByName: r.sent_by_support_user_id ? agentNameById.get(r.sent_by_support_user_id) ?? 'Concierge team' : 'Concierge team',
+    direction: r.direction === 'inbound' ? 'inbound' : 'outbound',
+    sentByName: r.direction === 'inbound'
+      ? r.recipient_label
+      : (r.sent_by_support_user_id ? agentNameById.get(r.sent_by_support_user_id) ?? 'Concierge team' : 'Concierge team'),
   }));
 
   return NextResponse.json({ messages });

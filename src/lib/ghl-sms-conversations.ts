@@ -474,7 +474,7 @@ export async function insertInboundGhlSms(params: {
   return { ok: true, inserted: true, venueCustomerId: customerId };
 }
 
-function ghlApiMessagesFromResponse(raw: unknown): Record<string, unknown>[] {
+export function ghlApiMessagesFromResponse(raw: unknown): Record<string, unknown>[] {
   if (!raw || typeof raw !== 'object') return [];
   const o = raw as Record<string, unknown>;
   const candidates: unknown[] = [
@@ -497,7 +497,7 @@ function ghlApiMessagesFromResponse(raw: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function isGhlApiInboundSmsMessage(msg: Record<string, unknown>): boolean {
+export function isGhlApiInboundSmsMessage(msg: Record<string, unknown>): boolean {
   const dir = String(msg.direction ?? '').toLowerCase();
   if (dir === 'outbound') return false;
 
@@ -521,7 +521,7 @@ function isGhlApiInboundSmsMessage(msg: Record<string, unknown>): boolean {
   return false;
 }
 
-function bodyFromGhlApiMessage(msg: Record<string, unknown>): string {
+export function bodyFromGhlApiMessage(msg: Record<string, unknown>): string {
   const content = msg.content;
   const fromContent =
     content && typeof content === 'object'
@@ -547,7 +547,7 @@ function bodyFromGhlApiMessage(msg: Record<string, unknown>): string {
   return s;
 }
 
-function ghlApiMessageId(msg: Record<string, unknown>): string | null {
+export function ghlApiMessageId(msg: Record<string, unknown>): string | null {
   const id = msg.id ?? msg.messageId ?? msg._id;
   if (id == null) return null;
   const s = String(id).trim();

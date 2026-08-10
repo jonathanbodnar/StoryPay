@@ -52,6 +52,37 @@ function ticketLink(ticketId: string): string {
   return `${APP_URL}/admin/support?tab=tickets&ticket=${encodeURIComponent(ticketId)}`;
 }
 
+/**
+ * Admin Support Inbox → Private Clients tab. `?venue=` is included for
+ * future-proofing (not yet auto-selected by the panel), matching the
+ * ticketLink pattern above.
+ */
+function privateClientLink(venueId: string): string {
+  return `${APP_URL}/admin/support?tab=private-clients&venue=${encodeURIComponent(venueId)}`;
+}
+
+export async function notifyPrivateClientReply(opts: {
+  venueName: string;
+  recipientLabel: string;
+  messagePreview: string;
+  venueId: string;
+}): Promise<void> {
+  const link = privateClientLink(opts.venueId);
+  const text = `📱 Reply from ${opts.recipientLabel} — ${opts.venueName}`;
+  await postToSlack(
+    [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `📱 *SMS reply from ${opts.recipientLabel}* — *${opts.venueName}*\n${truncate(opts.messagePreview)}\n<${link}|Open in Support Inbox>`,
+        },
+      },
+    ],
+    text,
+  );
+}
+
 export async function notifyBrideReply(opts: {
   venueName: string;
   contactName: string;

@@ -188,6 +188,10 @@ export async function POST(req: NextRequest) {
 
   let externalSent = false;
   let sendError: string | null = null;
+  // Cached when channel === 'sms' so the reply-tracking poller
+  // (src/lib/concierge-sms-sync.ts) knows which GHL contact to watch for a
+  // text-back from this recipient.
+  let smsGhlContactId: string | null = null;
 
   if (channel === 'email') {
     if (!recipientEmail) {
@@ -244,12 +248,34 @@ export async function POST(req: NextRequest) {
         firstName: recipientLabel,
       });
       if (!contactId) return NextResponse.json({ error: 'Could not resolve a GHL contact for this recipient' }, { status: 502 });
+      smsGhlContactId = contactId;
       const smsSignOff = isVenueContact
         ? (agentFirstName ? `${agentFirstName}, StoryVenue Concierge` : 'StoryVenue Concierge')
         : 'StoryVenue Client Services';
       const smsBody = `${text}\n– ${smsSignOff}`;
       await ghlSendSms(token, venue.ghl_location_id, contactId, smsBody, undefined, phoneE164);
       externalSent = true;
+
+      // Cache the GHL contact id so the reply-tracking poller can watch for
+      // a text-back without re-searching GHL every tick. Best-effort — a
+      // failure here never blocks the send that already went out.
+      void (async () => {
+        try {
+          if (recipientType === 'owner') {
+            await supabaseAdmin
+              .from('venues')
+              .update({ owner_concierge_ghl_contact_id: contactId })
+              .eq('id', venue.id);
+          } else if (recipientTeamMemberId) {
+            await supabaseAdmin
+              .from('venue_team_members')
+              .update({ concierge_ghl_contact_id: contactId })
+              .eq('id', recipientTeamMemberId);
+          }
+        } catch (e) {
+          console.warn('[private-clients/message] cache ghl contact id failed', e);
+        }
+      })();
     } catch (e) {
       sendError = e instanceof Error ? e.message : 'SMS send failed';
       return NextResponse.json({ error: sendError }, { status: 502 });
@@ -267,6 +293,8 @@ export async function POST(req: NextRequest) {
       recipient_phone:           channel === 'sms' ? recipientPhone : null,
       channel,
       body:                      text,
+      direction:                 'outbound',
+      ghl_contact_id:            smsGhlContactId,
       sent_by_support_user_id:   actingAgentId,
       external_sent:             externalSent,
       send_error:                sendError,
@@ -279,6 +307,15 @@ export async function POST(req: NextRequest) {
     // hiccup, just surface it so it's visible in server logs.
     console.error('[private-clients/message] log insert failed', logErr);
   }
+
+  void (async () => {
+    try {
+      const { broadcastPrivateClientMessage } = await import('@/lib/realtime/broadcast');
+      await broadcastPrivateClientMessage({ venueId, direction: 'outbound', channel });
+    } catch (e) {
+      console.warn('[private-clients/message] broadcast failed', e);
+    }
+  })();
 
   return NextResponse.json({
     ok: true,

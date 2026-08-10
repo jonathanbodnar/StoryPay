@@ -68,7 +68,7 @@ export async function GET() {
   const ownerIds = Array.from(new Set(venues.map((v) => v.owner_id).filter((x): x is string => Boolean(x))));
   const planIds = Array.from(new Set(venues.map((v) => v.directory_plan_id).filter((x): x is string => Boolean(x))));
 
-  const [{ data: teamRows }, { data: planRows }, { data: profileRows }] = await Promise.all([
+  const [{ data: teamRows }, { data: planRows }, { data: profileRows }, { data: recentMsgRows }] = await Promise.all([
     supabaseAdmin
       .from('venue_team_members')
       .select('id, venue_id, name, first_name, last_name, email, phone, role, status')
@@ -80,7 +80,24 @@ export async function GET() {
     ownerIds.length > 0
       ? supabaseAdmin.from('profiles').select('id, full_name').in('id', ownerIds)
       : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null }> }),
+    // Most recent message per venue (across recipients) — used below to
+    // flag venues whose latest activity is an unanswered inbound SMS reply
+    // (see src/lib/concierge-sms-sync.ts). Fetched newest-first and reduced
+    // to "first row seen per venue" in JS since Supabase-JS has no
+    // DISTINCT ON; private_client_messages is low-volume so this is cheap.
+    supabaseAdmin
+      .from('private_client_messages')
+      .select('venue_id, direction, created_at')
+      .in('venue_id', venueIds)
+      .order('created_at', { ascending: false })
+      .limit(Math.min(1000, venueIds.length * 20)),
   ]);
+
+  const needsReplyByVenue = new Map<string, boolean>();
+  for (const m of (recentMsgRows ?? []) as Array<{ venue_id: string; direction: string | null }>) {
+    if (needsReplyByVenue.has(m.venue_id)) continue;
+    needsReplyByVenue.set(m.venue_id, m.direction === 'inbound');
+  }
 
   const teamByVenue = new Map<string, TeamMemberRow[]>();
   for (const t of (teamRows ?? []) as TeamMemberRow[]) {
@@ -134,6 +151,7 @@ export async function GET() {
       subscriptionStatus: v.directory_subscription_status,
       ghlConnected: Boolean(v.ghl_connected),
       venueConcierge: Boolean(v.venue_concierge),
+      needsReply: needsReplyByVenue.get(v.id) === true,
       owner: {
         name: ownerName,
         email: ownerEmail,

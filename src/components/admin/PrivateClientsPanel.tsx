@@ -17,9 +17,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchWithGatewayRetry } from '@/lib/fetch-retry';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels } from '@/lib/realtime/channels';
 import {
   Building2, Search, RefreshCw, Loader2, AlertCircle, Mail, MessageSquare,
   Send, ChevronDown, ChevronRight, Users, Crown, CheckCircle2, ShieldAlert, Eye,
+  Reply,
 } from 'lucide-react';
 
 interface SupportMe {
@@ -53,6 +56,10 @@ interface PrivateClientVenue {
   subscriptionStatus: string | null;
   ghlConnected: boolean;
   venueConcierge: boolean;
+  /** True when the most recent private-client message for this venue is an
+   *  unanswered inbound SMS reply (see src/lib/concierge-sms-sync.ts) —
+   *  clears itself as soon as an agent sends another outbound message. */
+  needsReply: boolean;
   owner: OwnerInfo;
   teamMembers: TeamMemberInfo[];
 }
@@ -63,6 +70,7 @@ interface HistoryMessage {
   recipient_label: string;
   channel: string;
   body: string;
+  direction: 'outbound' | 'inbound';
   external_sent: boolean;
   send_error: string | null;
   sentByName: string;
@@ -120,6 +128,11 @@ export function PrivateClientsPanel({
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Any concierge <-> venue direct message (sent or synced-in SMS reply)
+  // refreshes the list so "needs reply" indicators update instantly instead
+  // of only on next manual refresh/reload of the tab.
+  useBroadcastChannel(supportChannels.privateClients(), ['message'], () => void load());
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -198,12 +211,20 @@ export function PrivateClientsPanel({
                   onClick={() => setSelectedId(v.id)}
                   className={`w-full text-left flex items-start gap-2.5 px-3 py-2.5 hover:bg-gray-50 ${selectedId === v.id ? 'bg-amber-50' : ''}`}
                 >
-                  <div className="mt-0.5 w-8 h-8 shrink-0 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-semibold">
+                  <div className="relative mt-0.5 w-8 h-8 shrink-0 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-semibold">
                     {initials(v.name)}
+                    {v.needsReply && (
+                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 border-2 border-white" title="Unanswered reply" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{v.name}</p>
+                      {v.needsReply && (
+                        <span className="shrink-0 rounded-full bg-red-100 border border-red-200 px-1.5 py-0 text-[9px] font-semibold text-red-700 leading-tight whitespace-nowrap flex items-center gap-0.5">
+                          <Reply size={9} /> Replied
+                        </span>
+                      )}
                       {v.venueConcierge ? (
                         <span className="shrink-0 rounded-full bg-emerald-100 border border-emerald-200 px-1.5 py-0 text-[9px] font-semibold text-emerald-700 leading-tight whitespace-nowrap">Concierge ✓</span>
                       ) : (
@@ -257,6 +278,13 @@ function VenueDetail({ venue, supportUserId }: { venue: PrivateClientVenue; supp
   }, [venue.id]);
 
   useEffect(() => { void loadHistory(); }, [loadHistory]);
+
+  // Live-refresh this venue's history the moment a reply is synced in or a
+  // teammate sends another message, without waiting for a manual reopen.
+  useBroadcastChannel(supportChannels.privateClients(), ['message'], (_event, payload) => {
+    const evt = payload as { venueId?: string } | null;
+    if (evt?.venueId === venue.id) void loadHistory();
+  });
 
   const contacts: Array<{ key: string; label: string; role: string; email: string | null; phone: string | null; smsAvailable: boolean; recipientType: 'owner' | 'team_member'; teamMemberId?: string }> = [
     {
@@ -327,21 +355,41 @@ function VenueDetail({ venue, supportUserId }: { venue: PrivateClientVenue; supp
             ) : history.length === 0 ? (
               <p className="text-xs text-gray-400 py-2">No messages sent yet.</p>
             ) : (
-              history.map((h) => (
-                <div key={h.id} className="rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2">
-                  <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
-                    {h.channel === 'email' ? <Mail size={11} className="text-gray-400" /> : <MessageSquare size={11} className="text-gray-400" />}
-                    <span className="font-semibold text-gray-700">{h.recipient_label}</span>
-                    <span className="text-gray-400">·</span>
-                    <span className="text-gray-500">{h.sentByName}</span>
-                    <span className="text-gray-400 ml-auto">{relativeTime(h.created_at)}</span>
+              history.map((h) => {
+                const inbound = h.direction === 'inbound';
+                return (
+                  <div
+                    key={h.id}
+                    className={`rounded-lg border px-3 py-2 ${
+                      inbound ? 'border-emerald-200 bg-emerald-50/70' : 'border-gray-100 bg-gray-50/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                      {inbound ? (
+                        <Reply size={11} className="text-emerald-600" />
+                      ) : h.channel === 'email' ? (
+                        <Mail size={11} className="text-gray-400" />
+                      ) : (
+                        <MessageSquare size={11} className="text-gray-400" />
+                      )}
+                      <span className={`font-semibold ${inbound ? 'text-emerald-800' : 'text-gray-700'}`}>
+                        {inbound ? `${h.recipient_label} replied` : h.recipient_label}
+                      </span>
+                      {!inbound && (
+                        <>
+                          <span className="text-gray-400">·</span>
+                          <span className="text-gray-500">{h.sentByName}</span>
+                        </>
+                      )}
+                      <span className="text-gray-400 ml-auto">{relativeTime(h.created_at)}</span>
+                    </div>
+                    <p className={`text-xs mt-1 whitespace-pre-wrap ${inbound ? 'text-emerald-900' : 'text-gray-700'}`}>{h.body}</p>
+                    {!h.external_sent && h.send_error && (
+                      <p className="text-[10px] text-red-600 mt-1">Failed: {h.send_error}</p>
+                    )}
                   </div>
-                  <p className="text-xs text-gray-700 mt-1 whitespace-pre-wrap">{h.body}</p>
-                  {!h.external_sent && h.send_error && (
-                    <p className="text-[10px] text-red-600 mt-1">Failed: {h.send_error}</p>
-                  )}
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
