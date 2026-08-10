@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAdminIdentity } from '@/lib/admin-identity';
 import { diagnoseOwnerGhl, reconcileOwnerGhlStages } from '@/lib/owner-ghl-sync';
 
@@ -21,18 +21,22 @@ async function isAdmin(): Promise<boolean> {
  *   - Reports, from OUR OWN venue data, what stage every non-demo venue
  *     SHOULD be in right now, and how many are already in sync vs. would
  *     need a push/move.
- * No GHL writes happen on GET.
+ *
+ * Pass ?apply=1 to actually apply the reconciliation from a plain browser
+ * visit (equivalent to POST) — safe to do, since the sync is idempotent and
+ * only ever moves a venue's opportunity to match its CURRENT lifecycle.
  */
-export async function GET(): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const apply = req.nextUrl.searchParams.get('apply') === '1';
   try {
     const [diagnostics, report] = await Promise.all([
       diagnoseOwnerGhl(),
-      reconcileOwnerGhlStages({ dryRun: true }),
+      reconcileOwnerGhlStages({ dryRun: !apply }),
     ]);
-    return NextResponse.json({ diagnostics, report, dryRun: true });
+    return NextResponse.json({ diagnostics, report, dryRun: !apply });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
