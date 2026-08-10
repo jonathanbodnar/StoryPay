@@ -272,20 +272,52 @@ async function syncVenueOpportunity(
         `[owner-ghl-sync] moved opportunity ${venue.owner_ghl_opportunity_id} → "${stageName}" ($${monetaryValue}/mo, status=${oppStatus}) for venue ${venue.id}`,
       );
     } else {
-      const oppId = await createOpportunity(cfg.token, cfg.locationId, {
-        pipelineId: resolved.pipelineId,
-        pipelineStageId: stageId,
-        name: oppName,
-        contactId,
-        monetaryValue,
-        status: oppStatus,
-      });
+      let oppId: string | null = null;
+      try {
+        oppId = await createOpportunity(cfg.token, cfg.locationId, {
+          pipelineId: resolved.pipelineId,
+          pipelineStageId: stageId,
+          name: oppName,
+          contactId,
+          monetaryValue,
+          status: oppStatus,
+        });
+        if (oppId) {
+          console.log(
+            `[owner-ghl-sync] created opportunity ${oppId} in "${stageName}" (status=${oppStatus}) for venue ${venue.id}`,
+          );
+        }
+      } catch (createErr) {
+        // GHL allows ONE opportunity per contact per pipeline. When the
+        // contact already has one, the 400 includes its id — either adopt it
+        // (pre-existing/manually created) or, if another venue row already
+        // claims it, this venue is a duplicate signup by the same owner and
+        // there is nothing separate to place. Skip instead of failing forever.
+        const msg = createErr instanceof Error ? createErr.message : String(createErr);
+        const existingId =
+          msg.includes('OPPORTUNITY_NO_DUPLICATE') ? /"existingId"\s*:\s*"([^"]+)"/.exec(msg)?.[1] ?? null : null;
+        if (!existingId) throw createErr;
+
+        const { data: claim } = await supabaseAdmin
+          .from('venues')
+          .select('id')
+          .eq('owner_ghl_opportunity_id', existingId)
+          .neq('id', venue.id)
+          .maybeSingle();
+        if (claim) {
+          console.log(
+            `[owner-ghl-sync] venue ${venue.id} is a duplicate signup — contact ${contactId} already has ` +
+              `opportunity ${existingId} owned by venue ${(claim as { id: string }).id}; skipping placement`,
+          );
+          return;
+        }
+        console.log(`[owner-ghl-sync] adopting pre-existing opportunity ${existingId} for venue ${venue.id}`);
+        await updateOpportunityStage(cfg.token, cfg.locationId, existingId, stageId, monetaryValue, oppStatus);
+        oppId = existingId;
+      }
       if (!oppId) return;
       await supabaseAdmin.from('venues').update({ owner_ghl_opportunity_id: oppId }).eq('id', venue.id);
       venue.owner_ghl_opportunity_id = oppId;
-      console.log(
-        `[owner-ghl-sync] created opportunity ${oppId} in "${stageName}" (status=${oppStatus}) for venue ${venue.id}`,
-      );
     }
 
     // Best-effort snapshot so the periodic reconciler can skip this venue
@@ -378,8 +410,13 @@ interface ReconcileResult {
   synced: number;
   failed: number;
   skippedNoIdentifier: number;
+  /** Duplicate signups: venue rows sharing an owner contact with another venue
+   *  that already holds the opportunity (GHL: one opportunity per contact per
+   *  pipeline). Skipped with zero GHL calls. */
+  skippedDuplicates: number;
   byTargetStage: Record<StageName, number>;
   failedVenueIds: string[];
+  duplicateVenueIds: string[];
 }
 
 async function fetchAllNonDemoVenues(): Promise<VenueSyncRow[]> {
@@ -431,19 +468,40 @@ export async function reconcileOwnerGhlStages(opts?: { dryRun?: boolean }): Prom
     synced: 0,
     failed: 0,
     skippedNoIdentifier: 0,
+    skippedDuplicates: 0,
     byTargetStage: { 'New Listing': 0, 'Trial Started': 0, 'Free Listing': 0, 'Paid Listing': 0 },
     failedVenueIds: [],
+    duplicateVenueIds: [],
   };
 
   const cfg = getOwnerGhlConfig();
   if (!cfg) return out;
 
   const venues = await fetchAllNonDemoVenues();
+
+  // Map owner contact → the venue that already holds its opportunity, so
+  // duplicate signups (same owner registered twice) are skipped instead of
+  // erroring against GHL's one-opportunity-per-contact rule on every run.
+  const oppOwnerByContact = new Map<string, string>();
+  for (const v of venues) {
+    if (v.owner_ghl_contact_id && v.owner_ghl_opportunity_id) {
+      oppOwnerByContact.set(v.owner_ghl_contact_id, v.id);
+    }
+  }
+
   for (const v of venues) {
     const hasIdentifier = Boolean((v.email ?? '').trim() || normalizePhone(v.phone));
     if (!hasIdentifier) {
       out.skippedNoIdentifier += 1;
       continue;
+    }
+    if (!v.owner_ghl_opportunity_id && v.owner_ghl_contact_id) {
+      const ownerVenueId = oppOwnerByContact.get(v.owner_ghl_contact_id);
+      if (ownerVenueId && ownerVenueId !== v.id) {
+        out.skippedDuplicates += 1;
+        out.duplicateVenueIds.push(v.id);
+        continue;
+      }
     }
     out.totalEligible += 1;
     out.byTargetStage[targetStageName(v)] += 1;
