@@ -10,15 +10,34 @@ function pctDelta(prev: number, curr: number): number {
 }
 
 async function countLeads(venueId: string, startIso: string | null, endIso: string | null): Promise<number> {
-  // Exclude the onboarding test inquiry so it never inflates real lead metrics.
+  // Exclude the onboarding test inquiry so it never inflates real lead metrics,
+  // and exclude leads explicitly parked outside every pipeline ("None" stage on
+  // the contacts page) so this KPI reflects the actual sales-funnel headcount
+  // rather than every row in the table (which also inflates alongside stray
+  // duplicate rows — see recordDuplicateCandidatesForNewLead/autoMergeExactDuplicates).
   let q = supabaseAdmin
     .from('leads')
     .select('*', { count: 'exact', head: true })
     .eq('venue_id', venueId)
-    .neq('source', 'test_inquiry');
+    .neq('source', 'test_inquiry')
+    .neq('excluded_from_pipeline', true);
   if (startIso) q = q.gte('created_at', startIso);
   if (endIso)   q = q.lte('created_at', endIso);
   const { count, error } = await q;
+  if (error && /column .*excluded_from_pipeline/i.test(error.message)) {
+    // Migration 051 not applied yet on this environment — fall back to the
+    // legacy count rather than 500ing the whole dashboard.
+    let legacy = supabaseAdmin
+      .from('leads')
+      .select('*', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+      .neq('source', 'test_inquiry');
+    if (startIso) legacy = legacy.gte('created_at', startIso);
+    if (endIso)   legacy = legacy.lte('created_at', endIso);
+    const retry = await legacy;
+    if (retry.error) console.error('[dashboard/stats] leads count', retry.error);
+    return retry.count ?? 0;
+  }
   if (error) console.error('[dashboard/stats] leads count', error);
   return count ?? 0;
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
-import { recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
+import { autoMergeExactDuplicates } from '@/lib/merge-leads';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
 import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
@@ -269,7 +269,7 @@ export async function POST(request: NextRequest) {
 
   // Skip duplicate recording for demo venues — they exist to test resubmission.
   if (!(venue as { is_demo?: boolean }).is_demo) {
-    void recordDuplicateCandidatesForNewLead(venue.id, lr.id, lr.email, lr.phone, lr.created_at);
+    void autoMergeExactDuplicates(venue.id, lr.id, lr.email, lr.phone, lr.created_at);
   }
 
   // Apply new_lead, inquiry_received, form_submitted, directory_lead system tags (fire-and-forget)

@@ -330,9 +330,25 @@ export async function GET(
               status:     'new',
               position:   0,
             })
-            .select('id')
+            .select('id, created_at')
             .maybeSingle();
-          newLeadId = (inserted as { id: string } | null)?.id ?? null;
+          const insertedRow = inserted as { id: string; created_at?: string } | null;
+          newLeadId = insertedRow?.id ?? null;
+          // Safety net: if this insert raced with another creator of the same
+          // contact (or the email-only check above missed a phone-only sister
+          // row), merge the exact email+phone duplicate immediately instead of
+          // leaving two lead rows for one person.
+          if (newLeadId) {
+            const { autoMergeExactDuplicates } = await import('@/lib/merge-leads');
+            const merge = await autoMergeExactDuplicates(
+              t.venue_id,
+              newLeadId,
+              email,
+              phone,
+              insertedRow?.created_at ?? new Date().toISOString(),
+            );
+            if (merge) newLeadId = merge.mergedInto;
+          }
         }
         if (newLeadId) {
           await applySystemTags(t.venue_id, newLeadId, ['new_lead', 'inquiry_received']);

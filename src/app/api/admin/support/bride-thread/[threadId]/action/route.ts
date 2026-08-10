@@ -176,7 +176,15 @@ async function ensureLeadForVenueCustomer(
     console.error('[ensureLeadForVenueCustomer]', error);
     return null;
   }
-  return (inserted as { id: string }).id;
+  const newLeadId = (inserted as { id: string }).id;
+
+  // Safety net: the email/phone lookups above are check-then-insert, so a
+  // concurrent call for the same contact can still race past both checks and
+  // insert a sister row. Merge it immediately if that happened rather than
+  // leaving two lead rows for one person.
+  const { autoMergeExactDuplicates } = await import('@/lib/merge-leads');
+  const merge = await autoMergeExactDuplicates(venueId, newLeadId, email || null, phone || null, now);
+  return merge ? merge.mergedInto : newLeadId;
 }
 
 async function resolveLeadForThread(

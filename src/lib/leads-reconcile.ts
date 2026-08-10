@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
-import { recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
+import { autoMergeExactDuplicates } from '@/lib/merge-leads';
 
 export function isRealLeadEmail(email: string): boolean {
   const e = email.trim().toLowerCase();
@@ -97,7 +97,7 @@ export async function createLeadFromVenueCustomerIfMissing(
     return;
   }
 
-  void recordDuplicateCandidatesForNewLead(
+  void autoMergeExactDuplicates(
     venueId,
     inserted.id as string,
     email,
@@ -480,7 +480,7 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
 
     emailSet.add(em);
 
-    void recordDuplicateCandidatesForNewLead(
+    void autoMergeExactDuplicates(
       venueId,
       (inserted as { id: string }).id,
       em,

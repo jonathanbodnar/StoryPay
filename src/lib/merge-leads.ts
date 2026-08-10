@@ -1,6 +1,11 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { insertLeadActivity } from '@/lib/lead-activity';
-import { refreshDuplicateCandidatesForLead } from '@/lib/lead-duplicates';
+import {
+  normalizeLeadEmail,
+  normalizePhoneDigits,
+  recordDuplicateCandidatesForNewLead,
+  refreshDuplicateCandidatesForLead,
+} from '@/lib/lead-duplicates';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 
 type LeadRow = Record<string, unknown>;
@@ -110,6 +115,7 @@ export async function mergeLeadsInto(
   keepLeadId: string,
   mergeLeadId: string,
   actor: { memberId: string | null; isOwner: boolean },
+  extraActivityDetails?: Record<string, unknown>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (keepLeadId === mergeLeadId) return { ok: false, error: 'Cannot merge a lead into itself' };
 
@@ -264,7 +270,7 @@ export async function mergeLeadsInto(
     actorMemberId: actor.memberId,
     actorIsOwner: actor.isOwner,
     action: 'leads_merged',
-    details: { merged_lead_id: mergeLeadId },
+    details: { merged_lead_id: mergeLeadId, ...extraActivityDetails },
   });
 
   await refreshDuplicateCandidatesForLead(venueId, keepLeadId);
@@ -277,4 +283,82 @@ export async function mergeLeadsInto(
   }
 
   return { ok: true };
+}
+
+const SYSTEM_ACTOR = { memberId: null, isOwner: false };
+
+/**
+ * Auto-merge safety net for newly created leads.
+ *
+ * Two lead rows that share BOTH the same email and the same phone number are
+ * unambiguously the same person — there's no scenario where that pairing is a
+ * coincidence. Several code paths (GHL contact sync, the support inbox's
+ * "ensure a lead exists for this thread" helpers, the kanban reconciler)
+ * independently do a "does a lead already exist for this person" check
+ * before inserting one; under the right timing they can each pass that check
+ * and insert their own row, leaving 2+ leads for one real contact.
+ *
+ * Rather than surface an exact email+phone match as a "possible duplicate"
+ * banner for a human to click through, merge it immediately — keeping the
+ * older lead (so its history/first-touch data wins) and folding the newer
+ * one into it. Looser matches (same email OR same phone, but not both) stay
+ * on the normal `lead_duplicate_candidates` manual-review flow, since those
+ * are genuinely ambiguous (a shared family phone, a re-used email address).
+ */
+export async function autoMergeExactDuplicates(
+  venueId: string,
+  newLeadId: string,
+  email: string | null | undefined,
+  phone: string | null | undefined,
+  createdAt: string,
+): Promise<{ mergedInto: string } | null> {
+  const em = normalizeLeadEmail(email);
+  const ph = normalizePhoneDigits(phone);
+
+  if (!em || !ph) {
+    await recordDuplicateCandidatesForNewLead(venueId, newLeadId, email ?? '', phone ?? null, createdAt);
+    return null;
+  }
+
+  const { data: others, error } = await supabaseAdmin
+    .from('leads')
+    .select('id, email, phone, created_at')
+    .eq('venue_id', venueId)
+    .neq('id', newLeadId);
+
+  if (error || !others?.length) {
+    await recordDuplicateCandidatesForNewLead(venueId, newLeadId, email ?? '', phone ?? null, createdAt);
+    return null;
+  }
+
+  let exactMatch: { id: string; created_at: string } | null = null;
+  for (const row of others as Array<{ id: string; email: string | null; phone: string | null; created_at: string }>) {
+    if (normalizeLeadEmail(row.email) !== em) continue;
+    if (normalizePhoneDigits(row.phone) !== ph) continue;
+    if (!exactMatch || new Date(row.created_at).getTime() < new Date(exactMatch.created_at).getTime()) {
+      exactMatch = { id: row.id, created_at: row.created_at };
+    }
+  }
+
+  if (!exactMatch) {
+    await recordDuplicateCandidatesForNewLead(venueId, newLeadId, email ?? '', phone ?? null, createdAt);
+    return null;
+  }
+
+  const otherIsOlder = new Date(exactMatch.created_at).getTime() <= new Date(createdAt).getTime();
+  const keepId = otherIsOlder ? exactMatch.id : newLeadId;
+  const mergeId = otherIsOlder ? newLeadId : exactMatch.id;
+
+  const result = await mergeLeadsInto(venueId, keepId, mergeId, SYSTEM_ACTOR, {
+    auto: true,
+    reason: 'same_email_and_phone',
+  });
+
+  if (!result.ok) {
+    console.warn('[autoMergeExactDuplicates] merge failed, falling back to manual-review candidate:', result.error);
+    await recordDuplicateCandidatesForNewLead(venueId, newLeadId, email ?? '', phone ?? null, createdAt);
+    return null;
+  }
+
+  return { mergedInto: keepId };
 }
