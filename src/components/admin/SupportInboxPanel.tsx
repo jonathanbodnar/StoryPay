@@ -824,7 +824,7 @@ export function SupportInboxPanel() {
   const [composerMode, setComposerMode] = useState<'reply' | 'note' | 'venue_direct'>('reply');
   const [replyBody, setReplyBody] = useState('');
   const [replySubject, setReplySubject] = useState('');
-  const [replyChannel, setReplyChannel] = useState<'auto' | 'sms' | 'email'>('auto');
+  const [replyChannel, setReplyChannel] = useState<'sms' | 'email'>('sms');
   const [internalNote, setInternalNote] = useState('');
   const [showInternalNote, setShowInternalNote] = useState(false);
   const [noteBody, setNoteBody] = useState('');
@@ -844,7 +844,7 @@ export function SupportInboxPanel() {
     setComposerMode('reply');
     setReplyBody('');
     setReplySubject('');
-    setReplyChannel('auto');
+    setReplyChannel('sms');
     setInternalNote('');
     setShowInternalNote(false);
     setNoteBody('');
@@ -858,18 +858,11 @@ export function SupportInboxPanel() {
     setShowIntent(false);
   }, [activeThreadId]);
 
-  const lastInboundChannel = useMemo<'sms' | 'email'>(() => {
-    if (!detail) return 'sms';
-    for (let i = detail.messages.length - 1; i >= 0; i--) {
-      const m = detail.messages[i];
-      if (m.sender_kind === 'contact' && m.visibility === 'external') return m.channel;
-    }
-    const ext = detail.thread.external_reply_channel;
-    if (ext === 'sms' || ext === 'email') return ext;
-    return 'sms';
-  }, [detail]);
-
-  const effectiveChannel: 'sms' | 'email' = replyChannel === 'auto' ? lastInboundChannel : replyChannel;
+  // Composer always defaults to SMS on a fresh thread (see the reset effect
+  // above) — no more "Auto" channel-matching. `effectiveChannel` is kept as
+  // a stable alias so the rest of this component (and its children) don't
+  // need to know that reply/channel selection has been collapsed into one.
+  const effectiveChannel: 'sms' | 'email' = replyChannel;
 
   const draftReply = useCallback(async () => {
     if (!detail || drafting) return;
@@ -921,7 +914,7 @@ export function SupportInboxPanel() {
         body: JSON.stringify({
           threadId:      detail.thread.id,
           body:          replyBody.trim(),
-          channel:       replyChannel === 'auto' ? undefined : replyChannel,
+          channel:       replyChannel,
           internalNote:  internalNote.trim() || undefined,
           // Super admin: explicitly send the selected identity (synthetic
           // Super Admin or a teammate they're acting-as). Agent sessions
@@ -1136,7 +1129,7 @@ export function SupportInboxPanel() {
       )}
 
       {subTab === 'bride-replies' && (
-        <div className="flex-1 min-h-[500px] lg:min-h-0 grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_290px] gap-4 min-w-0 overflow-hidden">
+        <div className="flex-1 min-h-[500px] lg:min-h-0 grid grid-cols-1 lg:grid-cols-[272px_1fr] xl:grid-cols-[272px_1fr_290px] gap-4 min-w-0 overflow-hidden">
           {/* Thread list */}
           <div className="rounded-2xl border border-gray-200 bg-white flex flex-col min-h-0 min-w-0 overflow-hidden">
             <div className="p-3 border-b border-gray-200 space-y-2">
@@ -1301,7 +1294,6 @@ export function SupportInboxPanel() {
                 replyChannel={replyChannel}
                 onReplyChannelChange={setReplyChannel}
                 effectiveChannel={effectiveChannel}
-                lastInboundChannel={lastInboundChannel}
                 internalNote={internalNote}
                 onInternalNoteChange={setInternalNote}
                 showInternalNote={showInternalNote}
@@ -1578,7 +1570,7 @@ function ThreadDetailView({
   replyBody, onReplyBodyChange,
   replySubject, onReplySubjectChange,
   replyChannel, onReplyChannelChange,
-  effectiveChannel, lastInboundChannel,
+  effectiveChannel,
   internalNote, onInternalNoteChange,
   showInternalNote, onToggleInternalNote,
   noteBody, onNoteBodyChange,
@@ -1603,10 +1595,9 @@ function ThreadDetailView({
   onComposerModeChange: (m: 'reply' | 'note' | 'venue_direct') => void;
   replyBody: string; onReplyBodyChange: (v: string) => void;
   replySubject: string; onReplySubjectChange: (v: string) => void;
-  replyChannel: 'auto' | 'sms' | 'email';
-  onReplyChannelChange: (v: 'auto' | 'sms' | 'email') => void;
+  replyChannel: 'sms' | 'email';
+  onReplyChannelChange: (v: 'sms' | 'email') => void;
   effectiveChannel: 'sms' | 'email';
-  lastInboundChannel: 'sms' | 'email';
   internalNote: string; onInternalNoteChange: (v: string) => void;
   showInternalNote: boolean; onToggleInternalNote: () => void;
   noteBody: string; onNoteBodyChange: (v: string) => void;
@@ -1776,40 +1767,54 @@ function ThreadDetailView({
             ? 'border-violet-200 bg-violet-50/30'
             : 'border-gray-200'
       }`}>
-        {/* Mode tabs */}
-        <div className="flex items-center gap-1 -mt-1">
-          <ComposerTabButton
-            active={composerMode === 'reply'}
-            onClick={() => onComposerModeChange('reply')}
-            icon={<Send size={11} />}
-            label="Reply"
-            tone="reply"
+        {/* Message type — one compact selector replaces the old two-row
+            mode-tabs + reply-channel-buttons layout, freeing up vertical
+            space for the thread above. Defaults to SMS; switch to Email,
+            Internal note, or Venue Direct from the same dropdown. */}
+        <div className="flex items-center gap-2 -mt-1">
+          <ComposerTypeMenu
+            composerMode={composerMode}
+            replyChannel={replyChannel}
+            onSelect={(next) => {
+              onComposerModeChange(next.mode);
+              if (next.channel) onReplyChannelChange(next.channel);
+            }}
           />
-          <ComposerTabButton
-            active={isNoteMode}
-            onClick={() => onComposerModeChange('note')}
-            icon={<StickyNote size={11} />}
-            label="Internal note"
-            tone="note"
-          />
-          <ComposerTabButton
-            active={isVenueDirectMode}
-            onClick={() => onComposerModeChange('venue_direct')}
-            icon={<Building2 size={11} />}
-            label="Venue Direct"
-            tone="venue_direct"
-          />
-          <span className="ml-auto"><PresencePill agents={othersViewing} /></span>
           {isNoteMode && (
-            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
               <ShieldCheck size={10} /> Support team only
             </span>
           )}
           {isVenueDirectMode && (
-            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-violet-100 text-violet-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 text-violet-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
               <Building2 size={10} /> Venue staff only · bride hidden
             </span>
           )}
+          <div className="ml-auto flex items-center gap-1.5">
+            {composerMode === 'reply' && effectiveChannel === 'email' && (
+              <button
+                type="button"
+                onClick={onToggleIntent}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                  showIntent ? 'bg-violet-100 text-violet-800' : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <Sparkles size={11} /> {showIntent ? 'Hide intent' : 'Steer AI'}
+              </button>
+            )}
+            {composerMode === 'reply' && (
+              <button
+                type="button"
+                onClick={onToggleInternalNote}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                  showInternalNote ? 'bg-amber-100 text-amber-800' : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <StickyNote size={11} /> Pin note
+              </button>
+            )}
+            <PresencePill agents={othersViewing} />
+          </div>
         </div>
 
         {noActorWarning && (
@@ -1830,45 +1835,6 @@ function ThreadDetailView({
 
         {composerMode === 'reply' && (
           <>
-            <div className="flex items-center gap-2 text-[11px] text-gray-500 flex-wrap">
-              <span>Reply via</span>
-              <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-                {(['auto', 'sms', 'email'] as const).map(opt => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => onReplyChannelChange(opt)}
-                    className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                      replyChannel === opt ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    {opt === 'auto' ? `Auto (${lastInboundChannel.toUpperCase()})` : opt.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-              <span className="text-gray-400">→ as <span className="font-semibold text-gray-700">{effectiveChannel.toUpperCase()}</span></span>
-              {effectiveChannel === 'email' && (
-                <button
-                  type="button"
-                  onClick={onToggleIntent}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                    showIntent ? 'bg-violet-100 text-violet-800' : 'text-gray-500 hover:bg-gray-100'
-                  }`}
-                >
-                  <Sparkles size={11} /> {showIntent ? 'Hide intent' : 'Steer AI'}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onToggleInternalNote}
-                className={`ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                  showInternalNote ? 'bg-amber-100 text-amber-800' : 'text-gray-500 hover:bg-gray-100'
-                }`}
-              >
-                <StickyNote size={11} /> Pin note to message
-              </button>
-            </div>
-
             {showIntent && (
               <input
                 type="text"
@@ -2215,29 +2181,107 @@ function TagInput({
   );
 }
 
-function ComposerTabButton({
-  active, onClick, icon, label, tone,
+/**
+ * Compact "message type" dropdown — collapses what used to be two separate
+ * rows (Reply/Internal note/Venue Direct mode tabs, plus a Reply
+ * via Auto/SMS/EMAIL channel toggle) into a single button + menu, mirroring
+ * the venue-side conversations composer's channel picker. Defaults to SMS.
+ */
+function ComposerTypeMenu({
+  composerMode,
+  replyChannel,
+  onSelect,
 }: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  tone: 'reply' | 'note' | 'venue_direct';
+  composerMode: 'reply' | 'note' | 'venue_direct';
+  replyChannel: 'sms' | 'email';
+  onSelect: (next: { mode: 'reply' | 'note' | 'venue_direct'; channel?: 'sms' | 'email' }) => void;
 }) {
-  const activeCls = tone === 'reply'
-    ? 'border-gray-900 text-gray-900 bg-white'
-    : tone === 'note'
-      ? 'border-amber-500 text-amber-800 bg-white'
-      : 'border-violet-500 text-violet-800 bg-white';
-  const idleCls = 'border-transparent text-gray-500 hover:text-gray-700';
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocDown);
+    return () => document.removeEventListener('mousedown', onDocDown);
+  }, [open]);
+
+  const options: Array<{
+    key: string;
+    icon: React.ReactNode;
+    label: string;
+    active: boolean;
+    onClick: () => void;
+  }> = [
+    {
+      key: 'sms',
+      icon: <MessageSquare size={14} />,
+      label: 'SMS',
+      active: composerMode === 'reply' && replyChannel === 'sms',
+      onClick: () => onSelect({ mode: 'reply', channel: 'sms' }),
+    },
+    {
+      key: 'email',
+      icon: <Mail size={14} />,
+      label: 'Email',
+      active: composerMode === 'reply' && replyChannel === 'email',
+      onClick: () => onSelect({ mode: 'reply', channel: 'email' }),
+    },
+    {
+      key: 'note',
+      icon: <StickyNote size={14} />,
+      label: 'Internal note',
+      active: composerMode === 'note',
+      onClick: () => onSelect({ mode: 'note' }),
+    },
+    {
+      key: 'venue_direct',
+      icon: <Building2 size={14} />,
+      label: 'Venue Direct',
+      active: composerMode === 'venue_direct',
+      onClick: () => onSelect({ mode: 'venue_direct' }),
+    },
+  ];
+
+  const current = options.find(o => o.active) ?? options[0];
+
+  const toneCls = composerMode === 'note'
+    ? 'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200/70'
+    : composerMode === 'venue_direct'
+      ? 'border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-200/70'
+      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50';
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-md border-b-2 px-2.5 py-1 text-[11px] font-semibold transition-colors ${active ? activeCls : idleCls}`}
-    >
-      {icon} {label}
-    </button>
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${toneCls}`}
+      >
+        {current.icon}
+        {current.label}
+        <ChevronDown size={12} className="opacity-60" />
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 z-20 mb-1 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+          {options.map(opt => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => { opt.onClick(); setOpen(false); }}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors ${
+                opt.active ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {opt.icon}
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
