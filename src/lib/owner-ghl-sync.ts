@@ -53,11 +53,27 @@ const OWNER_GHL_TAG = 'saas-client';
  * NOTE: this MUST match the live GHL stage name exactly (case-insensitive).
  * The pipeline stage is named "Paid Listing" in GHL — it was originally
  * built against "Pro Listing" and silently broken (resolveOwnerPipeline
- * requires ALL 4 names to match, so a mismatch on this stage was skipping
+ * requires ALL names to match, so a mismatch on this stage was skipping
  * opportunity placement for every venue, not just paid ones) until this
  * name was corrected.
+ *
+ * "Payment Failed" is its own stage, distinct from "Paid Listing" — a venue
+ * whose recurring charge failed (directory_subscription_status='past_due')
+ * moves here instead of silently staying lumped in with paying customers.
+ *
+ * "Cancelled" is also its own stage (GHL has one) — a venue whose
+ * subscription was cancelled moves here instead of falling through to
+ * "New Listing" (which is what happened before, since cancelling clears
+ * directory_subscription_external_id).
  */
-const STAGE_NAMES = ['New Listing', 'Trial Started', 'Free Listing', 'Paid Listing'] as const;
+const STAGE_NAMES = [
+  'New Listing',
+  'Trial Started',
+  'Free Listing',
+  'Paid Listing',
+  'Payment Failed',
+  'Cancelled',
+] as const;
 type StageName = (typeof STAGE_NAMES)[number];
 
 interface OwnerGhlConfig {
@@ -203,20 +219,29 @@ async function resolveOwnerPipeline(cfg: OwnerGhlConfig): Promise<ResolvedOwnerP
 
 /** Monthly value in dollars for each pipeline stage. Free = $0, paid tiers = $97/mo. */
 const STAGE_VALUE: Record<StageName, number> = {
-  'New Listing':    0,
-  'Free Listing':   0,
-  'Trial Started':  97,
-  'Paid Listing':   97,
+  'New Listing':     0,
+  'Free Listing':    0,
+  'Trial Started':   97,
+  'Paid Listing':    97,
+  'Payment Failed':  97, // still the plan's value — it's at-risk revenue, not lost yet.
+  'Cancelled':       0,
 };
 
 /**
  * Map a venue's lifecycle to its target stage in the owner's pipeline, reusing
  * the shared funnel-stage logic (single source of truth):
- *   - Paid Listing  — active paid subscription, OR past_due (still a paying
- *     customer with a payment problem — not the same as a fresh trial).
- *   - Trial Started — Pro trial (card on file + subscription external id), not active-paid.
- *   - Free Listing  — Free plan (card vaulted, no subscription external id).
- *   - New Listing   — everything else (listing exists, no card yet).
+ *   - Cancelled       — subscription cancelled (directory_subscription_status
+ *     is 'canceled'/'cancelled'). Checked first since cancelling clears
+ *     directory_subscription_external_id, which would otherwise make this
+ *     fall through to "New Listing".
+ *   - Paid Listing    — active paid subscription, charging fine.
+ *   - Payment Failed  — a paying venue whose recurring charge is failing
+ *     (directory_subscription_status='past_due'). Distinct from Paid Listing
+ *     so the owner can see who needs a nudge/retry at a glance instead of it
+ *     being silently lumped in with healthy paying customers.
+ *   - Trial Started   — Pro trial (card on file + subscription external id), not active-paid.
+ *   - Free Listing    — Free plan (card vaulted, no subscription external id).
+ *   - New Listing     — everything else (listing exists, no card yet).
  */
 function targetStageName(v: VenueSyncRow): StageName {
   const funnelState: VenueFunnelState = {
@@ -226,8 +251,9 @@ function targetStageName(v: VenueSyncRow): StageName {
     directory_card_on_file: v.directory_card_on_file,
   };
   const status = String(v.directory_subscription_status ?? '').toLowerCase();
-  const paidActive = status === 'active' || status === 'past_due';
-  if (paidActive) return 'Paid Listing';
+  if (status === 'canceled' || status === 'cancelled') return 'Cancelled';
+  if (status === 'past_due') return 'Payment Failed';
+  if (status === 'active') return 'Paid Listing';
   if (choseProPlan(funnelState)) return 'Trial Started';
   if (choseFreePlan(funnelState)) return 'Free Listing';
   return 'New Listing';
@@ -236,10 +262,8 @@ function targetStageName(v: VenueSyncRow): StageName {
 /**
  * GHL opportunity `status` (separate from pipeline stage) — flips a canceled
  * venue's opportunity to "lost" so churn is visible in GHL's own win/loss
- * reporting without needing a dedicated "Canceled" stage. The stage itself
- * is left as whichever lifecycle stage the venue's current fields resolve
- * to (e.g. a canceled Pro trial that never converted stays "Trial Started",
- * marked lost) — see targetStageName.
+ * reporting, IN ADDITION to moving it into the dedicated "Cancelled" stage
+ * (see targetStageName).
  */
 function targetOpportunityStatus(v: VenueSyncRow): 'open' | 'lost' {
   const status = String(v.directory_subscription_status ?? '').toLowerCase();
@@ -402,6 +426,20 @@ export async function pushVenueToOwnerGhl(
   }
 }
 
+/**
+ * Fire-and-forget wrapper for billing/lifecycle handlers (webhooks, retry,
+ * update-payment, downgrade-to-free, etc). Immediately pushes the venue's
+ * current stage/status to the owner's GHL pipeline instead of waiting for
+ * the next 30-minute `owner-ghl-stage-sync` reconciler tick, so a failed
+ * recurring payment, a fixed card, or a downgrade shows up in GHL right
+ * away. Never throws — safe to call from any request path.
+ */
+export function scheduleOwnerGhlSync(venueId: string): void {
+  void pushVenueToOwnerGhl(venueId).catch((err) => {
+    console.error('[owner-ghl-sync] scheduleOwnerGhlSync threw for venue', venueId, err);
+  });
+}
+
 // ── Periodic reconciliation (SaaS → GHL "SaaS Clients" pipeline) ───────────
 
 interface ReconcileResult {
@@ -469,7 +507,14 @@ export async function reconcileOwnerGhlStages(opts?: { dryRun?: boolean }): Prom
     failed: 0,
     skippedNoIdentifier: 0,
     skippedDuplicates: 0,
-    byTargetStage: { 'New Listing': 0, 'Trial Started': 0, 'Free Listing': 0, 'Paid Listing': 0 },
+    byTargetStage: {
+      'New Listing': 0,
+      'Trial Started': 0,
+      'Free Listing': 0,
+      'Paid Listing': 0,
+      'Payment Failed': 0,
+      'Cancelled': 0,
+    },
     failedVenueIds: [],
     duplicateVenueIds: [],
   };

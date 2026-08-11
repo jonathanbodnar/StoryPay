@@ -2,6 +2,7 @@ import { createCheckoutSession, getCheckoutSession, listSubscriptions, getCustom
 import { supabaseAdmin } from '@/lib/supabase';
 import { getPlatformFortisMerchantId } from '@/lib/platform-billing';
 import { notifyVenueSubscriptionCharged, notifyVenueCardDeclined } from '@/lib/saas-billing-notifications';
+import { scheduleOwnerGhlSync } from '@/lib/owner-ghl-sync';
 
 /** Checkout + subscription metadata so webhooks can attribute revenue to a venue. */
 export const STORYPAY_PLATFORM_DIRECTORY_META_KEY = 'storypay_platform_directory';
@@ -267,6 +268,8 @@ export async function verifyDirectoryPlatformCheckoutAndSubscribe(
     metadata: { session_id: sessionId, subscription_id: String(subId), mode: 'subscription' },
   });
 
+  scheduleOwnerGhlSync(venueId);
+
   return { subscriptionId: subId };
 }
 
@@ -451,6 +454,8 @@ export async function applyLunarPaySubscriptionFix(params: {
     event_type: 'admin_resync',
     metadata: { source: 'lunarpay_audit_fix', lp_subscription_id: params.lpSubscriptionId, lp_amount_cents: params.lpAmountCents },
   });
+
+  scheduleOwnerGhlSync(params.venueId);
 }
 
 export async function insertPlatformBillingEventFromWebhook(params: {
@@ -622,6 +627,10 @@ export async function handleLunarPayWebhookForPlatformLedger(raw: Record<string,
         if (isFailure && prevStatus !== 'past_due') {
           void notifyVenueCardDeclined(v.id as string).catch(() => {});
         }
+        // Move the venue's opportunity into "Payment Failed" (or mark it lost
+        // on a hard cancel) in the owner's GHL pipeline right away instead of
+        // waiting for the next reconciler tick.
+        scheduleOwnerGhlSync(v.id as string);
       } else if (isSuccessCharge) {
         // First successful charge flips a trial (or a recovered past_due) to a
         // paying subscription. Idempotent — safe to re-apply on every renewal.
@@ -633,6 +642,9 @@ export async function handleLunarPayWebhookForPlatformLedger(raw: Record<string,
         if (prevStatus === 'trialing' || prevStatus === 'past_due') {
           void notifyVenueSubscriptionCharged(v.id as string, amount).catch(() => {});
         }
+        // A recovered payment (or fresh conversion) should move the
+        // opportunity back to "Paid Listing" immediately.
+        scheduleOwnerGhlSync(v.id as string);
       }
       return true;
     }

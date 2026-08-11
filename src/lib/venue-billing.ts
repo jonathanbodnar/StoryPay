@@ -20,6 +20,7 @@ import {
   verifyDirectoryPlatformCheckoutAndSubscribe,
   type VenuePlanRow,
 } from './platform-directory-billing';
+import { scheduleOwnerGhlSync } from './owner-ghl-sync';
 import {
   computeMonthlyTotalCents,
   resolveEffectiveAddons,
@@ -1244,6 +1245,8 @@ export async function cancelVenueSubscription(venueId: string): Promise<void> {
     `cancel:${venueId}:${Date.now()}`,
     { subscription_id: subId || null, reason: 'user_cancelled' },
   );
+
+  scheduleOwnerGhlSync(venueId);
 }
 
 // ── Downgrade to Free (card-gated trial model) ─────────────────────────────
@@ -1365,6 +1368,8 @@ export async function applyFreeDowngrade(venueId: string): Promise<void> {
     const { notifyVenueDowngradedToFree } = await import('@/lib/saas-billing-notifications');
     await notifyVenueDowngradedToFree(venueId);
   } catch { /* best-effort */ }
+
+  scheduleOwnerGhlSync(venueId);
 }
 
 // ── Update payment method ──────────────────────────────────────────────────
@@ -1525,6 +1530,8 @@ export async function verifyUpdatePaymentMethod(
       mode:                  'subscription',
     },
   );
+
+  scheduleOwnerGhlSync(venueId);
 }
 
 // Re-export the standard checkout verify so the page can still use it
@@ -1579,6 +1586,7 @@ export async function checkAndSyncSubscriptionStatus(
           subscription_last_checked_at: new Date().toISOString(),
         })
         .eq('id', venueId);
+      scheduleOwnerGhlSync(venueId);
       return 'past_due';
     }
   }
@@ -1620,6 +1628,7 @@ export async function checkAndSyncSubscriptionStatus(
         .from('venues')
         .update({ directory_subscription_status: 'past_due' })
         .eq('id', venueId);
+      scheduleOwnerGhlSync(venueId);
       return 'past_due';
     }
 
@@ -1631,6 +1640,7 @@ export async function checkAndSyncSubscriptionStatus(
         .from('venues')
         .update({ directory_subscription_status: 'past_due' })
         .eq('id', venueId);
+      scheduleOwnerGhlSync(venueId);
       return 'past_due';
     }
 
@@ -1731,4 +1741,6 @@ export async function retrySubscriptionCharge(venueId: string): Promise<void> {
     String(charge.id ?? `retry:${Date.now()}`),
     { retry: true, subscription_id: subId },
   );
+
+  scheduleOwnerGhlSync(venueId);
 }
