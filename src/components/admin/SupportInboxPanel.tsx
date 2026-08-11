@@ -1628,6 +1628,13 @@ function ThreadDetailView({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [guideAdded, setGuideAdded] = useState(false);
+  // Composer starts collapsed to a single-line field — clicking/focusing it
+  // (or its toolbar buttons) raises it to full size. Collapses again on
+  // blur only if there's no drafted content, so a half-written reply never
+  // disappears on you. Resets to collapsed on thread/mode switch so every
+  // fresh conversation opens with maximum message real estate.
+  const [fieldExpanded, setFieldExpanded] = useState(false);
+  const composerFieldWrapRef = useRef<HTMLDivElement | null>(null);
   const contactName = fullName(
     detail.customer?.first_name ?? null,
     detail.customer?.last_name ?? null,
@@ -1636,6 +1643,24 @@ function ThreadDetailView({
   const isNoteMode = composerMode === 'note';
   const isVenueDirectMode = composerMode === 'venue_direct';
   const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const currentComposerBody = isNoteMode ? noteBody : isVenueDirectMode ? venueDirectBody : replyBody;
+
+  // Collapse back to a single line whenever the active thread or message
+  // type changes — adjusted during render (not in an effect) per React's
+  // "storing info from previous renders" pattern, so it takes effect before
+  // paint instead of causing an extra render pass.
+  const composerResetKey = `${detail.thread.id}:${composerMode}`;
+  const [prevComposerResetKey, setPrevComposerResetKey] = useState(composerResetKey);
+  if (prevComposerResetKey !== composerResetKey) {
+    setPrevComposerResetKey(composerResetKey);
+    if (fieldExpanded) setFieldExpanded(false);
+  }
+
+  const expandField = useCallback(() => setFieldExpanded(true), []);
+  const collapseFieldIfEmpty = useCallback((relatedTarget: Node | null) => {
+    if (composerFieldWrapRef.current?.contains(relatedTarget)) return;
+    if (!currentComposerBody.trim()) setFieldExpanded(false);
+  }, [currentComposerBody]);
   const presenceSelf = selfId ? { agentId: selfId, agentName: actAsName || 'A teammate' } : null;
   const othersViewing = useThreadPresence('thread', detail.thread.id, presenceSelf);
 
@@ -1797,7 +1822,7 @@ function ThreadDetailView({
             {composerMode === 'reply' && effectiveChannel === 'email' && (
               <button
                 type="button"
-                onClick={onToggleIntent}
+                onClick={() => { onToggleIntent(); expandField(); }}
                 className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
                   showIntent ? 'bg-violet-100 text-violet-800' : 'text-gray-500 hover:bg-gray-100'
                 }`}
@@ -1808,7 +1833,7 @@ function ThreadDetailView({
             {composerMode === 'reply' && (
               <button
                 type="button"
-                onClick={onToggleInternalNote}
+                onClick={() => { onToggleInternalNote(); expandField(); }}
                 className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
                   showInternalNote ? 'bg-amber-100 text-amber-800' : 'text-gray-500 hover:bg-gray-100'
                 }`}
@@ -1838,7 +1863,7 @@ function ThreadDetailView({
 
         {composerMode === 'reply' && (
           <>
-            {showIntent && (
+            {fieldExpanded && showIntent && (
               <input
                 type="text"
                 value={draftIntent}
@@ -1848,7 +1873,7 @@ function ThreadDetailView({
               />
             )}
 
-            {showInternalNote && (
+            {fieldExpanded && showInternalNote && (
               <textarea
                 value={internalNote}
                 onChange={e => onInternalNoteChange(e.target.value)}
@@ -1858,13 +1883,13 @@ function ThreadDetailView({
               />
             )}
 
-            {draftError && (
+            {fieldExpanded && draftError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-center gap-2">
                 <AlertCircle size={12} /> {draftError}
               </div>
             )}
 
-            {effectiveChannel === 'email' && (
+            {fieldExpanded && effectiveChannel === 'email' && (
               <input
                 type="text"
                 value={replySubject}
@@ -1874,21 +1899,68 @@ function ThreadDetailView({
               />
             )}
 
-            {effectiveChannel === 'email' && (
+            {fieldExpanded && effectiveChannel === 'email' && (
               <RichTextToolbar textareaRef={replyTextareaRef} value={replyBody} onChange={onReplyBodyChange} />
             )}
 
-            <div className="relative">
+            <div className="relative" ref={composerFieldWrapRef}>
               <textarea
                 ref={replyTextareaRef}
                 value={replyBody}
                 onChange={e => onReplyBodyChange(e.target.value)}
-                placeholder={`Reply on behalf of ${detail.venue?.name || 'the venue'}… or click Suggest for an AI draft.`}
-                rows={3}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-44 outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300"
+                onFocus={expandField}
+                onBlur={e => collapseFieldIfEmpty(e.relatedTarget as Node | null)}
+                placeholder={fieldExpanded ? `Reply on behalf of ${detail.venue?.name || 'the venue'}… or click Suggest for an AI draft.` : 'Click to reply…'}
+                className={`w-full text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-900/10 focus:border-gray-300 transition-[height] duration-150 resize-none ${
+                  fieldExpanded
+                    ? `h-20 px-3 py-2 ${effectiveChannel === 'email' ? 'pr-28' : ''}`
+                    : 'h-10 px-3 py-2 overflow-hidden'
+                }`}
               />
-              <div className="absolute top-2 right-2 flex items-center gap-1">
-                {/* Pricing guide link — always live, always the current version */}
+              {fieldExpanded && effectiveChannel === 'email' && (
+                <div className="absolute top-2 right-2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(v => !v)}
+                    title="Insert a saved reply"
+                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                      pickerOpen
+                        ? 'border-violet-300 bg-violet-100 text-violet-800'
+                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <FileText size={11} /> Saved
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDraft}
+                    disabled={drafting}
+                    title="Generate a reply with AI using venue voice + bride context"
+                    className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white hover:bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 disabled:opacity-50"
+                  >
+                    {drafting ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                    {drafting ? 'Drafting…' : 'Suggest'}
+                  </button>
+                  <CannedReplyPicker
+                    open={pickerOpen}
+                    onClose={() => setPickerOpen(false)}
+                    listEndpoint="/api/admin/support/canned-replies?scope=admin"
+                    renderEndpoint={(id) => `/api/admin/support/canned-replies/${id}/render`}
+                    threadId={detail.thread.id}
+                    agentName={actAsName ?? undefined}
+                    channel={effectiveChannel}
+                    onInsert={(b) => onReplyBodyChange(b)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Guide + Attach live side by side here (rather than one stacked
+                on the other) to keep this row compact. Only shown once the
+                field is expanded, since neither matters until you're actually
+                composing. */}
+            {fieldExpanded && (
+              <div className="flex items-center gap-2">
                 {detail.venue?.id && (
                   <button
                     type="button"
@@ -1906,7 +1978,7 @@ function ThreadDetailView({
                       trackClient('pricing_guide_inserted', { label: 'Admin support inbox' });
                       setTimeout(() => setGuideAdded(false), 2000);
                     }}
-                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
                       guideAdded
                         ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
                         : 'border-gray-200 bg-white text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
@@ -1916,103 +1988,84 @@ function ThreadDetailView({
                     {guideAdded ? 'Added!' : 'Guide'}
                   </button>
                 )}
-                {effectiveChannel === 'email' && (
-                  <button
-                    type="button"
-                    onClick={() => setPickerOpen(v => !v)}
-                    title="Insert a saved reply"
-                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
-                      pickerOpen
-                        ? 'border-violet-300 bg-violet-100 text-violet-800'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <FileText size={11} /> Saved
-                  </button>
-                )}
-                {effectiveChannel === 'email' && (
-                  <button
-                    type="button"
-                    onClick={onDraft}
-                    disabled={drafting}
-                    title="Generate a reply with AI using venue voice + bride context"
-                    className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white hover:bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 disabled:opacity-50"
-                  >
-                    {drafting ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-                    {drafting ? 'Drafting…' : 'Suggest'}
-                  </button>
-                )}
-                <CannedReplyPicker
-                  open={pickerOpen}
-                  onClose={() => setPickerOpen(false)}
-                  listEndpoint="/api/admin/support/canned-replies?scope=admin"
-                  renderEndpoint={(id) => `/api/admin/support/canned-replies/${id}/render`}
-                  threadId={detail.thread.id}
-                  agentName={actAsName ?? undefined}
-                  channel={effectiveChannel}
-                  onInsert={(b) => onReplyBodyChange(b)}
+                <AttachmentComposerBar
+                  scope="thread"
+                  scopeId={detail.thread.id}
+                  attachments={composerAttachments}
+                  onChange={onComposerAttachmentsChange}
+                  disabled={sending}
                 />
               </div>
-            </div>
-
-            <AttachmentComposerBar
-              scope="thread"
-              scopeId={detail.thread.id}
-              attachments={composerAttachments}
-              onChange={onComposerAttachmentsChange}
-              disabled={sending}
-            />
+            )}
           </>
         )}
 
         {isNoteMode && (
           <>
-            <SupportMentionPicker
-              members={teamMembers}
-              selectedIds={noteMentionIds}
-              onChange={onNoteMentionIdsChange}
-              selfId={selfId}
-              disabled={sending}
-            />
-            <textarea
-              value={noteBody}
-              onChange={e => onNoteBodyChange(e.target.value)}
-              placeholder="Leave context for whoever picks this up next. The bride and venue never see this."
-              rows={3}
-              className="w-full text-sm border border-amber-200 bg-amber-50/60 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300"
-            />
-            <p className="text-[10px] text-amber-800/80">
-              {noteMentionIds.length === 0
-                ? 'Tip: @-mention a teammate to email them this note.'
-                : `${noteMentionIds.length} teammate${noteMentionIds.length === 1 ? '' : 's'} will be emailed when you save.`}
-            </p>
+            {fieldExpanded && (
+              <SupportMentionPicker
+                members={teamMembers}
+                selectedIds={noteMentionIds}
+                onChange={onNoteMentionIdsChange}
+                selfId={selfId}
+                disabled={sending}
+              />
+            )}
+            <div ref={composerFieldWrapRef}>
+              <textarea
+                value={noteBody}
+                onChange={e => onNoteBodyChange(e.target.value)}
+                onFocus={expandField}
+                onBlur={e => collapseFieldIfEmpty(e.relatedTarget as Node | null)}
+                placeholder={fieldExpanded ? 'Leave context for whoever picks this up next. The bride and venue never see this.' : 'Click to leave a note…'}
+                className={`w-full text-sm border border-amber-200 bg-amber-50/60 rounded-lg outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-[height] duration-150 resize-none ${
+                  fieldExpanded ? 'h-20 px-3 py-2' : 'h-10 px-3 py-2 overflow-hidden'
+                }`}
+              />
+            </div>
+            {fieldExpanded && (
+              <p className="text-[10px] text-amber-800/80">
+                {noteMentionIds.length === 0
+                  ? 'Tip: @-mention a teammate to email them this note.'
+                  : `${noteMentionIds.length} teammate${noteMentionIds.length === 1 ? '' : 's'} will be emailed when you save.`}
+              </p>
+            )}
           </>
         )}
 
         {isVenueDirectMode && (
           <>
-            <div className="rounded-lg border border-violet-200 bg-violet-50/40 px-3 py-2 text-[11px] text-violet-900 leading-relaxed">
-              <div className="font-semibold mb-0.5 inline-flex items-center gap-1">
-                <Building2 size={11} /> Messaging the venue team about{' '}
-                <span className="font-semibold">{contactName}</span>
+            {fieldExpanded && (
+              <div className="rounded-lg border border-violet-200 bg-violet-50/40 px-3 py-2 text-[11px] text-violet-900 leading-relaxed">
+                <div className="font-semibold mb-0.5 inline-flex items-center gap-1">
+                  <Building2 size={11} /> Messaging the venue team about{' '}
+                  <span className="font-semibold">{contactName}</span>
+                </div>
+                All active teammates on the venue&apos;s team page (and the account owner) get an email
+                with a link to reply in their dashboard. The bride never sees this.
               </div>
-              All active teammates on the venue&apos;s team page (and the account owner) get an email
-              with a link to reply in their dashboard. The bride never sees this.
+            )}
+            <div ref={composerFieldWrapRef}>
+              <textarea
+                value={venueDirectBody}
+                onChange={e => onVenueDirectBodyChange(e.target.value)}
+                onFocus={expandField}
+                onBlur={e => collapseFieldIfEmpty(e.relatedTarget as Node | null)}
+                placeholder={fieldExpanded ? `Ask the venue team about ${contactName}… e.g. "We booked a tour Saturday 2pm — anything we should mention?"` : 'Click to message the venue team…'}
+                className={`w-full text-sm border border-violet-200 bg-white rounded-lg outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-[height] duration-150 resize-none ${
+                  fieldExpanded ? 'h-24 px-3 py-2' : 'h-10 px-3 py-2 overflow-hidden'
+                }`}
+              />
             </div>
-            <textarea
-              value={venueDirectBody}
-              onChange={e => onVenueDirectBodyChange(e.target.value)}
-              placeholder={`Ask the venue team about ${contactName}… e.g. "We booked a tour Saturday 2pm — anything we should mention?"`}
-              rows={4}
-              className="w-full text-sm border border-violet-200 bg-white rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300"
-            />
-            <AttachmentComposerBar
-              scope="thread"
-              scopeId={detail.thread.id}
-              attachments={composerAttachments}
-              onChange={onComposerAttachmentsChange}
-              disabled={sending}
-            />
+            {fieldExpanded && (
+              <AttachmentComposerBar
+                scope="thread"
+                scopeId={detail.thread.id}
+                attachments={composerAttachments}
+                onChange={onComposerAttachmentsChange}
+                disabled={sending}
+              />
+            )}
           </>
         )}
 
