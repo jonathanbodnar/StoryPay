@@ -11,7 +11,6 @@
  *   - Pause / Resume   → toggle ai_state between ai_active ↔ paused
  *   - Mark Handoff     → flag for human follow-up
  *   - Snooze +1/+2/+3d → push next scheduled send forward
- *   - Tags             → add/remove marketing tags (AI on/off, custom labels)
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -19,7 +18,7 @@ import {
   RefreshCw, Search, ChevronDown, ChevronUp,
   MessageSquare, Clock, CalendarClock, Sparkles,
   AlertTriangle, XCircle, Pause, Play, PhoneOff,
-  CheckCircle2, Radio, Eye, Zap, Tag, X as XIcon,
+  CheckCircle2, Radio, Eye, Zap, X as XIcon,
   RotateCcw, Hand, Moon, ExternalLink,
 } from 'lucide-react';
 import type { MonitorLead, MonitorPayload } from '@/app/api/admin/ai-concierge/monitor/route';
@@ -84,18 +83,6 @@ const OUTCOME_CFG: Record<string, { dot: string; label: string }> = {
   reschedule_quiet_hours: { dot: 'bg-blue-400', label: 'Quiet hours' },
   manual_re_enable:   { dot: 'bg-purple-400',  label: 'Re-enabled'   },
 };
-
-// ── tag type ──────────────────────────────────────────────────────────────────
-
-interface TagRow {
-  id:         string;
-  name:       string;
-  icon:       string | null;
-  color:      string | null;
-  is_system:  boolean | null;
-  system_key: string | null;
-  category:   string | null;
-}
 
 // ── main component ────────────────────────────────────────────────────────────
 
@@ -392,9 +379,6 @@ function LeadCard({ lead, expanded, onToggle, onMutated }: {
           {/* ── Action bar ─────────────────────────────────────────────── */}
           <ActionBar lead={lead} onMutated={onMutated} />
 
-          {/* ── Tag manager ────────────────────────────────────────────── */}
-          <TagManager leadId={lead.lead_id} venueId={lead.venue_id} />
-
           {/* Deep-link actions */}
           <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100">
             <a
@@ -686,140 +670,10 @@ function ActionBar({ lead, onMutated }: { lead: MonitorLead; onMutated: () => vo
   );
 }
 
-// ── TagManager ────────────────────────────────────────────────────────────────
-
-function TagManager({ leadId, venueId }: { leadId: string; venueId: string }) {
-  const [assigned, setAssigned]   = useState<TagRow[]>([]);
-  const [available, setAvailable] = useState<TagRow[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [adding, setAdding]       = useState(false);
-  const [showAdd, setShowAdd]     = useState(false);
-  const [search, setSearch]       = useState('');
-
-  const loadTags = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await fetch(`/api/admin/ai-concierge/leads/${leadId}/tags`);
-      const d = await r.json() as { assigned?: TagRow[]; available?: TagRow[] };
-      setAssigned(d.assigned ?? []);
-      setAvailable(d.available ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [leadId]);
-
-  useEffect(() => { void loadTags(); }, [loadTags]);
-
-  async function addTag(tagId: string) {
-    setAdding(true);
-    await fetch(`/api/admin/ai-concierge/leads/${leadId}/tags`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tagId }),
-    });
-    setAdding(false);
-    setShowAdd(false);
-    setSearch('');
-    void loadTags();
-  }
-
-  async function removeTag(tagId: string) {
-    await fetch(`/api/admin/ai-concierge/leads/${leadId}/tags/${tagId}`, { method: 'DELETE' });
-    void loadTags();
-  }
-
-  const filteredAvailable = available.filter(t =>
-    t.name.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  void venueId; // used in the API route via leadId lookup
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
-          <Tag size={10} /> Tags
-        </p>
-        <button
-          onClick={() => setShowAdd(v => !v)}
-          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-        >
-          {showAdd ? 'Cancel' : '+ Add tag'}
-        </button>
-      </div>
-
-      {loading ? (
-        <p className="text-xs text-gray-400">Loading tags…</p>
-      ) : (
-        <>
-          {/* Current tags */}
-          <div className="flex flex-wrap gap-1.5 min-h-6">
-            {assigned.length === 0 && !showAdd && (
-              <p className="text-xs text-gray-400 italic">No tags</p>
-            )}
-            {assigned.map(t => (
-              <span
-                key={t.id}
-                className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
-                style={{
-                  borderColor: t.color ? `${t.color}40` : '#e5e7eb',
-                  backgroundColor: t.color ? `${t.color}15` : '#f9fafb',
-                  color: t.color ?? '#374151',
-                }}
-              >
-                {t.icon && <span>{t.icon}</span>}
-                {t.name}
-                <button
-                  onClick={() => void removeTag(t.id)}
-                  className="ml-0.5 opacity-60 hover:opacity-100"
-                  title="Remove tag"
-                >
-                  <XIcon size={9} />
-                </button>
-              </span>
-            ))}
-          </div>
-
-          {/* Add dropdown */}
-          {showAdd && (
-            <div className="mt-2 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="p-2 border-b border-gray-100">
-                <input
-                  type="text"
-                  placeholder="Search tags…"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="w-full text-xs rounded-md border border-gray-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-900"
-                  autoFocus
-                />
-              </div>
-              <div className="max-h-40 overflow-y-auto">
-                {filteredAvailable.length === 0 ? (
-                  <p className="px-3 py-2 text-xs text-gray-400">
-                    {search ? 'No matching tags' : 'All tags already applied'}
-                  </p>
-                ) : (
-                  filteredAvailable.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => void addTag(t.id)}
-                      disabled={adding}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-gray-50 text-left disabled:opacity-60"
-                    >
-                      {t.icon && <span>{t.icon}</span>}
-                      <span className="font-medium">{t.name}</span>
-                      {t.is_system && <span className="ml-auto text-gray-400 text-[10px]">system</span>}
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
+// TagManager (per-lead tag add/remove UI) was removed by product decision —
+// tags still function under the hood, this manual control was just clutter.
+// See equivalent removal in dashboard/leads/page.tsx, AddLeadModal.tsx, and
+// components/admin/SupportContextSidebar.tsx.
 
 // ── small helpers ─────────────────────────────────────────────────────────────
 

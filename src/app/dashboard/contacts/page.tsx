@@ -23,7 +23,6 @@ import AddLeadModal, {
   NO_PIPELINE_STAGE,
   type LeadDraft,
   type LeadPipeline,
-  type MarketingTag,
   type VenueSpaceLite,
 } from '@/components/leads/AddLeadModal';
 
@@ -127,13 +126,11 @@ export default function ContactsPage() {
   const [pipelines, setPipelines] = useState<LeadPipeline[]>([]);
   const [defaultPipelineId, setDefaultPipelineId] = useState<string>('');
   const [spaces, setSpaces] = useState<VenueSpaceLite[]>([]);
-  const [tags, setTags] = useState<MarketingTag[]>([]);
 
   const loadModalData = useCallback(async () => {
-    const [pipeRes, spaceRes, tagRes] = await Promise.all([
+    const [pipeRes, spaceRes] = await Promise.all([
       fetch('/api/pipelines', { cache: 'no-store' }).catch(() => null),
       fetch('/api/spaces', { cache: 'no-store' }).catch(() => null),
-      fetch('/api/marketing/tags', { cache: 'no-store' }).catch(() => null),
     ]);
     if (pipeRes?.ok) {
       const d = (await pipeRes.json().catch(() => ({}))) as {
@@ -147,10 +144,6 @@ export default function ContactsPage() {
     if (spaceRes?.ok) {
       const rows = (await spaceRes.json().catch(() => [])) as VenueSpaceLite[];
       setSpaces(Array.isArray(rows) ? rows : []);
-    }
-    if (tagRes?.ok) {
-      const d = (await tagRes.json().catch(() => ({}))) as { tags?: MarketingTag[] };
-      setTags(Array.isArray(d.tags) ? d.tags : []);
     }
   }, []);
 
@@ -811,7 +804,6 @@ export default function ContactsPage() {
           title="New contact"
           submitLabel="Create contact"
           pipelines={pipelines}
-          allTags={tags}
           spaces={spaces}
           onSpacesChange={setSpaces}
           defaultPipelineId={defaultPipelineId}
@@ -821,9 +813,6 @@ export default function ContactsPage() {
             setShowModal(false);
             await Promise.all([fetchContacts(search, page), loadModalData()]);
           }}
-          onVenueTagCreated={(tag) =>
-            setTags((prev) => (prev.some((t) => t.id === tag.id) ? prev : [...prev, tag]))
-          }
         />
       )}
     </div>

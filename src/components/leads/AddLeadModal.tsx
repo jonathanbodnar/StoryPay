@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Check,
   DollarSign,
@@ -105,24 +105,20 @@ export default function AddLeadModal({
   title = 'New lead',
   submitLabel = 'Create lead',
   pipelines,
-  allTags,
   spaces,
   onSpacesChange,
   defaultPipelineId,
   onClose,
   onSave,
-  onVenueTagCreated,
 }: {
   title?: string;
   submitLabel?: string;
   pipelines: LeadPipeline[];
-  allTags: MarketingTag[];
   spaces: VenueSpaceLite[];
   onSpacesChange: (next: VenueSpaceLite[] | ((prev: VenueSpaceLite[]) => VenueSpaceLite[])) => void;
   defaultPipelineId: string;
   onClose: () => void;
   onSave: (draft: LeadDraft) => Promise<void> | void;
-  onVenueTagCreated: (tag: MarketingTag) => void;
 }) {
   const initialPipeline = pipelines.find((p) => p.id === defaultPipelineId) ?? pipelines[0];
   const [draft, setDraft] = useState<LeadDraft>(() => {
@@ -566,46 +562,11 @@ export default function AddLeadModal({
                 className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-sm focus:border-gray-400 focus:outline-none resize-none"
               />
             </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
-                Tags
-              </label>
-              <InlineTagPicker
-                allTags={allTags}
-                selectedIds={new Set(draft.tagIds)}
-                onToggle={(tagId) => {
-                  setDraft((prev) => {
-                    const s = new Set(prev.tagIds);
-                    if (s.has(tagId)) s.delete(tagId);
-                    else s.add(tagId);
-                    return { ...prev, tagIds: [...s] };
-                  });
-                }}
-                onCreateTag={async (name) => {
-                  const trimmed = name.trim();
-                  if (!trimmed) return;
-                  const res = await fetch('/api/marketing/tags', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: trimmed }),
-                  });
-                  const j = (await res.json().catch(() => ({}))) as {
-                    tag?: MarketingTag;
-                    error?: string;
-                  };
-                  if (!res.ok) {
-                    alert(j.error || 'Could not create tag');
-                    return;
-                  }
-                  const tag = j.tag;
-                  if (!tag) return;
-                  onVenueTagCreated(tag);
-                  setDraft((prev) =>
-                    prev.tagIds.includes(tag.id) ? prev : { ...prev, tagIds: [...prev.tagIds, tag.id] },
-                  );
-                }}
-              />
-            </div>
+            {/* Manual tag picker removed by product decision — tags still
+                function under the hood (automations fire off pipeline-stage
+                moves or tag_added events applied elsewhere), this UI was just
+                redundant. See equivalent removal in dashboard/leads/page.tsx
+                and components/admin/SupportContextSidebar.tsx. */}
           </div>
           <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100">
             <button
@@ -666,77 +627,5 @@ function DraftField({
   );
 }
 
-function InlineTagPicker({
-  allTags,
-  selectedIds,
-  onToggle,
-  onCreateTag,
-}: {
-  allTags: MarketingTag[];
-  selectedIds: Set<string>;
-  onToggle: (tagId: string) => void;
-  onCreateTag: (name: string) => Promise<void>;
-}) {
-  const [newName, setNewName] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  async function submitNew() {
-    const n = newName.trim();
-    if (!n) return;
-    setSaving(true);
-    try {
-      await onCreateTag(n);
-      setNewName('');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-      {allTags.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {allTags.map((t) => {
-            const on = selectedIds.has(t.id);
-            return (
-              <button
-                key={t.id}
-                type="button"
-                title={t.name}
-                onClick={() => onToggle(t.id)}
-                className={`inline-flex max-w-[140px] items-center justify-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                  on
-                    ? 'border-brand-900 bg-brand-900 text-white'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-brand-900/30 hover:bg-brand-900/5 hover:text-brand-900'
-                }`}
-              >
-                <span className="truncate">{t.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-[10px] text-gray-400">No tags yet — create one below.</p>
-      )}
-      <div className="flex gap-1.5 pt-0.5">
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="New tag name"
-          className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void submitNew();
-          }}
-        />
-        <button
-          type="button"
-          disabled={saving || !newName.trim()}
-          onClick={() => void submitNew()}
-          className="shrink-0 rounded-lg bg-brand-900 px-2 py-1 text-[11px] font-medium text-white hover:bg-brand-700 disabled:opacity-40"
-        >
-          {saving ? '…' : 'Add'}
-        </button>
-      </div>
-    </div>
-  );
-}
+// InlineTagPicker (manual tag add/remove at lead-creation time) was removed
+// by product decision — see the comment where the "Tags" field used to sit.

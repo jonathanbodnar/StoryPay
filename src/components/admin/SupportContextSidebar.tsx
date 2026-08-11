@@ -10,13 +10,13 @@
  * pipeline stage, AI state, recent activity, etc.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { capitalizeName } from '@/lib/format-name';
 import { fetchWithGatewayRetry } from '@/lib/fetch-retry';
 import { createPortal } from 'react-dom';
 import {
   Loader2, AlertCircle, User, Building2, Mail, Phone, ShieldCheck, ShieldAlert,
-  Sparkles, CircleDot, AlertTriangle, Calendar, Clock, Tag, Tags,
+  Sparkles, CircleDot, AlertTriangle, Calendar, Clock, Tag,
   Activity, Inbox, BellOff, RefreshCw, ExternalLink, ChevronDown, CheckCircle2,
   StickyNote, CalendarPlus, Plus, Trash2, X, MessageSquare, Send, Reply,
 } from 'lucide-react';
@@ -675,39 +675,17 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
               </div>
             )}
 
-            {/* Action icons — tags / notes / calendar. The applied tags
-                themselves live inside the tag modal so the contact card stays
-                tight; the icon's badge count tells you how many are on. */}
+            {/* Action icons — notes / calendar. Tag management (TagsModal) and
+                the inline applied-tags pill row were removed from this UI by
+                product decision: automations now fire off pipeline-stage
+                moves (Speed-to-Lead) or tag_added events applied entirely
+                behind the scenes, so surfacing/toggling tags here was pure
+                redundant clutter for agents. Tags themselves are untouched —
+                they still get applied/removed and still drive every
+                tag_added-triggered automation; only this display + the manual
+                add/remove control are hidden. See also the equivalent removal
+                in dashboard/leads/page.tsx and AddLeadModal.tsx. */}
             <div className="flex items-center gap-1 flex-wrap">
-              <TagsModal
-                allTags={data.tags}
-                appliedTagIds={data.applied_tag_ids}
-                disabled={actionPending}
-                onAdd={(tagId, tagName) =>
-                  runAction(
-                    { action: 'add_tag', tagId },
-                    () => {
-                      setData(prev => prev ? {
-                        ...prev,
-                        applied_tag_ids: [...new Set([...prev.applied_tag_ids, tagId])],
-                      } : prev);
-                    },
-                    `Tagged · ${tagName}`,
-                  )
-                }
-                onRemove={(tagId) =>
-                  runAction(
-                    { action: 'remove_tag', tagId },
-                    () => {
-                      setData(prev => prev ? {
-                        ...prev,
-                        applied_tag_ids: prev.applied_tag_ids.filter(id => id !== tagId),
-                      } : prev);
-                    },
-                    'Tag removed',
-                  )
-                }
-              />
               {data.venue && data.venue_customer_id && (
                 <NotesButton venueId={data.venue.id} customerId={data.venue_customer_id} />
               )}
@@ -721,41 +699,6 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                 />
               )}
             </div>
-
-            {/* Inline applied tags — visible at a glance so agents can see
-                which tags are active without opening the modal.
-                Custom tags first, then system tags. */}
-            {(() => {
-              const appliedSet = new Set(data.applied_tag_ids);
-              const applied = data.tags.filter(t => appliedSet.has(t.id));
-              const custom  = applied.filter(t => !t.is_system);
-              const system  = applied.filter(t => t.is_system);
-              if (applied.length === 0) return (
-                <p className="text-[10px] text-gray-400 italic pt-0.5">
-                  No tags yet — click <Tags size={9} className="inline mx-0.5" /> to add
-                </p>
-              );
-              return (
-                <div className="flex flex-wrap gap-1 pt-0.5">
-                  {[...custom, ...system].map(t => (
-                    <span
-                      key={t.id}
-                      title={t.category ? `${t.category}${t.system_key ? ` · ${t.system_key}` : ''}` : undefined}
-                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
-                      style={{
-                        borderColor:     t.color ? `${t.color}60` : '#e5e7eb',
-                        backgroundColor: t.color ? `${t.color}15` : '#f9fafb',
-                        color:           t.color ?? '#374151',
-                        opacity:         t.is_system ? 0.8 : 1,
-                      }}
-                    >
-                      {t.icon && <span className="text-[10px] leading-none">{t.icon}</span>}
-                      {t.name}
-                    </span>
-                  ))}
-                </div>
-              );
-            })()}
 
             {/* AI quick-actions */}
             {data.ai && (
@@ -1083,135 +1026,9 @@ function QualifiedPill({
   );
 }
 
-/**
- * Tag icon button + anchored popover — matches the venue-side LeadTagPopover
- * pixel-for-pixel. Active tags are filled `#1b1b1b` (brand-900) with white
- * text; inactive tags are an outlined pill with gray text.
- *
- * Rendered via createPortal so it's never clipped by overflow:hidden parents.
- */
-function TagsModal({
-  allTags,
-  appliedTagIds,
-  disabled,
-  onAdd,
-  onRemove,
-}: {
-  allTags: ContextResponse['tags'];
-  appliedTagIds: string[];
-  disabled: boolean;
-  onAdd:    (tagId: string, tagName: string) => void;
-  onRemove: (tagId: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
-  const n = appliedTagIds.length;
-
-  const appliedSet = useMemo(() => new Set(appliedTagIds), [appliedTagIds]);
-
-  // Close on outside click (matching LeadTagPopover behaviour)
-  useEffect(() => {
-    if (!open) return;
-    function onDocDown(e: MouseEvent) {
-      const target = e.target as Node;
-      const portalEl = document.getElementById('admin-tag-popover-portal');
-      if (btnRef.current?.contains(target)) return;
-      if (portalEl?.contains(target)) return;
-      setOpen(false);
-    }
-    document.addEventListener('mousedown', onDocDown);
-    return () => document.removeEventListener('mousedown', onDocDown);
-  }, [open]);
-
-  const handleOpen = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!open && btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect();
-      setPos({
-        top:   rect.bottom + window.scrollY + 4,
-        right: window.innerWidth - rect.right,
-      });
-    }
-    setOpen(v => !v);
-  };
-
-  const popup = open && pos ? createPortal(
-    <div
-      id="admin-tag-popover-portal"
-      style={{ position: 'absolute', top: pos.top, right: pos.right, zIndex: 9999 }}
-      className="w-64 rounded-xl border border-gray-200 bg-white shadow-xl p-2"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Tags</p>
-        {n > 0 && (
-          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold text-gray-600">
-            {n}
-          </span>
-        )}
-      </div>
-      {allTags.length === 0 ? (
-        <p className="text-[10px] text-gray-400">No tags yet.</p>
-      ) : (
-        // Sort applied tags first so the active set is the first thing the
-        // agent sees when they open the modal.
-        (() => {
-          const sorted = [...allTags].sort((a, b) => {
-            const aa = appliedSet.has(a.id) ? 0 : 1;
-            const bb = appliedSet.has(b.id) ? 0 : 1;
-            if (aa !== bb) return aa - bb;
-            return a.name.localeCompare(b.name);
-          });
-          return (
-            <div className="flex flex-wrap gap-1 max-h-[60vh] overflow-y-auto">
-              {sorted.map(t => {
-                const active = appliedSet.has(t.id);
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    disabled={disabled}
-                    title={t.name}
-                    onClick={() => active ? onRemove(t.id) : onAdd(t.id, t.name)}
-                    className={`inline-flex max-w-[140px] items-center justify-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${
-                      active
-                        ? 'border-brand-900 bg-brand-900 text-white'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-brand-900/30 hover:bg-brand-900/5 hover:text-brand-900'
-                    }`}
-                  >
-                    <span className="truncate">{t.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          );
-        })()
-      )}
-    </div>,
-    document.body,
-  ) : null;
-
-  return (
-    <>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={handleOpen}
-        title={n > 0 ? `${n} tag${n === 1 ? '' : 's'} — manage` : 'Add tags'}
-        className="relative inline-flex items-center justify-center rounded-lg p-1 text-gray-400 hover:bg-orange-50 hover:text-orange-500 transition-colors"
-      >
-        <Tags size={14} />
-        {n > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-orange-400 text-[9px] font-bold text-white leading-none">
-            {n > 9 ? '9+' : n}
-          </span>
-        )}
-      </button>
-      {popup}
-    </>
-  );
-}
+// TagsModal (tag add/remove popover) and the inline applied-tags pill row
+// were removed from this sidebar by product decision — see the comment
+// above the action-icons row for why.
 
 function AiActionRow({
   ai,

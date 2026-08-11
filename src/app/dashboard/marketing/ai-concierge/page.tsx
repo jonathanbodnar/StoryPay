@@ -680,23 +680,6 @@ function LeadRow({
             </div>
           )}
 
-          {/* Tags */}
-          {lead.tags.length > 0 && (
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Tags</p>
-              <div className="flex flex-wrap gap-1.5">
-                {lead.tags.map(t => (
-                  <span key={t.id}
-                    style={t.color ? { backgroundColor: `${t.color}18`, borderColor: `${t.color}50`, color: t.color } : undefined}
-                    className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] text-gray-600"
-                  >
-                    {t.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Preview draft */}
           {preview && (
             <div>

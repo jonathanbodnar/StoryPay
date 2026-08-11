@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createPortal } from 'react-dom';
 import {
   useCallback, useEffect, useMemo, useRef, useState,
   type CSSProperties,
@@ -12,7 +11,7 @@ import {
   MessageSquare, Trash2, ExternalLink, UserPlus,
   LayoutGrid, List as ListIcon, Plus, Settings2, X,
   Globe, CalendarPlus, Clock, GripVertical, ArrowLeft, ArrowRight,
-  ChevronDown, Filter, Link2, Copy, Tags,
+  ChevronDown, Filter, Link2, Copy,
   History, ListTodo, CheckSquare, Square, Send, Activity, StickyNote,
   Lock, Check,
 } from 'lucide-react';
@@ -693,38 +692,6 @@ export default function LeadsPage() {
     }
   }
 
-  function setLeadTagSelection(leadId: string, tagId: string) {
-    const lead = leads.find((l) => l.id === leadId);
-    if (!lead) return;
-    const set = new Set((lead.tags ?? []).map((t) => t.id));
-    if (set.has(tagId)) set.delete(tagId);
-    else set.add(tagId);
-    void updateLead(leadId, { tagIds: [...set] });
-  }
-
-  async function createTagAndAssignToLead(leadId: string, name: string) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const res = await fetch('/api/marketing/tags', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: trimmed }),
-    });
-    const j = (await res.json().catch(() => ({}))) as { tag?: MarketingTag; error?: string };
-    if (!res.ok) {
-      alert(j.error || 'Could not create tag');
-      return;
-    }
-    const tag = j.tag;
-    if (!tag) return;
-    const lead = leads.find((l) => l.id === leadId);
-    if (!lead) return;
-    const set = new Set((lead.tags ?? []).map((t) => t.id));
-    set.add(tag.id);
-    await updateLead(leadId, { tagIds: [...set] }, true, { extraTags: [tag] });
-    void loadTags();
-  }
-
   async function deleteLead(id: string) {
     const lead = leads.find((l) => l.id === id);
     if (lead?.is_protected) {
@@ -1001,14 +968,11 @@ export default function LeadsPage() {
           hideRevenue={hideRevenue}
           dragLeadId={dragLeadId}
           dragOverStage={dragOverStage}
-          allTags={allTags}
           onCardClick={(l) => void openLead(l)}
           onDragStartCard={onDragStart}
           onDragEndCard={onDragEnd}
           onDragOverStage={onDragOverStage}
           onDropStage={onDropStage}
-          onToggleLeadTag={setLeadTagSelection}
-          onCreateTagForLead={createTagAndAssignToLead}
           onDeleteLead={deleteLead}
           venueTz={venueTz}
         />
@@ -1018,12 +982,9 @@ export default function LeadsPage() {
         <ListBoard
           leads={leads}
           stages={activePipeline.stages}
-          allTags={allTags}
           hideRevenue={hideRevenue}
           onRowClick={(l) => void openLead(l)}
           onQuickStageChange={(id, stageId) => updateLead(id, { stageId })}
-          onToggleLeadTag={setLeadTagSelection}
-          onCreateTagForLead={createTagAndAssignToLead}
           venueTz={venueTz}
         />
       )}
@@ -1053,7 +1014,6 @@ export default function LeadsPage() {
         <LeadDrawer
           lead={selectedLead}
           pipelines={pipelines}
-          allTags={allTags}
           hideRevenue={hideRevenue}
           stages={
             pipelines.find((p) => p.id === selectedLead.pipeline_id)?.stages
@@ -1081,8 +1041,6 @@ export default function LeadsPage() {
             const res = await fetch(`/api/leads/${id}`, { cache: 'no-store' });
             if (res.ok) setSelectedLead(((await res.json()) as { lead: Lead }).lead);
           }}
-          onToggleLeadTag={setLeadTagSelection}
-          onCreateTagForLead={createTagAndAssignToLead}
           venueTz={venueTz}
         />
       )}
@@ -1103,15 +1061,11 @@ export default function LeadsPage() {
         <AddLeadModal
           key={activePipelineId}
           pipelines={pipelines}
-          allTags={allTags}
           spaces={spaces}
           onSpacesChange={setSpaces}
           defaultPipelineId={activePipelineId}
           onClose={() => setAddingOpen(false)}
           onSave={createLead}
-          onVenueTagCreated={(tag) =>
-            setAllTags((prev) => (prev.some((t) => t.id === tag.id) ? prev : [...prev, tag]))
-          }
         />
       )}
     </div>
@@ -1305,232 +1259,15 @@ function PipelineTabs({
   );
 }
 
-// ─── Tag toggles (shared: Kanban, List, drawer, new lead) ─────────────────────
-
-function TagPicker({
-  allTags,
-  selectedIds,
-  onToggle,
-  showCreate,
-  onCreateTag,
-}: {
-  allTags: MarketingTag[];
-  selectedIds: Set<string>;
-  onToggle: (tagId: string) => void;
-  showCreate?: boolean;
-  onCreateTag?: (name: string) => Promise<void>;
-}) {
-  const [newName, setNewName] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  async function submitNew() {
-    if (!onCreateTag) return;
-    const n = newName.trim();
-    if (!n) return;
-    setSaving(true);
-    try {
-      await onCreateTag(n);
-      setNewName('');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (allTags.length === 0 && !showCreate) {
-    return (
-      <p className="text-[10px] text-gray-400">
-        No tags yet — add under Marketing → Trigger Links & Tags, or create one below.
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-      {allTags.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {allTags.map((t) => {
-            const on = selectedIds.has(t.id);
-            return (
-              <button
-                key={t.id}
-                type="button"
-                title={t.name}
-                onClick={() => onToggle(t.id)}
-                className={`inline-flex max-w-[140px] items-center justify-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                  on
-                    ? 'border-brand-900 bg-brand-900 text-white'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-brand-900/30 hover:bg-brand-900/5 hover:text-brand-900'
-                }`}
-              >
-                <span className="truncate">{t.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-[10px] text-gray-400">No tags yet — create one below.</p>
-      )}
-      {showCreate && onCreateTag ? (
-        <div className="flex gap-1.5 pt-0.5">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="New tag name"
-            className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void submitNew();
-            }}
-          />
-          <button
-            type="button"
-            disabled={saving || !newName.trim()}
-            onClick={() => void submitNew()}
-            className="shrink-0 rounded-lg bg-brand-900 px-2 py-1 text-[11px] font-medium text-white hover:bg-brand-700 disabled:opacity-40"
-          >
-            {saving ? '…' : 'Add'}
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function LeadTagToggles({
-  allTags,
-  lead,
-  onToggleTag,
-  showCreate,
-  onCreateTagForLead,
-}: {
-  allTags: MarketingTag[];
-  lead: Lead;
-  onToggleTag: (leadId: string, tagId: string) => void;
-  showCreate?: boolean;
-  onCreateTagForLead?: (leadId: string, name: string) => Promise<void>;
-}) {
-  const selected = new Set((lead.tags ?? []).map((t) => t.id));
-  return (
-    <TagPicker
-      allTags={allTags}
-      selectedIds={selected}
-      onToggle={(tagId) => onToggleTag(lead.id, tagId)}
-      showCreate={showCreate}
-      onCreateTag={
-        showCreate && onCreateTagForLead
-          ? (name) => onCreateTagForLead(lead.id, name)
-          : undefined
-      }
-    />
-  );
-}
-
-function LeadTagPopover({
-  lead,
-  allTags,
-  onToggleTag,
-  onCreateTagForLead,
-  align = 'right',
-  compact = false,
-}: {
-  lead: Lead;
-  allTags: MarketingTag[];
-  onToggleTag: (leadId: string, tagId: string) => void;
-  onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
-  align?: 'left' | 'right';
-  compact?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState<{ top: number; left?: number; right?: number } | null>(null);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    function onDocDown(e: MouseEvent) {
-      const target = e.target as Node;
-      const portalEl = document.getElementById('tag-popover-portal');
-      if (btnRef.current?.contains(target)) return;
-      if (portalEl?.contains(target)) return;
-      setOpen(false);
-    }
-    document.addEventListener('mousedown', onDocDown);
-    return () => document.removeEventListener('mousedown', onDocDown);
-  }, [open]);
-
-  const handleOpen = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!open && btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect();
-      setPos({
-        top: rect.bottom + window.scrollY + 4,
-        ...(align === 'right'
-          ? { right: window.innerWidth - rect.right }
-          : { left: rect.left }),
-      });
-    }
-    setOpen(v => !v);
-  };
-
-  const n = (lead.tags ?? []).length;
-
-  const popup = open && pos ? createPortal(
-    <div
-      id="tag-popover-portal"
-      style={{ position: 'absolute', top: pos.top, left: pos.left, right: pos.right, zIndex: 9999 }}
-      className="w-64 rounded-xl border border-gray-200 bg-white shadow-xl p-2"
-    >
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Tags</p>
-      <TagPicker
-        allTags={allTags}
-        selectedIds={new Set((lead.tags ?? []).map((t) => t.id))}
-        onToggle={(tagId) => onToggleTag(lead.id, tagId)}
-        showCreate
-        onCreateTag={async (name) => {
-          await onCreateTagForLead(lead.id, name);
-          setOpen(false);
-        }}
-      />
-    </div>,
-    document.body,
-  ) : null;
-
-  return (
-    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-      {compact ? (
-        <button
-          ref={btnRef}
-          type="button"
-          onClick={handleOpen}
-          title={n > 0 ? `${n} tag${n === 1 ? '' : 's'} — manage` : 'Add tags'}
-          className="relative inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-orange-50 hover:text-orange-500 transition-colors"
-        >
-          <Tags className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          {n > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-orange-400 text-[9px] font-bold text-white leading-none">
-              {n > 9 ? '9+' : n}
-            </span>
-          )}
-        </button>
-      ) : (
-        <button
-          ref={btnRef}
-          type="button"
-          onClick={handleOpen}
-          title="Tags — add or remove"
-          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
-            n > 0
-              ? 'border-brand-900/30 bg-brand-900/5 text-brand-900'
-              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50'
-          }`}
-        >
-          <Tags className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          {n > 0 ? <span className="tabular-nums">{n}</span> : null}
-        </button>
-      )}
-      {popup}
-    </div>
-  );
-}
+// TagPicker / LeadTagToggles / LeadTagPopover (the tag pill display + manual
+// add/remove UI for a lead) were removed from this page by product decision:
+// automations now fire off pipeline-stage moves (Speed-to-Lead) or tag_added
+// events applied entirely behind the scenes, so surfacing/toggling tags in
+// the UI was pure redundant clutter. Tags themselves are untouched — they
+// still get applied/removed by the backend and still drive every
+// tag_added-triggered automation; only this display + manual control are
+// hidden. See also the equivalent removal in AddLeadModal.tsx and
+// components/admin/SupportContextSidebar.tsx.
 
 // ─── Kanban board ────────────────────────────────────────────────────────────
 
@@ -1538,9 +1275,8 @@ function KanbanBoard({
   pipeline, leadsByStage, totalValueByStage, weightedValueByStage,
   hideRevenue,
   dragLeadId, dragOverStage,
-  allTags,
-  onCardClick, onDragStartCard, onDragEndCard, onDragOverStage, onDropStage, onToggleLeadTag,
-  onCreateTagForLead, onDeleteLead, venueTz,
+  onCardClick, onDragStartCard, onDragEndCard, onDragOverStage, onDropStage,
+  onDeleteLead, venueTz,
 }: {
   pipeline: Pipeline;
   leadsByStage: Map<string, Lead[]>;
@@ -1549,14 +1285,11 @@ function KanbanBoard({
   hideRevenue: boolean;
   dragLeadId: string | null;
   dragOverStage: string | null;
-  allTags: MarketingTag[];
   onCardClick: (l: Lead) => void;
   onDragStartCard: (e: React.DragEvent, id: string) => void;
   onDragEndCard: () => void;
   onDragOverStage: (e: React.DragEvent, stageId: string) => void;
   onDropStage: (e: React.DragEvent, stageId: string) => void;
-  onToggleLeadTag: (leadId: string, tagId: string) => void;
-  onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
   onDeleteLead: (id: string) => void;
   venueTz?: string;
 }) {
@@ -1614,7 +1347,6 @@ function KanbanBoard({
                     <KanbanCard
                       key={lead.id}
                       lead={lead}
-                      allTags={allTags}
                       bookingBadge={lead.booking_badge ?? null}
                       stageWinPct={winPct}
                       hideRevenue={hideRevenue}
@@ -1622,8 +1354,6 @@ function KanbanBoard({
                       onClick={() => onCardClick(lead)}
                       onDragStart={(e) => onDragStartCard(e, lead.id)}
                       onDragEnd={onDragEndCard}
-                      onToggleLeadTag={onToggleLeadTag}
-                      onCreateTagForLead={onCreateTagForLead}
                       onDelete={() => onDeleteLead(lead.id)}
                       venueTz={venueTz}
                     />
@@ -1639,11 +1369,10 @@ function KanbanBoard({
 }
 
 function KanbanCard({
-  lead, allTags, bookingBadge, stageWinPct, hideRevenue, isDragging, onClick, onDragStart, onDragEnd, onToggleLeadTag,
-  onCreateTagForLead, onDelete, venueTz,
+  lead, bookingBadge, stageWinPct, hideRevenue, isDragging, onClick, onDragStart, onDragEnd,
+  onDelete, venueTz,
 }: {
   lead: Lead;
-  allTags: MarketingTag[];
   bookingBadge: { iso: string; variant: 'wedding' | 'appointment' } | null;
   stageWinPct: number;
   hideRevenue: boolean;
@@ -1651,8 +1380,6 @@ function KanbanCard({
   onClick: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
-  onToggleLeadTag: (leadId: string, tagId: string) => void;
-  onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
   onDelete: () => void;
   venueTz?: string;
 }) {
@@ -1799,18 +1526,6 @@ function KanbanCard({
           </button>
         )}
 
-        {/* Tags */}
-        {!native && (
-          <LeadTagPopover
-            lead={lead}
-            allTags={allTags}
-            onToggleTag={onToggleLeadTag}
-            onCreateTagForLead={onCreateTagForLead}
-            align="left"
-            compact
-          />
-        )}
-
         {/* New appointment */}
         <Link
           href={`/dashboard/calendar?new=1${lead.email ? `&email=${encodeURIComponent(lead.email)}` : ''}${lead.first_name || lead.name ? `&name=${encodeURIComponent((lead.first_name && lead.last_name ? `${lead.first_name} ${lead.last_name}` : lead.first_name || lead.name || '').trim())}` : ''}`}
@@ -1855,16 +1570,13 @@ function KanbanCard({
 // ─── List view ───────────────────────────────────────────────────────────────
 
 function ListBoard({
-  leads, stages, allTags, hideRevenue, onRowClick, onQuickStageChange, onToggleLeadTag, onCreateTagForLead, venueTz,
+  leads, stages, hideRevenue, onRowClick, onQuickStageChange, venueTz,
 }: {
   leads: Lead[];
   stages: Stage[];
-  allTags: MarketingTag[];
   hideRevenue: boolean;
   onRowClick: (l: Lead) => void;
   onQuickStageChange: (id: string, stageId: string) => void;
-  onToggleLeadTag: (leadId: string, tagId: string) => void;
-  onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
   venueTz?: string;
 }) {
   if (leads.length === 0) {
@@ -1991,15 +1703,6 @@ function ListBoard({
                   >
                     <CalendarPlus className="w-4 h-4" />
                   </Link>
-                  {!native && (
-                    <LeadTagPopover
-                      lead={lead}
-                      allTags={allTags}
-                      onToggleTag={onToggleLeadTag}
-                      onCreateTagForLead={onCreateTagForLead}
-                      align="left"
-                    />
-                  )}
                   {lead.booking_badge && (
                     <div className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-900">
                       <CalendarPlus className="w-3 h-3 shrink-0" />
@@ -2055,15 +1758,12 @@ type LeadActivityRow = {
 };
 
 function LeadDrawer({
-  lead, pipelines, allTags, stages, hideRevenue, onClose, onUpdate, onDelete, onConvert, onRefresh, onMerged,
+  lead, pipelines, stages, hideRevenue, onClose, onUpdate, onDelete, onConvert, onRefresh, onMerged,
   onReloadCurrentLead,
-  onToggleLeadTag,
-  onCreateTagForLead,
   venueTz,
 }: {
   lead: Lead;
   pipelines: Pipeline[];
-  allTags: MarketingTag[];
   stages: Stage[];
   hideRevenue: boolean;
   onClose: () => void;
@@ -2075,8 +1775,6 @@ function LeadDrawer({
   onMerged?: (keepLeadId: string, removedLeadId: string) => void | Promise<void>;
   /** Re-fetch the open lead from GET /api/leads/[id] (e.g. after dismiss duplicate). */
   onReloadCurrentLead?: () => void | Promise<void>;
-  onToggleLeadTag: (leadId: string, tagId: string) => void;
-  onCreateTagForLead: (leadId: string, name: string) => Promise<void>;
   venueTz?: string;
 }) {
   const [newNote, setNewNote] = useState('');
@@ -2584,24 +2282,6 @@ function LeadDrawer({
               </div>
             </div>
           )}
-
-          {/* Tags */}
-          <section>
-            <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
-              Tags
-            </label>
-            <p className="text-[11px] text-gray-400 mb-2">
-              Tap to add or remove. You can also create a new tag here; rename or delete tags under Marketing →
-              Trigger Links & Tags.
-            </p>
-            <LeadTagToggles
-              allTags={allTags}
-              lead={lead}
-              onToggleTag={onToggleLeadTag}
-              showCreate
-              onCreateTagForLead={onCreateTagForLead}
-            />
-          </section>
 
           {/* Owner */}
           <section>
