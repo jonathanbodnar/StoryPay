@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   CheckCircle2, Bell, BellOff, Loader2, Send, Smartphone,
-  ChevronRight, AlertTriangle, Monitor, RefreshCw,
+  ChevronRight, AlertTriangle, Monitor, RefreshCw, Mail, MessageSquare, Building2,
 } from 'lucide-react';
 import { isNativeApp } from '@/lib/platform';
 import { requestNativePushPermission } from '@/components/NativePushRegistrar';
@@ -78,6 +78,97 @@ function urlBase64ToArrayBuffer(b64: string): ArrayBuffer {
   const view = new Uint8Array(buf);
   for (let i = 0; i < raw.length; i++) view[i] = raw.charCodeAt(i);
   return buf;
+}
+
+// ── Venue Direct handoff notification prefs ──────────────────────────────────
+// Per-person (not per-venue) — each individual, owner or team member, gets
+// their own row via /api/profile/venue-direct-notifications, which resolves
+// identity from the venue_id/member_id session cookies. Turning both off
+// just means this person only sees the handoff inside the app.
+function VenueDirectPrefsCard() {
+  const [prefs, setPrefs]     = useState<{ email: boolean; sms: boolean } | null>(null);
+  const [saving, setSaving]   = useState(false);
+
+  useEffect(() => {
+    fetch('/api/profile/venue-direct-notifications', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setPrefs(d as { email: boolean; sms: boolean }); })
+      .catch(() => {});
+  }, []);
+
+  function toggle(key: 'email' | 'sms') {
+    if (!prefs) return;
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    setSaving(true);
+    fetch('/api/profile/venue-direct-notifications', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: next[key] }),
+    }).finally(() => setSaving(false));
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden mb-4">
+      <div className="px-5 py-4 flex items-center gap-3 border-b border-gray-100">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-50 flex-shrink-0">
+          <Building2 size={14} className="text-violet-600" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Venue Direct handoffs</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            When the concierge team hands you a bride conversation, how do you want to hear about it? This is just for you — everyone on your team sets their own.
+          </p>
+        </div>
+      </div>
+      {!prefs ? (
+        <div className="flex justify-center py-5">
+          <Loader2 size={16} className="animate-spin text-gray-300" />
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          <div className="flex items-center gap-4 px-5 py-3.5">
+            <Mail size={14} className="text-gray-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 leading-tight">Email</p>
+              <p className="text-xs text-gray-400 mt-0.5">A message with a link to the contact&apos;s thread.</p>
+            </div>
+            <button
+              type="button" role="switch" aria-checked={prefs.email}
+              onClick={() => toggle('email')}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${prefs.email ? 'bg-emerald-500' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${prefs.email ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          <div className="flex items-center gap-4 px-5 py-3.5">
+            <MessageSquare size={14} className="text-gray-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 leading-tight">Text message</p>
+              <p className="text-xs text-gray-400 mt-0.5">A short heads-up + link, sent to the phone on file.</p>
+            </div>
+            <button
+              type="button" role="switch" aria-checked={prefs.sms}
+              onClick={() => toggle('sms')}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${prefs.sms ? 'bg-emerald-500' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${prefs.sms ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          {!prefs.email && !prefs.sms && (
+            <p className="text-xs text-gray-400 px-5 py-2.5 bg-gray-50/60">
+              Both off — you&apos;ll only see handoffs by opening the app.
+            </p>
+          )}
+        </div>
+      )}
+      {saving && (
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 px-5 py-2.5 border-t border-gray-50">
+          <RefreshCw size={11} className="animate-spin" /> Saving…
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -283,6 +374,8 @@ export default function PushNotificationsClientPage() {
           </p>
         </div>
 
+        <VenueDirectPrefsCard />
+
         {/* Master toggle */}
         <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden mb-4">
           <div className="px-5 py-4 flex items-center justify-between gap-4">
@@ -401,6 +494,8 @@ export default function PushNotificationsClientPage() {
           Get instant alerts on this device — new leads, payments, messages, and more. Takes about 30 seconds to set up.
         </p>
       </div>
+
+      <VenueDirectPrefsCard />
 
       {/* Server not configured */}
       {vapidMissing && (

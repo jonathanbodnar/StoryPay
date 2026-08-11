@@ -28,6 +28,11 @@
  *     This is intentionally one-way: a text-back has no reliable way to know
  *     which bride thread it's about (unlike the threaded email reply-to), so
  *     the real reply still happens via the email thread or in the dashboard.
+ *   - Both the email and SMS legs are gated per-person by
+ *     venues.owner_venue_direct_{email,sms}_enabled / venue_team_members.
+ *     venue_direct_{email,sms}_enabled (migration 201, editable from
+ *     Settings -> Push Notifications). The in-app message is unaffected —
+ *     everyone still sees it in the thread regardless of their prefs.
  *   - Broadcasts a realtime event so the support inbox + venue dashboard
  *     update without a refresh.
  */
@@ -75,6 +80,8 @@ interface VenueRow {
   ghl_location_id:    string | null;
   ghl_connected:       boolean | null;
   owner_concierge_ghl_contact_id: string | null;
+  owner_venue_direct_email_enabled: boolean | null;
+  owner_venue_direct_sms_enabled:   boolean | null;
 }
 
 interface VenueCustomerRow {
@@ -90,6 +97,8 @@ interface TeamMemberRow {
   email: string | null;
   phone: string | null;
   role:  string | null;
+  venue_direct_email_enabled: boolean | null;
+  venue_direct_sms_enabled:   boolean | null;
 }
 
 function escapeHtml(s: string): string {
@@ -141,7 +150,7 @@ export async function POST(req: NextRequest) {
   const [{ data: venue }, { data: customer }, { data: agent }, { data: lastBrideMsgs }] = await Promise.all([
     supabaseAdmin
       .from('venues')
-      .select('id, name, slug, email, notification_email, notification_phone, phone, owner_id, ghl_access_token, ghl_location_id, ghl_connected, owner_concierge_ghl_contact_id')
+      .select('id, name, slug, email, notification_email, notification_phone, phone, owner_id, ghl_access_token, ghl_location_id, ghl_connected, owner_concierge_ghl_contact_id, owner_venue_direct_email_enabled, owner_venue_direct_sms_enabled')
       .eq('id', t.venue_id)
       .maybeSingle(),
     supabaseAdmin
@@ -190,7 +199,7 @@ export async function POST(req: NextRequest) {
   // included if their email matches an explicit selection.
   let recipientQuery = supabaseAdmin
     .from('venue_team_members')
-    .select('id, name, email, phone, role')
+    .select('id, name, email, phone, role, venue_direct_email_enabled, venue_direct_sms_enabled')
     .eq('venue_id', t.venue_id)
     .neq('status', 'inactive');
 
@@ -201,17 +210,30 @@ export async function POST(req: NextRequest) {
   const teamRecipients = ((recipientsRaw ?? []) as TeamMemberRow[]).filter(r => !!r.email);
 
   const ownerIncluded = explicit.length === 0; // when not narrowed, include owner
-  type EmailRecipient = { email: string; name: string | null; isOwner: boolean; phone: string | null; teamMemberId: string | null };
+  type EmailRecipient = {
+    email: string; name: string | null; isOwner: boolean; phone: string | null; teamMemberId: string | null;
+    /** Per-person opt-out — see migration 201 + /api/profile/venue-direct-notifications.
+     *  Defaults to true (existing always-on behavior) until someone explicitly flips it. */
+    emailEnabled: boolean; smsEnabled: boolean;
+  };
   const dedup = new Map<string, EmailRecipient>();
   for (const m of teamRecipients) {
     const key = (m.email || '').toLowerCase();
-    if (key) dedup.set(key, { email: m.email!, name: m.name, isOwner: false, phone: m.phone ?? null, teamMemberId: m.id });
+    if (key) dedup.set(key, {
+      email: m.email!, name: m.name, isOwner: false, phone: m.phone ?? null, teamMemberId: m.id,
+      emailEnabled: m.venue_direct_email_enabled !== false,
+      smsEnabled:   m.venue_direct_sms_enabled   !== false,
+    });
   }
   const ownerPhone = (v?.notification_phone || v?.phone || null);
   if (ownerIncluded && ownerEmail) {
     const key = ownerEmail.toLowerCase();
     if (!dedup.has(key)) {
-      dedup.set(key, { email: ownerEmail, name: v?.name ?? null, isOwner: true, phone: ownerPhone, teamMemberId: null });
+      dedup.set(key, {
+        email: ownerEmail, name: v?.name ?? null, isOwner: true, phone: ownerPhone, teamMemberId: null,
+        emailEnabled: v?.owner_venue_direct_email_enabled !== false,
+        smsEnabled:   v?.owner_venue_direct_sms_enabled   !== false,
+      });
     }
   }
   const recipients = Array.from(dedup.values());
@@ -379,9 +401,13 @@ export async function POST(req: NextRequest) {
   </table>
 </body></html>`;
 
-  // Send to each unique recipient (team members + owner, deduped).
+  // Send to each unique recipient (team members + owner, deduped) who hasn't
+  // personally turned off the Venue Direct email in their own notification
+  // prefs (Settings -> Push Notifications). Everyone still sees the message
+  // in-app either way.
+  const emailRecipients = recipients.filter(r => r.emailEnabled);
   const emailResults = await Promise.allSettled(
-    recipients.map(r =>
+    emailRecipients.map(r =>
       sendEmail({
         to: r.email,
         subject: `[Venue Direct] Message about ${brideName}`,
@@ -429,7 +455,7 @@ export async function POST(req: NextRequest) {
     const smsBody = `StoryVenue Concierge: new message about ${brideName} at ${venueName}. View & reply: ${contactUrl}`;
     const smsResults = await Promise.allSettled(
       recipients
-        .filter(r => !!r.phone)
+        .filter(r => !!r.phone && r.smsEnabled)
         .map(async r => {
           const phoneE164 = normalizePhone(r.phone);
           if (!phoneE164) return;
@@ -463,6 +489,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     messageId: msg.id,
     recipientsNotified: recipients.length,
+    emailNotified: emailRecipients.length,
     smsNotified,
     ownerIncluded: recipients.some(r => r.isOwner),
   });
