@@ -1862,7 +1862,7 @@ function ThreadDetailView({
         )}
 
         {composerMode === 'reply' && (
-          <>
+          <div ref={composerFieldWrapRef} className="space-y-2">
             {fieldExpanded && showIntent && (
               <input
                 type="text"
@@ -1903,7 +1903,7 @@ function ThreadDetailView({
               <RichTextToolbar textareaRef={replyTextareaRef} value={replyBody} onChange={onReplyBodyChange} />
             )}
 
-            <div className="relative" ref={composerFieldWrapRef}>
+            <div className="relative">
               <textarea
                 ref={replyTextareaRef}
                 value={replyBody}
@@ -1997,11 +1997,11 @@ function ThreadDetailView({
                 />
               </div>
             )}
-          </>
+          </div>
         )}
 
         {isNoteMode && (
-          <>
+          <div ref={composerFieldWrapRef} className="space-y-2">
             {fieldExpanded && (
               <SupportMentionPicker
                 members={teamMembers}
@@ -2011,18 +2011,16 @@ function ThreadDetailView({
                 disabled={sending}
               />
             )}
-            <div ref={composerFieldWrapRef}>
-              <textarea
-                value={noteBody}
-                onChange={e => onNoteBodyChange(e.target.value)}
-                onFocus={expandField}
-                onBlur={e => collapseFieldIfEmpty(e.relatedTarget as Node | null)}
-                placeholder={fieldExpanded ? 'Leave context for whoever picks this up next. The bride and venue never see this.' : 'Click to leave a note…'}
-                className={`w-full text-sm border border-amber-200 bg-amber-50/60 rounded-lg outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-[height] duration-150 resize-none ${
-                  fieldExpanded ? 'h-20 px-3 py-2' : 'h-10 px-3 py-2 overflow-hidden'
-                }`}
-              />
-            </div>
+            <textarea
+              value={noteBody}
+              onChange={e => onNoteBodyChange(e.target.value)}
+              onFocus={expandField}
+              onBlur={e => collapseFieldIfEmpty(e.relatedTarget as Node | null)}
+              placeholder={fieldExpanded ? 'Leave context for whoever picks this up next. The bride and venue never see this.' : 'Click to leave a note…'}
+              className={`w-full text-sm border border-amber-200 bg-amber-50/60 rounded-lg outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition-[height] duration-150 resize-none ${
+                fieldExpanded ? 'h-20 px-3 py-2' : 'h-10 px-3 py-2 overflow-hidden'
+              }`}
+            />
             {fieldExpanded && (
               <p className="text-[10px] text-amber-800/80">
                 {noteMentionIds.length === 0
@@ -2030,11 +2028,11 @@ function ThreadDetailView({
                   : `${noteMentionIds.length} teammate${noteMentionIds.length === 1 ? '' : 's'} will be emailed when you save.`}
               </p>
             )}
-          </>
+          </div>
         )}
 
         {isVenueDirectMode && (
-          <>
+          <div ref={composerFieldWrapRef} className="space-y-2">
             {fieldExpanded && (
               <div className="rounded-lg border border-violet-200 bg-violet-50/40 px-3 py-2 text-[11px] text-violet-900 leading-relaxed">
                 <div className="font-semibold mb-0.5 inline-flex items-center gap-1">
@@ -2045,18 +2043,16 @@ function ThreadDetailView({
                 with a link to reply in their dashboard. The bride never sees this.
               </div>
             )}
-            <div ref={composerFieldWrapRef}>
-              <textarea
-                value={venueDirectBody}
-                onChange={e => onVenueDirectBodyChange(e.target.value)}
-                onFocus={expandField}
-                onBlur={e => collapseFieldIfEmpty(e.relatedTarget as Node | null)}
-                placeholder={fieldExpanded ? `Ask the venue team about ${contactName}… e.g. "We booked a tour Saturday 2pm — anything we should mention?"` : 'Click to message the venue team…'}
-                className={`w-full text-sm border border-violet-200 bg-white rounded-lg outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-[height] duration-150 resize-none ${
-                  fieldExpanded ? 'h-24 px-3 py-2' : 'h-10 px-3 py-2 overflow-hidden'
-                }`}
-              />
-            </div>
+            <textarea
+              value={venueDirectBody}
+              onChange={e => onVenueDirectBodyChange(e.target.value)}
+              onFocus={expandField}
+              onBlur={e => collapseFieldIfEmpty(e.relatedTarget as Node | null)}
+              placeholder={fieldExpanded ? `Ask the venue team about ${contactName}… e.g. "We booked a tour Saturday 2pm — anything we should mention?"` : 'Click to message the venue team…'}
+              className={`w-full text-sm border border-violet-200 bg-white rounded-lg outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-[height] duration-150 resize-none ${
+                fieldExpanded ? 'h-24 px-3 py-2' : 'h-10 px-3 py-2 overflow-hidden'
+              }`}
+            />
             {fieldExpanded && (
               <AttachmentComposerBar
                 scope="thread"
@@ -2066,7 +2062,7 @@ function ThreadDetailView({
                 disabled={sending}
               />
             )}
-          </>
+          </div>
         )}
 
         <div className="flex items-center justify-between">
