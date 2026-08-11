@@ -1392,7 +1392,10 @@ export function SupportInboxPanel() {
           </div>
 
           {/* Context sidebar — hidden on smaller screens, visible from xl up */}
-          <SupportContextSidebar threadId={activeThreadId} />
+          <SupportContextSidebar
+            threadId={activeThreadId}
+            onOpenVenueDirect={() => setComposerMode('venue_direct')}
+          />
         </div>
       )}
     </div>

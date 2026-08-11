@@ -12,13 +12,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { capitalizeName } from '@/lib/format-name';
-import { fetchWithGatewayRetry } from '@/lib/fetch-retry';
 import { createPortal } from 'react-dom';
 import {
   Loader2, AlertCircle, User, Building2, Mail, Phone, ShieldCheck, ShieldAlert,
   Sparkles, CircleDot, AlertTriangle, Calendar, Clock, Tag,
   Activity, Inbox, BellOff, RefreshCw, ExternalLink, ChevronDown, CheckCircle2,
-  StickyNote, CalendarPlus, Plus, Trash2, X, MessageSquare, Send, Reply,
+  StickyNote, CalendarPlus, Plus, Trash2, X,
 } from 'lucide-react';
 import { SlaPill } from '@/components/support/SlaIndicator';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
@@ -178,114 +177,27 @@ function ImpersonateButton({
   );
 }
 
-// ─── Venue contact inline compose ───────────────────────────────────────────
+// ─── Venue contact card ─────────────────────────────────────────────────────
 
 /**
- * Inline email/SMS compose row for venue contacts in the context sidebar.
- * Mirrors the ContactRow pattern from PrivateClientsPanel but compact for
- * the narrow sidebar width. Posts to the same shared endpoint.
+ * Read-only venue contact card in the context sidebar — just enough to see
+ * who's on the team and hand off to Venue Direct.
  *
- * Contact ID convention (from bride-context route):
- *   owner      → "owner:<venueId>"
- *   team member → the team member UUID
+ * Deliberately does NOT send email/SMS directly to this person anymore.
+ * That used to exist here (see git history) but it logged into
+ * private_client_messages keyed by venue+recipient only, with no thread/lead
+ * reference — so the "last reply" shown was whatever this person last said
+ * about ANY bride, not this one. Venue Direct is the correct tool for a
+ * bride-specific handoff: every message (and, since the SMS nudge was added,
+ * every notification) is scoped to this exact thread.
  */
-function VenueContactComposeRow({
-  venueId,
+function VenueContactCard({
   contact,
-  ghlConnected,
+  onOpenVenueDirect,
 }: {
-  venueId: string;
   contact: { id: string; name: string; role: string; email: string | null; phone: string | null };
-  ghlConnected: boolean;
+  onOpenVenueDirect?: () => void;
 }) {
-  const isOwner = contact.id.startsWith('owner:');
-  const recipientType = isOwner ? 'owner' : 'team_member';
-  const teamMemberId  = isOwner ? undefined : contact.id;
-  // SMS rides the venue's own GHL/A2P connection — works for the owner or
-  // any team member, as long as the venue is connected and this contact
-  // has a phone on file.
-  const smsAvailable  = ghlConnected && Boolean(contact.phone);
-
-  const [composeChannel, setComposeChannel] = useState<'email' | 'sms' | null>(null);
-  const [subject, setSubject]   = useState('');
-  const [body, setBody]         = useState('');
-  const [sending, setSending]   = useState(false);
-  const [result, setResult]     = useState<'ok' | 'error' | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Latest message for THIS contact (either direction) — surfaces an SMS
-  // reply right where it was texted from, even for venues that aren't on
-  // the Private Clients watch list (see src/lib/concierge-sms-sync.ts for
-  // how inbound replies get synced in from GHL).
-  const [lastMsg, setLastMsg] = useState<{ direction: 'outbound' | 'inbound'; body: string; created_at: string } | null>(null);
-
-  const loadLastMsg = useCallback(async () => {
-    try {
-      const r = await fetch(`/api/admin/support/private-clients/${venueId}/messages`, { cache: 'no-store' });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) return;
-      const rows = (d.messages ?? []) as Array<{
-        recipient_type: string; recipient_team_member_id: string | null;
-        direction: 'outbound' | 'inbound'; body: string; created_at: string;
-      }>;
-      const mine = rows.find((m) =>
-        isOwner ? m.recipient_type === 'owner' : m.recipient_team_member_id === teamMemberId,
-      );
-      setLastMsg(mine ? { direction: mine.direction, body: mine.body, created_at: mine.created_at } : null);
-    } catch {
-      // best-effort
-    }
-  }, [venueId, isOwner, teamMemberId]);
-
-  useEffect(() => { void loadLastMsg(); }, [loadLastMsg]);
-
-  useBroadcastChannel(supportChannels.privateClients(), ['message'], (_event, payload) => {
-    const evt = payload as { venueId?: string } | null;
-    if (evt?.venueId === venueId) void loadLastMsg();
-  });
-
-  const openCompose = (ch: 'email' | 'sms') => {
-    setResult(null);
-    setErrorMsg(null);
-    setSubject('');
-    setBody('');
-    setComposeChannel(cur => cur === ch ? null : ch);
-  };
-
-  async function send() {
-    if (!composeChannel || !body.trim() || sending) return;
-    setSending(true);
-    setResult(null);
-    setErrorMsg(null);
-    try {
-      const res = await fetchWithGatewayRetry('/api/admin/support/private-clients/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          venueId,
-          recipientType,
-          teamMemberId,
-          channel: composeChannel,
-          body: body.trim(),
-          subject: composeChannel === 'email' ? subject.trim() || undefined : undefined,
-          context: 'venue_contact',
-        }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((d as { error?: string }).error || `Failed (${res.status})`);
-      setResult('ok');
-      setBody('');
-      setSubject('');
-      void loadLastMsg();
-      setTimeout(() => setComposeChannel(null), 1200);
-    } catch (e) {
-      setResult('error');
-      setErrorMsg(e instanceof Error ? e.message : 'Send failed');
-    } finally {
-      setSending(false);
-    }
-  }
-
   return (
     <div className="rounded-lg border border-gray-100 overflow-hidden">
       <div className="space-y-1 px-2 py-1.5">
@@ -299,83 +211,30 @@ function VenueContactComposeRow({
             <span className="truncate">{contact.email}</span>
           </p>
         )}
-        {lastMsg?.direction === 'inbound' && (
-          <p className="flex items-start gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-1 text-[10px] text-emerald-800">
-            <Reply size={9} className="text-emerald-600 shrink-0 mt-0.5" />
-            <span className="line-clamp-2">Replied: {lastMsg.body}</span>
-          </p>
-        )}
-        <div className="flex items-center gap-1 flex-wrap">
-          {contact.email && (
-            <button
-              type="button"
-              onClick={() => openCompose('email')}
-              className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
-                composeChannel === 'email'
-                  ? 'bg-gray-900 text-white border-gray-900'
-                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Mail size={8} /> Email
-            </button>
-          )}
+        {onOpenVenueDirect && (
           <button
             type="button"
-            onClick={() => openCompose('sms')}
-            disabled={!smsAvailable}
-            title={smsAvailable ? 'SMS' : 'SMS unavailable for this contact'}
-            className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-              composeChannel === 'sms'
-                ? 'bg-gray-900 text-white border-gray-900'
-                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-            }`}
+            onClick={onOpenVenueDirect}
+            title="Message this venue about this specific bride — scoped to this thread, notifies by email + SMS"
+            className="inline-flex items-center gap-1 rounded border border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium transition-colors"
           >
-            <MessageSquare size={8} /> SMS
+            <Building2 size={8} /> Message via Venue Direct
           </button>
-        </div>
+        )}
       </div>
-
-      {composeChannel && (
-        <div className="px-2 pb-2 pt-1 border-t border-gray-100 bg-gray-50/60 space-y-1.5">
-          {composeChannel === 'email' && (
-            <input
-              type="text"
-              value={subject}
-              onChange={e => setSubject(e.target.value)}
-              placeholder="Subject…"
-              className="w-full rounded border border-gray-200 px-2 py-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-gray-900/20"
-            />
-          )}
-          <textarea
-            value={body}
-            onChange={e => setBody(e.target.value)}
-            placeholder={composeChannel === 'email' ? `Email ${contact.name}…` : `Text ${contact.name}…`}
-            rows={3}
-            className="w-full rounded border border-gray-200 px-2 py-1.5 text-[11px] resize-none focus:outline-none focus:ring-1 focus:ring-gray-900/20"
-          />
-          <div className="flex items-center justify-between gap-1">
-            {result === 'ok' ? (
-              <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1"><CheckCircle2 size={11} /> Sent</span>
-            ) : result === 'error' ? (
-              <span className="text-[10px] text-red-600 font-medium flex items-center gap-1"><AlertCircle size={11} /> {errorMsg}</span>
-            ) : <span />}
-            <button
-              type="button"
-              onClick={() => void send()}
-              disabled={sending || !body.trim()}
-              className="rounded bg-gray-900 text-white px-2 py-1 text-[10px] font-semibold flex items-center gap-1 disabled:opacity-50"
-            >
-              {sending ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
-              Send
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-export function SupportContextSidebar({ threadId }: { threadId: string | null }) {
+export function SupportContextSidebar({
+  threadId,
+  onOpenVenueDirect,
+}: {
+  threadId: string | null;
+  /** Switches the composer to Venue Direct mode — used by the "Message via
+   *  Venue Direct" button on each venue contact card below. */
+  onOpenVenueDirect?: () => void;
+}) {
   const [data, setData] = useState<ContextResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -841,11 +700,10 @@ export function SupportContextSidebar({ threadId }: { threadId: string | null })
                     <User size={9} /> Contacts
                   </div>
                   {data.venue.contacts.map(contact => (
-                    <VenueContactComposeRow
+                    <VenueContactCard
                       key={contact.id}
-                      venueId={data.venue!.id}
                       contact={contact}
-                      ghlConnected={data.venue!.ghl_connected}
+                      onOpenVenueDirect={onOpenVenueDirect}
                     />
                   ))}
                 </div>

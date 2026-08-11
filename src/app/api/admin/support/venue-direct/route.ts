@@ -22,6 +22,12 @@
  *     support_only=false). The message is NEVER sent to the bride.
  *   - Emails every selected venue team member with a deep-link to the bride's
  *     contact page so they can reply in-app.
+ *   - Best-effort SMS "nudge" (rides the venue's own GHL/A2P connection, same
+ *     as Private Clients) to every recipient with a phone on file — short
+ *     text + deep link, since busy owners check texts faster than email.
+ *     This is intentionally one-way: a text-back has no reliable way to know
+ *     which bride thread it's about (unlike the threaded email reply-to), so
+ *     the real reply still happens via the email thread or in the dashboard.
  *   - Broadcasts a realtime event so the support inbox + venue dashboard
  *     update without a refresh.
  */
@@ -34,6 +40,7 @@ import { broadcastBrideMessage, broadcastBrideMessageAdminOnly, broadcastVenueDi
 import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
 import { buildVenueDirectReplyToEmail } from '@/lib/conversations-inbound-email';
 import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
+import { findOrCreateContact, getGhlToken, normalizePhone, sendSms as ghlSendSms } from '@/lib/ghl';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -61,7 +68,13 @@ interface VenueRow {
   slug:               string | null;
   email:              string | null;
   notification_email: string | null;
+  notification_phone: string | null;
+  phone:              string | null;
   owner_id:           string | null;
+  ghl_access_token:   string | null;
+  ghl_location_id:    string | null;
+  ghl_connected:       boolean | null;
+  owner_concierge_ghl_contact_id: string | null;
 }
 
 interface VenueCustomerRow {
@@ -75,6 +88,7 @@ interface TeamMemberRow {
   id:    string;
   name:  string | null;
   email: string | null;
+  phone: string | null;
   role:  string | null;
 }
 
@@ -127,7 +141,7 @@ export async function POST(req: NextRequest) {
   const [{ data: venue }, { data: customer }, { data: agent }, { data: lastBrideMsgs }] = await Promise.all([
     supabaseAdmin
       .from('venues')
-      .select('id, name, slug, email, notification_email, owner_id')
+      .select('id, name, slug, email, notification_email, notification_phone, phone, owner_id, ghl_access_token, ghl_location_id, ghl_connected, owner_concierge_ghl_contact_id')
       .eq('id', t.venue_id)
       .maybeSingle(),
     supabaseAdmin
@@ -176,7 +190,7 @@ export async function POST(req: NextRequest) {
   // included if their email matches an explicit selection.
   let recipientQuery = supabaseAdmin
     .from('venue_team_members')
-    .select('id, name, email, role')
+    .select('id, name, email, phone, role')
     .eq('venue_id', t.venue_id)
     .neq('status', 'inactive');
 
@@ -187,16 +201,17 @@ export async function POST(req: NextRequest) {
   const teamRecipients = ((recipientsRaw ?? []) as TeamMemberRow[]).filter(r => !!r.email);
 
   const ownerIncluded = explicit.length === 0; // when not narrowed, include owner
-  type EmailRecipient = { email: string; name: string | null; isOwner: boolean };
+  type EmailRecipient = { email: string; name: string | null; isOwner: boolean; phone: string | null; teamMemberId: string | null };
   const dedup = new Map<string, EmailRecipient>();
   for (const m of teamRecipients) {
     const key = (m.email || '').toLowerCase();
-    if (key) dedup.set(key, { email: m.email!, name: m.name, isOwner: false });
+    if (key) dedup.set(key, { email: m.email!, name: m.name, isOwner: false, phone: m.phone ?? null, teamMemberId: m.id });
   }
+  const ownerPhone = (v?.notification_phone || v?.phone || null);
   if (ownerIncluded && ownerEmail) {
     const key = ownerEmail.toLowerCase();
     if (!dedup.has(key)) {
-      dedup.set(key, { email: ownerEmail, name: v?.name ?? null, isOwner: true });
+      dedup.set(key, { email: ownerEmail, name: v?.name ?? null, isOwner: true, phone: ownerPhone, teamMemberId: null });
     }
   }
   const recipients = Array.from(dedup.values());
@@ -402,10 +417,53 @@ export async function POST(req: NextRequest) {
       .eq('id', msg.id);
   }
 
+  // Best-effort SMS nudge — same GHL/A2P connection as Private Clients, but
+  // one-way: a short text + deep link, never a two-way reply channel. A raw
+  // text-back from the owner has no reliable way to say "which bride thread
+  // is this about", so the actual reply still happens via the threaded email
+  // (replyTo above) or in the dashboard. Never blocks the response — a
+  // missing/invalid phone or a disconnected GHL location just means no text.
+  const ghlToken = getGhlToken({ ghl_access_token: v?.ghl_access_token ?? null });
+  let smsNotified = 0;
+  if (v?.ghl_connected && v?.ghl_location_id && ghlToken) {
+    const smsBody = `StoryVenue Concierge: new message about ${brideName} at ${venueName}. View & reply: ${contactUrl}`;
+    const smsResults = await Promise.allSettled(
+      recipients
+        .filter(r => !!r.phone)
+        .map(async r => {
+          const phoneE164 = normalizePhone(r.phone);
+          if (!phoneE164) return;
+          const placeholderEmail = r.isOwner
+            ? `owner.${v.id}@storyvenue.concierge.placeholder`
+            : `team.${r.teamMemberId}@storyvenue.concierge.placeholder`;
+          const contactId = await findOrCreateContact(ghlToken, v.ghl_location_id!, {
+            email: r.email || placeholderEmail,
+            phone: phoneE164,
+            firstName: r.name || undefined,
+          });
+          if (!contactId) return;
+          await ghlSendSms(ghlToken, v.ghl_location_id!, contactId, smsBody, undefined, phoneE164);
+          smsNotified += 1;
+          // Cache the GHL contact id so the existing concierge SMS reply
+          // poller (src/lib/concierge-sms-sync.ts) can pick up a text-back,
+          // same as Private Clients — best-effort, never blocks the send.
+          if (r.isOwner) {
+            await supabaseAdmin.from('venues').update({ owner_concierge_ghl_contact_id: contactId }).eq('id', v.id);
+          } else if (r.teamMemberId) {
+            await supabaseAdmin.from('venue_team_members').update({ concierge_ghl_contact_id: contactId }).eq('id', r.teamMemberId);
+          }
+        }),
+    );
+    for (const res of smsResults) {
+      if (res.status === 'rejected') console.warn('[venue-direct] sms nudge failed', res.reason);
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     messageId: msg.id,
     recipientsNotified: recipients.length,
+    smsNotified,
     ownerIncluded: recipients.some(r => r.isOwner),
   });
 }
