@@ -1095,7 +1095,7 @@ export function SupportInboxPanel() {
           active={subTab === 'tickets'}
           onClick={() => setSubTab('tickets')}
           icon={<LifeBuoy size={14} />}
-          label="Venue support"
+          label="Support"
           dot={ticketOpenCount}
         />
         <SubTabButton
