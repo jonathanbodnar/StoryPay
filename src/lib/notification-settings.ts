@@ -44,7 +44,7 @@ export const NOTIFICATION_SCENARIOS = [
   {
     key: 'bride_handoff',
     label: 'Bride needs you',
-    description: 'The AI Concierge escalates, or our concierge team hands off a conversation for you to take over.',
+    description: 'AI Concierge escalates a conversation, or our concierge team sends you a Venue Direct message — either way, a bride needs your attention.',
     icon: 'Building2',
     emailDefault: true,
     smsDefault: true,
