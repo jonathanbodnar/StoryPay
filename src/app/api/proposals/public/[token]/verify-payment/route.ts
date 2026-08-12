@@ -9,7 +9,7 @@ import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
-import { notifyOwner, formatAmount, HIGH_VALUE_THRESHOLD_CENTS } from '@/lib/owner-notifications';
+import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { recordOnlinePaymentLedger, buildBalanceLine } from '@/lib/proposal-payments';
 
@@ -539,22 +539,8 @@ export async function POST(
             customer_name: customerName,
             amount:        formatAmount(amountCents),
           },
-          actionUrl:    dashUrl,
-          alsoHighValue: amountCents >= HIGH_VALUE_THRESHOLD_CENTS,
+          actionUrl: dashUrl,
         });
-
-        // 3. Separate high-value SMS scenario (gated by sms_high_value_payment)
-        if (amountCents >= HIGH_VALUE_THRESHOLD_CENTS) {
-          await notifyOwner({
-            venueId: proposal.venue_id as string,
-            scenario: 'high_value_payment',
-            vars: {
-              customer_name: customerName,
-              amount:        formatAmount(amountCents),
-            },
-            actionUrl: dashUrl,
-          });
-        }
       }
     } catch (notifyErr) {
       console.error('[verify-payment] Failed to notify owner:', notifyErr);

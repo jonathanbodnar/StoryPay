@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   Bell, CreditCard, FileText, Loader2, Save, CheckCircle2, Eye, Send,
   X, PenLine, RefreshCw, XCircle, AlertTriangle, ChevronRight, FilePen,
-  UserPlus, MessageSquare, Building2, Sparkles, Users, Lock,
+  UserPlus, MessageSquare, Building2, Users, Lock,
 } from 'lucide-react';
 import type { ReminderOffset } from '@/lib/appointment-reminders';
 import {
@@ -24,7 +24,7 @@ const CUSTOMER_FACING_TEMPLATE_TYPES = new Set([
 ]);
 
 const SCENARIO_ICON_MAP: Record<string, React.ElementType> = {
-  UserPlus, MessageSquare, Building2, Sparkles, Users,
+  UserPlus, MessageSquare, Building2, Users,
   CreditCard, AlertTriangle, FileSignature: PenLine, Eye, FileText, RefreshCw, XCircle,
 };
 
@@ -377,9 +377,6 @@ export default function NotificationsPage() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="font-heading text-2xl text-gray-900">Notifications</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Everything about how you and your team hear about what&apos;s happening — by email or text. Push is on hold for now; the native app will have its own settings.
-        </p>
       </div>
 
       {/* ── Section A: Alerts about your business (per-person) ── */}

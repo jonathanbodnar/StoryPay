@@ -33,7 +33,6 @@ const PREF_SCENARIO_OVERRIDE: Partial<Record<OwnerScenario, string>> = {
 export type OwnerScenario =
   | 'payment_received'
   | 'payment_failed'
-  | 'high_value_payment'
   | 'proposal_signed'
   | 'document_viewed'
   | 'subscription_created'
@@ -154,19 +153,6 @@ const SCENARIO_META: Record<OwnerScenario, {
     defaultEmailBody:    'A payment attempt for {{organization}} did not complete.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}\nReason: {{reason}}',
     defaultPushTitle: 'Payment failed',
     defaultPushBody:  '{{amount}} from {{customer_name}} — {{reason}}',
-    defaultPushUrl:   '/dashboard/transactions',
-  },
-  high_value_payment: {
-    emailKey: 'email_payment_received',
-    smsKey:   'sms_high_value_payment',
-    pushKey:  'push_high_value_payment',
-    templateType: 'payment_notification',
-    defaultSmsTemplate: '🎉 High-value payment: {{amount}} from {{customer_name}} — {{organization}}',
-    defaultEmailSubject: 'High-value payment received: {{amount}} from {{customer_name}}',
-    defaultEmailHeading: 'High-Value Payment Received',
-    defaultEmailBody:    'A high-value payment was received for {{organization}}.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}',
-    defaultPushTitle: '🎉 High-value payment',
-    defaultPushBody:  '{{amount}} from {{customer_name}}',
     defaultPushUrl:   '/dashboard/transactions',
   },
   proposal_signed: {
@@ -320,8 +306,6 @@ interface NotifyArgs {
   vars: Record<string, string>;
   /** Optional URL for the email's CTA button. */
   actionUrl?: string;
-  /** When true, also fires the `high_value_payment` SMS toggle if the amount qualifies. */
-  alsoHighValue?: boolean;
 }
 
 /**
@@ -359,11 +343,7 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
 
     // ── Recipients: the owner + every active team member, each with their ──
     // own independent email_<scenario>/sms_<scenario> toggles (see
-    // src/lib/notification-settings.ts). `alsoHighValue` no longer needs
-    // special-casing here — callers that qualify for high-value already fire
-    // a separate notifyOwner({scenario:'high_value_payment'}) call right
-    // after (see proposals verify-payment route), which this same fan-out
-    // handles on its own.
+    // src/lib/notification-settings.ts).
     const prefScenario = PREF_SCENARIO_OVERRIDE[args.scenario] || args.scenario;
     const emailKey = emailKeyFor(prefScenario);
     const smsKey   = smsKeyFor(prefScenario);
@@ -495,9 +475,6 @@ export function formatAmount(cents: number | null | undefined): string {
   const value = (cents ?? 0) / 100;
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 }
-
-/** US$1,000 threshold for the "high-value" SMS — match the toggle copy. */
-export const HIGH_VALUE_THRESHOLD_CENTS = 100_000;
 
 // ── Convenience wrappers for the push-first scenarios ───────────────────────
 // These exist so the lead-creation, inbound-message, and AI-handoff call

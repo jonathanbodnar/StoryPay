@@ -14,7 +14,7 @@ import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
-import { notifyOwner, formatAmount, HIGH_VALUE_THRESHOLD_CENTS } from '@/lib/owner-notifications';
+import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { recordOnlinePaymentLedger, buildBalanceLine } from '@/lib/proposal-payments';
 
@@ -243,7 +243,6 @@ export async function POST(
       scenario: 'payment_received',
       vars: { customer_name: customerName, amount: formatAmount(finalChargeCents) },
       actionUrl: dashUrl,
-      alsoHighValue: finalChargeCents >= HIGH_VALUE_THRESHOLD_CENTS,
     }).catch(() => {});
 
     if (proposal.venue_id) {

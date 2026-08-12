@@ -17,7 +17,6 @@ const NATIVE_TOGGLES = [
 const NATIVE_DISABLED_FINANCIAL_KEYS: Record<string, boolean> = {
   push_payment_received:      false,
   push_payment_failed:        false,
-  push_high_value_payment:    false,
   push_invoice_paid:          false,
   push_refund_issued:         false,
   push_subscription_created:  false,

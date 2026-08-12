@@ -66,14 +66,6 @@ export const NOTIFICATION_SCENARIOS = [
     smsDefault: true,
   },
   {
-    key: 'high_value_payment',
-    label: 'High-value payment',
-    description: 'A single payment over $1,000.',
-    icon: 'Sparkles',
-    emailDefault: true,
-    smsDefault: true,
-  },
-  {
     key: 'proposal_signed',
     label: 'Proposal signed',
     description: 'A customer signs a proposal.',
