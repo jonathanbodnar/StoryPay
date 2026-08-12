@@ -12,7 +12,7 @@ const PLATFORM_DOCS = `
 StoryVenue is an all-in-one platform for wedding venues to manage proposals, invoices, payments, a booking calendar, contact CRM profiles, email templates, branding, integrations, and team members — all from one place.
 
 ## Navigation / Sections
-- Home (Dashboard): Revenue overview, KPI cards (Total Revenue, New Proposals, Signed Proposals, Pending Amount, Refunds, Avg. Proposal Value), area revenue chart, proposal status breakdown, recent proposals table (links to detail pages), recent transactions table, and a **Weddings & Income Trends** section — a ComposedChart showing weddings booked and revenue by month with MoM%, YoY%, and prior-year overlays for the trailing 12 months.
+- Home: web users land on Venue listing (Bride Booking System™ Analytics); the native mobile app opens to a "Today" screen (unread conversations + today's schedule) instead.
 - Ask AI: Sidebar entry plus floating sparkle (bottom-right) — answers questions using live account data and this documentation (updated for Venue listing, Media library, Reviews, Conversations, public API/embed, and Help Center).
 - Contacts: Full CRM — contact profiles with Overview, Notes, Activity timeline, Payments, Tasks, Documents; configurable sales pipeline and stages in the profile header (aligned with Leads when email matches).
 - Conversations: Unified inbox per contact — **Team only** internal notes (optional @mentions to teammates) vs **External** outbound messages with a channel toggle for **Email** or **SMS** per message. Path: /dashboard/conversations. Two-way by design: every outbound message shows a green "Sent" check or red "Failed" badge. Inbound replies arrive in real time — when a contact replies by email or SMS, the message appears in the thread within seconds. Threads can carry both SMS AND email simultaneously.
@@ -26,7 +26,7 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
   - **Notes** — add a quick note attached to the lead.
   - **Calendar** — schedule an appointment for this contact directly from the card (opens the New Event modal pre-filled with their info).
   These buttons appear on hover so the card stays compact; tap on mobile to reveal them.
-- Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
+- Reports: 7 downloadable financial reports (Revenue, Proposals, Customers, Aging, Payment Methods, Refunds, Bank Reconciliation) as CSV, Excel, or PDF, plus an Accounting Export. Owners and admins only. Just the report cards and a date range picker — no overview/chart section above the list.
 - Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions. **Packages / Offerings** (/dashboard/offerings) — the unified Items + Bundles catalog for all products and packages you sell. Bundles can have a linked contract template that auto-loads in the proposal builder.
 - Marketing (sidebar flyout): Analytics, Emails (campaigns), Audiences, Forms, Workflows, Trigger links & tags. All three email surfaces (Templates / Campaigns / Automations) use the Flodesk-style drag-and-drop builder — see "Marketing email builder" section below.
 - Help Center: Searchable categories and articles (including Venue listing, Reviews, Conversations, Ask AI, Leads); contextual suggestions by page; voice search; article ratings.
@@ -596,7 +596,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 
 ## Common Questions
 - How do I create a proposal? Payments → New → select a template → fill in client details → Send.
-- How do I see my revenue? Home dashboard (filter by date) or Reports → Revenue.
+- How do I see my revenue? Reports → Revenue (filter by date range, then preview or download).
 - How do I refund a payment? Transactions → Charges → click Refund.
 - Why can't I accept payments? Your StoryPay merchant account may still be pending review. Check Payments → Settings.
 - How do I add my logo? Settings → Branding → upload a logo file, or choose an image from Media (JPG/PNG/WebP/AVIF/GIF).

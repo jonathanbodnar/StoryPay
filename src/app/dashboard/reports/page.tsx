@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 import { classNames } from '@/lib/utils';
-import { DashboardOverview } from './DashboardOverview';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -416,8 +415,6 @@ export default function ReportsPage() {
 
  return (
  <div className="min-h-full bg-white space-y-12">
-   <DashboardOverview />
-
    <div>
      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
      <div>

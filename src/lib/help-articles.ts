@@ -30,12 +30,11 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         tags: ['overview', 'intro', 'dashboard', 'what is', 'storypay', 'storyvenue'],
         body: `StoryVenue (at app.storyvenue.com) is the all-in-one command center for wedding venues. From one dashboard you manage your public directory listing on storyvenue.com, the leads it generates, customer profiles, proposals, invoices, payments, a booking calendar, branding, email templates, and your team.
 
-After logging in you land on the Home dashboard which shows your revenue, pipeline, recent proposals, and recent transactions at a glance.
+After logging in on desktop, you land on your Venue listing's Bride Booking System™ Analytics — the live visitor map, booking funnel, and traffic insights for your storyvenue.com listing. On the native mobile app, you land on a "Today" screen showing unread conversations and today's schedule instead.
 
 Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Contacts, Conversations, Calendar, Leads, Reports, What's New, and Help Center. Venue listing (directory Dashboard, Media library, Photos, Analytics, Reviews), Payments, Marketing (analytics, lead capture forms, email tools, trigger links & tags), and Settings open as flyout submenus. On desktop you can collapse the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
 
 The main areas:
-- Home — revenue snapshot and recent activity
 - Contacts — CRM profiles with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a pipeline + stage control in the header (same sales pipelines as Leads)
 - Conversations — unified inbox per contact: Team only notes vs Email contact messages
 - Calendar — tours, weddings, and events
@@ -152,49 +151,6 @@ Couples (clients):
     iconName: 'LayoutDashboard',
     color: '#6366f1',
     articles: [
-      {
-        id: 'dash-kpis',
-        title: 'Understanding your KPI cards',
-        tags: ['kpi', 'revenue', 'metrics', 'home', 'stats'],
-        body: `The Home dashboard shows six KPI cards at the top:
-
-- Total Revenue — sum of all completed payments in the selected period
-- New Proposals — proposals created in the period
-- Signed Proposals — proposals that have been e-signed
-- Pending Amount — value of proposals awaiting payment
-- Refunds — total refunded in the period
-- Avg. Proposal Value — average revenue per signed proposal
-
-Use the date range picker (top-right of the dashboard) to change the period. Preset options include Today, Last 7 days, This month, Last month, Last 90 days, and Year to date.`,
-      },
-      {
-        id: 'dash-chart',
-        title: 'Revenue chart, proposal breakdown, and wedding trends',
-        tags: ['chart', 'graph', 'revenue', 'status', 'pipeline', 'weddings', 'trends', 'mom', 'yoy', 'month over month', 'year over year', 'income trends', 'booking trends', 'prior year'],
-        body: `Below the KPI cards is an area chart showing daily or monthly revenue over the selected period.
-
-Beneath the chart you'll see a status breakdown showing how many proposals are in each stage: Draft, Sent, Viewed, Signed, Paid, Refunded, and Cancelled.
-
-The two tables below the status breakdown show your 5 most recent proposals (with a link to each detail page) and your 5 most recent charges (customer names and amounts).
-
-Weddings & Income Trends section
-Further down the home dashboard is a "Weddings & Income Trends" section that shows how your booking and revenue metrics track month over month and year over year.
-
-Three summary KPI tiles at the top:
-- This month — weddings booked + revenue this month with a MoM% chip and a YoY% chip
-- Last month — same metrics for the prior month
-- Year to date — running totals vs. same period in the prior year
-
-The chart below the tiles is a combo chart (bars + line):
-- Pink bars — weddings booked this year per month
-- Light pink bars — same month in the prior year (so you can see seasonality)
-- Green line — revenue this year
-- Dashed green line — revenue prior year
-
-Below the chart is a full data table with columns: Month, Events booked, MoM%, YoY%, Prior-yr events, Income, MoM%, YoY%, Prior-yr income. All changes are color-coded (green = up, red = down).
-
-This section is great for spotting seasonal patterns and understanding how this year's bookings compare to last year's.`,
-      },
       {
         id: 'dash-announcement-ticker',
         title: 'Announcement ticker — what it is and why you can\'t close it',
