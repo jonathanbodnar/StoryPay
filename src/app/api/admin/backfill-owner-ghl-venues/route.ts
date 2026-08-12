@@ -53,10 +53,11 @@ interface VenueRow {
   directory_card_on_file: boolean | null;
   owner_ghl_synced_stage: string | null;
   owner_ghl_synced_status: string | null;
+  owner_trial_alert_sent_at: string | null;
 }
 
 const SELECT =
-  'id, name, email, phone, owner_first_name, owner_last_name, slug, city, state, owner_ghl_contact_id, owner_ghl_opportunity_id, is_published, directory_subscription_status, directory_subscription_external_id, directory_card_on_file, owner_ghl_synced_stage, owner_ghl_synced_status';
+  'id, name, email, phone, owner_first_name, owner_last_name, slug, city, state, owner_ghl_contact_id, owner_ghl_opportunity_id, is_published, directory_subscription_status, directory_subscription_external_id, directory_card_on_file, owner_ghl_synced_stage, owner_ghl_synced_status, owner_trial_alert_sent_at';
 
 async function fetchVenues(onlyPublished: boolean, limit: number | null): Promise<VenueRow[]> {
   // Paginate past Supabase's 1,000-row cap.

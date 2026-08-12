@@ -8,7 +8,10 @@
  *   1. Every SaaS venue (their customers) pushed as a contact into THEIR OWN
  *      GHL sub-account, one-way (SaaS → GHL), so they have one accurate list to
  *      build automations on.
- *   2. An SMS to themselves every time a new venue listing goes live.
+ *   2. An SMS to themselves the first time a venue actually starts a paid
+ *      trial (card on file, 14-day trial begun — GHL stage "Trial Started").
+ *      NOT on every listing publish — most listings never add a card, and
+ *      texting on those was pure noise.
  *
  * All sends use the owner's GHL sub-account, configured via env (never hardcode
  * the token):
@@ -121,10 +124,13 @@ interface VenueSyncRow {
   // instead of round-tripping GHL for all 80+ venues on every run.
   owner_ghl_synced_stage: string | null;
   owner_ghl_synced_status: string | null;
+  // Set once the owner has been texted that this venue started a paid trial
+  // (stage "Trial Started"). Prevents re-firing the SMS on later syncs.
+  owner_trial_alert_sent_at: string | null;
 }
 
 const VENUE_SYNC_COLUMNS =
-  'id, name, email, phone, owner_first_name, owner_last_name, slug, city, state, owner_ghl_contact_id, owner_ghl_opportunity_id, directory_subscription_status, directory_subscription_external_id, directory_card_on_file, owner_ghl_synced_stage, owner_ghl_synced_status';
+  'id, name, email, phone, owner_first_name, owner_last_name, slug, city, state, owner_ghl_contact_id, owner_ghl_opportunity_id, directory_subscription_status, directory_subscription_external_id, directory_card_on_file, owner_ghl_synced_stage, owner_ghl_synced_status, owner_trial_alert_sent_at';
 
 async function loadVenueForSync(venueId: string): Promise<VenueSyncRow | null> {
   const { data, error } = await supabaseAdmin
@@ -353,6 +359,13 @@ async function syncVenueOpportunity(
       .eq('id', venue.id);
     venue.owner_ghl_synced_stage = stageName;
     venue.owner_ghl_synced_status = oppStatus;
+
+    // Text the owner exactly once, the first time this venue actually starts
+    // a paid trial (card on file + subscription created) — NOT on every
+    // free/no-card listing publish. See migration 204.
+    if (stageName === 'Trial Started' && !venue.owner_trial_alert_sent_at) {
+      await notifyOwnerOfTrialStart(venue);
+    }
   } catch (err) {
     console.warn(
       '[owner-ghl-sync] syncVenueOpportunity failed for',
@@ -609,10 +622,49 @@ export async function sendOwnerSms(message: string): Promise<boolean> {
 }
 
 /**
+ * Text the owner the first (and only) time a venue starts a paid trial —
+ * i.e. its GHL stage reaches "Trial Started" (card on file + subscription
+ * created, not yet actively billed). Exactly-once via
+ * `owner_trial_alert_sent_at`, stamped BEFORE sending to close the race
+ * between the immediate scheduleOwnerGhlSync() call and the 30-min
+ * reconciler both reaching this venue around the same time.
+ */
+async function notifyOwnerOfTrialStart(venue: VenueSyncRow): Promise<void> {
+  const { data: gate } = await supabaseAdmin
+    .from('venues')
+    .select('owner_trial_alert_sent_at')
+    .eq('id', venue.id)
+    .maybeSingle();
+  if ((gate as { owner_trial_alert_sent_at?: string | null } | null)?.owner_trial_alert_sent_at) {
+    return; // already alerted (race with reconciler)
+  }
+  await supabaseAdmin
+    .from('venues')
+    .update({ owner_trial_alert_sent_at: new Date().toISOString() })
+    .eq('id', venue.id);
+  venue.owner_trial_alert_sent_at = new Date().toISOString();
+
+  const name = (venue.name ?? '').trim() || 'A venue';
+  const place = [venue.city, venue.state].filter(Boolean).join(', ');
+  const url = venueLiveUrl(venue.slug);
+  const body =
+    `New StoryVenue trial started: ${name}` +
+    (place ? ` — ${place}` : '') +
+    ' (14-day free trial, card on file)' +
+    (url ? `. ${url}` : '');
+  await sendOwnerSms(body);
+}
+
+/**
  * Fire when a venue listing goes live. Exactly-once via
  * `owner_listing_alert_sent_at`:
- *   - pushes the venue into the owner's GHL sub-account, AND
- *   - texts the owner that a new listing is live.
+ *   - pushes the venue into the owner's GHL sub-account (as a "New Listing").
+ *
+ * NOTE: this used to also text the owner on every publish, but that fired for
+ * every free/no-card listing (way too noisy). The owner is now texted
+ * separately — once, from syncVenueOpportunity() below — the first time a
+ * venue's stage actually reaches "Trial Started" (card on file, 14-day trial
+ * begun). See owner_trial_alert_sent_at.
  *
  * Safe to call on every publish — subsequent calls are no-ops.
  */
@@ -623,36 +675,26 @@ export async function onNewListingLive(venueId: string): Promise<void> {
   const venue = await loadVenueForSync(venueId);
   if (!venue) return;
 
-  // Idempotency gate — has the owner already been alerted for this venue?
+  // Idempotency gate — has this venue already been pushed to owner GHL on publish?
   const { data: gate } = await supabaseAdmin
     .from('venues')
     .select('owner_listing_alert_sent_at')
     .eq('id', venueId)
     .maybeSingle();
   if ((gate as { owner_listing_alert_sent_at?: string | null } | null)?.owner_listing_alert_sent_at) {
-    return; // already alerted
+    return; // already pushed
   }
 
   // Stamp FIRST to close the race — two near-simultaneous publishes shouldn't
-  // both send. If the sends below fail, the venue is still captured by the
-  // backfill route later.
+  // both fire. If the push below fails, the venue is still captured by the
+  // periodic reconciler later.
   await supabaseAdmin
     .from('venues')
     .update({ owner_listing_alert_sent_at: new Date().toISOString() })
     .eq('id', venueId);
 
-  // 1. One-way sync this venue into the owner's GHL list.
+  // One-way sync this venue into the owner's GHL list.
   await pushVenueToOwnerGhl(venue);
-
-  // 2. Text the owner.
-  const name = (venue.name ?? '').trim() || 'A new venue';
-  const place = [venue.city, venue.state].filter(Boolean).join(', ');
-  const url = venueLiveUrl(venue.slug);
-  const body =
-    `New StoryVenue listing live: ${name}` +
-    (place ? ` — ${place}` : '') +
-    (url ? `. ${url}` : '');
-  await sendOwnerSms(body);
 }
 
 /** Fire-and-forget wrapper for request handlers. Never blocks the response. */

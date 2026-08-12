@@ -6,6 +6,7 @@ import {
   requirePlatformLunarPaySecretKey,
 } from '@/lib/platform-directory-billing';
 import { getCheckoutSession, listSubscriptions } from '@/lib/lunarpay';
+import { scheduleOwnerGhlSync } from '@/lib/owner-ghl-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -126,6 +127,12 @@ export async function POST(req: NextRequest) {
       mode: 'subscription',
     },
   });
+
+  // Owner-GHL pipeline: push this venue to its new stage ("Trial Started" or
+  // "Paid Listing") right away instead of waiting for the 30-min reconciler.
+  // This is also where the owner's one-time "new trial started" SMS fires
+  // when isTrialStart lands the venue in "Trial Started" for the first time.
+  scheduleOwnerGhlSync(venueId);
 
   return NextResponse.json({
     ok: true,

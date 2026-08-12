@@ -15,6 +15,7 @@ import {
 } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
+import { scheduleOwnerGhlSync } from '@/lib/owner-ghl-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -362,6 +363,12 @@ async function verifyHandler(req: NextRequest) {
       addon_concierge:          addonConcierge,
     },
   });
+
+  // Owner alert + owner-GHL pipeline: push this venue to the "Trial Started"
+  // stage right away instead of waiting for the 30-min reconciler. This is
+  // also where the owner's "new trial started" SMS fires (see
+  // notifyOwnerOfTrialStart in owner-ghl-sync.ts) — exactly once per venue.
+  scheduleOwnerGhlSync(venueId);
 
   return NextResponse.json({
     ok: true,
