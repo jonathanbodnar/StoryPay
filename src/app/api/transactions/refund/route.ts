@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { refundCharge } from '@/lib/lunarpay';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
+import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
 
   const { data: proposal } = await supabaseAdmin
     .from('proposals')
-    .select('id, status, charge_id, transaction_id, price, customer_email')
+    .select('id, status, charge_id, transaction_id, price, customer_email, customer_name')
     .eq('id', proposalId)
     .eq('venue_id', venueId)
     .single();
@@ -72,6 +73,20 @@ export async function POST(request: NextRequest) {
         .then(() => applySystemTagByEmail(venueId, refundEmail, 'refunded'))
         .catch(() => {});
     }
+
+    // Notify the owner/team (gated per-person by their refund_issued
+    // email/SMS/push toggles — see src/lib/notification-settings.ts). This
+    // was previously defined but never fired, so the toggle was a no-op.
+    const refundedAmountCents = result?.refundedAmount ?? amountCents ?? proposal.price ?? 0;
+    void notifyOwner({
+      venueId,
+      scenario: 'refund_issued',
+      vars: {
+        customer_name: (proposal.customer_name as string | null) || 'Customer',
+        amount:        formatAmount(refundedAmountCents),
+      },
+      actionUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io'}/dashboard/transactions`,
+    });
 
     return NextResponse.json({
       success: true,
