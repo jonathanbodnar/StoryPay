@@ -24,14 +24,13 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
   - **SMS** — opens a quick SMS composer to the contact's phone via GHL.
   - **Email** — opens a quick email composer to the contact.
   - **Notes** — add a quick note attached to the lead.
-  - **Tags** — manage marketing tags on the lead.
   - **Calendar** — schedule an appointment for this contact directly from the card (opens the New Event modal pre-filled with their info).
   These buttons appear on hover so the card stays compact; tap on mobile to reveal them.
 - Reports: 7 downloadable financial reports (CSV, Excel, PDF). Owners and admins only.
 - Payments (sidebar flyout): New, Proposals, Proposal Templates, Installments, Subscriptions, Transactions. **Packages / Offerings** (/dashboard/offerings) — the unified Items + Bundles catalog for all products and packages you sell. Bundles can have a linked contract template that auto-loads in the proposal builder.
 - Marketing (sidebar flyout): Analytics, Emails (campaigns), Audiences, Forms, Workflows, Trigger links & tags. All three email surfaces (Templates / Campaigns / Automations) use the Flodesk-style drag-and-drop builder — see "Marketing email builder" section below.
 - Help Center: Searchable categories and articles (including Venue listing, Reviews, Conversations, Ask AI, Leads); contextual suggestions by page; voice search; article ratings.
-- What's New: Changelog and Feature Requests board. The sidebar menu item shows a **red dot with unread count** whenever there are entries a user hasn't reviewed; visiting the page marks everything read for that user (per-user read state). Feature Requests submitted by venues can be **approved, edited, or removed** by super admins. When a super admin approves a request it's automatically converted into a **What's New** changelog entry with an outcome-based auto-generated headline + description, and the request is removed from the venue's own feature-request list.
+- What's New: Changelog and Feature Requests board. The sidebar menu item shows a **red dot with unread count** whenever there are entries a user hasn't reviewed; visiting the page marks everything read for that user (per-user read state). Feature Requests submitted by venues are reviewed by the StoryVenue team, who can **approve, edit, or remove** them. When a request is approved it's automatically converted into a **What's New** changelog entry with an outcome-based auto-generated headline + description, and the request is removed from the venue's own feature-request list.
 - Settings (sidebar flyout): General (venue info, service fee), Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team (roles, invites, **Hide $** for team members — owners only), **Notifications** (per-person email/SMS alert toggles + customer email template editor — see "Owner Notifications" below; Push Notifications is native-app-only and hidden on web for now), **Calendar** (5 tabs: General, Connections, Availability, Booking Rules, Notifications). Venues may also store **listing marketing monthly spend** on the account for Leads ROI — when that value exists, insights use it.
 - Sidebar collapse (desktop): Chevron next to the logo narrows the sidebar to an icon rail and shows a compact mark; preference is saved in the browser.
 - Announcement ticker (top of every page, dark "News" bar): broadcasts platform-wide messages from the StoryVenue team (downtime, new features, billing/compliance updates). It is **intentionally NOT dismissible** from the venue side — there is no X / close button. Only the StoryVenue support team can deactivate a message, and they will when it's no longer relevant. Hovering pauses the scroll so you can read or click any embedded link.
@@ -408,24 +407,12 @@ Setup checklist for a speed-to-lead funnel:
 3. Add steps: Send email (welcome) → Wait 2 days → Send email (follow-up) → Wait 3 days → repeat as needed.
 4. Set workflow status to Active and Save.
 
-## Notifications & Email Templates (Settings → Notifications)
-- Path: /dashboard/settings/notifications — this single page replaces the old separate "Email Templates" and "Notifications" settings pages.
-- All transactional email templates live here, each with an on/off toggle in the left sidebar list and a full editor in the main panel.
-- Template types (10 total):
-  - Invoice — sent to the customer when an invoice is created
-  - Proposal — sent to the customer when a proposal is sent
-  - Payment Confirmation — receipt sent to the customer after a successful payment
-  - Payment Notification — owner-only alert when a payment is received (shows amount, net, fee)
-  - Subscription Confirmation — sent when a subscription is started
-  - Subscription Cancelled — sent when a subscription is cancelled
-  - Payment Failed — alert when a payment attempt fails
-  - Payment Reminder — overdue reminders sent to customers after a payment due date (see below)
-  - Proposal / Invoice Viewed — owner-only alert when a customer first opens their document
-  - Proposal Signed — owner-only alert when a customer signs a proposal
-- Each template has: Subject Line, Email Heading, Body Text, Button Text, Footer Text — all editable.
-- Toggle switch in the sidebar list turns a template on or off. Off = that email will NOT send. State persists after page reload.
+## Notifications (Settings → Notifications)
+- Path: /dashboard/settings/notifications — single page for everything notification-related, split into two sections.
+- **Section 1 — "Alerts about your business"**: per-person Email + Text toggles, one row per alert type. Every person on the team (owner + each teammate) sets their own — nobody's choices affect anyone else's. Alert types: new lead, contact replied, AI Concierge handoff, Venue Direct message, payment received, payment failed, proposal signed, document opened, refund issued, new subscription. The Text toggle is locked until SMS/Legacy messaging is connected (Settings → Integrations).
+- **Section 2 — "Emails to your customers"**: account-wide (not per-person) editor for the actual content of transactional emails customers receive — Invoice, Proposal, Payment Confirmation, Subscription Confirmation, Payment Failed, Payment Reminder (6 total). Each has: Subject Line, Email Heading, Body Text, Button Text, Footer Text — all editable, plus an on/off toggle in the left list.
 - Click Preview to see the rendered email. Click Send Test to fire a live test to any email address.
-- Variable pills appear below the editor for each template. Click a pill to copy the tag, then paste it into the subject or body. Both flat tags ({{customer_name}}) and canonical dot-notation tags ({{contact.first_name}}, {{payment.amount}}) work — they resolve the same value.
+- Variable pills appear below the editor for each customer template. Click a pill to copy the tag, then paste it into the subject or body. Both flat tags ({{customer_name}}) and canonical dot-notation tags ({{contact.first_name}}, {{payment.amount}}) work — they resolve the same value.
 - Payment Reminder specifics: When the Payment Reminder template is selected, a "Reminder schedule" panel appears below the editor. Configure up to 3 reminder send-times — each one is a number of days/hours AFTER the due date (overdue reminders, not advance reminders). Default offsets are 1 day, 3 days, and 7 days after the due date. Save changes to update the schedule for all future reminder queues.
 
 ## Team Members
@@ -511,7 +498,7 @@ Setup checklist for a speed-to-lead funnel:
 ## Owner Notifications (Email + SMS, per person)
 - Go to Settings → Notifications → "Alerts about your business" to control what you (and each teammate, independently) get notified about by **email** and **SMS/text**.
 - Each person on the team sets their own toggles — nobody's settings affect anyone else's.
-- **Alert types**: new lead, contact replied, "Bride needs you" (AI Concierge handoff + Venue Direct handoffs from the concierge team), payment received, payment failed, high-value payment ($1,000+), proposal signed, document opened, invoice paid, refund issued, new subscription, subscription cancelled, new contact.
+- **Alert types**: new lead, contact replied, AI Concierge handoff (the AI escalates a conversation and needs you to take over), Venue Direct message (the concierge team sends you a direct message about a specific bride), payment received, payment failed, proposal signed, document opened, refund issued, new subscription. AI Concierge handoff and Venue Direct are two separate toggles even though both mean "a bride needs your attention" — each has its own email/SMS settings.
 - SMS requires the venue's SMS/A2P integration to be connected (Settings → Integrations) — the SMS toggle is locked otherwise.
 - The same page's "Emails to your customers" section is for editing the content of customer-facing emails (invoices, proposals, receipts, reminders) — that part is account-wide, not per-person.
 
@@ -637,7 +624,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - How do I pick a custom color for a pipeline stage? Leads → Edit pipelines → click the color swatch on any stage (or the new-stage row) → use the color wheel, type a **Hex code**, or pick a preset in the popover.
 - Where do inbound email and SMS replies go? Into the same Conversations thread. Email replies and SMS replies both appear automatically in the thread in real time.
 - What is the red dot on What's New? It shows how many release notes you haven't read. Opening the What's New page marks them all read for your user.
-- How do I request a new feature? What's New → Feature Requests → Submit a request. A super admin reviews it; if approved it becomes a new What's New entry automatically.
+- How do I request a new feature? What's New → Feature Requests → Submit a request. The StoryVenue team reviews it; if approved it becomes a new What's New entry automatically.
 - What is a pipeline / stage? Venues use configurable **sales pipelines** (see Leads). On a contact profile, pick a pipeline and click **stage pills** to move someone through your funnel; stages match your Kanban columns. Linked leads with the same email can stay in sync.
 - How do I collapse the sidebar? Desktop: click the chevron beside the logo (narrow icon rail + compact mark). Preference saves for this browser.
 - The browser tab shows the StoryVenue icon; if it looks outdated after an update, hard-refresh or clear site data (favicons cache aggressively).
@@ -672,7 +659,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - How do I set minimum notice for bookings? Settings → Calendar → Booking Rules → Minimum Scheduling Notice. Set to 0 for same-day, up to 72 hours.
 - How do I add a time buffer between appointments? Settings → Calendar → Booking Rules → Pre-buffer and Post-buffer. These block the calendar before/after each booking so you have prep or debrief time.
 - Why do I see Google Calendar events on my StoryVenue calendar? If you've connected Google Calendar (Settings → Calendar → Connections), your Google events display as read-only chips on the StoryVenue calendar for full-schedule visibility.
-- How do I call or text a lead without opening their full profile? From the Kanban board, hover the lead card — action buttons (Call, SMS, Email, Notes, Tags, Calendar) appear at the bottom of the card for quick access.
+- How do I call or text a lead without opening their full profile? From the Kanban board, hover the lead card — action buttons (Call, SMS, Email, Notes, Calendar) appear at the bottom of the card for quick access.
 - How do I book an appointment from a lead card? Hover the lead card on the Kanban board → click the Calendar icon → the New Event modal opens pre-filled with the contact's info.
 - How do I schedule an appointment from inside a conversation thread? Open the conversation thread → click the Profile button to open the contact's slide-over profile → go to the Schedule tab → book the appointment there.
 - What's the difference between Email Templates, Campaigns, and Automations? Templates are reusable starting designs (never sent). Campaigns are one-off broadcasts (Design → Recipients → Review). Automations are multi-step drip sequences triggered by an event (new lead, tag added, etc.) where each step has its own delay. All three use the same Flodesk-style builder.
@@ -913,22 +900,9 @@ Where to find variable pickers:
 - SMS delivery requires a connected StoryVenue Legacy (GHL) sub-account with A2P verification. All email and template variables are native to StoryVenue.
 - Common question — "will editing my pricing guide change what brides receive?" Yes — the PDF is generated live on each click from your current saved Pricing Guide content.
 
-## Default Sales Pipeline (Locked)
-- Every venue has a default pipeline (the "Bride Booking System™" pipeline) whose stages are locked and cannot be renamed, reordered, added to, or deleted.
-- The pipeline itself cannot be deleted either.
-- This protects the platform's built-in automations which reference these specific stage names.
-- Venue owners can create additional custom pipelines freely. Only the default pipeline is read-only.
-- When a venue owner tries to edit a default pipeline stage, they see a lock message.
-
 ## Contacts — Deleting a Contact
 - To delete a contact: Contacts page → find the contact → delete action.
 - Deleting a contact removes them from your CRM, leads pipeline, and if connected, from your GHL sub-account as well.
-
-## PWA / Install as App
-- StoryVenue is a Progressive Web App — installable on phone, tablet, or desktop.
-- iPhone: Safari → Share → "Add to Home Screen". Android: Chrome → menu → "Add to Home screen". Desktop: install icon in address bar.
-- Installed apps get: home screen icon, full-screen mode, push notifications when browser is closed, faster load.
-- Install prompt appears automatically after first visits; manual install always available.
 `;
 
 // Each message in the conversation history is capped at 2 000 chars

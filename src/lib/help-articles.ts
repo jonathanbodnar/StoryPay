@@ -210,7 +210,7 @@ Why there's no "X" to close it
 The ticker is intentionally non-dismissible from the venue side. When the StoryVenue team broadcasts something it's because every venue genuinely needs to see it, and a per-venue dismiss would mean important messages get hidden in the moments they matter most. There's no per-user "snooze" cookie — if you see it, every other user on your venue sees it too.
 
 Who can turn it off
-Only the StoryVenue team can hide an announcement. Each announcement has an Active / Inactive toggle on the super admin dashboard; the moment a message is deactivated it disappears from every venue ticker on the next page load. Announcements are also rotated and replaced regularly, so the bar will feel fresh rather than static.
+Only the StoryVenue team can deactivate an announcement on their end; the moment they do, it disappears from every venue's ticker on the next page load. Announcements are also rotated and replaced regularly, so the bar will feel fresh rather than static.
 
 Clicking the link in an announcement
 If a message has a link, clicking it opens the destination in a new tab (or the same tab, for in-app routes). Hovering anywhere over the scrolling text pauses the animation so you can read or click without chasing the message.`,
@@ -826,9 +826,9 @@ Tips:
         id: 'conversations-venue-direct',
         title: 'Venue Direct — messages from the StoryVenue Concierge team',
         tags: ['venue direct', 'concierge', 'support inbox', 'concierge message', 'storvenue team', 'two-way', 'mark read', 'unread', 'collapsible', 'reply'],
-        body: `Venue Direct is the two-way channel between the StoryVenue Concierge team and your venue.
+        body: `Venue Direct is the two-way channel between the StoryVenue Concierge team and your venue — typically used when a bride is ready for a call or tour and needs a warm handoff to you.
 
-When the Concierge team sends you a message you will see it in your Conversations inbox (Conversations in the sidebar). A notification email is also sent to your registered email address.
+When the Concierge team sends you a message you will see it in your Conversations inbox (Conversations in the sidebar). You'll also be alerted by email and/or a text nudge with a direct link to that bride's contact page, based on your personal notification preferences (Settings → Notifications → "Alerts about your business" → Venue Direct message). Each person on your team chooses their own email/text combination independently.
 
 Replying
 - Open the thread in Conversations and type your reply in the composer. Your reply routes back to the Concierge team's support inbox automatically.
@@ -871,7 +871,7 @@ Replying
 
 When a new Venue Direct message arrives
 - A badge appears on the Concierge Inbox menu item in the sidebar
-- A notification email is sent to your registered venue email address`,
+- You're alerted by email and/or a text nudge, based on your personal notification preferences (Settings → Notifications → "Alerts about your business" → Venue Direct message)`,
       },
       {
         id: 'conversations-inbound',
@@ -1452,7 +1452,6 @@ Available actions
 - SMS — opens a quick SMS composer to text the contact via your connected Legacy messaging number
 - Email — opens a quick email composer to send a message to the contact
 - Notes — opens a quick note input so you can jot something without opening the drawer
-- Tags — manage the contact's marketing tags directly from the card
 - Calendar — opens the New Event modal with this contact pre-filled so you can book an appointment instantly
 
 Why use card actions?
@@ -1525,7 +1524,7 @@ Things to ask:
 - "Explain weighted pipeline vs open pipeline"
 - "What's my directory vs referral booked revenue?" (insights strip uses your data; Ask AI also has leads context when you're on this page)
 
-Ask AI uses server-side pipeline data when you're on the Leads page (totals, recent leads, notes snippets). It does not change leads for you — use the Kanban board or drawer. If your user session hides revenue in the UI, you may still get numeric answers in chat depending on backend context; treat the dashboard as the source of truth for what your role may view.
+Ask AI uses your live pipeline data when you're on the Leads page (totals, recent leads, notes snippets). It does not change leads for you — use the Kanban board or drawer to make edits. Treat the dashboard as the source of truth for exactly what your role can view.
 
 If AI gives a stale answer, refresh the page to reset the context.`,
       },
@@ -2816,19 +2815,15 @@ Troubleshooting:
         id: 'email-types',
         title: 'Email template types',
         tags: ['email', 'templates', 'automated', 'notification', 'test email', 'preview'],
-        body: `StoryVenue sends automated transactional emails on your behalf. Customize each one at Settings → Notifications (the "Email Templates" section lives inside the Notifications settings page, not a separate page).
+        body: `StoryVenue sends automated transactional emails on your behalf. Customize the ones your customers receive at Settings → Notifications, under "Emails to your customers."
 
-There are 10 template types:
+The 6 customer-facing template types:
 1. Invoice — sent to the customer when you send them an invoice
 2. Proposal — sent to the customer when you send them a proposal
 3. Payment Confirmation — receipt sent to the customer after a successful payment
-4. Payment Notification — alert sent to you (the venue) when you receive a payment
-5. Subscription Confirmation — sent to the customer when a recurring subscription starts
-6. Subscription Cancelled — sent to the customer when a subscription ends
-7. Payment Failed — sent when a payment attempt is declined
-8. Payment Reminder — sent automatically before a scheduled installment or subscription charge
-9. Proposal / Invoice Viewed — sent to you when a customer opens their proposal or invoice link
-10. Proposal Signed — sent to you when a customer e-signs a proposal or contract
+4. Subscription Confirmation — sent to the customer when a recurring subscription starts
+5. Payment Failed — sent to the customer when their payment attempt is declined
+6. Payment Reminder — sent automatically after a payment due date passes (overdue reminders)
 
 Each template has:
 - Subject Line
@@ -2844,7 +2839,9 @@ To test a template: click "Send Test" and enter any email address. The test emai
 
 To preview: click "Preview" for a live mock-up inside the editor.
 
-Tip: Send a test email to yourself before sending a real proposal to ensure the template looks correct with your branding.`,
+Tip: Send a test email to yourself before sending a real proposal to ensure the template looks correct with your branding.
+
+Looking for your own alerts (new lead, payment received, a bride needs you, etc.)? Those live in the "Alerts about your business" section of the same Notifications page — see the "Owner notifications" article for details.`,
       },
       {
         id: 'email-variables',
@@ -2945,7 +2942,7 @@ Quick tour:
 - DELETE /api/v1/webhooks/:id — unsubscribe
 
 Security
-- API keys are stored hashed (SHA-256) — only the prefix is visible after creation
+- API keys are never stored in plain text — only the prefix is visible after creation, so keep your copy safe when it's first generated
 - Webhook subscriptions auto-disable after 5 consecutive delivery failures
 - All traffic is HTTPS only
 - Each key is venue-scoped — there is no cross-tenant access`,
@@ -3157,10 +3154,7 @@ What couples can see
 After logging in, couples see only their own records — the proposals and documents sent to them from your venue. They cannot see other contacts, your full calendar, or any internal data.
 
 Updating couple profile
-Couples can update their first name, last name, and phone by clicking their name in the header after logging in.
-
-Admin management
-Super admins can view, search, and manage all couple accounts from the admin Couples tab.`,
+Couples can update their first name, last name, and phone by clicking their name in the header after logging in.`,
       },
       {
         id: 'account-2fa',
@@ -3373,31 +3367,37 @@ Pipeline revenue visibility — The venue owner can enable Hide $ for individual
     articles: [
       {
         id: 'notif-settings',
-        title: 'Email notifications and templates (Settings → Notifications)',
-        tags: ['notifications', 'email alerts', 'email templates', 'alerts', 'payment reminder', 'proposal signed', 'invoice viewed', 'toggle', 'on off'],
-        body: `Settings → Notifications is the single page for all transactional email templates. It replaced the old separate "Email Templates" and "Notifications" pages.
+        title: 'Notifications (Settings → Notifications)',
+        tags: ['notifications', 'email alerts', 'sms alerts', 'email templates', 'alerts about your business', 'owner notifications', 'venue direct', 'ai concierge handoff', 'payment reminder', 'proposal signed', 'toggle', 'on off', 'per person'],
+        body: `Settings → Notifications is the single page for everything notification-related — what you and your team get alerted about, and what your customers receive by email. It's split into two sections.
 
-The left sidebar lists every template with an on/off toggle. The main panel shows the full editor for whichever template is selected.
+Section 1 — Alerts about your business
+This is personal: every person on your team (you, and each teammate) sets their own Email and Text toggles for each alert type. Nobody's choices affect anyone else's.
 
-The 10 template types:
-- Invoice — sent to the customer when an invoice is created
-- Proposal — sent to the customer when a proposal is sent
-- Payment Confirmation — receipt sent to the customer after a successful payment
-- Payment Notification — owner-only alert when you receive a payment
-- Subscription Confirmation — sent when a subscription starts
-- Subscription Cancelled — sent when a subscription ends
-- Payment Failed — alert when a payment attempt fails
-- Payment Reminder — overdue reminder sent to customers after a payment due date
-- Proposal / Invoice Viewed — owner-only alert when a customer opens their document for the first time
-- Proposal Signed — owner-only alert when a customer signs a proposal
+Alert types:
+- New lead — someone enquires about your venue
+- Contact replied — a contact sends a reply to an ongoing conversation
+- AI Concierge handoff — the AI Concierge escalates a conversation and needs you to take over
+- Venue Direct message — our concierge team sends you a direct message about a specific bride
+- Payment received — any successful payment comes in
+- Payment failed — a charge attempt fails
+- Proposal signed — a customer signs a proposal
+- Document opened — a customer opens a proposal or invoice you sent
+- Refund issued — a refund is processed
+- New subscription — a recurring payment plan starts
 
-Editing a template:
-1. Click the template name in the left sidebar to open it
+Each row has an Email toggle and a Text toggle. The Text toggle is locked with a small lock icon until your StoryVenue Legacy (SMS) integration is connected under Settings → Integrations — connect it to unlock text alerts.
+
+Section 2 — Emails to your customers
+This is account-wide (not per-person) — it's where you edit the actual content of the transactional emails your customers receive: Invoice, Proposal, Payment Confirmation, Subscription Confirmation, Payment Failed, and Payment Reminder. See the "Email template types" article for the full list and how to edit them.
+
+Editing a customer email template:
+1. Click the template name in the left list to open it
 2. Edit the Subject, Heading, Body, Button Text, or Footer
 3. Click Save
 
-Toggling a template on/off:
-- Use the toggle switch next to the template name in the left sidebar
+Toggling a customer email on/off:
+- Use the toggle switch next to the template name in the left list
 - Off = that email will not send for any future event
 - The toggle persists after page reload
 
@@ -3412,7 +3412,7 @@ Payment Reminder — overdue schedule:
 - Default: 1 day after, 3 days after, 7 days after
 - Remove an offset by clicking X; add one with "Add reminder"
 
-Test any template:
+Test any customer email template:
 - Click the Preview button to see the rendered email
 - Click Send Test to fire a real email to any address with sample values filled in`,
       },
@@ -3797,75 +3797,40 @@ Where to find variable pickers:
       {
         id: 'push-overview',
         title: 'Push notifications overview',
-        tags: ['push notifications', 'push alerts', 'browser notifications', 'real-time alerts', 'pwa'],
-        body: `**Browser/PWA push is on hold for now** — Settings → Push Notifications is only available inside the native StoryVenue iOS/Android app. On the web, use Settings → Notifications for email and SMS alerts instead (per-person toggles for you and each teammate).
+        tags: ['push notifications', 'push alerts', 'browser notifications', 'real-time alerts', 'pwa', 'native app'],
+        body: `Push notifications (an instant alert banner on your phone or desktop) are a native-app-only feature right now. On the web dashboard, Settings → Push Notifications is hidden, and alerts about your business go out by email and text instead — see Settings → Notifications.
 
-The rest of this article describes how push worked/will work once re-enabled or inside the native app:
+Why push moved to the native app
+The StoryVenue iOS/Android app has its own push notifications built in, so there's no need for browser push on the web anymore. Once you've installed the native app from the App Store or Play Store and logged in, open Settings → Push Notifications inside the app to choose which events (new lead, new message, AI Concierge handoff, etc.) send you a push alert.
 
-Push notifications send instant alerts to your phone, tablet, or desktop when important events happen in your venue — even when StoryVenue is closed.
-
-What triggers push notifications:
-- New message from a contact
-- Payment received (includes high-value payments)
-- Payment failed
-- Proposal signed
-- New lead created
-- AI Concierge handoff (when a lead needs human attention)
-- Invoice paid
-- Subscription created or cancelled
-- Refund issued
-- New customer added
-
-Push notifications are sent alongside existing email alerts — they don't replace them. You control each event type independently.
-
-To receive push notifications:
-1. Your browser must ask for permission — StoryVenue will prompt you on first visit
-2. Accept the notification permission when asked
-3. Go to Settings → Push Notifications to toggle each event on or off
-
-Push notifications work on:
-- Chrome, Edge, Firefox, Safari (desktop)
-- Chrome and Safari on Android and iOS (when installed as a PWA — see the Install as App article)
-
-If you're not receiving push notifications:
-1. Check your browser's notification permission — click the lock/site icon in the address bar
-2. Make sure the specific event type is enabled at Settings → Push Notifications
-3. Try clicking "Send test notification" on the Push Notifications settings page`,
+On the web
+Use Settings → Notifications instead. Under "Alerts about your business" you and every teammate independently choose, per alert type, whether you get an email, a text, both, or neither. Nothing is missed — it just arrives by email/SMS on web instead of a push banner.`,
       },
       {
         id: 'push-settings',
-        title: 'Configuring push notification preferences',
-        tags: ['push settings', 'notification settings', 'toggle', 'enable push', 'disable push', 'test push'],
-        body: `Go to Settings → Push Notifications to manage which events send you browser push alerts.
+        title: 'Configuring push notification preferences (native app)',
+        tags: ['push settings', 'notification settings', 'toggle', 'enable push', 'disable push', 'test push', 'native app', 'mobile app'],
+        body: `Push notification toggles live inside the native StoryVenue iOS/Android app only — Settings → Push Notifications on the web dashboard now redirects to Settings → Notifications (email + SMS).
 
-The page shows:
-- Connection status — whether your browser is subscribed to receive push notifications
-- A toggle for each notification scenario (new message, payment received, proposal signed, etc.)
-- A "Send test notification" button to verify delivery
+Inside the native app:
+1. Open Settings → Push Notifications.
+2. Turn on the master push toggle if you haven't already — your device will ask for notification permission.
+3. Toggle individual event types (new lead, new message, AI Concierge handoff, etc.) on or off.
 
-To turn a specific notification on or off:
-1. Find the event type in the list (e.g. "Payment received", "New message")
-2. Toggle the switch — changes take effect immediately
-
-To test push notifications:
-Click "Send test notification" — you should receive a browser alert within a few seconds.
-
-Troubleshooting:
-- Not receiving pushes? Check that your browser has notification permissions enabled for app.storyvenue.com
-- Getting duplicate alerts? Push notifications are sent in addition to email alerts — you can disable the email version at Settings → Notifications, or disable the push version at Settings → Push Notifications
-- Working on one device but not another? Push subscriptions are per-device and per-browser — you need to accept the permission on each device you want to receive alerts on`,
+If you're not on the native app yet, or you're on the web dashboard, manage your alerts at Settings → Notifications instead — choose email and/or text for each alert type, independently for you and every teammate.`,
       },
       {
         id: 'push-install-app',
         title: 'Installing StoryVenue as an app (PWA)',
         tags: ['install app', 'pwa', 'progressive web app', 'add to home screen', 'mobile app', 'desktop app', 'app install'],
-        body: `StoryVenue is a Progressive Web App (PWA) — you can install it on your phone, tablet, or desktop for a native-app experience.
+        body: `StoryVenue's web dashboard is a Progressive Web App (PWA) — you can install it on your phone, tablet, or desktop so it looks and feels like an app, separate from your browser.
 
 What you get when you install:
 - A home screen / desktop icon for one-tap access
 - Full-screen mode without browser address bar
-- Push notifications that work even when the browser is closed
 - Faster load times after the first visit
+
+Note: the installed web app does not send push notifications — that's a native-app-only feature right now (see the Push Notifications articles). On the installed web app, alerts about your business arrive by email and text instead, configured at Settings → Notifications. For push alerts, install the dedicated StoryVenue app from the App Store or Play Store.
 
 How to install on iPhone / iPad (Safari):
 1. Open app.storyvenue.com in Safari
