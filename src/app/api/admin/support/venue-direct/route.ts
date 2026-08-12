@@ -29,12 +29,14 @@
  *     which bride thread it's about (unlike the threaded email reply-to), so
  *     the real reply still happens via the email thread or in the dashboard.
  *   - Both the email and SMS legs are gated per-person by each recipient's
- *     own `email_bride_handoff` / `sms_bride_handoff` toggle inside their
+ *     own `email_venue_direct` / `sms_venue_direct` toggle inside their
  *     notification_settings jsonb (venues.notification_settings for the
  *     owner, venue_team_members.notification_settings per teammate — see
  *     src/lib/notification-settings.ts, editable from
- *     Settings -> Notifications). The in-app message is unaffected —
- *     everyone still sees it in the thread regardless of their prefs.
+ *     Settings -> Notifications). This is a separate toggle from AI
+ *     Concierge handoff — they're different triggers with different
+ *     content. The in-app message is unaffected — everyone still sees it
+ *     in the thread regardless of their prefs.
  *   - Broadcasts a realtime event so the support inbox + venue dashboard
  *     update without a refresh.
  */
@@ -224,8 +226,8 @@ export async function POST(req: NextRequest) {
       const prefs = mergePersonNotificationSettings(m.notification_settings);
       dedup.set(key, {
         email: m.email!, name: m.name, isOwner: false, phone: m.phone ?? null, teamMemberId: m.id,
-        emailEnabled: prefs.email_bride_handoff,
-        smsEnabled:   prefs.sms_bride_handoff,
+        emailEnabled: prefs.email_venue_direct,
+        smsEnabled:   prefs.sms_venue_direct,
       });
     }
   }
@@ -236,8 +238,8 @@ export async function POST(req: NextRequest) {
       const prefs = mergePersonNotificationSettings(v?.notification_settings);
       dedup.set(key, {
         email: ownerEmail, name: v?.name ?? null, isOwner: true, phone: ownerPhone, teamMemberId: null,
-        emailEnabled: prefs.email_bride_handoff,
-        smsEnabled:   prefs.sms_bride_handoff,
+        emailEnabled: prefs.email_venue_direct,
+        smsEnabled:   prefs.sms_venue_direct,
       });
     }
   }

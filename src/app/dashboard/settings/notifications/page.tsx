@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   Bell, CreditCard, FileText, Loader2, Save, CheckCircle2, Eye, Send,
   X, PenLine, RefreshCw, XCircle, AlertTriangle, ChevronRight, FilePen,
-  UserPlus, MessageSquare, Building2, Users, Lock,
+  UserPlus, MessageSquare, Building2, Users, Lock, Bot,
 } from 'lucide-react';
 import type { ReminderOffset } from '@/lib/appointment-reminders';
 import {
@@ -24,7 +24,7 @@ const CUSTOMER_FACING_TEMPLATE_TYPES = new Set([
 ]);
 
 const SCENARIO_ICON_MAP: Record<string, React.ElementType> = {
-  UserPlus, MessageSquare, Building2, Users,
+  UserPlus, MessageSquare, Building2, Users, Bot,
   CreditCard, AlertTriangle, FileSignature: PenLine, Eye, FileText, RefreshCw, XCircle,
 };
 

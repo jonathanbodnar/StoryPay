@@ -13,13 +13,12 @@
  * unlike the old venue-wide `venue_notifications.settings` bag (still used
  * for push toggles only).
  *
- * `bride_handoff` is a merged concept covering both the AI Concierge
- * auto-escalating a conversation AND the concierge support team manually
- * sending a "Venue Direct" message — from the owner's point of view both are
- * "a bride needs your attention right now," so they share one toggle even
- * though the two triggers live in different code paths
- * (owner-notifications.ts's `ai_handoff` scenario vs.
- * /api/admin/support/venue-direct/route.ts).
+ * `ai_handoff` and `venue_direct` are two separate scenarios even though
+ * both are "a bride needs your attention right now" from the owner's point
+ * of view — the AI Concierge auto-escalating (owner-notifications.ts's
+ * `ai_handoff` scenario) and the concierge support team manually sending a
+ * "Venue Direct" message (/api/admin/support/venue-direct/route.ts) are
+ * different triggers with different content, so each gets its own toggle.
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
@@ -42,9 +41,17 @@ export const NOTIFICATION_SCENARIOS = [
     smsDefault: false,
   },
   {
-    key: 'bride_handoff',
-    label: 'Bride needs you',
-    description: 'AI Concierge escalates a conversation, or our concierge team sends you a Venue Direct message — either way, a bride needs your attention.',
+    key: 'ai_handoff',
+    label: 'AI Concierge handoff',
+    description: 'The AI Concierge escalates a conversation and needs you to take over.',
+    icon: 'Bot',
+    emailDefault: true,
+    smsDefault: true,
+  },
+  {
+    key: 'venue_direct',
+    label: 'Venue Direct message',
+    description: 'Our concierge team sends you a direct message about a specific bride.',
     icon: 'Building2',
     emailDefault: true,
     smsDefault: true,

@@ -19,17 +19,6 @@ import { sendPushToVenue } from '@/lib/push';
 import { sendNativePush } from '@/lib/native-push';
 import { loadNotificationRecipients, emailKeyFor, smsKeyFor } from '@/lib/notification-settings';
 
-/**
- * Some scenarios share a single per-person preference even though they fire
- * from different code paths — e.g. the AI Concierge auto-escalating and the
- * concierge support team's manual "Venue Direct" handoff are both just "a
- * bride needs you right now" from the owner's point of view. Map those onto
- * one shared preference key (see src/lib/notification-settings.ts).
- */
-const PREF_SCENARIO_OVERRIDE: Partial<Record<OwnerScenario, string>> = {
-  ai_handoff: 'bride_handoff',
-};
-
 export type OwnerScenario =
   | 'payment_received'
   | 'payment_failed'
@@ -344,9 +333,8 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
     // ── Recipients: the owner + every active team member, each with their ──
     // own independent email_<scenario>/sms_<scenario> toggles (see
     // src/lib/notification-settings.ts).
-    const prefScenario = PREF_SCENARIO_OVERRIDE[args.scenario] || args.scenario;
-    const emailKey = emailKeyFor(prefScenario);
-    const smsKey   = smsKeyFor(prefScenario);
+    const emailKey = emailKeyFor(args.scenario);
+    const smsKey   = smsKeyFor(args.scenario);
     const recipients = await loadNotificationRecipients(args.venueId);
 
     // ── Owner/team email ──────────────────────────────────────────────────
