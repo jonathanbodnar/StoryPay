@@ -39,12 +39,8 @@ const SCENARIO_TOGGLES: { key: string; label: string; description: string; defau
   { key: 'push_document_viewed',      label: 'Document viewed',       description: 'A customer opens a proposal or invoice you sent.',       defaultOn: false },
   { key: 'push_payment_received',     label: 'Payment received',      description: 'Any successful payment from a customer.',                defaultOn: true },
   { key: 'push_payment_failed',       label: 'Payment failed',        description: 'A charge attempt declines.',                             defaultOn: true },
-  { key: 'push_high_value_payment',   label: 'High-value payment',    description: 'Single payment over $1,000.',                            defaultOn: true },
-  { key: 'push_invoice_paid',         label: 'Invoice paid',          description: 'A standalone invoice is paid in full.',                  defaultOn: true },
   { key: 'push_refund_issued',        label: 'Refund issued',         description: 'A refund is processed.',                                 defaultOn: true },
   { key: 'push_subscription_created', label: 'New subscription',      description: 'A recurring plan starts.',                               defaultOn: false },
-  { key: 'push_subscription_cancelled', label: 'Subscription cancelled', description: 'A recurring plan ends.',                              defaultOn: false },
-  { key: 'push_new_customer',         label: 'New customer',          description: 'A new customer record is created.',                      defaultOn: false },
 ];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

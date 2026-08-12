@@ -69,20 +69,9 @@ export const DEFAULT_TEMPLATES: Record<string, {
       body: 'Hi {{customer_name}},\n\nYour subscription with {{organization}} is now active.\n\nAmount: {{amount}} {{frequency}}\nNext payment: {{next_payment_date}}',
     },
   },
-  subscription_cancelled: {
-    label: 'Subscription Cancelled',
-    description: 'Confirmation when a subscription is cancelled',
-    icon: 'XCircle',
-    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{venue.name}}'],
-    defaults: {
-      subject: 'Subscription cancelled - {{organization}}',
-      heading: 'Subscription Cancelled',
-      body: 'Hi {{customer_name}},\n\nYour subscription with {{organization}} has been cancelled as requested.',
-    },
-  },
   payment_failed: {
     label: 'Payment Failed',
-    description: 'Notification when a payment fails',
+    description: 'Sent to the customer when their payment fails',
     icon: 'AlertTriangle',
     variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{payment.amount}}', '{{payment.reason}}', '{{venue.name}}'],
     defaults: {

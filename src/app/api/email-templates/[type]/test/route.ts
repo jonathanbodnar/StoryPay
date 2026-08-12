@@ -40,10 +40,6 @@ const SAMPLE_VARS: Record<string, Record<string, string>> = {
     frequency:         'monthly',
     next_payment_date: 'May 7, 2026',
   },
-  subscription_cancelled: {
-    organization:  '{{organization}}',
-    customer_name: 'Jane Smith',
-  },
   payment_failed: {
     organization:  '{{organization}}',
     customer_name: 'Jane Smith',

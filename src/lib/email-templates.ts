@@ -59,18 +59,26 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
     button_text: null,
     footer:      null,
   },
-  subscription_cancelled: {
-    subject:     'Subscription cancelled — {{organization}}',
-    heading:     'Subscription Cancelled',
-    body:        'Hi {{customer_name}},\n\nYour subscription with {{organization}} has been cancelled as requested.',
-    button_text: null,
-    footer:      null,
-  },
+  // Customer-facing "your payment didn't go through" email. Sent to the
+  // BRIDE directly from the checkout-decline handler in
+  // verify-payment/route.ts — separate from owner_payment_failed below,
+  // which is the venue owner's own alert that a customer's payment failed.
   payment_failed: {
     subject:     'Action required: Payment failed — {{organization}}',
     heading:     'Payment Failed',
     body:        'Hi {{customer_name}},\n\nWe were unable to process your payment of {{amount}} to {{organization}}.\n\nReason: {{reason}}\n\nPlease update your payment method.',
     button_text: 'Update Payment Method',
+    footer:      null,
+  },
+  // Owner-side "a customer's payment failed" alert. Fires from
+  // owner-notifications.ts's payment_failed scenario. Kept separate from
+  // the customer-facing `payment_failed` template above so editing one
+  // never accidentally changes what the other audience sees.
+  owner_payment_failed: {
+    subject:     'Payment failed: {{customer_name}} — {{amount}}',
+    heading:     'Payment Failed',
+    body:        'A payment attempt for {{organization}} did not complete.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}\nReason: {{reason}}',
+    button_text: 'View in Dashboard',
     footer:      null,
   },
   payment_reminder: {

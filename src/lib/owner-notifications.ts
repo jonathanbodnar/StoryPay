@@ -25,15 +25,18 @@ export type OwnerScenario =
   | 'proposal_signed'
   | 'document_viewed'
   | 'subscription_created'
-  | 'subscription_cancelled'
-  | 'invoice_paid'
   | 'refund_issued'
-  | 'new_customer'
   // Scenarios used only for push (no email template by default). Phase 4
   // will wire these from the lead / conversations / AI-handoff flows.
   | 'new_lead'
   | 'new_message'
   | 'ai_handoff';
+// `subscription_cancelled` / `invoice_paid` / `new_customer` were removed
+// 2026-08-11 — defined here (and had matching toggles) but never actually
+// fired: invoice payments already go through `payment_received`, there is
+// no code path that cancels a customer's proposal subscription, and there
+// is no "new customer" event distinct from `new_lead`. See
+// src/lib/notification-settings.ts for the fuller note.
 
 interface VenueRow {
   id: string;
@@ -135,7 +138,12 @@ const SCENARIO_META: Record<OwnerScenario, {
     emailKey: 'email_payment_failed',
     smsKey:   'sms_payment_failed',
     pushKey:  'push_payment_failed',
-    templateType: 'payment_failed',
+    // Dedicated owner-voice template, distinct from the customer-facing
+    // `payment_failed` template (sent separately, straight to the customer,
+    // from the checkout-decline handler in verify-payment/route.ts). These
+    // used to share one template type, which meant the owner's alert email
+    // was accidentally worded as if addressed to their customer.
+    templateType: 'owner_payment_failed',
     defaultSmsTemplate: '⚠️ Payment failed: {{amount}} from {{customer_name}} — {{organization}}. Reason: {{reason}}',
     defaultEmailSubject: 'Payment failed: {{customer_name}} — {{amount}}',
     defaultEmailHeading: 'Payment Failed',
@@ -183,32 +191,6 @@ const SCENARIO_META: Record<OwnerScenario, {
     defaultPushBody:  '{{customer_name}} — {{amount}} {{frequency}}',
     defaultPushUrl:   '/dashboard/payments/subscriptions',
   },
-  subscription_cancelled: {
-    emailKey: 'email_subscription_cancelled',
-    smsKey:   'sms_subscription_created', // share the SMS toggle (no separate one yet)
-    pushKey:  'push_subscription_cancelled',
-    templateType: 'subscription_cancelled',
-    defaultSmsTemplate: '🛑 Subscription cancelled: {{customer_name}} — {{organization}}',
-    defaultEmailSubject: 'Subscription cancelled: {{customer_name}}',
-    defaultEmailHeading: 'Subscription Cancelled',
-    defaultEmailBody:    '{{customer_name}}\'s subscription with {{organization}} was cancelled.',
-    defaultPushTitle: 'Subscription cancelled',
-    defaultPushBody:  '{{customer_name}} cancelled their subscription',
-    defaultPushUrl:   '/dashboard/payments/subscriptions',
-  },
-  invoice_paid: {
-    emailKey: 'email_invoice_paid',
-    smsKey:   'sms_payment_received',
-    pushKey:  'push_invoice_paid',
-    templateType: 'payment_notification',
-    defaultSmsTemplate: '💸 Invoice paid: {{amount}} from {{customer_name}} — {{organization}}',
-    defaultEmailSubject: 'Invoice paid: {{amount}} from {{customer_name}}',
-    defaultEmailHeading: 'Invoice Paid',
-    defaultEmailBody:    'An invoice was just paid for {{organization}}.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}',
-    defaultPushTitle: 'Invoice paid',
-    defaultPushBody:  '{{amount}} from {{customer_name}}',
-    defaultPushUrl:   '/dashboard/invoices',
-  },
   refund_issued: {
     emailKey: 'email_refund_issued',
     smsKey:   'sms_payment_failed',
@@ -222,24 +204,7 @@ const SCENARIO_META: Record<OwnerScenario, {
     defaultPushBody:  '{{amount}} refunded to {{customer_name}}',
     defaultPushUrl:   '/dashboard/transactions',
   },
-  new_customer: {
-    emailKey: 'email_new_customer',
-    smsKey:   'sms_payment_received',
-    pushKey:  'push_new_customer',
-    templateType: 'payment_notification',
-    defaultSmsTemplate: '👤 New customer: {{customer_name}} — {{organization}}',
-    defaultEmailSubject: 'New customer: {{customer_name}}',
-    defaultEmailHeading: 'New Customer',
-    defaultEmailBody:    'A new customer was added to {{organization}}: {{customer_name}}.',
-    defaultPushTitle: 'New customer',
-    defaultPushBody:  '{{customer_name}}',
-    defaultPushUrl:   '/dashboard/contacts',
-  },
-  // ── Push-first scenarios (no email/SMS by default) ────────────────────────
-  // These reuse no email template — push is the only channel. Phase 4 will
-  // wire each from its origin (lead creation, inbound conversation, AI
-  // handoff). Until wired, calling notifyOwner({scenario:'new_lead'}) is a
-  // safe no-op (no recipient email, push toggle off by default).
+  // ── Lead / conversation / AI-handoff scenarios ────────────────────────────
   new_lead: {
     emailKey: 'email_new_lead',
     smsKey:   'sms_new_lead',

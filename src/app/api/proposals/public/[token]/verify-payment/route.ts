@@ -125,6 +125,38 @@ export async function POST(
           .then(() => applySystemTagByEmail(proposal.venue_id as string, proposal.customer_email as string, 'payment_failed'))
           .catch(() => {});
       }
+      // Also let the CUSTOMER know their payment didn't go through — the
+      // on-screen error covers the moment they're still on the page, but an
+      // email catches the case where they close the tab and never see it.
+      // Uses the customer-facing `payment_failed` template (distinct from
+      // the owner's `owner_payment_failed` alert above — see
+      // src/lib/email-templates.ts). Best-effort: never blocks the response.
+      if (proposal.customer_email) {
+        void (async () => {
+          try {
+            const tmpl = await getVenueEmailTemplate(proposal.venue_id as string, 'payment_failed');
+            if (!tmpl) return;
+            const vars: Record<string, string> = {
+              organization:  venue.name || 'Your Venue',
+              customer_name: proposal.customer_name || 'there',
+              amount:        formatAmount(proposal.price),
+              reason:        String(session.status || 'unknown'),
+            };
+            await directSendEmail({
+              to:      proposal.customer_email as string,
+              subject: fillTemplate(tmpl.subject, vars),
+              html:    buildEmailHtml({
+                template:  tmpl,
+                vars,
+                actionUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io'}/proposal/${token}`,
+                venueName: venue.name || 'Your Venue',
+              }),
+            });
+          } catch (err) {
+            console.error('[verify-payment] customer payment_failed email failed:', err);
+          }
+        })();
+      }
       return NextResponse.json(
         { error: 'Payment not completed', status: session.status },
         { status: 400 }

@@ -11,11 +11,8 @@ export const DEFAULT_NOTIFICATIONS = {
   // ── Email notifications ───────────────────────────────────────────────────
   email_payment_received:       true,
   email_payment_failed:         true,
-  email_invoice_paid:           true,
   email_proposal_signed:        true,
-  email_new_customer:           false,
   email_subscription_created:   true,
-  email_subscription_cancelled: true,
   email_refund_issued:          true,
   email_weekly_digest:          false,
   // ── Platform notifications (emails from StoryVenue to the venue owner) ────
@@ -26,7 +23,6 @@ export const DEFAULT_NOTIFICATIONS = {
   // ── SMS notifications ─────────────────────────────────────────────────────
   sms_payment_received:         false,
   sms_payment_failed:           true,
-  sms_high_value_payment:       true,
   sms_proposal_signed:          false,
   sms_subscription_created:     false,
   // ── Push notifications ────────────────────────────────────────────────────
@@ -43,12 +39,8 @@ export const DEFAULT_NOTIFICATIONS = {
   push_document_viewed:         false,
   push_payment_received:        true,
   push_payment_failed:          true,
-  push_high_value_payment:      true,
-  push_invoice_paid:            true,
   push_refund_issued:           true,
   push_subscription_created:    false,
-  push_subscription_cancelled:  false,
-  push_new_customer:            false,
 };
 
 export async function GET() {

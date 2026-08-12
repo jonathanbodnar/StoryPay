@@ -89,14 +89,6 @@ export const NOTIFICATION_SCENARIOS = [
     smsDefault: false,
   },
   {
-    key: 'invoice_paid',
-    label: 'Invoice paid',
-    description: 'A standalone invoice is paid.',
-    icon: 'FileText',
-    emailDefault: true,
-    smsDefault: false,
-  },
-  {
     key: 'refund_issued',
     label: 'Refund issued',
     description: 'A refund is processed.',
@@ -112,23 +104,15 @@ export const NOTIFICATION_SCENARIOS = [
     emailDefault: true,
     smsDefault: false,
   },
-  {
-    key: 'subscription_cancelled',
-    label: 'Subscription cancelled',
-    description: 'A recurring plan ends.',
-    icon: 'XCircle',
-    emailDefault: true,
-    smsDefault: false,
-  },
-  {
-    key: 'new_customer',
-    label: 'New contact',
-    description: 'A new customer record is created.',
-    icon: 'Users',
-    emailDefault: false,
-    smsDefault: false,
-  },
 ] as const;
+// Removed as of 2026-08-11: `invoice_paid`, `subscription_cancelled`, and
+// `new_customer` were defined here (and had matching toggles + push keys)
+// but nothing anywhere in the app ever called notifyOwner() with those
+// scenarios — invoice payments already fire `payment_received`, there is no
+// code path that cancels a customer's proposal subscription, and there is
+// no distinct "new customer" event separate from `new_lead`. Rather than
+// ship toggles that silently do nothing, they were removed. Re-add here
+// (plus SCENARIO_META in owner-notifications.ts) if/when those flows exist.
 
 export type NotificationScenarioKey = typeof NOTIFICATION_SCENARIOS[number]['key'];
 

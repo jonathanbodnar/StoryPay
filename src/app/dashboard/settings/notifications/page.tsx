@@ -13,14 +13,15 @@ import {
 } from '@/lib/payment-reminders';
 import { NOTIFICATION_SCENARIOS } from '@/lib/notification-settings';
 
-// Email templates that are sent to CUSTOMERS (invoice, proposal, receipts…).
-// Owner/team-facing templates (payment_notification, new_lead, ai_handoff,
-// etc.) still exist in DEFAULT_TEMPLATES so notifyOwner() can pull their
+// Email templates that are sent to CUSTOMERS (invoice, proposal, receipts,
+// the "your payment failed" notice…). Owner/team-facing templates
+// (payment_notification, new_lead, ai_handoff, owner_payment_failed, etc.)
+// still exist in DEFAULT_TEMPLATES so notifyOwner() can pull their
 // subject/body, but they're controlled from the "Alerts about your
 // business" section below (per-person on/off) rather than edited here.
 const CUSTOMER_FACING_TEMPLATE_TYPES = new Set([
   'invoice', 'proposal', 'payment_confirmation', 'subscription_confirmation',
-  'subscription_cancelled', 'payment_failed', 'payment_reminder',
+  'payment_failed', 'payment_reminder',
 ]);
 
 const SCENARIO_ICON_MAP: Record<string, React.ElementType> = {
