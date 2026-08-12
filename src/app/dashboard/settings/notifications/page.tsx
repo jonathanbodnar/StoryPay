@@ -4,12 +4,29 @@ import { useEffect, useState } from 'react';
 import {
   Bell, CreditCard, FileText, Loader2, Save, CheckCircle2, Eye, Send,
   X, PenLine, RefreshCw, XCircle, AlertTriangle, ChevronRight, FilePen,
+  UserPlus, MessageSquare, Building2, Sparkles, Users, Lock,
 } from 'lucide-react';
 import type { ReminderOffset } from '@/lib/appointment-reminders';
 import {
   DEFAULT_PAYMENT_REMINDER_OFFSETS,
   normalizePaymentReminderOffsets,
 } from '@/lib/payment-reminders';
+import { NOTIFICATION_SCENARIOS } from '@/lib/notification-settings';
+
+// Email templates that are sent to CUSTOMERS (invoice, proposal, receipts…).
+// Owner/team-facing templates (payment_notification, new_lead, ai_handoff,
+// etc.) still exist in DEFAULT_TEMPLATES so notifyOwner() can pull their
+// subject/body, but they're controlled from the "Alerts about your
+// business" section below (per-person on/off) rather than edited here.
+const CUSTOMER_FACING_TEMPLATE_TYPES = new Set([
+  'invoice', 'proposal', 'payment_confirmation', 'subscription_confirmation',
+  'subscription_cancelled', 'payment_failed', 'payment_reminder',
+]);
+
+const SCENARIO_ICON_MAP: Record<string, React.ElementType> = {
+  UserPlus, MessageSquare, Building2, Sparkles, Users,
+  CreditCard, AlertTriangle, FileSignature: PenLine, Eye, FileText, RefreshCw, XCircle,
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -199,19 +216,45 @@ export default function NotificationsPage() {
   const [paySaving, setPaySaving]     = useState(false);
   const [paySaved, setPaySaved]       = useState(false);
 
+  // ── Per-person alert toggles ("Alerts about your business") ──
+  const [alertPrefs, setAlertPrefs]     = useState<Record<string, boolean> | null>(null);
+  const [alertSaving, setAlertSaving]   = useState(false);
+  const [ghlConnected, setGhlConnected] = useState(false);
+
   useEffect(() => {
     Promise.all([
       fetch('/api/email-templates').then((r) => r.json()),
       fetch('/api/venues/me').then((r) => r.json()),
     ]).then(([tmpl, venue]) => {
       const list = Array.isArray(tmpl) ? tmpl as EmailTemplate[] : [];
-      setTemplates(list);
-      if (list.length > 0) setSelected(list[0].type);
+      const customerFacing = list.filter((t) => CUSTOMER_FACING_TEMPLATE_TYPES.has(t.type));
+      setTemplates(customerFacing);
+      if (customerFacing.length > 0) setSelected(customerFacing[0].type);
       setVenueName((venue as { name?: string })?.name || '');
       setLogoUrl((venue as { brand_logo_url?: string })?.brand_logo_url || '');
       setBrandColor((venue as { brand_color?: string })?.brand_color || '#1b1b1b');
+      setGhlConnected(!!(venue as { ghl_connected?: boolean })?.ghl_connected);
     }).finally(() => setLoading(false));
+
+    fetch('/api/profile/notifications', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setAlertPrefs(d as Record<string, boolean>); })
+      .catch(() => {});
   }, []);
+
+  function toggleAlert(key: string) {
+    setAlertPrefs((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, [key]: !prev[key] };
+      setAlertSaving(true);
+      fetch('/api/profile/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: next[key] }),
+      }).finally(() => setAlertSaving(false));
+      return next;
+    });
+  }
 
   useEffect(() => {
     fetch('/api/venues/me', { cache: 'no-store' })
@@ -333,9 +376,71 @@ export default function NotificationsPage() {
     <div>
       {/* Header */}
       <div className="mb-8">
-        <h1 className="font-heading text-2xl text-gray-900">Email Notifications</h1>
+        <h1 className="font-heading text-2xl text-gray-900">Notifications</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Customize every email notification sent from your account. Toggle individual emails on or off, edit the subject and body, or send a test. Changes take effect immediately.
+          Everything about how you and your team hear about what&apos;s happening — by email or text. Push is on hold for now; the native app will have its own settings.
+        </p>
+      </div>
+
+      {/* ── Section A: Alerts about your business (per-person) ── */}
+      <div className="mb-4">
+        <h2 className="text-sm font-bold text-gray-900">Alerts about your business</h2>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Just for you — each person on your team sets their own. Choose email, text, both, or neither for each type of alert.
+        </p>
+      </div>
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden mb-10">
+        <div className="hidden sm:flex items-center gap-4 px-5 py-2.5 border-b border-gray-100 bg-gray-50/60">
+          <div className="flex-1" />
+          <span className="w-14 text-center text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Email</span>
+          <span className="w-14 text-center text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Text</span>
+        </div>
+        {!alertPrefs ? (
+          <div className="flex justify-center py-8">
+            <Loader2 size={18} className="animate-spin text-gray-300" />
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {NOTIFICATION_SCENARIOS.map((s) => {
+              const Icon = SCENARIO_ICON_MAP[s.icon] ?? Bell;
+              const emailKey = `email_${s.key}`;
+              const smsKey = `sms_${s.key}`;
+              return (
+                <div key={s.key} className="flex items-center gap-4 px-5 py-3.5">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100">
+                    <Icon size={14} className="text-gray-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 leading-tight">{s.label}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{s.description}</p>
+                  </div>
+                  <div className="w-14 flex justify-center" title="Email">
+                    <Toggle checked={alertPrefs[emailKey] === true} onChange={() => toggleAlert(emailKey)} size="sm" />
+                  </div>
+                  <div className="w-14 flex justify-center" title={ghlConnected ? 'Text message' : 'Connect SMS under Integrations to enable text alerts'}>
+                    {ghlConnected ? (
+                      <Toggle checked={alertPrefs[smsKey] === true} onChange={() => toggleAlert(smsKey)} size="sm" />
+                    ) : (
+                      <Lock size={13} className="text-gray-300" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {alertSaving && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-400 px-5 py-2.5 border-t border-gray-50">
+            <RefreshCw size={11} className="animate-spin" /> Saving…
+          </div>
+        )}
+      </div>
+
+      {/* ── Section B: Emails to your customers ── */}
+      <div className="mb-4">
+        <h2 className="text-sm font-bold text-gray-900">Emails to your customers</h2>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Edit the content of every email your customers receive — invoices, proposals, receipts, and reminders. These apply to your whole account.
         </p>
       </div>
 
@@ -344,7 +449,7 @@ export default function NotificationsPage() {
         {/* ── Left: template list with inline enable toggle ── */}
         <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
           <div className="px-5 py-3.5 border-b border-gray-100">
-            <span className="text-sm font-semibold text-gray-900">Email notifications</span>
+            <span className="text-sm font-semibold text-gray-900">Customer emails</span>
           </div>
           <div className="divide-y divide-gray-50">
             {templates.map((t) => {

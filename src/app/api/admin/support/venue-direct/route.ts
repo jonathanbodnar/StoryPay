@@ -28,10 +28,12 @@
  *     This is intentionally one-way: a text-back has no reliable way to know
  *     which bride thread it's about (unlike the threaded email reply-to), so
  *     the real reply still happens via the email thread or in the dashboard.
- *   - Both the email and SMS legs are gated per-person by
- *     venues.owner_venue_direct_{email,sms}_enabled / venue_team_members.
- *     venue_direct_{email,sms}_enabled (migration 201, editable from
- *     Settings -> Push Notifications). The in-app message is unaffected —
+ *   - Both the email and SMS legs are gated per-person by each recipient's
+ *     own `email_bride_handoff` / `sms_bride_handoff` toggle inside their
+ *     notification_settings jsonb (venues.notification_settings for the
+ *     owner, venue_team_members.notification_settings per teammate — see
+ *     src/lib/notification-settings.ts, editable from
+ *     Settings -> Notifications). The in-app message is unaffected —
  *     everyone still sees it in the thread regardless of their prefs.
  *   - Broadcasts a realtime event so the support inbox + venue dashboard
  *     update without a refresh.
@@ -46,6 +48,7 @@ import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/li
 import { buildVenueDirectReplyToEmail } from '@/lib/conversations-inbound-email';
 import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms as ghlSendSms } from '@/lib/ghl';
+import { mergePersonNotificationSettings } from '@/lib/notification-settings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -80,8 +83,7 @@ interface VenueRow {
   ghl_location_id:    string | null;
   ghl_connected:       boolean | null;
   owner_concierge_ghl_contact_id: string | null;
-  owner_venue_direct_email_enabled: boolean | null;
-  owner_venue_direct_sms_enabled:   boolean | null;
+  notification_settings: unknown;
 }
 
 interface VenueCustomerRow {
@@ -97,8 +99,7 @@ interface TeamMemberRow {
   email: string | null;
   phone: string | null;
   role:  string | null;
-  venue_direct_email_enabled: boolean | null;
-  venue_direct_sms_enabled:   boolean | null;
+  notification_settings: unknown;
 }
 
 function escapeHtml(s: string): string {
@@ -150,7 +151,7 @@ export async function POST(req: NextRequest) {
   const [{ data: venue }, { data: customer }, { data: agent }, { data: lastBrideMsgs }] = await Promise.all([
     supabaseAdmin
       .from('venues')
-      .select('id, name, slug, email, notification_email, notification_phone, phone, owner_id, ghl_access_token, ghl_location_id, ghl_connected, owner_concierge_ghl_contact_id, owner_venue_direct_email_enabled, owner_venue_direct_sms_enabled')
+      .select('id, name, slug, email, notification_email, notification_phone, phone, owner_id, ghl_access_token, ghl_location_id, ghl_connected, owner_concierge_ghl_contact_id, notification_settings')
       .eq('id', t.venue_id)
       .maybeSingle(),
     supabaseAdmin
@@ -199,7 +200,7 @@ export async function POST(req: NextRequest) {
   // included if their email matches an explicit selection.
   let recipientQuery = supabaseAdmin
     .from('venue_team_members')
-    .select('id, name, email, phone, role, venue_direct_email_enabled, venue_direct_sms_enabled')
+    .select('id, name, email, phone, role, notification_settings')
     .eq('venue_id', t.venue_id)
     .neq('status', 'inactive');
 
@@ -219,20 +220,24 @@ export async function POST(req: NextRequest) {
   const dedup = new Map<string, EmailRecipient>();
   for (const m of teamRecipients) {
     const key = (m.email || '').toLowerCase();
-    if (key) dedup.set(key, {
-      email: m.email!, name: m.name, isOwner: false, phone: m.phone ?? null, teamMemberId: m.id,
-      emailEnabled: m.venue_direct_email_enabled !== false,
-      smsEnabled:   m.venue_direct_sms_enabled   !== false,
-    });
+    if (key) {
+      const prefs = mergePersonNotificationSettings(m.notification_settings);
+      dedup.set(key, {
+        email: m.email!, name: m.name, isOwner: false, phone: m.phone ?? null, teamMemberId: m.id,
+        emailEnabled: prefs.email_bride_handoff,
+        smsEnabled:   prefs.sms_bride_handoff,
+      });
+    }
   }
   const ownerPhone = (v?.notification_phone || v?.phone || null);
   if (ownerIncluded && ownerEmail) {
     const key = ownerEmail.toLowerCase();
     if (!dedup.has(key)) {
+      const prefs = mergePersonNotificationSettings(v?.notification_settings);
       dedup.set(key, {
         email: ownerEmail, name: v?.name ?? null, isOwner: true, phone: ownerPhone, teamMemberId: null,
-        emailEnabled: v?.owner_venue_direct_email_enabled !== false,
-        smsEnabled:   v?.owner_venue_direct_sms_enabled   !== false,
+        emailEnabled: prefs.email_bride_handoff,
+        smsEnabled:   prefs.sms_bride_handoff,
       });
     }
   }

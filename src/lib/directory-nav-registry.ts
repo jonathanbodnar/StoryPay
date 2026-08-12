@@ -83,7 +83,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_settings_email_templates', label: 'Settings — Email templates', pathPrefix: '/dashboard/settings/email-templates', group: 'settings' },
   { id: 'nav_settings_integrations', label: 'Settings — Integrations', pathPrefix: '/dashboard/settings/integrations', group: 'settings' },
   { id: 'nav_settings_team', label: 'Settings — Team', pathPrefix: '/dashboard/settings/team', group: 'settings' },
-  { id: 'nav_settings_notifications', label: 'Settings — Email Notifications', pathPrefix: '/dashboard/settings/notifications', group: 'settings' },
+  { id: 'nav_settings_notifications', label: 'Settings — Notifications', pathPrefix: '/dashboard/settings/notifications', group: 'settings' },
   { id: 'nav_settings_billing', label: 'Settings — Plans & billing', pathPrefix: '/dashboard/directory-billing', group: 'settings' },
 ];
 

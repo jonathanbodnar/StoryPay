@@ -32,7 +32,7 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 - Marketing (sidebar flyout): Analytics, Emails (campaigns), Audiences, Forms, Workflows, Trigger links & tags. All three email surfaces (Templates / Campaigns / Automations) use the Flodesk-style drag-and-drop builder — see "Marketing email builder" section below.
 - Help Center: Searchable categories and articles (including Venue listing, Reviews, Conversations, Ask AI, Leads); contextual suggestions by page; voice search; article ratings.
 - What's New: Changelog and Feature Requests board. The sidebar menu item shows a **red dot with unread count** whenever there are entries a user hasn't reviewed; visiting the page marks everything read for that user (per-user read state). Feature Requests submitted by venues can be **approved, edited, or removed** by super admins. When a super admin approves a request it's automatically converted into a **What's New** changelog entry with an outcome-based auto-generated headline + description, and the request is removed from the venue's own feature-request list.
-- Settings (sidebar flyout): General (venue info, service fee), Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team (roles, invites, **Hide $** for team members — owners only), Notifications, **Push Notifications** (toggle browser push alerts per event type), **Calendar** (5 tabs: General, Connections, Availability, Booking Rules, Notifications). Venues may also store **listing marketing monthly spend** on the account for Leads ROI — when that value exists, insights use it.
+- Settings (sidebar flyout): General (venue info, service fee), Branding, Email Templates, Integrations (Calendly, Google Calendar, QuickBooks, FreshBooks), Team (roles, invites, **Hide $** for team members — owners only), **Notifications** (per-person email/SMS alert toggles + customer email template editor — see "Owner Notifications" below; Push Notifications is native-app-only and hidden on web for now), **Calendar** (5 tabs: General, Connections, Availability, Booking Rules, Notifications). Venues may also store **listing marketing monthly spend** on the account for Leads ROI — when that value exists, insights use it.
 - Sidebar collapse (desktop): Chevron next to the logo narrows the sidebar to an icon rail and shows a compact mark; preference is saved in the browser.
 - Announcement ticker (top of every page, dark "News" bar): broadcasts platform-wide messages from the StoryVenue team (downtime, new features, billing/compliance updates). It is **intentionally NOT dismissible** from the venue side — there is no X / close button. Only the StoryVenue support team can deactivate a message, and they will when it's no longer relevant. Hovering pauses the scroll so you can read or click any embedded link.
 
@@ -496,29 +496,24 @@ Setup checklist for a speed-to-lead funnel:
 - SMS is sent automatically when proposals and invoices are created (if the customer has a phone number on file).
 - SMS requires a connected StoryVenue Legacy (GHL) sub-account with an approved A2P phone number. If SMS isn't sending, check your integration status at Settings → Integrations.
 
-## Push Notifications (Browser Alerts)
-- StoryVenue sends instant browser push notifications for important events — even when the dashboard is closed.
-- **Setup**: your browser will prompt for notification permission on first visit. Accept it to receive pushes. Then go to Settings → Push Notifications to toggle each event type on/off.
-- **Events**: new message, payment received, payment failed, proposal signed, new lead, AI Concierge handoff, invoice paid, subscription created/cancelled, refund issued, new customer.
-- **Test**: click "Send test notification" on the Push Notifications settings page to verify delivery.
-- **Troubleshooting**: check browser notification permission (lock icon in address bar), make sure the event toggle is ON at Settings → Push Notifications, and try the test button. Push subscriptions are per-device and per-browser.
-- Push notifications are sent alongside existing email alerts — they don't replace them. Each event type can be independently enabled or disabled.
-- Path: Settings → Push Notifications.
+## Push Notifications (Native App Only)
+- Browser/PWA push is on hold for now — the Settings → Push Notifications page is hidden on web and only used inside the native iOS/Android app (once installed from the App Store/Play Store).
+- On the web, alerts go out by **email and SMS** instead — see "Owner Notifications" below.
 
 ## Installing StoryVenue as an App (PWA)
-- StoryVenue is a Progressive Web App (PWA) — install it on phone, tablet, or desktop for a native-app experience.
+- StoryVenue is a Progressive Web App (PWA) — install it on phone, tablet, or desktop for a home-screen, full-screen app experience.
 - **iPhone/iPad**: Safari → Share button → "Add to Home Screen".
 - **Android**: Chrome → three-dot menu → "Add to Home screen" or "Install app".
 - **Desktop**: Chrome/Edge → install icon in the address bar → Install.
-- Installed apps get: home screen icon, full-screen mode, push notifications when browser is closed, faster load times.
-- The install prompt appears automatically after your first few visits. If dismissed, use the manual steps above.
+- Installed apps get: home screen icon, full-screen mode, faster load times. Push notifications are not part of the installed web app right now — use the native app for that, or rely on email/SMS.
 - Offline: shows a friendly offline page with retry button when internet is lost.
 
-## Owner Notifications (Multi-Channel Alerts)
-- StoryVenue notifies venue owners through three channels: **Email**, **SMS**, and **Browser Push notifications**.
-- Each notification type can be independently enabled or disabled at Settings → Notifications and Settings → Push Notifications.
-- **Notification events**: payment received, payment failed, high-value payment, proposal signed, document viewed, subscription created/cancelled, invoice paid, refund issued, new customer, new lead, new message, AI handoff.
-- All three channels fire simultaneously — disabling one doesn't affect the others.
+## Owner Notifications (Email + SMS, per person)
+- Go to Settings → Notifications → "Alerts about your business" to control what you (and each teammate, independently) get notified about by **email** and **SMS/text**.
+- Each person on the team sets their own toggles — nobody's settings affect anyone else's.
+- **Alert types**: new lead, contact replied, "Bride needs you" (AI Concierge handoff + Venue Direct handoffs from the concierge team), payment received, payment failed, high-value payment ($1,000+), proposal signed, document opened, invoice paid, refund issued, new subscription, subscription cancelled, new contact.
+- SMS requires the venue's SMS/A2P integration to be connected (Settings → Integrations) — the SMS toggle is locked otherwise.
+- The same page's "Emails to your customers" section is for editing the content of customer-facing emails (invoices, proposals, receipts, reminders) — that part is account-wide, not per-person.
 
 ## Two-Factor Authentication (2FA)
 - 2FA adds a second verification step (a 6-digit code from an authenticator app) to your login.

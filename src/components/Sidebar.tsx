@@ -99,7 +99,10 @@ const marketingItems: NavItem[] = [
 const settingsItems: NavItem[] = [
   { label: 'General', href: '/dashboard/settings', icon: Settings, navId: 'nav_settings_general' },
   { label: 'Email settings', href: '/dashboard/marketing/email/settings', icon: Mail, navId: 'nav_marketing_email_settings' },
-  { label: 'Email Notifications',  href: '/dashboard/settings/notifications',       icon: Bell,           navId: 'nav_settings_notifications' },
+  { label: 'Notifications',  href: '/dashboard/settings/notifications',       icon: Bell,           navId: 'nav_settings_notifications' },
+  // Web push is on hold for now (native apps + email/SMS cover it) — this
+  // item is filtered out of visibleSettingsItems below on the web, and stays
+  // native-only. See PushNotificationsClientPage.tsx.
   { label: 'Push Notifications', href: '/dashboard/settings/push', icon: Bell, navId: 'nav_settings_push' },
   { label: 'Branding', href: '/dashboard/settings/branding', icon: Palette, navId: 'nav_settings_branding' },
   { label: 'Integrations', href: '/dashboard/settings/integrations', icon: Link2, navId: 'nav_settings_integrations' },
@@ -151,9 +154,9 @@ const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
   'nav_payments_settings',
   // Marketing — analytics only
   'nav_marketing_analytics',
-  // Settings
+  // Settings — Push Notifications excluded: web push is on hold for now
+  // (see PushNotificationsClientPage.tsx), native-only until further notice.
   'nav_settings_notifications',
-  'nav_settings_push',
   'nav_settings_branding',
   'nav_settings_team',
 ]);
@@ -408,10 +411,14 @@ export default function Sidebar({
     || pathname.startsWith('/dashboard/invoices')
     || pathname.startsWith('/dashboard/proposals');
 
-  // For legacy plans, filter out the Billing item from Settings and Listing groups
-  const visibleSettingsItems = isLegacyPlan
-    ? settingsItems.filter(item => item.navId !== 'nav_settings_billing')
-    : settingsItems;
+  // For legacy plans, filter out the Billing item from Settings and Listing groups.
+  // Push Notifications is native-app-only for now (web push is on hold) — hide
+  // it from the web sidebar entirely rather than showing a dead-end page.
+  const visibleSettingsItems = settingsItems.filter(item => {
+    if (isLegacyPlan && item.navId === 'nav_settings_billing') return false;
+    if (!isNativeApp() && item.navId === 'nav_settings_push') return false;
+    return true;
+  });
   const visibleListingItems = isLegacyPlan
     ? listingItems.filter(item => item.navId !== 'nav_listing_directory_billing')
     : listingItems;

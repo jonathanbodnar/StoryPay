@@ -3798,7 +3798,11 @@ Where to find variable pickers:
         id: 'push-overview',
         title: 'Push notifications overview',
         tags: ['push notifications', 'push alerts', 'browser notifications', 'real-time alerts', 'pwa'],
-        body: `Push notifications send instant browser alerts to your phone, tablet, or desktop when important events happen in your venue — even when StoryVenue is closed.
+        body: `**Browser/PWA push is on hold for now** — Settings → Push Notifications is only available inside the native StoryVenue iOS/Android app. On the web, use Settings → Notifications for email and SMS alerts instead (per-person toggles for you and each teammate).
+
+The rest of this article describes how push worked/will work once re-enabled or inside the native app:
+
+Push notifications send instant alerts to your phone, tablet, or desktop when important events happen in your venue — even when StoryVenue is closed.
 
 What triggers push notifications:
 - New message from a contact
