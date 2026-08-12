@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useCallback, useEffect, useTransition } from 'react';
-import { usePathname, useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
  Search, Sparkles, ChevronRight, ChevronDown, X, Send, Loader2,
  LayoutDashboard, Users, BarChart2, CreditCard, FileText, Receipt,
@@ -13,7 +13,6 @@ import {
 import {
  HELP_CATEGORIES,
  ALL_ARTICLES,
- getArticlesForPath,
  getArticleById,
  type HelpArticle,
  type HelpCategory,
@@ -927,7 +926,6 @@ function getRelatedArticles(sourceId: string, limit = 3): EnrichedArticle[] {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function HelpPage() {
- const pathname = usePathname();
  const searchParams = useSearchParams();
  const router = useRouter();
 
@@ -1039,15 +1037,7 @@ export default function HelpPage() {
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, []);
 
- // Contextual articles for the *previous* page (stored in referrer logic via
- // the badge — here we just surface them in the sidebar as"Suggested for you")
- const contextualIds = useMemo(() => getArticlesForPath(pathname), [pathname]);
- const contextualArticles = useMemo(
- () => contextualIds.map(id => getArticleById(id)).filter(Boolean) as NonNullable<ReturnType<typeof getArticleById>>[],
- [contextualIds]
- );
-
- const allArticles = useMemo(() => ALL_ARTICLES, []);
+const allArticles = useMemo(() => ALL_ARTICLES, []);
 
  // Substring results (fast, synchronous)
  const substringResults = useMemo(() => {
@@ -1197,32 +1187,9 @@ export default function HelpPage() {
 
  <div className="flex gap-6 items-start">
  {/* ── Sidebar: categories ── */}
- <aside className="hidden lg:block w-60 flex-shrink-0 space-y-3">
+        <aside className="hidden lg:block w-60 flex-shrink-0 space-y-3">
 
- {/* Contextual: suggested articles for the current page */}
- {contextualArticles.length > 0 && !isSearching && !activeArticle && (
- <div className="rounded-2xl border border-amber-200 bg-amber-50 overflow-hidden">
- <div className="px-4 py-3 border-b border-amber-100 flex items-center gap-2">
- <span className="text-amber-500 text-xs">✦</span>
- <p className="text-xs font-semibold text-amber-800">Suggested for this page</p>
- </div>
- <nav className="p-2 space-y-0.5">
- {contextualArticles.map(a => (
- <button
- key={a.id}
- onClick={() => { setActiveArticle(a); setArticleHighlight(''); setActiveCat(null); setQuery(''); setShowAI(false); }}
- className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left text-amber-900 hover:bg-amber-100`}
- >
- <div className="h-1.5 w-1.5 rounded-full flex-shrink-0"style={{ backgroundColor: a.catColor }} />
- <span className="flex-1 truncate text-xs">{a.title}</span>
- <ChevronRight size={11} className="text-amber-400 flex-shrink-0"/>
- </button>
- ))}
- </nav>
- </div>
- )}
-
- {/* All topics */}
+            {/* All topics */}
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-4 py-3 border-b border-gray-200">
  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Topics</p>
