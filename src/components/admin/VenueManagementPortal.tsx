@@ -1370,6 +1370,12 @@ export function VenueManagementPortal({
                 </div>
                 <div className="flex items-center gap-3 text-[11px] text-gray-400 ml-auto flex-shrink-0">
                   <span>Signed up: <span className="text-gray-600">{fmtTs(venue.created_at)}</span></span>
+                  {venue.directory_trial_ends_at && (
+                    <span className="inline-flex items-center gap-1">
+                      <CalendarClock size={10} />
+                      Trial ends: <span className="text-gray-600">{fmtTs(venue.directory_trial_ends_at)}</span>
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1">
                     <Clock size={10} />
                     {venue.last_login_at
@@ -1999,6 +2005,12 @@ function VenueMobileCard({
       {venue.phone ? <div className="text-xs text-gray-500">{venue.phone}</div> : null}
       <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-gray-500">
         <span>Signed up: <span className="text-gray-700">{fmtTs(venue.created_at)}</span></span>
+        {venue.directory_trial_ends_at && (
+          <span className="inline-flex items-center gap-1">
+            <CalendarClock size={10} className="text-gray-400" />
+            Trial ends: <span className="text-gray-700">{fmtTs(venue.directory_trial_ends_at)}</span>
+          </span>
+        )}
         <span className="inline-flex items-center gap-1">
           <Clock size={10} className="text-gray-400" />
           {venue.last_login_at
@@ -2214,6 +2226,12 @@ function DemoVenueCard({
             </div>
             <div className="flex items-center gap-3 text-[11px] text-gray-400 ml-auto flex-shrink-0">
               <span>Signed up: <span className="text-gray-600">{fmtTs(venue.created_at)}</span></span>
+              {venue.directory_trial_ends_at && (
+                <span className="inline-flex items-center gap-1">
+                  <CalendarClock size={10} />
+                  Trial ends: <span className="text-gray-600">{fmtTs(venue.directory_trial_ends_at)}</span>
+                </span>
+              )}
               <span className="inline-flex items-center gap-1">
                 <Clock size={10} />
                 {venue.last_login_at
