@@ -58,6 +58,7 @@ interface ContextResponse {
     created_at:         string | null;
     plan:               { id: string; name: string; price_cents: number; is_legacy: boolean } | null;
     addons:             { concierge: boolean; verified: boolean; sponsored: boolean };
+    venue_concierge:    boolean;
     a2p:                { verified: boolean; brand_status: string | null; campaign_status: string | null };
     ghl_connected:      boolean;
     ai_concierge_enabled: boolean;
@@ -637,6 +638,15 @@ export function SupportContextSidebar({
               )}
 
               <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                {data.venue.venue_concierge ? (
+                  <span className="rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 text-[10px] font-semibold" title="Venue Concierge addon is on">
+                    Concierge ✓
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-gray-50 border border-gray-200 text-gray-400 px-2 py-0.5 text-[10px] font-medium" title="Venue Concierge addon is off">
+                    No Concierge
+                  </span>
+                )}
                 {data.venue.plan && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 text-blue-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
                     {data.venue.plan.name} · {dollars(data.venue.plan.price_cents)}/mo
@@ -663,24 +673,20 @@ export function SupportContextSidebar({
                 )}
               </div>
 
-              {/* Addons */}
-              <div className="flex items-center gap-1 flex-wrap">
-                {data.venue.addons.concierge && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
-                    <Tag size={9} /> Concierge
-                  </span>
-                )}
-                {data.venue.addons.verified && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
-                    <Tag size={9} /> Verified
-                  </span>
-                )}
-                {data.venue.addons.sponsored && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
-                    <Tag size={9} /> Sponsored
-                  </span>
-                )}
-              </div>
+              {(data.venue.addons.verified || data.venue.addons.sponsored) && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {data.venue.addons.verified && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
+                      <Tag size={9} /> Verified
+                    </span>
+                  )}
+                  {data.venue.addons.sponsored && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
+                      <Tag size={9} /> Sponsored
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-1 pt-1 text-[10px] text-gray-500">
                 <p>

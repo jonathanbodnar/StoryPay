@@ -84,6 +84,7 @@ export async function GET(
       .select(`
         id, name, notification_email, notification_phone, timezone, created_at,
         directory_plan_id, directory_addon_concierge, directory_addon_verified, directory_addon_sponsored,
+        venue_concierge,
         a2p_verified, a2p_brand_status, a2p_campaign_status,
         ghl_connected,
         ai_concierge_enabled, ai_assistant_persona_name,
@@ -496,6 +497,7 @@ export async function GET(
         verified:  Boolean(v.directory_addon_verified),
         sponsored: Boolean(v.directory_addon_sponsored),
       },
+      venue_concierge: Boolean(v.venue_concierge),
       a2p: {
         verified:        Boolean(v.a2p_verified),
         brand_status:    (v.a2p_brand_status as string | null) ?? null,
