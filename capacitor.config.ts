@@ -26,6 +26,12 @@ const config: CapacitorConfig = {
     // faster. /login server-redirects already-signed-in owners to /dashboard,
     // so this is also the right entry for returning users.
     url: 'https://app.storyvenue.com/login',
+    // Capacitor treats a main-frame navigation as "in-app" only if the URL
+    // starts with server.url OR the host is in this list. server.url includes
+    // `/login`, so `/dashboard` (the logged-in redirect) would otherwise be
+    // handed to Safari. Keep every app.storyvenue.com path in the webview.
+    // LunarPay / other hosts still open in the system browser.
+    allowNavigation: ['app.storyvenue.com'],
     // Force HTTPS only — never allow plaintext (App Store / Play requirement).
     cleartext: false,
     // Serve the local shell over the https scheme on Android so the origin
