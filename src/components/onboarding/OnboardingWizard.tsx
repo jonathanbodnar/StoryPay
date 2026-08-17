@@ -101,9 +101,8 @@ export default function OnboardingWizard({ adminView = false }: { adminView?: bo
   const [isLegacy, setIsLegacy] = useState(false);  // legacy/grandfathered → not card-gated
   const [activated, setActivated] = useState(false); // already fired a test inquiry
 
-  // Gate on onboarding state. "Complete" = they published via the wizard, OR
-  // they manually finished both the listing (is_published) and the pricing
-  // guide (guide_enabled). Until then we keep a persistent launcher bubble.
+  // Gate on onboarding state. "Complete" = they finished the wizard (or
+  // published from the listing page). Unpublishing later does not reopen this.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -126,13 +125,13 @@ export default function OnboardingWizard({ adminView = false }: { adminView?: bo
         if (!res.ok) { setChecking(false); if (forced) setOpen(true); return; }
         const s = await res.json();
         if (cancelled) return;
-        // Hide the wizard/pill once they've completed onboarding OR published
-        // their listing manually — a live listing means they're done here.
+        // Hide the wizard/pill once they've completed onboarding. A later
+        // unpublish on the listing page is not a reason to reopen setup —
+        // listing/me stamps onboarding_completed_at on that toggle.
+        // Legacy venues also count a currently-live listing as done (no card
+        // step). Non-legacy venues must have the finish stamp so the card
+        // gate can still hold while the listing is live from a test inquiry.
         const legacy = Boolean(s.is_legacy);
-        // Completion model: legacy venues have no card step, so going live
-        // (is_published) finishes them. Non-legacy venues must complete the card
-        // step — the `finish` action stamps onboarding_completed_at; until then
-        // they are NOT complete and the gate reopens (on the card step).
         const isComplete = legacy
           ? (Boolean(s.completed) || Boolean(s.is_published))
           : Boolean(s.completed);

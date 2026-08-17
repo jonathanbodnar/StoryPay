@@ -4,7 +4,8 @@
  * In-flow "Finish setup" launcher rendered at the top-left of the dashboard
  * content (inside <main>, under the announcement ribbon) so it lines up exactly
  * with the page. Stays until onboarding is complete; clicking it opens the
- * wizard modal (owned by OnboardingWizard) via a window event.
+ * wizard modal (owned by OnboardingWizard) via a window event. Unpublishing
+ * the listing does not bring it back — only Restart setup in General settings.
  */
 
 import { useEffect, useState } from 'react';
@@ -29,7 +30,10 @@ export default function OnboardingLauncher() {
         if (!res.ok) return;
         const s = await res.json();
         if (cancelled) return;
-        // A published listing (manually or via the wizard) means setup is done.
+        // Hide while the listing is live, or after they've finished setup.
+        // Unpublish must not bring this back — listing/me stamps completed
+        // when they toggle off, and Restart setup in General settings is the
+        // only way to clear that stamp.
         const complete = Boolean(s.completed) || Boolean(s.is_published);
         setShow(!complete);
       } catch { /* ignore */ }
@@ -57,7 +61,8 @@ export default function OnboardingLauncher() {
         Finish setup
       </button>
       <div className="pointer-events-none absolute top-full left-0 z-20 mt-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-        Publish your booking system to start getting leads. This goes away once your listing and guide are live.
+        Publish your booking system to start getting leads. This goes away once
+        you finish setup — unpublishing the listing later won&apos;t bring it back.
       </div>
     </div>
   );

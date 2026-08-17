@@ -179,6 +179,18 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
   }
 
+  // Publish / unpublish on the listing page is a visibility toggle, not a
+  // setup restart. Stamp onboarding complete the first time they use that
+  // toggle so Finish setup stays gone after they take the listing off the
+  // public directory. Restart setup in General settings is the only clear.
+  if ('is_published' in updates) {
+    await supabaseAdmin
+      .from('venues')
+      .update({ onboarding_completed_at: new Date().toISOString() })
+      .eq('id', venueId)
+      .is('onboarding_completed_at', null);
+  }
+
   // The pricing guide About text shares this column (single source of truth).
   // Flag it as a deliberate edit so a later onboarding draft never overwrites it.
   if ('description' in updates) {
