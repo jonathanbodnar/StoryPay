@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Eye, EyeOff, Building2, Heart } from 'lucide-react';
 import { getCoupleSupabase } from '@/lib/couple-browser';
-import { isNativeApp, openExternalBrowser, postAuthNavigate } from '@/lib/platform';
+import { isNativeApp, postAuthNavigate } from '@/lib/platform';
 
 /**
  * Unified login page.
@@ -58,34 +58,28 @@ export function LoginClient() {
           {effectiveMode === 'venue' ? <VenueLoginForm /> : <CoupleLoginForm router={router} nextPath={nextParam} />}
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-5">
-          {effectiveMode === 'venue' ? (
-            <>
-              New to StoryVenue?{' '}
-              {/* Native: account creation (and its card step) happens entirely
-                  in the system browser — never inside the app webview. */}
-              <Link
-                href={signupHref}
-                className="font-semibold text-gray-900 hover:underline"
-                onClick={(e) => {
-                  if (native) {
-                    e.preventDefault();
-                    void openExternalBrowser(signupHref);
-                  }
-                }}
-              >
-                Create a venue account
-              </Link>
-            </>
-          ) : (
-            <>
-              No account yet?{' '}
-              <Link href={signupHref} className="font-semibold text-gray-900 hover:underline">
-                Sign up as a couple
-              </Link>
-            </>
-          )}
-        </p>
+        {/* Native app is login-only — existing venue owners sign in. Account
+            creation lives on the web at app.storyvenue.com/signup and is never
+            linked or handed off from inside the binary. */}
+        {!native && (
+          <p className="text-center text-sm text-gray-500 mt-5">
+            {effectiveMode === 'venue' ? (
+              <>
+                New to StoryVenue?{' '}
+                <Link href={signupHref} className="font-semibold text-gray-900 hover:underline">
+                  Create a venue account
+                </Link>
+              </>
+            ) : (
+              <>
+                No account yet?{' '}
+                <Link href={signupHref} className="font-semibold text-gray-900 hover:underline">
+                  Sign up as a couple
+                </Link>
+              </>
+            )}
+          </p>
+        )}
 
         <p className="text-center text-xs text-gray-400 mt-5">
           <Link href="/privacy" className="hover:text-gray-600 transition-colors">Privacy Policy</Link>

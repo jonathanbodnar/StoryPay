@@ -6,6 +6,7 @@ import { getPageSeo } from '@/lib/page-seo';
 import PWAInstaller from '@/components/PWAInstaller';
 import ClientErrorLogger from '@/components/ClientErrorLogger';
 import NativeViewportLock from '@/components/NativeViewportLock';
+import NativeLoginOnlyGuard from '@/components/NativeLoginOnlyGuard';
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? '';
 
@@ -149,6 +150,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased bg-white text-gray-900">
         {children}
         <NativeViewportLock />
+        <NativeLoginOnlyGuard />
         <PWAInstaller />
         <ClientErrorLogger />
       </body>
