@@ -4,12 +4,19 @@
  * Permanently deletes the authenticated venue and all associated data.
  * Only the venue owner (role === 'owner') can call this.
  * Requires: { confirmName, confirmPassword } — venue name + current password.
- * Blocked when: active LunarPay subscription, active proposals (paid/signed).
+ *
+ * Cancels this venue's StoryVenue SaaS subscription (HQ LunarPay) before
+ * wiping the row, so the monthly charge stops. Does not touch the venue's
+ * own LunarPay merchant (couple collection). Blocked when open/signed/paid
+ * proposals still exist.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
+import { cancelSubscription } from '@/lib/lunarpay';
+import { requirePlatformLunarPaySecretKey } from '@/lib/platform-directory-billing';
+import { revalidateDirectory } from '@/lib/directory-revalidate';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -41,7 +48,9 @@ export async function POST(request: NextRequest) {
   // Fetch venue + password hash to validate both confirmations
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('id, name, owner_id, password_hash, directory_subscription_status, lunarpay_merchant_id, is_demo')
+    .select(
+      'id, name, slug, owner_id, password_hash, directory_subscription_external_id, directory_subscription_status, is_demo',
+    )
     .eq('id', venueId)
     .maybeSingle();
 
@@ -76,17 +85,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Incorrect password.' }, { status: 400 });
   }
 
-  // 3. Block deletion when an active SaaS subscription exists — cancelling
-  //    billing first prevents orphaned subscriptions at LunarPay.
-  const subStatus = (venue as { directory_subscription_status?: string | null }).directory_subscription_status;
-  if (subStatus === 'active' || subStatus === 'trialing') {
-    return NextResponse.json(
-      { error: 'You have an active subscription. Please cancel your plan before deleting your account.' },
-      { status: 409 },
-    );
-  }
-
-  // 4. Block deletion when open/signed proposals exist — venues have legal
+  // 3. Block deletion when open/signed proposals exist — venues have legal
   //    obligations on signed contracts; hard-deleting them creates liability.
   const { count: openProposals } = await supabaseAdmin
     .from('proposals')
@@ -98,6 +97,23 @@ export async function POST(request: NextRequest) {
       { error: `You have ${openProposals} active or signed proposal${(openProposals ?? 0) !== 1 ? 's' : ''}. Please resolve them before deleting your account.` },
       { status: 409 },
     );
+  }
+
+  // Cancel this venue's StoryVenue SaaS subscription (HQ LunarPay) so the
+  // card is not charged after deletion. Best-effort, same as admin delete —
+  // already-canceled / missing-key must not block account deletion.
+  // Couple collection uses a different LunarPay merchant key and is not
+  // touched here.
+  const subId = (venue as { directory_subscription_external_id?: string | null }).directory_subscription_external_id;
+  const subStatus = (venue as { directory_subscription_status?: string | null }).directory_subscription_status;
+  if (subId && subStatus !== 'canceled' && subStatus !== 'none') {
+    try {
+      const hqSecret = requirePlatformLunarPaySecretKey();
+      await cancelSubscription(hqSecret, subId);
+      console.log('[venues/me/delete] canceled HQ subscription', subId, 'for venue', venueId);
+    } catch (e) {
+      console.warn('[venues/me/delete] HQ subscription cancel failed (non-fatal):', e);
+    }
   }
 
   // Best-effort storage cleanup
@@ -119,6 +135,8 @@ export async function POST(request: NextRequest) {
   // Delete venue row — cascade handles all related rows
   const { error } = await supabaseAdmin.from('venues').delete().eq('id', venueId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  void revalidateDirectory({ slug: (venue as { slug?: string | null }).slug ?? null });
 
   // Delete the Supabase Auth user + profile so the email can be reused for a new account
   const ownerId = (venue as { owner_id?: string | null }).owner_id;

@@ -530,7 +530,8 @@ export default function ProfilePage() {
               </div>
               <p className="text-sm text-gray-700 mb-1">
                 This will permanently delete <strong>{venueName}</strong> and all associated
-                data — contacts, conversations, leads, payments, and files.
+                data — contacts, conversations, leads, payments, and files. Your StoryVenue
+                plan is canceled too — you won&apos;t be charged again.
               </p>
               <p className="text-sm text-gray-700 mb-4">
                 Type <strong>{venueName}</strong> to confirm:
