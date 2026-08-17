@@ -13,12 +13,12 @@ export default function PasswordStrengthBar({ password, className = '' }: Props)
   const { strength, errors, valid } = checkPassword(password);
 
   const segments = 3;
-  const filled = strength === 'strong' ? 3 : strength === 'fair' ? 2 : 1;
+  const filled = !valid ? 1 : strength === 'strong' ? 3 : strength === 'fair' ? 2 : 1;
 
   const color =
-    strength === 'strong' ? 'bg-emerald-500' :
+    !valid || strength === 'weak' ? 'bg-red-400' :
     strength === 'fair'   ? 'bg-amber-400'   :
-                            'bg-red-400';
+                            'bg-emerald-500';
 
   const label =
     strength === 'strong' ? 'Strong' :
@@ -39,15 +39,13 @@ export default function PasswordStrengthBar({ password, className = '' }: Props)
       </div>
       <div className="flex items-center justify-between">
         <p className={`text-xs font-medium ${
+          !valid ? 'text-red-500' :
           strength === 'strong' ? 'text-emerald-600' :
           strength === 'fair'   ? 'text-amber-600'   :
                                   'text-red-500'
         }`}>
-          {label}
+          {valid ? label : errors[0]}
         </p>
-        {!valid && errors.length > 0 && (
-          <p className="text-xs text-gray-400">{errors[0]}</p>
-        )}
       </div>
     </div>
   );

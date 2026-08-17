@@ -112,10 +112,12 @@ function VenueSignupForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
-    if (!phone.trim()) { setError('Phone number is required.'); return; }
-    if (!pwCheck.valid) { setError(pwCheck.message); return; }
-    if (!passwordsMatch) { setError('Passwords do not match.'); return; }
+    if (!canSubmit) {
+      if (!pwCheck.valid) { setError(pwCheck.message); return; }
+      if (!passwordsMatch) { setError('Passwords do not match.'); return; }
+      setError('Please fill in all required fields.');
+      return;
+    }
     setLoading(true);
     setError('');
     const attribution = collectAttribution(searchParams);
