@@ -997,6 +997,39 @@ export default function Sidebar({
       </nav>
 
       <div className={`px-3 py-4 border-t border-gray-200 space-y-0.5 ${rail ? 'flex flex-col items-center' : ''}`}>
+        {/* App store download badges — only shown on web (not inside the native app), not in rail/collapsed mode */}
+        {!isNativeApp() && !rail && (
+          <div className="flex items-center gap-2 px-2 py-2">
+            <a
+              href="https://apps.apple.com/us/app/storyvenue/id6797507866"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1"
+              title="Download on the App Store"
+            >
+              <img
+                src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                alt="Download on the App Store"
+                className="h-8 w-full object-contain object-left"
+                style={{ minWidth: 0 }}
+              />
+            </a>
+            <a
+              href="https://play.google.com/store/apps/details?id=com.storyvenue.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1"
+              title="Get it on Google Play"
+            >
+              <img
+                src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+                alt="Get it on Google Play"
+                className="h-8 w-full object-contain object-left"
+                style={{ minWidth: 0 }}
+              />
+            </a>
+          </div>
+        )}
         {/* My Profile — visible to all users */}
         <Link
           href="/dashboard/profile"
