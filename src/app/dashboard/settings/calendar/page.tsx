@@ -569,8 +569,24 @@ export default function CalendarSettingsPage() {
         </p>
       </div>
 
-      {/* Tab bar — horizontally scrollable so every tab stays reachable on narrow/mobile viewports */}
-      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-gray-200">
+      {/* Mobile: dropdown selector — friendlier than a scrolling tab strip on phone-width screens */}
+      <div className="mb-6 sm:hidden">
+        <div className="relative">
+          <select
+            value={activeTab}
+            onChange={(e) => setTab(e.target.value)}
+            className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+          >
+            {tabs.map((tab) => (
+              <option key={tab.id} value={tab.id}>{tab.label}</option>
+            ))}
+          </select>
+          <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        </div>
+      </div>
+
+      {/* Desktop/web: horizontal tab bar */}
+      <div className="mb-6 hidden sm:flex gap-1 overflow-x-auto border-b border-gray-200">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
