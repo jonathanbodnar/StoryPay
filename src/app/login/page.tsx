@@ -1,14 +1,16 @@
 import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/session';
 import { LoginClient } from './LoginClient';
+import LoginRedirect from './LoginRedirect';
 
 export default async function LoginPage() {
-  // Already signed in? Skip the login form entirely and go to the dashboard.
-  // This is what makes `/login` a fast, safe entry point for the native app:
-  // returning owners land straight on the dashboard, first-timers see the form.
+  // Already signed in? Skip the login form and go to the dashboard — but via
+  // a CLIENT-side router.replace (see LoginRedirect), never a server
+  // redirect(). The shipped native binary lacks `allowNavigation`, so an HTTP
+  // redirect off /login gets bounced to the system browser (Chrome/Safari)
+  // instead of staying inside the app webview.
   const user = await getSessionUser();
-  if (user) redirect('/dashboard');
+  if (user) return <LoginRedirect />;
 
   return (
     <Suspense
