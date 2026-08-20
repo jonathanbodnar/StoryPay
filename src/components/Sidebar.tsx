@@ -196,7 +196,10 @@ export default function Sidebar({
   const handleLogoutClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
     if (!isNativeApp()) return;
     e.preventDefault();
-    void unregisterNativePush().finally(() => {
+    Promise.allSettled([
+      unregisterNativePush(),
+      import('@capawesome/capacitor-badge').then((m) => m.Badge.clear()),
+    ]).finally(() => {
       window.location.assign('/api/auth/logout');
     });
   }, []);

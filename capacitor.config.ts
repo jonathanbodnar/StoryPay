@@ -52,6 +52,14 @@ const config: CapacitorConfig = {
       // foregrounded. Matches the web-push UX users already expect.
       presentationOptions: ['badge', 'sound', 'alert'],
     },
+    Badge: {
+      // We persist an explicit count of our own (leads + messages +
+      // concierge handoffs) — never blow it away just because the OS
+      // resumed the app. NativeBadgeSync.tsx sets/clears it based on the
+      // actual unread total instead.
+      persist: true,
+      autoClear: false,
+    },
   },
 };
 

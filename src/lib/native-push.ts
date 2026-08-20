@@ -24,6 +24,7 @@
 
 import jwt from 'jsonwebtoken';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getServerBadgeCount } from '@/lib/notification-badge';
 
 const FCM_PROJECT_ID   = process.env.FCM_PROJECT_ID || '';
 const FCM_CLIENT_EMAIL = process.env.FCM_CLIENT_EMAIL || '';
@@ -137,6 +138,12 @@ export async function sendNativePush(
   const accessToken = await getAccessToken();
   if (!accessToken) return { sent: 0, pruned: 0, failed: rows.length };
 
+  // Stamp the app-icon badge on the APNs payload so it updates the instant
+  // this push is delivered, even while the app is backgrounded or killed —
+  // NativeBadgeSync.tsx (running whenever the app is open) keeps it correct
+  // the rest of the time and folds unread leads back in on top of this.
+  const badge = await getServerBadgeCount(venueId).catch(() => 0);
+
   const endpoint = `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`;
   const title = payload.title.slice(0, 120);
   const body  = payload.body.slice(0, 240);
@@ -169,7 +176,7 @@ export async function sendNativePush(
             // handler in NativePushRegistrar.tsx never sees `data.url` and
             // falls back to opening the app with no deep link.
             apns: {
-              payload: { aps: { sound: 'default' }, ...data_ },
+              payload: { aps: { sound: 'default', badge }, ...data_ },
             },
             android: {
               priority: 'high',

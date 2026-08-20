@@ -9,6 +9,7 @@ import AnnouncementTicker from '@/components/AnnouncementTicker';
 import MobileTabBar from '@/components/MobileTabBar';
 import MobileDashboardRedirect from '@/components/MobileDashboardRedirect';
 import NativePushRegistrar from '@/components/NativePushRegistrar';
+import NativeBadgeSync from '@/components/NativeBadgeSync';
 import NativeTabPrefetch from '@/components/NativeTabPrefetch';
 // ImpersonationBanner rendered server-side in layout.tsx (black bar)
 import { DirectoryRouteGuard } from '@/components/DirectoryRouteGuard';
@@ -196,6 +197,7 @@ export default function DashboardShell({
       <UsageTracker />
       {/* Native-shell push registration (no-op on the web). */}
       <NativePushRegistrar />
+      <NativeBadgeSync />
       <NativeTabPrefetch />
       <Sidebar
         venue={venue}
