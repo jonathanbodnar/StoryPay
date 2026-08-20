@@ -219,8 +219,8 @@ export default function AiConciergeSettingsPage() {
 
   return (
     <div className="bg-white overflow-hidden min-h-[500px]">
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 px-6 pt-2 bg-white">
+      {/* Tabs — horizontally scrollable so every tab stays reachable on narrow/mobile viewports */}
+      <div className="flex gap-1 overflow-x-auto border-b border-gray-200 px-6 pt-2 bg-white">
         {([
           { id: 'overview', label: 'Overview', icon: Sparkles },
           { id: 'leads',    label: 'Active Leads', icon: Bot,
@@ -229,7 +229,7 @@ export default function AiConciergeSettingsPage() {
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               activeTab === id
                 ? 'border-gray-900 text-gray-900'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
