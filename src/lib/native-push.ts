@@ -180,7 +180,10 @@ export async function sendNativePush(
             },
             android: {
               priority: 'high',
-              notification: { sound: 'default' },
+              // notification_count powers the numeric badge on launchers that
+              // support it (Samsung, Pixel long-press, etc.); the plain dot
+              // appears automatically on any launcher when a push is showing.
+              notification: { sound: 'default', notificationCount: badge },
             },
           },
         }),
