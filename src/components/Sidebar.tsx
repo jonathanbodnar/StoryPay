@@ -997,36 +997,44 @@ export default function Sidebar({
       </nav>
 
       <div className={`px-3 py-4 border-t border-gray-200 space-y-0.5 ${rail ? 'flex flex-col items-center' : ''}`}>
-        {/* App store download badges — only shown on web (not inside the native app), not in rail/collapsed mode */}
+        {/* App store download badges — web only, not in rail/collapsed mode */}
         {!isNativeApp() && !rail && (
-          <div className="flex items-center gap-2 px-2 py-2">
+          <div className="flex items-center gap-1.5 px-1 py-2">
+            {/* iOS App Store */}
             <a
               href="https://apps.apple.com/us/app/storyvenue/id6797507866"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1"
               title="Download on the App Store"
+              className="flex-1 flex items-center gap-2 rounded-lg px-3 py-2 hover:opacity-75 transition-opacity"
+              style={{ background: '#1b1b1b', minWidth: 0 }}
             >
-              <img
-                src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
-                alt="Download on the App Store"
-                className="h-8 w-full object-contain object-left"
-                style={{ minWidth: 0 }}
-              />
+              {/* Apple logo */}
+              <svg viewBox="0 0 814 1000" width="13" height="16" fill="white" style={{ flexShrink: 0 }}>
+                <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105-37.5-167.2-37.5c-62.2 0-117.7-55-171.5-125C121.8 776.4 57 656.5 57 548.9c0-170.4 112.5-260.6 222.3-260.6 74.2 0 137.1 49.3 183.3 49.3 44.5 0 115.6-52.3 199.5-52.3zM549.8 181.4c31.7-39.5 54.3-94.5 54.3-149.4 0-7.7-.6-15.4-1.9-21.8-51.6 1.9-113.1 34.4-150.5 79.5-29.1 32.5-56.8 87.5-56.8 143.1 0 8.3 1.3 16.7 1.9 19.2 3.2.6 8.3 1.3 13.4 1.3 46.2 0 103.7-30.9 139.6-71.9z" />
+              </svg>
+              <div className="leading-none min-w-0">
+                <div className="text-white mb-0.5" style={{ fontSize: 8, letterSpacing: '0.04em', opacity: 0.75 }}>Download on the</div>
+                <div className="text-white font-semibold truncate" style={{ fontSize: 12 }}>App Store</div>
+              </div>
             </a>
+            {/* Google Play */}
             <a
               href="https://play.google.com/store/apps/details?id=com.storyvenue.app"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1"
               title="Get it on Google Play"
+              className="flex-1 flex items-center gap-2 rounded-lg px-3 py-2 hover:opacity-75 transition-opacity"
+              style={{ background: '#1b1b1b', minWidth: 0 }}
             >
-              <img
-                src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
-                alt="Get it on Google Play"
-                className="h-8 w-full object-contain object-left"
-                style={{ minWidth: 0 }}
-              />
+              {/* Play icon triangle */}
+              <svg viewBox="0 0 24 24" width="13" height="16" fill="white" style={{ flexShrink: 0 }}>
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              <div className="leading-none min-w-0">
+                <div className="text-white mb-0.5" style={{ fontSize: 8, letterSpacing: '0.06em', opacity: 0.75 }}>GET IT ON</div>
+                <div className="text-white font-semibold truncate" style={{ fontSize: 12 }}>Google Play</div>
+              </div>
             </a>
           </div>
         )}
