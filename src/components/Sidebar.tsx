@@ -1009,9 +1009,10 @@ export default function Sidebar({
               className="h-10 flex items-center gap-2 rounded-lg px-2.5 hover:opacity-75 transition-opacity overflow-hidden"
               style={{ background: '#1b1b1b' }}
             >
-              {/* Correct Apple logo — body + leaf stem as one compound path */}
-              <svg viewBox="0 0 24 28" width="12" height="15" fill="white" style={{ flexShrink: 0 }}>
-                <path d="M17.05 20.28c-.98 1.46-2.01 2.9-3.61 2.93-1.57.03-2.09-.94-3.88-.94-1.8 0-2.37.91-3.86.97-1.57.06-2.76-1.55-3.75-3-2.05-2.96-3.62-8.36-1.51-12 1.05-1.8 2.93-2.94 4.97-2.96 1.56-.03 3.02.99 3.97.99.95 0 2.74-1.23 4.62-1.05.79.04 2.99.32 4.41 2.38-.11.07-2.63 1.54-2.6 4.59.04 3.64 3.19 4.85 3.23 4.87-.03.07-.5 1.73-1.99 3.22zM13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+              {/* Apple logo — MDI path, body centered at x≈13, leaf stem originates from x=13 (same center) */}
+              <svg viewBox="0 0 24 24" width="13" height="16" fill="white" style={{ flexShrink: 0 }}>
+                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83z" />
+                <path d="M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
               </svg>
               <div className="leading-none overflow-hidden">
                 <div className="text-white whitespace-nowrap" style={{ fontSize: 7, opacity: 0.7 }}>Download on the</div>
