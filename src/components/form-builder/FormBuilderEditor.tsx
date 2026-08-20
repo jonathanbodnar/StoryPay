@@ -24,6 +24,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { postAuthNavigate } from '@/lib/platform';
 import {
   useCallback,
   useEffect,
@@ -1951,6 +1953,7 @@ export function FormBuilderEditor({
   initialDefinition: MarketingFormDefinition;
   embedToken: string;
 }) {
+  const router = useRouter();
   const initialSnapshot: EditorSnapshot = useMemo(
     () => ({
       definition: initialDefinition,
@@ -2235,14 +2238,16 @@ export function FormBuilderEditor({
         setDeletingForm(false);
         return;
       }
-      // Hard navigation back to the list — avoids any stale local state from
-      // this page trying to save against the now-deleted form.
-      window.location.assign('/dashboard/marketing/form-builder');
+      // Back to the list. Hard reload on web (avoids stale local state saving
+      // against the deleted form); client-side route on native, where a
+      // top-level navigation gets ejected to the system browser by the
+      // shipped binary. Autosave is already cancelled above either way.
+      postAuthNavigate(router, '/dashboard/marketing/form-builder');
     } catch (e) {
       window.alert(e instanceof Error ? e.message : 'Failed to delete form.');
       setDeletingForm(false);
     }
-  }, [deletingForm, formId, clearAutosaveTimer]);
+  }, [deletingForm, formId, clearAutosaveTimer, router]);
 
   const addBlockAt = useCallback(
     (idx: number, type: FormBlockType) => {

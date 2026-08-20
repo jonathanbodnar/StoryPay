@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { postAuthNavigate } from '@/lib/platform';
 import {
  LinkIcon,
  Check,
@@ -52,6 +54,7 @@ interface VenueInfo {
 
 
 export default function SettingsPage() {
+ const router = useRouter();
  const [venue, setVenue] = useState<VenueInfo | null>(null);
  const [loading, setLoading] = useState(true);
  const [isOwner, setIsOwner] = useState(true); // default true until session loads
@@ -251,7 +254,9 @@ async function syncGhlContacts() {
        body: JSON.stringify({ action: 'restart' }),
      });
     try { sessionStorage.removeItem('sv_onboarding_skipped'); } catch { /* ignore */ }
-    window.location.href = '/dashboard/listing?onboarding=1';
+    // router.push on native / full reload on web — a top-level navigation to
+    // /dashboard/* gets ejected to the system browser by the shipped binary.
+    postAuthNavigate(router, '/dashboard/listing?onboarding=1');
   } catch {
     setRestarting(false);
   }
@@ -275,7 +280,7 @@ async function startOverOnboarding() {
       body: JSON.stringify({ action: 'start_over' }),
     });
     try { sessionStorage.removeItem('sv_onboarding_skipped'); } catch { /* ignore */ }
-    window.location.href = '/dashboard/listing?onboarding=1';
+    postAuthNavigate(router, '/dashboard/listing?onboarding=1');
   } catch {
     setStartingOver(false);
   }
@@ -294,7 +299,7 @@ async function devResetOnboarding() {
       body: JSON.stringify({ action: 'dev_reset' }),
     });
     try { sessionStorage.removeItem('sv_onboarding_skipped'); } catch { /* ignore */ }
-    window.location.href = '/dashboard/listing?onboarding=1';
+    postAuthNavigate(router, '/dashboard/listing?onboarding=1');
   } catch {
     setDevResetting(false);
   }

@@ -200,7 +200,16 @@ export default function Sidebar({
       unregisterNativePush(),
       import('@capawesome/capacitor-badge').then((m) => m.Badge.clear()),
     ]).finally(() => {
-      window.location.assign('/api/auth/logout');
+      // Clear the session via fetch, then land on /login with a full reload.
+      // Never top-level-navigate to /api/auth/logout on native: the shipped
+      // app binary only whitelists URLs under /login, so a full-page hop to
+      // /api/* gets ejected to the system browser (Safari/Chrome) instead of
+      // staying in the webview. /login itself always passes the check.
+      fetch('/api/auth/logout', { redirect: 'manual' })
+        .catch(() => undefined)
+        .finally(() => {
+          window.location.assign('/login');
+        });
     });
   }, []);
   const router = useRouter();
