@@ -497,7 +497,7 @@ export async function POST(req: NextRequest) {
   const ghlToken = getGhlToken({ ghl_access_token: v?.ghl_access_token ?? null });
   let smsNotified = 0;
   if (v?.ghl_connected && v?.ghl_location_id && ghlToken) {
-    const smsBody = `StoryVenue Concierge: new message about ${brideName} at ${venueName}. View & reply: ${contactUrl}`;
+    const smsBody = 'You have a new message from the StoryVenue Concierge team. Please check your email, app or dashboard for details.';
     const smsResults = await Promise.allSettled(
       recipients
         .filter(r => !!r.phone && r.smsEnabled)
