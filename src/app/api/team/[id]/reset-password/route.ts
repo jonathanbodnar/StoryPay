@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -21,41 +22,20 @@ function passwordResetEmailHtml({
   brandColor?: string;
   logoUrl?: string;
 }): string {
-  const headerHtml = logoUrl
-    ? `<div style="background-color:#ffffff;padding:24px 32px 20px;border-radius:12px 12px 0 0;border:1px solid #e5e7eb;border-bottom:4px solid ${brandColor}">
-        <img src="${logoUrl}" alt="${venueName}" style="max-height:56px;max-width:200px;width:auto;height:auto;display:block;background-color:#ffffff">
-       </div>`
-    : `<div style="background-color:${brandColor};padding:28px 32px;border-radius:12px 12px 0 0">
-        <h1 style="color:white;font-size:22px;margin:0;font-weight:300">${venueName}</h1>
-       </div>`;
-
-  return `
-<div style="font-family:'Open Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
-  ${headerHtml}
-  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">Set your password</h2>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 8px">Hi ${memberName},</p>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px">
-      Your account manager at <strong>${venueName}</strong> has requested a password reset for your
-      StoryVenue account. Click the button below to set a new password.
-      This link expires in <strong>24 hours</strong>.
-    </p>
-    <div style="text-align:center;margin:32px 0">
-      <a href="${resetUrl}"
-        style="background-color:${brandColor};border-radius:10px;color:#ffffff;display:inline-block;font-family:'Open Sans',Arial,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:240px;">
-        <span style="color:#ffffff;text-decoration:none;">Set Password</span>
-      </a>
-    </div>
-    <p style="color:#9ca3af;font-size:12px;text-align:center;margin:8px 0 0">
-      If the button doesn&apos;t work, copy this link:<br>
-      <a href="${resetUrl}" style="color:${brandColor};text-decoration:underline;">${resetUrl}</a>
-    </p>
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
-    <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
-      If you didn&apos;t expect this, you can safely ignore it. Your password will not change unless you follow the link above.
-    </p>
-  </div>
-</div>`;
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return buildSystemEmail({
+    logoUrl:     logoUrl || undefined,
+    brandName:   venueName,
+    logoAlt:     venueName,
+    accentColor: brandColor,
+    title:       'Set your password',
+    heading:     'Set your password',
+    bodyHtml: `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 8px;">Hi ${esc(memberName)},</p>
+      <p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">Your account manager at <strong>${esc(venueName)}</strong> has requested a password reset for your StoryVenue account. Click the button below to set a new password. This link expires in <strong>24 hours</strong>.</p>`,
+    cta:              { label: 'Set password', url: resetUrl },
+    showLinkFallback: true,
+    footerHtml: `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">If you didn&apos;t expect this, you can safely ignore it. Your password will not change unless you follow the link above.</p>`,
+  });
 }
 
 /**

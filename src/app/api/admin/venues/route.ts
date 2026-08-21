@@ -6,6 +6,7 @@ import { agencyCreateMerchant } from '@/lib/lunarpay';
 import { getLunarPayAdminSummary } from '@/lib/lunarpay-venue-admin';
 import { normalizeLunarPayStatus } from '@/lib/lunarpay-status';
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 import { normalizePhone } from '@/lib/ghl';
 import { getAdminIdentity } from '@/lib/admin-identity';
 
@@ -304,44 +305,25 @@ function legacyInviteEmailHtml(args: {
   isLegacy: boolean;
 }): string {
   const { firstName, venueName, loginUrl, isLegacy } = args;
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const intro = isLegacy
-    ? `Welcome to StoryVenue! We&apos;ve set up your new subaccount as part of your migration from your previous platform. Everything you need to manage <strong>${venueName}</strong> lives in one place now — contacts, calendar, conversations, proposals, payments, and more.`
-    : `Welcome to StoryVenue! We&apos;ve set up your subaccount for <strong>${venueName}</strong>. Click below to log in and finish getting things ready.`;
+    ? `Welcome to StoryVenue! We&apos;ve set up your new subaccount as part of your migration from your previous platform. Everything you need to manage <strong>${esc(venueName)}</strong> lives in one place now — contacts, calendar, conversations, proposals, payments, and more.`
+    : `Welcome to StoryVenue! We&apos;ve set up your subaccount for <strong>${esc(venueName)}</strong>. Click below to log in and finish getting things ready.`;
 
-  return `
-<div style="font-family:'Open Sans',Arial,sans-serif;max-width:560px;margin:0 auto;background:#ffffff">
-  <div style="background-color:#1b1b1b;padding:28px 32px;border-radius:12px 12px 0 0">
-    <h1 style="color:white;font-size:22px;margin:0;font-weight:300">StoryVenue</h1>
-  </div>
-  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">Your account is ready, ${firstName}</h2>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px">${intro}</p>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px">
-      Click the button below to log in. This link is unique to you — no password required.
-    </p>
-    <div style="text-align:center;margin:32px 0">
-      <a href="${loginUrl}"
-        style="background-color:#1b1b1b;border-radius:10px;color:#ffffff;display:inline-block;font-family:'Open Sans',Arial,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:240px;">
-        <span style="color:#ffffff;text-decoration:none;">Log In to StoryVenue</span>
-      </a>
-    </div>
-    <p style="color:#9ca3af;font-size:12px;text-align:center;margin:8px 0 0">
-      If the button doesn&apos;t work, copy and paste this link:<br>
-      <a href="${loginUrl}" style="color:#1b1b1b;text-decoration:underline;word-break:break-all">${loginUrl}</a>
-    </p>
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
-    <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0 0 12px">
-      <strong>What's next:</strong>
-    </p>
-    <ul style="color:#6b7280;font-size:13px;line-height:1.7;margin:0 0 16px;padding-left:20px">
-      <li>Confirm your venue details and connect your calendar</li>
-      <li>Import or sync your contacts</li>
-      <li>Set up payment processing if you take deposits</li>
-      <li>Reach out to clients@storyvenue.com if you need anything</li>
-    </ul>
-    <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
-      You&apos;re receiving this because the StoryVenue concierge team set up your subaccount.
-    </p>
-  </div>
-</div>`;
+  return buildSystemEmail({
+    title:   `Welcome to StoryVenue — ${venueName}`,
+    heading: `Your account is ready, ${esc(firstName)}`,
+    bodyHtml: `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px;">${intro}</p>
+      <p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">Click the button below to log in. This link is unique to you — no password required.</p>`,
+    cta:              { label: 'Log in to StoryVenue', url: loginUrl },
+    showLinkFallback: true,
+    footerHtml: `<p style="margin:0 0 12px;font-size:13px;color:#6b7280;line-height:1.6;"><strong>What's next:</strong></p>
+      <ul style="color:#6b7280;font-size:13px;line-height:1.7;margin:0 0 16px;padding-left:20px;">
+        <li>Confirm your venue details and connect your calendar</li>
+        <li>Import or sync your contacts</li>
+        <li>Set up payment processing if you take deposits</li>
+        <li>Reach out to clients@storyvenue.com if you need anything</li>
+      </ul>
+      <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">You&apos;re receiving this because the StoryVenue concierge team set up your subaccount.</p>`,
+  });
 }

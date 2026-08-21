@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 import { rateLimitAny, getClientIp } from '@/lib/rate-limit';
 
 /** Magic-link token lifetime: 24 hours from issue. */
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     await sendEmail({
       to: normalized,
       subject: `Your StoryVenue login link for ${venue.name || 'your account'}`,
-      html: loginEmailHtml({ name: venue.name || 'your account', loginUrl, appUrl, isTeamMember: false }),
+      html: loginEmailHtml({ name: venue.name || 'your account', loginUrl, isTeamMember: false }),
     });
   }
 
@@ -100,7 +101,6 @@ export async function POST(request: NextRequest) {
       html: loginEmailHtml({
         name: member.first_name || 'there',
         loginUrl,
-        appUrl,
         isTeamMember: true,
         venueName: venueData?.name,
         brandColor: venueData?.brand_color,
@@ -113,43 +113,25 @@ export async function POST(request: NextRequest) {
 }
 
 function loginEmailHtml({
-  name, loginUrl, appUrl, isTeamMember = false,
+  name, loginUrl, isTeamMember = false,
   venueName, brandColor = '#1b1b1b', logoUrl,
 }: {
-  name: string; loginUrl: string; appUrl: string; isTeamMember?: boolean;
+  name: string; loginUrl: string; isTeamMember?: boolean;
   venueName?: string; brandColor?: string; logoUrl?: string;
 }) {
-  const headerHtml = logoUrl
-    ? `<div style="background-color:#ffffff;padding:24px 32px 20px;border-radius:12px 12px 0 0;border:1px solid #e5e7eb;border-bottom:4px solid ${brandColor}">
-        <img src="${logoUrl}" alt="${venueName || 'StoryVenue'}" style="max-height:48px;max-width:180px;width:auto;height:auto;display:block;">
-       </div>`
-    : `<div style="background-color:${brandColor};padding:28px 32px;border-radius:12px 12px 0 0">
-        <h1 style="color:white;font-size:22px;margin:0;font-weight:300">${isTeamMember && venueName ? venueName : 'StoryVenue'}</h1>
-       </div>`;
-
-  return `
-<div style="font-family:'Open Sans',Arial,sans-serif;max-width:560px;margin:0 auto;background:#ffffff">
-  ${headerHtml}
-  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">Your login link</h2>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 8px">Hi ${name},</p>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px">
-      Click the button below to log in to your StoryVenue account${isTeamMember && venueName ? ` (${venueName})` : ''}. This link is valid for your current session.
-    </p>
-    <div style="text-align:center;margin:32px 0">
-      <a href="${loginUrl}"
-        style="background-color:${brandColor};border-radius:10px;color:#ffffff;display:inline-block;font-family:'Open Sans',Arial,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:220px;">
-        <span style="color:#ffffff;text-decoration:none;">Log In to StoryVenue</span>
-      </a>
-    </div>
-    <p style="color:#9ca3af;font-size:12px;text-align:center;margin:8px 0 0">
-      If the button doesn&apos;t work, copy this link:<br>
-      <a href="${loginUrl}" style="color:${brandColor};text-decoration:underline;">${loginUrl}</a>
-    </p>
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
-    <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
-      If you didn&apos;t request this link, you can safely ignore this email. Your account is still secure.
-    </p>
-  </div>
-</div>`;
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const acctLabel = isTeamMember && venueName ? ` (${esc(venueName)})` : '';
+  return buildSystemEmail({
+    logoUrl:     logoUrl || undefined,
+    brandName:   isTeamMember ? (venueName || undefined) : undefined,
+    logoAlt:     venueName || 'StoryVenue',
+    accentColor: brandColor,
+    title:       'Your StoryVenue login link',
+    heading:     'Your login link',
+    bodyHtml: `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 8px;">Hi ${esc(name)},</p>
+      <p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">Click the button below to log in to your StoryVenue account${acctLabel}. This link is valid for your current session.</p>`,
+    cta:              { label: 'Log in to StoryVenue', url: loginUrl },
+    showLinkFallback: true,
+    footerHtml: `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">If you didn&apos;t request this link, you can safely ignore this email. Your account is still secure.</p>`,
+  });
 }

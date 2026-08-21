@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { hashSupportPassword } from '@/lib/support/auth';
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 import { CONTACT_TYPES, type ContactType } from '@/lib/admin-contacts';
 
 export const dynamic = 'force-dynamic';
@@ -76,7 +77,7 @@ export async function POST(
       await sendEmail({
         to: email,
         subject: 'Reset your StoryVenue password',
-        html: resetEmailHtml({ resetUrl: link, appUrl, name: 'there' }),
+        html: resetEmailHtml({ resetUrl: link, name: 'there' }),
       });
     } catch (e) {
       console.warn('[contacts/reset-password] sendEmail failed:', e);
@@ -159,7 +160,6 @@ export async function POST(
           to: email,
           subject: 'StoryVenue login link',
           html: venueLoginEmailHtml({
-            appUrl,
             venueName: (venue as { name?: string | null }).name ?? 'your venue',
             loginUrl,
             supabaseResetUrl,
@@ -185,87 +185,40 @@ function randomPassword(): string {
   return s;
 }
 
-function resetEmailHtml({ resetUrl, appUrl, name }: { resetUrl: string; appUrl: string; name: string }) {
-  return `
-<div style="font-family:'Open Sans',Arial,sans-serif;max-width:560px;margin:0 auto;background:#ffffff">
-  <div style="background-color:#1b1b1b;padding:28px 32px;border-radius:12px 12px 0 0">
-    <h1 style="color:white;font-size:22px;margin:0;font-weight:300">StoryVenue</h1>
-  </div>
-  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">Reset your password</h2>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px">
-      Hi ${name}, the StoryVenue team triggered a password reset for your account.
-      Click the button below to set a new password. This link expires in 1 hour.
-    </p>
-    <div style="text-align:center;margin:32px 0">
-      <a href="${resetUrl}"
-        style="background-color:#1b1b1b;border-radius:10px;color:#ffffff;display:inline-block;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:240px;">
-        Reset Password
-      </a>
-    </div>
-    <p style="color:#9ca3af;font-size:12px;text-align:center;margin:8px 0 0">
-      Or paste this URL into your browser:<br>
-      <a href="${resetUrl}" style="color:#1b1b1b;text-decoration:underline;word-break:break-all;">${resetUrl}</a>
-    </p>
-  </div>
-</div>
-<p style="color:#9ca3af;font-size:11px;text-align:center;margin:16px 0 0">
-  <a href="${appUrl}" style="color:#9ca3af;text-decoration:underline;">StoryVenue</a>
-</p>`;
+function resetEmailHtml({ resetUrl, name }: { resetUrl: string; name: string }) {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return buildSystemEmail({
+    title:   'Reset your StoryVenue password',
+    heading: 'Reset your password',
+    bodyHtml: `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">Hi ${esc(name)}, the StoryVenue team triggered a password reset for your account. Click the button below to set a new password. This link expires in 1 hour.</p>`,
+    cta:              { label: 'Reset password', url: resetUrl },
+    showLinkFallback: true,
+  });
 }
 
 function adminResetHtml({ appUrl, name, tempPassword }: { appUrl: string; name: string; tempPassword: string }) {
-  return `
-<div style="font-family:'Open Sans',Arial,sans-serif;max-width:560px;margin:0 auto;background:#ffffff">
-  <div style="background-color:#1b1b1b;padding:28px 32px;border-radius:12px 12px 0 0">
-    <h1 style="color:white;font-size:22px;margin:0;font-weight:300">StoryVenue Admin</h1>
-  </div>
-  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">Your password was reset</h2>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px">
-      Hi ${name}, the StoryVenue super-admin team reset your admin password. Use the
-      temporary password below to sign in, then change it from the My Profile page.
-    </p>
-    <div style="background:#f3f4f6;border-radius:8px;padding:16px 20px;margin:16px 0;font-family:monospace;font-size:18px;color:#111827;text-align:center;letter-spacing:1px">
-      ${tempPassword}
-    </div>
-    <div style="text-align:center;margin:32px 0">
-      <a href="${appUrl}/admin/login"
-        style="background-color:#1b1b1b;border-radius:10px;color:#ffffff;display:inline-block;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:240px;">
-        Open admin login
-      </a>
-    </div>
-  </div>
-</div>`;
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return buildSystemEmail({
+    title:   'Your StoryVenue admin password was reset',
+    heading: 'Your password was reset',
+    bodyHtml: `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px;">Hi ${esc(name)}, the StoryVenue super-admin team reset your admin password. Use the temporary password below to sign in, then change it from the My Profile page.</p>
+      <div style="background:#f3f4f6;border-radius:8px;padding:16px 20px;margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:18px;color:#111827;text-align:center;letter-spacing:1px;">${esc(tempPassword)}</div>`,
+    cta: { label: 'Open admin login', url: `${appUrl}/admin/login` },
+  });
 }
 
 function venueLoginEmailHtml({
-  appUrl, venueName, loginUrl, supabaseResetUrl,
-}: { appUrl: string; venueName: string; loginUrl: string; supabaseResetUrl: string | null }) {
-  return `
-<div style="font-family:'Open Sans',Arial,sans-serif;max-width:560px;margin:0 auto;background:#ffffff">
-  <div style="background-color:#1b1b1b;padding:28px 32px;border-radius:12px 12px 0 0">
-    <h1 style="color:white;font-size:22px;margin:0;font-weight:300">StoryVenue</h1>
-  </div>
-  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">A new login link for ${venueName}</h2>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px">
-      Use the link below to sign in to StoryVenue. This link is unique to you — no password needed.
-    </p>
-    <div style="text-align:center;margin:32px 0">
-      <a href="${loginUrl}"
-        style="background-color:#1b1b1b;border-radius:10px;color:#ffffff;display:inline-block;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:240px;">
-        Log In to StoryVenue
-      </a>
-    </div>
-    ${supabaseResetUrl ? `
-      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
-      <p style="color:#6b7280;font-size:13px;line-height:1.7;margin:0">
-        Prefer a password? <a href="${supabaseResetUrl}" style="color:#1b1b1b">Click here to set one</a>.
-      </p>` : ''}
-    <p style="color:#9ca3af;font-size:11px;text-align:center;margin:24px 0 0">
-      <a href="${appUrl}" style="color:#9ca3af;text-decoration:underline;">StoryVenue</a>
-    </p>
-  </div>
-</div>`;
+  venueName, loginUrl, supabaseResetUrl,
+}: { venueName: string; loginUrl: string; supabaseResetUrl: string | null }) {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return buildSystemEmail({
+    title:   `A new login link for ${venueName}`,
+    heading: `A new login link for ${esc(venueName)}`,
+    bodyHtml: `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">Use the link below to sign in to StoryVenue. This link is unique to you — no password needed.</p>`,
+    cta:              { label: 'Log in to StoryVenue', url: loginUrl },
+    showLinkFallback: true,
+    footerHtml: supabaseResetUrl
+      ? `<p style="margin:0;font-size:13px;color:#6b7280;line-height:1.7;text-align:center;">Prefer a password? <a href="${esc(supabaseResetUrl)}" style="color:#1b1b1b;">Click here to set one</a>.</p>`
+      : undefined,
+  });
 }

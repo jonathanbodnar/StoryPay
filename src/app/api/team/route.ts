@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 import { getEffectiveVenueId } from '@/lib/effective-venue';
 import { normalizePhone } from '@/lib/ghl';
 
@@ -18,40 +19,21 @@ function inviteEmailHtml({
   venueName: string; inviteeName: string; role: string;
   inviteUrl: string; brandColor?: string; logoUrl?: string;
 }): string {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const roleLabel = role === 'admin' ? 'Admin' : role === 'owner' ? 'Owner' : 'Member';
-  const headerHtml = logoUrl
-    ? `<div style="background-color:#ffffff;padding:24px 32px 20px;border-radius:12px 12px 0 0;border:1px solid #e5e7eb;border-bottom:4px solid ${brandColor}">
-        <img src="${logoUrl}" alt="${venueName}" style="max-height:56px;max-width:200px;width:auto;height:auto;display:block;background-color:#ffffff">
-       </div>`
-    : `<div style="background-color:${brandColor};padding:28px 32px;border-radius:12px 12px 0 0">
-        <h1 style="color:white;font-size:22px;margin:0;font-weight:300">${venueName}</h1>
-       </div>`;
-  return `
-<div style="font-family:'Open Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
-  ${headerHtml}
-  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">You&rsquo;ve been invited to join ${venueName}</h2>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 8px">Hi ${inviteeName},</p>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px">
-      You&rsquo;ve been invited to join <strong>${venueName}</strong> on StoryVenue as a <strong>${roleLabel}</strong>.
-      Click the button below to accept your invitation and access the account.
-    </p>
-    <div style="text-align:center;margin:32px 0">
-      <a href="${inviteUrl}"
-        style="background-color:${brandColor};border-radius:10px;color:#ffffff;display:inline-block;font-family:'Open Sans',Arial,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:240px;">
-        <span style="color:#ffffff;text-decoration:none;">Accept Invitation</span>
-      </a>
-    </div>
-    <p style="color:#9ca3af;font-size:12px;text-align:center;margin:8px 0 0">
-      If the button doesn&apos;t work, copy this link:<br>
-      <a href="${inviteUrl}" style="color:${brandColor};text-decoration:underline;">${inviteUrl}</a>
-    </p>
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
-    <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
-      This invitation was sent by ${venueName} via StoryVenue. If you didn&apos;t expect this, you can safely ignore it.
-    </p>
-  </div>
-</div>`;
+  return buildSystemEmail({
+    logoUrl:     logoUrl || undefined,
+    brandName:   venueName,
+    logoAlt:     venueName,
+    accentColor: brandColor,
+    title:       `You've been invited to join ${venueName}`,
+    heading:     `You've been invited to join ${esc(venueName)}`,
+    bodyHtml: `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 8px;">Hi ${esc(inviteeName)},</p>
+      <p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">You&rsquo;ve been invited to join <strong>${esc(venueName)}</strong> on StoryVenue as a <strong>${roleLabel}</strong>. Click the button below to accept your invitation and access the account.</p>`,
+    cta:              { label: 'Accept invitation', url: inviteUrl },
+    showLinkFallback: true,
+    footerHtml: `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">This invitation was sent by ${esc(venueName)} via StoryVenue. If you didn&apos;t expect this, you can safely ignore it.</p>`,
+  });
 }
 
 export async function GET(request: NextRequest) {

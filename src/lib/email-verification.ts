@@ -14,6 +14,7 @@
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 
 /** Verification link lifetime: 24h. */
 export const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -136,36 +137,12 @@ function verifyEmailHtml({
   venueName: string;
   verifyUrl: string;
 }): string {
-  return `
-<div style="font-family:'Open Sans',Arial,sans-serif;max-width:560px;margin:0 auto;background:#ffffff">
-  <div style="background-color:#1b1b1b;padding:28px 32px;border-radius:12px 12px 0 0">
-    <h1 style="color:white;font-size:22px;margin:0;font-weight:300">StoryVenue</h1>
-  </div>
-  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 16px">
-      Confirm your email, ${escapeHtml(firstName)}
-    </h2>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px">
-      Thanks for signing up <strong>${escapeHtml(venueName)}</strong> on StoryVenue.
-      Please confirm your email address to activate payment processing.
-      This link expires in <strong>24 hours</strong>.
-    </p>
-    <div style="text-align:center;margin:32px 0">
-      <a href="${verifyUrl}"
-        style="background-color:#1b1b1b;border-radius:10px;color:#ffffff;display:inline-block;font-family:'Open Sans',Arial,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:240px;">
-        <span style="color:#ffffff;text-decoration:none;">Verify Email</span>
-      </a>
-    </div>
-    <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0 0 8px">
-      Or copy and paste this link into your browser:
-    </p>
-    <p style="color:#1b1b1b;font-size:12px;word-break:break-all;margin:0 0 24px">
-      ${verifyUrl}
-    </p>
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 16px">
-    <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
-      If you didn&apos;t create a StoryVenue account, you can safely ignore this email.
-    </p>
-  </div>
-</div>`;
+  return buildSystemEmail({
+    title:   'Verify your StoryVenue email address',
+    heading: `Confirm your email, ${escapeHtml(firstName)}`,
+    bodyHtml: `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">Thanks for signing up <strong>${escapeHtml(venueName)}</strong> on StoryVenue. Please confirm your email address to activate payment processing. This link expires in <strong>24 hours</strong>.</p>`,
+    cta:              { label: 'Verify email', url: verifyUrl },
+    showLinkFallback: true,
+    footerHtml: `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">If you didn&apos;t create a StoryVenue account, you can safely ignore this email.</p>`,
+  });
 }
