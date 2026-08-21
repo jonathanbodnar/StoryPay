@@ -52,6 +52,7 @@ import type { SupportAttachment } from '@/lib/support/support-attachments-bucket
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms as ghlSendSms } from '@/lib/ghl';
 import { mergePersonNotificationSettings } from '@/lib/notification-settings';
 import { notifyOwnerVenueDirectPush } from '@/lib/owner-notifications';
+import { buildSystemEmail } from '@/lib/email-templates';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -154,7 +155,7 @@ export async function POST(req: NextRequest) {
   if (!thread) return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
   const t = thread as ThreadRow;
 
-  const [{ data: venue }, { data: customer }, { data: agent }, { data: lastBrideMsgs }] = await Promise.all([
+  const [{ data: venue }, { data: customer }] = await Promise.all([
     supabaseAdmin
       .from('venues')
       .select('id, name, slug, email, notification_email, notification_phone, phone, owner_id, ghl_access_token, ghl_location_id, ghl_connected, owner_concierge_ghl_contact_id, notification_settings')
@@ -165,25 +166,10 @@ export async function POST(req: NextRequest) {
       .select('customer_email, first_name, last_name, phone, created_at, stage_id, pipeline_stage')
       .eq('id', t.venue_customer_id)
       .maybeSingle(),
-    supabaseAdmin
-      .from('support_team_members')
-      .select('id, name, email')
-      .eq('id', actingAgentId)
-      .maybeSingle(),
-    // Fetch the bride's most recent inbound message for email context
-    supabaseAdmin
-      .from('conversation_messages')
-      .select('body, created_at')
-      .eq('thread_id', threadId)
-      .eq('sender_kind', 'contact')
-      .order('created_at', { ascending: false })
-      .limit(1),
   ]);
 
   const v  = (venue    ?? null) as VenueRow | null;
   const vc = (customer ?? null) as VenueCustomerRow | null;
-  const a  = (agent    ?? null) as { id: string; name: string | null; email: string | null } | null;
-  const lastBrideMessage = ((lastBrideMsgs ?? []) as Array<{ body: string; created_at: string }>)[0] ?? null;
 
   // Resolve the contact's current pipeline stage label
   let stageName: string | null = null;
@@ -340,13 +326,8 @@ export async function POST(req: NextRequest) {
   void notifyOwnerVenueDirectPush({ venueId: t.venue_id, venueCustomerId: t.venue_customer_id });
 
   // Build email
-  const brideName = [vc?.first_name, vc?.last_name].filter(Boolean).join(' ').trim() || vc?.customer_email || 'a contact';
-  const venueName = v?.name || 'your venue';
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
   const contactUrl = `${baseUrl}/dashboard/contacts/${t.venue_customer_id}?tab=concierge`;
-  const fromDisplayName = a?.name
-    ? `${a.name} · StoryVenue Concierge team`
-    : 'StoryVenue Concierge team';
   const fromEmail = process.env.SUPPORT_FROM_EMAIL?.trim() || 'support@storyvenue.com';
   // Reply-To is the threaded venue-direct address — replies route back into
   // this same conversation thread via /api/webhooks/inbound-email.
@@ -396,60 +377,22 @@ export async function POST(req: NextRequest) {
       </tr>`).join('')}
     </table>` : '';
 
-  const emailHtml = `<!doctype html>
-<html><head><meta charset="utf-8"><title>New Message From: StoryVenue Concierge Team</title></head>
-<body style="margin:0;padding:0;background:#f2f2f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:32px 12px;">
-    <tr><td align="center">
-      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+  const snapshotBlock = brideInfoRows.length > 0
+    ? `<p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Contact Snapshot</p>${brideInfoHtml}`
+    : '';
+  const messageBlock = `<p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Message from Concierge Team</p>
+    <div style="border:1px solid #e5e7eb;padding:16px 20px;background:#f9f9f9;color:#1b1b1b;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;text-align:left;font-size:14px;line-height:1.7;border-radius:8px;">${escapeHtml(text)}</div>
+    ${attachmentsListHtml}`;
 
-        <!-- Logo -->
-        <tr><td style="padding:36px 28px 0;text-align:center;">
-          <img src="https://app.storyvenue.com/storyvenue-logo-dark.png" alt="StoryVenue" height="30" style="display:inline-block;height:30px;width:auto;">
-        </td></tr>
-
-        <!-- Heading -->
-        <tr><td style="padding:20px 28px 0;text-align:center;">
-          <p style="margin:0;font-size:18px;font-weight:700;color:#1b1b1b;line-height:1.4;">StoryVenue Concierge Team</p>
-          <p style="margin:0;font-size:18px;font-weight:700;color:#1b1b1b;line-height:1.4;">has sent you a message.</p>
-        </td></tr>
-
-        <!-- Divider -->
-        <tr><td style="padding:24px 28px 0;"><div style="height:1px;background:#e5e7eb;"></div></td></tr>
-
-        <!-- Bride snapshot -->
-        ${brideInfoRows.length > 0 ? `<tr><td style="padding:20px 28px 0;">
-          <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Contact Snapshot</p>
-          ${brideInfoHtml}
-        </td></tr>` : ''}
-
-        <!-- Concierge message -->
-        <tr><td style="padding:${brideInfoRows.length > 0 ? '16px' : '20px'} 28px 0;">
-          <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Message from Concierge Team</p>
-          <div style="border:1px solid #e5e7eb;padding:16px 20px;background:#f9f9f9;color:#1b1b1b;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;text-align:left;font-size:14px;line-height:1.7;border-radius:8px;">${escapeHtml(text)}</div>
-          ${attachmentsListHtml}
-        </td></tr>
-
-        <!-- CTA -->
-        <tr><td style="padding:28px 28px 0;text-align:center;">
-          <a href="${contactUrl}" style="display:inline-block;background:#1b1b1b;color:#ffffff;text-decoration:none;padding:13px 32px;border-radius:8px;font-size:14px;font-weight:600;">View &amp; reply in dashboard</a>
-        </td></tr>
-
-        <!-- Footer -->
-        <tr><td style="padding:20px 28px 32px;">
-          <p style="margin:0 0 16px;font-size:13px;color:#374151;line-height:1.55;">
-            ${replyHint}
-          </p>
-          <div style="height:1px;background:#e5e7eb;margin-bottom:16px;"></div>
-          <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;">
-            This is a private message between the StoryVenue Concierge team and your venue. The contact never sees it.
-          </p>
-        </td></tr>
-
-      </table>
-    </td></tr>
-  </table>
-</body></html>`;
+  const emailHtml = buildSystemEmail({
+    title:      'New Message From: StoryVenue Concierge Team',
+    preheader:  'A private message from the StoryVenue Concierge team.',
+    heading:    ['StoryVenue Concierge Team', 'has sent you a message.'],
+    bodyHtml:   `${snapshotBlock}${messageBlock}`,
+    cta:        { label: 'View &amp; reply in dashboard', url: contactUrl },
+    footerHtml: `<p style="margin:0 0 14px;font-size:13px;color:#374151;line-height:1.55;">${replyHint}</p>
+          <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;">This is a private message between the StoryVenue Concierge team and your venue. The contact never sees it.</p>`,
+  });
 
   // Send to each unique recipient (team members + owner, deduped) who hasn't
   // personally turned off the Venue Direct email in their own notification

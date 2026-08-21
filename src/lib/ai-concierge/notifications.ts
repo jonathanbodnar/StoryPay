@@ -30,6 +30,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 
 // ── Public types ───────────────────────────────────────────────────────────
 
@@ -237,7 +238,7 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
     }
 
     const subject = meta.emailSubject(input.brideName, venueName);
-    const html = renderHtml({ meta, input, venue, venueName });
+    const html = renderHtml({ meta, input, venueName });
 
     // Brand from "StoryVenue Concierge team" so the venue owner immediately
     // recognises this as a managed-service alert (matches the Venue Direct
@@ -381,56 +382,38 @@ function escapeHtml(s: string): string {
 function renderHtml(opts: {
   meta:      ScenarioMeta;
   input:     AiOwnerNotifyInput;
-  venue:     VenueRow;
   venueName: string;
 }): string {
-  const { meta, input, venue, venueName } = opts;
-  const brandColor = (venue.brand_color || '#1b1b1b').trim() || '#1b1b1b';
-  const accent     = meta.urgent ? '#dc2626' : brandColor;
-  const logoHtml   = venue.brand_logo_url
-    ? `<img src="${escapeHtml(venue.brand_logo_url)}" alt="${escapeHtml(venueName)}" style="height:36px;display:block;margin-bottom:8px">`
-    : '';
+  const { meta, input, venueName } = opts;
   const ctaUrl = ctaUrlFor(input.scenario, input.leadId);
 
-  const briderReplyBlock = input.brideReply?.trim()
-    ? `
-        <div style="margin:24px 0;padding:18px 20px;background:#f9fafb;border-left:4px solid ${accent};border-radius:6px">
-          <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Her message</div>
-          <div style="font-size:15px;color:#111827;line-height:1.6;white-space:pre-wrap">${escapeHtml(input.brideReply.slice(0, 500))}</div>
-        </div>`
+  // Urgent alerts get a subtle red pill in the body — the chassis itself stays
+  // on-brand (black accent) so every StoryVenue email reads the same.
+  const urgentBadge = meta.urgent
+    ? `<div style="text-align:center;margin:0 0 16px;"><span style="display:inline-block;background:#fef2f2;color:#dc2626;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:5px 12px;border-radius:999px;">Urgent — needs you now</span></div>`
     : '';
 
   const triggerBlock = input.matchedTrigger
-    ? `
-        <div style="font-size:13px;color:#6b7280;margin:0 0 16px">
-          Trigger: <strong>${escapeHtml(input.matchedTrigger)}</strong>${input.extraDetail ? ` — ${escapeHtml(input.extraDetail)}` : ''}
-        </div>`
+    ? `<p style="font-size:13px;color:#6b7280;margin:0 0 16px;">Trigger: <strong style="color:#1b1b1b;">${escapeHtml(input.matchedTrigger)}</strong>${input.extraDetail ? ` — ${escapeHtml(input.extraDetail)}` : ''}</p>`
     : (input.extraDetail
-       ? `<div style="font-size:13px;color:#6b7280;margin:0 0 16px">${escapeHtml(input.extraDetail)}</div>`
+       ? `<p style="font-size:13px;color:#6b7280;margin:0 0 16px;">${escapeHtml(input.extraDetail)}</p>`
        : '');
 
-  return `
-    <div style="font-family:'Open Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
-      <div style="background-color:${accent};padding:24px 28px;border-radius:12px 12px 0 0">
-        ${logoHtml}
-        <h1 style="color:white;font-size:20px;margin:0;font-weight:600">${escapeHtml(meta.heading(input.brideName))}</h1>
-      </div>
-      <div style="padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-        ${triggerBlock}
-        <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 12px">
-          ${escapeHtml(meta.intro(input.brideName))}
-        </p>
-        ${briderReplyBlock}
-        <div style="text-align:center;margin:28px 0 8px">
-          <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background-color:${accent};color:white;padding:13px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">
-            ${escapeHtml(meta.ctaLabel)}
-          </a>
-        </div>
-        <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
-        <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">
-          AI Concierge alert from ${escapeHtml(venueName)} · sent via StoryVenue
-        </p>
-      </div>
-    </div>
-  `;
+  const introBlock = `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">${escapeHtml(meta.intro(input.brideName))}</p>`;
+
+  const replyBlock = input.brideReply?.trim()
+    ? `<div style="margin:20px 0 0;padding:16px 20px;background:#f9f9f9;border:1px solid #e5e7eb;border-radius:8px;">
+         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;margin-bottom:8px;">Her message</div>
+         <div style="font-size:14px;color:#1b1b1b;line-height:1.7;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">${escapeHtml(input.brideReply.slice(0, 500))}</div>
+       </div>`
+    : '';
+
+  return buildSystemEmail({
+    accentColor: '#1b1b1b',
+    title:       meta.heading(input.brideName),
+    heading:     meta.heading(input.brideName),
+    bodyHtml:    `${urgentBadge}${triggerBlock}${introBlock}${replyBlock}`,
+    cta:         { label: meta.ctaLabel.replace(/\s*→\s*$/, ''), url: ctaUrl },
+    footerHtml:  `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">AI Concierge alert from ${escapeHtml(venueName)} · sent via StoryVenue</p>`,
+  });
 }
