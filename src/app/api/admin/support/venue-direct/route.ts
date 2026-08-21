@@ -328,9 +328,8 @@ export async function POST(req: NextRequest) {
   const replyTo = buildVenueDirectReplyToEmail(threadId, t.venue_id)
     || process.env.SUPPORT_REPLY_TO?.trim()
     || undefined;
-  const previewSnippet = text.length > 600 ? `${text.slice(0, 600)}…` : text;
   const replyHint = replyTo
-    ? 'You can reply to this email <strong style="color:#111827;">or</strong> click the button to reply in your dashboard — either way it lands in the same thread.'
+    ? 'You can reply to this email <strong style="color:#1b1b1b;">or</strong> click the button to reply in your dashboard — either way it lands in the same thread.'
     : 'Click the button to reply in your dashboard.';
 
   // Bride info snapshot rows
@@ -357,48 +356,53 @@ export async function POST(req: NextRequest) {
     </table>` : '';
 
   const emailHtml = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Message from StoryVenue Concierge</title></head>
-<body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f9;padding:24px 12px;">
+<html><head><meta charset="utf-8"><title>New Message From: StoryVenue Concierge Team</title></head>
+<body style="margin:0;padding:0;background:#f2f2f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:32px 12px;">
     <tr><td align="center">
       <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
 
-        <!-- Header -->
-        <tr><td style="padding:24px 28px 16px;">
-          <p style="margin:0 0 6px;font-size:11px;letter-spacing:1.5px;color:#7c3aed;text-transform:uppercase;font-weight:700;">StoryVenue Concierge Team &middot; Venue Direct</p>
-          <h1 style="margin:0 0 4px;font-size:18px;color:#111827;font-weight:600;">${escapeHtml(fromDisplayName)} sent you a message</h1>
-          <p style="margin:0;font-size:13px;color:#6b7280;">About <strong style="color:#111827;">${escapeHtml(brideName)}</strong> at ${escapeHtml(venueName)}</p>
+        <!-- Logo -->
+        <tr><td style="padding:36px 28px 0;text-align:center;">
+          <img src="https://app.storyvenue.com/storyvenue-logo-dark.png" alt="StoryVenue" height="30" style="display:inline-block;height:30px;width:auto;">
+        </td></tr>
+
+        <!-- Heading -->
+        <tr><td style="padding:20px 28px 0;text-align:center;">
+          <h1 style="margin:0 0 8px;font-size:20px;color:#1b1b1b;font-weight:700;line-height:1.3;">StoryVenue Concierge Team has sent you a message.</h1>
+          <p style="margin:0;font-size:13px;color:#6b7280;">About <strong style="color:#1b1b1b;">${escapeHtml(brideName)}</strong> at ${escapeHtml(venueName)}</p>
         </td></tr>
 
         <!-- Divider -->
-        <tr><td style="padding:0 28px;"><div style="height:1px;background:#f3f4f6;"></div></td></tr>
+        <tr><td style="padding:24px 28px 0;"><div style="height:1px;background:#e5e7eb;"></div></td></tr>
 
         <!-- Bride snapshot -->
-        ${brideInfoRows.length > 0 ? `<tr><td style="padding:16px 28px 0;">
-          <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.5px;">Contact snapshot</p>
+        ${brideInfoRows.length > 0 ? `<tr><td style="padding:20px 28px 0;">
+          <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Contact Snapshot</p>
           ${brideInfoHtml}
         </td></tr>` : ''}
 
         <!-- Concierge message -->
-        <tr><td style="padding:${brideInfoRows.length > 0 ? '4px' : '16px'} 28px 16px;">
-          <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.5px;">Message from concierge team</p>
-          <div style="border-left:3px solid #7c3aed;padding:12px 16px;background:#f5f3ff;color:#1f2937;white-space:pre-wrap;font-size:14px;line-height:1.6;border-radius:0 8px 8px 0;">
-            ${escapeHtml(previewSnippet)}
+        <tr><td style="padding:${brideInfoRows.length > 0 ? '16px' : '20px'} 28px 0;">
+          <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Message from Concierge Team</p>
+          <div style="border:1px solid #e5e7eb;padding:16px 20px;background:#f9f9f9;color:#1b1b1b;white-space:pre-wrap;font-size:14px;line-height:1.7;border-radius:8px;">
+            ${escapeHtml(text)}
           </div>
           ${attachmentsListHtml}
         </td></tr>
 
         <!-- CTA -->
-        <tr><td style="padding:4px 28px 16px;">
-          <a href="${contactUrl}" style="display:inline-block;background:#1b1b1b;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">View &amp; reply in dashboard</a>
+        <tr><td style="padding:28px 28px 0;text-align:center;">
+          <a href="${contactUrl}" style="display:inline-block;background:#1b1b1b;color:#ffffff;text-decoration:none;padding:13px 32px;border-radius:8px;font-size:14px;font-weight:600;">View &amp; reply in dashboard</a>
         </td></tr>
 
         <!-- Footer -->
-        <tr><td style="padding:0 28px 24px;">
-          <p style="margin:0 0 12px;font-size:13px;color:#374151;line-height:1.55;">
+        <tr><td style="padding:20px 28px 32px;">
+          <p style="margin:0 0 16px;font-size:13px;color:#374151;line-height:1.55;">
             ${replyHint}
           </p>
-          <p style="margin:0;padding-top:14px;border-top:1px solid #f3f4f6;font-size:12px;color:#9ca3af;line-height:1.55;">
+          <div style="height:1px;background:#e5e7eb;margin-bottom:16px;"></div>
+          <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;">
             This is a private message between the StoryVenue Concierge team and your venue. The contact never sees it.
           </p>
         </td></tr>
@@ -417,7 +421,7 @@ export async function POST(req: NextRequest) {
     emailRecipients.map(r =>
       sendEmail({
         to: r.email,
-        subject: `[Venue Direct] Message about ${brideName}`,
+        subject: `New Message From: StoryVenue Concierge Team`,
         html: emailHtml,
         replyTo,
         from: { email: fromEmail, name: 'StoryVenue Concierge team' },
