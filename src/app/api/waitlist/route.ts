@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RESEND_FROM_FALLBACK } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 import { supabaseAdmin } from '@/lib/supabase';
 
 const NOTIFY_EMAIL = 'jason@storyvenuemarketing.com';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+
+function esc(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -72,25 +78,20 @@ async function sendEmail(data: {
         to: [NOTIFY_EMAIL],
         reply_to: data.email,
         subject: 'New StoryVenue invite requested',
-        html: `
-          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-            <div style="background:#1b1b1b;padding:24px 32px;border-radius:12px 12px 0 0">
-              <h1 style="color:white;font-size:18px;margin:0;font-weight:400">New StoryVenue invite request</h1>
-            </div>
-            <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-              <table style="width:100%;border-collapse:collapse">
-                <tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;width:160px">Name</td><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600">${data.firstName} ${data.lastName}</td></tr>
-                <tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">Email</td><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600">${data.email}</td></tr>
-                <tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">Phone</td><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600">${data.phone || 'Not provided'}</td></tr>
-                <tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">Venue</td><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600">${data.venueName || 'Not provided'}</td></tr>
-                <tr><td style="padding:10px 0;color:#6b7280;font-size:13px">Heard via</td><td style="padding:10px 0;color:#111827;font-size:13px;font-weight:600">${data.referralSource || 'Not provided'}</td></tr>
-              </table>
-              <div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:8px">
-                <a href="${APP_URL}/admin" style="color:#1b1b1b;font-size:13px;font-weight:600;text-decoration:none">View in Admin Panel</a>
-              </div>
-            </div>
-          </div>
-        `,
+        html: buildSystemEmail({
+          title:     'New StoryVenue invite requested',
+          preheader: `New invite request from ${esc(`${data.firstName} ${data.lastName}`.trim())}`,
+          heading:   'New invite request',
+          bodyHtml: `
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;width:120px;">Name</td><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600;">${esc(`${data.firstName} ${data.lastName}`.trim())}</td></tr>
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;">Email</td><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600;">${esc(data.email)}</td></tr>
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;">Phone</td><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600;">${esc(data.phone || 'Not provided')}</td></tr>
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;">Venue</td><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600;">${esc(data.venueName || 'Not provided')}</td></tr>
+              <tr><td style="padding:10px 0;color:#6b7280;font-size:13px;">Heard via</td><td style="padding:10px 0;color:#111827;font-size:13px;font-weight:600;">${esc(data.referralSource || 'Not provided')}</td></tr>
+            </table>`,
+          cta:       { label: 'View in admin panel', url: `${APP_URL}/admin` },
+        }),
       }),
     });
     if (!res.ok) {
