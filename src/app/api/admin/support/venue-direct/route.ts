@@ -419,9 +419,7 @@ export async function POST(req: NextRequest) {
         <!-- Concierge message -->
         <tr><td style="padding:${brideInfoRows.length > 0 ? '16px' : '20px'} 28px 0;">
           <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Message from Concierge Team</p>
-          <div style="border:1px solid #e5e7eb;padding:16px 20px;background:#f9f9f9;color:#1b1b1b;white-space:pre-wrap;font-size:14px;line-height:1.7;border-radius:8px;">
-            ${escapeHtml(text)}
-          </div>
+          <div style="border:1px solid #e5e7eb;padding:16px 20px;background:#f9f9f9;color:#1b1b1b;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;text-align:left;font-size:14px;line-height:1.7;border-radius:8px;">${escapeHtml(text)}</div>
           ${attachmentsListHtml}
         </td></tr>
 
