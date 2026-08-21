@@ -655,6 +655,22 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
   const startedAtIso = new Date(startedAt).toISOString();
   let totalEstimate: number | null = null;
 
+  // Load the full deleted-contacts blocklist for this venue once up front so
+  // we can filter each page in memory without extra DB round trips.
+  const deletedSet = new Set<string>();
+  try {
+    const { data: deletedRows } = await supabaseAdmin
+      .from('ghl_deleted_contacts')
+      .select('ghl_contact_id')
+      .eq('venue_id', venueId);
+    for (const row of (deletedRows ?? []) as { ghl_contact_id: string }[]) {
+      deletedSet.add(row.ghl_contact_id);
+    }
+  } catch {
+    // Table may not exist yet on some envs — gracefully degrade (sync
+    // continues without blocklist filtering rather than crashing).
+  }
+
   await writeProgress(venueId, {
     status: 'running',
     started_at: startedAtIso,
@@ -684,11 +700,17 @@ export async function syncGhlContactsForVenue(venueId: string): Promise<SyncCoun
       totalEstimate = pageData.total;
     }
 
+    // Skip any GHL contact that the venue owner has explicitly deleted from
+    // StoryVenue — this prevents them from re-appearing after every sync run.
+    const contactsToSync = deletedSet.size > 0
+      ? pageData.contacts.filter((c) => !deletedSet.has(c.id))
+      : pageData.contacts;
+
     // Upsert this page's contacts in parallel batches to keep total latency
     // manageable. Each upsertContact runs 1-3 supabase round-trips, so this
     // is I/O bound and benefits from concurrency.
-    for (let i = 0; i < pageData.contacts.length; i += PAGE_CONCURRENCY) {
-      const batch = pageData.contacts.slice(i, i + PAGE_CONCURRENCY);
+    for (let i = 0; i < contactsToSync.length; i += PAGE_CONCURRENCY) {
+      const batch = contactsToSync.slice(i, i + PAGE_CONCURRENCY);
       const results = await Promise.all(
         batch.map(async (c) => {
           try {
@@ -766,6 +788,19 @@ export async function syncSingleGhlContact(
     .maybeSingle();
   if (!venueRaw) return false;
   const venue = venueRaw as VenueRow;
+
+  // Refuse to re-import a contact the venue owner has explicitly deleted.
+  try {
+    const { data: blocked } = await supabaseAdmin
+      .from('ghl_deleted_contacts')
+      .select('id')
+      .eq('venue_id', venue.id)
+      .eq('ghl_contact_id', contactId)
+      .maybeSingle();
+    if (blocked) return false;
+  } catch {
+    // Table may not exist yet — gracefully continue.
+  }
 
   let token: string;
   try {

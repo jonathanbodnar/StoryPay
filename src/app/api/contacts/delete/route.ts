@@ -152,6 +152,18 @@ export async function POST(request: NextRequest) {
         }
       }
     }
+
+    // Always add to the blocklist regardless of whether the GHL API delete
+    // succeeded — this prevents the contact from re-appearing on the next
+    // sync run even if GHL still has the record (e.g. token error, GHL API
+    // flake, or contact was manually recreated in GHL by someone else).
+    await supabaseAdmin
+      .from('ghl_deleted_contacts')
+      .upsert({ venue_id: venueId, ghl_contact_id: ghlContactId }, { onConflict: 'venue_id,ghl_contact_id' })
+      .catch((err: unknown) => {
+        // Non-fatal — migration may not be applied yet on some envs.
+        console.warn('[contacts/delete] blocklist upsert failed:', err instanceof Error ? err.message : err);
+      });
   }
 
   return NextResponse.json({
