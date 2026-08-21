@@ -18,6 +18,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 import { renderMergeVars, systemDateVars } from '@/lib/merge-variables';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -317,19 +318,14 @@ export function plainToHtml(text: string, venueName: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-  return `
-<div style="font-family:'Open Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
-  <div style="background-color:#1b1b1b;padding:24px 28px;border-radius:12px 12px 0 0">
-    <h1 style="color:white;font-size:18px;margin:0;font-weight:400">${venueName}</h1>
-  </div>
-  <div style="padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <pre style="font-family:'Open Sans',Arial,sans-serif;font-size:14px;line-height:1.8;color:#374151;margin:0;white-space:pre-wrap">${escaped}</pre>
-    <hr style="border:none;border-top:1px solid #f3f4f6;margin:24px 0 12px">
-    <p style="font-size:11px;color:#9ca3af;margin:0;text-align:center">
-      Sent via StoryVenue on behalf of ${venueName}
-    </p>
-  </div>
-</div>`;
+  const safeVenue = venueName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return buildSystemEmail({
+    brandName: venueName,
+    logoAlt:   venueName,
+    title:     venueName,
+    bodyHtml: `<pre style="font-family:inherit;font-size:14px;line-height:1.8;color:#374151;margin:0;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">${escaped}</pre>`,
+    footerHtml: `<p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;">Sent via StoryVenue on behalf of ${safeVenue}</p>`,
+  });
 }
 
 // ── Resolve template: DB row → fallback default ───────────────────────────────

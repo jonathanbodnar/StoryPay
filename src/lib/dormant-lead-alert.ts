@@ -12,7 +12,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { SYSTEM_EMAIL_BY_KEY, SYSTEM_EMAIL_SAMPLE_VARS } from '@/lib/system-email-registry';
-import { fillTemplate } from '@/lib/email-templates';
+import { fillTemplate, buildSystemEmail } from '@/lib/email-templates';
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/$/, '');
 
@@ -54,28 +54,13 @@ function buildHtml(tpl: TemplateOverride, vars: Record<string, string>): string 
     )
     .join('\n');
 
-  const buttonHtml = btn
-    ? `<div style="text-align:center;margin:32px 0">
-        <a href="${actionUrl}"
-          style="background-color:#1b1b1b;border-radius:10px;color:#ffffff;display:inline-block;font-family:'Open Sans',Arial,sans-serif;font-size:16px;font-weight:700;line-height:48px;text-align:center;text-decoration:none;width:240px;-webkit-text-size-adjust:none;">
-          <span style="color:#ffffff;text-decoration:none;">${btn}</span>
-        </a>
-      </div>`
-    : '';
-
-  return `
-<div style="font-family:'Open Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff">
-  <div style="background-color:#1b1b1b;padding:24px 32px 20px;border-radius:12px 12px 0 0">
-    <span style="font-size:16px;font-weight:700;color:#ffffff;font-family:'Open Sans',Arial,sans-serif;">StoryVenue</span>
-  </div>
-  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 20px">${heading}</h2>
-    ${bodyHtml}
-    ${buttonHtml}
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
-    <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0">Sent by StoryVenue on behalf of your listing</p>
-  </div>
-</div>`;
+  return buildSystemEmail({
+    title:      heading,
+    heading,
+    bodyHtml,
+    cta:        btn ? { label: btn, url: actionUrl } : undefined,
+    footerHtml: `<p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;">Sent by StoryVenue on behalf of your listing</p>`,
+  });
 }
 
 // ── Dormant check ─────────────────────────────────────────────────────────────

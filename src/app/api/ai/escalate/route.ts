@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 
 const SUPPORT_EMAIL = 'clients@storyvenuemarketing.com';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
@@ -37,49 +38,44 @@ export async function POST(request: NextRequest) {
 
   const subject = `Support Request | ${venue.name} | ${venue.email || venueId}`;
 
-  const html = `
-    <div style="font-family:'Open Sans',Arial,sans-serif;max-width:680px;margin:0 auto">
-      <div style="background:#1b1b1b;padding:24px 32px;border-radius:12px 12px 0 0">
-        <h1 style="color:white;font-size:18px;margin:0;font-weight:400">Support request — StoryVenue Ask AI</h1>
-        <p style="color:rgba(255,255,255,0.6);font-size:12px;margin:6px 0 0">${timestamp}</p>
+  const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const sectionLabel = 'font-size:13px;font-weight:700;color:#111827;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.05em;';
+  const html = buildSystemEmail({
+    title:   subject,
+    heading: 'Support request — Ask AI',
+    bodyHtml: `
+      <p style="margin:0 0 20px;font-size:12px;color:#9ca3af;text-align:center;">${esc(timestamp)}</p>
+
+      <h2 style="${sectionLabel}">Client Information</h2>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;text-align:left;">
+        <tr><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;width:180px">Venue Name</td><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600">${esc(venue.name)}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">Email</td><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600">${esc(venue.email || 'Not provided')}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">Account ID</td><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">${esc(venue.id)}</td></tr>
+        <tr><td style="padding:8px 0;color:#6b7280;font-size:13px">Dashboard Page</td><td style="padding:8px 0;color:#111827;font-size:13px">${esc(currentPage || 'Not captured')}</td></tr>
+      </table>
+
+      <h2 style="${sectionLabel}">What They Need Help With</h2>
+      <div style="background:#f9f9f9;border-left:3px solid #1b1b1b;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:24px">
+        <p style="margin:0;color:#111827;font-size:14px;line-height:1.6;font-weight:600">${esc(supportNote)}</p>
       </div>
-      <div style="padding:28px 32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
 
-        <h2 style="font-size:13px;font-weight:700;color:#111827;margin:0 0 14px;text-transform:uppercase;letter-spacing:0.05em">Client Information</h2>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
-          <tr><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;width:180px">Venue Name</td><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600">${venue.name}</td></tr>
-          <tr><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">Email</td><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600">${venue.email || 'Not provided'}</td></tr>
-          <tr><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">Account ID</td><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-family:monospace">${venue.id}</td></tr>
-          <tr><td style="padding:8px 0;color:#6b7280;font-size:13px">Dashboard Page</td><td style="padding:8px 0;color:#111827;font-size:13px">${currentPage || 'Not captured'}</td></tr>
-        </table>
-
-        <h2 style="font-size:13px;font-weight:700;color:#111827;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.05em">What They Need Help With</h2>
-        <div style="background:#fef3c7;border-left:3px solid #f59e0b;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:24px">
-          <p style="margin:0;color:#92400e;font-size:14px;line-height:1.6;font-weight:600">${supportNote}</p>
-        </div>
-
-        <h2 style="font-size:13px;font-weight:700;color:#111827;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.05em">Original AI Question</h2>
-        <div style="background:#f9fafb;border-left:3px solid #1b1b1b;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:24px">
-          <p style="margin:0;color:#374151;font-size:13px;line-height:1.6">${question}</p>
-        </div>
-
-        <h2 style="font-size:13px;font-weight:700;color:#111827;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.05em">AI Conversation Summary</h2>
-        <div style="background:#f9fafb;border-radius:8px;padding:16px;margin-bottom:24px">
-          <pre style="margin:0;font-size:12px;color:#374151;white-space:pre-wrap;font-family:'Open Sans',Arial,sans-serif;line-height:1.7">${convoText}</pre>
-        </div>
-
-        <div style="background:#fef3c7;border-radius:8px;padding:12px 16px;margin-bottom:24px">
-          <p style="margin:0;color:#92400e;font-size:13px;font-weight:600">Action Required</p>
-          <p style="margin:4px 0 0;color:#78350f;font-size:13px">Client has interacted with Ask AI and requested human support. Please review and follow up directly at <a href="mailto:${venue.email}">${venue.email}</a>.</p>
-        </div>
-
-        <div style="text-align:center;border-top:1px solid #e5e7eb;padding-top:16px">
-          <a href="${APP_URL}/admin" style="color:#1b1b1b;font-size:12px;font-weight:600;text-decoration:none">View in Admin Panel</a>
-          <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">Sent from StoryVenue Ask AI · ${timestamp}</p>
-        </div>
+      <h2 style="${sectionLabel}">Original AI Question</h2>
+      <div style="background:#f9f9f9;border-left:3px solid #d1d5db;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:24px">
+        <p style="margin:0;color:#374151;font-size:13px;line-height:1.6">${esc(question)}</p>
       </div>
-    </div>
-  `;
+
+      <h2 style="${sectionLabel}">AI Conversation Summary</h2>
+      <div style="background:#f9f9f9;border-radius:8px;padding:16px;margin-bottom:24px">
+        <pre style="margin:0;font-size:12px;color:#374151;white-space:pre-wrap;font-family:inherit;line-height:1.7">${esc(convoText)}</pre>
+      </div>
+
+      <div style="background:#f9f9f9;border-radius:8px;padding:12px 16px;">
+        <p style="margin:0;color:#111827;font-size:13px;font-weight:600">Action Required</p>
+        <p style="margin:4px 0 0;color:#374151;font-size:13px">Client has interacted with Ask AI and requested human support. Please review and follow up directly at <a href="mailto:${esc(venue.email || '')}" style="color:#1b1b1b;">${esc(venue.email || 'no email on file')}</a>.</p>
+      </div>`,
+    cta:        { label: 'View in admin panel', url: `${APP_URL}/admin` },
+    footerHtml: `<p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;">Sent from StoryVenue Ask AI · ${esc(timestamp)}</p>`,
+  });
 
   const result = await sendEmail({
     to: SUPPORT_EMAIL,
