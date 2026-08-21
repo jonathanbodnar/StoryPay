@@ -89,13 +89,13 @@ interface VenueRow {
 }
 
 interface VenueCustomerRow {
-  customer_email:      string | null;
-  customer_first_name: string | null;
-  customer_last_name:  string | null;
-  phone:               string | null;
-  created_at:          string | null;
-  stage_id:            string | null;
-  pipeline_stage:      string | null;
+  customer_email: string | null;
+  first_name:     string | null;
+  last_name:      string | null;
+  phone:          string | null;
+  created_at:     string | null;
+  stage_id:       string | null;
+  pipeline_stage: string | null;
 }
 
 interface TeamMemberRow {
@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle(),
     supabaseAdmin
       .from('venue_customers')
-      .select('customer_email, customer_first_name, customer_last_name, phone, created_at, stage_id, pipeline_stage')
+      .select('customer_email, first_name, last_name, phone, created_at, stage_id, pipeline_stage')
       .eq('id', t.venue_customer_id)
       .maybeSingle(),
     supabaseAdmin
@@ -333,7 +333,7 @@ export async function POST(req: NextRequest) {
   void broadcastVenueDirectInboxUpdate({ threadId, venueId: t.venue_id, direction: 'outbound' });
 
   // Build email
-  const brideName = [vc?.customer_first_name, vc?.customer_last_name].filter(Boolean).join(' ').trim() || vc?.customer_email || 'a contact';
+  const brideName = [vc?.first_name, vc?.last_name].filter(Boolean).join(' ').trim() || vc?.customer_email || 'a contact';
   const venueName = v?.name || 'your venue';
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
   const contactUrl = `${baseUrl}/dashboard/contacts/${t.venue_customer_id}?tab=concierge`;
@@ -362,7 +362,7 @@ export async function POST(req: NextRequest) {
 
   // Always emit a Name row — fall back through first+last, email, then "Unknown"
   const contactNameForSnapshot =
-    [vc?.customer_first_name, vc?.customer_last_name].filter(Boolean).join(' ').trim()
+    [vc?.first_name, vc?.last_name].filter(Boolean).join(' ').trim()
     || vc?.customer_email
     || 'Unknown';
 
