@@ -360,8 +360,14 @@ export async function POST(req: NextRequest) {
       })()
     : null;
 
+  // Always emit a Name row — fall back through first+last, email, then "Unknown"
+  const contactNameForSnapshot =
+    [vc?.customer_first_name, vc?.customer_last_name].filter(Boolean).join(' ').trim()
+    || vc?.customer_email
+    || 'Unknown';
+
   const brideInfoRows = [
-    ['Name',    brideName !== 'a contact' ? brideName : null],
+    ['Name',    contactNameForSnapshot],
     ['Phone',   vc?.phone || null],
     ['Email',   vc?.customer_email || null],
     ['Created', opportunityCreatedAt],
@@ -397,8 +403,8 @@ export async function POST(req: NextRequest) {
 
         <!-- Heading -->
         <tr><td style="padding:20px 28px 0;text-align:center;">
-          <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#1b1b1b;letter-spacing:0.02em;">StoryVenue Concierge Team</p>
-          <h1 style="margin:0;font-size:20px;color:#1b1b1b;font-weight:700;line-height:1.3;">has sent you a message.</h1>
+          <p style="margin:0;font-size:18px;font-weight:700;color:#1b1b1b;line-height:1.4;">StoryVenue Concierge Team</p>
+          <p style="margin:0;font-size:18px;font-weight:700;color:#1b1b1b;line-height:1.4;">has sent you a message.</p>
         </td></tr>
 
         <!-- Divider -->
