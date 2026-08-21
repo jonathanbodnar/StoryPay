@@ -203,7 +203,8 @@ export interface SystemEmailOptions {
   logoUrl?: string;
   /** Alt text for the logo image. */
   logoAlt?: string;
-  /** Shown centered in place of a logo when `logoUrl` is empty (e.g. a venue with no uploaded logo). */
+  /** @deprecated Ignored. We never render a text logo — when `logoUrl` is empty
+   *  we fall back to the black StoryVenue logo image. Kept for caller compatibility. */
   brandName?: string;
   /** Accent color for the CTA button + inline links. Defaults to #1b1b1b. */
   accentColor?: string;
@@ -233,13 +234,11 @@ export function buildSystemEmail(opts: SystemEmailOptions): string {
   const logoAlt  = opts.logoAlt || 'StoryVenue';
   const title    = opts.title || 'StoryVenue';
 
-  const useStoryVenueLogo = !logoUrl && !opts.brandName;
+  // Always render a real logo image — never a text-based logo. Use the venue's
+  // uploaded logo when provided, otherwise fall back to the black StoryVenue mark.
   const logoHtml = logoUrl
     ? `<img src="${escapeAttr(logoUrl)}" alt="${escapeAttr(logoAlt)}" style="display:inline-block;max-height:44px;max-width:200px;width:auto;height:auto;border:0;outline:none;text-decoration:none;">`
-    : opts.brandName
-      ? `<span style="font-size:20px;font-weight:700;color:#1b1b1b;">${opts.brandName}</span>`
-      : `<img src="${escapeAttr(STORYVENUE_DARK_LOGO_URL)}" alt="StoryVenue" height="30" style="display:inline-block;height:30px;width:auto;border:0;outline:none;text-decoration:none;">`;
-  void useStoryVenueLogo;
+    : `<img src="${escapeAttr(STORYVENUE_DARK_LOGO_URL)}" alt="StoryVenue" height="30" style="display:inline-block;height:30px;width:auto;border:0;outline:none;text-decoration:none;">`;
 
   const headingLines = opts.heading
     ? (Array.isArray(opts.heading) ? opts.heading : [opts.heading])
