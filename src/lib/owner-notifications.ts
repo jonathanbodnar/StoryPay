@@ -495,3 +495,56 @@ export function notifyOwnerAiHandoff(input: {
     actionUrl: `/dashboard/contacts/${input.leadId}`,
   });
 }
+
+/**
+ * Fire a PUSH-ONLY alert when the StoryVenue Concierge team sends a Venue
+ * Direct message to a venue.
+ *
+ * Email + SMS for Venue Direct are handled inline in the venue-direct route
+ * (they honour each recipient's per-person email_venue_direct /
+ * sms_venue_direct prefs), so this deliberately sends ONLY web + native push
+ * so the mobile app both alerts and updates its badge. Push toggles are
+ * venue-wide, so we gate on the master `push_enabled` toggle only (always-on
+ * for this alert once push is enabled, like the other first-class signals).
+ *
+ * `sendNativePush` recomputes the app-icon badge from getServerBadgeCount(),
+ * which already counts unread venue_direct messages, so the badge is correct
+ * the instant this push lands. Best-effort — never throws.
+ */
+export async function notifyOwnerVenueDirectPush(input: {
+  venueId: string;
+  venueCustomerId: string;
+}): Promise<void> {
+  try {
+    const settings = await loadSettings(input.venueId);
+    if (settings.push_enabled !== true) {
+      console.log('[notifyOwnerVenueDirectPush] push disabled for venue', input.venueId);
+      return;
+    }
+    const title = 'StoryVenue';
+    const body  = 'You have a new message from the StoryVenue Concierge team.';
+    const url   = `/dashboard/contacts/${input.venueCustomerId}?tab=concierge`;
+    const [result, nativeResult] = await Promise.all([
+      sendPushToVenue(input.venueId, {
+        title,
+        body,
+        url,
+        tag: `venue_direct-${input.venueId}`,
+      }),
+      sendNativePush(input.venueId, {
+        title,
+        body,
+        url,
+        data: { scenario: 'venue_direct', venueId: input.venueId },
+      }),
+    ]);
+    if (result.sent > 0 || result.pruned > 0) {
+      console.log('[notifyOwnerVenueDirectPush] push', result);
+    }
+    if (nativeResult.sent > 0 || nativeResult.pruned > 0) {
+      console.log('[notifyOwnerVenueDirectPush] native-push', nativeResult);
+    }
+  } catch (err) {
+    console.error('[notifyOwnerVenueDirectPush]', err instanceof Error ? err.message : err);
+  }
+}

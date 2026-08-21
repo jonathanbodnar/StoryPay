@@ -51,6 +51,7 @@ import { buildVenueDirectReplyToEmail } from '@/lib/conversations-inbound-email'
 import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms as ghlSendSms } from '@/lib/ghl';
 import { mergePersonNotificationSettings } from '@/lib/notification-settings';
+import { notifyOwnerVenueDirectPush } from '@/lib/owner-notifications';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -331,6 +332,12 @@ export async function POST(req: NextRequest) {
   });
   // Update VenueDirectInboxView in real-time (replaces 30-second poll for this event).
   void broadcastVenueDirectInboxUpdate({ threadId, venueId: t.venue_id, direction: 'outbound' });
+
+  // Push notification (web + native mobile app). Email/SMS are sent below with
+  // per-person prefs; push is venue-wide and gated on the master push toggle.
+  // sendNativePush stamps the refreshed badge (which counts unread venue_direct
+  // messages), so the app icon count updates the instant the push lands.
+  void notifyOwnerVenueDirectPush({ venueId: t.venue_id, venueCustomerId: t.venue_customer_id });
 
   // Build email
   const brideName = [vc?.first_name, vc?.last_name].filter(Boolean).join(' ').trim() || vc?.customer_email || 'a contact';
