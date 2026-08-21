@@ -93,6 +93,9 @@ interface VenueCustomerRow {
   customer_first_name: string | null;
   customer_last_name:  string | null;
   phone:               string | null;
+  created_at:          string | null;
+  stage_id:            string | null;
+  pipeline_stage:      string | null;
 }
 
 interface TeamMemberRow {
@@ -158,7 +161,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle(),
     supabaseAdmin
       .from('venue_customers')
-      .select('customer_email, customer_first_name, customer_last_name, phone')
+      .select('customer_email, customer_first_name, customer_last_name, phone, created_at, stage_id, pipeline_stage')
       .eq('id', t.venue_customer_id)
       .maybeSingle(),
     supabaseAdmin
@@ -180,6 +183,21 @@ export async function POST(req: NextRequest) {
   const vc = (customer ?? null) as VenueCustomerRow | null;
   const a  = (agent    ?? null) as { id: string; name: string | null; email: string | null } | null;
   const lastBrideMessage = ((lastBrideMsgs ?? []) as Array<{ body: string; created_at: string }>)[0] ?? null;
+
+  // Resolve the contact's current pipeline stage label
+  let stageName: string | null = null;
+  if (vc?.stage_id) {
+    const { data: stageRow } = await supabaseAdmin
+      .from('lead_pipeline_stages')
+      .select('name')
+      .eq('id', vc.stage_id)
+      .maybeSingle();
+    stageName = (stageRow as { name: string } | null)?.name ?? null;
+  }
+  if (!stageName && vc?.pipeline_stage) {
+    // Capitalise the legacy text slug (e.g. "inquiry" → "Inquiry")
+    stageName = vc.pipeline_stage.charAt(0).toUpperCase() + vc.pipeline_stage.slice(1);
+  }
 
   // Resolve the account owner's login email from auth.users via owner_id.
   // This is the email they use to sign in, which may differ from the business
@@ -332,12 +350,22 @@ export async function POST(req: NextRequest) {
     ? 'You can reply to this email <strong style="color:#1b1b1b;">or</strong> click the button to reply in your dashboard — either way it lands in the same thread.'
     : 'Click the button to reply in your dashboard.';
 
-  // Bride info snapshot rows
+  // Contact snapshot rows
+  const opportunityCreatedAt = vc?.created_at
+    ? (() => {
+        const d = new Date(vc.created_at);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          + ' at '
+          + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      })()
+    : null;
+
   const brideInfoRows = [
-    ['Name',  brideName !== 'a contact' ? brideName : null],
-    ['Email', vc?.customer_email || null],
-    ['Phone', vc?.phone || null],
-    ['Last message', lastBrideMessage?.body ? (lastBrideMessage.body.length > 200 ? `${lastBrideMessage.body.slice(0, 200)}…` : lastBrideMessage.body) : null],
+    ['Name',    brideName !== 'a contact' ? brideName : null],
+    ['Phone',   vc?.phone || null],
+    ['Email',   vc?.customer_email || null],
+    ['Created', opportunityCreatedAt],
+    ['Stage',   stageName],
   ].filter(([, val]) => val) as [string, string][];
 
   const attachmentsListHtml = attachments.length
@@ -369,8 +397,8 @@ export async function POST(req: NextRequest) {
 
         <!-- Heading -->
         <tr><td style="padding:20px 28px 0;text-align:center;">
-          <h1 style="margin:0 0 8px;font-size:20px;color:#1b1b1b;font-weight:700;line-height:1.3;">StoryVenue Concierge Team has sent you a message.</h1>
-          <p style="margin:0;font-size:13px;color:#6b7280;">About <strong style="color:#1b1b1b;">${escapeHtml(brideName)}</strong> at ${escapeHtml(venueName)}</p>
+          <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#1b1b1b;letter-spacing:0.02em;">StoryVenue Concierge Team</p>
+          <h1 style="margin:0;font-size:20px;color:#1b1b1b;font-weight:700;line-height:1.3;">has sent you a message.</h1>
         </td></tr>
 
         <!-- Divider -->
