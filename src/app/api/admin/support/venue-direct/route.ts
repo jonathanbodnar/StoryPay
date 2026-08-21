@@ -335,8 +335,8 @@ export async function POST(req: NextRequest) {
     || process.env.SUPPORT_REPLY_TO?.trim()
     || undefined;
   const replyHint = replyTo
-    ? 'You can reply to this email <strong style="color:#1b1b1b;">or</strong> click the button to reply in your dashboard — either way it lands in the same thread.'
-    : 'Click the button to reply in your dashboard.';
+    ? 'You can reply to this email, reply in the app, <strong style="color:#1b1b1b;">or</strong> click the button to reply in your dashboard. Any way you reply, it lands in the same thread.'
+    : 'You can reply in the app <strong style="color:#1b1b1b;">or</strong> click the button to reply in your dashboard. Any way you reply, it lands in the same thread.';
 
   // Contact snapshot rows
   const opportunityCreatedAt = vc?.created_at
@@ -348,11 +348,13 @@ export async function POST(req: NextRequest) {
       })()
     : null;
 
-  // Always emit a Name row — fall back through first+last, email, then "Unknown"
-  const contactNameForSnapshot =
-    [vc?.first_name, vc?.last_name].filter(Boolean).join(' ').trim()
-    || vc?.customer_email
-    || 'Unknown';
+  // Always emit a Name row — fall back through first+last, email, then "Unknown".
+  // Force a capitalized first initial on each name part (jason → Jason).
+  const capitalizeName = (s: string) => s.replace(/(^|\s)(\S)/g, (_, sp, ch) => sp + ch.toUpperCase());
+  const rawContactName = [vc?.first_name, vc?.last_name].filter(Boolean).join(' ').trim();
+  const contactNameForSnapshot = rawContactName
+    ? capitalizeName(rawContactName)
+    : (vc?.customer_email || 'Unknown');
 
   const brideInfoRows = [
     ['Name',    contactNameForSnapshot],
@@ -378,7 +380,7 @@ export async function POST(req: NextRequest) {
     </table>` : '';
 
   const snapshotBlock = brideInfoRows.length > 0
-    ? `<p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Contact Snapshot</p>${brideInfoHtml}`
+    ? `<p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Contact Information</p>${brideInfoHtml}`
     : '';
   const messageBlock = `<p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Message from Concierge Team</p>
     <div style="border:1px solid #e5e7eb;padding:16px 20px;background:#f9f9f9;color:#1b1b1b;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;text-align:left;font-size:14px;line-height:1.7;border-radius:8px;">${escapeHtml(text)}</div>
@@ -387,7 +389,7 @@ export async function POST(req: NextRequest) {
   const emailHtml = buildSystemEmail({
     title:      'New Message From: StoryVenue Concierge Team',
     preheader:  'A private message from the StoryVenue Concierge team.',
-    heading:    ['StoryVenue Concierge Team', 'has sent you a message.'],
+    heading:    'StoryVenue Concierge Team has sent you a message.',
     bodyHtml:   `${snapshotBlock}${messageBlock}`,
     cta:        { label: 'View &amp; reply in dashboard', url: contactUrl },
     footerHtml: `<p style="margin:0 0 14px;font-size:13px;color:#374151;line-height:1.55;">${replyHint}</p>
