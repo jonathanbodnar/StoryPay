@@ -251,12 +251,17 @@ const SCENARIO_META: Record<OwnerScenario, {
     defaultPushUrl:   '/dashboard/conversations',
     from: CONCIERGE_FROM,
   },
+  // Push-only (see notifyOwnerAiHandoff() below) — email/smsKey and the
+  // email/SMS default copy are unreachable in practice (pushOnly:true skips
+  // that code in notifyOwner()) but stay populated because SCENARIO_META's
+  // type requires every field. Kept intentionally bland; the real
+  // owner-facing copy for handoffs lives in ai-concierge/notifications.ts.
   ai_handoff: {
     emailKey: 'email_ai_handoff',
     smsKey:   'sms_ai_handoff',
     pushKey:  'push_ai_handoff',
     templateType: 'ai_handoff',
-    defaultSmsTemplate: '🤖 AI Concierge handed off: {{customer_name}} needs you — {{organization}}',
+    defaultSmsTemplate: 'AI Concierge handed off: {{customer_name}} needs you — {{organization}}',
     defaultEmailSubject: 'AI Concierge handoff: {{customer_name}}',
     defaultEmailHeading: 'AI Concierge Handoff',
     defaultEmailBody:    'The AI Concierge handed off the conversation with {{customer_name}} to you. Reason: {{reason}}',
@@ -281,6 +286,13 @@ interface NotifyArgs {
   vars: Record<string, string>;
   /** Optional URL for the email's CTA button. */
   actionUrl?: string;
+  /**
+   * When true, skip the email + SMS blocks entirely and only send push.
+   * Used by scenarios whose email/SMS content is already fully owned by a
+   * more specific notifier elsewhere (e.g. `ai_handoff` — see
+   * `notifyOwnerAiHandoff()` below) so we don't double-notify the same event.
+   */
+  pushOnly?: boolean;
 }
 
 /**
@@ -323,69 +335,73 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
     const smsKey   = smsKeyFor(args.scenario);
     const recipients = await loadNotificationRecipients(args.venueId);
 
-    // ── Owner/team email ──────────────────────────────────────────────────
-    // Gate 1: this person's own toggle (defaults applied in loadNotificationRecipients).
-    // Gate 2: the email template's own enabled flag — if the venue has disabled the
-    //         template, getVenueEmailTemplate returns null and we skip the email send
-    //         entirely (template content/on-off is venue-wide, only the recipient
-    //         list + per-recipient channel choice is per-person).
-    const emailRecipients = recipients.filter(r => r.email && r.settings[emailKey] === true);
-    if (emailRecipients.length === 0) {
-      console.log('[notifyOwner]', args.scenario, 'no recipients with', emailKey, 'enabled');
+    if (args.pushOnly) {
+      console.log('[notifyOwner]', args.scenario, 'pushOnly — skipping email + SMS');
     } else {
-      try {
-        const tmpl = await getVenueEmailTemplate(args.venueId, meta.templateType);
-        if (!tmpl) {
-          console.log('[notifyOwner]', args.scenario, 'template disabled or missing:', meta.templateType);
-        } else {
-          const subject = fillTemplate(tmpl.subject, vars);
-          const html = buildEmailHtml({
-            template:   tmpl,
-            vars,
-            actionUrl:  args.actionUrl,
-            brandColor: venue.brand_color   || '#1b1b1b',
-            logoUrl:    venue.brand_logo_url || undefined,
-            venueName,
-          });
-          const results = await Promise.allSettled(
-            emailRecipients.map(r => sendEmail({ to: r.email as string, subject, html, from: meta.from })),
-          );
-          for (let i = 0; i < results.length; i++) {
-            const res = results[i];
-            const to = emailRecipients[i].email;
-            if (res.status === 'fulfilled' && res.value.success) {
-              console.log('[notifyOwner]', args.scenario, 'email sent to', to);
-            } else {
-              console.error('[notifyOwner]', args.scenario, 'email send failed:', to, res.status === 'fulfilled' ? res.value.error : res.reason);
+      // ── Owner/team email ────────────────────────────────────────────────
+      // Gate 1: this person's own toggle (defaults applied in loadNotificationRecipients).
+      // Gate 2: the email template's own enabled flag — if the venue has disabled the
+      //         template, getVenueEmailTemplate returns null and we skip the email send
+      //         entirely (template content/on-off is venue-wide, only the recipient
+      //         list + per-recipient channel choice is per-person).
+      const emailRecipients = recipients.filter(r => r.email && r.settings[emailKey] === true);
+      if (emailRecipients.length === 0) {
+        console.log('[notifyOwner]', args.scenario, 'no recipients with', emailKey, 'enabled');
+      } else {
+        try {
+          const tmpl = await getVenueEmailTemplate(args.venueId, meta.templateType);
+          if (!tmpl) {
+            console.log('[notifyOwner]', args.scenario, 'template disabled or missing:', meta.templateType);
+          } else {
+            const subject = fillTemplate(tmpl.subject, vars);
+            const html = buildEmailHtml({
+              template:   tmpl,
+              vars,
+              actionUrl:  args.actionUrl,
+              brandColor: venue.brand_color   || '#1b1b1b',
+              logoUrl:    venue.brand_logo_url || undefined,
+              venueName,
+            });
+            const results = await Promise.allSettled(
+              emailRecipients.map(r => sendEmail({ to: r.email as string, subject, html, from: meta.from })),
+            );
+            for (let i = 0; i < results.length; i++) {
+              const res = results[i];
+              const to = emailRecipients[i].email;
+              if (res.status === 'fulfilled' && res.value.success) {
+                console.log('[notifyOwner]', args.scenario, 'email sent to', to);
+              } else {
+                console.error('[notifyOwner]', args.scenario, 'email send failed:', to, res.status === 'fulfilled' ? res.value.error : res.reason);
+              }
             }
           }
+        } catch (err) {
+          console.error('[notifyOwner email]', args.scenario, err instanceof Error ? err.message : err);
         }
-      } catch (err) {
-        console.error('[notifyOwner email]', args.scenario, err instanceof Error ? err.message : err);
       }
-    }
 
-    // ── Owner/team SMS via GHL ─────────────────────────────────────────────
-    const smsRecipients = recipients.filter(r => r.phone && r.settings[smsKey] === true);
-    if (smsRecipients.length > 0) {
-      const token = getGhlToken({ ghl_access_token: venue.ghl_access_token });
-      const locId = venue.ghl_location_id || '';
-      if (!token || !locId) {
-        console.warn('[notifyOwner sms] missing GHL token/location for venue', args.venueId);
-      } else {
-        const body = interpolate(meta.defaultSmsTemplate, vars);
-        const results = await Promise.allSettled(smsRecipients.map(async r => {
-          const norm = normalizePhone(r.phone) || r.phone;
-          const contact = await findOrCreateContact(token, locId, {
-            phone: norm ?? undefined,
-            email: r.email || undefined,
-            firstName: r.name || (r.kind === 'owner' ? 'Owner' : undefined),
-          }).catch(() => null);
-          const contactId = (contact as { id?: string } | null)?.id;
-          if (contactId) await sendSms(token, locId, contactId, body);
-        }));
-        for (const res of results) {
-          if (res.status === 'rejected') console.error('[notifyOwner sms]', args.scenario, res.reason);
+      // ── Owner/team SMS via GHL ──────────────────────────────────────────
+      const smsRecipients = recipients.filter(r => r.phone && r.settings[smsKey] === true);
+      if (smsRecipients.length > 0) {
+        const token = getGhlToken({ ghl_access_token: venue.ghl_access_token });
+        const locId = venue.ghl_location_id || '';
+        if (!token || !locId) {
+          console.warn('[notifyOwner sms] missing GHL token/location for venue', args.venueId);
+        } else {
+          const body = interpolate(meta.defaultSmsTemplate, vars);
+          const results = await Promise.allSettled(smsRecipients.map(async r => {
+            const norm = normalizePhone(r.phone) || r.phone;
+            const contact = await findOrCreateContact(token, locId, {
+              phone: norm ?? undefined,
+              email: r.email || undefined,
+              firstName: r.name || (r.kind === 'owner' ? 'Owner' : undefined),
+            }).catch(() => null);
+            const contactId = (contact as { id?: string } | null)?.id;
+            if (contactId) await sendSms(token, locId, contactId, body);
+          }));
+          for (const res of results) {
+            if (res.status === 'rejected') console.error('[notifyOwner sms]', args.scenario, res.reason);
+          }
         }
       }
     }
@@ -513,7 +529,17 @@ export function notifyOwnerNewMessage(input: {
   });
 }
 
-/** Fire an "AI Concierge handed off to you" push. */
+/**
+ * Fire an "AI Concierge handed off to you" PUSH notification only.
+ *
+ * Email + SMS for AI handoffs are already fully covered by the dedicated
+ * `ai_handoff_urgent` / `ai_handoff_pricing` scenarios in
+ * `ai-concierge/notifications.ts` (better copy, urgent-vs-pricing framing,
+ * super-admin-editable). This call used to also fire a second, generic email
+ * + SMS through the legacy `ai_handoff` scenario below — every venue owner
+ * and team member was getting handed off twice. `pushOnly: true` keeps this
+ * call doing exactly what its name says: the lock-screen push alert only.
+ */
 export function notifyOwnerAiHandoff(input: {
   venueId: string;
   leadId: string;
@@ -528,6 +554,7 @@ export function notifyOwnerAiHandoff(input: {
       reason:        input.reason || 'needs human follow-up',
     },
     actionUrl: `/dashboard/contacts/${input.leadId}`,
+    pushOnly:  true,
   });
 }
 

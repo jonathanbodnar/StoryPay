@@ -222,10 +222,25 @@ export async function handleInboundAiMessage(
         reason: 'inbound_tcpa_opt_out', triggeredBy: 'webhook:ghl-inbound',
         metadata: { message_excerpt: body.slice(0, 300) },
       });
+      // TCPA opt-outs are legally significant — notify the owner even though
+      // she was already Not Interested, matching the other two opt-out paths
+      // (mid-sequence and mid-active) which both notify.
+      void notifyAiOwner({
+        venueId:       lead.venue_id,
+        leadId:        lead.id,
+        scenario:      'ai_tcpa_opt_out',
+        notifyRoles:   ['venue_owner'],
+        brideName:     firstNameOf(lead),
+        brideFullName: fullNameOf(lead),
+        brideReply:    body,
+        matchedTrigger: 'STOP keyword after the 60-day follow-up window ended',
+      }).catch((e) => {
+        console.error('[ai-concierge] exhausted-lead STOP notifyAiOwner failed:', e);
+      });
       return {
         ok: true, acted: true, leadId: lead.id,
         fromState: 'exhausted', toState: 'opted_out',
-        matchedRule: null, matchedVia: 'keyword', notifiedScenario: null,
+        matchedRule: null, matchedVia: 'keyword', notifiedScenario: 'ai_tcpa_opt_out',
       };
     }
 

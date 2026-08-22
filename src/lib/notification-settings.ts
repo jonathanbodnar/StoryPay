@@ -13,12 +13,15 @@
  * unlike the old venue-wide `venue_notifications.settings` bag (still used
  * for push toggles only).
  *
- * `ai_handoff` and `venue_direct` are two separate scenarios even though
- * both are "a bride needs your attention right now" from the owner's point
- * of view — the AI Concierge auto-escalating (owner-notifications.ts's
- * `ai_handoff` scenario) and the concierge support team manually sending a
- * "Venue Direct" message (/api/admin/support/venue-direct/route.ts) are
- * different triggers with different content, so each gets its own toggle.
+ * AI Concierge handoffs are intentionally NOT in this list: `ai_handoff_urgent`
+ * / `ai_handoff_pricing` (ai-concierge/notifications.ts) own email for that
+ * event unconditionally (owner + concierge + team, no per-person opt-out —
+ * these are urgent-enough that everyone relevant should see them), and
+ * `push_ai_handoff` (PushNotificationsClientPage.tsx) owns the push toggle.
+ * `owner-notifications.ts`'s legacy `ai_handoff` scenario is push-only now
+ * (see `notifyOwnerAiHandoff()`), so it has no email/sms toggle to show here
+ * — a duplicate email + SMS used to fire from it alongside the scenarios
+ * above until this was fixed.
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
@@ -39,14 +42,6 @@ export const NOTIFICATION_SCENARIOS = [
     icon: 'MessageSquare',
     emailDefault: true,
     smsDefault: false,
-  },
-  {
-    key: 'ai_handoff',
-    label: 'AI Concierge handoff',
-    description: 'The AI Concierge escalates a conversation and needs you to take over.',
-    icon: 'Bot',
-    emailDefault: true,
-    smsDefault: true,
   },
   {
     key: 'venue_direct',

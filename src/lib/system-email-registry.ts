@@ -184,25 +184,12 @@ Reach out while they are hot — open their contact to start the conversation.`,
       button_text: 'View Lead',
     },
   },
-  {
-    key: 'ai_handoff',
-    label: 'AI Concierge Handoff',
-    description:
-      'Sent to the venue owner when the AI Concierge escalates a conversation and needs a human to take over.',
-    trigger: 'Fires from `/api/ai/escalate` when the AI triggers a handoff.',
-    category: 'ai',
-    editable: false,
-    defaults: {
-      subject: 'Action needed: AI Concierge handed off {{customer_name}} — {{venue_name}}',
-      heading: 'AI Concierge Handoff',
-      body: `The AI Concierge handed the conversation with {{customer_name}} off to you.
-
-Reason: {{reason}}
-
-Open the conversation to take over and reply.`,
-      button_text: 'View Conversation',
-    },
-  },
+  // Entry removed 2026-08-22: `ai_handoff` (generic, non-editable) duplicated
+  // the two scenarios directly below on every single handoff — the owner and
+  // team were getting emailed + texted twice for the same event. Its trigger
+  // note ("fires from /api/ai/escalate") was also stale; that route doesn't
+  // exist. The underlying code (owner-notifications.ts's notifyOwnerAiHandoff)
+  // is now push-only, so it no longer sends an email to audit here.
   // ── AI Concierge notifications (all editable) ───────────────────────────
   // These fire from the AI Concierge inbound handler / send cron. Variables:
   // {{bride_first_name}}, {{bride_full_name}}, {{venue_name}}. Subject lines
@@ -286,9 +273,9 @@ Open the conversation to take over and reply.`,
   },
   {
     key: 'ai_daily_cap_warning',
-    label: 'AI: Daily Cap Warning (80%)',
+    label: 'AI: Daily Cap Warning (80% default)',
     description:
-      'Sent to the venue owner when the AI has used 80% of the day\'s outbound SMS budget.',
+      'Sent to the venue owner when the AI has used 80% of the day\'s outbound SMS budget (80% is the platform default — venues can set their own alert threshold).',
     trigger: 'Fires from the AI send cron when the daily spend crosses 80% of the cap.',
     category: 'ai',
     editable: true,
@@ -570,12 +557,6 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
     lead_created_at: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       + ' at ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
     action_url: `${APP_URL}/dashboard/leads`,
-  },
-  ai_handoff: {
-    customer_name: 'Emily Richardson',
-    venue_name: 'Meadowbrook Estate',
-    reason: 'Bride expressed strong interest and requested a callback',
-    action_url: `${APP_URL}/dashboard/conversations`,
   },
   booking_report: {
     owner_first_name: 'Sarah',

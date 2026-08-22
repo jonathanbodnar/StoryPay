@@ -127,13 +127,11 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
   // Owner-side "AI Concierge handed off to you" email. Fires when the AI
   // escalates a conversation (pricing question, urgent/negative intent) and
   // the owner needs to step in. Push-only before this default existed.
-  ai_handoff: {
-    subject:     'Action needed: AI Concierge handed off {{customer_name}} — {{organization}}',
-    heading:     'AI Concierge Handoff',
-    body:        'The AI Concierge handed the conversation with {{customer_name}} off to you.\n\nReason: {{reason}}\n\nOpen the conversation to take over and reply.',
-    button_text: 'View Conversation',
-    footer:      null,
-  },
+  // `ai_handoff` DEFAULTS entry removed — notifyOwnerAiHandoff() is push-only
+  // now (see owner-notifications.ts), so getVenueEmailTemplate(venueId,
+  // 'ai_handoff') is never called anymore. The real handoff email copy lives
+  // in ai-concierge/notifications.ts's ai_handoff_urgent / ai_handoff_pricing
+  // scenarios.
 };
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
