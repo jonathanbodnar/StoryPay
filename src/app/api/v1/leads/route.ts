@@ -119,11 +119,13 @@ export async function POST(request: NextRequest) {
   const shaped = shape(data as LeadRow);
   // Push to the owner's enabled devices (no-op unless they opted in).
   notifyOwnerNewLead({
-    venueId:  auth.venueId,
-    leadId:   shaped.id,
-    fullName: shaped.full_name,
-    email:    shaped.email,
-    source:   shaped.source,
+    venueId:   auth.venueId,
+    leadId:    shaped.id,
+    fullName:  shaped.full_name,
+    email:     shaped.email,
+    phone:     shaped.phone,
+    source:    shaped.source,
+    createdAt: shaped.created_at,
   });
   void dispatchIntegrationEvent(auth.venueId, 'lead.created', { lead: shaped });
 

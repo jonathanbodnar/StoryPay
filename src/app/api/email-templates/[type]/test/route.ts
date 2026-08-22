@@ -63,6 +63,25 @@ const SAMPLE_VARS: Record<string, Record<string, string>> = {
     customer_name: 'Jane Smith',
     amount:        '$4,500.00',
   },
+  new_lead: {
+    organization:  '{{organization}}',
+    customer_name: 'Jane Smith',
+    phone:         '(555) 123-4567',
+    email:         'jane@example.com',
+    source:        'Public listing',
+    created_at:    new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      + ' at ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+  },
+  new_message: {
+    organization:     '{{organization}}',
+    customer_name:    'Jane Smith',
+    message_preview:  'Hi! Just wanted to check on availability for June 2027.',
+  },
+  ai_handoff: {
+    organization:  '{{organization}}',
+    customer_name: 'Jane Smith',
+    reason:        'Bride expressed strong interest and requested a callback',
+  },
 };
 
 export async function POST(

@@ -434,13 +434,25 @@ export function formatAmount(cents: number | null | undefined): string {
 // sites can stay one-liners without re-deriving the merge variables and
 // dashboard URLs every time.
 
+/** Format an ISO timestamp as "Aug 22, 2026 at 10:37 AM" — matches the
+ *  contact-snapshot formatting used elsewhere (e.g. venue-direct emails). */
+function formatLeadTimestamp(iso?: string | null): string {
+  const d = iso ? new Date(iso) : new Date();
+  if (Number.isNaN(d.getTime())) return iso || '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' at '
+    + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
 /** Fire a "new lead" push for the freshly-inserted lead. */
 export function notifyOwnerNewLead(input: {
   venueId: string;
   leadId: string;
   fullName: string;
   email: string;
+  phone?: string | null;
   source?: string | null;
+  createdAt?: string | null;
 }): void {
   const display = (input.fullName || '').trim() || input.email || 'New lead';
   void notifyOwner({
@@ -449,7 +461,9 @@ export function notifyOwnerNewLead(input: {
     vars: {
       customer_name: display,
       email:         input.email || '',
+      phone:         input.phone || 'Not provided',
       source:        input.source || 'directory',
+      created_at:    formatLeadTimestamp(input.createdAt),
     },
     actionUrl: `/dashboard/contacts/${input.leadId}`,
   });

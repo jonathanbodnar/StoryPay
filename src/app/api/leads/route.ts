@@ -674,10 +674,12 @@ export async function POST(request: NextRequest) {
   // this primary flow.
   notifyOwnerNewLead({
     venueId,
-    leadId: newId,
-    fullName: (data as LeadRow).name || fullName,
-    email: (data as LeadRow).email,
-    source: (data as LeadRow).source,
+    leadId:    newId,
+    fullName:  (data as LeadRow).name || fullName,
+    email:     (data as LeadRow).email,
+    phone:     (data as LeadRow).phone ?? phone,
+    source:    (data as LeadRow).source,
+    createdAt: row.created_at,
   });
 
   // Instant Lead Inbox badge update (sidebar + mobile tab bar).

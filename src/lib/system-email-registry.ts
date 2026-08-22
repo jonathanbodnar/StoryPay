@@ -175,8 +175,10 @@ You have been invited to join {{venue_name}} on StoryVenue. Click below to accep
       body: `You have a new lead for {{venue_name}}.
 
 Name: {{lead_first_name}} {{lead_last_name}}
+Phone: {{lead_phone}}
 Email: {{lead_email}}
 Source: {{lead_source}}
+Created: {{lead_created_at}}
 
 Reach out while they are hot — open their contact to start the conversation.`,
       button_text: 'View Lead',
@@ -593,7 +595,10 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
     lead_first_name: 'Emily',
     lead_last_name: 'Richardson',
     lead_email: 'emily@example.com',
+    lead_phone: '(555) 123-4567',
     lead_source: 'Public listing',
+    lead_created_at: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      + ' at ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
     action_url: `${APP_URL}/dashboard/leads`,
   },
   ai_handoff: {

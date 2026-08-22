@@ -286,11 +286,13 @@ export async function POST(request: NextRequest) {
   // the venue has no subscriptions yet. Phone-first venues see this on
   // the lock screen seconds after a directory inquiry hits the webhook.
   notifyOwnerNewLead({
-    venueId:  venue.id,
-    leadId:   lr.id,
-    fullName: [firstName, lastName].filter(Boolean).join(' ').trim() || lr.email,
-    email:    lr.email,
-    source:   payload.source || 'directory',
+    venueId:   venue.id,
+    leadId:    lr.id,
+    fullName:  [firstName, lastName].filter(Boolean).join(' ').trim() || lr.email,
+    email:     lr.email,
+    phone:     phone || null,
+    source:    payload.source || 'directory',
+    createdAt: lr.created_at,
   });
 
   // Instant Lead Inbox badge update (sidebar + mobile tab bar).
