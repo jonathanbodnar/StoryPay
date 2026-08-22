@@ -328,7 +328,7 @@ export async function POST(req: NextRequest) {
   // Build email
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
   const contactUrl = `${baseUrl}/dashboard/contacts/${t.venue_customer_id}?tab=concierge`;
-  const fromEmail = process.env.SUPPORT_FROM_EMAIL?.trim() || 'support@storyvenue.com';
+  const fromEmail = process.env.CONCIERGE_FROM_EMAIL?.trim() || 'concierge@send.storyvenue.com';
   // Reply-To is the threaded venue-direct address — replies route back into
   // this same conversation thread via /api/webhooks/inbound-email.
   const replyTo = buildVenueDirectReplyToEmail(threadId, t.venue_id)
@@ -408,7 +408,7 @@ export async function POST(req: NextRequest) {
         subject: `New Message From: StoryVenue Concierge Team`,
         html: emailHtml,
         replyTo,
-        from: { email: fromEmail, name: 'StoryVenue Concierge team' },
+        from: { email: fromEmail, name: 'StoryVenue Concierge' },
         headers: { 'X-Entity-Ref-ID': `storyvenue-venue-direct-${msg.id}` },
         attachments: attachments.length
           ? attachments.map((a) => ({ filename: a.filename, path: a.url }))

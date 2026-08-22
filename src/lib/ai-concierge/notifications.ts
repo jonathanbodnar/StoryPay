@@ -251,16 +251,17 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
     const subject = meta.emailSubject(nameCtx, venueName);
     const html = renderHtml({ meta, input, venueName, nameCtx });
 
-    // Brand from "StoryVenue Concierge team" so the venue owner immediately
+    // Brand from "StoryVenue Concierge" so the venue owner immediately
     // recognises this as a managed-service alert (matches the Venue Direct
-    // emails). Honour SUPPORT_FROM_EMAIL if configured.
-    const fromEmail = process.env.SUPPORT_FROM_EMAIL?.trim() || 'support@storyvenue.com';
+    // emails) and sees a real name in their inbox instead of a bare address.
+    // Honour CONCIERGE_FROM_EMAIL if configured.
+    const fromEmail = process.env.CONCIERGE_FROM_EMAIL?.trim() || 'concierge@send.storyvenue.com';
     await sendEmail({
       to,
       cc,
       subject,
       html,
-      from: { email: fromEmail, name: 'StoryVenue Concierge team' },
+      from: { email: fromEmail, name: 'StoryVenue Concierge' },
     });
   } catch (e) {
     console.error('[ai-concierge] notifyAiOwner failed:', e);

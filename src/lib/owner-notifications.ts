@@ -19,6 +19,16 @@ import { sendPushToVenue } from '@/lib/push';
 import { sendNativePush } from '@/lib/native-push';
 import { loadNotificationRecipients, emailKeyFor, smsKeyFor } from '@/lib/notification-settings';
 
+/** Shared sender identity for the two scenarios below that are really the
+ *  concierge team reaching out (a lead replied, AI handed off) rather than a
+ *  generic StoryVenue system alert. Matches the address used by the AI
+ *  Concierge's own notifications (`ai-concierge/notifications.ts`) and Venue
+ *  Direct messages so all "your concierge team" mail looks consistent. */
+const CONCIERGE_FROM = {
+  email: process.env.CONCIERGE_FROM_EMAIL?.trim() || 'concierge@send.storyvenue.com',
+  name:  'StoryVenue Concierge',
+};
+
 export type OwnerScenario =
   | 'payment_received'
   | 'payment_failed'
@@ -120,6 +130,15 @@ const SCENARIO_META: Record<OwnerScenario, {
   defaultPushBody: string;
   /** Path the SW opens on click. May be omitted for "open dashboard root". */
   defaultPushUrl?: string;
+  /**
+   * Override the email `from` for this scenario. When omitted, `sendEmail`
+   * falls back to `RESEND_DEFAULT_FROM`, which — if that env var has no
+   * display name — shows up in Gmail/Outlook as the bare local-part (e.g.
+   * "hello") instead of a recognizable sender. Scenarios that are really
+   * "your StoryVenue Concierge team reaching out" (a reply came in, AI
+   * handed off) get a real name here so the inbox preview is unambiguous.
+   */
+  from?: { email: string; name: string };
 }> = {
   payment_received: {
     emailKey: 'email_payment_received',
@@ -230,6 +249,7 @@ const SCENARIO_META: Record<OwnerScenario, {
     defaultPushTitle: 'StoryVenue',
     defaultPushBody:  '{{customer_name}}: {{message_preview}}',
     defaultPushUrl:   '/dashboard/conversations',
+    from: CONCIERGE_FROM,
   },
   ai_handoff: {
     emailKey: 'email_ai_handoff',
@@ -242,6 +262,7 @@ const SCENARIO_META: Record<OwnerScenario, {
     defaultEmailBody:    'The AI Concierge handed off the conversation with {{customer_name}} to you. Reason: {{reason}}',
     defaultPushTitle: 'StoryVenue',
     defaultPushBody:  'AI handoff: {{customer_name}} needs a human — {{reason}}',
+    from: CONCIERGE_FROM,
     defaultPushUrl:   '/dashboard/conversations',
   },
 };
@@ -327,7 +348,7 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
             venueName,
           });
           const results = await Promise.allSettled(
-            emailRecipients.map(r => sendEmail({ to: r.email as string, subject, html })),
+            emailRecipients.map(r => sendEmail({ to: r.email as string, subject, html, from: meta.from })),
           );
           for (let i = 0; i < results.length; i++) {
             const res = results[i];
@@ -477,7 +498,7 @@ export function notifyOwnerNewMessage(input: {
   fromEmail: string;
   bodyText: string;
 }): void {
-  const display = (input.fromName || '').trim() || input.fromEmail || 'New message';
+  const display = (input.fromName || '').trim() || input.fromEmail || 'Your contact';
   // Trim aggressively — the SW caps the body to 240 chars but the lockscreen
   // typically shows ~60 before truncation, so keep the preview punchy.
   const preview = input.bodyText.replace(/\s+/g, ' ').slice(0, 140);
