@@ -426,22 +426,6 @@ Your account has moved to the Free plan. Your listing stays live and you'll stil
 
   // ── Miscellaneous (read-only preview) ───────────────────────────────────
   {
-    key: 'email_verification',
-    label: 'Email Verification',
-    description: 'Sent to verify a venue owner\'s email address during signup or email change.',
-    trigger: 'Fires on signup / email change when verification is required.',
-    category: 'auth',
-    editable: false,
-    defaults: {
-      subject: 'Verify your email for StoryVenue',
-      heading: 'Confirm your email address',
-      body: `Hi,
-
-Click below to verify your email address and finish setting up your StoryVenue account.`,
-      button_text: 'Verify my email',
-    },
-  },
-  {
     key: 'monthly_analytics_digest',
     label: 'Monthly Analytics Digest',
     description: 'Monthly summary of listing views, leads, and engagement sent to venue owners.',
@@ -643,9 +627,6 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
   billing_downgraded_free: {
     owner_first_name: 'Sarah',
     action_url: `${APP_URL}/dashboard/directory-billing`,
-  },
-  email_verification: {
-    action_url: `${APP_URL}/verify-email/example`,
   },
   monthly_analytics_digest: {
     owner_first_name: 'Sarah',

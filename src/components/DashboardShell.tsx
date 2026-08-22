@@ -37,8 +37,6 @@ export default function DashboardShell({
   isLegacyPlan = false,
   isFreePlan = false,
   directoryBillingPending = false,
-  emailVerificationPending = false,
-  ownerEmail = '',
   trialCountdown = false,
   trialDaysRemaining = 0,
   trialEndsAt = null,
@@ -58,10 +56,6 @@ export default function DashboardShell({
   isFreePlan?: boolean;
   /** Directory SaaS: priced plan assigned, payment still required. */
   directoryBillingPending?: boolean;
-  /** True when the venue's email address has not yet been verified. */
-  emailVerificationPending?: boolean;
-  /** Owner email address (shown in the verification banner). */
-  ownerEmail?: string;
   /** True when the venue is on an active (not-yet-expired) Venue Pro trial. */
   trialCountdown?: boolean;
   /** Whole days left in the active trial. */
@@ -76,7 +70,6 @@ export default function DashboardShell({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null);
-  const [verifyResent, setVerifyResent] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [startEarlyBusy, setStartEarlyBusy] = useState(false);
   const [startEarlyError, setStartEarlyError] = useState('');
 
@@ -113,15 +106,6 @@ export default function DashboardShell({
     void openExternalBrowser(path);
   }, []);
 
-  const resendVerification = useCallback(async () => {
-    setVerifyResent('sending');
-    try {
-      const res = await fetch('/api/auth/resend-verification', { method: 'POST' });
-      setVerifyResent(res.ok ? 'sent' : 'error');
-    } catch {
-      setVerifyResent('error');
-    }
-  }, []);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -308,31 +292,6 @@ export default function DashboardShell({
                 Add a card and start your subscription
               </Link>
               .
-            </div>
-          ) : null}
-
-          {emailVerificationPending && pathname === '/dashboard' ? (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="flex-1">
-                <span className="font-semibold">Verify your email address to activate payment processing.</span>{' '}
-                We sent a verification link to{' '}
-                <span className="font-medium">{ownerEmail || 'your email'}</span>.
-                Until then, you can&apos;t send proposals or take payments.
-              </div>
-              <button
-                type="button"
-                onClick={resendVerification}
-                disabled={verifyResent === 'sending' || verifyResent === 'sent'}
-                className="self-start sm:self-auto whitespace-nowrap rounded-lg border border-amber-700 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition disabled:opacity-60"
-              >
-                {verifyResent === 'sent'
-                  ? 'Email sent'
-                  : verifyResent === 'sending'
-                    ? 'Sending…'
-                    : verifyResent === 'error'
-                      ? 'Try again'
-                      : 'Resend email'}
-              </button>
             </div>
           ) : null}
 

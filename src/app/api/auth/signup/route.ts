@@ -4,7 +4,6 @@ import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
 import bcrypt from 'bcryptjs';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
-import { issueAndSendVerificationEmail } from '@/lib/email-verification';
 import { checkPassword } from '@/lib/password-policy';
 import { resolveVenueProPlan } from '@/lib/trial-plans';
 import { setSignedCookie } from '@/lib/venue-session';
@@ -244,6 +243,13 @@ export async function POST(request: NextRequest) {
       setup_completed:  true,
       owner_first_name: firstName || null,
       owner_last_name:  lastName  || null,
+      // Email verification was removed (2026-08) — it was meant to gate
+      // LunarPay merchant provisioning against signups under someone else's
+      // email, but the Settings onboarding flow (/api/lunarpay/register)
+      // never enforced the same check, so it never actually blocked
+      // anything in practice while confusing owners with a nag banner.
+      // New venues are simply marked verified at creation.
+      email_verified_at: new Date().toISOString(),
     })
     .select('id')
     .single();
@@ -332,31 +338,7 @@ export async function POST(request: NextRequest) {
     console.warn('[signup] trial grant failed (non-fatal):', e);
   }
 
-  // Email verification gate (H10): we no longer auto-provision the
-  // LunarPay merchant during signup. Provisioning runs after the user
-  // proves they own the email address by clicking the verification
-  // link, which lives in /api/auth/verify-email/<token>. The user can
-  // still sign in, browse the dashboard, and pick a plan during this
-  // window — only payment-processing actions are gated until then.
-  //
-  // For graceful schema rollout: if migration 123 hasn't run yet the
-  // best-effort `issueAndSendVerificationEmail` will fail to persist
-  // the token (column missing). We log a warning and fall through, so
-  // dev environments without the migration still work end-to-end.
-  try {
-    await issueAndSendVerificationEmail({
-      venueId:   venue.id,
-      email,
-      firstName,
-      venueName,
-    });
-  } catch (e) {
-    console.warn('[signup] verification email failed (non-fatal):', e);
-  }
-
-  // Send welcome email (best-effort, non-blocking). Distinct from the
-  // verification email — the welcome email is informational and OK to
-  // hit anyone, the verification email is the one that gates LunarPay.
+  // Send welcome email (best-effort, non-blocking).
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
   try {
     await sendEmail({

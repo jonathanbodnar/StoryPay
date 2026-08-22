@@ -30,7 +30,7 @@ export default async function DashboardLayout({
  // don't hit the venues table 3 times per page render.
  const { data: venueRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_plan_id, directory_subscription_status, email_verified_at, email, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id')
+   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id')
    .eq('id', user.venueId)
    .maybeSingle();
 
@@ -61,11 +61,6 @@ export default async function DashboardLayout({
  const billingRow = venueRow;
  const directoryBillingPending =
    user.isAdmin && billingRow?.directory_subscription_status === 'pending_payment';
-
- const emailVerifiedAt = (billingRow as { email_verified_at?: string | null } | null)?.email_verified_at;
- const showVerifyBanner =
-   user.isAdmin && emailVerifiedAt !== undefined && !emailVerifiedAt;
- const ownerEmail = (billingRow as { email?: string | null } | null)?.email ?? '';
 
  // ── Trial state ───────────────────────────────────────────────────────────
  // We compute trial status from directory_trial_ends_at at request time (there
@@ -149,10 +144,8 @@ export default async function DashboardLayout({
  allowedNavIds={navAccess.allowedNavIds}
  isLegacyPlan={navAccess.isLegacyPlan}
  isFreePlan={navAccess.isFreePlan}
- directoryBillingPending={directoryBillingPending}
- emailVerificationPending={showVerifyBanner}
- ownerEmail={ownerEmail}
- trialCountdown={showTrialCountdown}
+directoryBillingPending={directoryBillingPending}
+trialCountdown={showTrialCountdown}
  trialDaysRemaining={trialDaysRemaining}
  trialEndsAt={trialEndsAt}
  trialHasCard={hasExternalSub}
