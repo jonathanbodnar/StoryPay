@@ -97,8 +97,11 @@ export interface AiNameContext {
 
 interface ScenarioMeta {
   emailSubject: (name: AiNameContext, venueName: string) => string;
-  heading:      (name: AiNameContext) => string;
-  intro:        (name: AiNameContext) => string;
+  /** `venueName` is only passed for admin-only scenarios (spend caps) where
+   *  the recipient isn't the venue itself, so the copy needs to name the
+   *  venue explicitly instead of saying "your AI Concierge". */
+  heading:      (name: AiNameContext, venueName?: string) => string;
+  intro:        (name: AiNameContext, venueName?: string) => string;
   urgent:       boolean;
   ctaLabel:     string;
   /**
@@ -151,18 +154,20 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     ctaLabel:     'View her contact record →',
     notifyTeam:   true,
   },
+  // Admin-only (see ADMIN_ONLY_SCENARIOS below) — venue owners/teams never
+  // see these two. Copy is written for StoryVenue ops, not the venue.
   ai_daily_cap_warning: {
     emailSubject: (_n, v) => `Heads up: AI Concierge is at 80% of today's send cap — ${v}`,
-    heading:      ()      => `AI Concierge daily cap warning`,
-    intro:        ()      => `Your AI Concierge has used most of today's outbound SMS budget. We'll keep sending until the cap is reached, then pause new sends until tomorrow morning. Raise the cap from your AI Concierge admin if you want today's outreach to continue uninterrupted.`,
+    heading:      (_n, v) => `AI Concierge daily cap warning — ${v || 'a venue'}`,
+    intro:        (_n, v) => `${v || 'This venue'}'s AI Concierge has used most of today's outbound SMS budget. It'll keep sending until the cap is reached, then pause new sends until tomorrow morning (venue-local time). Raise the venue's cap from the AI Concierge admin panel if they need today's outreach to continue uninterrupted.`,
     urgent:       false,
     ctaLabel:     'Open AI Concierge admin →',
     notifyTeam:   false,
   },
   ai_daily_cap_reached: {
     emailSubject: (_n, v) => `AI Concierge has hit today's send cap — ${v}`,
-    heading:      ()      => `AI Concierge daily cap reached`,
-    intro:        ()      => `Your AI Concierge has hit today's outbound SMS cap. New sends are paused until tomorrow morning (in your venue's local timezone). Inbound replies are unaffected — you'll still receive every reply notification. To resume sends sooner, raise the cap from your AI Concierge admin.`,
+    heading:      (_n, v) => `AI Concierge daily cap reached — ${v || 'a venue'}`,
+    intro:        (_n, v) => `${v || 'This venue'}'s AI Concierge has hit today's outbound SMS cap. New sends are paused until tomorrow morning (venue-local time). Inbound replies are unaffected. Raise the venue's cap from the AI Concierge admin panel if needed.`,
     urgent:       false,
     ctaLabel:     'Open AI Concierge admin →',
     notifyTeam:   false,
@@ -195,6 +200,17 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
 
 // ── Public entry ───────────────────────────────────────────────────────────
 
+/**
+ * Scenarios that alert StoryVenue ops about an internal platform guardrail,
+ * not the venue itself — the venue owner/team never see these. Spend caps
+ * are a StoryVenue cost/throughput control, not something a venue needs (or
+ * should need) to think about; ops decides whether to raise a venue's cap.
+ */
+const ADMIN_ONLY_SCENARIOS = new Set<AiOwnerScenario>([
+  'ai_daily_cap_warning',
+  'ai_daily_cap_reached',
+]);
+
 export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
   try {
     const venue = await loadVenue(input.venueId);
@@ -210,40 +226,49 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
     const meta = await applyTemplateOverride(input.scenario, defaultMeta, venueName);
     const nameCtx: AiNameContext = { firstName: input.brideName, fullName: input.brideFullName };
 
-    const ownerEmail = await resolveOwnerEmail(venue);
-    const conciergeEmails = (venue.ai_concierge_notify_emails ?? [])
-      .map((e) => (e || '').trim())
-      .filter((e) => e.includes('@'));
-
-    const includesOwner     = input.notifyRoles.includes('venue_owner');
-    const includesConcierge = input.notifyRoles.includes('concierge');
-
-    // Resolve primary recipient
     let to: string | null = null;
     const cc: string[] = [];
 
-    if (includesOwner && ownerEmail) {
-      to = ownerEmail;
-      if (includesConcierge) {
-        cc.push(...conciergeEmails.filter((e) => e.toLowerCase() !== ownerEmail.toLowerCase()));
+    if (ADMIN_ONLY_SCENARIOS.has(input.scenario)) {
+      // Same env var the critical-error alert (error-log.ts) uses, so ops
+      // only has one "where do platform alerts go" address to manage.
+      to = process.env.ERROR_ALERT_EMAIL?.trim() || process.env.ADMIN_EMAIL?.trim() || null;
+      if (!to) {
+        console.warn('[ai-concierge] notifyAiOwner: skipping', input.scenario, '— no ERROR_ALERT_EMAIL/ADMIN_EMAIL configured');
+        return;
       }
-    } else if (includesConcierge && conciergeEmails.length > 0) {
-      to = conciergeEmails[0];
-      if (conciergeEmails.length > 1) cc.push(...conciergeEmails.slice(1));
-    } else if (ownerEmail) {
-      to = ownerEmail;
     } else {
-      return;
-    }
+      const ownerEmail = await resolveOwnerEmail(venue);
+      const conciergeEmails = (venue.ai_concierge_notify_emails ?? [])
+        .map((e) => (e || '').trim())
+        .filter((e) => e.includes('@'));
 
-    // For lead-action scenarios (replies, negative intent, handoffs) also CC
-    // every venue team member so the whole team can act without waiting for
-    // the owner to forward the email.
-    if (meta.notifyTeam) {
-      const teamEmails = await loadTeamMemberEmails(input.venueId, to);
-      for (const e of teamEmails) {
-        if (!cc.some((c) => c.toLowerCase() === e.toLowerCase())) {
-          cc.push(e);
+      const includesOwner     = input.notifyRoles.includes('venue_owner');
+      const includesConcierge = input.notifyRoles.includes('concierge');
+
+      if (includesOwner && ownerEmail) {
+        to = ownerEmail;
+        if (includesConcierge) {
+          cc.push(...conciergeEmails.filter((e) => e.toLowerCase() !== ownerEmail.toLowerCase()));
+        }
+      } else if (includesConcierge && conciergeEmails.length > 0) {
+        to = conciergeEmails[0];
+        if (conciergeEmails.length > 1) cc.push(...conciergeEmails.slice(1));
+      } else if (ownerEmail) {
+        to = ownerEmail;
+      } else {
+        return;
+      }
+
+      // For lead-action scenarios (replies, negative intent, handoffs) also
+      // CC every venue team member so the whole team can act without waiting
+      // for the owner to forward the email.
+      if (meta.notifyTeam) {
+        const teamEmails = await loadTeamMemberEmails(input.venueId, to);
+        for (const e of teamEmails) {
+          if (!cc.some((c) => c.toLowerCase() === e.toLowerCase())) {
+            cc.push(e);
+          }
         }
       }
     }
@@ -371,15 +396,18 @@ function dashboardContactUrl(leadId: string): string {
   return `${base}/dashboard/contacts/${leadId}`;
 }
 
-function aiConciergeSettingsUrl(): string {
+/** The super-admin AI Concierge monitor — used for admin-only scenarios
+ *  (spend caps) instead of the venue-facing dashboard settings page, since
+ *  the recipient is StoryVenue ops, not the venue. */
+function adminAiConciergePanelUrl(): string {
   const base = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/$/, '');
-  return `${base}/dashboard/marketing/ai-concierge`;
+  return `${base}/admin/ai-concierge`;
 }
 
 /** Scenario-aware CTA URL. */
 function ctaUrlFor(scenario: AiOwnerScenario, leadId: string): string {
   if (scenario === 'ai_daily_cap_warning' || scenario === 'ai_daily_cap_reached') {
-    return aiConciergeSettingsUrl();
+    return adminAiConciergePanelUrl();
   }
   return dashboardContactUrl(leadId);
 }
@@ -414,7 +442,7 @@ function renderHtml(opts: {
        ? `<p style="font-size:13px;color:#6b7280;margin:0 0 16px;">${escapeHtml(input.extraDetail)}</p>`
        : '');
 
-  const introBlock = `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">${escapeHtml(meta.intro(nameCtx))}</p>`;
+  const introBlock = `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">${escapeHtml(meta.intro(nameCtx, venueName))}</p>`;
 
   const replyBlock = input.brideReply?.trim()
     ? `<div style="margin:20px 0 0;padding:16px 20px;background:#f9f9f9;border:1px solid #e5e7eb;border-radius:8px;">
@@ -425,8 +453,8 @@ function renderHtml(opts: {
 
   return buildSystemEmail({
     accentColor: '#1b1b1b',
-    title:       meta.heading(nameCtx),
-    heading:     meta.heading(nameCtx),
+    title:       meta.heading(nameCtx, venueName),
+    heading:     meta.heading(nameCtx, venueName),
     bodyHtml:    `${urgentBadge}${triggerBlock}${introBlock}${replyBlock}`,
     cta:         { label: meta.ctaLabel.replace(/\s*→\s*$/, ''), url: ctaUrl },
     footerHtml:  `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">AI Concierge alert from ${escapeHtml(venueName)} · sent via StoryVenue</p>`,
