@@ -19,7 +19,6 @@ export const DEFAULT_NOTIFICATIONS = {
   // These are sent by the platform itself (not triggered by a client action).
   // Venue owners can opt out of each one individually.
   email_winback_nudge:          true,   // "A bride just requested your pricing — your auto-reply is off"
-  email_analytics_digest:       true,   // Monthly listing performance report
   // ── SMS notifications ─────────────────────────────────────────────────────
   sms_payment_received:         false,
   sms_payment_failed:           true,

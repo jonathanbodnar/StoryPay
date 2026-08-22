@@ -426,22 +426,6 @@ Your account has moved to the Free plan. Your listing stays live and you'll stil
 
   // ── Miscellaneous (read-only preview) ───────────────────────────────────
   {
-    key: 'monthly_analytics_digest',
-    label: 'Monthly Analytics Digest',
-    description: 'Monthly summary of listing views, leads, and engagement sent to venue owners.',
-    trigger: 'Fires monthly from the analytics digest cron.',
-    category: 'reporting',
-    editable: false,
-    defaults: {
-      subject: 'Your {{venue_name}} monthly performance summary',
-      heading: 'Your month at a glance',
-      body: `Hi {{owner_first_name}},
-
-Here's how {{venue_name}} performed this month: listing views, new leads, and conversation activity — all in one summary.`,
-      button_text: 'Open your dashboard',
-    },
-  },
-  {
     key: 'couple_password_reset',
     label: 'Couple Password Reset',
     description: 'Sent when a couple (bride/groom portal user) requests a password reset.',
@@ -627,11 +611,6 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
   billing_downgraded_free: {
     owner_first_name: 'Sarah',
     action_url: `${APP_URL}/dashboard/directory-billing`,
-  },
-  monthly_analytics_digest: {
-    owner_first_name: 'Sarah',
-    venue_name: 'Meadowbrook Estate',
-    action_url: `${APP_URL}/dashboard/listing`,
   },
   couple_password_reset: {
     action_url: `${APP_URL}/reset-password/couple`,
