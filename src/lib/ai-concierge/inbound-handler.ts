@@ -321,7 +321,9 @@ export async function handleInboundAiMessage(
         notifyOwnerAiHandoff({
           venueId:   input.venueId,
           leadId:    lead.id,
-          brideName,
+          // Full name (not just first) so the push/subject reads
+          // "Jason Westbrook" rather than an ambiguous "Jason".
+          brideName: fullNameOf(lead),
           reason:    outcome.scenario === 'ai_handoff_urgent'
             ? 'needs urgent human attention'
             : 'asked about pricing',

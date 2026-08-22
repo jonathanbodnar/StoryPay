@@ -205,8 +205,10 @@ Open the conversation to take over and reply.`,
   },
   // ── AI Concierge notifications (all editable) ───────────────────────────
   // These fire from the AI Concierge inbound handler / send cron. Variables:
-  // {{bride_first_name}}, {{venue_name}}. The CTA button always deep-links to
-  // the conversation or contact record — button_text only changes its label.
+  // {{bride_first_name}}, {{bride_full_name}}, {{venue_name}}. Subject lines
+  // always use the full name (never just first name) and never contain
+  // emoji/icons. The CTA button always deep-links to the conversation or
+  // contact record — button_text only changes its label.
   {
     key: 'ai_handoff_urgent',
     label: 'AI: Urgent Handoff',
@@ -216,7 +218,7 @@ Open the conversation to take over and reply.`,
     category: 'ai',
     editable: true,
     defaults: {
-      subject: '🚨 Urgent: {{bride_first_name}} needs human attention — {{venue_name}}',
+      subject: 'Urgent: {{bride_full_name}} needs human attention — {{venue_name}}',
       heading: '{{bride_first_name}} just sent a message that needs you NOW',
       body: `{{bride_first_name}} replied to one of your AI follow-up messages with something that needs a human in the loop right away. The AI has stopped and is waiting for you to take over.`,
       button_text: 'Open the conversation →',
@@ -231,7 +233,7 @@ Open the conversation to take over and reply.`,
     category: 'ai',
     editable: true,
     defaults: {
-      subject: '{{bride_first_name}} is asking about pricing — {{venue_name}}',
+      subject: '{{bride_full_name}} is asking about pricing — {{venue_name}}',
       heading: '{{bride_first_name}} asked about pricing — your concierge should reply',
       body: `{{bride_first_name}} replied to one of your AI follow-up messages asking about pricing, packages, or rates. The AI is intentionally never quoting prices, so it has handed the conversation off so a real person can give her real answers.`,
       button_text: 'Reply to her now →',
@@ -246,7 +248,7 @@ Open the conversation to take over and reply.`,
     category: 'ai',
     editable: true,
     defaults: {
-      subject: '🎉 {{bride_first_name}} just replied — {{venue_name}}',
+      subject: '{{bride_full_name}} just replied — {{venue_name}}',
       heading: '{{bride_first_name}} replied to your AI follow-up',
       body: `Great news — {{bride_first_name}} just replied to one of your AI follow-up messages. The AI has paused so a human (you or your team) can take over the conversation. The sooner you respond, the warmer she'll feel.`,
       button_text: 'Reply to her now →',
@@ -261,7 +263,7 @@ Open the conversation to take over and reply.`,
     category: 'ai',
     editable: true,
     defaults: {
-      subject: '{{bride_first_name}} marked herself as not interested — {{venue_name}}',
+      subject: '{{bride_full_name}} marked herself as not interested — {{venue_name}}',
       heading: '{{bride_first_name}} is no longer interested',
       body: `{{bride_first_name}} replied to your AI follow-up indicating she's no longer interested or has chosen another venue. We've moved her to your "Not Interested" pipeline and stopped all future AI follow-ups for her.`,
       button_text: 'View her contact record →',
@@ -276,7 +278,7 @@ Open the conversation to take over and reply.`,
     category: 'ai',
     editable: true,
     defaults: {
-      subject: '{{bride_first_name}} opted out of SMS — {{venue_name}}',
+      subject: '{{bride_full_name}} opted out of SMS — {{venue_name}}',
       heading: '{{bride_first_name}} replied STOP / UNSUBSCRIBE — SMS disabled',
       body: `{{bride_first_name}} replied with a TCPA opt-out keyword (STOP, UNSUBSCRIBE, etc.). She will not receive any more SMS messages from your account — this is a legal compliance requirement and cannot be undone from the AI side. You can still reach out via email or other channels.`,
       button_text: 'View her contact record →',
@@ -321,7 +323,7 @@ Open the conversation to take over and reply.`,
     category: 'ai',
     editable: true,
     defaults: {
-      subject: '💬 {{bride_first_name}} replied to your follow-up — {{venue_name}}',
+      subject: '{{bride_full_name}} replied to your follow-up — {{venue_name}}',
       heading: '{{bride_first_name}} replied — time to step in',
       body: `{{bride_first_name}} replied to one of your automated follow-up messages. The AI Concierge hasn't activated yet, so this conversation needs a real person right now. The faster you respond, the warmer she'll feel — don't let this one go cold.`,
       button_text: 'Reply to her now →',
@@ -336,7 +338,7 @@ Open the conversation to take over and reply.`,
     category: 'ai',
     editable: true,
     defaults: {
-      subject: '{{bride_first_name}} finished the 60-day follow-up window — {{venue_name}}',
+      subject: '{{bride_full_name}} finished the 60-day follow-up window — {{venue_name}}',
       heading: '{{bride_first_name}} never replied — moved to Not Interested',
       body: `The AI Concierge completed its full 60-day follow-up sequence for {{bride_first_name}} without ever getting a reply. She has been moved to your "Not Interested" pipeline stage and is no longer considered a warm lead. No further automated messages will be sent. If she ever replies in the future, she'll automatically move back to "Conversation Started" and you'll be notified.`,
       button_text: 'View her contact record →',
@@ -351,7 +353,7 @@ Open the conversation to take over and reply.`,
     category: 'ai',
     editable: true,
     defaults: {
-      subject: '🎉 {{bride_first_name}} came back — she replied after going quiet — {{venue_name}}',
+      subject: '{{bride_full_name}} came back — she replied after going quiet — {{venue_name}}',
       heading: '{{bride_first_name}} is a warm lead again',
       body: `Great news — {{bride_first_name}} just replied, even though her follow-up window had already ended and she'd been moved to Not Interested. We've moved her back to "Conversation Started" in your pipeline. This is a warm lead — a real person should take over the conversation right now.`,
       button_text: 'Reply to her now →',
@@ -589,6 +591,7 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
       'ai_exhausted_no_reply', 'ai_lead_revived',
     ].map((key) => [key, {
       bride_first_name: 'Emily',
+      bride_full_name: 'Emily Carter',
       venue_name: 'Meadowbrook Estate',
       action_url: `${APP_URL}/dashboard/conversations`,
     }]),

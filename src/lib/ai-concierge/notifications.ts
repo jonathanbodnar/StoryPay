@@ -85,10 +85,20 @@ interface VenueRow {
 
 // ── Scenario meta ──────────────────────────────────────────────────────────
 
+/** First + full name context passed into scenario copy functions. Subjects
+ *  always use `fullName` (never just first name, per compliance/clarity —
+ *  a venue owner managing many leads needs the last name to tell them
+ *  apart); the in-body heading/intro keep the friendlier first-name-only
+ *  tone. Subject lines never contain emoji or icons. */
+export interface AiNameContext {
+  firstName: string;
+  fullName:  string;
+}
+
 interface ScenarioMeta {
-  emailSubject: (brideName: string, venueName: string) => string;
-  heading:      (brideName: string) => string;
-  intro:        (brideName: string) => string;
+  emailSubject: (name: AiNameContext, venueName: string) => string;
+  heading:      (name: AiNameContext) => string;
+  intro:        (name: AiNameContext) => string;
   urgent:       boolean;
   ctaLabel:     string;
   /**
@@ -102,41 +112,41 @@ interface ScenarioMeta {
 
 const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
   ai_handoff_urgent: {
-    emailSubject: (n, v) => `🚨 Urgent: ${n} needs human attention — ${v}`,
-    heading:      (n) => `${n} just sent a message that needs you NOW`,
-    intro:        (n) => `${n} replied to one of your AI follow-up messages with something that needs a human in the loop right away. The AI has stopped and is waiting for you to take over.`,
+    emailSubject: (n, v) => `Urgent: ${n.fullName} needs human attention — ${v}`,
+    heading:      (n) => `${n.firstName} just sent a message that needs you NOW`,
+    intro:        (n) => `${n.firstName} replied to one of your AI follow-up messages with something that needs a human in the loop right away. The AI has stopped and is waiting for you to take over.`,
     urgent:       true,
     ctaLabel:     'Open the conversation →',
     notifyTeam:   true,
   },
   ai_handoff_pricing: {
-    emailSubject: (n, v) => `${n} is asking about pricing — ${v}`,
-    heading:      (n) => `${n} asked about pricing — your concierge should reply`,
-    intro:        (n) => `${n} replied to one of your AI follow-up messages asking about pricing, packages, or rates. The AI is intentionally never quoting prices, so it has handed the conversation off so a real person can give her real answers.`,
+    emailSubject: (n, v) => `${n.fullName} is asking about pricing — ${v}`,
+    heading:      (n) => `${n.firstName} asked about pricing — your concierge should reply`,
+    intro:        (n) => `${n.firstName} replied to one of your AI follow-up messages asking about pricing, packages, or rates. The AI is intentionally never quoting prices, so it has handed the conversation off so a real person can give her real answers.`,
     urgent:       false,
     ctaLabel:     'Reply to her now →',
     notifyTeam:   true,
   },
   ai_reply_received: {
-    emailSubject: (n, v) => `🎉 ${n} just replied — ${v}`,
-    heading:      (n) => `${n} replied to your AI follow-up`,
-    intro:        (n) => `Great news — ${n} just replied to one of your AI follow-up messages. The AI has paused so a human (you or your team) can take over the conversation. The sooner you respond, the warmer she'll feel.`,
+    emailSubject: (n, v) => `${n.fullName} just replied — ${v}`,
+    heading:      (n) => `${n.firstName} replied to your AI follow-up`,
+    intro:        (n) => `Great news — ${n.firstName} just replied to one of your AI follow-up messages. The AI has paused so a human (you or your team) can take over the conversation. The sooner you respond, the warmer she'll feel.`,
     urgent:       false,
     ctaLabel:     'Reply to her now →',
     notifyTeam:   true,
   },
   ai_not_interested: {
-    emailSubject: (n, v) => `${n} marked herself as not interested — ${v}`,
-    heading:      (n) => `${n} is no longer interested`,
-    intro:        (n) => `${n} replied to your AI follow-up indicating she's no longer interested or has chosen another venue. We've moved her to your "Not Interested" pipeline and stopped all future AI follow-ups for her.`,
+    emailSubject: (n, v) => `${n.fullName} marked herself as not interested — ${v}`,
+    heading:      (n) => `${n.firstName} is no longer interested`,
+    intro:        (n) => `${n.firstName} replied to your AI follow-up indicating she's no longer interested or has chosen another venue. We've moved her to your "Not Interested" pipeline and stopped all future AI follow-ups for her.`,
     urgent:       false,
     ctaLabel:     'View her contact record →',
     notifyTeam:   true,
   },
   ai_tcpa_opt_out: {
-    emailSubject: (n, v) => `${n} opted out of SMS — ${v}`,
-    heading:      (n) => `${n} replied STOP / UNSUBSCRIBE — SMS disabled`,
-    intro:        (n) => `${n} replied with a TCPA opt-out keyword (STOP, UNSUBSCRIBE, etc.). She will not receive any more SMS messages from your account — this is a legal compliance requirement and cannot be undone from the AI side. You can still reach out via email or other channels.`,
+    emailSubject: (n, v) => `${n.fullName} opted out of SMS — ${v}`,
+    heading:      (n) => `${n.firstName} replied STOP / UNSUBSCRIBE — SMS disabled`,
+    intro:        (n) => `${n.firstName} replied with a TCPA opt-out keyword (STOP, UNSUBSCRIBE, etc.). She will not receive any more SMS messages from your account — this is a legal compliance requirement and cannot be undone from the AI side. You can still reach out via email or other channels.`,
     urgent:       false,
     ctaLabel:     'View her contact record →',
     notifyTeam:   true,
@@ -158,25 +168,25 @@ const SCENARIOS: Record<AiOwnerScenario, ScenarioMeta> = {
     notifyTeam:   false,
   },
   sequence_reply_received: {
-    emailSubject: (n, v) => `💬 ${n} replied to your follow-up — ${v}`,
-    heading:      (n) => `${n} replied — time to step in`,
-    intro:        (n) => `${n} replied to one of your automated follow-up messages. The AI Concierge hasn't activated yet, so this conversation needs a real person right now. The faster you respond, the warmer she'll feel — don't let this one go cold.`,
+    emailSubject: (n, v) => `${n.fullName} replied to your follow-up — ${v}`,
+    heading:      (n) => `${n.firstName} replied — time to step in`,
+    intro:        (n) => `${n.firstName} replied to one of your automated follow-up messages. The AI Concierge hasn't activated yet, so this conversation needs a real person right now. The faster you respond, the warmer she'll feel — don't let this one go cold.`,
     urgent:       false,
     ctaLabel:     'Reply to her now →',
     notifyTeam:   true,
   },
   ai_exhausted_no_reply: {
-    emailSubject: (n, v) => `${n} finished the 60-day follow-up window — ${v}`,
-    heading:      (n) => `${n} never replied — moved to Not Interested`,
-    intro:        (n) => `The AI Concierge completed its full 60-day follow-up sequence for ${n} without ever getting a reply. She has been moved to your "Not Interested" pipeline stage and is no longer considered a warm lead. No further automated messages will be sent. If she ever replies in the future, she'll automatically move back to "Conversation Started" and you'll be notified.`,
+    emailSubject: (n, v) => `${n.fullName} finished the 60-day follow-up window — ${v}`,
+    heading:      (n) => `${n.firstName} never replied — moved to Not Interested`,
+    intro:        (n) => `The AI Concierge completed its full 60-day follow-up sequence for ${n.firstName} without ever getting a reply. She has been moved to your "Not Interested" pipeline stage and is no longer considered a warm lead. No further automated messages will be sent. If she ever replies in the future, she'll automatically move back to "Conversation Started" and you'll be notified.`,
     urgent:       false,
     ctaLabel:     'View her contact record →',
     notifyTeam:   true,
   },
   ai_lead_revived: {
-    emailSubject: (n, v) => `🎉 ${n} came back — she replied after going quiet — ${v}`,
-    heading:      (n) => `${n} is a warm lead again`,
-    intro:        (n) => `Great news — ${n} just replied, even though her follow-up window had already ended and she'd been moved to Not Interested. We've moved her back to "Conversation Started" in your pipeline. This is a warm lead — a real person should take over the conversation right now.`,
+    emailSubject: (n, v) => `${n.fullName} came back — she replied after going quiet — ${v}`,
+    heading:      (n) => `${n.firstName} is a warm lead again`,
+    intro:        (n) => `Great news — ${n.firstName} just replied, even though her follow-up window had already ended and she'd been moved to Not Interested. We've moved her back to "Conversation Started" in your pipeline. This is a warm lead — a real person should take over the conversation right now.`,
     urgent:       false,
     ctaLabel:     'Reply to her now →',
     notifyTeam:   true,
@@ -196,8 +206,9 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
 
     // Super-admin copy overrides (System Email Templates page). Any saved
     // override for this scenario key replaces the hardcoded default copy.
-    // Variables: {{bride_first_name}}, {{venue_name}}.
+    // Variables: {{bride_first_name}}, {{bride_full_name}}, {{venue_name}}.
     const meta = await applyTemplateOverride(input.scenario, defaultMeta, venueName);
+    const nameCtx: AiNameContext = { firstName: input.brideName, fullName: input.brideFullName };
 
     const ownerEmail = await resolveOwnerEmail(venue);
     const conciergeEmails = (venue.ai_concierge_notify_emails ?? [])
@@ -237,8 +248,8 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
       }
     }
 
-    const subject = meta.emailSubject(input.brideName, venueName);
-    const html = renderHtml({ meta, input, venueName });
+    const subject = meta.emailSubject(nameCtx, venueName);
+    const html = renderHtml({ meta, input, venueName, nameCtx });
 
     // Brand from "StoryVenue Concierge team" so the venue owner immediately
     // recognises this as a managed-service alert (matches the Venue Direct
@@ -260,10 +271,11 @@ export async function notifyAiOwner(input: AiOwnerNotifyInput): Promise<void> {
 
 /**
  * Merge a saved System Email Template override (if any) over the hardcoded
- * scenario copy. Overrides are stored with {{bride_first_name}} and
- * {{venue_name}} variables; we substitute them here so the resulting meta is
- * drop-in compatible with the function-based defaults. Fail-open: any error
- * falls back to the defaults so notifications never break.
+ * scenario copy. Overrides are stored with {{bride_first_name}},
+ * {{bride_full_name}}, and {{venue_name}} variables; we substitute them here
+ * so the resulting meta is drop-in compatible with the function-based
+ * defaults. Fail-open: any error falls back to the defaults so notifications
+ * never break.
  */
 async function applyTemplateOverride(
   scenario: AiOwnerScenario,
@@ -279,9 +291,10 @@ async function applyTemplateOverride(
     if (!data) return defaults;
 
     const row = data as { subject?: string | null; heading?: string | null; body?: string | null; button_text?: string | null };
-    const fill = (tpl: string, brideName: string) =>
+    const fill = (tpl: string, n: AiNameContext) =>
       tpl
-        .replace(/\{\{\s*bride_first_name\s*\}\}/g, brideName)
+        .replace(/\{\{\s*bride_first_name\s*\}\}/g, n.firstName)
+        .replace(/\{\{\s*bride_full_name\s*\}\}/g, n.fullName)
         .replace(/\{\{\s*venue_name\s*\}\}/g, venueName);
 
     return {
@@ -383,8 +396,9 @@ function renderHtml(opts: {
   meta:      ScenarioMeta;
   input:     AiOwnerNotifyInput;
   venueName: string;
+  nameCtx:   AiNameContext;
 }): string {
-  const { meta, input, venueName } = opts;
+  const { meta, input, venueName, nameCtx } = opts;
   const ctaUrl = ctaUrlFor(input.scenario, input.leadId);
 
   // Urgent alerts get a subtle red pill in the body — the chassis itself stays
@@ -399,7 +413,7 @@ function renderHtml(opts: {
        ? `<p style="font-size:13px;color:#6b7280;margin:0 0 16px;">${escapeHtml(input.extraDetail)}</p>`
        : '');
 
-  const introBlock = `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">${escapeHtml(meta.intro(input.brideName))}</p>`;
+  const introBlock = `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0;">${escapeHtml(meta.intro(nameCtx))}</p>`;
 
   const replyBlock = input.brideReply?.trim()
     ? `<div style="margin:20px 0 0;padding:16px 20px;background:#f9f9f9;border:1px solid #e5e7eb;border-radius:8px;">
@@ -410,8 +424,8 @@ function renderHtml(opts: {
 
   return buildSystemEmail({
     accentColor: '#1b1b1b',
-    title:       meta.heading(input.brideName),
-    heading:     meta.heading(input.brideName),
+    title:       meta.heading(nameCtx),
+    heading:     meta.heading(nameCtx),
     bodyHtml:    `${urgentBadge}${triggerBlock}${introBlock}${replyBlock}`,
     cta:         { label: meta.ctaLabel.replace(/\s*→\s*$/, ''), url: ctaUrl },
     footerHtml:  `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">AI Concierge alert from ${escapeHtml(venueName)} · sent via StoryVenue</p>`,

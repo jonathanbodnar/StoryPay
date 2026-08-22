@@ -240,7 +240,7 @@ async function sendCriticalAlert(opts: {
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     await sendEmail({
       to,
-      subject: `🚨 Critical error: ${opts.message.slice(0, 80)}`,
+      subject: `Critical error: ${opts.message.slice(0, 80)}`,
       html: `
         <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px">
           <h2 style="color:#b91c1c;margin:0 0 12px">Critical error logged</h2>
