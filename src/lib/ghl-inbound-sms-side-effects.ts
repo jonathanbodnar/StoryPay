@@ -21,7 +21,7 @@ import {
 import { recordSmsReplyAttribution } from '@/lib/sms-reply-tracking';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
 import { handleInboundAiMessage } from '@/lib/ai-concierge/inbound-handler';
-import { moveLeadToAiStage } from '@/lib/ai-concierge/pipeline-tag-service';
+import { moveLeadToAiStage, applyAiTags, removeAiTag } from '@/lib/ai-concierge/pipeline-tag-service';
 import { insertLeadActivity } from '@/lib/lead-activity';
 import { supabaseAdmin } from '@/lib/supabase';
 import { normalizePhone } from '@/lib/ghl';
@@ -36,7 +36,11 @@ const PLACEHOLDER_SMS_EMAIL = '@ghl-sms.storypay.placeholder';
  * function also:
  *   1. Sets `sms_dnd = true` + `ai_state = 'opted_out'` on matching leads
  *      (delegated to `applySmsDndForVenueCustomer`).
- *   2. Moves every linked lead to the venue's "Not Interested" pipeline stage.
+ *   2. Moves every linked lead to the venue's default-pipeline "Not
+ *      Interested" stage — awaited (not fire-and-forget) so the move is
+ *      guaranteed to land before the webhook responds, and swaps the
+ *      `AI Active` tag for `Not Interested` so the Contacts view never shows
+ *      a STOP'd lead as still being actively worked by the AI.
  *   3. Logs an `sms_stop_received` activity row for each lead so the
  *      concierge team has a clear audit trail.
  *
@@ -108,24 +112,44 @@ export async function handleStopKeyword(params: {
 
     const note = 'Lead replied STOP — SMS DND enabled, moved to Not Interested, AI halted.';
 
-    for (const leadId of leadIds) {
-      // Move to "Not Interested" AI pipeline stage (fires onMarketingStageChanged + vc mirror)
-      void moveLeadToAiStage(venueId, leadId, 'not_interested').catch((err) => {
-        console.error(`${logPrefix} STOP: moveLeadToAiStage failed for lead ${leadId}:`, err);
-      });
+    // Awaited (not fire-and-forget) so every linked lead is guaranteed to be
+    // moved + re-tagged before this function returns — a STOP reply must
+    // reliably land the lead in "Not Interested" every time, not on a
+    // best-effort basis.
+    await Promise.all([...leadIds].map(async (leadId) => {
+      try {
+        // Move to "Not Interested" in the venue's default pipeline (fires
+        // onMarketingStageChanged + venue_customer mirror).
+        const moveResult = await moveLeadToAiStage(venueId, leadId, 'not_interested');
+        if (!moveResult.ok) {
+          console.error(`${logPrefix} STOP: moveLeadToAiStage failed for lead ${leadId}:`, moveResult.error);
+        }
+      } catch (err) {
+        console.error(`${logPrefix} STOP: moveLeadToAiStage threw for lead ${leadId}:`, err);
+      }
+
+      // Swap AI tags: she's no longer "AI Active" — she's "Not Interested".
+      try {
+        await removeAiTag(venueId, leadId, 'ai_active');
+        await applyAiTags(venueId, leadId, ['ai_not_interested']);
+      } catch (err) {
+        console.error(`${logPrefix} STOP: AI tag sync failed for lead ${leadId}:`, err);
+      }
 
       // Audit trail
-      void insertLeadActivity({
-        venueId,
-        leadId,
-        actorMemberId: null,
-        actorIsOwner: false,
-        action: 'sms_stop_received',
-        details: { note, venue_customer_id: venueCustomerId },
-      }).catch((err) => {
+      try {
+        await insertLeadActivity({
+          venueId,
+          leadId,
+          actorMemberId: null,
+          actorIsOwner: false,
+          action: 'sms_stop_received',
+          details: { note, venue_customer_id: venueCustomerId },
+        });
+      } catch (err) {
         console.error(`${logPrefix} STOP: insertLeadActivity failed for lead ${leadId}:`, err);
-      });
-    }
+      }
+    }));
   } catch (err) {
     console.error(`${logPrefix} STOP: stage move / activity log failed:`, err);
   }
