@@ -412,32 +412,27 @@ export default function ConversationsPage() {
   }, []);
 
   // Pull-to-refresh gesture (native only).
-  // Only activates when the touch starts while the thread list is scrolled
-  // to the very top. Never calls preventDefault when the list itself has
-  // scroll room — that was causing the scroll-gets-stuck bug.
+  // All listeners are passive: true so WKWebView can handle scroll natively
+  // on its compositor thread without waiting on JS. We observe the gesture
+  // without ever calling preventDefault — this is critical for smooth scroll.
+  // The list container uses touch-action: pan-y (set inline below) which
+  // further signals to WebKit that vertical panning should never be blocked.
   useEffect(() => {
     if (!isNativeApp()) return;
+    const el = listRef.current;
+    if (!el) return;
 
     function onTouchStart(e: TouchEvent) {
       touchStartY.current = e.touches[0].clientY;
-      pulling.current = false;
-      // Only allow a pull gesture when the list is at the top.
-      const scrollTop = listRef.current ? listRef.current.scrollTop : 0;
-      pulling.current = scrollTop <= 2;
+      pulling.current = el!.scrollTop <= 2;
     }
 
     function onTouchMove(e: TouchEvent) {
       if (!pulling.current) return;
-      // Re-check scroll position — user may have scrolled down since touchstart.
-      const scrollTop = listRef.current ? listRef.current.scrollTop : 0;
-      if (scrollTop > 2) { pulling.current = false; setPullY(0); return; }
+      if (el!.scrollTop > 2) { pulling.current = false; setPullY(0); return; }
       const dy = e.touches[0].clientY - touchStartY.current;
       if (dy <= 0) { pulling.current = false; setPullY(0); return; }
-      const clamped = Math.min(dy * 0.45, PULL_THRESHOLD * 1.2);
-      setPullY(clamped);
-      // Only suppress the browser's native scroll when we're actively pulling
-      // downward and the list is truly at the top.
-      if (dy > 8) e.preventDefault();
+      setPullY(Math.min(dy * 0.45, PULL_THRESHOLD * 1.2));
     }
 
     function onTouchEnd() {
@@ -453,13 +448,14 @@ export default function ConversationsPage() {
       }
     }
 
-    document.addEventListener('touchstart', onTouchStart, { passive: true });
-    document.addEventListener('touchmove', onTouchMove, { passive: false });
-    document.addEventListener('touchend', onTouchEnd, { passive: true });
+    // All passive — never block native scroll.
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: true });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
     return () => {
-      document.removeEventListener('touchstart', onTouchStart);
-      document.removeEventListener('touchmove', onTouchMove);
-      document.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
     };
   }, [pullY, loadThreads]);
 
@@ -1819,10 +1815,7 @@ export default function ConversationsPage() {
               {listActionError}
             </p>
           ) : null}
-          <div className={classNames(
-            'flex-shrink-0 border-b border-gray-200',
-            isNativeApp() ? 'px-2 py-1.5' : 'p-2',
-          )}>
+          <div className="flex-shrink-0 border-b border-gray-200 p-2">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -1834,7 +1827,11 @@ export default function ConversationsPage() {
               />
             </div>
           </div>
-          <div ref={listRef} className="sp-thread-list min-h-0 flex-1 overflow-y-auto">
+          <div
+            ref={listRef}
+            className="sp-thread-list min-h-0 flex-1 overflow-y-auto"
+            style={isNativeApp() ? { touchAction: 'pan-y', overscrollBehavior: 'contain' } : undefined}
+          >
             {/* ── Team contacts directory (shown at top when Team filter is active) ── */}
             {threadListFilter === 'team_contacts' && teamContacts.length > 0 && (
               <div className="border-b border-gray-200 bg-gray-50/60 px-3 py-3">
@@ -1962,10 +1959,11 @@ export default function ConversationsPage() {
                       role="button"
                       tabIndex={0}
                       {...rowHandlers}
-                      className="flex w-full cursor-pointer items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors active:bg-gray-100"
+                      className="flex w-full cursor-pointer items-start gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors active:bg-gray-100"
                     >
-                      {/* Avatar circle */}
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1B1B1B]">
+                      {/* Avatar circle — top-aligned so it sits beside the name,
+                          not vertically centered across the whole card height. */}
+                      <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1B1B1B]">
                         <span className="text-sm font-semibold text-white">{avatarInitials}</span>
                       </div>
 
