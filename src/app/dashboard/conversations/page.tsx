@@ -411,23 +411,32 @@ export default function ConversationsPage() {
     return () => { el.removeEventListener('scroll', onScroll); clearTimeout(timer); };
   }, []);
 
-  // Pull-to-refresh gesture (native only — checks listRef scroll position)
+  // Pull-to-refresh gesture (native only).
+  // Only activates when the touch starts while the thread list is scrolled
+  // to the very top. Never calls preventDefault when the list itself has
+  // scroll room — that was causing the scroll-gets-stuck bug.
   useEffect(() => {
     if (!isNativeApp()) return;
 
     function onTouchStart(e: TouchEvent) {
       touchStartY.current = e.touches[0].clientY;
       pulling.current = false;
+      // Only allow a pull gesture when the list is at the top.
+      const scrollTop = listRef.current ? listRef.current.scrollTop : 0;
+      pulling.current = scrollTop <= 2;
     }
 
     function onTouchMove(e: TouchEvent) {
+      if (!pulling.current) return;
+      // Re-check scroll position — user may have scrolled down since touchstart.
       const scrollTop = listRef.current ? listRef.current.scrollTop : 0;
-      if (scrollTop > 2) return;
+      if (scrollTop > 2) { pulling.current = false; setPullY(0); return; }
       const dy = e.touches[0].clientY - touchStartY.current;
-      if (dy <= 0) return;
-      pulling.current = true;
+      if (dy <= 0) { pulling.current = false; setPullY(0); return; }
       const clamped = Math.min(dy * 0.45, PULL_THRESHOLD * 1.2);
       setPullY(clamped);
+      // Only suppress the browser's native scroll when we're actively pulling
+      // downward and the list is truly at the top.
       if (dy > 8) e.preventDefault();
     }
 
@@ -1810,7 +1819,10 @@ export default function ConversationsPage() {
               {listActionError}
             </p>
           ) : null}
-          <div className="flex-shrink-0 border-b border-gray-200 p-2">
+          <div className={classNames(
+            'flex-shrink-0 border-b border-gray-200',
+            isNativeApp() ? 'px-2 py-1.5' : 'p-2',
+          )}>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -1950,14 +1962,7 @@ export default function ConversationsPage() {
                       role="button"
                       tabIndex={0}
                       {...rowHandlers}
-                      className={classNames(
-                        'flex w-full cursor-pointer items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors',
-                        selectedId === t.thread_id
-                          ? 'bg-blue-50'
-                          : unread
-                            ? 'bg-blue-50/40 active:bg-gray-100'
-                            : 'active:bg-gray-100',
-                      )}
+                      className="flex w-full cursor-pointer items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors active:bg-gray-100"
                     >
                       {/* Avatar circle */}
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1B1B1B]">
