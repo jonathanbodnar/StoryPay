@@ -465,9 +465,10 @@ export async function insertInboundGhlSms(params: {
     notifyOwnerNewMessage({
       venueId,
       threadId,
-      fromName:  contactName?.trim() || null,
-      fromEmail: '',
-      bodyText:  messageBody.trim(),
+      fromName:        contactName?.trim() || null,
+      fromEmail:       '',
+      bodyText:        messageBody.trim(),
+      venueCustomerId: customerId,
     });
   }
 

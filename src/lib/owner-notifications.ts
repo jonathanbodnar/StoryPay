@@ -19,16 +19,6 @@ import { sendPushToVenue } from '@/lib/push';
 import { sendNativePush } from '@/lib/native-push';
 import { loadNotificationRecipients, emailKeyFor, smsKeyFor } from '@/lib/notification-settings';
 
-/** Shared sender identity for the two scenarios below that are really the
- *  concierge team reaching out (a lead replied, AI handed off) rather than a
- *  generic StoryVenue system alert. Matches the address used by the AI
- *  Concierge's own notifications (`ai-concierge/notifications.ts`) and Venue
- *  Direct messages so all "your concierge team" mail looks consistent. */
-const CONCIERGE_FROM = {
-  email: process.env.CONCIERGE_FROM_EMAIL?.trim() || 'concierge@send.storyvenue.com',
-  name:  'StoryVenue Concierge',
-};
-
 export type OwnerScenario =
   | 'payment_received'
   | 'payment_failed'
@@ -130,15 +120,6 @@ const SCENARIO_META: Record<OwnerScenario, {
   defaultPushBody: string;
   /** Path the SW opens on click. May be omitted for "open dashboard root". */
   defaultPushUrl?: string;
-  /**
-   * Override the email `from` for this scenario. When omitted, `sendEmail`
-   * falls back to `RESEND_DEFAULT_FROM`, which — if that env var has no
-   * display name — shows up in Gmail/Outlook as the bare local-part (e.g.
-   * "hello") instead of a recognizable sender. Scenarios that are really
-   * "your StoryVenue Concierge team reaching out" (a reply came in, AI
-   * handed off) get a real name here so the inbox preview is unambiguous.
-   */
-  from?: { email: string; name: string };
 }> = {
   payment_received: {
     emailKey: 'email_payment_received',
@@ -249,25 +230,18 @@ const SCENARIO_META: Record<OwnerScenario, {
     defaultPushTitle: 'StoryVenue',
     defaultPushBody:  '{{customer_name}}: {{message_preview}}',
     defaultPushUrl:   '/dashboard/conversations',
-    from: CONCIERGE_FROM,
   },
-  // Push-only (see notifyOwnerAiHandoff() below) — email/smsKey and the
-  // email/SMS default copy are unreachable in practice (pushOnly:true skips
-  // that code in notifyOwner()) but stay populated because SCENARIO_META's
-  // type requires every field. Kept intentionally bland; the real
-  // owner-facing copy for handoffs lives in ai-concierge/notifications.ts.
   ai_handoff: {
     emailKey: 'email_ai_handoff',
     smsKey:   'sms_ai_handoff',
     pushKey:  'push_ai_handoff',
     templateType: 'ai_handoff',
-    defaultSmsTemplate: 'AI Concierge handed off: {{customer_name}} needs you — {{organization}}',
+    defaultSmsTemplate: '🤖 AI Concierge handed off: {{customer_name}} needs you — {{organization}}',
     defaultEmailSubject: 'AI Concierge handoff: {{customer_name}}',
     defaultEmailHeading: 'AI Concierge Handoff',
     defaultEmailBody:    'The AI Concierge handed off the conversation with {{customer_name}} to you. Reason: {{reason}}',
     defaultPushTitle: 'StoryVenue',
     defaultPushBody:  'AI handoff: {{customer_name}} needs a human — {{reason}}',
-    from: CONCIERGE_FROM,
     defaultPushUrl:   '/dashboard/conversations',
   },
 };
@@ -286,13 +260,6 @@ interface NotifyArgs {
   vars: Record<string, string>;
   /** Optional URL for the email's CTA button. */
   actionUrl?: string;
-  /**
-   * When true, skip the email + SMS blocks entirely and only send push.
-   * Used by scenarios whose email/SMS content is already fully owned by a
-   * more specific notifier elsewhere (e.g. `ai_handoff` — see
-   * `notifyOwnerAiHandoff()` below) so we don't double-notify the same event.
-   */
-  pushOnly?: boolean;
 }
 
 /**
@@ -335,73 +302,69 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
     const smsKey   = smsKeyFor(args.scenario);
     const recipients = await loadNotificationRecipients(args.venueId);
 
-    if (args.pushOnly) {
-      console.log('[notifyOwner]', args.scenario, 'pushOnly — skipping email + SMS');
+    // ── Owner/team email ──────────────────────────────────────────────────
+    // Gate 1: this person's own toggle (defaults applied in loadNotificationRecipients).
+    // Gate 2: the email template's own enabled flag — if the venue has disabled the
+    //         template, getVenueEmailTemplate returns null and we skip the email send
+    //         entirely (template content/on-off is venue-wide, only the recipient
+    //         list + per-recipient channel choice is per-person).
+    const emailRecipients = recipients.filter(r => r.email && r.settings[emailKey] === true);
+    if (emailRecipients.length === 0) {
+      console.log('[notifyOwner]', args.scenario, 'no recipients with', emailKey, 'enabled');
     } else {
-      // ── Owner/team email ────────────────────────────────────────────────
-      // Gate 1: this person's own toggle (defaults applied in loadNotificationRecipients).
-      // Gate 2: the email template's own enabled flag — if the venue has disabled the
-      //         template, getVenueEmailTemplate returns null and we skip the email send
-      //         entirely (template content/on-off is venue-wide, only the recipient
-      //         list + per-recipient channel choice is per-person).
-      const emailRecipients = recipients.filter(r => r.email && r.settings[emailKey] === true);
-      if (emailRecipients.length === 0) {
-        console.log('[notifyOwner]', args.scenario, 'no recipients with', emailKey, 'enabled');
-      } else {
-        try {
-          const tmpl = await getVenueEmailTemplate(args.venueId, meta.templateType);
-          if (!tmpl) {
-            console.log('[notifyOwner]', args.scenario, 'template disabled or missing:', meta.templateType);
-          } else {
-            const subject = fillTemplate(tmpl.subject, vars);
-            const html = buildEmailHtml({
-              template:   tmpl,
-              vars,
-              actionUrl:  args.actionUrl,
-              brandColor: venue.brand_color   || '#1b1b1b',
-              logoUrl:    venue.brand_logo_url || undefined,
-              venueName,
-            });
-            const results = await Promise.allSettled(
-              emailRecipients.map(r => sendEmail({ to: r.email as string, subject, html, from: meta.from })),
-            );
-            for (let i = 0; i < results.length; i++) {
-              const res = results[i];
-              const to = emailRecipients[i].email;
-              if (res.status === 'fulfilled' && res.value.success) {
-                console.log('[notifyOwner]', args.scenario, 'email sent to', to);
-              } else {
-                console.error('[notifyOwner]', args.scenario, 'email send failed:', to, res.status === 'fulfilled' ? res.value.error : res.reason);
-              }
+      try {
+        const tmpl = await getVenueEmailTemplate(args.venueId, meta.templateType);
+        if (!tmpl) {
+          console.log('[notifyOwner]', args.scenario, 'template disabled or missing:', meta.templateType);
+        } else {
+          const subject = fillTemplate(tmpl.subject, vars);
+          const html = buildEmailHtml({
+            template:   tmpl,
+            vars,
+            actionUrl:  args.actionUrl,
+            brandColor: venue.brand_color   || '#1b1b1b',
+            logoUrl:    venue.brand_logo_url || undefined,
+            venueName,
+          });
+          const results = await Promise.allSettled(
+            emailRecipients.map(r => sendEmail({ to: r.email as string, subject, html })),
+          );
+          for (let i = 0; i < results.length; i++) {
+            const res = results[i];
+            const to = emailRecipients[i].email;
+            if (res.status === 'fulfilled' && res.value.success) {
+              console.log('[notifyOwner]', args.scenario, 'email sent to', to);
+            } else {
+              console.error('[notifyOwner]', args.scenario, 'email send failed:', to, res.status === 'fulfilled' ? res.value.error : res.reason);
             }
           }
-        } catch (err) {
-          console.error('[notifyOwner email]', args.scenario, err instanceof Error ? err.message : err);
         }
+      } catch (err) {
+        console.error('[notifyOwner email]', args.scenario, err instanceof Error ? err.message : err);
       }
+    }
 
-      // ── Owner/team SMS via GHL ──────────────────────────────────────────
-      const smsRecipients = recipients.filter(r => r.phone && r.settings[smsKey] === true);
-      if (smsRecipients.length > 0) {
-        const token = getGhlToken({ ghl_access_token: venue.ghl_access_token });
-        const locId = venue.ghl_location_id || '';
-        if (!token || !locId) {
-          console.warn('[notifyOwner sms] missing GHL token/location for venue', args.venueId);
-        } else {
-          const body = interpolate(meta.defaultSmsTemplate, vars);
-          const results = await Promise.allSettled(smsRecipients.map(async r => {
-            const norm = normalizePhone(r.phone) || r.phone;
-            const contact = await findOrCreateContact(token, locId, {
-              phone: norm ?? undefined,
-              email: r.email || undefined,
-              firstName: r.name || (r.kind === 'owner' ? 'Owner' : undefined),
-            }).catch(() => null);
-            const contactId = (contact as { id?: string } | null)?.id;
-            if (contactId) await sendSms(token, locId, contactId, body);
-          }));
-          for (const res of results) {
-            if (res.status === 'rejected') console.error('[notifyOwner sms]', args.scenario, res.reason);
-          }
+    // ── Owner/team SMS via GHL ─────────────────────────────────────────────
+    const smsRecipients = recipients.filter(r => r.phone && r.settings[smsKey] === true);
+    if (smsRecipients.length > 0) {
+      const token = getGhlToken({ ghl_access_token: venue.ghl_access_token });
+      const locId = venue.ghl_location_id || '';
+      if (!token || !locId) {
+        console.warn('[notifyOwner sms] missing GHL token/location for venue', args.venueId);
+      } else {
+        const body = interpolate(meta.defaultSmsTemplate, vars);
+        const results = await Promise.allSettled(smsRecipients.map(async r => {
+          const norm = normalizePhone(r.phone) || r.phone;
+          const contact = await findOrCreateContact(token, locId, {
+            phone: norm ?? undefined,
+            email: r.email || undefined,
+            firstName: r.name || (r.kind === 'owner' ? 'Owner' : undefined),
+          }).catch(() => null);
+          const contactId = (contact as { id?: string } | null)?.id;
+          if (contactId) await sendSms(token, locId, contactId, body);
+        }));
+        for (const res of results) {
+          if (res.status === 'rejected') console.error('[notifyOwner sms]', args.scenario, res.reason);
         }
       }
     }
@@ -471,25 +434,13 @@ export function formatAmount(cents: number | null | undefined): string {
 // sites can stay one-liners without re-deriving the merge variables and
 // dashboard URLs every time.
 
-/** Format an ISO timestamp as "Aug 22, 2026 at 10:37 AM" — matches the
- *  contact-snapshot formatting used elsewhere (e.g. venue-direct emails). */
-function formatLeadTimestamp(iso?: string | null): string {
-  const d = iso ? new Date(iso) : new Date();
-  if (Number.isNaN(d.getTime())) return iso || '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    + ' at '
-    + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-}
-
 /** Fire a "new lead" push for the freshly-inserted lead. */
 export function notifyOwnerNewLead(input: {
   venueId: string;
   leadId: string;
   fullName: string;
   email: string;
-  phone?: string | null;
   source?: string | null;
-  createdAt?: string | null;
 }): void {
   const display = (input.fullName || '').trim() || input.email || 'New lead';
   void notifyOwner({
@@ -498,9 +449,7 @@ export function notifyOwnerNewLead(input: {
     vars: {
       customer_name: display,
       email:         input.email || '',
-      phone:         input.phone || 'Not provided',
       source:        input.source || 'directory',
-      created_at:    formatLeadTimestamp(input.createdAt),
     },
     actionUrl: `/dashboard/contacts/${input.leadId}`,
   });
@@ -513,33 +462,49 @@ export function notifyOwnerNewMessage(input: {
   fromName: string | null;
   fromEmail: string;
   bodyText: string;
+  /** venue_customers UUID — used to resolve the contact's name from our DB
+   *  when the caller doesn't have a display name (e.g. a GHL contact with
+   *  no firstName/lastName set). */
+  venueCustomerId?: string | null;
 }): void {
-  const display = (input.fromName || '').trim() || input.fromEmail || 'Your contact';
-  // Trim aggressively — the SW caps the body to 240 chars but the lockscreen
-  // typically shows ~60 before truncation, so keep the preview punchy.
+  // Trim aggressively — the lock screen typically shows ~60 chars before
+  // truncating, so keep the preview punchy.
   const preview = input.bodyText.replace(/\s+/g, ' ').slice(0, 140);
-  void notifyOwner({
-    venueId:   input.venueId,
-    scenario:  'new_message',
-    vars: {
-      customer_name:   display,
-      message_preview: preview,
-    },
-    actionUrl: `/dashboard/conversations?thread=${input.threadId}`,
-  });
+
+  void (async () => {
+    let display = (input.fromName || '').trim() || input.fromEmail.trim() || '';
+
+    // If we still don't have a name, try to resolve it from venue_customers.
+    if (!display && input.venueCustomerId) {
+      try {
+        const { supabaseAdmin } = await import('@/lib/supabase');
+        const { data: row } = await supabaseAdmin
+          .from('venue_customers')
+          .select('first_name, last_name, customer_email')
+          .eq('id', input.venueCustomerId)
+          .maybeSingle();
+        if (row) {
+          const fullName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim();
+          display = fullName || (row.customer_email as string | null) || '';
+        }
+      } catch { /* best-effort — never block the notification */ }
+    }
+
+    if (!display) display = 'Someone';
+
+    await notifyOwner({
+      venueId:   input.venueId,
+      scenario:  'new_message',
+      vars: {
+        customer_name:   display,
+        message_preview: preview,
+      },
+      actionUrl: `/dashboard/conversations?thread=${input.threadId}`,
+    });
+  })();
 }
 
-/**
- * Fire an "AI Concierge handed off to you" PUSH notification only.
- *
- * Email + SMS for AI handoffs are already fully covered by the dedicated
- * `ai_handoff_urgent` / `ai_handoff_pricing` scenarios in
- * `ai-concierge/notifications.ts` (better copy, urgent-vs-pricing framing,
- * super-admin-editable). This call used to also fire a second, generic email
- * + SMS through the legacy `ai_handoff` scenario below — every venue owner
- * and team member was getting handed off twice. `pushOnly: true` keeps this
- * call doing exactly what its name says: the lock-screen push alert only.
- */
+/** Fire an "AI Concierge handed off to you" push. */
 export function notifyOwnerAiHandoff(input: {
   venueId: string;
   leadId: string;
@@ -554,59 +519,5 @@ export function notifyOwnerAiHandoff(input: {
       reason:        input.reason || 'needs human follow-up',
     },
     actionUrl: `/dashboard/contacts/${input.leadId}`,
-    pushOnly:  true,
   });
-}
-
-/**
- * Fire a PUSH-ONLY alert when the StoryVenue Concierge team sends a Venue
- * Direct message to a venue.
- *
- * Email + SMS for Venue Direct are handled inline in the venue-direct route
- * (they honour each recipient's per-person email_venue_direct /
- * sms_venue_direct prefs), so this deliberately sends ONLY web + native push
- * so the mobile app both alerts and updates its badge. Push toggles are
- * venue-wide, so we gate on the master `push_enabled` toggle only (always-on
- * for this alert once push is enabled, like the other first-class signals).
- *
- * `sendNativePush` recomputes the app-icon badge from getServerBadgeCount(),
- * which already counts unread venue_direct messages, so the badge is correct
- * the instant this push lands. Best-effort — never throws.
- */
-export async function notifyOwnerVenueDirectPush(input: {
-  venueId: string;
-  venueCustomerId: string;
-}): Promise<void> {
-  try {
-    const settings = await loadSettings(input.venueId);
-    if (settings.push_enabled !== true) {
-      console.log('[notifyOwnerVenueDirectPush] push disabled for venue', input.venueId);
-      return;
-    }
-    const title = 'StoryVenue';
-    const body  = 'You have a new message from the StoryVenue Concierge team.';
-    const url   = `/dashboard/contacts/${input.venueCustomerId}?tab=concierge`;
-    const [result, nativeResult] = await Promise.all([
-      sendPushToVenue(input.venueId, {
-        title,
-        body,
-        url,
-        tag: `venue_direct-${input.venueId}`,
-      }),
-      sendNativePush(input.venueId, {
-        title,
-        body,
-        url,
-        data: { scenario: 'venue_direct', venueId: input.venueId },
-      }),
-    ]);
-    if (result.sent > 0 || result.pruned > 0) {
-      console.log('[notifyOwnerVenueDirectPush] push', result);
-    }
-    if (nativeResult.sent > 0 || nativeResult.pruned > 0) {
-      console.log('[notifyOwnerVenueDirectPush] native-push', nativeResult);
-    }
-  } catch (err) {
-    console.error('[notifyOwnerVenueDirectPush]', err instanceof Error ? err.message : err);
-  }
 }

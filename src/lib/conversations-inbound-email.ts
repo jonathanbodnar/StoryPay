@@ -336,7 +336,8 @@ export async function insertInboundConversationEmail(params: {
       threadId,
       fromName,
       fromEmail,
-      bodyText: body,
+      bodyText:        body,
+      venueCustomerId: customerId,
     });
   }
 
