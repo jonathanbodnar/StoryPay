@@ -329,8 +329,18 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
             logoUrl:    venue.brand_logo_url || undefined,
             venueName,
           });
+          // Send from the dedicated notifications address so venue owners
+          // see "StoryVenue" (not hello@) in their inbox.
+          // Honour NOTIFICATION_FROM_EMAIL if configured on the host.
+          const notifFromEmail =
+            process.env.NOTIFICATION_FROM_EMAIL?.trim() || 'notifications@send.storyvenue.com';
           const results = await Promise.allSettled(
-            emailRecipients.map(r => sendEmail({ to: r.email as string, subject, html })),
+            emailRecipients.map(r => sendEmail({
+              to: r.email as string,
+              subject,
+              html,
+              from: { email: notifFromEmail, name: 'StoryVenue' },
+            })),
           );
           for (let i = 0; i < results.length; i++) {
             const res = results[i];
