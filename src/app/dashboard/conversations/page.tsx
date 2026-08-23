@@ -1793,11 +1793,15 @@ export default function ConversationsPage() {
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+      <div className={classNames(
+        'flex min-h-0 flex-1 overflow-hidden',
+        isNativeApp() ? 'bg-white' : 'rounded-2xl border border-gray-200 bg-white',
+      )}>
         {/* Thread list */}
         <aside
           className={classNames(
-            'flex w-full flex-shrink-0 flex-col border-gray-200 bg-gray-50/80 lg:w-[min(100%,340px)] lg:border-r',
+            'flex w-full flex-shrink-0 flex-col border-gray-200 lg:w-[min(100%,340px)] lg:border-r',
+            isNativeApp() ? 'bg-white' : 'bg-gray-50/80',
             mobileShowThread ? 'hidden lg:flex' : 'flex',
           )}
         >
