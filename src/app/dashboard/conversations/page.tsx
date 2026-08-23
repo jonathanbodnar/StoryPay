@@ -1258,14 +1258,17 @@ export default function ConversationsPage() {
         setBody('');
         setComposerExpanded(false);
         // Reload messages so the new venue_direct bubble renders correctly.
-        // (We don't append optimistically here because the GET endpoint is
-        // already cheap and the audience-based styling depends on extra
-        // fields we'd otherwise have to backfill.)
         try {
           const r = await fetch(`/api/conversations/threads/${selectedId}/messages`, { cache: 'no-store' });
           const msgs = (await r.json()) as Msg[];
           if (Array.isArray(msgs)) setMessages(msgs);
         } catch { /* non-fatal */ }
+        // Auto-mark read when owner sends a reply.
+        void fetch(`/api/conversations/threads/${selectedId}/read`, { method: 'POST', cache: 'no-store' })
+          .then(() => {
+            setThreads((prev) => prev.map((t) => t.thread_id === selectedId ? { ...t, unread_count: 0 } : t));
+            window.dispatchEvent(new Event('storypay:conversations-unread'));
+          }).catch(() => {});
         void loadThreads({ silent: true });
       } finally {
         setSending(false);
@@ -1327,6 +1330,12 @@ export default function ConversationsPage() {
         };
         setMessages(prev => [...prev, newMsg]);
       }
+      // Auto-mark read when owner sends a reply.
+      void fetch(`/api/conversations/threads/${selectedId}/read`, { method: 'POST', cache: 'no-store' })
+        .then(() => {
+          setThreads((prev) => prev.map((t) => t.thread_id === selectedId ? { ...t, unread_count: 0 } : t));
+          window.dispatchEvent(new Event('storypay:conversations-unread'));
+        }).catch(() => {});
       void loadThreads({ silent: true });
     } finally {
       setSending(false);
@@ -2198,6 +2207,30 @@ export default function ConversationsPage() {
                   {aiActionMsg && (
                     <span className="text-xs text-gray-500 max-w-[160px] truncate">{aiActionMsg}</span>
                   )}
+
+                  {/* Read / Unread toggle — native app only, shown in the
+                      thread header next to Profile so owners can quickly
+                      flag a conversation to come back to it. */}
+                  {isNativeApp() && selectedId && (() => {
+                    const activeThread = threads.find((t) => t.thread_id === selectedId);
+                    const isUnread = (activeThread?.unread_count ?? 0) > 0;
+                    return (
+                      <button
+                        type="button"
+                        aria-label={isUnread ? 'Mark as read' : 'Mark as unread'}
+                        onClick={(e) => {
+                          if (isUnread) {
+                            void markThreadRead(selectedId, e);
+                          } else {
+                            void markThreadUnread(selectedId, e);
+                          }
+                        }}
+                        className="inline-flex flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-50 active:bg-gray-100"
+                      >
+                        {isUnread ? <MailCheck size={16} /> : <MailOpen size={16} />}
+                      </button>
+                    );
+                  })()}
 
                   {contactProfileHref ? (
                     <button
