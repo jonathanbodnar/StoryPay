@@ -348,6 +348,13 @@ export default function ConversationsPage() {
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const deepLinkConsumed = useRef(false);
 
+  // Pull-to-refresh state (native only)
+  const [pullY, setPullY] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const PULL_THRESHOLD = 72;
+  const touchStartY = useRef(0);
+  const pulling = useRef(false);
+
   // `silent` background refreshes update the thread array WITHOUT flipping
   // `loadingList`, which would swap the whole list for the spinner and reset
   // the left pane's scroll position back to the top. Only the initial mount
@@ -403,6 +410,49 @@ export default function ConversationsPage() {
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => { el.removeEventListener('scroll', onScroll); clearTimeout(timer); };
   }, []);
+
+  // Pull-to-refresh gesture (native only — checks listRef scroll position)
+  useEffect(() => {
+    if (!isNativeApp()) return;
+
+    function onTouchStart(e: TouchEvent) {
+      touchStartY.current = e.touches[0].clientY;
+      pulling.current = false;
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      const scrollTop = listRef.current ? listRef.current.scrollTop : 0;
+      if (scrollTop > 2) return;
+      const dy = e.touches[0].clientY - touchStartY.current;
+      if (dy <= 0) return;
+      pulling.current = true;
+      const clamped = Math.min(dy * 0.45, PULL_THRESHOLD * 1.2);
+      setPullY(clamped);
+      if (dy > 8) e.preventDefault();
+    }
+
+    function onTouchEnd() {
+      if (!pulling.current) return;
+      pulling.current = false;
+      if (pullY >= PULL_THRESHOLD) {
+        setRefreshing(true);
+        setPullY(0);
+        void loadThreads({ silent: true });
+        setTimeout(() => setRefreshing(false), 800);
+      } else {
+        setPullY(0);
+      }
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [pullY, loadThreads]);
 
   // Push-notification deep link: /dashboard/conversations?thread=<id>.
   // Driven by useSearchParams (NOT a one-shot window.location read) so it
@@ -1947,6 +1997,78 @@ export default function ConversationsPage() {
                             )}
                           </div>
                         )}
+
+                        {/* Action buttons row */}
+                        <div className="mt-1.5 flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            title={t.has_starred ? 'Remove star' : 'Star thread'}
+                            onClick={(e) => void toggleThreadStarPin(t.thread_id, 'is_starred', e)}
+                            className="rounded p-1 text-gray-400 hover:bg-gray-100 active:bg-gray-200 hover:text-amber-600"
+                          >
+                            <Star size={15} className={t.has_starred ? 'fill-amber-400 text-amber-500' : ''} />
+                          </button>
+                          <button
+                            type="button"
+                            title={t.has_pinned ? 'Unpin' : 'Pin thread'}
+                            onClick={(e) => void toggleThreadStarPin(t.thread_id, 'is_pinned', e)}
+                            className="rounded p-1 text-gray-400 hover:bg-gray-100 active:bg-gray-200 hover:text-sky-700"
+                          >
+                            <Pin size={15} className={t.has_pinned ? 'text-sky-600' : ''} />
+                          </button>
+                          {unread ? (
+                            <button
+                              type="button"
+                              title="Mark as read"
+                              onClick={(e) => void markThreadRead(t.thread_id, e)}
+                              className="rounded p-1 text-gray-400 hover:bg-gray-100 active:bg-gray-200 hover:text-emerald-600"
+                            >
+                              <MailCheck size={14} />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              title="Mark as unread"
+                              onClick={(e) => void markThreadUnread(t.thread_id, e)}
+                              className="rounded p-1 text-gray-400 hover:bg-gray-100 active:bg-gray-200 hover:text-blue-600"
+                            >
+                              <MailOpen size={14} />
+                            </button>
+                          )}
+                          {confirmDeleteId === t.thread_id ? (
+                            <span className="flex items-center gap-0.5">
+                              <button
+                                type="button"
+                                title="Confirm delete"
+                                onClick={(e) => { e.stopPropagation(); void deleteThread(t.thread_id); }}
+                                className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white bg-red-600 hover:bg-red-700"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                                className="rounded p-1 text-gray-400 hover:bg-gray-100"
+                              >
+                                <X size={12} />
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              title="Delete conversation"
+                              onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(t.thread_id); }}
+                              className="rounded p-1 text-gray-400 hover:bg-gray-100 active:bg-gray-200 hover:text-red-600"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                          {unread ? (
+                            <span className="ml-auto inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
+                              {unreadN > 99 ? '99+' : unreadN}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   );
