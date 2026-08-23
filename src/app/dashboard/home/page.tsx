@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MessageCircle, Inbox, Calendar, Phone, ChevronRight, Clock, MapPin, CheckCircle2, Check,
 } from 'lucide-react';
 import { getClientCache, setClientCache } from '@/lib/client-cache';
+import { isNativeApp } from '@/lib/platform';
 
 /**
  * "Today" home screen — the default landing screen on mobile / the native app.
@@ -214,67 +215,111 @@ export default function MobileHomePage() {
   const [events, setEvents] = useState<CalEvent[]>(() => getClientCache<CalEvent[]>('home:events') ?? []);
   const [loading, setLoading] = useState(() => getClientCache<Thread[]>('home:threads') === undefined);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Pull-to-refresh state (native app only).
+  const [pullY, setPullY] = useState(0);          // current drag distance (px)
+  const [refreshing, setRefreshing] = useState(false);
+  const PULL_THRESHOLD = 72;                        // px needed to trigger refresh
+  const touchStartY = useRef(0);
+  const pulling = useRef(false);
 
-    // Unread conversation count (metric card).
+  const loadData = useCallback((cancelled?: { current: boolean }) => {
     fetch('/api/conversations/unread-count')
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { count?: number } | null) => {
-        if (!cancelled && d && typeof d.count === 'number') {
-          setUnread(d.count);
-          setClientCache('home:unread', d.count);
-        }
+        if (cancelled?.current) return;
+        if (d && typeof d.count === 'number') { setUnread(d.count); setClientCache('home:unread', d.count); }
       })
       .catch(() => {});
 
-    // New leads in the last 7 days (metric card).
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     fetch(`/api/leads/unread-count?since=${encodeURIComponent(weekAgo)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { count?: number } | null) => {
-        if (!cancelled && d && typeof d.count === 'number') {
-          setNewLeads(d.count);
-          setClientCache('home:newLeads', d.count);
-        }
+        if (cancelled?.current) return;
+        if (d && typeof d.count === 'number') { setNewLeads(d.count); setClientCache('home:newLeads', d.count); }
       })
       .catch(() => {});
 
-    // Unread threads → "Needs a reply" list.
     fetch('/api/conversations/threads?unread=1')
       .then((r) => (r.ok ? r.json() : null))
       .then((rows: Thread[] | null) => {
-        if (!cancelled && Array.isArray(rows)) {
+        if (cancelled?.current) return;
+        if (Array.isArray(rows)) {
           const top = rows.slice(0, 8);
           setThreads(top);
           setClientCache('home:threads', top);
         }
       })
       .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .finally(() => { if (!cancelled?.current) setLoading(false); });
 
-    // Today's calendar events → "Today's schedule".
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const end = new Date(); end.setHours(23, 59, 59, 999);
     fetch(`/api/calendar?from=${encodeURIComponent(start.toISOString())}&to=${encodeURIComponent(end.toISOString())}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((rows: CalEvent[] | null) => {
-        if (cancelled || !Array.isArray(rows)) return;
+        if (cancelled?.current || !Array.isArray(rows)) return;
         const s = start.getTime();
         const e = end.getTime();
         const todays = rows
-          .filter((ev) => {
-            const t = new Date(ev.start_at).getTime();
-            return !Number.isNaN(t) && t >= s && t <= e;
-          })
+          .filter((ev) => { const t = new Date(ev.start_at).getTime(); return !Number.isNaN(t) && t >= s && t <= e; })
           .sort((a, b) => a.start_at.localeCompare(b.start_at));
         setEvents(todays);
         setClientCache('home:events', todays);
       })
       .catch(() => {});
-
-    return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    const cancelled = { current: false };
+    loadData(cancelled);
+    return () => { cancelled.current = true; };
+  }, [loadData]);
+
+  // Pull-to-refresh gesture (native only — browser already has overscroll).
+  useEffect(() => {
+    if (!isNativeApp()) return;
+
+    function onTouchStart(e: TouchEvent) {
+      touchStartY.current = e.touches[0].clientY;
+      pulling.current = false;
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      const scrollEl = document.scrollingElement || document.documentElement;
+      if (scrollEl.scrollTop > 2) return; // only at the very top
+      const dy = e.touches[0].clientY - touchStartY.current;
+      if (dy <= 0) return;
+      pulling.current = true;
+      // Rubber-band: full pull distance at threshold, diminishing returns above.
+      const clamped = Math.min(dy * 0.45, PULL_THRESHOLD * 1.2);
+      setPullY(clamped);
+      if (dy > 8) e.preventDefault(); // block native bounce
+    }
+
+    function onTouchEnd() {
+      if (!pulling.current) return;
+      pulling.current = false;
+      if (pullY >= PULL_THRESHOLD) {
+        setRefreshing(true);
+        setPullY(0);
+        loadData();
+        // Show spinner for at least 800ms so it doesn't flash.
+        setTimeout(() => setRefreshing(false), 800);
+      } else {
+        setPullY(0);
+      }
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [pullY, loadData]);
 
   // Clearing a card marks the thread read server-side (so it stays cleared
   // and reappears only if the contact messages again), removes it locally,
@@ -310,6 +355,24 @@ export default function MobileHomePage() {
     // No max-width cap — matches every other native tab (Messages, Contacts,
     // Calendar), which all use the full available width with no inner cap.
     <div>
+      {/* Pull-to-refresh indicator — slides in from the top while dragging,
+          stays visible as a spinner while the fetch runs. Native only. */}
+      {isNativeApp() && (pullY > 0 || refreshing) && (
+        <div
+          className="pointer-events-none flex items-center justify-center overflow-hidden transition-all duration-150"
+          style={{ height: refreshing ? 44 : pullY, opacity: refreshing ? 1 : Math.min(pullY / 40, 1) }}
+        >
+          <svg
+            className={refreshing ? 'animate-spin' : ''}
+            style={{ transform: refreshing ? undefined : `rotate(${Math.min(pullY / 72, 1) * 180}deg)` }}
+            width={22} height={22} viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+        </div>
+      )}
+
       {/* Greeting */}
       <div className="pb-1">
         <h1 className="font-heading text-2xl text-gray-900">{greeting()}</h1>
