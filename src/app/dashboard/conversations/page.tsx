@@ -481,7 +481,12 @@ export default function ConversationsPage() {
   }, [loadThreads]);
 
   useEffect(() => {
-    if (loadingList || threads.length !== 1 || selectedId) return;
+    // On the native app, never auto-open a thread on load — the user should
+    // always land on the full thread list and tap in deliberately. Auto-open
+    // only happens via an explicit ?thread= / ?customer= deep link (push
+    // notification tap or Needs a Reply card). On the web desktop layout the
+    // auto-select is fine because both panels are visible side-by-side.
+    if (loadingList || threads.length !== 1 || selectedId || isNativeApp()) return;
     setSelectedId(threads[0].thread_id);
     setMobileShowThread(true);
   }, [loadingList, threads, selectedId]);
