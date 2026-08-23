@@ -1677,8 +1677,8 @@ export default function ConversationsPage() {
           scrolls horizontally instead of wrapping so it always stays a
           single line no matter how many stage pills a venue's pipeline has. ── */}
       <div className={classNames(
-        'no-scrollbar mb-3 flex flex-shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto border border-gray-200 bg-white',
-        isNativeApp() ? 'h-10 rounded-lg px-2' : 'rounded-2xl px-3 py-2',
+        'no-scrollbar flex flex-shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto border border-gray-200 bg-white',
+        isNativeApp() ? 'mb-2 h-10 rounded-lg px-2' : 'mb-3 rounded-2xl px-3 py-2',
       )}>
         {/* ── Icon-toggle overlays: pinned + starred (leftmost, independent of the
             main/stage pills — combinable with any single-select filter below) ── */}
@@ -1835,7 +1835,7 @@ export default function ConversationsPage() {
           </div>
           <div
             ref={listRef}
-            className="sp-thread-list min-h-0 flex-1 overflow-y-auto"
+            className={classNames('sp-thread-list min-h-0 flex-1 overflow-y-auto', isNativeApp() ? 'pt-3' : '')}
             style={isNativeApp() ? { touchAction: 'pan-y', overscrollBehavior: 'contain' } : undefined}
           >
             {/* ── Team contacts directory (shown at top when Team filter is active) ── */}
@@ -1965,7 +1965,7 @@ export default function ConversationsPage() {
                       role="button"
                       tabIndex={0}
                       {...rowHandlers}
-                      className="flex w-full cursor-pointer items-start gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors active:bg-gray-100"
+                      className="flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition-colors active:bg-gray-100"
                     >
                       {/* Avatar circle — top-aligned so it sits beside the name,
                           not vertically centered across the whole card height. */}
@@ -2093,6 +2093,10 @@ export default function ConversationsPage() {
                           )}
                         </div>
                       </div>
+                      {/* Inset separator — starts after the avatar (px-4 + w-11 + gap-3 = 71px)
+                          so it matches the width of the filter/search boxes above and looks
+                          like the iMessage / iOS Contacts separator style. */}
+                      <div className="ml-[71px] h-px bg-gray-100" />
                     </div>
                   );
                 }
