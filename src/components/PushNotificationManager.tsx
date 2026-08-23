@@ -34,7 +34,7 @@ import { Bell, BellOff, Loader2, CheckCircle2, AlertTriangle, Send, Smartphone }
 const SCENARIO_TOGGLES: { key: string; label: string; description: string; defaultOn: boolean }[] = [
   { key: 'push_new_lead',             label: 'New lead',              description: 'Someone enquires through your listing or website form.', defaultOn: true },
   { key: 'push_new_message',          label: 'New message',           description: 'A contact replies to a conversation.',                   defaultOn: true },
-  { key: 'push_ai_handoff',           label: 'AI Concierge handoff',  description: 'The AI hands a conversation back to you.',               defaultOn: true },
+  { key: 'push_ai_handoff',           label: 'Concierge handoff',     description: 'Your StoryVenue Concierge Team hands a conversation back to you.', defaultOn: true },
   { key: 'push_proposal_signed',      label: 'Proposal signed',       description: 'A customer signs a proposal you sent.',                  defaultOn: true },
   { key: 'push_document_viewed',      label: 'Document viewed',       description: 'A customer opens a proposal or invoice you sent.',       defaultOn: false },
   { key: 'push_payment_received',     label: 'Payment received',      description: 'Any successful payment from a customer.',                defaultOn: true },

@@ -10,7 +10,7 @@ import { requestNativePushPermission } from '@/components/NativePushRegistrar';
 const NATIVE_TOGGLES = [
   { key: 'push_new_lead',    label: 'New lead',             description: 'Someone enquires about your venue.',    defaultOn: true },
   { key: 'push_new_message', label: 'New message',          description: 'A contact sends you a reply.',          defaultOn: true },
-  { key: 'push_ai_handoff',  label: 'AI Concierge handoff', description: 'The AI hands a conversation to you.',   defaultOn: true },
+  { key: 'push_ai_handoff',  label: 'Concierge handoff', description: 'Your StoryVenue Concierge Team hands a conversation back to you.', defaultOn: true },
 ];
 
 // Financial scenario keys disabled on native to satisfy App Store guidelines.

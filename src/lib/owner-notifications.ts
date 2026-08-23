@@ -241,7 +241,10 @@ const SCENARIO_META: Record<OwnerScenario, {
     defaultEmailHeading: 'AI Concierge Handoff',
     defaultEmailBody:    'The AI Concierge handed off the conversation with {{customer_name}} to you. Reason: {{reason}}',
     defaultPushTitle: 'StoryVenue',
-    defaultPushBody:  'AI handoff: {{customer_name}} needs a human — {{reason}}',
+    // Push-only channel that venue owners actually see (see comment on
+    // notifyOwnerAiHandoff below) — kept AI-free, unlike the vestigial
+    // email/SMS copy above which is unreachable dead config.
+    defaultPushBody:  'Your StoryVenue Concierge Team needs you: {{customer_name}} — {{reason}}',
     defaultPushUrl:   '/dashboard/conversations',
   },
 };

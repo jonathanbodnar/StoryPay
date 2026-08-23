@@ -678,7 +678,7 @@ async function markExhausted(row: ReservedLeadRow): Promise<void> {
         notifyRoles:   ['venue_owner', 'concierge'],
         brideName:     first,
         brideFullName: full,
-        extraDetail:   `${row.ai_attempt_count} AI follow-ups were sent over 60 days with no reply.`,
+        extraDetail:   `${row.ai_attempt_count} follow-up messages were sent over 60 days with no reply.`,
       });
     } catch (e) {
       console.error('[ai-send] markExhausted notify failed:', e);
