@@ -1815,7 +1815,13 @@ export default function ConversationsPage() {
               {listActionError}
             </p>
           ) : null}
-          <div className="flex-shrink-0 border-b border-gray-200 p-2">
+          <div className={classNames(
+            'flex-shrink-0 border-b border-gray-200',
+            // On native: no horizontal padding so the input's own border sits
+            // flush with the container edges — same visual width as the filter
+            // bar above it. On web: keep the original inset look.
+            isNativeApp() ? 'py-1.5' : 'p-2',
+          )}>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
