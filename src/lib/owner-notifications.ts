@@ -494,6 +494,10 @@ export function notifyOwnerNewMessage(input: {
 
     if (!display) display = 'Someone';
 
+    // Capitalize the first letter of each word in the name so it always
+    // reads "Jason Westbrook" instead of "jason westbrook".
+    display = display.replace(/\b\w/g, (c) => c.toUpperCase());
+
     await notifyOwner({
       venueId:   input.venueId,
       scenario:  'new_message',
