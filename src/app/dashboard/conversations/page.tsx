@@ -1980,7 +1980,7 @@ export default function ConversationsPage() {
                             </span>
                           ) : null}
                           {unread ? (
-                            <span className="inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-bold leading-none text-white tabular-nums">
+                            <span className="inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white tabular-nums">
                               {unreadN > 99 ? '99+' : unreadN}
                             </span>
                           ) : null}
@@ -2085,11 +2085,6 @@ export default function ConversationsPage() {
                               <Trash2 size={14} />
                             </button>
                           )}
-                          {unread ? (
-                            <span className="ml-auto inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white tabular-nums">
-                              {unreadN > 99 ? '99+' : unreadN}
-                            </span>
-                          ) : null}
                         </div>
                       </div>
                     </div>
