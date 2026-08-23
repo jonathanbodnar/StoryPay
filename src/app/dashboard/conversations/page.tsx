@@ -1852,24 +1852,112 @@ export default function ConversationsPage() {
                   'Contact';
                 const unreadN = Number(t.unread_count ?? 0);
                 const unread = unreadN > 0;
+                // Avatar initials — up to 2 chars from first + last name.
+                const parts = [t.contact_first_name, t.contact_last_name].filter(Boolean);
+                const avatarInitials = parts.length >= 2
+                  ? (parts[0]![0]! + parts[1]![0]!).toUpperCase()
+                  : (parts[0]?.[0] ?? t.contact_email?.[0] ?? '?').toUpperCase();
+                const rowHandlers = {
+                  onClick: () => {
+                    setSelectedId(t.thread_id);
+                    setMobileShowThread(true);
+                    setProfileDrawerOpen(false);
+                  },
+                  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedId(t.thread_id);
+                      setMobileShowThread(true);
+                      setProfileDrawerOpen(false);
+                    }
+                  },
+                };
+
+                if (isNativeApp()) {
+                  // iMessage-style row for native mobile
+                  return (
+                    <div
+                      key={t.thread_id}
+                      role="button"
+                      tabIndex={0}
+                      {...rowHandlers}
+                      className={classNames(
+                        'flex w-full cursor-pointer items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors',
+                        selectedId === t.thread_id
+                          ? 'bg-blue-50'
+                          : unread
+                            ? 'bg-blue-50/40 active:bg-gray-100'
+                            : 'active:bg-gray-100',
+                      )}
+                    >
+                      {/* Avatar circle */}
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1B1B1B]">
+                        <span className="text-sm font-semibold text-white">{avatarInitials}</span>
+                      </div>
+
+                      {/* Content */}
+                      <div className="min-w-0 flex-1">
+                        {/* Name row + timestamp + unread badge */}
+                        <div className="flex items-center gap-1.5">
+                          <span className={classNames('min-w-0 flex-1 truncate text-[15px]', unread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800')}>
+                            {name}
+                          </span>
+                          {t.last_message_at ? (
+                            <span className="shrink-0 text-xs text-gray-400 tabular-nums">
+                              {fmtThreadTime(t.last_message_at)}
+                            </span>
+                          ) : null}
+                          {unread ? (
+                            <span className="inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-bold leading-none text-white tabular-nums">
+                              {unreadN > 99 ? '99+' : unreadN}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {/* Preview text */}
+                        <p className={classNames('truncate text-sm leading-snug', unread ? 'font-medium text-gray-700' : 'text-gray-400')}>
+                          {t.last_message_preview || t.subject || 'No messages'}
+                        </p>
+
+                        {/* Compact badges row */}
+                        {(t.contact_stage?.name || t.contact_dnd_any || t.last_message_visibility === 'internal') && (
+                          <div className="mt-0.5 flex items-center gap-1">
+                            {t.contact_stage?.name ? (
+                              <span
+                                className="inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] font-semibold"
+                                style={t.contact_stage.color ? {
+                                  backgroundColor: `${t.contact_stage.color}1f`,
+                                  color: t.contact_stage.color,
+                                  borderColor: `${t.contact_stage.color}55`,
+                                } : { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }}
+                                title={t.contact_stage.name}
+                              >
+                                {t.contact_stage.name}
+                              </span>
+                            ) : null}
+                            {t.contact_dnd_any && (
+                              <span className="inline-flex items-center rounded bg-red-100 px-1.5 py-0 text-[10px] font-semibold text-red-700 border border-red-200">
+                                DND
+                              </span>
+                            )}
+                            {t.last_message_visibility === 'internal' && (
+                              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0 text-[10px] text-amber-800">
+                                <Lock size={10} /> Team
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={t.thread_id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => {
-                      setSelectedId(t.thread_id);
-                      setMobileShowThread(true);
-                      setProfileDrawerOpen(false);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setSelectedId(t.thread_id);
-                        setMobileShowThread(true);
-                        setProfileDrawerOpen(false);
-                      }
-                    }}
+                    {...rowHandlers}
                     className={classNames(
                       'flex w-full cursor-pointer flex-col gap-0.5 border-b border-gray-100 px-4 py-3 text-left transition-colors',
                       selectedId === t.thread_id && unread
