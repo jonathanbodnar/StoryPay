@@ -105,7 +105,8 @@ function ReplyCard({
   const startY = useRef(0);
   const swiping = useRef(false);
 
-  const name = `${t.contact_first_name || ''} ${t.contact_last_name || ''}`.trim() || t.contact_email || 'Contact';
+  const rawName = `${t.contact_first_name || ''} ${t.contact_last_name || ''}`.trim() || t.contact_email || 'Contact';
+  const name = rawName.replace(/\b\w/g, (c) => c.toUpperCase());
   const phone = formatPhone(t.contact_phone);
   const openHref = t.venue_customer_id
     ? `/dashboard/conversations?customer=${t.venue_customer_id}`
