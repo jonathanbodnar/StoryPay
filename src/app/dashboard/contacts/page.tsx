@@ -116,6 +116,13 @@ export default function ContactsPage() {
   const [importMessage, setImportMessage] = useState('');
   const importInputRef = useRef<HTMLInputElement>(null);
 
+  // Pull-to-refresh state (native only)
+  const [pullY, setPullY] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const PULL_THRESHOLD = 72;
+  const touchStartY = useRef(0);
+  const pulling = useRef(false);
+
   // GHL sync state
   const [ghlConnected, setGhlConnected] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'running' | 'done'>('idle');
@@ -265,6 +272,49 @@ export default function ContactsPage() {
     fetchContacts(search, newPage);
   }
 
+  // Pull-to-refresh gesture (native only)
+  useEffect(() => {
+    if (!isNativeApp()) return;
+
+    function onTouchStart(e: TouchEvent) {
+      touchStartY.current = e.touches[0].clientY;
+      pulling.current = false;
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      const scrollEl = document.scrollingElement || document.documentElement;
+      if (scrollEl.scrollTop > 2) return;
+      const dy = e.touches[0].clientY - touchStartY.current;
+      if (dy <= 0) return;
+      pulling.current = true;
+      const clamped = Math.min(dy * 0.45, PULL_THRESHOLD * 1.2);
+      setPullY(clamped);
+      if (dy > 8) e.preventDefault();
+    }
+
+    function onTouchEnd() {
+      if (!pulling.current) return;
+      pulling.current = false;
+      if (pullY >= PULL_THRESHOLD) {
+        setRefreshing(true);
+        setPullY(0);
+        void fetchContacts(search, 1);
+        setTimeout(() => setRefreshing(false), 800);
+      } else {
+        setPullY(0);
+      }
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [pullY, fetchContacts, search]);
+
   // iPhone-style alphabetical sections (native list only). Contacts arrive from
   // the server already sorted A–Z, so we just bucket them by first letter.
   const groupedContacts = useMemo(() => {
@@ -388,6 +438,21 @@ export default function ContactsPage() {
 
   return (
     <div>
+      {isNativeApp() && (pullY > 0 || refreshing) && (
+        <div
+          className="pointer-events-none flex items-center justify-center overflow-hidden transition-all duration-150"
+          style={{ height: refreshing ? 44 : pullY, opacity: refreshing ? 1 : Math.min(pullY / 40, 1) }}
+        >
+          <svg
+            className={refreshing ? 'animate-spin' : ''}
+            style={{ transform: refreshing ? undefined : `rotate(${Math.min(pullY / 72, 1) * 180}deg)` }}
+            width={22} height={22} viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+        </div>
+      )}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Contacts</h1>

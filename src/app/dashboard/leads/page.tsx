@@ -387,6 +387,13 @@ export default function LeadsPage() {
   const [venueTz, setVenueTz] = useState<string | undefined>(undefined);
   const router = useRouter();
 
+  // Pull-to-refresh state (native only)
+  const [pullY, setPullY] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const PULL_THRESHOLD = 72;
+  const touchStartY = useRef(0);
+  const pulling = useRef(false);
+
   // On the native app every lead entry point opens the full contact-profile
   // page (the richest view — same one Contacts / Messages open) instead of the
   // lead drawer. We resolve/create the lead's venue_customer, then navigate.
@@ -571,6 +578,49 @@ export default function LeadsPage() {
   useEffect(() => { void loadPipelines(); }, [loadPipelines]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadLeads(); }, [loadLeads]);
+
+  // Pull-to-refresh gesture (native only)
+  useEffect(() => {
+    if (!isNativeApp()) return;
+
+    function onTouchStart(e: TouchEvent) {
+      touchStartY.current = e.touches[0].clientY;
+      pulling.current = false;
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      const scrollEl = document.scrollingElement || document.documentElement;
+      if (scrollEl.scrollTop > 2) return;
+      const dy = e.touches[0].clientY - touchStartY.current;
+      if (dy <= 0) return;
+      pulling.current = true;
+      const clamped = Math.min(dy * 0.45, PULL_THRESHOLD * 1.2);
+      setPullY(clamped);
+      if (dy > 8) e.preventDefault();
+    }
+
+    function onTouchEnd() {
+      if (!pulling.current) return;
+      pulling.current = false;
+      if (pullY >= PULL_THRESHOLD) {
+        setRefreshing(true);
+        setPullY(0);
+        void loadLeads();
+        setTimeout(() => setRefreshing(false), 800);
+      } else {
+        setPullY(0);
+      }
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [pullY, loadLeads]);
 
   const loadInsights = useCallback(async () => {
     if (!activePipelineId) {
@@ -840,6 +890,21 @@ export default function LeadsPage() {
 
   return (
     <div className="space-y-4">
+      {isNativeApp() && (pullY > 0 || refreshing) && (
+        <div
+          className="pointer-events-none flex items-center justify-center overflow-hidden transition-all duration-150"
+          style={{ height: refreshing ? 44 : pullY, opacity: refreshing ? 1 : Math.min(pullY / 40, 1) }}
+        >
+          <svg
+            className={refreshing ? 'animate-spin' : ''}
+            style={{ transform: refreshing ? undefined : `rotate(${Math.min(pullY / 72, 1) * 180}deg)` }}
+            width={22} height={22} viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+        </div>
+      )}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-xl text-gray-900 flex items-center gap-2">

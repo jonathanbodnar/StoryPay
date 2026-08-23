@@ -1636,6 +1636,21 @@ export default function ConversationsPage() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] min-h-[520px] flex-col gap-0 sm:h-[calc(100vh-6rem)]">
+      {isNativeApp() && (pullY > 0 || refreshing) && (
+        <div
+          className="pointer-events-none flex flex-shrink-0 items-center justify-center overflow-hidden transition-all duration-150"
+          style={{ height: refreshing ? 44 : pullY, opacity: refreshing ? 1 : Math.min(pullY / 40, 1) }}
+        >
+          <svg
+            className={refreshing ? 'animate-spin' : ''}
+            style={{ transform: refreshing ? undefined : `rotate(${Math.min(pullY / 72, 1) * 180}deg)` }}
+            width={22} height={22} viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+        </div>
+      )}
       <div className="mb-4 flex flex-shrink-0 flex-wrap items-start justify-between gap-3 px-1">
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Conversations</h1>
