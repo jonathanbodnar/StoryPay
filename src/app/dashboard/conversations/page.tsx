@@ -1678,7 +1678,7 @@ export default function ConversationsPage() {
           single line no matter how many stage pills a venue's pipeline has. ── */}
       <div className={classNames(
         'no-scrollbar flex flex-shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto border border-gray-200 bg-white',
-        isNativeApp() ? 'mb-2 h-10 rounded-lg px-2' : 'mb-3 rounded-2xl px-3 py-2',
+        isNativeApp() ? 'mx-2 mb-2 h-10 rounded-lg px-2' : 'mb-3 rounded-2xl px-3 py-2',
       )}>
         {/* ── Icon-toggle overlays: pinned + starred (leftmost, independent of the
             main/stage pills — combinable with any single-select filter below) ── */}
@@ -1820,7 +1820,7 @@ export default function ConversationsPage() {
             // On native: no bottom border (avoids a visible separator line above
             // the first card) and no horizontal padding so the input sits flush.
             // On web: keep the original inset look with bottom border.
-            isNativeApp() ? 'pb-1.5' : 'p-2 border-b border-gray-200',
+            isNativeApp() ? 'mx-2 pb-1.5' : 'p-2 border-b border-gray-200',
           )}>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
