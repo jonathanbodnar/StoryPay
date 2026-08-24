@@ -60,7 +60,7 @@ async function resolveVars(ctx: CannedReplyContext): Promise<ResolvedVars> {
   const [{ data: venue }, { data: customer }] = await Promise.all([
     venueId
       ? supabaseAdmin.from('venues')
-          .select('name, ai_assistant_persona_name')
+          .select('name, owner_first_name')
           .eq('id', venueId).maybeSingle()
       : Promise.resolve({ data: null }),
     venueCustomerId
@@ -70,7 +70,7 @@ async function resolveVars(ctx: CannedReplyContext): Promise<ResolvedVars> {
       : Promise.resolve({ data: null }),
   ]);
 
-  const v = venue as { name?: string; ai_assistant_persona_name?: string | null } | null;
+  const v = venue as { name?: string; owner_first_name?: string | null } | null;
   const c = customer as { first_name?: string | null; last_name?: string | null; customer_email?: string | null } | null;
 
   const first = (c?.first_name ?? '').trim();
@@ -82,7 +82,7 @@ async function resolveVars(ctx: CannedReplyContext): Promise<ResolvedVars> {
     bride_full_name:  [first, last].filter(Boolean).join(' ') || 'there',
     bride_email:      (c?.customer_email ?? '').trim(),
     venue_name:       (v?.name ?? '').trim() || 'our venue',
-    venue_persona:    (v?.ai_assistant_persona_name ?? '').trim() || (v?.name ?? '').trim() || 'the team',
+    venue_persona:    (v?.owner_first_name ?? '').trim() || (v?.name ?? '').trim() || 'the team',
     agent_name:       (ctx.agentName ?? '').trim(),
     current_date:     new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
   };

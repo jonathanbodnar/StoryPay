@@ -131,13 +131,13 @@ export function clearAiConfigCache(): void {
 // ── Loader: venue + lead context ───────────────────────────────────────────
 
 interface VenueContextRow {
-  id:                          string;
-  name:                        string | null;
-  location_city:               string | null;
-  location_state:              string | null;
-  description:                 string | null;
-  ai_assistant_persona_name:   string | null;
-  timezone:                    string | null;
+  id:               string;
+  name:             string | null;
+  location_city:    string | null;
+  location_state:   string | null;
+  description:      string | null;
+  owner_first_name: string | null;
+  timezone:         string | null;
 }
 
 interface LeadContextRow {
@@ -156,7 +156,7 @@ interface LeadContextRow {
 async function loadVenueContext(venueId: string): Promise<VenueContextRow | null> {
   const { data } = await supabaseAdmin
     .from('venues')
-    .select('id, name, location_city, location_state, description, ai_assistant_persona_name, timezone')
+    .select('id, name, location_city, location_state, description, owner_first_name, timezone')
     .eq('id', venueId)
     .maybeSingle();
   return (data as VenueContextRow | null) ?? null;
@@ -386,7 +386,7 @@ function venueRowToContext(venue: VenueContextRow, tz: string): PromptInputConte
     venue_city:              venue.location_city?.trim() || '',
     venue_state:              venue.location_state?.trim() || '',
     venue_style_description:  venue.description?.trim().slice(0, 400) || '',
-    assistant_persona_name:   venue.ai_assistant_persona_name?.trim() || 'Alison',
+    assistant_persona_name:   venue.owner_first_name?.trim() || venue.name?.trim() || 'there',
     timezone:                tz,
   };
 }

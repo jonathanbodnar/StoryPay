@@ -66,7 +66,7 @@ export async function draftBrideReply(input: DraftReplyInput): Promise<DraftRepl
 
   const [{ data: venue }, { data: bride }] = await Promise.all([
     supabaseAdmin.from('venues')
-      .select('name, ai_assistant_persona_name, timezone, owner_first_name, owner_last_name')
+      .select('name, timezone, owner_first_name, owner_last_name')
       .eq('id', input.venueId).maybeSingle(),
     supabaseAdmin.from('venue_customers')
       .select('first_name, last_name, customer_email, phone, sms_dnd')
@@ -129,7 +129,7 @@ export async function draftBrideReply(input: DraftReplyInput): Promise<DraftRepl
   }
 
   // 4. Build the prompt
-  const persona = (venue as { ai_assistant_persona_name: string | null }).ai_assistant_persona_name?.trim() || 'the venue team';
+  const persona = (venue as { owner_first_name: string | null }).owner_first_name?.trim() || (venue as { name: string | null }).name?.trim() || 'the venue team';
   const venueName = (venue as { name: string }).name;
   const brideFirst = (bride as { first_name: string | null } | null)?.first_name?.trim() || 'there';
 

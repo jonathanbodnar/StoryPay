@@ -106,7 +106,6 @@ interface ReservedLeadRow {
   ai_attempt_count:         number;
   ai_angles_used:           string[];
   timezone:                 string | null;
-  ai_assistant_persona_name: string | null;
 }
 
 /**
@@ -234,8 +233,7 @@ async function reserveDueLeads(
         l.ai_expires_at,
         l.ai_attempt_count,
         l.ai_angles_used,
-        v.timezone,
-        v.ai_assistant_persona_name
+        v.timezone
     `;
     return rows;
   }
@@ -309,8 +307,7 @@ async function reserveDueLeads(
       l.ai_expires_at,
       l.ai_attempt_count,
       l.ai_angles_used,
-      v.timezone,
-      v.ai_assistant_persona_name
+      v.timezone
   `;
   return rows;
 }
