@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -1835,7 +1835,7 @@ export default function ConversationsPage() {
           </div>
           <div
             ref={listRef}
-            className={classNames('sp-thread-list min-h-0 flex-1 overflow-y-auto', isNativeApp() ? 'pt-4' : '')}
+            className={classNames('sp-thread-list min-h-0 flex-1 overflow-y-auto', isNativeApp() ? 'pt-2' : '')}
             style={isNativeApp() ? { touchAction: 'pan-y', overscrollBehavior: 'contain' } : undefined}
           >
             {/* ── Team contacts directory (shown at top when Team filter is active) ── */}
@@ -1958,15 +1958,14 @@ export default function ConversationsPage() {
                 };
 
                 if (isNativeApp()) {
-                  // iMessage-style row for native mobile
+                  // Card-style row for native mobile
                   return (
-                    <Fragment key={t.thread_id}>
-                      {tIndex === 0 && <div className="ml-[71px] h-px bg-gray-100" />}
-                      <div
+                    <div
+                      key={t.thread_id}
                       role="button"
                       tabIndex={0}
                       {...rowHandlers}
-                      className="flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition-colors active:bg-gray-100"
+                      className="mx-1 mb-2 flex w-full cursor-pointer items-start gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors active:bg-gray-50"
                     >
                       {/* Avatar circle — top-aligned so it sits beside the name,
                           not vertically centered across the whole card height. */}
@@ -2094,12 +2093,7 @@ export default function ConversationsPage() {
                           )}
                         </div>
                       </div>
-                      {/* Inset separator — starts after the avatar (px-4 + w-11 + gap-3 = 71px)
-                          so it matches the width of the filter/search boxes above and looks
-                          like the iMessage / iOS Contacts separator style. */}
-                      <div className="ml-[71px] h-px bg-gray-100" />
                     </div>
-                    </Fragment>
                   );
                 }
 
