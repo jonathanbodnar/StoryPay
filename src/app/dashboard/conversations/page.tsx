@@ -2485,7 +2485,17 @@ export default function ConversationsPage() {
 
               {/* ── Inline pipeline stage selector ── */}
               {(() => {
-                const allStages = threadPipelines.flatMap((p) => p.stages.map((s) => ({...s, pipelineId: p.id})));
+                const activePipelineId = threadDetail.contact_stage_id
+                  ? threadPipelines.find((p) => p.stages.some((s) => s.id === threadDetail.contact_stage_id))?.id
+                  : null;
+                const activePipeline =
+                  threadPipelines.find((p) => p.id === activePipelineId) ??
+                  threadPipelines.find((p) => p.is_default) ??
+                  threadPipelines[0] ??
+                  null;
+                const allStages = activePipeline
+                  ? activePipeline.stages.map((s) => ({...s, pipelineId: activePipeline.id}))
+                  : [];
                 if (!allStages.length && !threadDetail.contact_stage?.name) return null;
 
                 // Resolve the active stage ID with multiple fallbacks so the pill
