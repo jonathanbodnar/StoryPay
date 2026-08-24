@@ -1816,11 +1816,11 @@ export default function ConversationsPage() {
             </p>
           ) : null}
           <div className={classNames(
-            'flex-shrink-0 border-b border-gray-200',
-            // On native: no horizontal padding so the input's own border sits
-            // flush with the container edges — same visual width as the filter
-            // bar above it. On web: keep the original inset look.
-            isNativeApp() ? 'pb-1.5' : 'p-2',
+            'flex-shrink-0',
+            // On native: no bottom border (avoids a visible separator line above
+            // the first card) and no horizontal padding so the input sits flush.
+            // On web: keep the original inset look with bottom border.
+            isNativeApp() ? 'pb-1.5' : 'p-2 border-b border-gray-200',
           )}>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1836,7 +1836,7 @@ export default function ConversationsPage() {
           <div
             ref={listRef}
             className={classNames('sp-thread-list min-h-0 flex-1 overflow-y-auto', isNativeApp() ? 'pt-2' : '')}
-            style={isNativeApp() ? { touchAction: 'pan-y', overscrollBehavior: 'contain' } : undefined}
+            style={isNativeApp() ? { touchAction: 'pan-y', overscrollBehavior: 'contain', overflowX: 'visible' } : undefined}
           >
             {/* ── Team contacts directory (shown at top when Team filter is active) ── */}
             {threadListFilter === 'team_contacts' && teamContacts.length > 0 && (
@@ -1965,7 +1965,7 @@ export default function ConversationsPage() {
                       role="button"
                       tabIndex={0}
                       {...rowHandlers}
-                      className="mx-1 mb-2 flex w-full cursor-pointer items-start gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors active:bg-gray-50"
+                      className="mx-2 mb-2 flex w-full cursor-pointer items-start gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors active:bg-gray-50"
                     >
                       {/* Avatar circle — top-aligned so it sits beside the name,
                           not vertically centered across the whole card height. */}
