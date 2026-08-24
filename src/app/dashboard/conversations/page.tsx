@@ -1689,7 +1689,7 @@ export default function ConversationsPage() {
           single line no matter how many stage pills a venue's pipeline has. ── */}
       <div className={classNames(
         'no-scrollbar flex flex-shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto border border-gray-200 bg-white',
-        isNativeApp() ? 'mx-2 mb-2 h-10 rounded-lg px-2' : 'mb-3 rounded-2xl px-3 py-2',
+        isNativeApp() ? 'mb-2 h-10 rounded-lg px-2' : 'mb-3 rounded-2xl px-3 py-2',
       )}>
         {/* ── Icon-toggle overlays: pinned + starred (leftmost, independent of the
             main/stage pills — combinable with any single-select filter below) ── */}
@@ -1829,9 +1829,11 @@ export default function ConversationsPage() {
           <div className={classNames(
             'flex-shrink-0',
             // On native: no bottom border (avoids a visible separator line above
-            // the first card) and no horizontal padding so the input sits flush.
+            // the first card) and no horizontal margin — DashboardShell's outer
+            // px-6 is the single source of truth for the horizontal inset, so
+            // this sits flush with the filter bar and cards below it.
             // On web: keep the original inset look with bottom border.
-            isNativeApp() ? 'mx-2 pb-1.5' : 'p-2 border-b border-gray-200',
+            isNativeApp() ? 'pb-1.5' : 'p-2 border-b border-gray-200',
           )}>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1847,7 +1849,7 @@ export default function ConversationsPage() {
           <div
             ref={listRef}
             className={classNames('sp-thread-list min-h-0 flex-1 overflow-y-auto', isNativeApp() ? 'pt-2' : '')}
-            style={isNativeApp() ? { touchAction: 'pan-y', overscrollBehavior: 'contain', overflowX: 'visible' } : undefined}
+            style={isNativeApp() ? { touchAction: 'pan-y', overscrollBehavior: 'contain' } : undefined}
           >
             {/* ── Team contacts directory (shown at top when Team filter is active) ── */}
             {threadListFilter === 'team_contacts' && teamContacts.length > 0 && (
@@ -1976,7 +1978,7 @@ export default function ConversationsPage() {
                       role="button"
                       tabIndex={0}
                       {...rowHandlers}
-                      className="mx-2 mb-2 flex w-full cursor-pointer items-start gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors active:bg-gray-50"
+                      className="mb-2 flex w-full cursor-pointer items-start gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors active:bg-gray-50"
                     >
                       {/* Avatar circle — top-aligned so it sits beside the name,
                           not vertically centered across the whole card height. */}
