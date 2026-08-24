@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -1820,7 +1820,7 @@ export default function ConversationsPage() {
             // On native: no horizontal padding so the input's own border sits
             // flush with the container edges — same visual width as the filter
             // bar above it. On web: keep the original inset look.
-            isNativeApp() ? 'py-1.5' : 'p-2',
+            isNativeApp() ? 'pb-1.5' : 'p-2',
           )}>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1835,7 +1835,7 @@ export default function ConversationsPage() {
           </div>
           <div
             ref={listRef}
-            className={classNames('sp-thread-list min-h-0 flex-1 overflow-y-auto', isNativeApp() ? 'pt-3' : '')}
+            className={classNames('sp-thread-list min-h-0 flex-1 overflow-y-auto', isNativeApp() ? 'pt-4' : '')}
             style={isNativeApp() ? { touchAction: 'pan-y', overscrollBehavior: 'contain' } : undefined}
           >
             {/* ── Team contacts directory (shown at top when Team filter is active) ── */}
@@ -1929,7 +1929,7 @@ export default function ConversationsPage() {
                   : 'No threads match your search.'}
               </p>
             ) : threadsFiltered.length > 0 ? (
-              threadsFiltered.map((t) => {
+              threadsFiltered.map((t, tIndex) => {
                 const name =
                   toTitleCase([t.contact_first_name, t.contact_last_name].filter(Boolean).join(' ')) ||
                   t.contact_email ||
@@ -1960,8 +1960,9 @@ export default function ConversationsPage() {
                 if (isNativeApp()) {
                   // iMessage-style row for native mobile
                   return (
-                    <div
-                      key={t.thread_id}
+                    <Fragment key={t.thread_id}>
+                      {tIndex === 0 && <div className="ml-[71px] h-px bg-gray-100" />}
+                      <div
                       role="button"
                       tabIndex={0}
                       {...rowHandlers}
@@ -2098,6 +2099,7 @@ export default function ConversationsPage() {
                           like the iMessage / iOS Contacts separator style. */}
                       <div className="ml-[71px] h-px bg-gray-100" />
                     </div>
+                    </Fragment>
                   );
                 }
 
