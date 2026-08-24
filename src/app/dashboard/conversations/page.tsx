@@ -1640,7 +1640,18 @@ export default function ConversationsPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] min-h-[520px] flex-col gap-0 sm:h-[calc(100vh-6rem)]">
+    <div className={classNames(
+      'flex min-h-[520px] flex-col gap-0',
+      // On native the fixed tab bar (~4rem + safe-area-inset-bottom) sits at
+      // the bottom of the viewport. Without bottom padding the container
+      // extends under the tab bar, hiding the last conversation threads.
+      // Adding pb-28 (7rem) inside the fixed height reserves enough space so
+      // all threads are visible above the tab bar in both the initial view and
+      // after scrolling. On web, keep the original responsive heights.
+      isNativeApp()
+        ? 'h-[calc(100vh-8rem)] pb-28'
+        : 'h-[calc(100vh-8rem)] sm:h-[calc(100vh-6rem)]',
+    )}>
       {isNativeApp() && (pullY > 0 || refreshing) && (
         <div
           className="pointer-events-none flex flex-shrink-0 items-center justify-center overflow-hidden transition-all duration-150"
