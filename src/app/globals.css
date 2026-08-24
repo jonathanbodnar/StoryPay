@@ -17,7 +17,20 @@
   --font-body: var(--font-open-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-html, body {
+html {
+  font-family: var(--font-body);
+  color: #1a1a1a;
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* overflow-x: hidden only on body so that <html> remains overflow:visible.
+   When <html> has any overflow other than visible, CSS coerces overflow-y to
+   auto, making <html> the scroll container. In WKWebView this causes
+   position:fixed elements to scroll with the page instead of staying fixed.
+   Keeping <html> at overflow:visible lets body's overflow propagate to the
+   viewport, which preserves correct fixed-positioning behaviour. */
+body {
   font-family: var(--font-body);
   overflow-x: hidden;
   width: 100%;
@@ -40,6 +53,10 @@ html, body {
 }
 .native-app-shell {
   touch-action: manipulation;
+  /* Disable the iOS rubber-band (over-scroll bounce) effect on the root
+     element. The bounce causes position:fixed elements to temporarily
+     appear displaced during the bounce animation. */
+  overscroll-behavior-y: none;
 }
 
 /* Open Sans is the canonical sitewide font. The next/font CSS variable
