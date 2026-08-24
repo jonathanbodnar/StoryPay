@@ -247,5 +247,14 @@ export async function PATCH(request: NextRequest) {
     )
     .catch(() => { /* non-fatal */ });
 
+  // Invalidate cached pricing guide PDF when fields that appear in the PDF change.
+  // The PDF renders venue.description (About text) and venue.faq.
+  const PDF_FIELDS = new Set(['description', 'faq', 'name', 'brand_phone', 'brand_email', 'location_full', 'location_city', 'location_state', 'brand_logo_url', 'logo_url', 'social_links', 'features', 'owner_first_name', 'owner_last_name']);
+  if (Object.keys(updates).some((k) => PDF_FIELDS.has(k))) {
+    void import('@/lib/pricing-guide-cache')
+      .then(({ invalidatePricingGuidePdfCache }) => invalidatePricingGuidePdfCache(venueId))
+      .catch(() => {});
+  }
+
   return NextResponse.json({ listing: updated });
 }

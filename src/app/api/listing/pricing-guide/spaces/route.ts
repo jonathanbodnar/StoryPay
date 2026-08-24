@@ -73,5 +73,10 @@ export async function POST(req: Request) {
     .then(({ triggerVenueKnowledgeRegen }) => triggerVenueKnowledgeRegen(venueId))
     .catch(() => { /* non-fatal */ });
 
+  // Invalidate cached pricing guide PDF when guide data changes
+  void import('@/lib/pricing-guide-cache')
+    .then(({ invalidatePricingGuidePdfCache }) => invalidatePricingGuidePdfCache(venueId))
+    .catch(() => {});
+
   return NextResponse.json({ space: data });
 }

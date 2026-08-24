@@ -56,6 +56,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     .then(({ triggerVenueKnowledgeRegen }) => triggerVenueKnowledgeRegen(venueId))
     .catch(() => { /* non-fatal */ });
 
+  // Invalidate cached pricing guide PDF when guide data changes
+  void import('@/lib/pricing-guide-cache')
+    .then(({ invalidatePricingGuidePdfCache }) => invalidatePricingGuidePdfCache(venueId))
+    .catch(() => {});
+
   return NextResponse.json({ package: data });
 }
 
@@ -80,6 +85,11 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   void import('@/lib/ai-concierge/venue-knowledge')
     .then(({ triggerVenueKnowledgeRegen }) => triggerVenueKnowledgeRegen(venueId))
     .catch(() => { /* non-fatal */ });
+
+  // Invalidate cached pricing guide PDF when guide data changes
+  void import('@/lib/pricing-guide-cache')
+    .then(({ invalidatePricingGuidePdfCache }) => invalidatePricingGuidePdfCache(venueId))
+    .catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

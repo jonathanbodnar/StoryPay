@@ -14,6 +14,10 @@ import {
   type GuideData,
   type VenueInfo,
 } from '@/lib/pricing-guide-pdf-server';
+import {
+  PRICING_GUIDES_BUCKET,
+  ensurePricingGuidesBucket,
+} from '@/lib/pricing-guide-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,6 +67,34 @@ export async function GET(
   // If the venue uses a custom uploaded PDF, redirect directly to it
   if (guide?.use_custom_pricing_guide && guide?.custom_pricing_guide_url) {
     return NextResponse.redirect(guide.custom_pricing_guide_url);
+  }
+
+  // ── Fast path: serve cached PDF from Supabase Storage ────────────────────
+  // Skip the cache when the caller wants a forced download — the CDN URL
+  // cannot set Content-Disposition: attachment, so we fall through to
+  // streaming the PDF directly in that case.
+  if (!forceDownload) {
+    const cachePath = `${venueId}/pricing-guide.pdf`;
+    try {
+      await ensurePricingGuidesBucket();
+      const { data: listed } = await supabaseAdmin.storage
+        .from(PRICING_GUIDES_BUCKET)
+        .list(venueId, { search: 'pricing-guide.pdf', limit: 1 });
+      if (listed && listed.some((f) => f.name === 'pricing-guide.pdf')) {
+        const { data: urlData } = supabaseAdmin.storage
+          .from(PRICING_GUIDES_BUCKET)
+          .getPublicUrl(cachePath);
+        return new NextResponse(null, {
+          status: 302,
+          headers: {
+            'Location': urlData.publicUrl,
+            'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600',
+          },
+        });
+      }
+    } catch (cacheErr) {
+      console.warn('[public pricing-guide PDF] cache check failed, generating fresh', cacheErr);
+    }
   }
 
   // Load child rows (spaces + packages + accommodations)
@@ -150,6 +182,34 @@ export async function GET(
     const pdfBuffer = await generatePricingGuidePdfServer(guideData, venueInfo);
 
     const safeName = (venue.name ?? 'venue').replace(/[^a-zA-Z0-9]/g, '_');
+
+    // ── Upload to Supabase Storage and redirect (non-download requests) ──
+    if (!forceDownload) {
+      const cachePath = `${venueId}/pricing-guide.pdf`;
+      try {
+        await ensurePricingGuidesBucket();
+        await supabaseAdmin.storage
+          .from(PRICING_GUIDES_BUCKET)
+          .upload(cachePath, new Uint8Array(pdfBuffer), {
+            contentType: 'application/pdf',
+            upsert: true,
+          });
+        const { data: urlData } = supabaseAdmin.storage
+          .from(PRICING_GUIDES_BUCKET)
+          .getPublicUrl(cachePath);
+        return new NextResponse(null, {
+          status: 302,
+          headers: {
+            'Location': urlData.publicUrl,
+            'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600',
+          },
+        });
+      } catch (uploadErr) {
+        console.warn('[public pricing-guide PDF] storage upload failed, falling back to inline', uploadErr);
+        // Fall through to streaming the PDF directly below.
+      }
+    }
+
     const disposition = forceDownload
       ? `attachment; filename="${safeName}_Pricing_Guide.pdf"`
       : `inline; filename="${safeName}_Pricing_Guide.pdf"`;
@@ -159,7 +219,6 @@ export async function GET(
       headers: {
         'Content-Type':        'application/pdf',
         'Content-Disposition': disposition,
-        // No caching — always freshly generated
         'Cache-Control':       'no-store',
       },
     });
