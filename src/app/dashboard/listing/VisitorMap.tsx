@@ -68,18 +68,27 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
         scrollWheelZoom: true,
       });
 
-      // CartoDB Positron — a clean, light gray basemap that matches the
-      // Google Analytics "Realtime overview" aesthetic (light blue water,
-      // muted gray land, subtle country borders) and is free under CC-BY.
-      L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-        {
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-          subdomains: "abcd",
-          maxZoom: 20,
-        }
-      ).addTo(map);
+      // Mapbox "Light" style rendered as raster tiles via the Static Tiles
+      // API — a clean, light gray basemap matching the Google Analytics
+      // "Realtime overview" aesthetic (light blue water, muted gray land,
+      // subtle borders). Swapped in from CartoDB's free basemap CDN after
+      // CARTO started requiring an API key on that endpoint (2026).
+      // Requires NEXT_PUBLIC_MAPBOX_TOKEN — see .env.example. Falls back to
+      // plain OpenStreetMap tiles (still free, no key) if unset so the map
+      // never silently breaks in an environment missing the token.
+      const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+      const tileUrl = mapboxToken
+        ? `https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}?access_token=${mapboxToken}`
+        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+      const tileAttribution = mapboxToken
+        ? '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+      L.tileLayer(tileUrl, {
+        attribution: tileAttribution,
+        subdomains: "abcd",
+        maxZoom: 20,
+      }).addTo(map);
 
       mapRef.current = map;
       layerRef.current = L.layerGroup().addTo(map);
