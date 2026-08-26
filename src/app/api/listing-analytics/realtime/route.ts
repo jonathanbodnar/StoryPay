@@ -1,30 +1,9 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { EVENT_LABELS, countryFlag as flag } from '@/lib/listing-events';
 
 export const dynamic = 'force-dynamic';
-
-// Country code → flag emoji
-function flag(code: string | null): string {
-  if (!code || code.length !== 2) return '🌐';
-  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1A5 + c.charCodeAt(0)));
-}
-
-const EVENT_LABELS: Record<string, string> = {
-  page_view:            'Viewing listing',
-  scroll_25:            'Reading (25%)',
-  scroll_50:            'Reading (50%)',
-  scroll_75:            'Reading (75%)',
-  scroll_100:           'Finished reading',
-  photo_view:           'Browsing photos',
-  faq_open:             'Reading FAQs',
-  map_click:            'Checked location',
-  social_click:         'Clicked social link',
-  contact_form_open:    'Opened contact form',
-  contact_form_submit:  'Sent inquiry ✉️',
-  listing_impression:   'Found in search',
-  session_heartbeat:    'Browsing listing',
-};
 
 export async function GET() {
   const c = await cookies();
@@ -198,6 +177,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
+    venue_id:    venueId,
     active_now:  activeNow,
     active_5m:   sessions5m.size,
     active_30m:  sessions30m.size,

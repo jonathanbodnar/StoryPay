@@ -28,6 +28,7 @@ import {
   type ErrorLoggedEvent,
   type NewLeadEvent,
   type PrivateClientMessageEvent,
+  type VisitorPingEvent,
 } from './channels';
 
 // ─── HTTP broadcast ─────────────────────────────────────────────────────────
@@ -157,6 +158,12 @@ export async function broadcastErrorLogged(evt: ErrorLoggedEvent): Promise<void>
  *  updates instantly instead of waiting for the poll cycle. */
 export async function broadcastNewLead(evt: NewLeadEvent): Promise<void> {
   await send(supportChannels.venueLeads(evt.venueId), 'new_lead', evt);
+}
+
+/** Broadcast a visitor's resolved location so the Live Visitor Map plots
+ *  their dot immediately instead of waiting for the next 30s poll. */
+export async function broadcastVisitorPing(evt: VisitorPingEvent): Promise<void> {
+  await send(supportChannels.venueVisitorMap(evt.venueId), 'ping', evt);
 }
 
 /**

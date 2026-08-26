@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { EVENT_LABELS, countryFlag } from '@/lib/listing-events';
+import { broadcastVisitorPing } from '@/lib/realtime/broadcast';
 
 // Allow the listing page (served from a different domain, e.g. storyvenue.com)
 // to POST events to this API cross-origin.
@@ -284,6 +286,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, warning: 'migration_pending' }, { headers: CORS_HEADERS });
     }
     return NextResponse.json({ ok: false }, { status: 500, headers: CORS_HEADERS });
+  }
+
+  // Plot the visitor's dot on the Live Visitor Map the instant they're seen
+  // — no waiting for the dashboard's next 30s poll. Only fires when we
+  // actually resolved coordinates (geo lookups above already completed by
+  // this point, so this is never a "second phase" delayed update).
+  if (typeof latitude === 'number' && typeof longitude === 'number') {
+    void broadcastVisitorPing({
+      venueId:   venue_id,
+      sessionId: session_id,
+      lat:       latitude,
+      lng:       longitude,
+      city, region, country,
+      flag:      countryFlag(country),
+      label:     EVENT_LABELS[event_type] ?? event_type,
+      live:      true,
+    });
   }
 
   return NextResponse.json({ ok: true }, { headers: CORS_HEADERS });

@@ -25,6 +25,8 @@ import {
 import FeatureLockModal from '@/components/FeatureLockModal';
 import { useFeatureAccess } from '@/lib/use-feature-access';
 import { isNativeApp, openExternalBrowser } from '@/lib/platform';
+import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { supportChannels, type VisitorPingEvent } from '@/lib/realtime/channels';
 import NextLink from 'next/link';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -78,6 +80,7 @@ type AnalyticsPayload = {
 
 // ── Realtime + lead insight types ─────────────────────────────────────────────
 type RealtimePayload = {
+  venue_id?: string;
   active_now: number;
   active_5m: number;
   active_30m: number;
@@ -934,6 +937,43 @@ export default function ListingAnalyticsPage() {
     }, 30000);
     return () => { if (rtInterval.current) clearInterval(rtInterval.current); };
   }, []);
+
+  // Plot a visitor's dot on the Live Visitor Map the instant they land on
+  // the page — pushed via Realtime broadcast from the tracking endpoint,
+  // not the 30s poll above (which still runs, and will naturally supersede
+  // this optimistic point with the same data on its next tick).
+  useBroadcastChannel(
+    rt?.venue_id ? supportChannels.venueVisitorMap(rt.venue_id) : null,
+    ['ping'],
+    (_event, payload) => {
+      const p = payload as VisitorPingEvent;
+      setRt((prev) => {
+        if (!prev) return prev;
+        const existing = prev.geo_points ?? [];
+        const isNewSession = !existing.some((g) => g.session_id === p.sessionId);
+        const withoutThisSession = existing.filter((g) => g.session_id !== p.sessionId);
+        return {
+          ...prev,
+          active_now: isNewSession ? prev.active_now + 1 : prev.active_now,
+          geo_points: [
+            {
+              session_id: p.sessionId,
+              lat: p.lat,
+              lng: p.lng,
+              city: p.city,
+              region: p.region,
+              country: p.country,
+              flag: p.flag,
+              label: p.label,
+              ago_seconds: 0,
+              live: p.live,
+            },
+            ...withoutThisSession,
+          ],
+        };
+      });
+    },
+  );
 
   // Reset QR when URL changes
   useEffect(() => { setQrDataUrl(null); }, [data?.venue_slug, utmPreset, utmSource, utmMedium, utmCampaign, qrWithUtm]);

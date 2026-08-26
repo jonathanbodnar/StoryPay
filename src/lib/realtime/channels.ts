@@ -45,6 +45,10 @@ export const supportChannels = {
   /** Fired whenever a new lead is created for a venue so the Lead Inbox badge
    *  (sidebar + mobile tab bar) updates instantly instead of polling. */
   venueLeads:       (venueId: string) => `venue:${venueId}:leads`,
+  /** Fired the instant a listing_events row lands with usable coordinates,
+   *  so the Live Visitor Map on the Listing Analytics dashboard plots the
+   *  dot the moment someone lands on the venue's page — no 30s poll wait. */
+  venueVisitorMap:  (venueId: string) => `venue:${venueId}:visitor-map`,
   /**
    * Venue-wide conversations channel — fired on every new message across ALL
    * threads for the venue. The conversations page subscribes here so the
@@ -68,6 +72,25 @@ export interface NewLeadEvent {
   leadId:    string;
   source:    string;
   createdAt: string;
+}
+
+/** Fired the instant a visitor's browser reports a trackable event with
+ *  resolved coordinates (page view, heartbeat, etc.) — lets the Live
+ *  Visitor Map plot/refresh their dot immediately instead of waiting for
+ *  the next 30s poll. `flag`/`label` are pre-computed server-side (from
+ *  the same helpers the poll endpoint uses) so the optimistic dot and the
+ *  next polled one render identically. */
+export interface VisitorPingEvent {
+  venueId:    string;
+  sessionId:  string;
+  lat:        number;
+  lng:        number;
+  city:       string | null;
+  region:     string | null;
+  country:    string | null;
+  flag:       string;
+  label:      string;
+  live:       boolean;
 }
 
 // ─── Bride conversation events ──────────────────────────────────────────────
