@@ -25,25 +25,51 @@ export type GeoPoint = {
 
 type Props = {
   points: GeoPoint[];
+  /** Venue's own coordinates — when present, the map stays permanently
+   *  centered on a ~100mi radius around the venue instead of drifting to
+   *  fit wherever visitors happen to be. */
+  venueLat?: number | null;
+  venueLng?: number | null;
   heightClass?: string; // tailwind height utility, default h-96
 };
 
-// Continental-US bounding box (SW → NE). Fitting to this guarantees the whole
-// country is visible regardless of the container's aspect ratio (portrait phone
-// vs. wide desktop), instead of a fixed zoom that clips to the Midwest.
+// Continental-US bounding box (SW → NE) — fallback only, used when a venue
+// has no lat/lng on file yet (so the map isn't blank/mis-centered).
 const US_BOUNDS: [[number, number], [number, number]] = [
   [24.4, -125.0],
   [49.4, -66.9],
 ];
 
-export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
+const LOCAL_RADIUS_MILES = 100;
+const MILES_PER_DEGREE_LAT = 69.0;
+
+// Bounding box that roughly contains a `radiusMiles` circle around
+// (lat, lng). Longitude degrees shrink as you move away from the equator,
+// so we correct for that with cos(latitude) — otherwise the box would look
+// noticeably "too wide" east-west for northern venues.
+function boundsForRadius(
+  lat: number,
+  lng: number,
+  radiusMiles: number
+): [[number, number], [number, number]] {
+  const latDelta = radiusMiles / MILES_PER_DEGREE_LAT;
+  const milesPerDegreeLng = MILES_PER_DEGREE_LAT * Math.cos((lat * Math.PI) / 180);
+  const lngDelta = radiusMiles / Math.max(milesPerDegreeLng, 1);
+  return [
+    [lat - latDelta, lng - lngDelta],
+    [lat + latDelta, lng + lngDelta],
+  ];
+}
+
+export default function VisitorMap({ points, venueLat, venueLng, heightClass = "h-96" }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const layerRef = useRef<LayerGroup | null>(null);
-  const pointsRef = useRef<GeoPoint[]>(points);
-  const fitViewRef = useRef<(() => void) | null>(null);
+  const venueCoordsRef = useRef<{ lat: number; lng: number } | null>(
+    typeof venueLat === "number" && typeof venueLng === "number" ? { lat: venueLat, lng: venueLng } : null
+  );
+  const recenterRef = useRef<(() => void) | null>(null);
   const userMovedRef = useRef(false);
-  const programmaticRef = useRef(false);
 
   // One-time map initialisation.
   useEffect(() => {
@@ -56,8 +82,9 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
       if (cancelled || !containerRef.current) return;
 
       const map = L.map(containerRef.current, {
-        // Seeded with a rough continental-US view; fitView() below refines it
-        // to the exact US bounds once the container has its final size.
+        // Seeded with a rough continental-US view; recenter() below refines
+        // it to the venue's ~100mi radius once the container has its final
+        // size (or the US fallback if the venue has no coordinates yet).
         center: [39.5, -98.35],
         zoom: 3,
         minZoom: 2,
@@ -65,7 +92,13 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
         worldCopyJump: true,
         zoomControl: true,
         attributionControl: true,
-        scrollWheelZoom: true,
+        // Scroll-wheel zoom on a small embedded map inside a scrolling
+        // dashboard page is an easy accidental trigger (the owner scrolls
+        // the page, their cursor happens to be over the map, and it zooms
+        // instead) — that used to permanently "lock" the view and, with it,
+        // any further programmatic redraws. Disabled entirely now that the
+        // view is meant to stay fixed on the venue's local radius anyway.
+        scrollWheelZoom: false,
       });
 
       // Mapbox "Light" style rendered as raster tiles via the Static Tiles
@@ -93,59 +126,46 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
       mapRef.current = map;
       layerRef.current = L.layerGroup().addTo(map);
 
-      // Once the owner pans/zooms manually, stop auto-fitting so we don't yank
-      // the view out from under them on the next realtime refresh. Programmatic
-      // fitBounds calls are flagged so they don't count as user movement.
-      map.on("movestart", () => {
-        if (!programmaticRef.current) userMovedRef.current = true;
-      });
+      // Once the owner deliberately pans/zooms, stop re-centering on resize
+      // so we don't yank the view out from under them. Recentering itself
+      // never runs from realtime data updates anymore — only from mount and
+      // container-resize events — so this is purely a "don't fight the
+      // user" guard, not the old points-based auto-fit.
+      map.on("dragstart zoomstart", () => { userMovedRef.current = true; });
 
-      // Fit the map to the current data: the whole US when there are no live
-      // visitors, or tight around the active markers (capped zoom) when there
-      // are. No-ops once the user has taken control of the view.
-      const fitView = () => {
+      // Always centers on the venue's fixed ~100mi-radius bounds (or the
+      // continental US if this venue has no coordinates yet) — never on
+      // wherever visitors happen to be, so the map never drifts around.
+      const recenter = () => {
         const m = mapRef.current;
         if (!m || userMovedRef.current) return;
-        const pts = pointsRef.current;
-        programmaticRef.current = true;
-        if (!pts.length) {
-          m.fitBounds(US_BOUNDS, { padding: [12, 12], animate: false });
-        } else {
-          let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
-          for (const p of pts) {
-            minLat = Math.min(minLat, p.lat);
-            maxLat = Math.max(maxLat, p.lat);
-            minLng = Math.min(minLng, p.lng);
-            maxLng = Math.max(maxLng, p.lng);
-          }
-          m.fitBounds([[minLat, minLng], [maxLat, maxLng]], {
-            padding: [40, 40],
-            maxZoom: 8,
-            animate: false,
-          });
-        }
-        // Release the programmatic flag after this frame's move settles.
-        setTimeout(() => { programmaticRef.current = false; }, 0);
+        const coords = venueCoordsRef.current;
+        const bounds = coords
+          ? boundsForRadius(coords.lat, coords.lng, LOCAL_RADIUS_MILES)
+          : US_BOUNDS;
+        m.fitBounds(bounds, { padding: [12, 12], animate: false });
       };
-      fitViewRef.current = fitView;
-      fitView();
+      recenterRef.current = recenter;
+      recenter();
 
-      // Two reasons Leaflet can render white on one side:
+      // Two reasons Leaflet can render white on one side (or compute the
+      // wrong zoom for the fixed radius):
       //   1. The container got its final width AFTER L.map() ran (common
       //      inside tabs, flex layouts, or conditionally rendered blocks).
       //   2. The dashboard window was resized and the map wasn't told.
       // Both are solved by calling invalidateSize() whenever the container
       // changes size, plus a few post-mount nudges to catch the first paint.
       resizeObserver = new ResizeObserver(() => {
-        if (mapRef.current) mapRef.current.invalidateSize();
+        mapRef.current?.invalidateSize();
+        recenterRef.current?.();
       });
       resizeObserver.observe(containerRef.current);
       nudgeTimers = [0, 60, 240, 600].map((ms) =>
         setTimeout(() => {
           mapRef.current?.invalidateSize();
-          // Re-fit after the container reaches its real size so the US view
-          // isn't computed against a zero/partial-width map on first paint.
-          fitViewRef.current?.();
+          // Re-fit after the container reaches its real size so the radius
+          // view isn't computed against a zero/partial-width map on first paint.
+          recenterRef.current?.();
         }, ms)
       );
     })();
@@ -164,7 +184,6 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
 
   // Re-render markers whenever the realtime payload changes.
   useEffect(() => {
-    pointsRef.current = points;
     let cancelled = false;
     (async () => {
       const map = mapRef.current;
@@ -239,15 +258,34 @@ export default function VisitorMap({ points, heightClass = "h-96" }: Props) {
         markers.push(marker);
       }
 
-      // Fit to the data: whole US when idle, zoomed to visitors when present.
-      // Skips itself once the owner has manually moved the map.
-      fitViewRef.current?.();
+      // Force an immediate repaint so a brand-new visitor's dot appears the
+      // instant this effect runs — no manual zoom/pan required. Leaflet
+      // positions each marker correctly via `_setPos` when added, but a
+      // freshly-added DOM node inside this map's `overflow:hidden` +
+      // `isolation:isolate` container can sit un-painted by the browser
+      // until *something* forces a genuine layout/compositing pass (which
+      // is exactly what a manual zoom used to do, by accident). A real
+      // (but 1px, instantly-reversed, non-animated) pan does the same job
+      // reliably and invisibly, on every single update.
+      map.invalidateSize({ pan: false, animate: false });
+      map.panBy([1, 0], { animate: false });
+      requestAnimationFrame(() => {
+        mapRef.current?.panBy([-1, 0], { animate: false });
+      });
     })();
 
     return () => {
       cancelled = true;
     };
   }, [points]);
+
+  // If the venue's coordinates load in (or change) after mount, update the
+  // ref used by recenter() and snap the fixed view to them once.
+  useEffect(() => {
+    venueCoordsRef.current =
+      typeof venueLat === "number" && typeof venueLng === "number" ? { lat: venueLat, lng: venueLng } : null;
+    recenterRef.current?.();
+  }, [venueLat, venueLng]);
 
   return (
     <>

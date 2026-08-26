@@ -106,6 +106,8 @@ type RealtimePayload = {
     ago_seconds: number;
     live: boolean;
   }[];
+  venue_lat?: number | null;
+  venue_lng?: number | null;
   _migration_pending?: boolean;
 };
 
@@ -1060,7 +1062,7 @@ export default function ListingAnalyticsPage() {
               </div>
             </div>
             <div className="relative">
-              <VisitorMap points={rt.geo_points ?? []} />
+              <VisitorMap points={rt.geo_points ?? []} venueLat={rt.venue_lat} venueLng={rt.venue_lng} />
             </div>
           </div>
         )}

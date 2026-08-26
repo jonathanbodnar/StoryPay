@@ -38,6 +38,17 @@ export async function GET() {
   const since30m = new Date(now - 30 * 60 * 1000).toISOString();
   const since24h = new Date(now - 24 * 60 * 60 * 1000).toISOString();
 
+  // Venue's own coordinates — lets the client keep the live visitor map
+  // permanently centered on this venue (~100mi radius) instead of jumping
+  // around based on where visitors happen to be.
+  const { data: venueRow } = await supabaseAdmin
+    .from('venues')
+    .select('lat, lng')
+    .eq('id', venueId)
+    .single();
+  const venueLat = venueRow?.lat != null ? Number(venueRow.lat) : null;
+  const venueLng = venueRow?.lng != null ? Number(venueRow.lng) : null;
+
   // Try with latitude/longitude first; fall back if migration 057 hasn't
   // been applied yet (column doesn't exist -> Postgres error 42703).
   let recent: Array<{
@@ -194,5 +205,7 @@ export async function GET() {
     activity,
     geo_live:    geoLive,
     geo_points:  geoPoints,
+    venue_lat:   venueLat,
+    venue_lng:   venueLng,
   });
 }
