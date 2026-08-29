@@ -626,9 +626,14 @@ export async function generatePricingGuidePdfServer(
   const fiveStar = (guide.reviews ?? []).filter((r) => (r.rating ?? 0) >= 5 && (r.body ?? '').trim());
   const hasStories = fiveStar.length > 0;
 
-  type Section = { label: string; render: () => void };
+  // `pages` = how many printed pages this section occupies. Most sections are
+  // a single page, but The Spaces and Pricing render one page per space/package
+  // so the guide shows EVERY item the owner filled out (not just the first).
+  // The TOC uses this count to keep page numbers accurate.
+  type Section = { label: string; pages: number; render: () => void };
   const sections: Section[] = [];
-  const addSection = (label: string, render: () => void) => sections.push({ label, render });
+  const addSection = (label: string, render: () => void, pages = 1) =>
+    sections.push({ label, pages, render });
 
   // ── Welcome ──────────────────────────────────────────────────────────
   addSection('Welcome', () => {
@@ -685,13 +690,15 @@ export async function generatePricingGuidePdfServer(
     footer();
   });
 
-  // ── The Spaces (single balanced page) ────────────────────────────────
-  addSection('The Spaces', () => {
+  // ── The Spaces (one balanced page per space) ─────────────────────────
+  // Every space the owner adds gets its own page. Previously only spaces[0]
+  // rendered, so venues with multiple spaces silently lost all but the first.
+  const spaceList = (guide.spaces ?? []).filter(Boolean);
+  const renderSpacePage = (space: Space | undefined) => {
     page();
-    const space = guide.spaces[0];
     let y = pageHeader({ eyebrow: 'Where it happens', title: space?.name?.trim() || 'The Spaces' });
-    if (space?.capacity) {
-      tracked(space.capacity.toUpperCase(), MARGIN, y - 3, 9, 1.8, PAL.mute, F.bodySemi, 'normal', 'left');
+    if (space?.capacity?.trim()) {
+      tracked(space.capacity.trim().toUpperCase(), MARGIN, y - 3, 9, 1.8, PAL.mute, F.bodySemi, 'normal', 'left');
       y += 6;
     }
     const desc = (space?.description?.trim())
@@ -710,46 +717,98 @@ export async function generatePricingGuidePdfServer(
     doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.soft);
     doc.text(shown, MARGIN, y + photoH + gap);
     footer();
-  });
+  };
+  addSection('The Spaces', () => {
+    if (spaceList.length === 0) { renderSpacePage(undefined); return; }
+    spaceList.forEach((s) => renderSpacePage(s));
+  }, Math.max(1, spaceList.length));
 
-  // ── Pricing (Packages + What's Included merged) ──────────────────────
-  addSection('Pricing', () => {
+  // ── Pricing (one page per package) ───────────────────────────────────
+  // Every package the owner adds gets its own page, showing that package's
+  // own description and its own "What's Included" list. Previously only
+  // packages[0] rendered — and its description/included items were dropped
+  // in favour of the generic venue-features grid.
+  const pkgList = (guide.packages ?? []).filter(Boolean);
+  const renderPackagePage = (pkg: Package | undefined, index: number) => {
     page();
     let y = pageHeader({ eyebrow: 'Plan with confidence', title: 'Pricing', align: 'center' });
-    const pkg = guide.packages[0];
+
     doc.setFont(F.serif, 'normal'); doc.setFontSize(18); tc(PAL.ink);
     doc.text(pkg?.name?.trim() || 'Starting Package', CX, y, { align: 'center' }); y += 9;
     doc.setFont(F.italic, 'normal'); doc.setFontSize(14); tc(PAL.soft);
     doc.text(pkg?.price_label?.trim() || 'Contact us for pricing', CX, y, { align: 'center' }); y += 12;
 
-    const narrative = guide.pricing_intro?.trim()
+    // The package's own "What's Included" list — the owner-authored, package-
+    // specific detail. Falls back to the venue-features grid only when the
+    // package has no items of its own.
+    const ownItems = (pkg?.included_items ?? [])
+      .map((s) => String(s ?? '').trim())
+      .filter(Boolean);
+    const usePackageItems = ownItems.length > 0;
+    const listItems = usePackageItems ? ownItems : includedItems;
+    const listLabel = usePackageItems ? "WHAT'S INCLUDED" : 'VENUE FEATURES';
+
+    // Measure the included-items block up front so the description above it can
+    // be trimmed to whole sentences that leave room — nothing runs off-page.
+    const labelH = 10;
+    let itemsH = labelH;
+    let itemLineSets: string[][] = [];
+    const bulletTextX = usePackageItems ? MARGIN + 12 : 0;
+    const bulletTextW = CONTENT_W - 12 - 4;
+    if (usePackageItems) {
+      // Long, sentence-style inclusions → single wrapped column (never clipped).
+      itemLineSets = listItems.map((item) => wrap(item, bulletTextW, T.body, F.body));
+      itemsH += itemLineSets.reduce((a, ls) => a + ls.length * LH + 2, 0);
+    } else {
+      const rows = Math.ceil(listItems.length / 2);
+      itemsH += rows * 9.5;
+    }
+
+    // Description: package's own copy → shared pricing intro (first page only)
+    // → evergreen fallback. Fit to whole sentences within the leftover height.
+    const narrative = (pkg?.description?.trim())
+      || (index === 0 ? guide.pricing_intro?.trim() : '')
       || `Final pricing depends on your date, your season, and your guest count. A quick call or tour lets us tailor a package to your day and help you plan every detail. We keep it transparent, with no hidden fees.`;
-    const nLines = wrap(narrative, CONTENT_W - 16, T.body, F.body);
+    const descMaxLines = Math.max(2, Math.floor((BOTTOM - 6 - y - itemsH - 14) / LH));
+    const nLines = wrap(fitSentences(narrative, CONTENT_W - 16, T.body, F.body, descMaxLines), CONTENT_W - 16, T.body, F.body);
     doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.soft);
     doc.text(nLines, CX, y, { align: 'center' });
     y += nLines.length * LH + 12;
 
-    // Venue Features list on the same page.
-    tracked('VENUE FEATURES', CX, y, 9, 2.2, PAL.mute, F.bodySemi, 'normal', 'center'); y += 10;
-    const cols = 2;
-    const colW = (CONTENT_W - 16) / cols;
-    const rowH = 9.5;
-    const rows = Math.ceil(includedItems.length / cols);
-    const gridX = MARGIN + 8;
-    includedItems.forEach((item, i) => {
-      const cxi = gridX + (i % cols) * (colW + 16);
-      const cyi = y + Math.floor(i / cols) * rowH;
-      dc(PAL.rule); doc.setLineWidth(0.5); doc.circle(cxi + 1.6, cyi - 1.2, 1.4, 'S');
-      doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.ink);
-      doc.text(item, cxi + 7, cyi);
-    });
-    y += rows * rowH + 12;
+    tracked(listLabel, CX, y, 9, 2.2, PAL.mute, F.bodySemi, 'normal', 'center'); y += 10;
+    if (usePackageItems) {
+      itemLineSets.forEach((lines) => {
+        dc(PAL.rule); doc.setLineWidth(0.5); doc.circle(MARGIN + 6, y - 1.2, 1.4, 'S');
+        doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.ink);
+        doc.text(lines, bulletTextX, y);
+        y += lines.length * LH + 2;
+      });
+      y += 10;
+    } else {
+      const cols = 2;
+      const colW = (CONTENT_W - 16) / cols;
+      const rowH = 9.5;
+      const rows = Math.ceil(listItems.length / cols);
+      const gridX = MARGIN + 8;
+      listItems.forEach((item, i) => {
+        const cxi = gridX + (i % cols) * (colW + 16);
+        const cyi = y + Math.floor(i / cols) * rowH;
+        dc(PAL.rule); doc.setLineWidth(0.5); doc.circle(cxi + 1.6, cyi - 1.2, 1.4, 'S');
+        doc.setFont(F.body, 'normal'); doc.setFontSize(T.body); tc(PAL.ink);
+        doc.text(item, cxi + 7, cyi);
+      });
+      y += rows * rowH + 12;
+    }
 
-    // Fill the remaining space with a distinct photo (no CTA/contact line here).
+    // Fill any remaining space with a distinct photo (no CTA/contact line here).
     const ph = BOTTOM - 6 - y;
     if (ph > 45) imgCover(nextPhoto(), MARGIN, y, CONTENT_W, ph);
     footer();
-  });
+  };
+  addSection('Pricing', () => {
+    if (pkgList.length === 0) { renderPackagePage(undefined, 0); return; }
+    pkgList.forEach((pkg, i) => renderPackagePage(pkg, i));
+  }, Math.max(1, pkgList.length));
 
   // ── Stories (5-star reviews only — title + reviews, no photos) ───────
   if (hasStories) {
@@ -865,13 +924,17 @@ export async function generatePricingGuidePdfServer(
     doc.setFont(F.serif, 'normal'); doc.setFontSize(T.title); tc(PAL.ink);
     doc.text('Contents', rx, y); y += 7;
     dc(PAL.rule); doc.setLineWidth(0.4); doc.line(rx, y, W - MARGIN, y); y += 11;
-    sections.forEach((s, i) => {
-      const pg = 3 + i; // cover=1, TOC=2, sections start at 3
+    // cover=1, TOC=2, sections start at 3. Each section advances the running
+    // page number by however many pages it occupies (a multi-space or
+    // multi-package section spans several pages).
+    let pg = 3;
+    sections.forEach((s) => {
       doc.setFont(F.serif, 'normal'); doc.setFontSize(12.5); tc(PAL.soft);
       doc.text(s.label, rx, y);
       doc.setFont(F.bodySemi, 'normal'); doc.setFontSize(9); tc(PAL.mute);
       doc.text(String(pg).padStart(2, '0'), W - MARGIN, y, { align: 'right' });
       y += 10.5;
+      pg += s.pages;
     });
   }
   footer();
