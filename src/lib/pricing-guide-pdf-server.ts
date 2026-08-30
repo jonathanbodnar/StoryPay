@@ -66,10 +66,28 @@ export interface VenueInfo {
 
 // ─── Server-safe image helpers ──────────────────────────────────────────
 
+// Longest-edge cap for embedded photos. A full-bleed A4 page is 297mm tall; at
+// ~1600px that's ~137 DPI — crisp on screen (where these guides are read) while
+// keeping the PDF small. Phone photos arrive at 3000-4000px / 4-8MB each, which
+// is what bloated guides to 40-50MB and made the preview crawl.
+const MAX_IMG_PX = 1600;
+
 /**
- * Fetch a remote image and return both the data-URL and the detected pixel
- * dimensions. Falls back to a 4:3 aspect ratio when dimensions cannot be read
- * from the image header.
+ * Fetch a remote image, normalize it, and return a data-URL plus the true
+ * (display) pixel dimensions.
+ *
+ * Normalization runs every photo through sharp so that:
+ *  1. `.rotate()` bakes in the EXIF orientation. Phone cameras store photos in
+ *     the sensor's native (often landscape) orientation with an EXIF tag that
+ *     tells viewers how to rotate them. Browsers honor that tag; jsPDF does
+ *     NOT — it embeds the raw pixels — so without this an upright phone photo
+ *     (e.g. the Garden Room) renders sideways in the PDF. Rotating bakes the
+ *     correct orientation into the pixels and strips the tag.
+ *  2. Downscaling + re-encoding keeps the PDF small so it generates, transfers,
+ *     and renders fast.
+ *
+ * Falls back to embedding the original bytes (with header-read dimensions) if
+ * sharp is unavailable or cannot decode the input.
  */
 async function fetchImageWithDims(
   url: string,
@@ -80,9 +98,26 @@ async function fetchImageWithDims(
     if (!res.ok) return null;
     const contentType = res.headers.get('content-type') || 'image/jpeg';
     const buf = Buffer.from(await res.arrayBuffer());
+
+    try {
+      const sharp = (await import('sharp')).default;
+      const { data, info } = await sharp(buf, { failOn: 'none' })
+        .rotate() // apply EXIF orientation, then strip the tag
+        .resize(MAX_IMG_PX, MAX_IMG_PX, { fit: 'inside', withoutEnlargement: true })
+        .flatten({ background: '#ffffff' }) // drop any alpha for JPEG
+        .jpeg({ quality: 80, mozjpeg: true })
+        .toBuffer({ resolveWithObject: true });
+      return {
+        dataUrl: `data:image/jpeg;base64,${data.toString('base64')}`,
+        w: info.width,
+        h: info.height,
+      };
+    } catch {
+      // sharp missing / unsupported input — fall back to the raw embed below.
+    }
+
     const mime = contentType.split(';')[0].trim();
     const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
-
     const dims = readImageDimensions(buf, mime);
     return { dataUrl, ...dims };
   } catch {

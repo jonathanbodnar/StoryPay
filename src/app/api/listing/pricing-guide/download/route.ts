@@ -16,6 +16,10 @@ import {
   type GuideData,
   type VenueInfo,
 } from '@/lib/pricing-guide-pdf-server';
+import {
+  PRICING_GUIDES_BUCKET,
+  ensurePricingGuidesBucket,
+} from '@/lib/pricing-guide-cache';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 25;
@@ -28,19 +32,21 @@ export async function GET(req: NextRequest) {
   }
 
   const inline = req.nextUrl.searchParams.get('inline') === '1';
+  const cachePath = `${venueId}/pricing-guide.pdf`;
 
-  // ── Venue info ────────────────────────────────────────────────────────
-  const { data: venue, error: venueErr } = await supabaseAdmin
-    .from('venues')
-    .select('name, location_city, location_state, location_full, lat, lng, brand_phone, brand_email, logo_url, brand_logo_url, social_links, features, owner_first_name, owner_last_name, faq, description')
-    .eq('id', venueId)
-    .maybeSingle();
+  const streamPdf = (bytes: Uint8Array, fileName: string) =>
+    new NextResponse(bytes as unknown as ArrayBuffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': inline
+          ? `inline; filename="${fileName}"`
+          : `attachment; filename="${fileName}"`,
+        'Cache-Control': 'no-store',
+      },
+    });
 
-  if (venueErr || !venue) {
-    return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
-  }
-
-  // ── Guide + child rows ────────────────────────────────────────────────
+  // ── Guide row (lightweight — needed for the custom-PDF check) ───────────
   const { data: guide, error: guideErr } = await supabaseAdmin
     .from('venue_pricing_guides')
     .select('*')
@@ -52,12 +58,41 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to load guide' }, { status: 500 });
   }
 
-  const guideId = guide?.id ?? null;
-
   // If the venue uses a custom uploaded PDF, redirect directly to it
   if (guide?.use_custom_pricing_guide && guide?.custom_pricing_guide_url) {
     return NextResponse.redirect(guide.custom_pricing_guide_url);
   }
+
+  // ── Fast path: serve the cached PDF ────────────────────────────────────
+  // The public link and this preview render byte-identical PDFs and share one
+  // cache object. On a hit we skip the venue/child queries, image fetches, and
+  // generation entirely — the preview opens instantly. The cache is cleared on
+  // every guide edit, so the first preview after a change regenerates once.
+  try {
+    await ensurePricingGuidesBucket();
+    const { data: cached } = await supabaseAdmin.storage
+      .from(PRICING_GUIDES_BUCKET)
+      .download(cachePath);
+    if (cached) {
+      const bytes = new Uint8Array(await cached.arrayBuffer());
+      return streamPdf(bytes, 'pricing-guide.pdf');
+    }
+  } catch (cacheErr) {
+    console.warn('[dashboard pricing-guide download] cache read failed, generating fresh', cacheErr);
+  }
+
+  // ── Cache miss: load everything and generate ───────────────────────────
+  const { data: venue, error: venueErr } = await supabaseAdmin
+    .from('venues')
+    .select('name, location_city, location_state, location_full, lat, lng, brand_phone, brand_email, logo_url, brand_logo_url, social_links, features, owner_first_name, owner_last_name, faq, description')
+    .eq('id', venueId)
+    .maybeSingle();
+
+  if (venueErr || !venue) {
+    return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+  }
+
+  const guideId = guide?.id ?? null;
 
   const [spacesRes, packagesRes, accommodationsRes] = await Promise.all([
     guideId
@@ -127,16 +162,16 @@ export async function GET(req: NextRequest) {
     const pdfBuffer = await generatePricingGuidePdfServer(guideData, venueInfo);
     const fileName = `${(venue.name ?? 'pricing-guide').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-guide.pdf`;
 
-    return new NextResponse(pdfBuffer.buffer as ArrayBuffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': inline
-          ? `inline; filename="${fileName}"`
-          : `attachment; filename="${fileName}"`,
-        'Cache-Control': 'no-store',
-      },
-    });
+    // Warm the shared cache so the next preview (and the public link) is instant.
+    supabaseAdmin.storage
+      .from(PRICING_GUIDES_BUCKET)
+      .upload(cachePath, new Uint8Array(pdfBuffer), {
+        contentType: 'application/pdf',
+        upsert: true,
+      })
+      .catch((e) => console.warn('[dashboard pricing-guide download] cache write failed', e));
+
+    return streamPdf(new Uint8Array(pdfBuffer), fileName);
   } catch (err) {
     console.error('[dashboard pricing-guide download] PDF generation failed:', err);
     return NextResponse.json({ error: 'PDF generation failed' }, { status: 500 });
