@@ -17,6 +17,7 @@ import {
   Mail,
   ArrowRightLeft,
   Headset,
+  FolderKanban,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -40,6 +41,7 @@ import SmsSequenceAnalyticsPanel from '@/components/admin/SmsSequenceAnalyticsPa
 import SystemEmailsPanel from '@/components/admin/SystemEmailsPanel';
 import { FunnelAbPanel } from '@/components/admin/FunnelAbPanel';
 import GhlMigrationPanel from '@/components/admin/GhlMigrationPanel';
+import { AdminProjectsBoard } from '@/components/admin/AdminProjectsBoard';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
 
@@ -58,6 +60,7 @@ const BRAND = '#1b1b1b';
 
 type AdminTabKey =
   | 'dashboard'
+  | 'projects'
   | 'venues'
   | 'couples'
   | 'contacts'
@@ -89,6 +92,7 @@ type AdminTabKey =
 
 const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'dashboard',
+  'projects',
   'venues',
   'couples',
   'contacts',
@@ -550,6 +554,7 @@ function FeatureRequestsAdminTab({
 
 const ADMIN_NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { key: 'projects', label: 'Projects', icon: FolderKanban },
   { key: 'venues', label: 'Venue management', icon: Building2 },
   { key: 'support', label: 'Support inbox', icon: Inbox },
   { key: 'ai-concierge', label: 'AI Concierge', icon: Sparkles },
@@ -2953,6 +2958,9 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
         {/* ── GHL Migration Tab ── */}
         {activeTab === 'ghl-migration' && <GhlMigrationPanel />}
+
+        {/* ── Projects (PM board + ad generator) ── */}
+        {activeTab === 'projects' && <AdminProjectsBoard />}
 
         {/* ── Team management ── */}
         {activeTab === 'team' && canManageTeam && <AdminTeamPanel />}

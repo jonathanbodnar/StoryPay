@@ -11,6 +11,7 @@
 
 export type AdminTabKey =
   | 'dashboard'
+  | 'projects'
   | 'venues'
   | 'couples'
   | 'contacts'
@@ -46,6 +47,7 @@ export interface AdminTabDef {
 
 export const ADMIN_TABS: AdminTabDef[] = [
   { key: 'dashboard',          label: 'Dashboard',           category: 'core' },
+  { key: 'projects',           label: 'Projects',            category: 'core' },
   { key: 'venues',             label: 'Venue management',    category: 'venue' },
   { key: 'couples',            label: 'Couples',             category: 'venue' },
   { key: 'contacts',           label: 'Contacts',            category: 'venue' },
