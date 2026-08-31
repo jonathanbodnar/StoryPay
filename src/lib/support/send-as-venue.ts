@@ -390,5 +390,21 @@ ${attachmentsListHtml}
     attachments:        attachments.length ? attachments : null,
   });
 
+  // 9. Human takeover: the Concierge team just replied on the venue's behalf,
+  //    so pause AI follow-ups (no-op unless the lead is currently ai_active).
+  void (async () => {
+    try {
+      const { pauseAiOnHumanTakeover } = await import('@/lib/ai-concierge/state-control');
+      await pauseAiOnHumanTakeover({
+        venueId,
+        leadId,
+        venueCustomerId: vc.id,
+        contactEmail:    vc.customer_email,
+        reason:          'human_reply_concierge',
+        triggeredBy:     `concierge:${supportUserId}`,
+      });
+    } catch { /* best-effort */ }
+  })();
+
   return { ok: true, threadId, messageId };
 }

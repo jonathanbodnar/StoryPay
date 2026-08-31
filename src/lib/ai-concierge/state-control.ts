@@ -162,6 +162,84 @@ export async function setLeadAiState(
 }
 
 /**
+ * A human just replied to the bride — treat it as a takeover and PAUSE AI
+ * Concierge follow-ups so the bot never talks over a real person. Used by:
+ *   - the venue owner/team replying to their notification email (inbound-email)
+ *   - the StoryVenue Concierge team replying on the venue's behalf (sendAsVenue)
+ *
+ * No-op unless the lead is currently `ai_active`, so it never mislabels a lead
+ * that never had AI running (or is already handed off). Best-effort — never
+ * throws — and broadcasts the state change so open inboxes update live.
+ */
+export async function pauseAiOnHumanTakeover(input: {
+  venueId:          string;
+  reason:           string;
+  triggeredBy:      string;
+  /** Preferred: the lead id if the caller already resolved it. */
+  leadId?:          string | null;
+  /** Fallback resolution: the thread's contact. */
+  venueCustomerId?: string | null;
+  /** Fallback resolution: the contact's email. */
+  contactEmail?:    string | null;
+}): Promise<void> {
+  try {
+    let leadId = input.leadId ?? null;
+    let knownState: AiState | null = null;
+
+    if (leadId) {
+      const { data: lead } = await supabaseAdmin
+        .from('leads')
+        .select('ai_state')
+        .eq('id', leadId)
+        .maybeSingle();
+      knownState = ((lead as { ai_state?: AiState } | null)?.ai_state ?? null);
+    } else {
+      let email = (input.contactEmail ?? '').trim().toLowerCase();
+      if (!email && input.venueCustomerId) {
+        const { data: vc } = await supabaseAdmin
+          .from('venue_customers')
+          .select('customer_email')
+          .eq('id', input.venueCustomerId)
+          .maybeSingle();
+        email = ((vc as { customer_email?: string } | null)?.customer_email ?? '').trim().toLowerCase();
+      }
+      if (!email) return;
+      const { data: leadRow } = await supabaseAdmin
+        .from('leads')
+        .select('id, ai_state')
+        .eq('venue_id', input.venueId)
+        .ilike('email', email)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const lr = leadRow as { id?: string; ai_state?: AiState } | null;
+      leadId = lr?.id ?? null;
+      knownState = lr?.ai_state ?? null;
+    }
+
+    if (!leadId || knownState !== 'ai_active') return;
+
+    const result = await setLeadAiState({
+      leadId,
+      venueId:        input.venueId,
+      newState:       'paused',
+      reason:         input.reason,
+      triggeredBy:    input.triggeredBy,
+      knownFromState: 'ai_active',
+    });
+
+    if (result.ok && !result.noop) {
+      try {
+        const { broadcastAiStateChanged } = await import('@/lib/realtime/broadcast');
+        void broadcastAiStateChanged({ leadId, venueId: input.venueId, newState: 'paused', nextSendAt: null });
+      } catch { /* best-effort */ }
+    }
+  } catch (e) {
+    console.warn('[ai-state] pauseAiOnHumanTakeover failed:', e instanceof Error ? e.message : e);
+  }
+}
+
+/**
  * Map a marketing_tags.system_key to the ai_state it should drive a lead to
  * when an admin / venue owner manually applies that tag.
  *

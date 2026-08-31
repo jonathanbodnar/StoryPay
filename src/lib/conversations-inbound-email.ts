@@ -584,6 +584,20 @@ ${esc(body).split(/\n+/).map((p) => `<p style="margin:0 0 12px">${p}</p>`).join(
     })();
   }
 
+  // Human takeover: the owner/team just replied, so pause AI Concierge
+  // follow-ups (no-op unless the lead is currently ai_active).
+  void (async () => {
+    try {
+      const { pauseAiOnHumanTakeover } = await import('@/lib/ai-concierge/state-control');
+      await pauseAiOnHumanTakeover({
+        venueId,
+        venueCustomerId: customerId,
+        reason:          'human_reply_email',
+        triggeredBy:     senderKind === 'team' ? 'venue_team:email_reply' : 'venue_owner:email_reply',
+      });
+    } catch { /* best-effort */ }
+  })();
+
   if (!externalSent) {
     // Logged the attempt so it's visible in the thread, but tell the webhook it
     // wasn't delivered so logs make the failure obvious.
