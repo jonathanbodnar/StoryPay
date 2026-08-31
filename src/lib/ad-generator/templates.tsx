@@ -48,9 +48,9 @@ function Dot({ color = INK }: { color?: string }) {
   return <div style={{ display: 'flex', width: 9, height: 9, borderRadius: 9, backgroundColor: color, marginTop: 12, flexShrink: 0 }} />;
 }
 
-function BulletList({ items, color, size = 25 }: { items: string[]; color: string; size?: number }) {
+function BulletList({ items, color, size = 25, gap = 12 }: { items: string[]; color: string; size?: number; gap?: number }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap }}>
       {items.map((b, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
           <Dot color={color} />
@@ -64,6 +64,9 @@ function BulletList({ items, color, size = 25 }: { items: string[]; color: strin
 /** Charcoal downward banner/arrow with the download CTA (Template A). */
 function DownArrowCta({ w = 292, h = 158 }: { w?: number; h?: number }) {
   const rect = Math.round(h * 0.7); // height of the rectangular text area
+  const fs = Math.max(16, Math.round(w * 0.054));
+  const ls = Math.max(2, Math.round(w * 0.008));
+  const line = { fontFamily: SANS, fontWeight: 700 as const, fontSize: fs, letterSpacing: ls, color: '#fff' };
   return (
     <div style={{ display: 'flex', position: 'relative', width: w, height: h }}>
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ position: 'absolute', top: 0, left: 0 }}>
@@ -80,35 +83,36 @@ function DownArrowCta({ w = 292, h = 158 }: { w?: number; h?: number }) {
           height: rect,
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 3,
+          gap: 5,
         }}
       >
-        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 17, letterSpacing: 2, color: '#fff' }}>DOWNLOAD</span>
-        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 17, letterSpacing: 2, color: '#fff' }}>PRICING & AVAILABILITY</span>
-        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 17, letterSpacing: 2, color: '#fff' }}>GUIDE NOW</span>
+        <span style={line}>DOWNLOAD</span>
+        <span style={line}>PRICING & AVAILABILITY</span>
+        <span style={line}>GUIDE NOW</span>
       </div>
     </div>
   );
 }
 
-function headlineSize(name: string): number {
-  const n = name.length;
-  if (n > 34) return 46;
-  if (n > 26) return 52;
-  if (n > 16) return 58;
-  return 66;
+function promiseSize(text: string): number {
+  const n = text.length;
+  if (n > 42) return 46;
+  if (n > 32) return 52;
+  if (n > 22) return 58;
+  return 64;
 }
 
-// ── Template A: editorial / showcase ─────────────────────────────────────────
-// One-for-one with the Coto Valley reference: a true 50/50 split, a big Playfair
-// venue-name headline over a clean cream top, short bullet features, a faint
-// ghost photo revealed only in the lower half, the charcoal down-arrow CTA, and
-// a tall top photo over two shorter photos on the right.
+// ── Template A: editorial ────────────────────────────────────────────────────
+// Coto Valley reference layout (true 50/50 split, faint ghost, tall top photo
+// over two shorter photos, charcoal down-arrow CTA) — now with a small venue-name
+// eyebrow above a big, high-converting PROMISE headline, and a large CTA that
+// fills most of the panel width so the composition reads balanced.
 function Editorial({ venue, variant, images }: TemplateProps) {
   const LEFT_W = 540;
   const RIGHT_W = AD_WIDTH - LEFT_W; // 540
   const name = (venue.name || 'Your Venue').toUpperCase();
-  const bullets = variant.imageBullets.slice(0, 7);
+  const headline = variant.imageHeadline || 'Where Your Story Begins';
+  const bullets = variant.imageBullets.slice(0, 6);
 
   return (
     <div style={{ display: 'flex', width: AD_WIDTH, height: AD_HEIGHT, backgroundColor: CREAM }}>
@@ -120,7 +124,7 @@ function Editorial({ venue, variant, images }: TemplateProps) {
             src={images[2]}
             width={LEFT_W}
             height={AD_HEIGHT}
-            style={{ position: 'absolute', top: 0, left: 0, objectFit: 'cover', opacity: 0.12 }}
+            style={{ position: 'absolute', top: 0, left: 0, objectFit: 'cover', opacity: 0.16 }}
             alt=""
           />
         )}
@@ -137,10 +141,11 @@ function Editorial({ venue, variant, images }: TemplateProps) {
             width: LEFT_W,
             height: AD_HEIGHT,
             backgroundImage:
-              'linear-gradient(180deg, rgba(243,239,231,1) 0%, rgba(243,239,231,1) 40%, rgba(243,239,231,0.55) 66%, rgba(243,239,231,0.15) 100%)',
+              'linear-gradient(180deg, rgba(243,239,231,1) 0%, rgba(243,239,231,0.98) 30%, rgba(243,239,231,0.72) 55%, rgba(243,239,231,0.35) 100%)',
           }}
         />
-        {/* Content */}
+        {/* Content — three evenly distributed groups (headline / bullets / CTA)
+            so the type fills the panel and there is no big empty gap. */}
         <div
           style={{
             display: 'flex',
@@ -148,16 +153,18 @@ function Editorial({ venue, variant, images }: TemplateProps) {
             position: 'relative',
             width: LEFT_W,
             height: AD_HEIGHT,
-            padding: '66px 44px 30px',
+            padding: '62px 40px 36px',
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 34 }}>
-            <span style={{ fontFamily: SERIF, fontWeight: 400, fontSize: headlineSize(name), lineHeight: 1.05, color: INK, letterSpacing: 1 }}>{name}</span>
-            <BulletList items={bullets} color={BODY} size={25} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <span style={{ fontFamily: SANS, fontWeight: 600, fontSize: 22, letterSpacing: 4, color: '#8a857b', textTransform: 'uppercase' }}>{name}</span>
+            <span style={{ fontFamily: SERIF, fontWeight: 400, fontSize: promiseSize(headline), lineHeight: 1.08, color: INK }}>{headline}</span>
           </div>
-          <div style={{ display: 'flex', paddingLeft: 52 }}>
-            <DownArrowCta />
+          <BulletList items={bullets} color={BODY} size={28} gap={20} />
+          {/* Big CTA: a little narrower than the panel with equal side + below gaps */}
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <DownArrowCta w={404} h={212} />
           </div>
         </div>
       </div>

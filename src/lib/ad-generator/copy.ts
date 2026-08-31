@@ -37,7 +37,17 @@ function bulletCountFor(key: TemplateKey): number {
   return key === 'pricing' ? 6 : 5;
 }
 
-function fallbackVariant(data: VenueAdData, key: TemplateKey): AdCopyVariant {
+/** Deterministic promise headlines if the model call fails, varied per slot. */
+const PROMISE_POOL = [
+  'Where Your Forever Begins',
+  'Say I Do In Style',
+  'Your Dream Day Awaits',
+  'Picture Your Perfect Day',
+  'The Wedding You Imagined',
+  'Your Story Starts Here',
+];
+
+function fallbackVariant(data: VenueAdData, key: TemplateKey, idx = 0): AdCopyVariant {
   const city = data.city ? ` in ${data.city}` : '';
   const cap = data.capacityMax ?? data.capacityMin;
   const pool = [
@@ -66,9 +76,9 @@ function fallbackVariant(data: VenueAdData, key: TemplateKey): AdCopyVariant {
 
   return {
     templateKey: key,
-    imageHeadline: key === 'pricing'
-      ? (data.priceFrom ? 'All-Inclusive Weddings' : 'Your Story Starts Here')
-      : data.name,
+    imageHeadline: key === 'pricing' && data.priceFrom
+      ? 'All-Inclusive Weddings'
+      : PROMISE_POOL[idx % PROMISE_POOL.length],
     imageBullets: bullets,
     imageCta: IMAGE_CTA,
     kicker: '',
@@ -77,22 +87,22 @@ function fallbackVariant(data: VenueAdData, key: TemplateKey): AdCopyVariant {
   };
 }
 
-function sanitize(raw: unknown, data: VenueAdData, key: TemplateKey): AdCopyVariant {
-  if (!raw || typeof raw !== 'object') return fallbackVariant(data, key);
+function sanitize(raw: unknown, data: VenueAdData, key: TemplateKey, idx = 0): AdCopyVariant {
+  if (!raw || typeof raw !== 'object') return fallbackVariant(data, key, idx);
   const r = raw as Record<string, unknown>;
   const bullets = arr(r.imageBullets, bulletCountFor(key), 32).map(shortFeature);
   const primaryText = s(r.primaryText, 1200);
-  const headline = s(r.imageHeadline, 60);
+  const headline = s(r.imageHeadline, 60).replace(/[."']+$/, '').replace(/^["']+/, '');
 
   if (!primaryText || bullets.length === 0) {
-    return fallbackVariant(data, key);
+    return fallbackVariant(data, key, idx);
   }
 
   return {
     templateKey: key,
-    // Editorial + showcase render the venue name as the headline regardless;
-    // only the pricing template uses the model's promise headline.
-    imageHeadline: key === 'pricing' ? (headline.replace(/[.]+$/, '') || 'All-Inclusive Weddings') : data.name,
+    // Every template shows a high-converting PROMISE headline; the venue name is
+    // rendered separately as an eyebrow.
+    imageHeadline: headline || PROMISE_POOL[idx % PROMISE_POOL.length],
     imageBullets: bullets,
     imageCta: s(r.imageCta, 40) || IMAGE_CTA,
     kicker: '',
@@ -123,9 +133,9 @@ export async function generateAdCopy(data: VenueAdData): Promise<AdCopyVariant[]
 
     // Map strictly by position so a batch alternates editorial/pricing as the
     // prompt was told; templateKey from the model is coerced to our slot's key.
-    return BATCH_TEMPLATES.map((key, i) => sanitize(variants[i], data, key));
+    return BATCH_TEMPLATES.map((key, i) => sanitize(variants[i], data, key, i));
   } catch (err) {
     console.error('[ad-generator/copy] falling back:', err instanceof Error ? err.message : err);
-    return BATCH_TEMPLATES.map((key) => fallbackVariant(data, key));
+    return BATCH_TEMPLATES.map((key, i) => fallbackVariant(data, key, i));
   }
 }

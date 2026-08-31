@@ -7,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getDbAsync } from '@/lib/db';
 import { getAdminIdentity, hasAdminTabAccess } from '@/lib/admin-identity';
 import { getVenueAdData } from '@/lib/ad-generator/venue-data';
+import { selectAdPhotos } from '@/lib/ad-generator/photo-select';
 import { generateAdCopy } from '@/lib/ad-generator/copy';
 import { prepareCover, prepareLogo } from '@/lib/ad-generator/images';
 import { renderAdCreative } from '@/lib/ad-generator/render';
@@ -90,6 +91,10 @@ export async function POST(request: NextRequest) {
       { status: 422 },
     );
   }
+
+  // Vet the photos with vision so only brides/grooms, wedding moments and
+  // property shots make it in — no table settings, food or construction.
+  data.photos = await selectAdPhotos(data.photos);
 
   const bucket = await ensureAdCreativesBucket();
   if (!bucket.ok) {
