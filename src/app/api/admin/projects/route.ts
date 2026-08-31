@@ -25,9 +25,39 @@ interface StageRow {
   position: number;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   if (!(await hasAdminTabAccess('projects'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // ── Venue search (for the "add existing venue" picker) ──────────────────────
+  const q = (request.nextUrl.searchParams.get('q') || '').trim();
+  if (q) {
+    try {
+      const sql = await getDbAsync();
+      const like = `%${q.replace(/[%_]/g, (m) => '\\' + m)}%`;
+      const results = await sql`
+        SELECT
+          v.id,
+          v.name,
+          v.slug,
+          COALESCE(v.logo_url, v.brand_logo_url)             AS logo_url,
+          COALESCE(v.city, v.location_city, v.brand_city)    AS city,
+          COALESCE(v.state, v.location_state, v.brand_state) AS state,
+          v.is_private_client,
+          v.project_stage_id,
+          (v.is_private_client IS TRUE OR v.project_stage_id IS NOT NULL) AS on_board
+        FROM venues v
+        WHERE v.name ILIKE ${like}
+        ORDER BY (v.is_private_client IS TRUE OR v.project_stage_id IS NOT NULL) ASC, v.name ASC
+        LIMIT 20
+      `;
+      return NextResponse.json({ results });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[admin/projects][search]', msg);
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
   }
 
   try {
@@ -48,6 +78,7 @@ export async function GET() {
         v.cover_image_url,
         COALESCE(v.city, v.location_city, v.brand_city)        AS city,
         COALESCE(v.state, v.location_state, v.brand_state)     AS state,
+        v.is_private_client,
         v.onboarding_status,
         v.onboarding_completed,
         v.setup_completed,
@@ -58,10 +89,10 @@ export async function GET() {
         v.ai_concierge_enabled,
         v.project_stage_id,
         v.project_position,
-        v.project_notes,
         v.created_at,
         (pg.id IS NOT NULL AND (pg.enabled IS TRUE OR pg.use_custom_pricing_guide IS TRUE)) AS pricing_guide_ready,
-        COALESCE(ac.cnt, 0)::int                               AS ad_creatives_count
+        COALESCE(ac.cnt, 0)::int                               AS ad_creatives_count,
+        COALESCE(nc.cnt, 0)::int                               AS notes_count
       FROM venues v
       LEFT JOIN venue_pricing_guides pg ON pg.venue_id = v.id
       LEFT JOIN (
@@ -69,7 +100,12 @@ export async function GET() {
         FROM venue_ad_creatives
         GROUP BY venue_id
       ) ac ON ac.venue_id = v.id
-      WHERE v.is_private_client IS TRUE
+      LEFT JOIN (
+        SELECT venue_id, count(*) AS cnt
+        FROM admin_project_notes
+        GROUP BY venue_id
+      ) nc ON nc.venue_id = v.id
+      WHERE v.is_private_client IS TRUE OR v.project_stage_id IS NOT NULL
       ORDER BY v.project_position ASC, v.created_at ASC
     `;
 
@@ -97,7 +133,7 @@ export async function PATCH(request: NextRequest) {
     venueId?: string;
     stageId?: string | null;
     orderedIds?: string[];
-    notes?: string | null;
+    action?: 'move' | 'remove';
   };
   try {
     body = await request.json();
@@ -113,33 +149,34 @@ export async function PATCH(request: NextRequest) {
   try {
     const sql = await getDbAsync();
 
-    // Notes-only update.
-    if (typeof body.notes === 'string' || body.notes === null) {
+    // Remove a venue from the board (only detaches non-private clients from view;
+    // private clients always surface in the first column).
+    if (body.action === 'remove') {
       await sql`
         UPDATE venues
-        SET project_notes = ${body.notes ?? null}
-        WHERE id = ${venueId} AND is_private_client IS TRUE
+        SET project_stage_id = NULL, project_position = 0
+        WHERE id = ${venueId}
       `;
       return NextResponse.json({ ok: true });
     }
 
-    // Move + reorder within a destination column.
+    // Move + reorder within a destination column. Adding an existing venue is the
+    // same operation (set its stage), so any venue id is allowed here.
     const stageId = body.stageId ?? null;
     const orderedIds = Array.isArray(body.orderedIds) ? body.orderedIds : [venueId];
 
     await sql.begin(async (tx) => {
-      // Place the moved card in its target stage.
       await tx`
         UPDATE venues
         SET project_stage_id = ${stageId}
-        WHERE id = ${venueId} AND is_private_client IS TRUE
+        WHERE id = ${venueId}
       `;
       // Persist the vertical order of the destination column.
       for (let i = 0; i < orderedIds.length; i++) {
         await tx`
           UPDATE venues
           SET project_position = ${i}, project_stage_id = ${stageId}
-          WHERE id = ${orderedIds[i]} AND is_private_client IS TRUE
+          WHERE id = ${orderedIds[i]}
         `;
       }
     });
