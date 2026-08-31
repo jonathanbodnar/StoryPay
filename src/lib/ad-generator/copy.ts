@@ -6,7 +6,7 @@
 
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import {
-  AD_CTA, TEMPLATE_KEYS, buildCopyMessages,
+  AD_CTA, BATCH_TEMPLATES, buildCopyMessages,
   type AdCopyVariant, type TemplateKey, type VenueAdData,
 } from '@/lib/ad-generator/spec';
 
@@ -74,7 +74,6 @@ function fallbackVariant(data: VenueAdData, key: TemplateKey): AdCopyVariant {
     kicker: '',
     primaryText,
     metaHeadline: data.priceFrom ? `Packages from ${data.priceFrom}` : 'Free pricing & availability guide',
-    description: 'See pricing, spaces and open dates in one guide.',
   };
 }
 
@@ -99,7 +98,6 @@ function sanitize(raw: unknown, data: VenueAdData, key: TemplateKey): AdCopyVari
     kicker: '',
     primaryText: ensureCta(primaryText),
     metaHeadline: s(r.metaHeadline, 60) || 'Free pricing & availability guide',
-    description: s(r.description, 120),
   };
 }
 
@@ -114,8 +112,8 @@ export async function generateAdCopy(data: VenueAdData): Promise<AdCopyVariant[]
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
-      temperature: 0.85,
-      max_tokens: 1600,
+      temperature: 0.9,
+      max_tokens: 3200,
       response_format: { type: 'json_object' },
     });
 
@@ -123,13 +121,11 @@ export async function generateAdCopy(data: VenueAdData): Promise<AdCopyVariant[]
     const parsed = JSON.parse(content) as { variants?: unknown[] };
     const variants = Array.isArray(parsed.variants) ? parsed.variants : [];
 
-    return TEMPLATE_KEYS.map((key, i) => {
-      const match =
-        variants.find((v) => (v as Record<string, unknown>)?.templateKey === key) ?? variants[i];
-      return sanitize(match, data, key);
-    });
+    // Map strictly by position so a batch alternates editorial/pricing as the
+    // prompt was told; templateKey from the model is coerced to our slot's key.
+    return BATCH_TEMPLATES.map((key, i) => sanitize(variants[i], data, key));
   } catch (err) {
     console.error('[ad-generator/copy] falling back:', err instanceof Error ? err.message : err);
-    return TEMPLATE_KEYS.map((key) => fallbackVariant(data, key));
+    return BATCH_TEMPLATES.map((key) => fallbackVariant(data, key));
   }
 }

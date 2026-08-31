@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   X, Sparkles, Loader2, Copy, Check, Download, ExternalLink, ImageOff,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { TEMPLATE_LABELS, type TemplateKey } from '@/lib/ad-generator/spec';
 
 interface Creative {
   id: string;
+  batch_id: string | null;
   variant: number;
   template_key: string | null;
   image_url: string | null;
@@ -15,9 +17,32 @@ interface Creative {
   bullets: unknown;
   primary_text: string | null;
   meta_headline: string | null;
-  description: string | null;
   destination_url: string | null;
   created_at: string;
+}
+
+interface Version {
+  key: string;
+  createdAt: string;
+  items: Creative[];
+}
+
+/** Group creatives (already ordered newest-first) into generation "versions". */
+function groupVersions(creatives: Creative[]): Version[] {
+  const map = new Map<string, Version>();
+  for (const c of creatives) {
+    const key = c.batch_id || c.created_at.slice(0, 19);
+    let v = map.get(key);
+    if (!v) {
+      v = { key, createdAt: c.created_at, items: [] };
+      map.set(key, v);
+    }
+    v.items.push(c);
+  }
+  return [...map.values()].map((v) => ({
+    ...v,
+    items: [...v.items].sort((a, b) => a.variant - b.variant),
+  }));
 }
 
 function templateLabel(key: string | null): string {
@@ -120,7 +145,6 @@ function CreativeCard({ c, venueName }: { c: Creative; venueName: string }) {
       <div className="flex flex-col gap-2 p-3">
         {c.primary_text && <Field title="Primary text" value={c.primary_text} />}
         {c.meta_headline && <Field title="Headline" value={c.meta_headline} />}
-        {c.description && <Field title="Description" value={c.description} />}
       </div>
     </div>
   );
@@ -138,6 +162,11 @@ export function AdStudioModal({
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [versionIndex, setVersionIndex] = useState(0);
+
+  const versions = useMemo(() => groupVersions(creatives), [creatives]);
+  const safeIndex = Math.min(versionIndex, Math.max(0, versions.length - 1));
+  const current = versions[safeIndex];
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -164,6 +193,7 @@ export function AdStudioModal({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
       await load();
+      setVersionIndex(0); // jump to the freshly generated version
       onGenerated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -194,7 +224,7 @@ export function AdStudioModal({
               className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-60"
             >
               {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              {generating ? 'Generating…' : creatives.length ? 'Generate new set' : 'Generate 3 ads'}
+              {generating ? 'Generating…' : creatives.length ? 'Generate new version' : 'Generate 6 ads'}
             </button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
           </div>
@@ -209,7 +239,7 @@ export function AdStudioModal({
           {generating && (
             <div className="mb-4 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Writing copy and compositing 3 creatives from this venue&apos;s photos & logo — this takes ~20–30s.
+              Writing copy and compositing 6 creatives from this venue&apos;s photos & logo — this takes ~30–50s.
             </div>
           )}
 
@@ -224,16 +254,44 @@ export function AdStudioModal({
               </div>
               <p className="text-sm font-medium text-gray-700">No ads yet</p>
               <p className="mt-1 max-w-sm text-xs text-gray-400">
-                Generate 3 scroll-stopping 1080×1350 creatives with paste-ready Meta copy, built from this venue&apos;s
-                real photos, logo and pricing guide.
+                Generate 6 scroll-stopping 1080×1350 creatives with paste-ready Meta copy, built from this venue&apos;s
+                real photos, logo and pricing guide. Generate again anytime to cycle through new versions.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {creatives.map((c) => (
-                <CreativeCard key={c.id} c={c} venueName={venueName} />
-              ))}
-            </div>
+            <>
+              {versions.length > 1 && (
+                <div className="mb-4 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <button
+                    onClick={() => setVersionIndex((i) => Math.min(versions.length - 1, i + 1))}
+                    disabled={safeIndex >= versions.length - 1}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" /> Older
+                  </button>
+                  <span className="text-xs font-medium text-gray-500">
+                    Version {versions.length - safeIndex} of {versions.length}
+                    {current && (
+                      <span className="ml-1 text-gray-400">
+                        · {new Date(current.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    onClick={() => setVersionIndex((i) => Math.max(0, i - 1))}
+                    disabled={safeIndex <= 0}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    Newer <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {(current?.items ?? []).map((c) => (
+                  <CreativeCard key={c.id} c={c} venueName={venueName} />
+                ))}
+              </div>
+            </>
           )}
         </div>
 

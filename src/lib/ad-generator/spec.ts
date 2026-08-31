@@ -25,14 +25,23 @@ export const AD_HEIGHT = 1350;
 /** Canonical call to action used in the Meta copy. */
 export const AD_CTA = 'Download the pricing and availability guide.';
 
-export type TemplateKey = 'editorial' | 'pricing' | 'showcase';
-export const TEMPLATE_KEYS: TemplateKey[] = ['editorial', 'pricing', 'showcase'];
+export type TemplateKey = 'editorial' | 'pricing';
+export const TEMPLATE_KEYS: TemplateKey[] = ['editorial', 'pricing'];
 
 export const TEMPLATE_LABELS: Record<TemplateKey, string> = {
   editorial: 'Editorial',
   pricing: 'All-inclusive',
-  showcase: 'Showcase',
 };
+
+/**
+ * One generation ("version") produces this many creatives so the operator has
+ * real options to choose from. We only ship the two approved designs, so a batch
+ * alternates between them — each slot gets its own copy + different hero photos.
+ */
+export const BATCH_TEMPLATES: TemplateKey[] = [
+  'editorial', 'pricing', 'editorial', 'pricing', 'editorial', 'pricing',
+];
+export const BATCH_SIZE = BATCH_TEMPLATES.length;
 
 /** Everything the generator needs about a venue to build ads. */
 export interface VenueAdData {
@@ -71,8 +80,6 @@ export interface AdCopyVariant {
   primaryText: string;
   /** Meta "Headline" field (short). */
   metaHeadline: string;
-  /** Meta "Description" field (optional, short). */
-  description: string;
 }
 
 // ── Copy generation prompt ─────────────────────────────────────────────────
@@ -95,18 +102,19 @@ const COPY_SYSTEM_PROMPT = [
   '• These render on the image next to bullet points. They MUST be extremely short scannable feature phrases: 3-5 words each, no trailing punctuation.',
   '• Prefer concrete, quick-read specifics: capacity, spaces, location, inclusions (e.g. "Up to 220 guests", "Onsite bridal suite", "Tables & chairs included", "Just outside Pittsburgh", "Vendor friendly").',
   '',
-  'You will produce EXACTLY 3 concepts, one per template:',
-  '  1. "editorial" — the venue NAME is the headline (we render it), so imageHeadline can restate the venue name. Provide 5 short feature bullets.',
-  '  2. "pricing" — imageHeadline is a SHORT promise/positioning line, max 4 words (e.g. "All-Inclusive Weddings", "Your Story Starts Here"). Provide 6 short feature bullets that lean into value/inclusions.',
-  '  3. "showcase" — like editorial (venue name headline). Provide 5 short feature bullets that are DIFFERENT from the editorial set.',
+  'You will produce EXACTLY 6 concepts, in THIS order of templates:',
+  '  1. editorial, 2. pricing, 3. editorial, 4. pricing, 5. editorial, 6. pricing.',
+  'Template rules:',
+  '• "editorial" — the venue NAME is the headline (we render it), so imageHeadline should restate the venue name. Provide 5 short feature bullets.',
+  '• "pricing" — imageHeadline is a SHORT promise/positioning line, max 4 words (e.g. "All-Inclusive Weddings", "Your Story Starts Here"). Provide 6 short feature bullets that lean into value/inclusions.',
+  'VARIETY IS THE WHOLE POINT: every one of the 6 concepts must feel like a genuinely different option. Across the 3 editorial concepts use DIFFERENT bullet sets and DIFFERENT primary text hooks/angles. Across the 3 pricing concepts use DIFFERENT promise headlines AND different bullet sets. Never repeat the same primaryText twice.',
   '',
-  'Also write the Meta fields for each:',
+  'Also write the Meta fields for each concept:',
   '• primaryText — full paste-in primary text following ALL rules (hook + line breaks + SHORT ✅ feature lines + final CTA line).',
   '• metaHeadline — the Meta Headline field, max ~40 characters, a strong promise or offer.',
-  '• description — the Meta Description field, one short sentence.',
   '',
   'OUTPUT: Return ONLY valid JSON of the shape:',
-  '{ "variants": [ { "templateKey": "editorial", "imageHeadline": "...", "imageBullets": ["...","...","...","...","..."], "kicker": "", "imageCta": "Download the pricing guide", "primaryText": "...", "metaHeadline": "...", "description": "..." }, { "templateKey": "pricing", ... }, { "templateKey": "showcase", ... } ] }',
+  '{ "variants": [ { "templateKey": "editorial", "imageHeadline": "...", "imageBullets": ["...","...","...","...","..."], "kicker": "", "imageCta": "Download the pricing guide", "primaryText": "...", "metaHeadline": "..." }, ... 6 total ... ] }',
 ].join('\n');
 
 export function buildCopyMessages(data: VenueAdData): { system: string; user: string } {
@@ -127,8 +135,9 @@ export function buildCopyMessages(data: VenueAdData): { system: string; user: st
   const user = [
     lines.join('\n'),
     '',
-    `Write the 3 ad concepts now for ${data.name}.${cityHook}`,
+    `Write the 6 ad concepts now for ${data.name}.${cityHook}`,
     'Keep on-graphic bullets to 3-5 words each. Keep the ✅ lines in the primary text to 4-5 words each.',
+    'Make all 6 distinct — different bullets and different primary text for each.',
   ].join('\n');
 
   return { system: COPY_SYSTEM_PROMPT, user };

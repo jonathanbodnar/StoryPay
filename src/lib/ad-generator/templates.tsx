@@ -34,7 +34,6 @@ export interface TemplateProps {
  *  tall top photo (~52%) over two shorter photos (~22% / ~25%) with 6px gaps. */
 export const TEMPLATE_SLOTS: Record<TemplateKey, { w: number; h: number }[]> = {
   editorial: [{ w: 540, h: 700 }, { w: 540, h: 300 }, { w: 540, h: 338 }],
-  showcase: [{ w: 540, h: 700 }, { w: 540, h: 300 }, { w: 540, h: 338 }],
   pricing: [{ w: 1080, h: 1350 }, { w: 360, h: 380 }, { w: 360, h: 380 }, { w: 360, h: 380 }],
 };
 
@@ -236,7 +235,6 @@ function Pricing({ venue, variant, images }: TemplateProps) {
 
 const TEMPLATES: Record<TemplateKey, (p: TemplateProps) => React.ReactElement> = {
   editorial: Editorial,
-  showcase: Editorial,
   pricing: Pricing,
 };
 

@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
@@ -23,6 +23,7 @@ const FALLBACK_HERO =
 interface CreativeRow {
   id: string;
   venue_id: string;
+  batch_id: string | null;
   variant: number;
   template_key: string | null;
   image_url: string | null;
@@ -31,7 +32,6 @@ interface CreativeRow {
   bullets: unknown;
   primary_text: string | null;
   meta_headline: string | null;
-  description: string | null;
   destination_url: string | null;
   created_at: string;
 }
@@ -47,13 +47,13 @@ export async function GET(request: NextRequest) {
   try {
     const sql = await getDbAsync();
     const rows = (await sql`
-      SELECT id, venue_id, variant, template_key, image_url, storage_path,
-             headline, bullets, primary_text, meta_headline, description,
+      SELECT id, venue_id, batch_id, variant, template_key, image_url, storage_path,
+             headline, bullets, primary_text, meta_headline,
              destination_url, created_at
       FROM venue_ad_creatives
       WHERE venue_id = ${venueId}
       ORDER BY created_at DESC, variant ASC
-      LIMIT 30
+      LIMIT 120
     `) as unknown as CreativeRow[];
     return NextResponse.json({ creatives: rows });
   } catch (err) {
@@ -155,14 +155,14 @@ export async function POST(request: NextRequest) {
     try {
       const rows = (await sql`
         INSERT INTO venue_ad_creatives
-          (venue_id, variant, template_key, image_url, storage_path, headline,
-           bullets, primary_text, meta_headline, description, destination_url, created_by)
+          (venue_id, batch_id, variant, template_key, image_url, storage_path, headline,
+           bullets, primary_text, meta_headline, destination_url, created_by)
         VALUES
-          (${venueId}, ${i + 1}, ${variant.templateKey}, ${imageUrl}, ${storagePath},
+          (${venueId}, ${batchId}, ${i + 1}, ${variant.templateKey}, ${imageUrl}, ${storagePath},
            ${variant.imageHeadline}, ${sql.json(variant.imageBullets)}, ${variant.primaryText},
-           ${variant.metaHeadline}, ${variant.description}, ${destinationUrl}, ${createdBy})
-        RETURNING id, venue_id, variant, template_key, image_url, storage_path, headline,
-                  bullets, primary_text, meta_headline, description, destination_url, created_at
+           ${variant.metaHeadline}, ${destinationUrl}, ${createdBy})
+        RETURNING id, venue_id, batch_id, variant, template_key, image_url, storage_path, headline,
+                  bullets, primary_text, meta_headline, destination_url, created_at
       `) as unknown as CreativeRow[];
       inserted = rows[0] ?? null;
     } catch (err) {
@@ -172,6 +172,7 @@ export async function POST(request: NextRequest) {
     creatives.push({
       id: inserted?.id ?? `${batchId}-${i + 1}`,
       venue_id: venueId,
+      batch_id: batchId,
       variant: i + 1,
       template_key: variant.templateKey,
       image_url: imageUrl,
@@ -181,7 +182,6 @@ export async function POST(request: NextRequest) {
       imageBullets: variant.imageBullets,
       primary_text: variant.primaryText,
       meta_headline: variant.metaHeadline,
-      description: variant.description,
       destination_url: destinationUrl,
       created_at: inserted?.created_at ?? new Date().toISOString(),
     });
