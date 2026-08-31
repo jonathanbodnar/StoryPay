@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   X, Sparkles, Loader2, Copy, Check, Download, ExternalLink, ImageOff,
-  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { TEMPLATE_LABELS, type TemplateKey } from '@/lib/ad-generator/spec';
 
@@ -162,11 +161,9 @@ export function AdStudioModal({
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [versionIndex, setVersionIndex] = useState(0);
 
-  const versions = useMemo(() => groupVersions(creatives), [creatives]);
-  const safeIndex = Math.min(versionIndex, Math.max(0, versions.length - 1));
-  const current = versions[safeIndex];
+  // Only ever show the most recent generation (batch). Regenerating replaces it.
+  const latest = useMemo(() => groupVersions(creatives)[0] ?? null, [creatives]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -193,7 +190,6 @@ export function AdStudioModal({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
       await load();
-      setVersionIndex(0); // jump to the freshly generated version
       onGenerated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -224,7 +220,7 @@ export function AdStudioModal({
               className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-60"
             >
               {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              {generating ? 'Generating…' : creatives.length ? 'Generate new version' : 'Generate 6 ads'}
+              {generating ? 'Generating…' : creatives.length ? 'Regenerate' : 'Generate 6 ads'}
             </button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
           </div>
@@ -255,43 +251,15 @@ export function AdStudioModal({
               <p className="text-sm font-medium text-gray-700">No ads yet</p>
               <p className="mt-1 max-w-sm text-xs text-gray-400">
                 Generate 6 scroll-stopping 1080×1350 creatives with paste-ready Meta copy, built from this venue&apos;s
-                real photos, logo and pricing guide. Generate again anytime to cycle through new versions.
+                real photos, logo and pricing guide. Don&apos;t like them? Hit generate again for a fresh batch of 6.
               </p>
             </div>
           ) : (
-            <>
-              {versions.length > 1 && (
-                <div className="mb-4 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                  <button
-                    onClick={() => setVersionIndex((i) => Math.min(versions.length - 1, i + 1))}
-                    disabled={safeIndex >= versions.length - 1}
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" /> Older
-                  </button>
-                  <span className="text-xs font-medium text-gray-500">
-                    Version {versions.length - safeIndex} of {versions.length}
-                    {current && (
-                      <span className="ml-1 text-gray-400">
-                        · {new Date(current.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </span>
-                    )}
-                  </span>
-                  <button
-                    onClick={() => setVersionIndex((i) => Math.max(0, i - 1))}
-                    disabled={safeIndex <= 0}
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                  >
-                    Newer <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {(current?.items ?? []).map((c) => (
-                  <CreativeCard key={c.id} c={c} venueName={venueName} />
-                ))}
-              </div>
-            </>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {(latest?.items ?? []).map((c) => (
+                <CreativeCard key={c.id} c={c} venueName={venueName} />
+              ))}
+            </div>
           )}
         </div>
 
