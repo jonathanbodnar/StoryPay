@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   X, Sparkles, Loader2, Copy, Check, Download, ExternalLink, ImageOff,
 } from 'lucide-react';
@@ -18,30 +18,6 @@ interface Creative {
   meta_headline: string | null;
   destination_url: string | null;
   created_at: string;
-}
-
-interface Version {
-  key: string;
-  createdAt: string;
-  items: Creative[];
-}
-
-/** Group creatives (already ordered newest-first) into generation "versions". */
-function groupVersions(creatives: Creative[]): Version[] {
-  const map = new Map<string, Version>();
-  for (const c of creatives) {
-    const key = c.batch_id || c.created_at.slice(0, 19);
-    let v = map.get(key);
-    if (!v) {
-      v = { key, createdAt: c.created_at, items: [] };
-      map.set(key, v);
-    }
-    v.items.push(c);
-  }
-  return [...map.values()].map((v) => ({
-    ...v,
-    items: [...v.items].sort((a, b) => a.variant - b.variant),
-  }));
 }
 
 function templateLabel(key: string | null): string {
@@ -157,26 +133,11 @@ export function AdStudioModal({
   onClose: () => void;
   onGenerated?: () => void;
 }) {
+  // The modal never loads past generations. It starts empty every time it opens
+  // and only shows the batch created in this session; closing it (unmount) resets.
   const [creatives, setCreatives] = useState<Creative[]>([]);
-  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Only ever show the most recent generation (batch). Regenerating replaces it.
-  const latest = useMemo(() => groupVersions(creatives)[0] ?? null, [creatives]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/ad-generator?venueId=${encodeURIComponent(venueId)}`, { cache: 'no-store' });
-      const json = await res.json();
-      if (res.ok) setCreatives(json.creatives || []);
-    } catch { /* ignore */ } finally {
-      setLoading(false);
-    }
-  }, [venueId]);
-
-  useEffect(() => { load(); }, [load]);
 
   const generate = useCallback(async () => {
     setGenerating(true);
@@ -189,14 +150,15 @@ export function AdStudioModal({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
-      await load();
+      const batch: Creative[] = (json.creatives || []).slice().sort((a: Creative, b: Creative) => a.variant - b.variant);
+      setCreatives(batch);
       onGenerated?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setGenerating(false);
     }
-  }, [venueId, load, onGenerated]);
+  }, [venueId, onGenerated]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -239,11 +201,7 @@ export function AdStudioModal({
             </div>
           )}
 
-          {loading ? (
-            <div className="flex items-center justify-center py-20 text-gray-400">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
-            </div>
-          ) : creatives.length === 0 ? (
+          {creatives.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 mb-3">
                 <Sparkles className="h-5 w-5 text-gray-400" />
@@ -256,7 +214,7 @@ export function AdStudioModal({
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {(latest?.items ?? []).map((c) => (
+              {creatives.map((c) => (
                 <CreativeCard key={c.id} c={c} venueName={venueName} />
               ))}
             </div>

@@ -4,11 +4,25 @@
  * always returns usable copy even if the model call fails.
  */
 
-import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
+import { getDeepSeekClient, getOpenAIChatClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import {
   AD_CTA, BATCH_TEMPLATES, buildCopyMessages,
   type AdCopyVariant, type TemplateKey, type VenueAdData,
 } from '@/lib/ad-generator/spec';
+
+/**
+ * Which model writes the ad copy. Defaults to OpenAI for top quality (the
+ * OPENAI_API_KEY is already configured). Override with env:
+ *   AD_COPY_PROVIDER=deepseek        → use DeepSeek instead
+ *   AD_COPY_MODEL=gpt-4o             → pick a specific OpenAI model
+ */
+function copyModel(): { client: ReturnType<typeof getOpenAIChatClient>; model: string } {
+  const provider = (process.env.AD_COPY_PROVIDER || 'openai').toLowerCase();
+  if (provider === 'deepseek') {
+    return { client: getDeepSeekClient(), model: DEEPSEEK_MODEL };
+  }
+  return { client: getOpenAIChatClient(), model: process.env.AD_COPY_MODEL || 'gpt-4o-mini' };
+}
 
 const IMAGE_CTA = 'Download the pricing guide';
 
@@ -115,9 +129,9 @@ export async function generateAdCopy(data: VenueAdData): Promise<AdCopyVariant[]
   const { system, user } = buildCopyMessages(data);
 
   try {
-    const deepseek = getDeepSeekClient();
-    const completion = await deepseek.chat.completions.create({
-      model: DEEPSEEK_MODEL,
+    const { client, model } = copyModel();
+    const completion = await client.chat.completions.create({
+      model,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },

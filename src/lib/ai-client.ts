@@ -27,11 +27,18 @@ export function getDeepSeekClient(): OpenAI {
 }
 
 /**
- * OpenAI client — used ONLY for embeddings (help search / seed-embeddings).
- * Requires OPENAI_API_KEY in env.
+ * OpenAI client — used for embeddings (help search) and, for the ad generator,
+ * high-quality copy + vision photo selection. Requires OPENAI_API_KEY.
  */
 export function getOpenAIEmbeddingsClient(): OpenAI {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set.');
   return new OpenAI({ apiKey, timeout: 30_000 });
+}
+
+/** Same OpenAI client, longer timeout — used for ad copy chat completions. */
+export function getOpenAIChatClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not set.');
+  return new OpenAI({ apiKey, timeout: 60_000 });
 }

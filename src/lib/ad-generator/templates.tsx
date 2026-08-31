@@ -33,9 +33,9 @@ export interface TemplateProps {
  *  Editorial mirrors the Coto Valley reference exactly: a 50/50 split, then a
  *  tall top photo (~52%) over two shorter photos (~22% / ~25%) with 6px gaps. */
 export const TEMPLATE_SLOTS: Record<TemplateKey, { w: number; h: number }[]> = {
-  // Top photo slightly bigger; the bottom two are the exact same size. 6px gaps
-  // (500 + 6 + 419 + 6 + 419 = 1350).
-  editorial: [{ w: 540, h: 500 }, { w: 540, h: 419 }, { w: 540, h: 419 }],
+  // Photo 1 is the largest and its height equals photos 2 + 3 combined. The two
+  // bottom photos are identical. 6px gaps (670 + 6 + 334 + 6 + 334 = 1350).
+  editorial: [{ w: 540, h: 670 }, { w: 540, h: 334 }, { w: 540, h: 334 }],
   pricing: [{ w: 1080, h: 1350 }, { w: 360, h: 380 }, { w: 360, h: 380 }, { w: 360, h: 380 }],
 };
 
@@ -46,17 +46,18 @@ const CHARCOAL = '#2E2E2E';
 const SERIF = 'Playfair Display';
 const SANS = 'Open Sans';
 
-function Dot({ color = INK }: { color?: string }) {
-  return <div style={{ display: 'flex', width: 10, height: 10, borderRadius: 10, backgroundColor: color, marginTop: 13, flexShrink: 0 }} />;
+function Dot({ color = INK, top = 12 }: { color?: string; top?: number }) {
+  return <div style={{ display: 'flex', width: 11, height: 11, borderRadius: 11, backgroundColor: color, marginTop: top, flexShrink: 0 }} />;
 }
 
 function BulletList({ items, color, size = 25, gap = 12 }: { items: string[]; color: string; size?: number; gap?: number }) {
+  const dotTop = Math.round(size * 0.42);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap }}>
       {items.map((b, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-          <Dot color={color} />
-          <span style={{ fontFamily: SANS, fontWeight: 400, fontSize: size, color, lineHeight: 1.25 }}>{b}</span>
+        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+          <Dot color={color} top={dotTop} />
+          <span style={{ fontFamily: SANS, fontWeight: 400, fontSize: size, color, lineHeight: 1.22 }}>{b}</span>
         </div>
       ))}
     </div>
@@ -98,11 +99,11 @@ function DownArrowCta({ w = 292, h = 158 }: { w?: number; h?: number }) {
 
 function promiseSize(text: string): number {
   const n = text.length;
-  if (n > 44) return 54;
-  if (n > 34) return 62;
-  if (n > 24) return 70;
-  if (n > 16) return 78;
-  return 86;
+  if (n > 46) return 58;
+  if (n > 36) return 66;
+  if (n > 26) return 76;
+  if (n > 18) return 86;
+  return 96;
 }
 
 // ── Template A: editorial ────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ function promiseSize(text: string): number {
 function Editorial({ venue, variant, images }: TemplateProps) {
   const LEFT_W = 540;
   const RIGHT_W = AD_WIDTH - LEFT_W; // 540
+  const PAD_X = 32; // shared left/right gutter for headline, bullets and CTA
   const name = (venue.name || 'Your Venue').toUpperCase();
   const headline = variant.imageHeadline || 'Where Your Story Begins';
   const bullets = variant.imageBullets.slice(0, 6);
@@ -148,8 +150,8 @@ function Editorial({ venue, variant, images }: TemplateProps) {
           }}
         />
         {/* Content — three evenly distributed groups (headline / bullets / CTA).
-            Tight side padding so the headline, bullets and CTA all read as one
-            near edge-to-edge column that fills the panel. */}
+            The eyebrow, headline, bullets AND the CTA all share the same left and
+            right gutter (PAD_X), so everything reads as one edge-to-edge column. */}
         <div
           style={{
             display: 'flex',
@@ -157,29 +159,27 @@ function Editorial({ venue, variant, images }: TemplateProps) {
             position: 'relative',
             width: LEFT_W,
             height: AD_HEIGHT,
-            padding: '58px 34px 34px',
+            padding: `54px ${PAD_X}px 32px`,
             justifyContent: 'space-between',
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <span style={{ fontFamily: SANS, fontWeight: 600, fontSize: 22, letterSpacing: 4, color: '#8a857b', textTransform: 'uppercase' }}>{name}</span>
-            <span style={{ fontFamily: SERIF, fontWeight: 400, fontSize: promiseSize(headline), lineHeight: 1.05, color: INK }}>{headline}</span>
+            <span style={{ fontFamily: SERIF, fontWeight: 400, fontSize: promiseSize(headline), lineHeight: 1.04, color: INK }}>{headline}</span>
           </div>
-          <BulletList items={bullets} color={BODY} size={31} gap={22} />
-          {/* Big CTA: near the panel width with even side + below gaps */}
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <DownArrowCta w={438} h={224} />
-          </div>
+          <BulletList items={bullets} color={BODY} size={34} gap={24} />
+          {/* CTA spans the full content width so its edges match the text gutter. */}
+          <DownArrowCta w={LEFT_W - PAD_X * 2} h={238} />
         </div>
       </div>
 
-      {/* Right 3-photo stack — top slightly bigger, bottom two identical (6px gaps) */}
+      {/* Right stack — photo 1 largest (= photos 2 + 3), bottom two identical (6px gaps) */}
       <div style={{ display: 'flex', flexDirection: 'column', width: RIGHT_W, height: AD_HEIGHT, backgroundColor: '#fff' }}>
-        {images[0] && <img src={images[0]} width={RIGHT_W} height={500} style={{ objectFit: 'cover' }} alt="" />}
+        {images[0] && <img src={images[0]} width={RIGHT_W} height={670} style={{ objectFit: 'cover' }} alt="" />}
         <div style={{ display: 'flex', height: 6 }} />
-        {images[1] && <img src={images[1]} width={RIGHT_W} height={419} style={{ objectFit: 'cover' }} alt="" />}
+        {images[1] && <img src={images[1]} width={RIGHT_W} height={334} style={{ objectFit: 'cover' }} alt="" />}
         <div style={{ display: 'flex', height: 6 }} />
-        {images[2] && <img src={images[2]} width={RIGHT_W} height={419} style={{ objectFit: 'cover' }} alt="" />}
+        {images[2] && <img src={images[2]} width={RIGHT_W} height={334} style={{ objectFit: 'cover' }} alt="" />}
       </div>
     </div>
   );

@@ -117,20 +117,43 @@ export async function POST(request: NextRequest) {
   const batchId = crypto.randomUUID();
 
   const sql = await getDbAsync();
+
+  // Only ever keep the latest generation: wipe the venue's previous creatives
+  // (DB rows + stored images) before writing the new batch.
+  try {
+    const oldRows = (await sql`
+      SELECT storage_path FROM venue_ad_creatives WHERE venue_id = ${venueId}
+    `) as unknown as { storage_path: string | null }[];
+    const paths = oldRows.map((r) => r.storage_path).filter((p): p is string => Boolean(p));
+    if (paths.length) await supabaseAdmin.storage.from(AD_CREATIVES_BUCKET).remove(paths);
+    await sql`DELETE FROM venue_ad_creatives WHERE venue_id = ${venueId}`;
+  } catch (e) {
+    console.warn('[admin/ad-generator] failed clearing old creatives', e instanceof Error ? e.message : e);
+  }
+
   const creatives: Array<CreativeRow & { imageBullets: string[] }> = [];
 
   for (let i = 0; i < variants.length; i++) {
     const variant = variants[i];
     const slots = TEMPLATE_SLOTS[variant.templateKey] ?? TEMPLATE_SLOTS.editorial;
 
-    // Fill each photo slot, cycling through the venue's photos with a per-variant
-    // offset so the three creatives feature different heroes.
+    // Fill each photo slot. Within ONE ad every slot must be a DIFFERENT photo,
+    // so track used indices and only reuse as a last resort. A per-variant offset
+    // also keeps the batch's creatives featuring different heroes.
     const images: string[] = [];
+    const usedIdx = new Set<number>();
     for (let sIdx = 0; sIdx < slots.length; sIdx++) {
       let dataUrl: string | null = null;
-      for (let p = 0; p < data.photos.length && !dataUrl; p++) {
-        const url = data.photos[(i + sIdx + p) % data.photos.length];
-        dataUrl = await prepareCover(url, slots[sIdx].w, slots[sIdx].h);
+      for (let step = 0; step < data.photos.length && !dataUrl; step++) {
+        const idx = (i + sIdx + step) % data.photos.length;
+        if (usedIdx.has(idx)) continue;
+        dataUrl = await prepareCover(data.photos[idx], slots[sIdx].w, slots[sIdx].h);
+        if (dataUrl) usedIdx.add(idx);
+      }
+      // Fallback: if every unused photo failed to decode, allow reuse over blank.
+      for (let step = 0; step < data.photos.length && !dataUrl; step++) {
+        const idx = (i + sIdx + step) % data.photos.length;
+        dataUrl = await prepareCover(data.photos[idx], slots[sIdx].w, slots[sIdx].h);
       }
       images.push(dataUrl ?? FALLBACK_HERO);
     }
