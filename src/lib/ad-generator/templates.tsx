@@ -33,7 +33,9 @@ export interface TemplateProps {
  *  Editorial mirrors the Coto Valley reference exactly: a 50/50 split, then a
  *  tall top photo (~52%) over two shorter photos (~22% / ~25%) with 6px gaps. */
 export const TEMPLATE_SLOTS: Record<TemplateKey, { w: number; h: number }[]> = {
-  editorial: [{ w: 540, h: 700 }, { w: 540, h: 300 }, { w: 540, h: 338 }],
+  // Top photo slightly bigger; the bottom two are the exact same size. 6px gaps
+  // (500 + 6 + 419 + 6 + 419 = 1350).
+  editorial: [{ w: 540, h: 500 }, { w: 540, h: 419 }, { w: 540, h: 419 }],
   pricing: [{ w: 1080, h: 1350 }, { w: 360, h: 380 }, { w: 360, h: 380 }, { w: 360, h: 380 }],
 };
 
@@ -45,7 +47,7 @@ const SERIF = 'Playfair Display';
 const SANS = 'Open Sans';
 
 function Dot({ color = INK }: { color?: string }) {
-  return <div style={{ display: 'flex', width: 9, height: 9, borderRadius: 9, backgroundColor: color, marginTop: 12, flexShrink: 0 }} />;
+  return <div style={{ display: 'flex', width: 10, height: 10, borderRadius: 10, backgroundColor: color, marginTop: 13, flexShrink: 0 }} />;
 }
 
 function BulletList({ items, color, size = 25, gap = 12 }: { items: string[]; color: string; size?: number; gap?: number }) {
@@ -96,10 +98,11 @@ function DownArrowCta({ w = 292, h = 158 }: { w?: number; h?: number }) {
 
 function promiseSize(text: string): number {
   const n = text.length;
-  if (n > 42) return 46;
-  if (n > 32) return 52;
-  if (n > 22) return 58;
-  return 64;
+  if (n > 44) return 54;
+  if (n > 34) return 62;
+  if (n > 24) return 70;
+  if (n > 16) return 78;
+  return 86;
 }
 
 // ── Template A: editorial ────────────────────────────────────────────────────
@@ -144,8 +147,9 @@ function Editorial({ venue, variant, images }: TemplateProps) {
               'linear-gradient(180deg, rgba(243,239,231,1) 0%, rgba(243,239,231,0.98) 30%, rgba(243,239,231,0.72) 55%, rgba(243,239,231,0.35) 100%)',
           }}
         />
-        {/* Content — three evenly distributed groups (headline / bullets / CTA)
-            so the type fills the panel and there is no big empty gap. */}
+        {/* Content — three evenly distributed groups (headline / bullets / CTA).
+            Tight side padding so the headline, bullets and CTA all read as one
+            near edge-to-edge column that fills the panel. */}
         <div
           style={{
             display: 'flex',
@@ -153,29 +157,29 @@ function Editorial({ venue, variant, images }: TemplateProps) {
             position: 'relative',
             width: LEFT_W,
             height: AD_HEIGHT,
-            padding: '62px 40px 36px',
+            padding: '58px 34px 34px',
             justifyContent: 'space-between',
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <span style={{ fontFamily: SANS, fontWeight: 600, fontSize: 22, letterSpacing: 4, color: '#8a857b', textTransform: 'uppercase' }}>{name}</span>
-            <span style={{ fontFamily: SERIF, fontWeight: 400, fontSize: promiseSize(headline), lineHeight: 1.08, color: INK }}>{headline}</span>
+            <span style={{ fontFamily: SERIF, fontWeight: 400, fontSize: promiseSize(headline), lineHeight: 1.05, color: INK }}>{headline}</span>
           </div>
-          <BulletList items={bullets} color={BODY} size={28} gap={20} />
-          {/* Big CTA: a little narrower than the panel with equal side + below gaps */}
+          <BulletList items={bullets} color={BODY} size={31} gap={22} />
+          {/* Big CTA: near the panel width with even side + below gaps */}
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <DownArrowCta w={404} h={212} />
+            <DownArrowCta w={438} h={224} />
           </div>
         </div>
       </div>
 
-      {/* Right 3-photo stack (6px white gaps) */}
+      {/* Right 3-photo stack — top slightly bigger, bottom two identical (6px gaps) */}
       <div style={{ display: 'flex', flexDirection: 'column', width: RIGHT_W, height: AD_HEIGHT, backgroundColor: '#fff' }}>
-        {images[0] && <img src={images[0]} width={RIGHT_W} height={700} style={{ objectFit: 'cover' }} alt="" />}
+        {images[0] && <img src={images[0]} width={RIGHT_W} height={500} style={{ objectFit: 'cover' }} alt="" />}
         <div style={{ display: 'flex', height: 6 }} />
-        {images[1] && <img src={images[1]} width={RIGHT_W} height={300} style={{ objectFit: 'cover' }} alt="" />}
+        {images[1] && <img src={images[1]} width={RIGHT_W} height={419} style={{ objectFit: 'cover' }} alt="" />}
         <div style={{ display: 'flex', height: 6 }} />
-        {images[2] && <img src={images[2]} width={RIGHT_W} height={338} style={{ objectFit: 'cover' }} alt="" />}
+        {images[2] && <img src={images[2]} width={RIGHT_W} height={419} style={{ objectFit: 'cover' }} alt="" />}
       </div>
     </div>
   );
