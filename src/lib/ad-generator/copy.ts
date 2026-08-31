@@ -4,30 +4,95 @@
  * always returns usable copy even if the model call fails.
  */
 
-import { getDeepSeekClient, getOpenAIChatClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
+import { getAnthropicClient, getDeepSeekClient, getOpenAIChatClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import {
   AD_CTA, BATCH_TEMPLATES, buildCopyMessages,
   type AdCopyVariant, type TemplateKey, type VenueAdData,
 } from '@/lib/ad-generator/spec';
 
+type CopyProvider = 'anthropic' | 'openai' | 'deepseek';
+
 /**
- * Which model writes the ad copy. Defaults to OpenAI's GPT-5.6 ("sol") for top
- * quality (the OPENAI_API_KEY is already configured). Override with env:
- *   AD_COPY_PROVIDER=deepseek        → use DeepSeek instead
- *   AD_COPY_MODEL=gpt-4o             → pick a specific OpenAI model
+ * Which provider writes the ad copy. Defaults to Claude (Anthropic) for top-tier
+ * copywriting, and automatically falls back to OpenAI (then DeepSeek) if the
+ * matching key isn't configured. Image generation is unaffected — it stays on
+ * OpenAI. Override with env:
+ *   AD_COPY_PROVIDER=anthropic|openai|deepseek
+ *   AD_COPY_MODEL=<id>   → override the Anthropic (primary) model id
  */
-function copyModel(): { client: ReturnType<typeof getOpenAIChatClient>; model: string } {
-  const provider = (process.env.AD_COPY_PROVIDER || 'openai').toLowerCase();
-  if (provider === 'deepseek') {
-    return { client: getDeepSeekClient(), model: DEEPSEEK_MODEL };
-  }
-  return { client: getOpenAIChatClient(), model: process.env.AD_COPY_MODEL || 'gpt-5.6-sol' };
+function resolveProvider(): CopyProvider {
+  const explicit = (process.env.AD_COPY_PROVIDER || '').toLowerCase();
+  if (explicit === 'anthropic' || explicit === 'openai' || explicit === 'deepseek') return explicit;
+  if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
+  if (process.env.OPENAI_API_KEY) return 'openai';
+  return 'deepseek';
+}
+
+function modelFor(provider: CopyProvider): string {
+  if (provider === 'anthropic') return process.env.AD_COPY_MODEL || 'claude-opus-4-8';
+  if (provider === 'deepseek') return DEEPSEEK_MODEL;
+  return process.env.AD_COPY_MODEL_OPENAI || 'gpt-5.6-sol';
 }
 
 /** The GPT-5 family uses `max_completion_tokens` and only supports the default
  * temperature, so we tailor the request params to the model to avoid 400s. */
 function isGpt5Family(model: string): boolean {
   return /^gpt-5/i.test(model) || /^o[0-9]/i.test(model);
+}
+
+/** Parse a model's JSON reply, tolerating stray prose or code fences around it. */
+function safeParseVariants(content: string): unknown[] {
+  const tryParse = (s: string): unknown[] | null => {
+    try {
+      const p = JSON.parse(s) as { variants?: unknown[] };
+      return Array.isArray(p.variants) ? p.variants : null;
+    } catch { return null; }
+  };
+  let out = tryParse(content);
+  if (!out) {
+    const first = content.indexOf('{');
+    const last = content.lastIndexOf('}');
+    if (first !== -1 && last > first) out = tryParse(content.slice(first, last + 1));
+  }
+  return out ?? [];
+}
+
+/** Claude copy call — enforce JSON by prefilling the assistant turn with "{". */
+async function callAnthropic(system: string, user: string, model: string): Promise<string> {
+  const client = getAnthropicClient();
+  const msg = await client.messages.create({
+    model,
+    max_tokens: 4000,
+    temperature: 1,
+    system,
+    messages: [
+      { role: 'user', content: user },
+      { role: 'assistant', content: '{' },
+    ],
+  });
+  const cont = msg.content
+    .map((b) => (b.type === 'text' ? b.text : ''))
+    .join('');
+  return `{${cont}`;
+}
+
+/** OpenAI / DeepSeek copy call (JSON mode). */
+async function callOpenAILike(system: string, user: string, model: string, provider: CopyProvider): Promise<string> {
+  const client = provider === 'deepseek' ? getDeepSeekClient() : getOpenAIChatClient();
+  const base = {
+    model,
+    messages: [
+      { role: 'system' as const, content: system },
+      { role: 'user' as const, content: user },
+    ],
+    response_format: { type: 'json_object' as const },
+  };
+  const params = isGpt5Family(model)
+    ? { ...base, max_completion_tokens: 4000 }
+    : { ...base, temperature: 0.9, max_tokens: 3200 };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const completion = await client.chat.completions.create(params as any);
+  return completion.choices[0]?.message?.content ?? '{}';
 }
 
 const IMAGE_CTA = 'Download the pricing guide';
@@ -134,35 +199,39 @@ function sanitize(raw: unknown, data: VenueAdData, key: TemplateKey, idx = 0): A
 export async function generateAdCopy(data: VenueAdData): Promise<AdCopyVariant[]> {
   const { system, user } = buildCopyMessages(data);
 
-  try {
-    const { client, model } = copyModel();
+  const primary = resolveProvider();
+  // If Claude is primary, fall back to OpenAI (then DeepSeek) when it errors, so
+  // a missing key or transient failure still yields real copy, not the static
+  // fallback. Non-Claude primaries only try themselves.
+  const chain: CopyProvider[] =
+    primary === 'anthropic'
+      ? (['anthropic', 'openai', 'deepseek'] as CopyProvider[]).filter(
+          (p) =>
+            p === 'anthropic' ||
+            (p === 'openai' && process.env.OPENAI_API_KEY) ||
+            (p === 'deepseek' && process.env.DEEPSEEK_API_KEY),
+        )
+      : [primary];
 
-    // GPT-5 family: `max_completion_tokens` + default temperature only.
-    // Older 4o/deepseek: `max_tokens` + a hotter temperature for variety.
-    const base = {
-      model,
-      messages: [
-        { role: 'system' as const, content: system },
-        { role: 'user' as const, content: user },
-      ],
-      response_format: { type: 'json_object' as const },
-    };
-    const params = isGpt5Family(model)
-      ? { ...base, max_completion_tokens: 4000 }
-      : { ...base, temperature: 0.9, max_tokens: 3200 };
+  for (const provider of chain) {
+    try {
+      const model = modelFor(provider);
+      const content =
+        provider === 'anthropic'
+          ? await callAnthropic(system, user, model)
+          : await callOpenAILike(system, user, model, provider);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const completion = await client.chat.completions.create(params as any);
+      const variants = safeParseVariants(content);
+      if (variants.length === 0) throw new Error('model returned no variants');
 
-    const content = completion.choices[0]?.message?.content ?? '{}';
-    const parsed = JSON.parse(content) as { variants?: unknown[] };
-    const variants = Array.isArray(parsed.variants) ? parsed.variants : [];
-
-    // Map strictly by position so a batch alternates editorial/pricing as the
-    // prompt was told; templateKey from the model is coerced to our slot's key.
-    return BATCH_TEMPLATES.map((key, i) => sanitize(variants[i], data, key, i));
-  } catch (err) {
-    console.error('[ad-generator/copy] falling back:', err instanceof Error ? err.message : err);
-    return BATCH_TEMPLATES.map((key, i) => fallbackVariant(data, key, i));
+      // Map strictly by position so a batch alternates editorial/pricing as the
+      // prompt was told; templateKey from the model is coerced to our slot's key.
+      return BATCH_TEMPLATES.map((key, i) => sanitize(variants[i], data, key, i));
+    } catch (err) {
+      console.error(`[ad-generator/copy] ${provider} failed:`, err instanceof Error ? err.message : err);
+    }
   }
+
+  console.error('[ad-generator/copy] all providers failed — using static fallback');
+  return BATCH_TEMPLATES.map((key, i) => fallbackVariant(data, key, i));
 }

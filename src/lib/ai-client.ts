@@ -8,9 +8,20 @@
  */
 
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
 /** DeepSeek chat model — used for all completion routes. */
 export const DEEPSEEK_MODEL = 'deepseek-chat';
+
+/**
+ * Anthropic (Claude) client — used for ad copywriting. Requires ANTHROPIC_API_KEY.
+ * Image generation stays on OpenAI; only the copy path uses this.
+ */
+export function getAnthropicClient(): Anthropic {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set.');
+  return new Anthropic({ apiKey, timeout: 60_000 });
+}
 
 /**
  * DeepSeek client (OpenAI-compatible).
