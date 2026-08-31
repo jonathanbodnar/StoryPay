@@ -91,7 +91,7 @@ function CreativeCard({ c, venueName }: { c: Creative; venueName: string }) {
             <span className="text-[11px]">Image unavailable — copy still below</span>
           </div>
         )}
-        <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-semibold text-white">
+        <span className="absolute right-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-semibold text-white">
           {label}
         </span>
       </div>

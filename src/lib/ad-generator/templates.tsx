@@ -29,10 +29,12 @@ export interface TemplateProps {
   logoDataUrl: string | null;
 }
 
-/** Ordered photo slots each template needs, cropped cover to these dimensions. */
+/** Ordered photo slots each template needs, cropped cover to these dimensions.
+ *  Editorial mirrors the Coto Valley reference exactly: a 50/50 split, then a
+ *  tall top photo (~52%) over two shorter photos (~22% / ~25%) with 6px gaps. */
 export const TEMPLATE_SLOTS: Record<TemplateKey, { w: number; h: number }[]> = {
-  editorial: [{ w: 612, h: 632 }, { w: 612, h: 353 }, { w: 612, h: 353 }],
-  showcase: [{ w: 612, h: 632 }, { w: 612, h: 353 }, { w: 612, h: 353 }],
+  editorial: [{ w: 540, h: 700 }, { w: 540, h: 300 }, { w: 540, h: 338 }],
+  showcase: [{ w: 540, h: 700 }, { w: 540, h: 300 }, { w: 540, h: 338 }],
   pricing: [{ w: 1080, h: 1350 }, { w: 360, h: 380 }, { w: 360, h: 380 }, { w: 360, h: 380 }],
 };
 
@@ -61,13 +63,12 @@ function BulletList({ items, color, size = 25 }: { items: string[]; color: strin
 }
 
 /** Charcoal downward banner/arrow with the download CTA (Template A). */
-function DownArrowCta() {
-  const W = 300;
-  const H = 150;
+function DownArrowCta({ w = 292, h = 158 }: { w?: number; h?: number }) {
+  const rect = Math.round(h * 0.7); // height of the rectangular text area
   return (
-    <div style={{ display: 'flex', position: 'relative', width: W, height: H }}>
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ position: 'absolute', top: 0, left: 0 }}>
-        <polygon points={`0,0 ${W},0 ${W},105 ${W / 2},${H} 0,105`} fill={CHARCOAL} />
+    <div style={{ display: 'flex', position: 'relative', width: w, height: h }}>
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ position: 'absolute', top: 0, left: 0 }}>
+        <polygon points={`0,0 ${w},0 ${w},${rect} ${w / 2},${h} 0,${rect}`} fill={CHARCOAL} />
       </svg>
       <div
         style={{
@@ -76,15 +77,16 @@ function DownArrowCta() {
           position: 'absolute',
           top: 0,
           left: 0,
-          width: W,
-          height: 105,
+          width: w,
+          height: rect,
           alignItems: 'center',
           justifyContent: 'center',
+          gap: 3,
         }}
       >
-        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 18, letterSpacing: 2, color: '#fff' }}>DOWNLOAD</span>
-        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 18, letterSpacing: 2, color: '#fff' }}>PRICING & AVAILABILITY</span>
-        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 18, letterSpacing: 2, color: '#fff' }}>GUIDE NOW</span>
+        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 17, letterSpacing: 2, color: '#fff' }}>DOWNLOAD</span>
+        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 17, letterSpacing: 2, color: '#fff' }}>PRICING & AVAILABILITY</span>
+        <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 17, letterSpacing: 2, color: '#fff' }}>GUIDE NOW</span>
       </div>
     </div>
   );
@@ -92,41 +94,82 @@ function DownArrowCta() {
 
 function headlineSize(name: string): number {
   const n = name.length;
-  if (n > 28) return 46;
-  if (n > 20) return 54;
-  return 62;
+  if (n > 34) return 46;
+  if (n > 26) return 52;
+  if (n > 16) return 58;
+  return 66;
 }
 
 // ── Template A: editorial / showcase ─────────────────────────────────────────
+// One-for-one with the Coto Valley reference: a true 50/50 split, a big Playfair
+// venue-name headline over a clean cream top, short bullet features, a faint
+// ghost photo revealed only in the lower half, the charcoal down-arrow CTA, and
+// a tall top photo over two shorter photos on the right.
 function Editorial({ venue, variant, images }: TemplateProps) {
-  const LEFT_W = 468;
-  const RIGHT_W = AD_WIDTH - LEFT_W;
+  const LEFT_W = 540;
+  const RIGHT_W = AD_WIDTH - LEFT_W; // 540
   const name = (venue.name || 'Your Venue').toUpperCase();
-  const bullets = variant.imageBullets.slice(0, 5);
+  const bullets = variant.imageBullets.slice(0, 7);
 
   return (
     <div style={{ display: 'flex', width: AD_WIDTH, height: AD_HEIGHT, backgroundColor: CREAM }}>
       {/* Left editorial panel */}
-      <div style={{ display: 'flex', position: 'relative', width: LEFT_W, height: AD_HEIGHT }}>
-        {images[0] && (
-          <img src={images[0]} width={LEFT_W} height={AD_HEIGHT} style={{ position: 'absolute', top: 0, left: 0, objectFit: 'cover', opacity: 0.06 }} alt="" />
+      <div style={{ display: 'flex', position: 'relative', width: LEFT_W, height: AD_HEIGHT, backgroundColor: CREAM }}>
+        {/* Faint ghost photo (behind everything) */}
+        {images[2] && (
+          <img
+            src={images[2]}
+            width={LEFT_W}
+            height={AD_HEIGHT}
+            style={{ position: 'absolute', top: 0, left: 0, objectFit: 'cover', opacity: 0.12 }}
+            alt=""
+          />
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', width: LEFT_W, height: AD_HEIGHT, padding: '52px 40px 44px', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
-            <span style={{ fontFamily: SERIF, fontWeight: 400, fontSize: headlineSize(name), lineHeight: 1.04, color: INK, letterSpacing: 1 }}>{name}</span>
-            <BulletList items={bullets} color={BODY} />
+        {/* Cream gradient mask: solid at the top (keeps headline + bullets crisp),
+            fading down so the ghost only whispers through the lower-left.
+            (Satori paints in DOM order, so this sits above the ghost and the
+            content below sits above both — no z-index needed.) */}
+        <div
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: LEFT_W,
+            height: AD_HEIGHT,
+            backgroundImage:
+              'linear-gradient(180deg, rgba(243,239,231,1) 0%, rgba(243,239,231,1) 40%, rgba(243,239,231,0.55) 66%, rgba(243,239,231,0.15) 100%)',
+          }}
+        />
+        {/* Content */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+            width: LEFT_W,
+            height: AD_HEIGHT,
+            padding: '66px 44px 30px',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 34 }}>
+            <span style={{ fontFamily: SERIF, fontWeight: 400, fontSize: headlineSize(name), lineHeight: 1.05, color: INK, letterSpacing: 1 }}>{name}</span>
+            <BulletList items={bullets} color={BODY} size={25} />
           </div>
-          <DownArrowCta />
+          <div style={{ display: 'flex', paddingLeft: 52 }}>
+            <DownArrowCta />
+          </div>
         </div>
       </div>
 
-      {/* Right 3-photo stack */}
+      {/* Right 3-photo stack (6px white gaps) */}
       <div style={{ display: 'flex', flexDirection: 'column', width: RIGHT_W, height: AD_HEIGHT, backgroundColor: '#fff' }}>
-        {images[0] && <img src={images[0]} width={RIGHT_W} height={632} style={{ objectFit: 'cover' }} alt="" />}
+        {images[0] && <img src={images[0]} width={RIGHT_W} height={700} style={{ objectFit: 'cover' }} alt="" />}
         <div style={{ display: 'flex', height: 6 }} />
-        {images[1] && <img src={images[1]} width={RIGHT_W} height={353} style={{ objectFit: 'cover' }} alt="" />}
+        {images[1] && <img src={images[1]} width={RIGHT_W} height={300} style={{ objectFit: 'cover' }} alt="" />}
         <div style={{ display: 'flex', height: 6 }} />
-        {images[2] && <img src={images[2]} width={RIGHT_W} height={353} style={{ objectFit: 'cover' }} alt="" />}
+        {images[2] && <img src={images[2]} width={RIGHT_W} height={338} style={{ objectFit: 'cover' }} alt="" />}
       </div>
     </div>
   );

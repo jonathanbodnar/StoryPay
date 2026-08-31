@@ -19,15 +19,21 @@ async function fetchBuffer(url: string): Promise<Buffer | null> {
   }
 }
 
-/** Cover-crop a photo to w×h and return a JPEG data URI (or null on failure). */
+/**
+ * Cover-crop a photo to w×h and return a JPEG data URI (or null on failure).
+ *
+ * Uses sharp's "attention" strategy, which crops toward the most salient region
+ * (faces, high-contrast subjects) instead of a blind center crop — so brides,
+ * couples and building facades stay in frame instead of getting decapitated.
+ */
 export async function prepareCover(url: string, w: number, h: number): Promise<string | null> {
   const buf = await fetchBuffer(url);
   if (!buf) return null;
   try {
     const out = await sharp(buf)
       .rotate() // apply EXIF orientation
-      .resize(w, h, { fit: 'cover', position: 'attention' })
-      .jpeg({ quality: 72, mozjpeg: true })
+      .resize(w, h, { fit: 'cover', position: sharp.strategy.attention })
+      .jpeg({ quality: 74, mozjpeg: true })
       .toBuffer();
     return `data:image/jpeg;base64,${out.toString('base64')}`;
   } catch {
