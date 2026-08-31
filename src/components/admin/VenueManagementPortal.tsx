@@ -218,7 +218,7 @@ function fmtTs(iso: string | null | undefined): string {
   }
 }
 
-type PlanOpt = {
+export type PlanOpt = {
   id: string;
   name: string;
   slug: string;
@@ -236,7 +236,7 @@ type PlanOpt = {
  * Unchecking always wins: for AI Concierge it sets the super-admin force-off
  * so even a plan that bundles it is overridden.
  */
-function AddonCheckboxes({
+export function AddonCheckboxes({
   venue,
   plans,
   busy,

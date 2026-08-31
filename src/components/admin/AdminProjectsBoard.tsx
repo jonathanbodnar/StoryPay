@@ -4,9 +4,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Loader2, RefreshCw, LayoutGrid, List as ListIcon, StickyNote, Sparkles,
   CheckCircle2, Clock, ShieldCheck, FileText, MessageSquare, X, Image as ImageIcon,
-  Eye, Plus, Search, Trash2, GripVertical,
+  Eye, Plus, Search, Trash2, GripVertical, Settings2,
 } from 'lucide-react';
 import { AdStudioModal } from '@/components/admin/AdStudioModal';
+import { VenueAdminControls } from '@/components/admin/VenueAdminControls';
 
 interface Stage {
   id: string;
@@ -364,6 +365,8 @@ export function AdminProjectsBoard() {
           onAds={() => { setAdVenue(openCard); }}
           onRemove={() => removeVenue(openCard.id)}
           onNoteAdded={() => bumpNotesCount(openCard.id)}
+          onVenueChanged={() => load()}
+          onVenueDeleted={() => { setOpenCardId(null); load(); }}
         />
       )}
 
@@ -517,7 +520,7 @@ function ListView({
 // ── Card modal (near full-screen) ────────────────────────────────────────────
 
 function CardModal({
-  card, stages, onClose, onChangeStage, onViewAs, onAds, onRemove, onNoteAdded,
+  card, stages, onClose, onChangeStage, onViewAs, onAds, onRemove, onNoteAdded, onVenueChanged, onVenueDeleted,
 }: {
   card: Card;
   stages: Stage[];
@@ -527,6 +530,8 @@ function CardModal({
   onAds: () => void;
   onRemove: () => void;
   onNoteAdded: () => void;
+  onVenueChanged: () => void;
+  onVenueDeleted: () => void;
 }) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(true);
@@ -618,16 +623,27 @@ function CardModal({
           <button onClick={onAds} className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700">
             <Sparkles className="h-3.5 w-3.5" /> Generate ads
           </button>
-          {!card.is_private_client && (
-            <button onClick={onRemove} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200">
-              <Trash2 className="h-3.5 w-3.5" /> Remove
-            </button>
-          )}
+          <button
+            onClick={() => { if (confirm(`Remove ${card.name} from the projects board? This does not delete the venue.`)) onRemove(); }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Remove from board
+          </button>
         </div>
 
         {/* Body */}
-        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+        <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
           <div className="flex flex-wrap gap-1.5"><StatusChips card={card} /></div>
+
+          {/* Venue management — same controls & data as the Venue Management page */}
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <Settings2 className="h-4 w-4 text-gray-500" />
+              <h3 className="text-sm font-semibold text-gray-800">Venue management</h3>
+              <span className="text-[11px] text-gray-400">single source of truth</span>
+            </div>
+            <VenueAdminControls venueId={card.id} onChanged={onVenueChanged} onDeleted={onVenueDeleted} />
+          </div>
 
           <div>
             <div className="mb-2 flex items-center gap-2">

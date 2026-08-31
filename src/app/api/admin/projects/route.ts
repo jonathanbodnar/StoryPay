@@ -46,10 +46,10 @@ export async function GET(request: NextRequest) {
           COALESCE(v.state, v.location_state, v.brand_state) AS state,
           v.is_private_client,
           v.project_stage_id,
-          (v.is_private_client IS TRUE OR v.project_stage_id IS NOT NULL) AS on_board
+          (v.project_stage_id IS NOT NULL) AS on_board
         FROM venues v
         WHERE v.name ILIKE ${like}
-        ORDER BY (v.is_private_client IS TRUE OR v.project_stage_id IS NOT NULL) ASC, v.name ASC
+        ORDER BY (v.project_stage_id IS NOT NULL) ASC, v.name ASC
         LIMIT 20
       `;
       return NextResponse.json({ results });
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
         FROM admin_project_notes
         GROUP BY venue_id
       ) nc ON nc.venue_id = v.id
-      WHERE v.is_private_client IS TRUE OR v.project_stage_id IS NOT NULL
+      WHERE v.project_stage_id IS NOT NULL
       ORDER BY v.project_position ASC, v.created_at ASC
     `;
 

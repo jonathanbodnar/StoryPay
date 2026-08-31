@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie, verifyMasterAdminOnly } from '@/lib/admin-auth';
+import { getAdminIdentity } from '@/lib/admin-identity';
+import { getLunarPayAdminSummary } from '@/lib/lunarpay-venue-admin';
 import { isDirectoryBadgeStatus } from '@/lib/directory-badges';
 import { cancelVenueSubscription, changeVenuePlan } from '@/lib/venue-billing';
 import { cancelSubscription } from '@/lib/lunarpay';
@@ -10,6 +12,55 @@ import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+const REDACT_VENUE_KEYS = new Set(['lunarpay_secret_key', 'lunarpay_org_token']);
+
+/**
+ * Single enriched venue row + plan options, shaped exactly like the list route
+ * so the Projects board card modal can reuse the same admin controls (single
+ * source of truth). Readable by the venues OR projects tab.
+ */
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const identity = await getAdminIdentity();
+  if (!identity.isMasterSuperAdmin && !identity.allowedTabs.has('venues') && !identity.allowedTabs.has('projects')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const { id: venueId } = await params;
+  if (!venueId) return NextResponse.json({ error: 'Missing venue id' }, { status: 400 });
+
+  const [{ data: venue, error }, { data: planRows }] = await Promise.all([
+    supabaseAdmin.from('venues').select('*').eq('id', venueId).maybeSingle(),
+    supabaseAdmin.from('directory_plans').select('id, name, slug, price_monthly_cents, feature_flags, is_legacy'),
+  ]);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  const safe: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(venue as Record<string, unknown>)) {
+    if (REDACT_VENUE_KEYS.has(k)) continue;
+    safe[k] = v;
+  }
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
+  const pid = safe.directory_plan_id as string | null | undefined;
+  const directory_plans = pid ? (planRows || []).find((p) => p.id === pid) ?? null : null;
+  const adminToken = safe.admin_login_token as string | null | undefined;
+  const loginToken = safe.login_token as string | null | undefined;
+
+  return NextResponse.json({
+    venue: {
+      ...safe,
+      directory_plans,
+      login_url: adminToken
+        ? `${appUrl}/login/admin/${adminToken}`
+        : loginToken
+          ? `${appUrl}/login/${loginToken}`
+          : null,
+      lunarpay_admin: getLunarPayAdminSummary(venue as Record<string, unknown>),
+    },
+    plans: planRows || [],
+  });
+}
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await verifyAdminCookie())) {
