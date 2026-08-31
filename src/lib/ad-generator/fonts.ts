@@ -52,16 +52,19 @@ async function fetchFont(family: string, weight: number): Promise<ArrayBuffer | 
 }
 
 /**
- * Returns the font set for the ad templates: Playfair Display (serif headline)
- * + Montserrat (sans body). Any font that fails to load is simply omitted, and
- * ImageResponse falls back to its default sans-serif.
+ * Returns the font set for the ad templates: Playfair Display (elegant serif
+ * headline — the lightest weight Google ships, 400, reads as the thin editorial
+ * look in the approved templates) + Open Sans for all body, bullets and buttons.
+ * Any font that fails to load is simply omitted and ImageResponse falls back to
+ * its default sans-serif.
  */
 export async function loadAdFonts(): Promise<LoadedFont[]> {
   const specs: { family: string; name: string; weight: number }[] = [
-    { family: 'Playfair Display', name: 'Playfair Display', weight: 700 },
-    { family: 'Montserrat', name: 'Montserrat', weight: 400 },
-    { family: 'Montserrat', name: 'Montserrat', weight: 600 },
-    { family: 'Montserrat', name: 'Montserrat', weight: 700 },
+    { family: 'Playfair Display', name: 'Playfair Display', weight: 400 },
+    { family: 'Playfair Display', name: 'Playfair Display', weight: 500 },
+    { family: 'Open Sans', name: 'Open Sans', weight: 400 },
+    { family: 'Open Sans', name: 'Open Sans', weight: 600 },
+    { family: 'Open Sans', name: 'Open Sans', weight: 700 },
   ];
 
   const loaded = await Promise.all(

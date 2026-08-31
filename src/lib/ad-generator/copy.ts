@@ -6,9 +6,11 @@
 
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import {
-  AD_CTA, AD_CTA_SHORT, TEMPLATE_KEYS, buildCopyMessages,
+  AD_CTA, TEMPLATE_KEYS, buildCopyMessages,
   type AdCopyVariant, type TemplateKey, type VenueAdData,
 } from '@/lib/ad-generator/spec';
+
+const IMAGE_CTA = 'Download the pricing guide';
 
 function s(v: unknown, max = 200): string {
   return typeof v === 'string' ? v.trim().slice(0, max) : '';
@@ -26,29 +28,50 @@ function ensureCta(text: string): string {
   return `${t}\n\n${AD_CTA}`;
 }
 
+/** Trim a feature to a short, scannable phrase (~5 words, no trailing period). */
+function shortFeature(f: string): string {
+  return f.replace(/[.]+$/, '').split(/\s+/).slice(0, 6).join(' ');
+}
+
+function bulletCountFor(key: TemplateKey): number {
+  return key === 'pricing' ? 6 : 5;
+}
+
 function fallbackVariant(data: VenueAdData, key: TemplateKey): AdCopyVariant {
   const city = data.city ? ` in ${data.city}` : '';
-  const feats = (data.features.length ? data.features : ['Ceremony & reception', 'Bridal suite', 'On-site parking', 'In-house catering']).slice(0, 4);
-  const bulletCount = key === 'photo' ? 3 : 4;
-  const bullets = feats.slice(0, bulletCount);
-  const priceLine = data.priceFrom ? `Packages start at ${data.priceFrom}.` : 'Transparent, all-in pricing.';
+  const cap = data.capacityMax ?? data.capacityMin;
+  const pool = [
+    cap ? `Up to ${cap} guests` : 'Ceremony & reception',
+    'Onsite bridal suite',
+    data.city ? `Just outside ${data.city}` : 'Convenient location',
+    'Tables & chairs included',
+    'Vendor friendly',
+    'Indoor & outdoor spaces',
+    'On-site parking',
+  ].filter(Boolean);
+  const feats = (data.features.length ? data.features.map(shortFeature) : pool);
+  const bullets = feats.slice(0, bulletCountFor(key));
+
   const primaryText = [
     `Hey engaged brides${city} 👰`,
     '',
     `Picture your wedding day at ${data.name} — a space made for your story.`,
     '',
-    ...feats.map((f) => `✅ ${f}`),
+    ...bullets.slice(0, 4).map((f) => `✅ ${f}`),
     '',
-    priceLine,
+    data.priceFrom ? `Packages start at ${data.priceFrom}.` : 'Transparent, all-in pricing.',
     '',
     AD_CTA,
   ].join('\n');
+
   return {
     templateKey: key,
-    imageHeadline: key === 'photo' ? 'See your story here' : `Your wedding day, beautifully yours`,
+    imageHeadline: key === 'pricing'
+      ? (data.priceFrom ? 'All-Inclusive Weddings' : 'Your Story Starts Here')
+      : data.name,
     imageBullets: bullets,
-    imageCta: AD_CTA_SHORT,
-    kicker: data.city ? `${data.city} Weddings` : 'Say I Do Here',
+    imageCta: IMAGE_CTA,
+    kicker: '',
     primaryText,
     metaHeadline: data.priceFrom ? `Packages from ${data.priceFrom}` : 'Free pricing & availability guide',
     description: 'See pricing, spaces and open dates in one guide.',
@@ -58,21 +81,22 @@ function fallbackVariant(data: VenueAdData, key: TemplateKey): AdCopyVariant {
 function sanitize(raw: unknown, data: VenueAdData, key: TemplateKey): AdCopyVariant {
   if (!raw || typeof raw !== 'object') return fallbackVariant(data, key);
   const r = raw as Record<string, unknown>;
-  const bulletMax = key === 'photo' ? 3 : 4;
-  const bullets = arr(r.imageBullets, bulletMax, 40);
+  const bullets = arr(r.imageBullets, bulletCountFor(key), 32).map(shortFeature);
   const primaryText = s(r.primaryText, 1200);
-  const headline = s(r.imageHeadline, 80);
+  const headline = s(r.imageHeadline, 60);
 
-  if (!primaryText || !headline || bullets.length === 0) {
+  if (!primaryText || bullets.length === 0) {
     return fallbackVariant(data, key);
   }
 
   return {
     templateKey: key,
-    imageHeadline: headline.replace(/[.]+$/, ''),
+    // Editorial + showcase render the venue name as the headline regardless;
+    // only the pricing template uses the model's promise headline.
+    imageHeadline: key === 'pricing' ? (headline.replace(/[.]+$/, '') || 'All-Inclusive Weddings') : data.name,
     imageBullets: bullets,
-    imageCta: s(r.imageCta, 40) || AD_CTA_SHORT,
-    kicker: s(r.kicker, 40) || (data.city ? `${data.city} Weddings` : 'Say I Do Here'),
+    imageCta: s(r.imageCta, 40) || IMAGE_CTA,
+    kicker: '',
     primaryText: ensureCta(primaryText),
     metaHeadline: s(r.metaHeadline, 60) || 'Free pricing & availability guide',
     description: s(r.description, 120),
@@ -99,8 +123,6 @@ export async function generateAdCopy(data: VenueAdData): Promise<AdCopyVariant[]
     const parsed = JSON.parse(content) as { variants?: unknown[] };
     const variants = Array.isArray(parsed.variants) ? parsed.variants : [];
 
-    // Map returned variants to our fixed template order, matching by templateKey
-    // when present, otherwise by index.
     return TEMPLATE_KEYS.map((key, i) => {
       const match =
         variants.find((v) => (v as Record<string, unknown>)?.templateKey === key) ?? variants[i];

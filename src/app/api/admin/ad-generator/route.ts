@@ -10,7 +10,7 @@ import { getVenueAdData } from '@/lib/ad-generator/venue-data';
 import { generateAdCopy } from '@/lib/ad-generator/copy';
 import { prepareCover, prepareLogo } from '@/lib/ad-generator/images';
 import { renderAdCreative } from '@/lib/ad-generator/render';
-import { HERO_SLOT } from '@/lib/ad-generator/templates';
+import { TEMPLATE_SLOTS } from '@/lib/ad-generator/templates';
 import { AD_CREATIVES_BUCKET, adCreativeObjectKey, ensureAdCreativesBucket } from '@/lib/ad-creatives-bucket';
 import type { AdCopyVariant } from '@/lib/ad-generator/spec';
 
@@ -116,13 +116,18 @@ export async function POST(request: NextRequest) {
 
   for (let i = 0; i < variants.length; i++) {
     const variant = variants[i];
-    const slot = HERO_SLOT[variant.templateKey];
+    const slots = TEMPLATE_SLOTS[variant.templateKey] ?? TEMPLATE_SLOTS.editorial;
 
-    // Give each variant a different hero photo when the venue has several.
-    let heroDataUrl: string | null = null;
-    for (let p = 0; p < data.photos.length && !heroDataUrl; p++) {
-      const url = data.photos[(i + p) % data.photos.length];
-      heroDataUrl = await prepareCover(url, slot.w, slot.h);
+    // Fill each photo slot, cycling through the venue's photos with a per-variant
+    // offset so the three creatives feature different heroes.
+    const images: string[] = [];
+    for (let sIdx = 0; sIdx < slots.length; sIdx++) {
+      let dataUrl: string | null = null;
+      for (let p = 0; p < data.photos.length && !dataUrl; p++) {
+        const url = data.photos[(i + sIdx + p) % data.photos.length];
+        dataUrl = await prepareCover(url, slots[sIdx].w, slots[sIdx].h);
+      }
+      images.push(dataUrl ?? FALLBACK_HERO);
     }
 
     let imageUrl: string | null = null;
@@ -131,7 +136,7 @@ export async function POST(request: NextRequest) {
       const png = await renderAdCreative(variant.templateKey, {
         venue: data,
         variant,
-        heroDataUrl: heroDataUrl ?? FALLBACK_HERO,
+        images,
         logoDataUrl,
       });
       const key = adCreativeObjectKey(venueId, batchId, i + 1, variant.templateKey);

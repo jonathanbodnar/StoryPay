@@ -9,6 +9,8 @@ import { AD_WIDTH, AD_HEIGHT, type TemplateKey } from './spec';
 import { loadAdFonts, type LoadedFont } from './fonts';
 import { adTemplateElement, type TemplateProps } from './templates';
 
+type FontWeight = 400 | 500 | 600 | 700;
+
 let fontsPromise: Promise<LoadedFont[]> | null = null;
 function getFonts(): Promise<LoadedFont[]> {
   if (!fontsPromise) fontsPromise = loadAdFonts();
@@ -20,7 +22,7 @@ export async function renderAdCreative(key: TemplateKey, props: TemplateProps): 
   const res = new ImageResponse(adTemplateElement(key, props), {
     width: AD_WIDTH,
     height: AD_HEIGHT,
-    fonts: fonts.map((f) => ({ name: f.name, data: f.data, weight: f.weight as 400 | 600 | 700, style: f.style })),
+    fonts: fonts.map((f) => ({ name: f.name, data: f.data, weight: f.weight as FontWeight, style: f.style })),
   });
   return Buffer.from(await res.arrayBuffer());
 }
