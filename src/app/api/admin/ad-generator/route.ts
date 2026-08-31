@@ -124,42 +124,41 @@ export async function POST(request: NextRequest) {
   const data = await getVenueAdData(venueId);
   if (!data) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
+  // Non-null alias so TS keeps the narrowing inside the async closures below.
+  const venue = data;
+  const destinationUrl = venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}` : null;
+
+  // Kick off the slow, independent work up front so it runs CONCURRENTLY with the
+  // photo vetting + downloads below: Claude writes the copy and the logo is
+  // prepped while we pick and fetch photos. Neither depends on the photo list.
+  // (Both resolve without throwing, so an early return can't leave them unhandled.)
+  const copyPromise = generateAdCopy(venue);
+  const logoPromise = venue.logoUrl ? prepareLogo(venue.logoUrl, 300, 112) : Promise.resolve(null);
+
   // Photo source: operator override wins; otherwise vision-vet the venue's photos.
   if (overridePhotos.length > 0) {
-    data.photos = overridePhotos;
+    venue.photos = overridePhotos;
   } else {
-    if (data.photos.length === 0) {
+    if (venue.photos.length === 0) {
       return NextResponse.json(
         { error: 'This venue has no photos yet. Add photos to the listing or pricing guide first.' },
         { status: 422 },
       );
     }
-    data.photos = await selectAdPhotos(data.photos);
+    venue.photos = await selectAdPhotos(venue.photos);
   }
-  if (data.photos.length === 0) {
+  if (venue.photos.length === 0) {
     return NextResponse.json({ error: 'No usable photos selected.' }, { status: 422 });
   }
-
-  // Non-null alias so TS keeps the narrowing inside the async closures below.
-  const venue = data;
-  const destinationUrl = venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}` : null;
-
-  // Copy always resolves (falls back internally) so this never blocks the batch.
-  let variants: AdCopyVariant[];
-  try {
-    variants = await generateAdCopy(data);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[admin/ad-generator] copy failed', msg);
-    return NextResponse.json({ error: `Copy generation failed: ${msg}` }, { status: 500 });
-  }
-
-  const logoDataUrl = data.logoUrl ? await prepareLogo(data.logoUrl, 300, 112) : null;
 
   // Fetch every source photo exactly ONCE (parallel), then crop from the decoded
   // buffer for each slot — the old code re-downloaded the same photo up to 18×,
   // which is what made generation time out.
   const buffers = await Promise.all(venue.photos.map((u) => fetchImageBuffer(u)));
+
+  // Copy always resolves (falls back internally) so this never blocks the batch.
+  const variants: AdCopyVariant[] = await copyPromise;
+  const logoDataUrl = await logoPromise;
   const cropCache = new Map<string, Promise<string | null>>();
   const crop = (idx: number, w: number, h: number): Promise<string | null> => {
     const key = `${idx}:${w}x${h}`;

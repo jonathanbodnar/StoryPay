@@ -108,22 +108,25 @@ const COPY_SYSTEM_PROMPT = [
   '• These render on the image next to bullet points. They MUST be extremely short scannable feature phrases: 3-5 words each, no trailing punctuation.',
   '• Prefer concrete, quick-read specifics: capacity, spaces, location, inclusions (e.g. "Up to 220 guests", "Onsite bridal suite", "Tables & chairs included", "Just outside Pittsburgh", "Vendor friendly").',
   '',
-  'You will produce EXACTLY 6 concepts, in THIS order of templates:',
-  '  1. editorial, 2. pricing, 3. editorial, 4. pricing, 5. editorial, 6. pricing.',
+  'You will produce a set of concepts in a specific template order given in the user message.',
   'Template rules:',
   '• "editorial" — imageHeadline is a high-converting PROMISE headline (see HEADLINES above), 3-7 words. Provide 5 short feature bullets.',
   '• "pricing" — imageHeadline is a high-converting PROMISE headline, max ~5 words, leaning into value/all-inclusive when relevant. Provide 6 short feature bullets that lean into value/inclusions.',
-  'VARIETY IS THE WHOLE POINT: every one of the 6 concepts must feel like a genuinely different option. Use a DIFFERENT headline, DIFFERENT bullet set and DIFFERENT primary text for each of the 6. Never repeat a headline or primaryText.',
+  'VARIETY IS THE WHOLE POINT: every concept must feel like a genuinely different option. Use a DIFFERENT headline, DIFFERENT bullet set and DIFFERENT primary text for each. Never repeat a headline or primaryText.',
   '',
   'Also write the Meta fields for each concept:',
   '• primaryText — full paste-in primary text following ALL rules (hook + line breaks + SHORT ✅ feature lines + final CTA line).',
   '• metaHeadline — the Meta Headline field, max ~40 characters, a strong promise or offer.',
   '',
   'OUTPUT: Return ONLY valid JSON of the shape:',
-  '{ "variants": [ { "templateKey": "editorial", "imageHeadline": "...", "imageBullets": ["...","...","...","...","..."], "kicker": "", "imageCta": "Download the pricing guide", "primaryText": "...", "metaHeadline": "..." }, ... 6 total ... ] }',
+  '{ "variants": [ { "templateKey": "editorial", "imageHeadline": "...", "imageBullets": ["...","...","...","...","..."], "kicker": "", "imageCta": "Download the pricing guide", "primaryText": "...", "metaHeadline": "..." }, ... one per requested template, in order ... ] }',
 ].join('\n');
 
-export function buildCopyMessages(data: VenueAdData): { system: string; user: string } {
+export function buildCopyMessages(
+  data: VenueAdData,
+  templates: TemplateKey[] = BATCH_TEMPLATES,
+  angle?: string,
+): { system: string; user: string } {
   const loc = [data.city, data.state].filter(Boolean).join(', ');
   const lines: string[] = ['VENUE CONTEXT:', `• Name: ${data.name}`];
   if (loc) lines.push(`• Location: ${loc}`);
@@ -137,13 +140,16 @@ export function buildCopyMessages(data: VenueAdData): { system: string; user: st
   if (data.about) lines.push(`• About: ${data.about.slice(0, 700)}`);
 
   const cityHook = data.city ? ` The city for the "engaged brides in {city}" hook is "${data.city}".` : '';
+  const n = templates.length;
+  const order = templates.map((t, i) => `${i + 1}. ${t}`).join(', ');
 
   const user = [
     lines.join('\n'),
     '',
-    `Write the 6 ad concepts now for ${data.name}.${cityHook}`,
+    `Write ${n} ad concept${n === 1 ? '' : 's'} now for ${data.name}, one per template in THIS exact order: ${order}.${cityHook}`,
+    ...(angle ? [`Creative angle for this set: ${angle} (still keep every concept distinct).`] : []),
     'Keep on-graphic bullets to 3-5 words each. Keep the ✅ lines in the primary text to 4-5 words each.',
-    'Make all 6 distinct — different bullets and different primary text for each.',
+    `Make all ${n} distinct — different headline, different bullets and different primary text for each.`,
   ].join('\n');
 
   return { system: COPY_SYSTEM_PROMPT, user };

@@ -57,7 +57,36 @@ function safeParseVariants(content: string): unknown[] {
   return out ?? [];
 }
 
-/** Claude copy call — enforce JSON by prefilling the assistant turn with "{". */
+/**
+ * Claude copy call — force structured output via tool use. (Reasoning models like
+ * claude-opus-4-8 reject assistant-prefill, so tool use is the reliable way to
+ * guarantee valid JSON.) Returns the tool input serialized as a JSON string.
+ */
+const AD_COPY_TOOL = {
+  name: 'emit_ad_copy',
+  description: 'Return the finished Meta ad copy concepts for the venue.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      variants: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            imageHeadline: { type: 'string' },
+            imageBullets: { type: 'array', items: { type: 'string' } },
+            imageCta: { type: 'string' },
+            primaryText: { type: 'string' },
+            metaHeadline: { type: 'string' },
+          },
+          required: ['imageHeadline', 'imageBullets', 'primaryText', 'metaHeadline'],
+        },
+      },
+    },
+    required: ['variants'],
+  },
+};
+
 async function callAnthropic(system: string, user: string, model: string): Promise<string> {
   const client = getAnthropicClient();
   const msg = await client.messages.create({
@@ -65,15 +94,14 @@ async function callAnthropic(system: string, user: string, model: string): Promi
     max_tokens: 4000,
     temperature: 1,
     system,
-    messages: [
-      { role: 'user', content: user },
-      { role: 'assistant', content: '{' },
-    ],
+    messages: [{ role: 'user', content: user }],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tools: [AD_COPY_TOOL as any],
+    tool_choice: { type: 'tool', name: 'emit_ad_copy' },
   });
-  const cont = msg.content
-    .map((b) => (b.type === 'text' ? b.text : ''))
-    .join('');
-  return `{${cont}`;
+  const block = msg.content.find((b) => b.type === 'tool_use');
+  const input = block && block.type === 'tool_use' ? block.input : {};
+  return JSON.stringify(input ?? {});
 }
 
 /** OpenAI / DeepSeek copy call (JSON mode). */
@@ -196,18 +224,53 @@ function sanitize(raw: unknown, data: VenueAdData, key: TemplateKey, idx = 0): A
   };
 }
 
-export async function generateAdCopy(data: VenueAdData): Promise<AdCopyVariant[]> {
-  const { system, user } = buildCopyMessages(data);
+/** One model call for a specific ordered set of templates → mapped variants. */
+async function generateOnce(
+  provider: CopyProvider,
+  data: VenueAdData,
+  templates: TemplateKey[],
+  startIdx: number,
+  angle?: string,
+): Promise<AdCopyVariant[]> {
+  const { system, user } = buildCopyMessages(data, templates, angle);
+  const content =
+    provider === 'anthropic'
+      ? await callAnthropic(system, user, modelFor(provider))
+      : await callOpenAILike(system, user, modelFor(provider), provider);
 
+  const raw = safeParseVariants(content);
+  if (raw.length === 0) throw new Error('model returned no variants');
+  // Map strictly by position so the batch alternates editorial/pricing as told.
+  return templates.map((key, i) => sanitize(raw[i], data, key, startIdx + i));
+}
+
+export async function generateAdCopy(data: VenueAdData): Promise<AdCopyVariant[]> {
   const primary = resolveProvider();
-  // If Claude is primary, fall back to OpenAI (then DeepSeek) when it errors, so
-  // a missing key or transient failure still yields real copy, not the static
-  // fallback. Non-Claude primaries only try themselves.
+
+  // Claude Opus is slow per call, so split the batch into two smaller concept
+  // sets and generate them IN PARALLEL — roughly halves copy latency while
+  // keeping Opus quality. Each half gets a distinct angle so the 6 stay varied.
+  if (primary === 'anthropic') {
+    try {
+      const mid = Math.ceil(BATCH_TEMPLATES.length / 2);
+      const [a, b] = await Promise.all([
+        generateOnce('anthropic', data, BATCH_TEMPLATES.slice(0, mid), 0,
+          'Lead with emotion and the dream-day story.'),
+        generateOnce('anthropic', data, BATCH_TEMPLATES.slice(mid), mid,
+          'Lead with value, inclusions and an effortless, all-in experience.'),
+      ]);
+      return [...a, ...b];
+    } catch (err) {
+      console.error('[ad-generator/copy] anthropic failed:', err instanceof Error ? err.message : err);
+      // fall through to the OpenAI/DeepSeek single-call fallback below
+    }
+  }
+
+  // Fallback chain (also the path for non-Claude primaries): single call for all.
   const chain: CopyProvider[] =
     primary === 'anthropic'
-      ? (['anthropic', 'openai', 'deepseek'] as CopyProvider[]).filter(
+      ? (['openai', 'deepseek'] as CopyProvider[]).filter(
           (p) =>
-            p === 'anthropic' ||
             (p === 'openai' && process.env.OPENAI_API_KEY) ||
             (p === 'deepseek' && process.env.DEEPSEEK_API_KEY),
         )
@@ -215,18 +278,7 @@ export async function generateAdCopy(data: VenueAdData): Promise<AdCopyVariant[]
 
   for (const provider of chain) {
     try {
-      const model = modelFor(provider);
-      const content =
-        provider === 'anthropic'
-          ? await callAnthropic(system, user, model)
-          : await callOpenAILike(system, user, model, provider);
-
-      const variants = safeParseVariants(content);
-      if (variants.length === 0) throw new Error('model returned no variants');
-
-      // Map strictly by position so a batch alternates editorial/pricing as the
-      // prompt was told; templateKey from the model is coerced to our slot's key.
-      return BATCH_TEMPLATES.map((key, i) => sanitize(variants[i], data, key, i));
+      return await generateOnce(provider, data, BATCH_TEMPLATES, 0);
     } catch (err) {
       console.error(`[ad-generator/copy] ${provider} failed:`, err instanceof Error ? err.message : err);
     }
