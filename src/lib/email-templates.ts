@@ -109,9 +109,9 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
   // 'new_message' scenario and the email never sent.
   new_message: {
     subject:     '{{customer_name}} replied — {{organization}}',
-    heading:     'New reply from {{customer_name}}',
-    body:        '{{customer_name}} just replied to {{organization}}.\n\n"{{message_preview}}"\n\nIf the AI Concierge is active it may respond automatically — open the conversation to review and take it over anytime.',
-    button_text: 'View Conversation',
+    heading:     '{{customer_name}} just replied',
+    body:        'Great news — {{customer_name}} just replied to {{organization}}:\n\n"{{message_preview}}"\n\n{{reply_hint}}\n\nIf your AI Concierge is active, it may reply automatically — open the conversation any time to review and take over.',
+    button_text: 'Open the conversation',
     footer:      null,
   },
   // Owner-side "new lead" email. Fires the first time a lead is captured

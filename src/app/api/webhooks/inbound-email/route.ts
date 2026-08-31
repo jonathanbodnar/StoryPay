@@ -6,8 +6,10 @@ import {
   firstEmailFromList,
   hashInboundDedupeFallback,
   insertInboundConversationEmail,
+  insertInboundOwnerReplyEmail,
   insertInboundVenueDirectEmail,
   parseFromHeader,
+  parseOwnerReplyLocalPart,
   parseReplyLocalPart,
   parseVenueDirectLocalPart,
   pickReplyRoutingAddressFromInboundEmail,
@@ -211,16 +213,18 @@ async function ingestFromParsedFields(params: {
   const toEmail = firstEmailFromList(toRaw);
   const local = toEmail.split('@')[0] ?? '';
   const parsedBride = parseReplyLocalPart(local);
-  const parsedVD = !parsedBride ? parseVenueDirectLocalPart(local) : null;
-  const parsedTicket = !parsedBride && !parsedVD ? parseTicketReplyLocalPart(local) : null;
+  const parsedOwner = !parsedBride ? parseOwnerReplyLocalPart(local) : null;
+  const parsedVD = !parsedBride && !parsedOwner ? parseVenueDirectLocalPart(local) : null;
+  const parsedTicket = !parsedBride && !parsedOwner && !parsedVD ? parseTicketReplyLocalPart(local) : null;
   const isSupportCatchAll =
-    !parsedBride && !parsedVD && !parsedTicket && local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART;
-  const parsed = parsedBride ?? parsedVD;
+    !parsedBride && !parsedOwner && !parsedVD && !parsedTicket && local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART;
+  const parsed = parsedBride ?? parsedOwner ?? parsedVD;
   console.warn('[inbound-email] parse', {
     fromRawPreview: fromRaw.slice(0, 80),
     toRawPreview: toRaw.slice(0, 120),
     local: local.slice(0, 72),
     matchedBride: !!parsedBride,
+    matchedOwner: !!parsedOwner,
     matchedVD: !!parsedVD,
     matchedTicket: !!parsedTicket,
     matchedSupportCatchAll: isSupportCatchAll,
@@ -304,6 +308,35 @@ async function ingestFromParsedFields(params: {
       receivedSig: parsed.sig,
     });
     return NextResponse.json({ ok: true, skipped: 'bad_token' });
+  }
+
+  // Owner-reply path: a venue owner/team member replying to their "a contact
+  // replied" notification email (signed `ownerreply+...@` address). Their
+  // message is sent to the bride as the venue and logged as an outbound message.
+  if (parsedOwner) {
+    const attachments = resendEmailId
+      ? await fetchAndStoreInboundEmailAttachments(resendEmailId, `thread/${parsedOwner.threadId}`)
+      : [];
+    const r = await insertInboundOwnerReplyEmail({
+      threadId:      parsedOwner.threadId,
+      venueId,
+      fromEmail,
+      fromName,
+      subject,
+      bodyText:      text || '(no body)',
+      smtpMessageId: smtpId,
+      attachments,
+    });
+    if (!r.ok) {
+      const skippable = new Set(['sender_not_authorized', 'thread_not_found', 'no_contact_email']);
+      if (r.error && skippable.has(r.error)) {
+        console.warn('[inbound-email] owner reply skipped:', r.error, { threadId: parsedOwner.threadId });
+        return NextResponse.json({ ok: true, skipped: r.error });
+      }
+      console.error('[inbound-email] owner reply ingest', r.error);
+      return NextResponse.json({ error: r.error ?? 'insert_failed' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, inserted: r.inserted ?? false, audience: 'owner_reply' });
   }
 
   // Venue Direct path: replies from venue staff to a `vd+...@` address are
@@ -489,6 +522,8 @@ export async function POST(request: NextRequest) {
     const local = firstEmailFromList(toRaw).split('@')[0] ?? '';
     const recognized =
       parseReplyLocalPart(local) ||
+      parseOwnerReplyLocalPart(local) ||
+      parseVenueDirectLocalPart(local) ||
       parseTicketReplyLocalPart(local) ||
       local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART;
     if (!recognized) {

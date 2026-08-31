@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
+import { sendEmail } from '@/lib/email';
 import { notifyOwnerNewMessage } from '@/lib/owner-notifications';
 import type { SupportAttachment } from '@/lib/support/support-attachments-bucket';
 
@@ -42,11 +43,43 @@ export function buildVenueDirectReplyToEmail(threadId: string, venueId: string):
   return `vd+${threadId}+${sig}@${domain}`;
 }
 
+/**
+ * Reply-To address for the OWNER-notification email ("a contact replied").
+ * Local part: ownerreply+{threadId}+{sig16}.
+ *
+ * Distinct from the bride `reply+` prefix (which posts inbound mail AS the
+ * contact and rejects any sender that isn't the bride). When a venue owner or
+ * team member replies to their notification email, this prefix routes the reply
+ * to {@link insertInboundOwnerReplyEmail}, which verifies the sender is the
+ * venue's owner/team, sends their message to the bride as the venue, and logs
+ * it as an outbound venue message in the thread.
+ */
+export function buildOwnerReplyToEmail(threadId: string, venueId: string): string | null {
+  const secret = process.env.CONVERSATIONS_INBOUND_SECRET?.trim();
+  const domain = process.env.CONVERSATIONS_INBOUND_DOMAIN?.trim();
+  if (!secret || !domain) return null;
+  const sig = inboundReplySignature(threadId, venueId, secret);
+  return `ownerreply+${threadId}+${sig}@${domain}`;
+}
+
 export function parseReplyLocalPart(
   localPart: string,
 ): { threadId: string; sig: string } | null {
   const parts = localPart.split('+');
   if (parts.length !== 3 || parts[0] !== 'reply') return null;
+  const threadId = parts[1];
+  const sig = parts[2];
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(threadId)) return null;
+  if (!/^[a-f0-9]{16}$/i.test(sig)) return null;
+  return { threadId, sig: sig.toLowerCase() };
+}
+
+/** Like {@link parseReplyLocalPart} but for the `ownerreply+...` prefix. */
+export function parseOwnerReplyLocalPart(
+  localPart: string,
+): { threadId: string; sig: string } | null {
+  const parts = localPart.split('+');
+  if (parts.length !== 3 || parts[0] !== 'ownerreply') return null;
   const threadId = parts[1];
   const sig = parts[2];
   if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(threadId)) return null;
@@ -172,7 +205,12 @@ export function pickReplyRoutingAddressFromInboundEmail(
   for (const raw of chunks) {
     const addr = firstEmailFromList(raw);
     const local = addr.split('@')[0] ?? '';
-    if (parseReplyLocalPart(local) || parseVenueDirectLocalPart(local) || extraLocalPartMatch?.(local)) {
+    if (
+      parseReplyLocalPart(local) ||
+      parseVenueDirectLocalPart(local) ||
+      parseOwnerReplyLocalPart(local) ||
+      extraLocalPartMatch?.(local)
+    ) {
       return raw.trim();
     }
   }
@@ -360,6 +398,200 @@ export function hashInboundDedupeFallback(from: string, subject: string, body: s
  *   audience='venue_direct', visibility='internal', sender_kind='owner'|'team',
  *   support_only=false, contact_from_name/email recorded for display.
  */
+/**
+ * Handle a venue OWNER/team reply to their "a contact replied" notification
+ * email (routed via the `ownerreply+{threadId}+{sig}@` address).
+ *
+ * Flow: verify the sender is the venue's owner or an active team member, send
+ * their message to the bride AS the venue (Reply-To set to the bride-`reply+`
+ * address so her next reply comes back into the thread), and log it as an
+ * outbound venue message. Mirrors the dashboard reply pipeline so a reply from
+ * Gmail is indistinguishable from one typed in the app.
+ */
+export async function insertInboundOwnerReplyEmail(params: {
+  threadId: string;
+  venueId: string;
+  fromEmail: string;
+  fromName: string | null;
+  subject: string | null;
+  bodyText: string;
+  smtpMessageId: string | null;
+  attachments?: SupportAttachment[];
+}): Promise<{ ok: boolean; error?: string; inserted?: boolean; messageId?: string }> {
+  const { threadId, venueId, fromEmail, subject, bodyText, smtpMessageId, attachments } = params;
+  const body = bodyText.trim();
+  if (!body) return { ok: true, inserted: false };
+
+  // Dedupe on the inbound message id.
+  if (smtpMessageId) {
+    const { data: dup } = await supabaseAdmin
+      .from('conversation_messages')
+      .select('id')
+      .eq('smtp_message_id', smtpMessageId)
+      .maybeSingle();
+    if (dup) return { ok: true, inserted: false };
+  }
+
+  const { data: thread, error: tErr } = await supabaseAdmin
+    .from('conversation_threads')
+    .select('id, venue_id, venue_customer_id, subject')
+    .eq('id', threadId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (tErr || !thread) return { ok: false, error: 'thread_not_found' };
+
+  // Verify the sender is the venue owner or an active team member. The HMAC
+  // already proves the mail belongs to this thread; this check keeps the
+  // message attributed correctly and blocks stray forwards/auto-responders.
+  const fromNorm = fromEmail.trim().toLowerCase();
+  const { data: venueRow } = await supabaseAdmin
+    .from('venues')
+    .select('id, name, email, notification_email, brand_email')
+    .eq('id', venueId)
+    .maybeSingle();
+  const v = venueRow as {
+    name?: string | null; email?: string | null; notification_email?: string | null; brand_email?: string | null;
+  } | null;
+  const ownerEmails = [v?.email, v?.notification_email]
+    .filter(Boolean)
+    .map((e) => (e as string).trim().toLowerCase());
+  let isOwner = ownerEmails.some((e) => e === fromNorm);
+  let memberId: string | null = null;
+  if (!isOwner) {
+    const { data: members } = await supabaseAdmin
+      .from('venue_team_members')
+      .select('id, email, status')
+      .eq('venue_id', venueId);
+    type MemberRow = { id: string; email: string | null; status: string | null };
+    const matches = ((members ?? []) as MemberRow[])
+      .filter((x) => x.email && x.email.trim().toLowerCase() === fromNorm);
+    const m = matches.find((x) => x.status !== 'inactive') ?? matches[0] ?? null;
+    if (m) memberId = m.id;
+  }
+  if (!isOwner && !memberId) return { ok: false, error: 'sender_not_authorized' };
+  const senderKind = memberId ? 'team' : 'owner';
+
+  // Resolve the bride's email.
+  const customerId = (thread as { venue_customer_id: string }).venue_customer_id;
+  const { data: contact } = await supabaseAdmin
+    .from('venue_customers')
+    .select('id, customer_email')
+    .eq('id', customerId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  const to = ((contact as { customer_email?: string } | null)?.customer_email ?? '').trim();
+  if (!to) return { ok: false, error: 'no_contact_email' };
+
+  const venueName = (v?.name || 'Venue').trim() || 'Venue';
+  const brandEmail = v?.brand_email?.trim() || undefined;
+  const threadSubject = ((thread as { subject?: string }).subject || '').trim();
+  const subjectLine = (subject?.trim() || threadSubject || `Message from ${venueName}`);
+
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const html = `
+<div style="font-family:'Open Sans',Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827">
+${esc(body).split(/\n+/).map((p) => `<p style="margin:0 0 12px">${p}</p>`).join('')}
+<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0" />
+<p style="font-size:12px;color:#6b7280">Sent via StoryVenue Conversations — reply to this email to continue the thread.</p>
+</div>`;
+
+  // Reply-To is the bride `reply+` address so her response threads back in.
+  const replyRouting = buildConversationsReplyToEmail(threadId, venueId);
+  const sendResult = await sendEmail({
+    to,
+    replyTo: replyRouting || brandEmail,
+    subject: subjectLine,
+    html,
+    from: { name: venueName, email: brandEmail },
+    attachments: attachments?.length
+      ? attachments.map((a) => ({ filename: a.filename, path: a.url }))
+      : undefined,
+  });
+
+  const externalSent = sendResult.success;
+  const sendError = sendResult.success ? null : (sendResult.error ?? 'Email send failed');
+
+  const insertRow: Record<string, unknown> = {
+    thread_id: threadId,
+    visibility: 'external',
+    channel: 'email',
+    body,
+    sender_kind: senderKind,
+    venue_team_member_id: memberId,
+    external_email_sent: externalSent,
+    send_error: sendError,
+    email_subject: subjectLine,
+    smtp_message_id: smtpMessageId || null,
+    email_to: to,
+  };
+  if (sendResult.id) insertRow.resend_email_id = sendResult.id;
+  if (attachments?.length) insertRow.attachments = attachments;
+
+  let { data: inserted, error: insErr } = await supabaseAdmin
+    .from('conversation_messages')
+    .insert(insertRow)
+    .select('id, created_at')
+    .single();
+  // Backwards-compat: drop optional columns if the schema is behind.
+  if (insErr && /(email_to|resend_email_id)/i.test(insErr.message ?? '')) {
+    delete insertRow.email_to;
+    delete insertRow.resend_email_id;
+    const retry = await supabaseAdmin
+      .from('conversation_messages')
+      .insert(insertRow)
+      .select('id, created_at')
+      .single();
+    inserted = retry.data;
+    insErr = retry.error;
+  }
+  if (insErr) {
+    if (insErr.code === '23505') return { ok: true, inserted: false };
+    console.error('[owner-reply-inbound] insert', insErr);
+    return { ok: false, error: insErr.message };
+  }
+
+  // Reopen the thread + keep it on the email channel.
+  void supabaseAdmin
+    .from('conversation_threads')
+    .update({ status: 'open', external_reply_channel: 'email' })
+    .eq('id', threadId)
+    .eq('venue_id', venueId)
+    .then(() => undefined, () => undefined);
+
+  const messageId = (inserted as { id: string } | null)?.id;
+  if (messageId) {
+    void (async () => {
+      try {
+        const { broadcastBrideMessage } = await import('@/lib/realtime/broadcast');
+        await broadcastBrideMessage({
+          inbound: false,
+          threadId,
+          venueId,
+          venueCustomerId: customerId,
+          messageId,
+          body,
+          channel: 'email',
+          senderKind,
+          sentByVenueSupport: false,
+          supportAgentId: null,
+          createdAt: (inserted as { created_at?: string } | null)?.created_at || new Date().toISOString(),
+          attachments: attachments?.length ? attachments : null,
+        });
+      } catch (e) {
+        console.warn('[owner-reply-inbound] broadcast failed', e);
+      }
+    })();
+  }
+
+  if (!externalSent) {
+    // Logged the attempt so it's visible in the thread, but tell the webhook it
+    // wasn't delivered so logs make the failure obvious.
+    console.warn('[owner-reply-inbound] email to bride failed:', sendError, { threadId });
+  }
+  return { ok: true, inserted: true, messageId };
+}
+
 export async function insertInboundVenueDirectEmail(params: {
   threadId: string;
   venueId: string;

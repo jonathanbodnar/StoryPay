@@ -18,6 +18,7 @@ import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib
 import { sendPushToVenue } from '@/lib/push';
 import { sendNativePush } from '@/lib/native-push';
 import { loadNotificationRecipients, emailKeyFor, smsKeyFor } from '@/lib/notification-settings';
+import { buildOwnerReplyToEmail } from '@/lib/conversations-inbound-email';
 
 export type OwnerScenario =
   | 'payment_received'
@@ -263,6 +264,10 @@ interface NotifyArgs {
   vars: Record<string, string>;
   /** Optional URL for the email's CTA button. */
   actionUrl?: string;
+  /** Conversation thread this notification is about. When present, the owner
+   *  email gets a Reply-To that routes a reply straight to the contact in the
+   *  thread (see buildOwnerReplyToEmail / the inbound-email webhook). */
+  threadId?: string;
 }
 
 /**
@@ -320,11 +325,33 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
         if (!tmpl) {
           console.log('[notifyOwner]', args.scenario, 'template disabled or missing:', meta.templateType);
         } else {
+          // CTA links must be absolute to work from an email client.
+          const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
+          const absActionUrl = args.actionUrl
+            ? (/^https?:\/\//i.test(args.actionUrl) ? args.actionUrl : `${appUrl}${args.actionUrl}`)
+            : undefined;
+
+          // Reply-To routing. For a conversation notification, a reply from the
+          // owner's inbox is sent to the contact in-thread. For everything else
+          // we fall back to a monitored/owner address so a reply NEVER bounces
+          // off the send-only notifications mailbox.
+          const threadReplyTo = args.threadId ? buildOwnerReplyToEmail(args.threadId, args.venueId) : null;
+          const fallbackReplyTo = process.env.NOTIFICATION_REPLY_TO?.trim() || venue.email || undefined;
+          const effectiveReplyTo = threadReplyTo || fallbackReplyTo || undefined;
+
+          // Template copy uses {{reply_hint}} to explain what a reply will do —
+          // only promise the auto-send when routing is actually available.
+          if (vars.reply_hint === undefined) {
+            vars.reply_hint = threadReplyTo
+              ? `Reply directly to this email and your response is sent to ${vars.customer_name || 'them'} in the conversation automatically — or log in on desktop or in the app to reply from there.`
+              : 'Log in on desktop or in the app to reply.';
+          }
+
           const subject = fillTemplate(tmpl.subject, vars);
           const html = buildEmailHtml({
             template:   tmpl,
             vars,
-            actionUrl:  args.actionUrl,
+            actionUrl:  absActionUrl,
             brandColor: venue.brand_color   || '#1b1b1b',
             logoUrl:    venue.brand_logo_url || undefined,
             venueName,
@@ -339,6 +366,7 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
               to: r.email as string,
               subject,
               html,
+              replyTo: effectiveReplyTo,
               from: { email: notifFromEmail, name: 'StoryVenue' },
             })),
           );
@@ -519,6 +547,7 @@ export function notifyOwnerNewMessage(input: {
         message_preview: preview,
       },
       actionUrl: `/dashboard/conversations?thread=${input.threadId}`,
+      threadId:  input.threadId,
     });
   })();
 }
