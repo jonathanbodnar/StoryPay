@@ -42,3 +42,13 @@ export function getOpenAIChatClient(): OpenAI {
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set.');
   return new OpenAI({ apiKey, timeout: 60_000 });
 }
+
+/**
+ * OpenAI client with a long timeout for image generation/edits (gpt-image-*),
+ * which can take 20–60s per creative. Requires OPENAI_API_KEY.
+ */
+export function getOpenAIImageClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not set.');
+  return new OpenAI({ apiKey, timeout: 180_000 });
+}

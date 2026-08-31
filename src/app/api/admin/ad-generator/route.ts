@@ -11,6 +11,7 @@ import { selectAdPhotos } from '@/lib/ad-generator/photo-select';
 import { generateAdCopy } from '@/lib/ad-generator/copy';
 import { prepareCover, prepareLogo } from '@/lib/ad-generator/images';
 import { renderAdCreative } from '@/lib/ad-generator/render';
+import { generateAdImage } from '@/lib/ad-generator/image-gen';
 import { TEMPLATE_SLOTS } from '@/lib/ad-generator/templates';
 import { AD_CREATIVES_BUCKET, adCreativeObjectKey, ensureAdCreativesBucket } from '@/lib/ad-creatives-bucket';
 import type { AdCopyVariant } from '@/lib/ad-generator/spec';
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { venueId?: string };
+  let body: { venueId?: string; mode?: string };
   try {
     body = await request.json();
   } catch {
@@ -82,6 +83,9 @@ export async function POST(request: NextRequest) {
   }
   const venueId = (body.venueId || '').trim();
   if (!venueId) return NextResponse.json({ error: 'venueId required' }, { status: 400 });
+  // 'ai' → gpt-image-2 designs the creative from the real photos;
+  // 'template' (default) → Satori composites real photos into the fixed layout.
+  const mode = (body.mode || 'template').toLowerCase() === 'ai' ? 'ai' : 'template';
 
   const data = await getVenueAdData(venueId);
   if (!data) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
@@ -133,50 +137,80 @@ export async function POST(request: NextRequest) {
 
   const creatives: Array<CreativeRow & { imageBullets: string[] }> = [];
 
+  // AI mode: fire all 6 gpt-image-2 designs in parallel (each is slow), feeding
+  // a rotated slice of the vetted photos so every creative leans on the real
+  // venue and the batch stays varied.
+  const aiPngs: (Buffer | null)[] =
+    mode === 'ai'
+      ? await Promise.all(
+          variants.map((variant, i) => {
+            const refs = [...data.photos.slice(i), ...data.photos.slice(0, i)];
+            return generateAdImage(data, variant, refs).catch((e) => {
+              console.error('[admin/ad-generator] ai image failed', e instanceof Error ? e.message : e);
+              return null;
+            });
+          }),
+        )
+      : [];
+
   for (let i = 0; i < variants.length; i++) {
     const variant = variants[i];
-    const slots = TEMPLATE_SLOTS[variant.templateKey] ?? TEMPLATE_SLOTS.editorial;
 
-    // Fill each photo slot. Within ONE ad every slot must be a DIFFERENT photo,
-    // so track used indices and only reuse as a last resort. A per-variant offset
-    // also keeps the batch's creatives featuring different heroes.
-    const images: string[] = [];
-    const usedIdx = new Set<number>();
-    for (let sIdx = 0; sIdx < slots.length; sIdx++) {
-      let dataUrl: string | null = null;
-      for (let step = 0; step < data.photos.length && !dataUrl; step++) {
-        const idx = (i + sIdx + step) % data.photos.length;
-        if (usedIdx.has(idx)) continue;
-        dataUrl = await prepareCover(data.photos[idx], slots[sIdx].w, slots[sIdx].h);
-        if (dataUrl) usedIdx.add(idx);
+    // Compute the creative PNG for this variant via the selected mode.
+    let png: Buffer | Uint8Array | null = null;
+    if (mode === 'ai') {
+      png = aiPngs[i];
+    } else {
+      const slots = TEMPLATE_SLOTS[variant.templateKey] ?? TEMPLATE_SLOTS.editorial;
+
+      // Fill each photo slot. Within ONE ad every slot must be a DIFFERENT photo,
+      // so track used indices and only reuse as a last resort. A per-variant offset
+      // also keeps the batch's creatives featuring different heroes.
+      const images: string[] = [];
+      const usedIdx = new Set<number>();
+      for (let sIdx = 0; sIdx < slots.length; sIdx++) {
+        let dataUrl: string | null = null;
+        for (let step = 0; step < data.photos.length && !dataUrl; step++) {
+          const idx = (i + sIdx + step) % data.photos.length;
+          if (usedIdx.has(idx)) continue;
+          dataUrl = await prepareCover(data.photos[idx], slots[sIdx].w, slots[sIdx].h);
+          if (dataUrl) usedIdx.add(idx);
+        }
+        // Fallback: if every unused photo failed to decode, allow reuse over blank.
+        for (let step = 0; step < data.photos.length && !dataUrl; step++) {
+          const idx = (i + sIdx + step) % data.photos.length;
+          dataUrl = await prepareCover(data.photos[idx], slots[sIdx].w, slots[sIdx].h);
+        }
+        images.push(dataUrl ?? FALLBACK_HERO);
       }
-      // Fallback: if every unused photo failed to decode, allow reuse over blank.
-      for (let step = 0; step < data.photos.length && !dataUrl; step++) {
-        const idx = (i + sIdx + step) % data.photos.length;
-        dataUrl = await prepareCover(data.photos[idx], slots[sIdx].w, slots[sIdx].h);
+
+      try {
+        png = await renderAdCreative(variant.templateKey, {
+          venue: data,
+          variant,
+          images,
+          logoDataUrl,
+        });
+      } catch (err) {
+        console.error('[admin/ad-generator] render failed', err instanceof Error ? err.message : err);
       }
-      images.push(dataUrl ?? FALLBACK_HERO);
     }
 
     let imageUrl: string | null = null;
     let storagePath: string | null = null;
-    try {
-      const png = await renderAdCreative(variant.templateKey, {
-        venue: data,
-        variant,
-        images,
-        logoDataUrl,
-      });
-      const key = adCreativeObjectKey(venueId, batchId, i + 1, variant.templateKey);
-      const { error: upErr } = await supabaseAdmin.storage
-        .from(AD_CREATIVES_BUCKET)
-        .upload(key, png, { contentType: 'image/png', upsert: true });
-      if (upErr) throw new Error(upErr.message);
-      storagePath = key;
-      imageUrl = supabaseAdmin.storage.from(AD_CREATIVES_BUCKET).getPublicUrl(key).data.publicUrl;
-    } catch (err) {
-      console.error('[admin/ad-generator] render/upload failed', err instanceof Error ? err.message : err);
-      // Keep going — copy is still valuable even if one image fails.
+    if (png) {
+      try {
+        const key = adCreativeObjectKey(venueId, batchId, i + 1, mode === 'ai' ? 'ai' : variant.templateKey);
+        const { error: upErr } = await supabaseAdmin.storage
+          .from(AD_CREATIVES_BUCKET)
+          .upload(key, png, { contentType: 'image/png', upsert: true });
+        if (upErr) throw new Error(upErr.message);
+        storagePath = key;
+        imageUrl = supabaseAdmin.storage.from(AD_CREATIVES_BUCKET).getPublicUrl(key).data.publicUrl;
+      } catch (err) {
+        console.error('[admin/ad-generator] upload failed', err instanceof Error ? err.message : err);
+        // Keep going — copy is still valuable even if one image fails.
+      }
     }
 
     let inserted: CreativeRow | null = null;

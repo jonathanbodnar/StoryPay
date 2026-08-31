@@ -11,8 +11,8 @@ import {
 } from '@/lib/ad-generator/spec';
 
 /**
- * Which model writes the ad copy. Defaults to OpenAI for top quality (the
- * OPENAI_API_KEY is already configured). Override with env:
+ * Which model writes the ad copy. Defaults to OpenAI's GPT-5.6 ("sol") for top
+ * quality (the OPENAI_API_KEY is already configured). Override with env:
  *   AD_COPY_PROVIDER=deepseek        → use DeepSeek instead
  *   AD_COPY_MODEL=gpt-4o             → pick a specific OpenAI model
  */
@@ -21,7 +21,13 @@ function copyModel(): { client: ReturnType<typeof getOpenAIChatClient>; model: s
   if (provider === 'deepseek') {
     return { client: getDeepSeekClient(), model: DEEPSEEK_MODEL };
   }
-  return { client: getOpenAIChatClient(), model: process.env.AD_COPY_MODEL || 'gpt-4o-mini' };
+  return { client: getOpenAIChatClient(), model: process.env.AD_COPY_MODEL || 'gpt-5.6-sol' };
+}
+
+/** The GPT-5 family uses `max_completion_tokens` and only supports the default
+ * temperature, so we tailor the request params to the model to avoid 400s. */
+function isGpt5Family(model: string): boolean {
+  return /^gpt-5/i.test(model) || /^o[0-9]/i.test(model);
 }
 
 const IMAGE_CTA = 'Download the pricing guide';
@@ -130,16 +136,23 @@ export async function generateAdCopy(data: VenueAdData): Promise<AdCopyVariant[]
 
   try {
     const { client, model } = copyModel();
-    const completion = await client.chat.completions.create({
+
+    // GPT-5 family: `max_completion_tokens` + default temperature only.
+    // Older 4o/deepseek: `max_tokens` + a hotter temperature for variety.
+    const base = {
       model,
       messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
+        { role: 'system' as const, content: system },
+        { role: 'user' as const, content: user },
       ],
-      temperature: 0.9,
-      max_tokens: 3200,
-      response_format: { type: 'json_object' },
-    });
+      response_format: { type: 'json_object' as const },
+    };
+    const params = isGpt5Family(model)
+      ? { ...base, max_completion_tokens: 4000 }
+      : { ...base, temperature: 0.9, max_tokens: 3200 };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const completion = await client.chat.completions.create(params as any);
 
     const content = completion.choices[0]?.message?.content ?? '{}';
     const parsed = JSON.parse(content) as { variants?: unknown[] };

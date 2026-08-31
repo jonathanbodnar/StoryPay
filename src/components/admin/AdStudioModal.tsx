@@ -138,6 +138,9 @@ export function AdStudioModal({
   const [creatives, setCreatives] = useState<Creative[]>([]);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Off = design templates composited from real photos (fast, pixel-precise).
+  // On  = gpt-image-2 designs each creative from the real photos (slower, AI art).
+  const [aiMode, setAiMode] = useState(false);
 
   const generate = useCallback(async () => {
     setGenerating(true);
@@ -146,7 +149,7 @@ export function AdStudioModal({
       const res = await fetch('/api/admin/ad-generator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ venueId }),
+        body: JSON.stringify({ venueId, mode: aiMode ? 'ai' : 'template' }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
@@ -158,7 +161,7 @@ export function AdStudioModal({
     } finally {
       setGenerating(false);
     }
-  }, [venueId, onGenerated]);
+  }, [venueId, aiMode, onGenerated]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -176,6 +179,19 @@ export function AdStudioModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <label
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50"
+              title="Let gpt-image-2 design each creative from this venue's real photos (slower, AI-generated art)."
+            >
+              <input
+                type="checkbox"
+                checked={aiMode}
+                onChange={(e) => setAiMode(e.target.checked)}
+                disabled={generating}
+                className="h-3.5 w-3.5 accent-gray-900"
+              />
+              AI images
+            </label>
             <button
               onClick={generate}
               disabled={generating}
@@ -197,7 +213,9 @@ export function AdStudioModal({
           {generating && (
             <div className="mb-4 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Writing copy and compositing 6 creatives from this venue&apos;s photos & logo — this takes ~30–50s.
+              {aiMode
+                ? "Writing copy and letting gpt-image-2 design 6 creatives from this venue's real photos — this can take 1–3 min."
+                : "Writing copy and compositing 6 creatives from this venue's photos & logo — this takes ~30–50s."}
             </div>
           )}
 
