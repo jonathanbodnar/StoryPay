@@ -9,11 +9,11 @@ import { getAdminIdentity, hasAdminTabAccess } from '@/lib/admin-identity';
 import { getVenueAdData } from '@/lib/ad-generator/venue-data';
 import { selectAdPhotos } from '@/lib/ad-generator/photo-select';
 import { generateAdCopy } from '@/lib/ad-generator/copy';
-import { prepareCover, prepareLogo } from '@/lib/ad-generator/images';
+import { fetchImageBuffer, prepareCoverFromBuffer, prepareLogo } from '@/lib/ad-generator/images';
 import { renderAdCreative } from '@/lib/ad-generator/render';
 import { generateAdImage } from '@/lib/ad-generator/image-gen';
 import { TEMPLATE_SLOTS } from '@/lib/ad-generator/templates';
-import { AD_CREATIVES_BUCKET, adCreativeObjectKey, ensureAdCreativesBucket } from '@/lib/ad-creatives-bucket';
+import { AD_CREATIVES_BUCKET } from '@/lib/ad-creatives-bucket';
 import type { AdCopyVariant } from '@/lib/ad-generator/spec';
 
 const DIRECTORY_URL = process.env.NEXT_PUBLIC_DIRECTORY_URL ?? 'https://storyvenue.com';
@@ -22,23 +22,34 @@ const DIRECTORY_URL = process.env.NEXT_PUBLIC_DIRECTORY_URL ?? 'https://storyven
 const FALLBACK_HERO =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-interface CreativeRow {
+/** Shape returned to the client. Images are inline data URIs — nothing is stored. */
+interface EphemeralCreative {
   id: string;
-  venue_id: string;
-  batch_id: string | null;
   variant: number;
-  template_key: string | null;
-  image_url: string | null;
-  storage_path: string | null;
-  headline: string | null;
-  bullets: unknown;
-  primary_text: string | null;
-  meta_headline: string | null;
+  template_key: string;
+  image: string | null;
+  /** The pre-cropped slot photos used, so an edited creative can be re-rendered
+   *  without re-downloading/re-cropping the venue's photos. */
+  slot_images: string[];
+  headline: string;
+  bullets: string[];
+  image_cta: string;
+  primary_text: string;
+  meta_headline: string;
   destination_url: string | null;
-  created_at: string;
 }
 
-/** GET ?venueId= → most recent generated creatives for a venue. */
+function pngDataUrl(buf: Buffer | Uint8Array | null): string | null {
+  if (!buf) return null;
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
+  return `data:image/png;base64,${b.toString('base64')}`;
+}
+
+/**
+ * GET
+ *   ?venueId=&candidates=1 → the venue's candidate photos (for the media picker).
+ * (Creatives are never persisted, so there is no "list past creatives" mode.)
+ */
 export async function GET(request: NextRequest) {
   if (!(await hasAdminTabAccess('projects'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -47,35 +58,54 @@ export async function GET(request: NextRequest) {
   if (!venueId) return NextResponse.json({ error: 'venueId required' }, { status: 400 });
 
   try {
-    const sql = await getDbAsync();
-    const rows = (await sql`
-      SELECT id, venue_id, batch_id, variant, template_key, image_url, storage_path,
-             headline, bullets, primary_text, meta_headline,
-             destination_url, created_at
-      FROM venue_ad_creatives
-      WHERE venue_id = ${venueId}
-      ORDER BY created_at DESC, variant ASC
-      LIMIT 120
-    `) as unknown as CreativeRow[];
-    return NextResponse.json({ creatives: rows });
+    const data = await getVenueAdData(venueId);
+    if (!data) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+    return NextResponse.json({ photos: data.photos, logoUrl: data.logoUrl });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[admin/ad-generator][GET]', msg);
-    if (/venue_ad_creatives/.test(msg)) {
-      return NextResponse.json({ error: 'Ad schema not found — run migration 207.', detail: msg }, { status: 503 });
-    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
-/** POST { venueId } → generate 3 copy + creative variants, store, return them. */
+/** DELETE ?venueId= → wipe any previously stored creatives for the venue (rows +
+ *  storage). Called when the Ad Studio modal closes so nothing lingers. */
+export async function DELETE(request: NextRequest) {
+  if (!(await hasAdminTabAccess('projects'))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const venueId = (request.nextUrl.searchParams.get('venueId') || '').trim();
+  if (!venueId) return NextResponse.json({ error: 'venueId required' }, { status: 400 });
+  await purgeVenueCreatives(venueId);
+  return NextResponse.json({ ok: true });
+}
+
+/** Best-effort removal of any stored creatives (legacy rows + storage objects). */
+async function purgeVenueCreatives(venueId: string): Promise<void> {
+  try {
+    const sql = await getDbAsync();
+    const oldRows = (await sql`
+      SELECT storage_path FROM venue_ad_creatives WHERE venue_id = ${venueId}
+    `) as unknown as { storage_path: string | null }[];
+    const paths = oldRows.map((r) => r.storage_path).filter((p): p is string => Boolean(p));
+    if (paths.length) await supabaseAdmin.storage.from(AD_CREATIVES_BUCKET).remove(paths);
+    await sql`DELETE FROM venue_ad_creatives WHERE venue_id = ${venueId}`;
+  } catch (e) {
+    // Table may not exist / already empty — nothing to clean up.
+    console.warn('[admin/ad-generator] purge skipped', e instanceof Error ? e.message : e);
+  }
+}
+
+/** POST { venueId, mode?, photos? } → generate 6 creatives + copy, return inline.
+ *  Nothing is written to the DB or storage — the images live only in the
+ *  response and are gone the moment the modal closes. */
 export async function POST(request: NextRequest) {
   const identity = await getAdminIdentity();
   if (!identity.allowedTabs.has('projects')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { venueId?: string; mode?: string };
+  let body: { venueId?: string; mode?: string; photos?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -86,28 +116,35 @@ export async function POST(request: NextRequest) {
   // 'ai' → gpt-image-2 designs the creative from the real photos;
   // 'template' (default) → Satori composites real photos into the fixed layout.
   const mode = (body.mode || 'template').toLowerCase() === 'ai' ? 'ai' : 'template';
+  // Optional operator override: exact photos hand-picked from the media folder.
+  const overridePhotos = Array.isArray(body.photos)
+    ? body.photos.filter((p): p is string => typeof p === 'string' && p.length > 0)
+    : [];
 
   const data = await getVenueAdData(venueId);
   if (!data) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  // Photo source: operator override wins; otherwise vision-vet the venue's photos.
+  if (overridePhotos.length > 0) {
+    data.photos = overridePhotos;
+  } else {
+    if (data.photos.length === 0) {
+      return NextResponse.json(
+        { error: 'This venue has no photos yet. Add photos to the listing or pricing guide first.' },
+        { status: 422 },
+      );
+    }
+    data.photos = await selectAdPhotos(data.photos);
+  }
   if (data.photos.length === 0) {
-    return NextResponse.json(
-      { error: 'This venue has no photos yet. Add photos to the listing or pricing guide first.' },
-      { status: 422 },
-    );
+    return NextResponse.json({ error: 'No usable photos selected.' }, { status: 422 });
   }
 
-  // Vet the photos with vision so only brides/grooms, wedding moments and
-  // property shots make it in — no table settings, food or construction.
-  data.photos = await selectAdPhotos(data.photos);
+  // Non-null alias so TS keeps the narrowing inside the async closures below.
+  const venue = data;
+  const destinationUrl = venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}` : null;
 
-  const bucket = await ensureAdCreativesBucket();
-  if (!bucket.ok) {
-    return NextResponse.json({ error: `Storage unavailable: ${bucket.error}` }, { status: 500 });
-  }
-
-  const createdBy = identity.isMasterSuperAdmin ? 'master' : identity.member?.email ?? null;
-  const destinationUrl = data.slug ? `${DIRECTORY_URL}/venue/${data.slug}` : null;
-
+  // Copy always resolves (falls back internally) so this never blocks the batch.
   let variants: AdCopyVariant[];
   try {
     variants = await generateAdCopy(data);
@@ -118,136 +155,87 @@ export async function POST(request: NextRequest) {
   }
 
   const logoDataUrl = data.logoUrl ? await prepareLogo(data.logoUrl, 300, 112) : null;
-  const batchId = crypto.randomUUID();
 
-  const sql = await getDbAsync();
+  // Fetch every source photo exactly ONCE (parallel), then crop from the decoded
+  // buffer for each slot — the old code re-downloaded the same photo up to 18×,
+  // which is what made generation time out.
+  const buffers = await Promise.all(venue.photos.map((u) => fetchImageBuffer(u)));
+  const cropCache = new Map<string, Promise<string | null>>();
+  const crop = (idx: number, w: number, h: number): Promise<string | null> => {
+    const key = `${idx}:${w}x${h}`;
+    let p = cropCache.get(key);
+    if (!p) {
+      const buf = buffers[idx];
+      p = buf ? prepareCoverFromBuffer(buf, w, h) : Promise.resolve(null);
+      cropCache.set(key, p);
+    }
+    return p;
+  };
 
-  // Only ever keep the latest generation: wipe the venue's previous creatives
-  // (DB rows + stored images) before writing the new batch.
-  try {
-    const oldRows = (await sql`
-      SELECT storage_path FROM venue_ad_creatives WHERE venue_id = ${venueId}
-    `) as unknown as { storage_path: string | null }[];
-    const paths = oldRows.map((r) => r.storage_path).filter((p): p is string => Boolean(p));
-    if (paths.length) await supabaseAdmin.storage.from(AD_CREATIVES_BUCKET).remove(paths);
-    await sql`DELETE FROM venue_ad_creatives WHERE venue_id = ${venueId}`;
-  } catch (e) {
-    console.warn('[admin/ad-generator] failed clearing old creatives', e instanceof Error ? e.message : e);
-  }
+  async function buildTemplate(variant: AdCopyVariant, i: number): Promise<{ png: Buffer | null; slotImages: string[] }> {
+    const slots = TEMPLATE_SLOTS[variant.templateKey] ?? TEMPLATE_SLOTS.editorial;
+    const n = venue.photos.length;
+    const slotImages: string[] = [];
+    const usedIdx = new Set<number>();
 
-  const creatives: Array<CreativeRow & { imageBullets: string[] }> = [];
-
-  // AI mode: fire all 6 gpt-image-2 designs in parallel (each is slow), feeding
-  // a rotated slice of the vetted photos so every creative leans on the real
-  // venue and the batch stays varied.
-  const aiPngs: (Buffer | null)[] =
-    mode === 'ai'
-      ? await Promise.all(
-          variants.map((variant, i) => {
-            const refs = [...data.photos.slice(i), ...data.photos.slice(0, i)];
-            return generateAdImage(data, variant, refs).catch((e) => {
-              console.error('[admin/ad-generator] ai image failed', e instanceof Error ? e.message : e);
-              return null;
-            });
-          }),
-        )
-      : [];
-
-  for (let i = 0; i < variants.length; i++) {
-    const variant = variants[i];
-
-    // Compute the creative PNG for this variant via the selected mode.
-    let png: Buffer | Uint8Array | null = null;
-    if (mode === 'ai') {
-      png = aiPngs[i];
-    } else {
-      const slots = TEMPLATE_SLOTS[variant.templateKey] ?? TEMPLATE_SLOTS.editorial;
-
-      // Fill each photo slot. Within ONE ad every slot must be a DIFFERENT photo,
-      // so track used indices and only reuse as a last resort. A per-variant offset
-      // also keeps the batch's creatives featuring different heroes.
-      const images: string[] = [];
-      const usedIdx = new Set<number>();
-      for (let sIdx = 0; sIdx < slots.length; sIdx++) {
-        let dataUrl: string | null = null;
-        for (let step = 0; step < data.photos.length && !dataUrl; step++) {
-          const idx = (i + sIdx + step) % data.photos.length;
-          if (usedIdx.has(idx)) continue;
-          dataUrl = await prepareCover(data.photos[idx], slots[sIdx].w, slots[sIdx].h);
-          if (dataUrl) usedIdx.add(idx);
-        }
-        // Fallback: if every unused photo failed to decode, allow reuse over blank.
-        for (let step = 0; step < data.photos.length && !dataUrl; step++) {
-          const idx = (i + sIdx + step) % data.photos.length;
-          dataUrl = await prepareCover(data.photos[idx], slots[sIdx].w, slots[sIdx].h);
-        }
-        images.push(dataUrl ?? FALLBACK_HERO);
+    for (let sIdx = 0; sIdx < slots.length; sIdx++) {
+      const { w, h } = slots[sIdx];
+      let dataUrl: string | null = null;
+      // Prefer a DIFFERENT photo per slot within the same ad.
+      for (let step = 0; step < n && !dataUrl; step++) {
+        const idx = (i + sIdx + step) % n;
+        if (usedIdx.has(idx) || !buffers[idx]) continue;
+        dataUrl = await crop(idx, w, h);
+        if (dataUrl) usedIdx.add(idx);
       }
-
-      try {
-        png = await renderAdCreative(variant.templateKey, {
-          venue: data,
-          variant,
-          images,
-          logoDataUrl,
-        });
-      } catch (err) {
-        console.error('[admin/ad-generator] render failed', err instanceof Error ? err.message : err);
+      // Fallback: allow reuse before a blank slot.
+      for (let step = 0; step < n && !dataUrl; step++) {
+        const idx = (i + sIdx + step) % n;
+        if (!buffers[idx]) continue;
+        dataUrl = await crop(idx, w, h);
       }
+      slotImages.push(dataUrl ?? FALLBACK_HERO);
     }
 
-    let imageUrl: string | null = null;
-    let storagePath: string | null = null;
-    if (png) {
-      try {
-        const key = adCreativeObjectKey(venueId, batchId, i + 1, mode === 'ai' ? 'ai' : variant.templateKey);
-        const { error: upErr } = await supabaseAdmin.storage
-          .from(AD_CREATIVES_BUCKET)
-          .upload(key, png, { contentType: 'image/png', upsert: true });
-        if (upErr) throw new Error(upErr.message);
-        storagePath = key;
-        imageUrl = supabaseAdmin.storage.from(AD_CREATIVES_BUCKET).getPublicUrl(key).data.publicUrl;
-      } catch (err) {
-        console.error('[admin/ad-generator] upload failed', err instanceof Error ? err.message : err);
-        // Keep going — copy is still valuable even if one image fails.
-      }
-    }
-
-    let inserted: CreativeRow | null = null;
+    let png: Buffer | null = null;
     try {
-      const rows = (await sql`
-        INSERT INTO venue_ad_creatives
-          (venue_id, batch_id, variant, template_key, image_url, storage_path, headline,
-           bullets, primary_text, meta_headline, destination_url, created_by)
-        VALUES
-          (${venueId}, ${batchId}, ${i + 1}, ${variant.templateKey}, ${imageUrl}, ${storagePath},
-           ${variant.imageHeadline}, ${sql.json(variant.imageBullets)}, ${variant.primaryText},
-           ${variant.metaHeadline}, ${destinationUrl}, ${createdBy})
-        RETURNING id, venue_id, batch_id, variant, template_key, image_url, storage_path, headline,
-                  bullets, primary_text, meta_headline, destination_url, created_at
-      `) as unknown as CreativeRow[];
-      inserted = rows[0] ?? null;
+      png = await renderAdCreative(variant.templateKey, { venue, variant, images: slotImages, logoDataUrl });
     } catch (err) {
-      console.error('[admin/ad-generator] insert failed', err instanceof Error ? err.message : err);
+      console.error('[admin/ad-generator] render failed', err instanceof Error ? err.message : err);
     }
-
-    creatives.push({
-      id: inserted?.id ?? `${batchId}-${i + 1}`,
-      venue_id: venueId,
-      batch_id: batchId,
-      variant: i + 1,
-      template_key: variant.templateKey,
-      image_url: imageUrl,
-      storage_path: storagePath,
-      headline: variant.imageHeadline,
-      bullets: variant.imageBullets,
-      imageBullets: variant.imageBullets,
-      primary_text: variant.primaryText,
-      meta_headline: variant.metaHeadline,
-      destination_url: destinationUrl,
-      created_at: inserted?.created_at ?? new Date().toISOString(),
-    });
+    return { png, slotImages };
   }
 
-  return NextResponse.json({ batchId, creatives });
+  let built: { png: Buffer | null; slotImages: string[] }[];
+  if (mode === 'ai') {
+    built = await Promise.all(
+      variants.map((variant, i) => {
+        const refs = [...venue.photos.slice(i), ...venue.photos.slice(0, i)];
+        return generateAdImage(venue, variant, refs)
+          .then((png) => ({ png, slotImages: [] as string[] }))
+          .catch((e) => {
+            console.error('[admin/ad-generator] ai image failed', e instanceof Error ? e.message : e);
+            return { png: null as Buffer | null, slotImages: [] as string[] };
+          });
+      }),
+    );
+  } else {
+    built = await Promise.all(variants.map((variant, i) => buildTemplate(variant, i)));
+  }
+
+  const creatives: EphemeralCreative[] = variants.map((variant, i) => ({
+    id: `${i + 1}`,
+    variant: i + 1,
+    template_key: variant.templateKey,
+    image: pngDataUrl(built[i]?.png ?? null),
+    slot_images: built[i]?.slotImages ?? [],
+    headline: variant.imageHeadline,
+    bullets: variant.imageBullets,
+    image_cta: variant.imageCta,
+    primary_text: variant.primaryText,
+    meta_headline: variant.metaHeadline,
+    destination_url: destinationUrl,
+  }));
+
+  return NextResponse.json({ creatives });
 }

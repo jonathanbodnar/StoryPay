@@ -8,12 +8,32 @@
 
 import sharp from 'sharp';
 
-async function fetchBuffer(url: string): Promise<Buffer | null> {
+export async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const ab = await res.arrayBuffer();
     return Buffer.from(ab);
+  } catch {
+    return null;
+  }
+}
+
+const fetchBuffer = fetchImageBuffer;
+
+/**
+ * Cover-crop an already-decoded buffer to w×h (JPEG data URI, or null).
+ * Lets a caller fetch each source image ONCE and crop it into many slots
+ * without re-downloading — critical for generating a 6-creative batch fast.
+ */
+export async function prepareCoverFromBuffer(buf: Buffer, w: number, h: number): Promise<string | null> {
+  try {
+    const out = await sharp(buf)
+      .rotate() // apply EXIF orientation
+      .resize(w, h, { fit: 'cover', position: sharp.strategy.attention })
+      .jpeg({ quality: 74, mozjpeg: true })
+      .toBuffer();
+    return `data:image/jpeg;base64,${out.toString('base64')}`;
   } catch {
     return null;
   }
@@ -29,16 +49,7 @@ async function fetchBuffer(url: string): Promise<Buffer | null> {
 export async function prepareCover(url: string, w: number, h: number): Promise<string | null> {
   const buf = await fetchBuffer(url);
   if (!buf) return null;
-  try {
-    const out = await sharp(buf)
-      .rotate() // apply EXIF orientation
-      .resize(w, h, { fit: 'cover', position: sharp.strategy.attention })
-      .jpeg({ quality: 74, mozjpeg: true })
-      .toBuffer();
-    return `data:image/jpeg;base64,${out.toString('base64')}`;
-  } catch {
-    return null;
-  }
+  return prepareCoverFromBuffer(buf, w, h);
 }
 
 /** Contain-fit a logo within maxW×maxH, preserving transparency (PNG data URI). */
