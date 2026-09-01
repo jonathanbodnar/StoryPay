@@ -21,7 +21,7 @@
  * prompted the ghlRequest 429-retry fix.
  */
 import { supabaseAdmin } from '@/lib/supabase';
-import { getGhlToken, listGhlConversationIdsForContactOrdered, listGhlConversationMessages } from '@/lib/ghl';
+import { getGhlToken, getOrCreateGhlConversationIdsForContact, listGhlConversationMessages } from '@/lib/ghl';
 import {
   ghlApiMessagesFromResponse,
   isGhlApiInboundSmsMessage,
@@ -143,7 +143,7 @@ export async function runConciergeSmsReplySync(): Promise<ConciergeSmsReplySyncR
   for (const c of contacts) {
     result.contactsChecked++;
     try {
-      const convIds = await listGhlConversationIdsForContactOrdered(c.token, c.locationId, c.ghlContactId, 10);
+      const convIds = await getOrCreateGhlConversationIdsForContact(c.token, c.locationId, c.ghlContactId, 10);
       for (const convId of convIds.slice(0, 5)) {
         let rawList: unknown;
         try {

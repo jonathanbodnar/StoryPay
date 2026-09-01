@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import {
   getGhlContact,
   getGhlToken,
-  listGhlConversationIdsForContactOrdered,
+  getOrCreateGhlConversationIdsForContact,
   listGhlConversationMessages,
   normalizePhone,
 } from '@/lib/ghl';
@@ -620,7 +620,11 @@ export async function syncInboundSmsFromGhlForThread(params: {
 
     let convIds: string[] = [];
     try {
-      convIds = await listGhlConversationIdsForContactOrdered(token, locationId, contactId, 25);
+      // Resilient to GHL's search index being empty on brand-new /
+      // just-A2P-provisioned sub-accounts: falls back to get-or-create so we
+      // still find the conversation (and its delivered inbound replies) that
+      // search can't see yet. See getOrCreateGhlConversationIdsForContact.
+      convIds = await getOrCreateGhlConversationIdsForContact(token, locationId, contactId, 25);
     } catch (e) {
       console.error('[ghl-sms sync] list conversations failed', {
         threadId,

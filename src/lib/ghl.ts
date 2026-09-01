@@ -937,6 +937,67 @@ export async function listGhlConversationIdsForContactOrdered(
   return scored.map((s) => s.id);
 }
 
+/**
+ * Conversation ids for a contact, resilient to GHL's search index being empty.
+ *
+ * WHY: On brand-new sub-accounts (especially right after A2P is enabled / a
+ * fresh Private Integration Token is created), GHL's
+ * `/conversations/search?contactId=` endpoint returns `{ conversations: [],
+ * total: 0 }` even though the contact DOES have a conversation with delivered
+ * inbound SMS in it — the conversation is reachable by id, it just isn't in the
+ * search index yet (observed to persist for many minutes). Our inbound SMS
+ * poller resolves contact → conversation purely through that search, so those
+ * replies never get imported and never reach the venue's thread.
+ *
+ * This helper adds a fallback: when search comes back empty, POST
+ * `/conversations/` (the same get-or-create GHL uses on send). GHL either
+ * returns the newly-created id, or a 400 "Conversation already exists" whose
+ * body embeds the existing `conversationId` — which we recover so the poller
+ * can scan it directly. Search remains the primary path (it returns multiple
+ * ordered conversations); the fallback only kicks in when search finds nothing.
+ */
+export async function getOrCreateGhlConversationIdsForContact(
+  accessToken: string,
+  locationId: string,
+  contactId: string,
+  searchLimit = 25
+): Promise<string[]> {
+  try {
+    const ids = await listGhlConversationIdsForContactOrdered(accessToken, locationId, contactId, searchLimit);
+    if (ids.length > 0) return ids;
+  } catch (e) {
+    console.warn('[ghl] conversation search failed, trying get-or-create fallback', {
+      contactId,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  // Search returned nothing (or errored) — recover the conversation id directly.
+  const token = await resolveLocationToken(accessToken, locationId);
+  try {
+    const created = await ghlRequest('/conversations/', token, {
+      method: 'POST',
+      body: { locationId, contactId },
+      locationId,
+    });
+    const id = (created?.conversation?.id || created?.id) as string | undefined;
+    if (id) {
+      console.log(`[ghl] recovered conversation for contact ${contactId} via create: ${id}`);
+      return [id];
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // GHL: 400 { "message": "Conversation already exists", "conversationId": "..." }
+    const m = msg.match(/"conversationId"\s*:\s*"([^"]+)"/);
+    if (m?.[1]) {
+      console.log(`[ghl] recovered existing conversation for contact ${contactId} via 400: ${m[1]}`);
+      return [m[1]];
+    }
+    console.warn('[ghl] get-or-create conversation fallback failed', { contactId, error: msg });
+  }
+  return [];
+}
+
 /** Best conversation id for SMS-heavy use (first after SMS-prioritized ordering). */
 export async function getGhlConversationIdForContact(
   accessToken: string,
