@@ -41,24 +41,21 @@ const US_BOUNDS: [[number, number], [number, number]] = [
 ];
 
 const LOCAL_RADIUS_MILES = 100;
-const MILES_PER_DEGREE_LAT = 69.0;
+const METERS_PER_MILE = 1609.344;
+// Web-mercator ground resolution at zoom 0 (equator), in meters per pixel.
+const EQUATOR_METERS_PER_PIXEL_Z0 = 156543.03392;
 
-// Bounding box that roughly contains a `radiusMiles` circle around
-// (lat, lng). Longitude degrees shrink as you move away from the equator,
-// so we correct for that with cos(latitude) — otherwise the box would look
-// noticeably "too wide" east-west for northern venues.
-function boundsForRadius(
-  lat: number,
-  lng: number,
-  radiusMiles: number
-): [[number, number], [number, number]] {
-  const latDelta = radiusMiles / MILES_PER_DEGREE_LAT;
-  const milesPerDegreeLng = MILES_PER_DEGREE_LAT * Math.cos((lat * Math.PI) / 180);
-  const lngDelta = radiusMiles / Math.max(milesPerDegreeLng, 1);
-  return [
-    [lat - latDelta, lng - lngDelta],
-    [lat + latDelta, lng + lngDelta],
-  ];
+// Fractional Leaflet zoom at which a `radiusMiles` circle around `lat` has its
+// full diameter span `viewportPx` pixels. We size against the LARGER container
+// dimension (see recenter) so the venue's local radius is never shown "further
+// out" than requested in any direction — the shorter axis just shows a bit
+// less. This is what keeps the map reliably zoomed in on the venue instead of
+// drifting out to a multi-state view the way fitBounds did on wide containers.
+function zoomForRadiusMiles(lat: number, radiusMiles: number, viewportPx: number): number {
+  const diameterMeters = radiusMiles * METERS_PER_MILE * 2;
+  const metersPerPixel = diameterMeters / Math.max(viewportPx, 1);
+  const worldMetersPerPixelZ0 = EQUATOR_METERS_PER_PIXEL_Z0 * Math.cos((lat * Math.PI) / 180);
+  return Math.log2(worldMetersPerPixelZ0 / metersPerPixel);
 }
 
 export default function VisitorMap({ points, venueLat, venueLng, heightClass = "h-96" }: Props) {
@@ -89,6 +86,10 @@ export default function VisitorMap({ points, venueLat, venueLng, heightClass = "
         zoom: 3,
         minZoom: 2,
         maxZoom: 18,
+        // Allow fractional zoom so the venue's local radius maps to an exact
+        // zoom level (integer snapping would round to a noticeably looser or
+        // tighter view than the intended ~100mi radius).
+        zoomSnap: 0,
         worldCopyJump: true,
         zoomControl: true,
         attributionControl: true,
@@ -140,10 +141,21 @@ export default function VisitorMap({ points, venueLat, venueLng, heightClass = "
         const m = mapRef.current;
         if (!m || userMovedRef.current) return;
         const coords = venueCoordsRef.current;
-        const bounds = coords
-          ? boundsForRadius(coords.lat, coords.lng, LOCAL_RADIUS_MILES)
-          : US_BOUNDS;
-        m.fitBounds(bounds, { padding: [12, 12], animate: false });
+        if (coords) {
+          // Zoom so a LOCAL_RADIUS_MILES radius fits the container's larger
+          // dimension — this venue's local area is always framed the same,
+          // zoomed in, regardless of where visitors are or how wide the
+          // dashboard is. Clamp so we never over/under-zoom to an extreme.
+          const el = containerRef.current;
+          const px = el ? Math.max(el.clientWidth, el.clientHeight) : 800;
+          const target = zoomForRadiusMiles(coords.lat, LOCAL_RADIUS_MILES, px);
+          const clamped = Math.max(m.getMinZoom(), Math.min(target, 16));
+          m.setView([coords.lat, coords.lng], clamped, { animate: false });
+        } else {
+          // No coordinates on file for this venue — fall back to a
+          // continental-US frame so the map isn't blank or mis-centered.
+          m.fitBounds(US_BOUNDS, { padding: [12, 12], animate: false });
+        }
       };
       recenterRef.current = recenter;
       recenter();
