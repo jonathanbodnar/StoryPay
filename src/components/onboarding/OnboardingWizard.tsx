@@ -757,7 +757,11 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
   // Show the required uploader whenever they chose manual entry, or whenever no
   // imported photos exist (manual venues never have Google imagery).
   const photosRequired = manualEntry || !hasImportedPhotos;
-  const photosOk = !photosRequired || photos.length >= MIN_PHOTOS;
+  // Manual account creation only needs a single photo to get started (the owner
+  // can round out the gallery later). Non-manual venues that still have no
+  // imported imagery keep the fuller MIN_PHOTOS ask so the listing looks full.
+  const requiredPhotos = manualEntry ? 1 : MIN_PHOTOS;
+  const photosOk = !photosRequired || photos.length >= requiredPhotos;
 
   // Every answer here feeds the AI-written guide, so they're all required (only
   // social links are optional). Returns the first missing-field message, or null.
@@ -775,7 +779,7 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
     const missing = requiredMissing();
     if (missing) { setError(missing); return; }
     if (!photosOk) {
-      setPhotoError(`Please add at least ${MIN_PHOTOS} photos so your guide and listing look full.`);
+      setPhotoError(`Please add at least ${requiredPhotos} photo${requiredPhotos === 1 ? '' : 's'} so your guide and listing look full.`);
       return;
     }
     setSaving(true); setError(null);
@@ -872,9 +876,9 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
         </Field>
 
         {photosRequired && (
-        <Field label={`Photos of your venue (at least ${MIN_PHOTOS})`}>
+        <Field label={`Photos of your venue (at least ${requiredPhotos})`}>
           <p className="-mt-0.5 mb-2 text-xs text-gray-500">
-            Add at least {MIN_PHOTOS} photos and we&apos;ll build your cover and gallery from them. {photos.length}/{MIN_PHOTOS} added.
+            Add at least {requiredPhotos} photo{requiredPhotos === 1 ? '' : 's'} and we&apos;ll build your cover and gallery from them. {photos.length}/{requiredPhotos} added.
           </p>
           <div className="flex flex-wrap gap-2">
             {photos.map((url) => (
@@ -919,7 +923,7 @@ function QuestionsStep({ onNext }: { onNext: () => void }) {
 
       <div className="mt-6 flex items-center justify-end">
         <button onClick={submit} disabled={saving} className="flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: BRAND }}>
-          {saving ? <><Loader2 size={16} className="animate-spin" /> Building your Bride Booking System…</> : <>Build my Bride Booking System <Sparkles size={16} /></>}
+          {saving ? <><Loader2 size={16} className="animate-spin" /> Building your Bride Booking System…</> : <>Build My Bride Booking System <Sparkles size={16} /></>}
         </button>
       </div>
     </div>
