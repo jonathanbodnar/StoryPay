@@ -40,20 +40,26 @@ const US_BOUNDS: [[number, number], [number, number]] = [
   [49.4, -66.9],
 ];
 
-const LOCAL_RADIUS_MILES = 100;
+// How many miles of ground the map shows across its WIDEST edge when it first
+// loads — i.e. the whole visible map spans ~100 miles (roughly a 50-mile reach
+// from the venue on that axis, less on the shorter axis). Kept deliberately
+// tight so the map always opens zoomed IN on the venue's own market rather than
+// a multi-county regional view. Owners can still pinch/scroll to zoom out;
+// refreshing or returning to the page snaps it back to this framing.
+const LOCAL_VIEW_MILES = 100;
 const METERS_PER_MILE = 1609.344;
 // Web-mercator ground resolution at zoom 0 (equator), in meters per pixel.
 const EQUATOR_METERS_PER_PIXEL_Z0 = 156543.03392;
 
-// Fractional Leaflet zoom at which a `radiusMiles` circle around `lat` has its
-// full diameter span `viewportPx` pixels. We size against the LARGER container
-// dimension (see recenter) so the venue's local radius is never shown "further
-// out" than requested in any direction — the shorter axis just shows a bit
-// less. This is what keeps the map reliably zoomed in on the venue instead of
-// drifting out to a multi-state view the way fitBounds did on wide containers.
-function zoomForRadiusMiles(lat: number, radiusMiles: number, viewportPx: number): number {
-  const diameterMeters = radiusMiles * METERS_PER_MILE * 2;
-  const metersPerPixel = diameterMeters / Math.max(viewportPx, 1);
+// Fractional Leaflet zoom at which `spanMiles` of ground fits across
+// `viewportPx` pixels at the given latitude. Feeding it the LARGER container
+// dimension (see recenter) makes `spanMiles` the widest thing on screen, so
+// the map never shows more than that from edge to edge — the shorter axis
+// simply shows less. Fractional (zoomSnap 0) so the framing is exact instead
+// of rounded to a looser/tighter integer level.
+function zoomForSpanMiles(lat: number, spanMiles: number, viewportPx: number): number {
+  const spanMeters = spanMiles * METERS_PER_MILE;
+  const metersPerPixel = spanMeters / Math.max(viewportPx, 1);
   const worldMetersPerPixelZ0 = EQUATOR_METERS_PER_PIXEL_Z0 * Math.cos((lat * Math.PI) / 180);
   return Math.log2(worldMetersPerPixelZ0 / metersPerPixel);
 }
@@ -142,13 +148,13 @@ export default function VisitorMap({ points, venueLat, venueLng, heightClass = "
         if (!m || userMovedRef.current) return;
         const coords = venueCoordsRef.current;
         if (coords) {
-          // Zoom so a LOCAL_RADIUS_MILES radius fits the container's larger
-          // dimension — this venue's local area is always framed the same,
-          // zoomed in, regardless of where visitors are or how wide the
-          // dashboard is. Clamp so we never over/under-zoom to an extreme.
+          // Frame ~LOCAL_VIEW_MILES across the container's larger dimension so
+          // the venue's local market is always the same tight, zoomed-in view
+          // regardless of where visitors are or how wide the dashboard is.
+          // Clamp so we never over/under-zoom to an extreme.
           const el = containerRef.current;
           const px = el ? Math.max(el.clientWidth, el.clientHeight) : 800;
-          const target = zoomForRadiusMiles(coords.lat, LOCAL_RADIUS_MILES, px);
+          const target = zoomForSpanMiles(coords.lat, LOCAL_VIEW_MILES, px);
           const clamped = Math.max(m.getMinZoom(), Math.min(target, 16));
           m.setView([coords.lat, coords.lng], clamped, { animate: false });
         } else {
