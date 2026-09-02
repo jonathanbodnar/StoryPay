@@ -24,9 +24,10 @@ import {
   StickyNote, ShieldCheck, AlertTriangle, CircleDot, CircleSlash,
   UserPlus, Flag, X, Radio, Sparkles, FileText, Maximize2, Minimize2,
   Eye, EyeOff, ChevronDown, ChevronUp, BookOpen, Volume2, VolumeX, ShieldAlert,
-  Check, CheckCheck, MailOpen, XCircle, Clock,
+  Check, CheckCheck, MailOpen, XCircle, Clock, ConciergeBell,
 } from 'lucide-react';
 import { PrivateClientsPanel } from '@/components/admin/PrivateClientsPanel';
+import { VenueConciergePanel } from '@/components/admin/VenueConciergePanel';
 import { trackClient } from '@/lib/analytics-client';
 import { useBroadcastChannel, useBroadcastChannels } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels, type BrideMessageEvent, type TicketMessageEvent, type TicketStatusEvent, type VenueDirectInboxEvent } from '@/lib/realtime/channels';
@@ -49,7 +50,7 @@ import { useThreadPresence } from '@/lib/realtime/use-thread-presence';
 
 const BRAND = '#1b1b1b';
 
-type SupportSubTab = 'bride-replies' | 'venue-direct' | 'tickets' | 'private-clients';
+type SupportSubTab = 'bride-replies' | 'venue-direct' | 'tickets' | 'private-clients' | 'venue-concierge';
 
 interface VenueDirectInboxRow {
   threadId:             string;
@@ -183,6 +184,7 @@ export function SupportInboxPanel() {
     if (t === 'tickets')          return 'tickets';
     if (t === 'venue-direct')     return 'venue-direct';
     if (t === 'private-clients') return 'private-clients';
+    if (t === 'venue-concierge')  return 'venue-concierge';
     return 'bride-replies';
   })();
   const initialThread = searchParams.get('thread') || null;
@@ -264,6 +266,7 @@ export function SupportInboxPanel() {
   const myAgentId = (me?.superAdmin ? actAsId : null) || me?.member?.id || null;
   const [ticketOpenCount, setTicketOpenCount] = useState(0);
   const [venueDirectUnreadCount, setVenueDirectUnreadCount] = useState(0);
+  const [venueConciergeUnreadCount, setVenueConciergeUnreadCount] = useState(0);
 
   // ── Bride inbox state ──────────────────────────────────────────────────────
   const [threads, setThreads] = useState<BrideInboxRow[]>([]);
@@ -388,6 +391,27 @@ export function SupportInboxPanel() {
     return () => clearInterval(id);
   }, [fetchVenueDirectCount]);
 
+  // Venue Concierge tab badge — total concierge-side unread across all venues.
+  const fetchVenueConciergeCount = useCallback(() => {
+    void fetch('/api/admin/venue-concierge/unread-count', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { count?: number } | null) => {
+        if (d && typeof d.count === 'number') setVenueConciergeUnreadCount(d.count);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchVenueConciergeCount();
+    const id = setInterval(fetchVenueConciergeCount, 30_000);
+    return () => clearInterval(id);
+  }, [fetchVenueConciergeCount]);
+
+  // Opening the tab clears the badge optimistically (the panel marks read).
+  useEffect(() => {
+    if (subTab === 'venue-concierge') setVenueConciergeUnreadCount(0);
+  }, [subTab]);
+
   // Lightweight "needs reply" bride count + "open" ticket count, kept
   // accurate regardless of active sub-tab (mirrors fetchVenueDirectCount
   // above). While a tab IS active, its own view already keeps these in sync
@@ -438,6 +462,14 @@ export function SupportInboxPanel() {
     ['message'],
     useCallback(() => { fetchVenueDirectCount(); }, [fetchVenueDirectCount]),
   );
+  useBroadcastChannel(
+    supportChannels.venueConciergeInbox(),
+    ['message'],
+    useCallback(() => {
+      // Don't badge the tab the admin is already reading.
+      if (subTab !== 'venue-concierge') fetchVenueConciergeCount();
+    }, [fetchVenueConciergeCount, subTab]),
+  );
 
   // When viewing a non-open filter, fetch a live open count in the background
   // so the badge reflects reality (e.g. a new bride message arrives while
@@ -467,6 +499,7 @@ export function SupportInboxPanel() {
     if (subTab === 'tickets')               next.set('tab', 'tickets');
     else if (subTab === 'venue-direct')     next.set('tab', 'venue-direct');
     else if (subTab === 'private-clients')  next.set('tab', 'private-clients');
+    else if (subTab === 'venue-concierge')  next.set('tab', 'venue-concierge');
     else                                     next.delete('tab');
     if (activeThreadId) next.set('thread', activeThreadId);
     else next.delete('thread');
@@ -1092,12 +1125,25 @@ export function SupportInboxPanel() {
           dot={ticketOpenCount}
         />
         <SubTabButton
+          active={subTab === 'venue-concierge'}
+          onClick={() => setSubTab('venue-concierge')}
+          icon={<ConciergeBell size={14} />}
+          label="Venue Concierge"
+          count={venueConciergeUnreadCount}
+        />
+        <SubTabButton
           active={subTab === 'private-clients'}
           onClick={() => setSubTab('private-clients')}
           icon={<ShieldAlert size={14} />}
           label="Private Clients"
         />
       </div>
+
+      {subTab === 'venue-concierge' && (
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">
+          <VenueConciergePanel />
+        </div>
+      )}
 
       {subTab === 'private-clients' && (
         <PrivateClientsPanel me={me} actAsId={actAsId} />

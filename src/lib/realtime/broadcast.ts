@@ -184,9 +184,14 @@ export async function broadcastPrivateClientMessage(evt: PrivateClientMessageEve
 }
 
 /** Broadcast a Venue Concierge message so the venue page + admin panel
- *  live-append it without a refetch. */
+ *  live-append it without a refetch. Venue → concierge messages also fan out to
+ *  the global admin inbox channel so the Support Inbox tab badge updates live. */
 export async function broadcastVenueConciergeMessage(evt: VenueConciergeMessageEvent): Promise<void> {
-  await send(supportChannels.venueConcierge(evt.venueId), 'message', evt);
+  const targets = [send(supportChannels.venueConcierge(evt.venueId), 'message', evt)];
+  if (evt.direction === 'inbound') {
+    targets.push(send(supportChannels.venueConciergeInbox(), 'message', evt));
+  }
+  await Promise.allSettled(targets);
 }
 
 /** Broadcast a tag change so the admin context sidebar reflects it without a refresh. */

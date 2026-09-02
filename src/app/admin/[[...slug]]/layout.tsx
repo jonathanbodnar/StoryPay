@@ -18,7 +18,6 @@ import {
   ArrowRightLeft,
   Headset,
   FolderKanban,
-  ConciergeBell,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -43,7 +42,6 @@ import SystemEmailsPanel from '@/components/admin/SystemEmailsPanel';
 import { FunnelAbPanel } from '@/components/admin/FunnelAbPanel';
 import GhlMigrationPanel from '@/components/admin/GhlMigrationPanel';
 import { AdminProjectsBoard } from '@/components/admin/AdminProjectsBoard';
-import { VenueConciergePanel } from '@/components/admin/VenueConciergePanel';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
 
@@ -70,7 +68,6 @@ type AdminTabKey =
   | 'directory-plans'
   | 'directory-badges'
   | 'ai-concierge'
-  | 'venue-concierge'
   | 'support'
   | 'support-analytics'
   | 'canned-replies'
@@ -103,7 +100,6 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'directory-plans',
   'directory-badges',
   'ai-concierge',
-  'venue-concierge',
   'support',
   'support-analytics',
   'canned-replies',
@@ -562,7 +558,6 @@ const ADMIN_NAV_ITEMS = [
   { key: 'venues', label: 'Venue management', icon: Building2 },
   { key: 'support', label: 'Support inbox', icon: Inbox },
   { key: 'ai-concierge', label: 'AI Concierge', icon: Sparkles },
-  { key: 'venue-concierge', label: 'Venue Concierge', icon: ConciergeBell },
   { key: 'funnel-ab', label: 'Funnel A/B', icon: TrendingUp },
   { key: 'analytics', label: 'Usage Analytics', icon: BarChart2 },
   { key: 'sms-analytics', label: 'SMS Reply Analytics', icon: MessageSquare },
@@ -2966,8 +2961,6 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
         {/* ── Projects (PM board + ad generator) ── */}
         {activeTab === 'projects' && <AdminProjectsBoard />}
-
-        {activeTab === 'venue-concierge' && <VenueConciergePanel />}
 
         {/* ── Team management ── */}
         {activeTab === 'team' && canManageTeam && <AdminTeamPanel />}

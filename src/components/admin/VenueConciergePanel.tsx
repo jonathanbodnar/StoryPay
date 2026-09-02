@@ -130,10 +130,8 @@ export function VenueConciergePanel() {
   return (
     <div>
       <div className="mb-4">
-        <h2 className="font-heading text-xl text-gray-900 inline-flex items-center gap-2">
-          <ConciergeBell size={18} className="text-gray-900" /> Venue Concierge
-        </h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-gray-500 inline-flex items-center gap-2">
+          <ConciergeBell size={15} className="text-gray-400" />
           Private relationship threads between venues and the concierge team.
         </p>
       </div>

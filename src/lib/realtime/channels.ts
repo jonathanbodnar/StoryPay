@@ -68,6 +68,10 @@ export const supportChannels = {
    *  broadcasts (server), plus ephemeral typing + Supabase presence so both the
    *  venue page and the admin panel feel live. */
   venueConcierge: (venueId: string) => `venue:${venueId}:concierge`,
+  /** Global admin fan-out — fires on ANY venue → concierge message so the
+   *  Support Inbox "Venue Concierge" tab badge + list update live regardless of
+   *  which venue is open. Mirrors venueDirectInbox(). */
+  venueConciergeInbox: () => 'support:venue-concierge-inbox',
 } as const;
 
 /** Fired when either side posts to the Venue Concierge thread. */

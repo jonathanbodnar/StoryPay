@@ -19,7 +19,6 @@ export type AdminTabKey =
   | 'directory-plans'
   | 'directory-badges'
   | 'ai-concierge'
-  | 'venue-concierge'
   | 'support'
   | 'support-analytics'
   | 'canned-replies'
@@ -56,7 +55,6 @@ export const ADMIN_TABS: AdminTabDef[] = [
   { key: 'directory-badges',   label: 'Verified & Sponsored', category: 'venue' },
   { key: 'directory-plans',    label: 'Directory plans',     category: 'venue' },
   { key: 'ai-concierge',       label: 'AI Concierge',        category: 'venue' },
-  { key: 'venue-concierge',    label: 'Venue Concierge',     category: 'core' },
   { key: 'support',            label: 'Support inbox',       category: 'core' },
   { key: 'support-analytics',  label: 'Support Analytics',   category: 'tools' },
   { key: 'canned-replies',     label: 'Saved replies',       category: 'core' },
