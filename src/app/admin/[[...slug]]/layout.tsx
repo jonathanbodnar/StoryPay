@@ -18,7 +18,7 @@ import {
   ArrowRightLeft,
   Headset,
   FolderKanban,
-  Gem,
+  ConciergeBell,
 } from 'lucide-react';
 import {
   VenueManagementPortal,
@@ -562,7 +562,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'venues', label: 'Venue management', icon: Building2 },
   { key: 'support', label: 'Support inbox', icon: Inbox },
   { key: 'ai-concierge', label: 'AI Concierge', icon: Sparkles },
-  { key: 'venue-concierge', label: 'Venue Concierge', icon: Gem },
+  { key: 'venue-concierge', label: 'Venue Concierge', icon: ConciergeBell },
   { key: 'funnel-ab', label: 'Funnel A/B', icon: TrendingUp },
   { key: 'analytics', label: 'Usage Analytics', icon: BarChart2 },
   { key: 'sms-analytics', label: 'SMS Reply Analytics', icon: MessageSquare },

@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Gem, Loader2, Send, RefreshCw } from 'lucide-react';
+import { ConciergeBell, Loader2, Send, RefreshCw } from 'lucide-react';
 
 interface TeamMember {
   id: string;
@@ -109,13 +109,9 @@ export default function VenueConciergePage() {
       {/* Header */}
       <div>
         <h1 className="font-heading text-2xl text-gray-900 inline-flex items-center gap-2">
-          <Gem size={20} className="text-violet-700" />
+          <ConciergeBell size={20} className="text-violet-700" />
           Venue Concierge
         </h1>
-        <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-          Your private line to the StoryVenue concierge team. Ask about onboarding, A2P,
-          ads, or anything else — we&apos;ll get back to you here.
-        </p>
       </div>
 
       {/* Meet your concierge team */}
@@ -154,7 +150,7 @@ export default function VenueConciergePage() {
             </div>
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <Gem size={28} className="text-gray-300 mb-2" />
+              <ConciergeBell size={28} className="text-gray-300 mb-2" />
               <p className="text-sm font-semibold text-gray-700">Start the conversation</p>
               <p className="text-xs text-gray-500 mt-1 max-w-sm">
                 Send a message and your concierge team will reply here.

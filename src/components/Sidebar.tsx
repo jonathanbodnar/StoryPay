@@ -26,6 +26,7 @@ import {
   Diamond,
   Gem,
   Target,
+  ConciergeBell,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import { isNativeApp, topBarSafeAreaPadding } from '@/lib/platform';
@@ -69,7 +70,7 @@ const topMenuItems: NavItem[] = [
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
-  { label: 'Venue Concierge', href: '/dashboard/venue-concierge', icon: Gem, navId: 'nav_venue_concierge' },
+  { label: 'Venue Concierge', href: '/dashboard/venue-concierge', icon: ConciergeBell, navId: 'nav_venue_concierge' },
 ];
 
 const middleMenuItems: NavItem[] = [];

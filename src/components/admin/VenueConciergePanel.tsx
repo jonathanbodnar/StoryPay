@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Gem, Loader2, Send, RefreshCw, Inbox } from 'lucide-react';
+import { ConciergeBell, Loader2, Send, RefreshCw, Inbox } from 'lucide-react';
 
 interface ThreadRow {
   venueId: string;
@@ -120,7 +120,7 @@ export function VenueConciergePanel() {
     <div>
       <div className="mb-4">
         <h2 className="font-heading text-xl text-gray-900 inline-flex items-center gap-2">
-          <Gem size={18} className="text-violet-700" /> Venue Concierge
+          <ConciergeBell size={18} className="text-violet-700" /> Venue Concierge
         </h2>
         <p className="text-sm text-gray-500 mt-1">
           Private relationship threads between venues and the concierge team.
