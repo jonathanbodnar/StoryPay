@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVenueId } from '@/lib/auth-helpers';
 import { getSessionUser } from '@/lib/session';
 import { conversationReaderRef } from '@/lib/conversation-reader';
-import { getConversationsUnread, getLeadsUnreadSince, getConciergeUnread } from '@/lib/notification-badge';
+import { getConversationsUnread, getLeadsUnreadSince, getConciergeUnread, getVenueConciergeChannelUnread } from '@/lib/notification-badge';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -30,11 +30,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   const leadsSince = new URL(req.url).searchParams.get('leadsSince');
 
-  const [conversations, leads, concierge] = await Promise.all([
+  const [conversations, leads, concierge, venueConcierge] = await Promise.all([
     getConversationsUnread(venueId, conversationReaderRef(user)).catch(() => 0),
     getLeadsUnreadSince(venueId, leadsSince).catch(() => 0),
     getConciergeUnread(venueId, user.memberId).catch(() => 0),
+    getVenueConciergeChannelUnread(venueId).catch(() => 0),
   ]);
 
-  return NextResponse.json({ count: conversations + leads + concierge });
+  return NextResponse.json({ count: conversations + leads + concierge + venueConcierge });
 }

@@ -68,9 +68,9 @@ interface SidebarProps {
 const topMenuItems: NavItem[] = [
   { label: 'Lead Inbox', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
+  { label: 'Venue Concierge', href: '/dashboard/venue-concierge', icon: ConciergeBell, navId: 'nav_venue_concierge' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
-  { label: 'Venue Concierge', href: '/dashboard/venue-concierge', icon: ConciergeBell, navId: 'nav_venue_concierge' },
 ];
 
 const middleMenuItems: NavItem[] = [];
@@ -173,6 +173,7 @@ const NATIVE_ALLOWED_NAV_IDS = new Set<string>([
   // Core nav
   'nav_main_leads',
   'nav_main_conversations',
+  'nav_venue_concierge',
   'nav_main_contacts',
   'nav_main_calendar',
   // Settings — push notifications only. Email notifications and Team are

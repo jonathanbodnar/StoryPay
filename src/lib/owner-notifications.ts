@@ -18,7 +18,7 @@ import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib
 import { sendPushToVenue } from '@/lib/push';
 import { sendNativePush } from '@/lib/native-push';
 import { loadNotificationRecipients, emailKeyFor, smsKeyFor } from '@/lib/notification-settings';
-import { buildOwnerReplyToEmail } from '@/lib/conversations-inbound-email';
+import { buildOwnerReplyToEmail, buildVenueConciergeReplyToEmail } from '@/lib/conversations-inbound-email';
 
 export type OwnerScenario =
   | 'payment_received'
@@ -474,6 +474,114 @@ export function formatAmount(cents: number | null | undefined): string {
 // These exist so the lead-creation, inbound-message, and AI-handoff call
 // sites can stay one-liners without re-deriving the merge variables and
 // dashboard URLs every time.
+
+function escapeHtmlBasic(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Notify a venue that the StoryVenue Concierge team just sent them a message on
+ * the Venue Concierge channel. Sends:
+ *   - a concierge-voiced email (to owner + active team members) whose Reply-To
+ *     routes a reply straight back into the concierge thread (vcreply+ inbound),
+ *   - web + native push (gated on the master push_enabled toggle) so the mobile
+ *     app alerts + badges like every other first-class signal.
+ * Best-effort — never throws.
+ */
+export async function notifyVenueOfConciergeMessage(input: {
+  venueId: string;
+  authorName: string;
+  bodyPreview: string;
+}): Promise<void> {
+  try {
+    const [venue, settings] = await Promise.all([
+      loadVenue(input.venueId),
+      loadSettings(input.venueId),
+    ]);
+    if (!venue) return;
+    const venueName = venue.name || 'your venue';
+    const preview = input.bodyPreview.replace(/\s+/g, ' ').slice(0, 600);
+    const author = (input.authorName || 'StoryVenue Concierge').trim();
+
+    // ── Email ──────────────────────────────────────────────────────────────
+    const toSet = new Set<string>();
+    for (const e of [venue.notification_email, venue.email]) {
+      if (e && e.trim()) toSet.add(e.trim().toLowerCase());
+    }
+    try {
+      const { data: members } = await supabaseAdmin
+        .from('venue_team_members')
+        .select('email, status')
+        .eq('venue_id', input.venueId);
+      for (const m of (members ?? []) as Array<{ email: string | null; status: string | null }>) {
+        if (m.email && m.status !== 'inactive') toSet.add(m.email.trim().toLowerCase());
+      }
+    } catch { /* best-effort */ }
+
+    const recipients = Array.from(toSet);
+    if (recipients.length > 0) {
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
+      const ctaUrl = `${appUrl}/dashboard/venue-concierge`;
+      const replyTo =
+        buildVenueConciergeReplyToEmail(input.venueId) ||
+        process.env.NOTIFICATION_REPLY_TO?.trim() ||
+        venue.email ||
+        undefined;
+      const canReply = !!buildVenueConciergeReplyToEmail(input.venueId);
+      const brand = venue.brand_color || '#1b1b1b';
+      const replyHint = canReply
+        ? 'Reply directly to this email and your message goes straight to your concierge — or open the Venue Concierge tab on desktop or in the app.'
+        : 'Open the Venue Concierge tab on desktop or in the app to reply.';
+
+      const html = `
+        <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1b1b1b;">
+          <p style="margin:0 0 4px;color:#888;font-size:12px;text-transform:uppercase;letter-spacing:.04em;">StoryVenue Concierge</p>
+          <h2 style="margin:0 0 12px;font-size:20px;">${escapeHtmlBasic(author)} sent you a message</h2>
+          <div style="border-left:3px solid ${escapeHtmlBasic(brand)};padding:2px 0 2px 14px;margin:0 0 18px;white-space:pre-wrap;color:#333;">${escapeHtmlBasic(preview)}</div>
+          <a href="${ctaUrl}" style="display:inline-block;background:#1b1b1b;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px;">Open Venue Concierge</a>
+          <p style="margin:18px 0 0;color:#666;font-size:13px;">${escapeHtmlBasic(replyHint)}</p>
+          <p style="margin:16px 0 0;color:#aaa;font-size:12px;">For ${escapeHtmlBasic(venueName)}</p>
+        </div>`;
+
+      const notifFromEmail =
+        process.env.NOTIFICATION_FROM_EMAIL?.trim() || 'notifications@send.storyvenue.com';
+      await Promise.allSettled(
+        recipients.map((to) =>
+          sendEmail({
+            to,
+            subject: `New message from your StoryVenue Concierge — ${venueName}`,
+            html,
+            replyTo,
+            from: { email: notifFromEmail, name: 'StoryVenue Concierge' },
+          }),
+        ),
+      );
+    }
+
+    // ── Push (web + native), gated on the master push toggle ────────────────
+    if (settings.push_enabled === true) {
+      const title = 'StoryVenue Concierge';
+      const body = `${author}: ${preview.slice(0, 120)}`;
+      const url = '/dashboard/venue-concierge';
+      await Promise.all([
+        sendPushToVenue(input.venueId, { title, body, url, tag: `venue_concierge-${input.venueId}` }),
+        sendNativePush(input.venueId, {
+          title,
+          body,
+          url,
+          data: { scenario: 'venue_concierge', venueId: input.venueId },
+        }),
+      ]);
+    }
+  } catch (err) {
+    console.error('[notifyVenueOfConciergeMessage]', err instanceof Error ? err.message : err);
+  }
+}
 
 /** Fire a "new lead" push for the freshly-inserted lead. */
 export function notifyOwnerNewLead(input: {

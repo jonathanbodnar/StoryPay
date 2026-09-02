@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConciergeBell, Loader2, Send, RefreshCw, Inbox } from 'lucide-react';
+import { useVenueConciergeRealtime } from '@/lib/realtime/use-venue-concierge-realtime';
 
 interface ThreadRow {
   venueId: string;
@@ -91,6 +92,16 @@ export function VenueConciergePanel() {
     setThreads((prev) => prev.map((t) => (t.venueId === venueId ? { ...t, unreadCount: 0 } : t)));
   }, []);
 
+  const { otherOnline, otherTyping, notifyTyping } = useVenueConciergeRealtime({
+    venueId: activeVenue,
+    side: 'concierge',
+    self: { id: 'concierge', name: 'Concierge' },
+    onMessage: () => {
+      if (activeVenue) void loadMessages(activeVenue);
+      void loadThreads();
+    },
+  });
+
   const send = useCallback(async () => {
     const text = draft.trim();
     if (!text || !activeVenue || sending) return;
@@ -120,7 +131,7 @@ export function VenueConciergePanel() {
     <div>
       <div className="mb-4">
         <h2 className="font-heading text-xl text-gray-900 inline-flex items-center gap-2">
-          <ConciergeBell size={18} className="text-violet-700" /> Venue Concierge
+          <ConciergeBell size={18} className="text-gray-900" /> Venue Concierge
         </h2>
         <p className="text-sm text-gray-500 mt-1">
           Private relationship threads between venues and the concierge team.
@@ -156,7 +167,7 @@ export function VenueConciergePanel() {
                   key={t.venueId}
                   type="button"
                   onClick={() => openVenue(t.venueId)}
-                  className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 ${activeVenue === t.venueId ? 'bg-violet-50' : ''}`}
+                  className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 ${activeVenue === t.venueId ? 'bg-gray-100' : ''}`}
                 >
                   <div className="flex items-center gap-2">
                     <p className={`text-sm truncate ${t.unreadCount > 0 ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'}`}>
@@ -186,8 +197,14 @@ export function VenueConciergePanel() {
             </div>
           ) : (
             <>
-              <div className="px-4 py-2.5 border-b border-gray-100">
+              <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
                 <p className="text-sm font-semibold text-gray-900">{activeName}</p>
+                {otherOnline && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600">
+                    <span className="h-2 w-2 rounded-full bg-green-500" />
+                    Venue online
+                  </span>
+                )}
               </div>
               <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
                 {loadingMsgs ? (
@@ -202,7 +219,7 @@ export function VenueConciergePanel() {
                       <div className={`max-w-[72%] ${m.fromConcierge ? 'text-right' : ''}`}>
                         <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap break-words ${
                           m.fromConcierge
-                            ? 'bg-violet-600 text-white rounded-tr-sm'
+                            ? 'bg-gray-900 text-white rounded-tr-sm'
                             : 'bg-gray-100 text-gray-900 rounded-tl-sm'
                         }`}>
                           {m.body}
@@ -213,10 +230,20 @@ export function VenueConciergePanel() {
                   ))
                 )}
               </div>
+              {otherTyping && (
+                <div className="px-4 py-1.5 text-xs text-gray-500 border-t border-gray-100 inline-flex items-center gap-1.5">
+                  <span className="flex gap-0.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '120ms' }} />
+                    <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '240ms' }} />
+                  </span>
+                  Venue is typing…
+                </div>
+              )}
               <div className="border-t border-gray-100 p-3 flex items-end gap-2">
                 <textarea
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={(e) => { setDraft(e.target.value); notifyTyping(); }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); }
                   }}
@@ -228,7 +255,7 @@ export function VenueConciergePanel() {
                   type="button"
                   onClick={() => void send()}
                   disabled={sending || !draft.trim()}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
                 >
                   {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                   Send

@@ -7,13 +7,16 @@ import {
   hashInboundDedupeFallback,
   insertInboundConversationEmail,
   insertInboundOwnerReplyEmail,
+  insertInboundVenueConciergeEmail,
   insertInboundVenueDirectEmail,
   parseFromHeader,
   parseOwnerReplyLocalPart,
   parseReplyLocalPart,
+  parseVenueConciergeLocalPart,
   parseVenueDirectLocalPart,
   pickReplyRoutingAddressFromInboundEmail,
   verifyReplySignature,
+  verifyVenueConciergeSignature,
 } from '@/lib/conversations-inbound-email';
 import { haltAutomationEnrollmentsForReply } from '@/lib/marketing-email-worker';
 import {
@@ -215,9 +218,10 @@ async function ingestFromParsedFields(params: {
   const parsedBride = parseReplyLocalPart(local);
   const parsedOwner = !parsedBride ? parseOwnerReplyLocalPart(local) : null;
   const parsedVD = !parsedBride && !parsedOwner ? parseVenueDirectLocalPart(local) : null;
-  const parsedTicket = !parsedBride && !parsedOwner && !parsedVD ? parseTicketReplyLocalPart(local) : null;
+  const parsedVC = !parsedBride && !parsedOwner && !parsedVD ? parseVenueConciergeLocalPart(local) : null;
+  const parsedTicket = !parsedBride && !parsedOwner && !parsedVD && !parsedVC ? parseTicketReplyLocalPart(local) : null;
   const isSupportCatchAll =
-    !parsedBride && !parsedOwner && !parsedVD && !parsedTicket && local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART;
+    !parsedBride && !parsedOwner && !parsedVD && !parsedVC && !parsedTicket && local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART;
   const parsed = parsedBride ?? parsedOwner ?? parsedVD;
   console.warn('[inbound-email] parse', {
     fromRawPreview: fromRaw.slice(0, 80),
@@ -226,9 +230,36 @@ async function ingestFromParsedFields(params: {
     matchedBride: !!parsedBride,
     matchedOwner: !!parsedOwner,
     matchedVD: !!parsedVD,
+    matchedVC: !!parsedVC,
     matchedTicket: !!parsedTicket,
     matchedSupportCatchAll: isSupportCatchAll,
   });
+
+  // Venue Concierge path: a venue owner/team member replying to their Venue
+  // Concierge notification email (signed `vcreply+{venueId}+{sig}@`). Routed
+  // per-venue (no conversation_thread), so handle it before the thread lookup.
+  if (parsedVC) {
+    if (!verifyVenueConciergeSignature(parsedVC.venueId, parsedVC.sig)) {
+      console.warn('[inbound-email] vc bad signature', { venueId: parsedVC.venueId });
+      return NextResponse.json({ ok: true, skipped: 'bad_token' });
+    }
+    const r = await insertInboundVenueConciergeEmail({
+      venueId:  parsedVC.venueId,
+      fromEmail,
+      fromName,
+      bodyText: text || '(no body)',
+    });
+    if (!r.ok) {
+      const skippable = new Set(['venue_not_found']);
+      if (r.error && skippable.has(r.error)) {
+        console.warn('[inbound-email] vc skipped:', r.error, { venueId: parsedVC.venueId });
+        return NextResponse.json({ ok: true, skipped: r.error });
+      }
+      console.error('[inbound-email] vc ingest', r.error);
+      return NextResponse.json({ error: r.error ?? 'insert_failed' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, inserted: r.inserted ?? false, audience: 'venue_concierge' });
+  }
 
   const mid =
     (messageId && messageId.replace(/^<|>$/g, '')) ||
@@ -524,6 +555,7 @@ export async function POST(request: NextRequest) {
       parseReplyLocalPart(local) ||
       parseOwnerReplyLocalPart(local) ||
       parseVenueDirectLocalPart(local) ||
+      parseVenueConciergeLocalPart(local) ||
       parseTicketReplyLocalPart(local) ||
       local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART;
     if (!recognized) {

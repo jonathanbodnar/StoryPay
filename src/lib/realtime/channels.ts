@@ -64,7 +64,30 @@ export const supportChannels = {
    *  or an SMS reply is synced in, so the Private Clients panel's message
    *  history and "needs reply" state update live instead of only on open. */
   privateClients: () => 'support:private-clients',
+  /** Venue Concierge relationship thread (one per venue). Carries new-message
+   *  broadcasts (server), plus ephemeral typing + Supabase presence so both the
+   *  venue page and the admin panel feel live. */
+  venueConcierge: (venueId: string) => `venue:${venueId}:concierge`,
 } as const;
+
+/** Fired when either side posts to the Venue Concierge thread. */
+export interface VenueConciergeMessageEvent {
+  venueId:    string;
+  /** 'inbound' = venue → concierge, 'outbound' = concierge → venue */
+  direction:  'inbound' | 'outbound';
+  messageId:  string;
+  body:       string;
+  authorName: string;
+  createdAt:  string;
+}
+
+/** Ephemeral typing broadcast on the venueConcierge channel. */
+export interface VenueConciergeTypingEvent {
+  /** 'venue' = venue owner/team is typing, 'concierge' = concierge is typing */
+  side:      'venue' | 'concierge';
+  authorName: string;
+  typing:    boolean;
+}
 
 /** Fired when a new lead is created so the Lead Inbox badge updates live. */
 export interface NewLeadEvent {

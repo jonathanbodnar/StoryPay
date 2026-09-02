@@ -11,6 +11,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { ensureSuperAdminSupportMember, SUPER_ADMIN_SUPPORT_USER_ID } from '@/lib/support/super-admin-member';
+import { broadcastVenueConciergeMessage } from '@/lib/realtime/broadcast';
+import { notifyVenueOfConciergeMessage } from '@/lib/owner-notifications';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -125,5 +127,34 @@ export async function POST(req: NextRequest) {
       { onConflict: 'venue_id,reader_ref' },
     );
 
-  return NextResponse.json({ ok: true, id: (msg as { id: string }).id });
+  // Resolve author name for the live-append + email/push copy.
+  let authorName = 'StoryVenue Concierge';
+  try {
+    const { data: person } = await supabaseAdmin
+      .from('support_team_members')
+      .select('name, first_name, last_name')
+      .eq('id', supportUserId)
+      .maybeSingle();
+    if (person) {
+      const p = person as { name: string | null; first_name: string | null; last_name: string | null };
+      authorName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim() || p.name || authorName;
+    }
+  } catch { /* best-effort */ }
+
+  const created = msg as { id: string; created_at?: string };
+  const createdAt = created.created_at || new Date().toISOString();
+
+  void broadcastVenueConciergeMessage({
+    venueId,
+    direction: 'outbound',
+    messageId: created.id,
+    body: text,
+    authorName,
+    createdAt,
+  });
+
+  // Email + push the venue so they can reply from their inbox / mobile app.
+  void notifyVenueOfConciergeMessage({ venueId, authorName, bodyPreview: text });
+
+  return NextResponse.json({ ok: true, id: created.id });
 }

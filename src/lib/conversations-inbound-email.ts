@@ -62,6 +62,52 @@ export function buildOwnerReplyToEmail(threadId: string, venueId: string): strin
   return `ownerreply+${threadId}+${sig}@${domain}`;
 }
 
+/** HMAC hex (16 chars) for the per-venue Venue Concierge reply address. */
+export function venueConciergeReplySignature(venueId: string, secret: string): string {
+  return createHmac('sha256', secret).update(`vc|${venueId}`).digest('hex').slice(0, 16);
+}
+
+/**
+ * Reply-To address for a Venue Concierge notification email (concierge → venue).
+ * Local part: vcreply+{venueId}+{sig16}. Per-venue (not per-thread) because the
+ * Venue Concierge channel is a single relationship thread per venue.
+ */
+export function buildVenueConciergeReplyToEmail(venueId: string): string | null {
+  const secret = process.env.CONVERSATIONS_INBOUND_SECRET?.trim();
+  const domain = process.env.CONVERSATIONS_INBOUND_DOMAIN?.trim();
+  if (!secret || !domain) return null;
+  const sig = venueConciergeReplySignature(venueId, secret);
+  return `vcreply+${venueId}+${sig}@${domain}`;
+}
+
+/** Parse the `vcreply+{venueId}+{sig}` local part. */
+export function parseVenueConciergeLocalPart(
+  localPart: string,
+): { venueId: string; sig: string } | null {
+  const parts = localPart.split('+');
+  if (parts.length !== 3 || parts[0] !== 'vcreply') return null;
+  const venueId = parts[1];
+  const sig = parts[2];
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(venueId)) return null;
+  if (!/^[a-f0-9]{16}$/i.test(sig)) return null;
+  return { venueId, sig: sig.toLowerCase() };
+}
+
+/** Verify a Venue Concierge reply signature. */
+export function verifyVenueConciergeSignature(venueId: string, sig: string): boolean {
+  const secret = process.env.CONVERSATIONS_INBOUND_SECRET?.trim();
+  if (!secret) return false;
+  const expected = venueConciergeReplySignature(venueId, secret);
+  try {
+    const a = hexToBuf(expected);
+    const b = hexToBuf(sig.toLowerCase());
+    if (!a || !b || a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
 export function parseReplyLocalPart(
   localPart: string,
 ): { threadId: string; sig: string } | null {
@@ -209,6 +255,7 @@ export function pickReplyRoutingAddressFromInboundEmail(
       parseReplyLocalPart(local) ||
       parseVenueDirectLocalPart(local) ||
       parseOwnerReplyLocalPart(local) ||
+      parseVenueConciergeLocalPart(local) ||
       extraLocalPartMatch?.(local)
     ) {
       return raw.trim();
@@ -455,7 +502,7 @@ export async function insertInboundOwnerReplyEmail(params: {
   const ownerEmails = [v?.email, v?.notification_email]
     .filter(Boolean)
     .map((e) => (e as string).trim().toLowerCase());
-  let isOwner = ownerEmails.some((e) => e === fromNorm);
+  const isOwner = ownerEmails.some((e) => e === fromNorm);
   let memberId: string | null = null;
   if (!isOwner) {
     const { data: members } = await supabaseAdmin
@@ -759,4 +806,95 @@ export async function insertInboundVenueDirectEmail(params: {
     messageId: (inserted as { id: string }).id,
     venueCustomerId: t.venue_customer_id,
   };
+}
+
+/**
+ * Inbound handler for a venue owner/team member replying to their Venue
+ * Concierge notification email (signed `vcreply+{venueId}+{sig}@` address).
+ * Inserts their reply into the venue's general concierge thread as a venue-side
+ * message so it shows up for the concierge team. The HMAC-signed address is the
+ * security boundary; we still tag the strongest sender match we can find.
+ */
+export async function insertInboundVenueConciergeEmail(params: {
+  venueId: string;
+  fromEmail: string;
+  fromName: string | null;
+  bodyText: string;
+}): Promise<{ ok: boolean; inserted?: boolean; error?: string; messageId?: string }> {
+  const { venueId, fromEmail, fromName, bodyText } = params;
+  const body = (bodyText ?? '').trim();
+  if (!body) return { ok: true, inserted: false };
+
+  const fromNorm = fromEmail.trim().toLowerCase();
+  const { data: venueRow } = await supabaseAdmin
+    .from('venues')
+    .select('id, name, email, notification_email')
+    .eq('id', venueId)
+    .maybeSingle();
+  if (!venueRow) return { ok: false, error: 'venue_not_found' };
+  const v = venueRow as { name?: string | null; email?: string | null; notification_email?: string | null };
+
+  const ownerEmails = [v.email, v.notification_email]
+    .filter(Boolean)
+    .map((e) => (e as string).trim().toLowerCase());
+  let matchedLabel: string | null = null;
+  if (ownerEmails.some((e) => e === fromNorm)) {
+    matchedLabel = v.name || 'Venue';
+  } else {
+    const { data: members } = await supabaseAdmin
+      .from('venue_team_members')
+      .select('first_name, last_name, name, email, status')
+      .eq('venue_id', venueId);
+    type MemberRow = { first_name: string | null; last_name: string | null; name: string | null; email: string | null; status: string | null };
+    const matches = ((members ?? []) as MemberRow[]).filter(
+      (x) => x.email && x.email.trim().toLowerCase() === fromNorm,
+    );
+    const m = matches.find((x) => x.status !== 'inactive') ?? matches[0] ?? null;
+    if (m) matchedLabel = [m.first_name, m.last_name].filter(Boolean).join(' ').trim() || m.name || 'Venue';
+  }
+
+  const senderLabel = matchedLabel || fromName?.trim() || v.name || 'Venue';
+
+  const { data: inserted, error: insErr } = await supabaseAdmin
+    .from('venue_concierge_messages')
+    .insert({
+      venue_id: venueId,
+      sender_kind: 'venue',
+      sender_label: senderLabel,
+      body,
+    })
+    .select('id, created_at')
+    .single();
+
+  if (insErr) {
+    console.error('[venue-concierge-inbound] insert', insErr);
+    return { ok: false, error: insErr.message };
+  }
+
+  // Venue is caught up on their own reply.
+  await supabaseAdmin
+    .from('venue_concierge_reads')
+    .upsert(
+      { venue_id: venueId, reader_ref: 'venue', last_read_at: new Date().toISOString() },
+      { onConflict: 'venue_id,reader_ref' },
+    );
+
+  // Live-append for anyone viewing the thread (venue page + admin panel).
+  void (async () => {
+    try {
+      const { broadcastVenueConciergeMessage } = await import('@/lib/realtime/broadcast');
+      await broadcastVenueConciergeMessage({
+        venueId,
+        direction: 'inbound',
+        messageId: (inserted as { id: string }).id,
+        body,
+        authorName: senderLabel,
+        createdAt: (inserted as { created_at?: string }).created_at || new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('[venue-concierge-inbound] broadcast failed', e);
+    }
+  })();
+
+  return { ok: true, inserted: true, messageId: (inserted as { id: string }).id };
 }

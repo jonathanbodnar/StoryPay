@@ -29,6 +29,7 @@ import {
   type NewLeadEvent,
   type PrivateClientMessageEvent,
   type VisitorPingEvent,
+  type VenueConciergeMessageEvent,
 } from './channels';
 
 // ─── HTTP broadcast ─────────────────────────────────────────────────────────
@@ -180,6 +181,12 @@ export async function broadcastAiStateChanged(evt: AiStateChangedEvent): Promise
  *  synced-in SMS reply) so the Private Clients panel updates live. */
 export async function broadcastPrivateClientMessage(evt: PrivateClientMessageEvent): Promise<void> {
   await send(supportChannels.privateClients(), 'message', evt);
+}
+
+/** Broadcast a Venue Concierge message so the venue page + admin panel
+ *  live-append it without a refetch. */
+export async function broadcastVenueConciergeMessage(evt: VenueConciergeMessageEvent): Promise<void> {
+  await send(supportChannels.venueConcierge(evt.venueId), 'message', evt);
 }
 
 /** Broadcast a tag change so the admin context sidebar reflects it without a refresh. */

@@ -10,7 +10,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ConciergeBell, Loader2, Send, RefreshCw } from 'lucide-react';
+import { ConciergeBell, Loader2, Send, RefreshCw, Clock } from 'lucide-react';
+import { useVenueConciergeRealtime } from '@/lib/realtime/use-venue-concierge-realtime';
 
 interface TeamMember {
   id: string;
@@ -47,6 +48,8 @@ export default function VenueConciergePage() {
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [venueId, setVenueId] = useState<string | null>(null);
+  const [sla, setSla] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const loadMessages = useCallback(async () => {
@@ -55,11 +58,20 @@ export default function VenueConciergePage() {
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || `Failed (${r.status})`);
       setMessages((d.messages ?? []) as Message[]);
+      if (typeof d.venueId === 'string') setVenueId(d.venueId);
+      if (d.sla && typeof d.sla.label === 'string') setSla(d.sla.label);
       window.dispatchEvent(new Event('storypay:venue-concierge-unread'));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     }
   }, []);
+
+  const { otherOnline, otherTyping, notifyTyping } = useVenueConciergeRealtime({
+    venueId,
+    side: 'venue',
+    self: venueId ? { id: venueId, name: 'Your team' } : null,
+    onMessage: () => { void loadMessages(); },
+  });
 
   const loadTeam = useCallback(async () => {
     try {
@@ -107,19 +119,33 @@ export default function VenueConciergePage() {
   return (
     <div className="flex flex-col gap-5">
       {/* Header */}
-      <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-heading text-2xl text-gray-900 inline-flex items-center gap-2">
-          <ConciergeBell size={20} className="text-violet-700" />
+          <ConciergeBell size={20} className="text-gray-900" />
           Venue Concierge
         </h1>
+        {sla && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600">
+            <Clock size={12} className="text-gray-400" />
+            Typically replies in {sla}
+          </span>
+        )}
       </div>
 
       {/* Meet your concierge team */}
       {team.length > 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-            Your concierge team
-          </p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Your concierge team
+            </p>
+            {otherOnline && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                Concierge online
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap gap-4">
             {team.map((m) => (
               <div key={m.id} className="flex items-center gap-3">
@@ -127,13 +153,13 @@ export default function VenueConciergePage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={m.avatarUrl} alt={m.name} className="h-10 w-10 rounded-full object-cover" />
                 ) : (
-                  <div className="h-10 w-10 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-sm font-semibold">
+                  <div className="h-10 w-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-semibold">
                     {initials(m.name)}
                   </div>
                 )}
                 <div>
                   <p className="text-sm font-semibold text-gray-900 leading-tight">{m.name}</p>
-                  <p className="text-[11px] font-medium text-violet-600">{m.roleLabel}</p>
+                  <p className="text-[11px] font-medium text-gray-500">{m.roleLabel}</p>
                 </div>
               </div>
             ))}
@@ -164,7 +190,7 @@ export default function VenueConciergePage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={m.authorAvatar} alt={m.authorName} className="h-8 w-8 shrink-0 rounded-full object-cover" />
                   ) : (
-                    <div className="h-8 w-8 shrink-0 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-[11px] font-semibold">
+                    <div className="h-8 w-8 shrink-0 rounded-full bg-gray-900 text-white flex items-center justify-center text-[11px] font-semibold">
                       {initials(m.authorName)}
                     </div>
                   )
@@ -173,7 +199,7 @@ export default function VenueConciergePage() {
                   <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap break-words ${
                     m.fromConcierge
                       ? 'bg-gray-100 text-gray-900 rounded-tl-sm'
-                      : 'bg-violet-600 text-white rounded-tr-sm'
+                      : 'bg-gray-900 text-white rounded-tr-sm'
                   }`}>
                     {m.body}
                   </div>
@@ -186,6 +212,17 @@ export default function VenueConciergePage() {
           )}
         </div>
 
+        {otherTyping && (
+          <div className="px-4 py-1.5 text-xs text-gray-500 border-t border-gray-100 inline-flex items-center gap-1.5">
+            <span className="flex gap-0.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '120ms' }} />
+              <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '240ms' }} />
+            </span>
+            Concierge is typing…
+          </div>
+        )}
+
         {error && (
           <div className="px-4 py-1.5 text-xs text-red-600 border-t border-red-100 bg-red-50">{error}</div>
         )}
@@ -194,7 +231,7 @@ export default function VenueConciergePage() {
         <div className="border-t border-gray-100 p-3 flex items-end gap-2">
           <textarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); notifyTyping(); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -209,7 +246,7 @@ export default function VenueConciergePage() {
             type="button"
             onClick={() => void send()}
             disabled={sending || !draft.trim()}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
           >
             {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             Send

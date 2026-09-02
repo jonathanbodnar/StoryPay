@@ -12,6 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSessionUser } from '@/lib/session';
+import { computeConciergeSla } from '@/lib/venue-concierge-sla';
+import { broadcastVenueConciergeMessage } from '@/lib/realtime/broadcast';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -79,7 +81,9 @@ export async function GET() {
       { onConflict: 'venue_id,reader_ref' },
     );
 
-  return NextResponse.json({ messages });
+  const sla = await computeConciergeSla(user.venueId).catch(() => ({ label: null, samples: 0 }));
+
+  return NextResponse.json({ messages, venueId: user.venueId, sla });
 }
 
 export async function POST(req: NextRequest) {
@@ -120,5 +124,15 @@ export async function POST(req: NextRequest) {
       { onConflict: 'venue_id,reader_ref' },
     );
 
-  return NextResponse.json({ ok: true, id: (msg as { id: string }).id });
+  const created = msg as { id: string; created_at?: string };
+  void broadcastVenueConciergeMessage({
+    venueId: user.venueId,
+    direction: 'inbound',
+    messageId: created.id,
+    body: text,
+    authorName: senderLabel,
+    createdAt: created.created_at || new Date().toISOString(),
+  });
+
+  return NextResponse.json({ ok: true, id: created.id });
 }

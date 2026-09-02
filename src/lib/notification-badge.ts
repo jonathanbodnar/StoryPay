@@ -72,6 +72,31 @@ export async function getConciergeUnread(venueId: string, memberId?: string | nu
 }
 
 /**
+ * Unread count for the general Venue Concierge channel (migration 211) — the
+ * $499 add-on relationship thread, distinct from the per-contact venue_direct
+ * concierge messages counted by getConciergeUnread. Counts concierge-authored
+ * messages newer than the venue's own read cursor.
+ */
+export async function getVenueConciergeChannelUnread(venueId: string): Promise<number> {
+  const { data: readRow } = await supabaseAdmin
+    .from('venue_concierge_reads')
+    .select('last_read_at')
+    .eq('venue_id', venueId)
+    .eq('reader_ref', 'venue')
+    .maybeSingle();
+  const lastReadAt = (readRow as { last_read_at?: string } | null)?.last_read_at ?? null;
+
+  let q = supabaseAdmin
+    .from('venue_concierge_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('venue_id', venueId)
+    .eq('sender_kind', 'concierge');
+  if (lastReadAt) q = q.gt('created_at', lastReadAt);
+  const { count } = await q;
+  return count ?? 0;
+}
+
+/**
  * Best-effort badge total to stamp on a native push at send time.
  * Native push toggles are venue-wide (not per-team-member — see
  * owner-notifications.ts), so every device on the venue gets the same push
@@ -84,9 +109,10 @@ export async function getConciergeUnread(venueId: string, memberId?: string | nu
  * self-corrects to the fully accurate count almost immediately.
  */
 export async function getServerBadgeCount(venueId: string): Promise<number> {
-  const [conversations, concierge] = await Promise.all([
+  const [conversations, concierge, venueConcierge] = await Promise.all([
     getConversationsUnread(venueId, 'owner').catch(() => 0),
     getConciergeUnread(venueId, null).catch(() => 0),
+    getVenueConciergeChannelUnread(venueId).catch(() => 0),
   ]);
-  return conversations + concierge;
+  return conversations + concierge + venueConcierge;
 }
