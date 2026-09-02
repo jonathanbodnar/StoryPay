@@ -60,6 +60,8 @@ interface SidebarProps {
   isLegacyPlan?: boolean;
   /** True when the venue is on the free ($0) plan. */
   isFreePlan?: boolean;
+  /** True when the venue has the Venue Concierge add-on (or plan bundles it). */
+  hasConciergeAddon?: boolean;
 }
 
 const topMenuItems: NavItem[] = [
@@ -67,6 +69,7 @@ const topMenuItems: NavItem[] = [
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
+  { label: 'Venue Concierge', href: '/dashboard/venue-concierge', icon: Gem, navId: 'nav_venue_concierge' },
 ];
 
 const middleMenuItems: NavItem[] = [];
@@ -138,6 +141,7 @@ const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
   'nav_main_calendar',
   'nav_main_leads',
   'nav_main_help',
+  'nav_venue_concierge',
   // Listing — desktop-only subpages hidden on mobile
   'nav_listing_dashboard',
   'nav_listing_analytics',
@@ -185,6 +189,7 @@ export default function Sidebar({
   allowedNavIds = null,
   isLegacyPlan = false,
   isFreePlan = false,
+  hasConciergeAddon = false,
 }: SidebarProps) {
   const isOwner = role === 'owner';
   const isAdmin = role === 'owner' || role === 'admin';
@@ -225,6 +230,9 @@ export default function Sidebar({
   // mark it accessible here and avoid the lock icon + upgrade modal.
   const navOk = (navId: string) => {
     if (navId === 'nav_settings_billing') return true;
+    // Venue Concierge is add-on-gated, independent of plan nav permissions —
+    // locked for everyone without the add-on (including legacy/full-access).
+    if (navId === 'nav_venue_concierge') return hasConciergeAddon;
     // Free-tier items are always locked regardless of nav_permissions in the DB.
     if (isFreePlan && FREE_TIER_LOCKED_NAV_IDS.has(navId)) return false;
     return allowedNavIds === null || allowedNavIds.includes(navId);
@@ -241,6 +249,7 @@ export default function Sidebar({
   const [leadsUnread, setLeadsUnread] = useState(0);
   const [updatesUnread, setUpdatesUnread] = useState(0);
   const [conciergeUnread, setConciergeUnread] = useState(0);
+  const [vcUnread, setVcUnread] = useState(0);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null); // null = loading
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   /** Locked-feature upgrade modal (opened when a locked menu item is clicked). */
@@ -308,6 +317,16 @@ export default function Sidebar({
       })
       .catch(() => {});
   }, []);
+
+  const refreshVcUnread = useCallback(() => {
+    if (!hasConciergeAddon) return;
+    void fetch('/api/venue-concierge/unread')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { count?: number } | null) => {
+        if (d && typeof d.count === 'number') setVcUnread(d.count);
+      })
+      .catch(() => {});
+  }, [hasConciergeAddon]);
 
   useEffect(() => {
     refreshConvUnread();
@@ -389,6 +408,25 @@ export default function Sidebar({
       return () => clearTimeout(t);
     }
   }, [pathname, refreshConciergeUnread]);
+
+  // Venue Concierge (general channel) unread badge.
+  useEffect(() => {
+    refreshVcUnread();
+    const t = setInterval(refreshVcUnread, 45000);
+    const onEvt = () => refreshVcUnread();
+    window.addEventListener('storypay:venue-concierge-unread', onEvt);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('storypay:venue-concierge-unread', onEvt);
+    };
+  }, [refreshVcUnread]);
+
+  useEffect(() => {
+    if (pathname.startsWith('/dashboard/venue-concierge')) {
+      const t = setTimeout(refreshVcUnread, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [pathname, refreshVcUnread]);
 
   // Fetch payments active status once on mount (and after onboarding completes).
   const refreshPaymentsActive = useCallback(() => {
@@ -659,10 +697,12 @@ export default function Sidebar({
       const isConversations = item.href === '/dashboard/conversations';
       const isUpdates = item.href === '/dashboard/updates';
       const isConcierge = item.href === '/dashboard/concierge';
+      const isVenueConcierge = item.href === '/dashboard/venue-concierge';
       const isLeads = item.href === '/dashboard/leads';
       const showConvBadge = isConversations && convUnread > 0;
       const showUpdatesBadge = isUpdates && updatesUnread > 0;
       const showConciergeBadge = isConcierge && conciergeUnread > 0;
+      const showVcBadge = isVenueConcierge && vcUnread > 0;
       const showLeadsBadge = isLeads && leadsUnread > 0;
       const badgeCount = showConvBadge
         ? convUnread
@@ -670,10 +710,12 @@ export default function Sidebar({
           ? updatesUnread
           : showConciergeBadge
             ? conciergeUnread
-            : showLeadsBadge
-              ? leadsUnread
-              : 0;
-      const showBadge = showConvBadge || showUpdatesBadge || showConciergeBadge || showLeadsBadge;
+            : showVcBadge
+              ? vcUnread
+              : showLeadsBadge
+                ? leadsUnread
+                : 0;
+      const showBadge = showConvBadge || showUpdatesBadge || showConciergeBadge || showVcBadge || showLeadsBadge;
       const locked = !navOk(item.navId);
       // Locked items can't be active; their grey style overrides the
       // selected highlight even on the route they "would" match.

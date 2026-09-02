@@ -15,12 +15,24 @@ import { LockedFeatureOverlay } from '@/components/LockedFeatureView';
  */
 export function DirectoryRouteGuard({
   allowedNavIds,
+  hasConciergeAddon = false,
   children,
 }: {
   allowedNavIds: string[] | null;
+  hasConciergeAddon?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+
+  // Venue Concierge is add-on-gated (not plan-gated), so it must be enforced
+  // even for legacy/full-access venues that otherwise bypass plan gating.
+  if (pathname.startsWith('/dashboard/venue-concierge') && !hasConciergeAddon) {
+    return (
+      <LockedFeatureOverlay featureName="Venue Concierge" navId="nav_venue_concierge">
+        {children}
+      </LockedFeatureOverlay>
+    );
+  }
 
   if (allowedNavIds === null) return <>{children}</>;
 

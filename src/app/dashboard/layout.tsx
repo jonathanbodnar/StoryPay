@@ -30,7 +30,7 @@ export default async function DashboardLayout({
  // don't hit the venues table 3 times per page render.
  const { data: venueRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id')
+   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge')
    .eq('id', user.venueId)
    .maybeSingle();
 
@@ -61,6 +61,26 @@ export default async function DashboardLayout({
  const billingRow = venueRow;
  const directoryBillingPending =
    user.isAdmin && billingRow?.directory_subscription_status === 'pending_payment';
+
+ // Venue Concierge is gated by the concierge add-on. It's granted when the
+ // venue is on a legacy/full-access plan, has toggled the add-on, or their
+ // plan bundles it (addon_concierge_included). Kept lightweight: the plan
+ // lookup only runs for venues not already entitled.
+ let hasConciergeAddon =
+   navAccess.isLegacyPlan ||
+   Boolean((venueRow as { directory_addon_concierge?: boolean | null } | null)?.directory_addon_concierge);
+ if (!hasConciergeAddon) {
+   const planId = (venueRow as { directory_plan_id?: string | null } | null)?.directory_plan_id ?? null;
+   if (planId) {
+     const { data: plan } = await supabaseAdmin
+       .from('directory_plans')
+       .select('feature_flags')
+       .eq('id', planId)
+       .maybeSingle();
+     const ff = ((plan as { feature_flags?: Record<string, boolean> | null } | null)?.feature_flags ?? {}) as Record<string, boolean>;
+     if (ff.addon_concierge_included) hasConciergeAddon = true;
+   }
+ }
 
  // ── Trial state ───────────────────────────────────────────────────────────
  // We compute trial status from directory_trial_ends_at at request time (there
@@ -144,6 +164,7 @@ export default async function DashboardLayout({
  allowedNavIds={navAccess.allowedNavIds}
  isLegacyPlan={navAccess.isLegacyPlan}
  isFreePlan={navAccess.isFreePlan}
+ hasConciergeAddon={hasConciergeAddon}
 directoryBillingPending={directoryBillingPending}
 trialCountdown={showTrialCountdown}
  trialDaysRemaining={trialDaysRemaining}

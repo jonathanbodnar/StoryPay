@@ -207,6 +207,13 @@ const FEATURE_OUTCOMES: Record<string, FeatureOutcome> = {
     outcome:
       'Invite staff as Owner, Admin, or Member. Each role sees exactly what they need. Hide revenue data from anyone who shouldn\'t see it.',
   },
+  nav_venue_concierge: {
+    headline: 'A real team behind your venue',
+    outcome:
+      'Message the StoryVenue concierge team directly — get help with onboarding, A2P, ads, and day-to-day questions in one private thread, with a team that knows your venue by name.',
+    upgradeNote:
+      'Included with the Venue Concierge add-on.',
+  },
   nav_listing_dashboard: {
     headline: 'Get found by couples searching right now',
     outcome:
@@ -239,9 +246,9 @@ export interface LockedFeatureBodyProps {
 function LockedFeatureBody({ featureName, navId, onNavigate }: LockedFeatureBodyProps) {
   const copy = getOutcome(navId);
   const [demoOpen, setDemoOpen] = useState(false);
-  // AI Concierge is a demo-led, higher-tier feature — funnel to "schedule a
-  // demo" rather than a self-serve upgrade.
-  const isDemoLed = navId === 'nav_marketing_ai_concierge';
+  // AI Concierge and Venue Concierge are demo-led, higher-tier features —
+  // funnel to "schedule a demo" rather than a self-serve upgrade.
+  const isDemoLed = navId === 'nav_marketing_ai_concierge' || navId === 'nav_venue_concierge';
 
   return (
     <div className="text-center">
