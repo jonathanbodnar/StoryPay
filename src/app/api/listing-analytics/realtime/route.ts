@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { EVENT_LABELS, countryFlag as flag } from '@/lib/listing-events';
+import { ensureVenueCoordinates } from '@/lib/venue-geocode';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,15 +19,14 @@ export async function GET() {
   const since24h = new Date(now - 24 * 60 * 60 * 1000).toISOString();
 
   // Venue's own coordinates — lets the client keep the live visitor map
-  // permanently centered on this venue (~100mi radius) instead of jumping
-  // around based on where visitors happen to be.
-  const { data: venueRow } = await supabaseAdmin
-    .from('venues')
-    .select('lat, lng')
-    .eq('id', venueId)
-    .single();
-  const venueLat = venueRow?.lat != null ? Number(venueRow.lat) : null;
-  const venueLng = venueRow?.lng != null ? Number(venueRow.lng) : null;
+  // framed on this venue's local (~100mi) area instead of jumping around
+  // based on where visitors happen to be. ensureVenueCoordinates self-heals
+  // venues that only have a city/state on file (geocodes + persists once), so
+  // EVERY venue gets a zoomed-in local map, not just ones set up via the
+  // address autocomplete.
+  const venueCoords = await ensureVenueCoordinates(venueId);
+  const venueLat = venueCoords?.lat ?? null;
+  const venueLng = venueCoords?.lng ?? null;
 
   // Try with latitude/longitude first; fall back if migration 057 hasn't
   // been applied yet (column doesn't exist -> Postgres error 42703).
