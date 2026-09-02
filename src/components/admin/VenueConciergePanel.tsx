@@ -8,8 +8,8 @@
  * channel (see /dashboard/venue-concierge).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ConciergeBell, Loader2, Send, RefreshCw, Inbox } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ConciergeBell, Loader2, Send, RefreshCw, Inbox, Search, X } from 'lucide-react';
 import { useVenueConciergeRealtime } from '@/lib/realtime/use-venue-concierge-realtime';
 
 interface ThreadRow {
@@ -29,10 +29,45 @@ interface Message {
   authorName: string;
 }
 
+interface SearchMatch {
+  id: string;
+  body: string;
+  createdAt: string;
+  fromConcierge: boolean;
+  authorName: string;
+}
+
+interface SearchVenue {
+  venueId: string;
+  venueName: string;
+  matches: SearchMatch[];
+}
+
 function timeLabel(iso: string): string {
   try {
     return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   } catch { return iso; }
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Wrap matched query tokens in <mark> for the search preview. */
+function Highlighted({ text, tokens }: { text: string; tokens: string[] }) {
+  const parts = useMemo(() => {
+    const clean = tokens.filter(Boolean).map(escapeRegExp);
+    if (clean.length === 0) return [{ t: text, hit: false }];
+    const re = new RegExp(`(${clean.join('|')})`, 'ig');
+    return text.split(re).map((t) => ({ t, hit: clean.some((c) => new RegExp(`^${c}$`, 'i').test(t)) }));
+  }, [text, tokens]);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.hit ? <mark key={i} className="bg-amber-200 text-gray-900 rounded px-0.5">{p.t}</mark> : <span key={i}>{p.t}</span>,
+      )}
+    </>
+  );
 }
 
 export function VenueConciergePanel() {
@@ -44,7 +79,14 @@ export function VenueConciergePanel() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchVenue[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [focusMessageId, setFocusMessageId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const focusPendingRef = useRef(false);
+  const searchTokens = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query]);
 
   const loadThreads = useCallback(async () => {
     try {
@@ -84,8 +126,46 @@ export function VenueConciergePanel() {
   }, [activeVenue, loadMessages]);
 
   useEffect(() => {
+    // Don't yank to the bottom when we're about to focus a searched message.
+    if (focusPendingRef.current) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages]);
+
+  // Debounced global search across all concierge conversations.
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) { setSearchResults(null); setSearching(false); return; }
+    setSearching(true);
+    const t = setTimeout(() => {
+      fetch(`/api/admin/venue-concierge/search?q=${encodeURIComponent(q)}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { results?: SearchVenue[] } | null) => setSearchResults(d?.results ?? []))
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearching(false));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // After a searched message's thread loads, scroll to + briefly highlight it.
+  useEffect(() => {
+    if (!focusMessageId) return;
+    const el = document.getElementById(`vc-msg-${focusMessageId}`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setHighlightId(focusMessageId);
+    setFocusMessageId(null);
+    focusPendingRef.current = false;
+    const t = setTimeout(() => setHighlightId(null), 2600);
+    return () => clearTimeout(t);
+  }, [messages, focusMessageId]);
+
+  const openMatch = useCallback((venueId: string, messageId: string) => {
+    focusPendingRef.current = true;
+    setFocusMessageId(messageId);
+    setActiveVenue(venueId);
+    setThreads((prev) => prev.map((t) => (t.venueId === venueId ? { ...t, unreadCount: 0 } : t)));
+    setQuery('');
+  }, []);
 
   const openVenue = useCallback((venueId: string) => {
     setActiveVenue(venueId);
@@ -143,48 +223,114 @@ export function VenueConciergePanel() {
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4" style={{ minHeight: 520 }}>
         {/* Thread list */}
         <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
-            <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">Venues</span>
-            <button type="button" onClick={() => void loadThreads()} className="text-gray-400 hover:text-gray-700">
-              <RefreshCw size={13} className={loadingThreads ? 'animate-spin' : ''} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
-            {loadingThreads ? (
-              <div className="flex items-center justify-center py-10 text-sm text-gray-500 gap-2">
-                <Loader2 size={14} className="animate-spin" /> Loading…
-              </div>
-            ) : threads.length === 0 ? (
-              <div className="px-4 py-10 text-center text-xs text-gray-500">
-                <Inbox size={24} className="mx-auto text-gray-300 mb-2" />
-                No conversations yet.
-              </div>
-            ) : (
-              threads.map((t) => (
+          {/* Search box */}
+          <div className="p-2 border-b border-gray-100">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search messages, venue, name, email, phone, date…"
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-8 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none"
+              />
+              {query && (
                 <button
-                  key={t.venueId}
                   type="button"
-                  onClick={() => openVenue(t.venueId)}
-                  className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 ${activeVenue === t.venueId ? 'bg-gray-100' : ''}`}
+                  onClick={() => setQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
                 >
-                  <div className="flex items-center gap-2">
-                    <p className={`text-sm truncate ${t.unreadCount > 0 ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'}`}>
-                      {t.venueName}
-                    </p>
-                    {t.unreadCount > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
-                        {t.unreadCount}
-                      </span>
-                    )}
-                    <span className="ml-auto text-[10px] text-gray-400 shrink-0">{timeLabel(t.latestAt)}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">
-                    {t.latestFromVenue ? '' : 'You: '}{t.latestBody}
-                  </p>
+                  <X size={14} />
                 </button>
-              ))
-            )}
+              )}
+            </div>
           </div>
+
+          {searchResults !== null ? (
+            /* Search results */
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+              {searching ? (
+                <div className="flex items-center justify-center py-10 text-sm text-gray-500 gap-2">
+                  <Loader2 size={14} className="animate-spin" /> Searching…
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="px-4 py-10 text-center text-xs text-gray-500">
+                  <Search size={22} className="mx-auto text-gray-300 mb-2" />
+                  No matches for “{query.trim()}”.
+                </div>
+              ) : (
+                searchResults.map((r) => (
+                  <div key={r.venueId} className="py-1.5">
+                    <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                      {r.venueName}
+                    </p>
+                    {r.matches.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => openMatch(r.venueId, m.id)}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-medium text-gray-600 truncate">
+                            {m.fromConcierge ? m.authorName : `${m.authorName} (venue)`}
+                          </span>
+                          <span className="ml-auto text-[10px] text-gray-400 shrink-0">{timeLabel(m.createdAt)}</span>
+                        </div>
+                        <p className="text-xs text-gray-600 line-clamp-2 mt-0.5">
+                          <Highlighted text={m.body} tokens={searchTokens} />
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+                <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">Venues</span>
+                <button type="button" onClick={() => void loadThreads()} className="text-gray-400 hover:text-gray-700">
+                  <RefreshCw size={13} className={loadingThreads ? 'animate-spin' : ''} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+                {loadingThreads ? (
+                  <div className="flex items-center justify-center py-10 text-sm text-gray-500 gap-2">
+                    <Loader2 size={14} className="animate-spin" /> Loading…
+                  </div>
+                ) : threads.length === 0 ? (
+                  <div className="px-4 py-10 text-center text-xs text-gray-500">
+                    <Inbox size={24} className="mx-auto text-gray-300 mb-2" />
+                    No conversations yet.
+                  </div>
+                ) : (
+                  threads.map((t) => (
+                    <button
+                      key={t.venueId}
+                      type="button"
+                      onClick={() => openVenue(t.venueId)}
+                      className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 ${activeVenue === t.venueId ? 'bg-gray-100' : ''}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <p className={`text-sm truncate ${t.unreadCount > 0 ? 'font-bold text-gray-900' : 'font-semibold text-gray-700'}`}>
+                          {t.venueName}
+                        </p>
+                        {t.unreadCount > 0 && (
+                          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                            {t.unreadCount}
+                          </span>
+                        )}
+                        <span className="ml-auto text-[10px] text-gray-400 shrink-0">{timeLabel(t.latestAt)}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                        {t.latestFromVenue ? '' : 'You: '}{t.latestBody}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Thread view */}
@@ -213,13 +359,13 @@ export function VenueConciergePanel() {
                   <div className="flex items-center justify-center h-full text-xs text-gray-400">No messages yet.</div>
                 ) : (
                   messages.map((m) => (
-                    <div key={m.id} className={`flex ${m.fromConcierge ? 'flex-row-reverse' : ''}`}>
+                    <div key={m.id} id={`vc-msg-${m.id}`} className={`flex ${m.fromConcierge ? 'flex-row-reverse' : ''}`}>
                       <div className={`max-w-[72%] ${m.fromConcierge ? 'text-right' : ''}`}>
-                        <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap break-words ${
+                        <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap break-words transition-shadow ${
                           m.fromConcierge
                             ? 'bg-gray-900 text-white rounded-tr-sm'
                             : 'bg-gray-100 text-gray-900 rounded-tl-sm'
-                        }`}>
+                        } ${highlightId === m.id ? 'ring-2 ring-amber-400 ring-offset-1' : ''}`}>
                           {m.body}
                         </div>
                         <p className="text-[10px] text-gray-400 mt-1">{m.authorName} · {timeLabel(m.createdAt)}</p>
