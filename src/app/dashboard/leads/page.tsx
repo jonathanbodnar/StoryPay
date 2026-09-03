@@ -23,6 +23,7 @@ import { getClientCache, setClientCache } from '@/lib/client-cache';
 import { TimezoneSelect } from '@/components/TimezoneSelect';
 import { DEFAULT_VENUE_TIMEZONE, resolveVenueTimezone, wallClockToUtc } from '@/lib/venue-timezone';
 import { effectiveWinProbability } from '@/lib/pipelines';
+import { bookingTimelineOptions } from '@/lib/booking-timeline';
 import { toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -2462,12 +2463,9 @@ function LeadDrawer({
                 className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 focus:border-gray-400 focus:outline-none"
               >
                 <option value="">— not answered —</option>
-                {[
-                  'Immediately — within the next month',
-                  'Soon — 1 to 3 months',
-                  'Planning ahead — 3 to 6 months',
-                  'Just exploring — 6+ months out',
-                ].map((o) => <option key={o} value={o}>{o}</option>)}
+                {bookingTimelineOptions(lead.booking_timeline).map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
               </select>
             </div>
 

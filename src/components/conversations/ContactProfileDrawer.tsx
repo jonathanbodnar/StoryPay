@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { classNames, formatCents, formatDate, formatDateTime, getStatusColor, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
+import { bookingTimelineLabel } from '@/lib/booking-timeline';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface VenueCustomer {
@@ -854,7 +855,7 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
                     <div className="rounded-xl border border-gray-200 bg-white p-4">
                       <h4 className="mb-3 text-sm font-semibold text-gray-900">Inquiry Questions</h4>
                       <div className="space-y-3 text-sm">
-                        {inquiry.booking_timeline && <div><p className="text-[11px] text-gray-400 mb-0.5">Touring timeline</p><p className="text-gray-700">{inquiry.booking_timeline}</p></div>}
+                        {inquiry.booking_timeline && <div><p className="text-[11px] text-gray-400 mb-0.5">Touring timeline</p><p className="text-gray-700">{bookingTimelineLabel(inquiry.booking_timeline)}</p></div>}
                         {inquiry.venue_matters && <div><p className="text-[11px] text-gray-400 mb-0.5">What matters most</p><p className="text-gray-700">{inquiry.venue_matters}</p></div>}
                       </div>
                     </div>

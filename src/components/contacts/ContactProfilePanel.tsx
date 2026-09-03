@@ -17,6 +17,7 @@ import VenueDirectPanel from '@/components/dashboard/VenueDirectPanel';
 import ContactConversationsTab from '@/components/contacts/ContactConversationsTab';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
+import { bookingTimelineOptions } from '@/lib/booking-timeline';
 import { isNativeApp } from '@/lib/platform';
 import { getClientCache, setClientCache } from '@/lib/client-cache';
 
@@ -1576,10 +1577,9 @@ export default function ContactProfilePanel({
                     className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
                   >
                     <option value="">— not answered —</option>
-                    <option value="Immediately — within the next month">Immediately — within the next month</option>
-                    <option value="Soon — 1 to 3 months">Soon — 1 to 3 months</option>
-                    <option value="Planning ahead — 3 to 6 months">Planning ahead — 3 to 6 months</option>
-                    <option value="Just exploring — 6+ months out">Just exploring — 6+ months out</option>
+                    {bookingTimelineOptions(inquiryForm.booking_timeline).map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="sm:col-span-2">

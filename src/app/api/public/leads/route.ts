@@ -38,6 +38,7 @@ interface LeadPayload {
   last_name?: string;
   email?: string;
   phone?: string;
+  guest_count?: number;
   booking_timeline?: string;
   venue_matters?: string;
   message?: string;
@@ -157,6 +158,14 @@ export async function POST(request: NextRequest) {
   const email = (payload.email ?? '').trim().toLowerCase();
   const phone = (payload.phone ?? '').trim();
 
+  // Guest count from the listing form — auto-fills the contact's Event Details.
+  const guestCount =
+    typeof payload.guest_count === 'number' &&
+    Number.isFinite(payload.guest_count) &&
+    payload.guest_count > 0
+      ? Math.round(payload.guest_count)
+      : null;
+
   if (!firstName || !lastName || !email || !isEmail(email) || !phone) {
     return NextResponse.json(
       { error: 'first_name, last_name, phone, and valid email are required' },
@@ -208,6 +217,9 @@ export async function POST(request: NextRequest) {
     name:                   name || `${firstName} ${lastName}`.trim(),
     email,
     phone:                  phone || null,
+    // Guest count lives on the lead too (not just venue_customers) so it shows
+    // on the leads Kanban/detail and feeds booking analytics.
+    ...(guestCount != null ? { guest_count: guestCount } : {}),
     booking_timeline:       payload.booking_timeline || null,
     venue_matters:          payload.venue_matters   || null,
     message:                payload.message         || null,
@@ -328,6 +340,9 @@ export async function POST(request: NextRequest) {
             first_name:     firstName || null,
             last_name:      lastName  || null,
             phone:          phone || null,
+            // Only set guest_count when the form provided one, so we never
+            // overwrite an existing value on a returning contact with null.
+            ...(guestCount != null ? { guest_count: guestCount } : {}),
             updated_at:     new Date().toISOString(),
           },
           { onConflict: 'venue_id,customer_email' },
@@ -456,7 +471,7 @@ export async function POST(request: NextRequest) {
     email:            lr.email,
     phone:            phone || null,
     wedding_date:     null,
-    guest_count:      null,
+    guest_count:      guestCount,
     message:          payload.message ?? null,
     booking_timeline: payload.booking_timeline ?? null,
     venue_matters:    payload.venue_matters ?? null,
@@ -523,6 +538,7 @@ export async function POST(request: NextRequest) {
             ${row('Name',      `${firstName} ${lastName}`)}
             ${row('Email',     email)}
             ${row('Phone',     phone)}
+            ${guestCount != null ? row('Guest count', String(guestCount)) : ''}
             ${payload.booking_timeline ? row('Touring timeline', payload.booking_timeline) : ''}
             ${payload.venue_matters    ? row('Matters most',      payload.venue_matters)    : ''}
             ${payload.message          ? row('Message',           payload.message)           : ''}
