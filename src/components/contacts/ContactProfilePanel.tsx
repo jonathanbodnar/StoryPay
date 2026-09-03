@@ -17,7 +17,7 @@ import VenueDirectPanel from '@/components/dashboard/VenueDirectPanel';
 import ContactConversationsTab from '@/components/contacts/ContactConversationsTab';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
-import { bookingTimelineOptions, bookingTimelineLabel } from '@/lib/booking-timeline';
+import { bookingTimelineOptions } from '@/lib/booking-timeline';
 import { isNativeApp } from '@/lib/platform';
 import { getClientCache, setClientCache } from '@/lib/client-cache';
 
@@ -213,7 +213,6 @@ export default function ContactProfilePanel({
   const [inquiryError, setInquiryError] = useState('');
 
   // Wedding details edit
-  const [editingWedding, setEditingWedding] = useState(false);
   const [weddingForm,    setWeddingForm]    = useState<{
     wedding_date: string; rehearsal_date: string; guest_count: string;
     coordinator_name: string; coordinator_phone: string;
@@ -222,6 +221,10 @@ export default function ContactProfilePanel({
   }>({ wedding_date: '', rehearsal_date: '', guest_count: '', coordinator_name: '', coordinator_phone: '', ceremony_type: '', wedding_space_id: '', catering_notes: '', booking_timeline: '', venue_matters: '' });
   const [savingWedding,  setSavingWedding]  = useState(false);
   const [weddingError,   setWeddingError]   = useState('');
+  const [weddingSaved,   setWeddingSaved]   = useState(false);
+  // Event Details is always-open/editable — seed the form once per contact so
+  // background refreshes of venueCustomer don't clobber in-progress edits.
+  const weddingSeededRef = useRef<string | null>(null);
 
   // Proposals
   const [proposalSearch, setProposalSearch] = useState('');
@@ -692,22 +695,24 @@ export default function ContactProfilePanel({
   }
 
   // ── Wedding details save ─────────────────────────────────────────────────────
-  function startEditWedding() {
+  // Seed the always-open Event Details form from the contact once it loads.
+  useEffect(() => {
+    const vc = venueCustomer;
+    if (!vc || weddingSeededRef.current === vc.id) return;
+    weddingSeededRef.current = vc.id;
     setWeddingForm({
-      wedding_date:      venueCustomer?.wedding_date      || '',
-      rehearsal_date:    venueCustomer?.rehearsal_date    || '',
-      guest_count:       venueCustomer?.guest_count != null ? String(venueCustomer.guest_count) : '',
-      coordinator_name:  venueCustomer?.coordinator_name  || '',
-      coordinator_phone: venueCustomer?.coordinator_phone || '',
-      ceremony_type:     venueCustomer?.ceremony_type     || '',
-      wedding_space_id:  venueCustomer?.wedding_space_id  || '',
-      catering_notes:    venueCustomer?.catering_notes    || '',
-      booking_timeline:  venueCustomer?.booking_timeline  || '',
-      venue_matters:     venueCustomer?.venue_matters     || '',
+      wedding_date:      vc.wedding_date      || '',
+      rehearsal_date:    vc.rehearsal_date    || '',
+      guest_count:       vc.guest_count != null ? String(vc.guest_count) : '',
+      coordinator_name:  vc.coordinator_name  || '',
+      coordinator_phone: vc.coordinator_phone || '',
+      ceremony_type:     vc.ceremony_type     || '',
+      wedding_space_id:  vc.wedding_space_id  || '',
+      catering_notes:    vc.catering_notes    || '',
+      booking_timeline:  vc.booking_timeline  || '',
+      venue_matters:     vc.venue_matters     || '',
     });
-    setWeddingError('');
-    setEditingWedding(true);
-  }
+  }, [venueCustomer]);
 
   async function saveWedding() {
     setSavingWedding(true);
@@ -734,7 +739,8 @@ export default function ContactProfilePanel({
     if (res.ok) {
       const d = await res.json();
       setVenueCustomer(d);
-      setEditingWedding(false);
+      setWeddingSaved(true);
+      setTimeout(() => setWeddingSaved(false), 2500);
     } else {
       const d = await res.json().catch(() => ({}));
       setWeddingError(d.error || 'Failed to save — please try again');
@@ -1618,81 +1624,67 @@ export default function ContactProfilePanel({
           <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Calendar size={15} /> Event Details</h2>
-              {!editingWedding && (
-                <button onClick={startEditWedding} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {(venueCustomer?.wedding_date || venueCustomer?.guest_count || venueCustomer?.booking_timeline || venueCustomer?.venue_matters) ? 'Edit' : 'Add'}</button>
-              )}
             </div>
-            {editingWedding ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[
-                    { k:'wedding_date',      l:'Event Date',    t:'date' },
-                    { k:'rehearsal_date',    l:'Rehearsal Date',  t:'date' },
-                    { k:'guest_count',       l:'Guest Count',     t:'number' },
-                    { k:'coordinator_name',  l:'Day-of Coordinator Name', t:'text' },
-                    { k:'coordinator_phone', l:'Coordinator Phone',        t:'tel' },
-                  ].map(f => (
-                    <div key={f.k}>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
-                      <input type={f.t} value={weddingForm[f.k as keyof typeof weddingForm]} onChange={e => setWeddingForm(p => ({...p,[f.k]:e.target.value}))}
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
-                    </div>
-                  ))}
-                  <div>
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Event Type</label>
-                    <select value={weddingForm.ceremony_type} onChange={e => setWeddingForm(p => ({...p,ceremony_type:e.target.value}))}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
-                      <option value="">Not set</option>
-                      {CEREMONY_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                    </select>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[
+                  { k:'wedding_date',      l:'Event Date',    t:'date' },
+                  { k:'rehearsal_date',    l:'Rehearsal Date',  t:'date' },
+                  { k:'guest_count',       l:'Guest Count',     t:'number' },
+                  { k:'coordinator_name',  l:'Day-of Coordinator Name', t:'text' },
+                  { k:'coordinator_phone', l:'Coordinator Phone',        t:'tel' },
+                ].map(f => (
+                  <div key={f.k}>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{f.l}</label>
+                    <input type={f.t} value={weddingForm[f.k as keyof typeof weddingForm]} onChange={e => setWeddingForm(p => ({...p,[f.k]:e.target.value}))}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Space</label>
-                    <select value={weddingForm.wedding_space_id} onChange={e => setWeddingForm(p => ({...p,wedding_space_id:e.target.value}))}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
-                      <option value="">Not assigned</option>
-                      {spaces.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Touring Timeline</label>
-                    <select value={weddingForm.booking_timeline} onChange={e => setWeddingForm(p => ({...p,booking_timeline:e.target.value}))}
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
-                      <option value="">— not answered —</option>
-                      {bookingTimelineOptions(weddingForm.booking_timeline).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
-                  </div>
+                ))}
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Event Type</label>
+                  <select value={weddingForm.ceremony_type} onChange={e => setWeddingForm(p => ({...p,ceremony_type:e.target.value}))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                    <option value="">Not set</option>
+                    {CEREMONY_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">What Matters Most</label>
-                  <input type="text" value={weddingForm.venue_matters} onChange={e => setWeddingForm(p => ({...p,venue_matters:e.target.value}))}
-                    placeholder="e.g. outdoor ceremony space, all-inclusive pricing…"
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Space</label>
+                  <select value={weddingForm.wedding_space_id} onChange={e => setWeddingForm(p => ({...p,wedding_space_id:e.target.value}))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                    <option value="">Not assigned</option>
+                    {spaces.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Notes</label>
-                  <textarea value={weddingForm.catering_notes} onChange={e => setWeddingForm(p => ({...p,catering_notes:e.target.value}))} rows={2}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none resize-none" />
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Touring Timeline</label>
+                  <select value={weddingForm.booking_timeline} onChange={e => setWeddingForm(p => ({...p,booking_timeline:e.target.value}))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                    <option value="">— not answered —</option>
+                    {bookingTimelineOptions(weddingForm.booking_timeline).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
                 </div>
-                <EditFooter onCancel={() => setEditingWedding(false)} onSave={saveWedding} saving={savingWedding} error={weddingError} />
               </div>
-            ) : venueCustomer && (venueCustomer.wedding_date || venueCustomer.guest_count || venueCustomer.ceremony_type || venueCustomer.booking_timeline || venueCustomer.venue_matters) ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
-                {venueCustomer.wedding_date && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Event Date</p><p className="text-gray-900 font-medium">{formatDate(venueCustomer.wedding_date)}</p></div>}
-                {venueCustomer.ceremony_type && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Type</p><p className="text-gray-900 font-medium">{CEREMONY_TYPES.find(c => c.value === venueCustomer.ceremony_type)?.label ?? venueCustomer.ceremony_type}</p></div>}
-                {venueCustomer.guest_count && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Guests</p><p className="text-gray-900 font-medium">{venueCustomer.guest_count}</p></div>}
-                {venueCustomer.venue_spaces && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Space</p><p className="text-gray-900 font-medium flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{backgroundColor:venueCustomer.venue_spaces.color}} />{venueCustomer.venue_spaces.name}</p></div>}
-                {venueCustomer.rehearsal_date && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Rehearsal</p><p className="text-gray-900 font-medium">{formatDate(venueCustomer.rehearsal_date)}</p></div>}
-                {venueCustomer.coordinator_name && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Coordinator</p><p className="text-gray-900 font-medium">{venueCustomer.coordinator_name}{venueCustomer.coordinator_phone && <a href={`tel:${venueCustomer.coordinator_phone.replace(/[^\d+]/g, '')}`} className="text-gray-500 font-normal hover:text-gray-900"> · {venueCustomer.coordinator_phone}</a>}</p></div>}
-                {venueCustomer.booking_timeline && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Touring Timeline</p><p className="text-gray-900 font-medium">{bookingTimelineLabel(venueCustomer.booking_timeline)}</p></div>}
-                {venueCustomer.venue_matters && <div className="sm:col-span-2 lg:col-span-4"><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">What Matters Most</p><p className="text-gray-700">{venueCustomer.venue_matters}</p></div>}
-                {venueCustomer.catering_notes && <div className="sm:col-span-2 lg:col-span-4"><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Notes</p><p className="text-gray-700">{venueCustomer.catering_notes}</p></div>}
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">What Matters Most</label>
+                <input type="text" value={weddingForm.venue_matters} onChange={e => setWeddingForm(p => ({...p,venue_matters:e.target.value}))}
+                  placeholder="e.g. outdoor ceremony space, all-inclusive pricing…"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
               </div>
-            ) : (
-              <p className="text-xs text-gray-400">No event details yet.{' '}
-                <button onClick={startEditWedding} className="text-blue-600 hover:underline">Add details</button>
-              </p>
-            )}
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Notes</label>
+                <textarea value={weddingForm.catering_notes} onChange={e => setWeddingForm(p => ({...p,catering_notes:e.target.value}))} rows={2}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none resize-none" />
+              </div>
+              {weddingError && <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle size={12} />{weddingError}</p>}
+              <div className="flex items-center justify-end gap-3 pt-1">
+                {weddingSaved && <span className="text-xs text-emerald-600 flex items-center gap-1"><Check size={12} /> Saved</span>}
+                <button type="button" onClick={saveWedding} disabled={savingWedding || !venueCustomer}
+                  className="rounded-lg px-8 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-50" style={{backgroundColor:'#1b1b1b'}}>
+                  {savingWedding ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* ── Venue Spaces ── */}
