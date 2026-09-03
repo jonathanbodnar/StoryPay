@@ -190,25 +190,35 @@ export default function VenueConciergePage() {
   }, [draft, sending, loadMessages]);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-1 min-h-0 flex-col gap-3 lg:flex-none lg:gap-5">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
         <h1 className="font-heading text-2xl text-gray-900 inline-flex items-center gap-2">
           <ConciergeBell size={20} className="text-gray-900" />
           Venue Concierge
         </h1>
-        {sla && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600">
-            <Clock size={12} className="text-gray-400" />
-            Typically replies in {sla}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {sla && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600">
+              <Clock size={12} className="text-gray-400" />
+              Typically replies in {sla}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => void loadMessages()}
+            title="Refresh"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:text-gray-700"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Meet your concierge team */}
       {team.length > 0 && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="rounded-2xl border border-gray-200 bg-white p-3 lg:p-4 shrink-0">
+          <div className="flex items-center justify-between mb-2.5 lg:mb-3">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
               Your concierge team
             </p>
@@ -219,14 +229,14 @@ export default function VenueConciergePage() {
               </span>
             )}
           </div>
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap gap-x-5 gap-y-3">
             {team.map((m) => (
-              <div key={m.id} className="flex items-center gap-3">
+              <div key={m.id} className="flex items-center gap-2.5">
                 {m.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.avatarUrl} alt={m.name} className="h-10 w-10 rounded-full object-cover" />
+                  <img src={m.avatarUrl} alt={m.name} className="h-9 w-9 rounded-full object-cover" />
                 ) : (
-                  <div className="h-10 w-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-semibold">
+                  <div className="h-9 w-9 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-semibold">
                     {initials(m.name)}
                   </div>
                 )}
@@ -241,7 +251,7 @@ export default function VenueConciergePage() {
       )}
 
       {/* Thread */}
-      <div className="rounded-2xl border border-gray-200 bg-white flex flex-col overflow-hidden" style={{ height: '60vh', minHeight: 380 }}>
+      <div className="rounded-2xl border border-gray-200 bg-white flex flex-col overflow-hidden flex-1 min-h-0 lg:flex-none lg:h-[60vh] lg:min-h-[380px]">
         {/* Search */}
         <div className="border-b border-gray-100 p-2">
           <div className="relative">
@@ -265,7 +275,7 @@ export default function VenueConciergePage() {
         </div>
 
         {searchResults !== null ? (
-          <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-gray-100">
             {searchResults.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <Search size={24} className="text-gray-300 mb-2" />
@@ -293,7 +303,7 @@ export default function VenueConciergePage() {
             )}
           </div>
         ) : (
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
           {loading ? (
             <div className="flex items-center justify-center h-full text-sm text-gray-500 gap-2">
               <Loader2 size={14} className="animate-spin" /> Loading…
@@ -398,7 +408,7 @@ export default function VenueConciergePage() {
       <button
         type="button"
         onClick={() => void loadMessages()}
-        className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
+        className="hidden lg:inline-flex self-start items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
       >
         <RefreshCw size={12} /> Refresh
       </button>
