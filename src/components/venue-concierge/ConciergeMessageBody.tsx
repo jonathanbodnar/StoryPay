@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronRight, ChevronDown, Mail } from 'lucide-react';
-import { parseConciergeMessage } from '@/lib/venue-concierge/message-format';
+import { parseConciergeMessage, tidyEmailText, parseQuoted } from '@/lib/venue-concierge/message-format';
 
 const URL_RE = /(https?:\/\/[^\s<>()]+)/g;
 
@@ -46,7 +46,35 @@ export function ConciergeMessageBody({ body }: { body: string }) {
   const { reply } = useMemo(() => parseConciergeMessage(body), [body]);
   return (
     <div className="text-[13px] leading-relaxed text-gray-900">
-      <Linkified text={reply} />
+      <Linkified text={tidyEmailText(reply)} />
+    </div>
+  );
+}
+
+/** Nested Gmail-style blockquote for the quoted email trail. */
+function QuotedThread({ text }: { text: string }) {
+  const groups = useMemo(() => parseQuoted(text), [text]);
+  return (
+    <div className="space-y-1.5">
+      {groups.map((g, i) => {
+        const isHeader = g.depth === 0 && /^On\b[\s\S]*wrote:/.test(g.text);
+        if (isHeader) {
+          return (
+            <p key={i} className="text-[11px] italic text-gray-400 whitespace-pre-wrap break-words">
+              {g.text}
+            </p>
+          );
+        }
+        return (
+          <div
+            key={i}
+            className={g.depth > 0 ? 'border-l-2 border-gray-200 pl-2.5' : ''}
+            style={g.depth > 1 ? { marginLeft: (g.depth - 1) * 8 } : undefined}
+          >
+            <Linkified text={g.text} className="text-[12px] leading-relaxed text-gray-500" />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -70,7 +98,9 @@ export function ConciergeEmailCard({
 }) {
   const { reply, signature, quoted } = useMemo(() => parseConciergeMessage(body), [body]);
   const [open, setOpen] = useState(false);
-  const preview = (reply || quoted || '').replace(/\s+/g, ' ').trim() || '(empty email)';
+  const replyText = useMemo(() => tidyEmailText(reply), [reply]);
+  const signatureText = useMemo(() => tidyEmailText(signature), [signature]);
+  const preview = (replyText || quoted || '').replace(/\s+/g, ' ').trim() || '(empty email)';
 
   return (
     <div
@@ -97,18 +127,20 @@ export function ConciergeEmailCard({
       </button>
 
       {open ? (
-        <div className="border-t border-gray-100 px-3 py-2.5 space-y-2.5">
-          <Linkified text={reply} className="text-[13px] leading-relaxed text-gray-800" />
-          {signature && (
-            <div className="border-t border-gray-100 pt-2">
-              <Linkified text={signature} className="text-[12px] leading-relaxed text-gray-500" />
+        <div className="border-t border-gray-100 px-3.5 py-3 space-y-3">
+          {replyText && (
+            <Linkified text={replyText} className="block text-[13px] leading-relaxed text-gray-800" />
+          )}
+          {signatureText && (
+            <div className="border-t border-gray-100 pt-2.5">
+              <Linkified text={signatureText} className="block text-[12px] leading-relaxed text-gray-500" />
             </div>
           )}
           {quoted && (
-            <div className="border-t border-gray-100 pt-2">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Quoted thread</p>
-              <div className="max-h-72 overflow-auto rounded-md bg-white border border-gray-100 px-2 py-1.5">
-                <Linkified text={quoted} className="text-[12px] leading-relaxed text-gray-500" />
+            <div className="border-t border-gray-100 pt-2.5">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Quoted thread</p>
+              <div className="max-h-72 overflow-auto rounded-md bg-white border border-gray-100 px-3 py-2">
+                <QuotedThread text={quoted} />
               </div>
             </div>
           )}

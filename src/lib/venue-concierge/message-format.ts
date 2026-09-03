@@ -84,6 +84,51 @@ function findSignatureStart(lines: string[]): number {
   return start;
 }
 
+/**
+ * Tidy an email text fragment for display: unwrap `<https://…>` / `<a@b.com>`
+ * angle brackets, drop `*emphasis*` asterisks, and collapse extra blank lines —
+ * so it reads like a normal Gmail message instead of raw MIME text.
+ */
+export function tidyEmailText(s: string): string {
+  return (s ?? '')
+    .replace(/<\s*(https?:\/\/[^>]+?)\s*>/g, '$1')
+    .replace(/<\s*([^<>@\s]+@[^<>\s]+?)\s*>/g, '$1')
+    .replace(/\*(\S[^*\n]*?\S|\S)\*/g, '$1')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export interface QuoteGroup {
+  /** Quote nesting level: 0 = a header line ("On … wrote:"), 1+ = quoted. */
+  depth: number;
+  text: string;
+}
+
+/**
+ * Parse a quoted email trail into depth-grouped blocks with the leading `>`
+ * markers stripped, so it can render as nested Gmail-style blockquotes.
+ */
+export function parseQuoted(quoted: string): QuoteGroup[] {
+  const cleaned = tidyEmailText(quoted);
+  const lines = cleaned.split('\n').map((l) => {
+    const m = l.match(/^(\s*>\s?)+/);
+    const depth = m ? (m[0].match(/>/g) || []).length : 0;
+    const content = l.replace(/^(\s*>\s?)+/, '');
+    return { depth, content };
+  });
+
+  const groups: QuoteGroup[] = [];
+  for (const ln of lines) {
+    const last = groups[groups.length - 1];
+    if (last && last.depth === ln.depth) last.text += '\n' + ln.content;
+    else groups.push({ depth: ln.depth, text: ln.content });
+  }
+  return groups
+    .map((g) => ({ depth: g.depth, text: g.text.replace(/\n{3,}/g, '\n\n').trim() }))
+    .filter((g) => g.text.length > 0);
+}
+
 export function parseConciergeMessage(body: string): ParsedConciergeMessage {
   const text = (body ?? '').replace(/\r\n/g, '\n');
   const lines = text.split('\n');
