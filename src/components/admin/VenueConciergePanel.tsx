@@ -9,9 +9,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ConciergeBell, Loader2, Send, RefreshCw, Inbox, Search, X, Mail } from 'lucide-react';
+import { ConciergeBell, Loader2, Send, RefreshCw, Inbox, Search, X } from 'lucide-react';
 import { useVenueConciergeRealtime } from '@/lib/realtime/use-venue-concierge-realtime';
-import { ConciergeMessageBody } from '@/components/venue-concierge/ConciergeMessageBody';
+import { ConciergeMessageBody, ConciergeEmailCard } from '@/components/venue-concierge/ConciergeMessageBody';
 import { parseConciergeMessage } from '@/lib/venue-concierge/message-format';
 
 interface ThreadRow {
@@ -362,20 +362,31 @@ export function VenueConciergePanel() {
                 ) : (
                   messages.map((m) => {
                     const emailed = parseConciergeMessage(m.body).isEmail;
+                    if (emailed) {
+                      const who = m.fromConcierge ? 'You → Venue' : `${m.authorName} → You`;
+                      return (
+                        <div key={m.id} id={`vc-msg-${m.id}`}>
+                          <ConciergeEmailCard
+                            body={m.body}
+                            who={who}
+                            time={timeLabel(m.createdAt)}
+                            highlighted={highlightId === m.id}
+                          />
+                        </div>
+                      );
+                    }
                     return (
                     <div key={m.id} id={`vc-msg-${m.id}`} className={`flex ${m.fromConcierge ? 'flex-row-reverse' : ''}`}>
                       <div className={`max-w-[72%] ${m.fromConcierge ? 'text-right' : ''}`}>
                         <div className={`inline-block text-left rounded-2xl px-3.5 py-2 transition-shadow ${
                           m.fromConcierge
-                            ? 'bg-gray-900 text-white rounded-tr-sm'
-                            : 'bg-gray-100 text-gray-900 rounded-tl-sm'
+                            ? 'bg-gray-100 text-gray-900 rounded-tr-sm'
+                            : 'bg-white border border-gray-200 text-gray-900 rounded-tl-sm'
                         } ${highlightId === m.id ? 'ring-2 ring-amber-400 ring-offset-1' : ''}`}>
-                          <ConciergeMessageBody body={m.body} tone={m.fromConcierge ? 'dark' : 'light'} />
+                          <ConciergeMessageBody body={m.body} />
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1 inline-flex items-center gap-1">
-                          {emailed && <Mail size={10} className="text-gray-400" />}
+                        <p className="text-[10px] text-gray-400 mt-1">
                           {m.fromConcierge ? m.authorName : `${m.authorName} (venue)`} · {timeLabel(m.createdAt)}
-                          {emailed && <span className="text-gray-400">· via email</span>}
                         </p>
                       </div>
                     </div>

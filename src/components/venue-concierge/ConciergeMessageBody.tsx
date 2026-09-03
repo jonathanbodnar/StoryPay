@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronRight, ChevronDown, Mail } from 'lucide-react';
 import { parseConciergeMessage } from '@/lib/venue-concierge/message-format';
 
 const URL_RE = /(https?:\/\/[^\s<>()]+)/g;
@@ -38,79 +38,83 @@ function Linkified({ text, className }: { text: string; className?: string }) {
 }
 
 /**
- * Renders a concierge message body iMessage-style: the new reply is shown
- * plainly, while an email signature and the quoted email history each collapse
- * behind a small toggle so the thread stays readable.
- *
- * `tone` matches the bubble background — 'dark' for the sender's own black
- * bubble (white text) and 'light' for the other party's gray bubble.
+ * Plain concierge message body (an in-app chat message) — just the new reply,
+ * linkified. Signature/quoted trails only appear on email messages, which are
+ * rendered with ConciergeEmailCard instead.
  */
-export function ConciergeMessageBody({ body, tone }: { body: string; tone: 'dark' | 'light' }) {
-  const { reply, signature, quoted } = useMemo(() => parseConciergeMessage(body), [body]);
-  const [showSig, setShowSig] = useState(false);
-  const [showQuote, setShowQuote] = useState(false);
+export function ConciergeMessageBody({ body }: { body: string }) {
+  const { reply } = useMemo(() => parseConciergeMessage(body), [body]);
+  return (
+    <div className="text-[13px] leading-relaxed text-gray-900">
+      <Linkified text={reply} />
+    </div>
+  );
+}
 
-  const muted = tone === 'dark' ? 'text-white/60' : 'text-gray-400';
-  const toggle =
-    tone === 'dark'
-      ? 'border-white/20 text-white/70 hover:text-white hover:border-white/40'
-      : 'border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300';
-  const divider = tone === 'dark' ? 'border-white/15' : 'border-gray-200';
+/**
+ * Full-width, GoHighLevel-style accordion card for an email message. Collapsed
+ * it shows the direction, an "Email" tag, the time and a one-line preview.
+ * Expanded it reveals the reply, the signature, and the quoted email thread —
+ * so you can read the whole conversation inline. Neutral (no purple).
+ */
+export function ConciergeEmailCard({
+  body,
+  who,
+  time,
+  highlighted,
+}: {
+  body: string;
+  who: string;
+  time: string;
+  highlighted?: boolean;
+}) {
+  const { reply, signature, quoted } = useMemo(() => parseConciergeMessage(body), [body]);
+  const [open, setOpen] = useState(false);
+  const preview = (reply || quoted || '').replace(/\s+/g, ' ').trim() || '(empty email)';
 
   return (
-    <div className="text-[13px] leading-relaxed">
-      <Linkified text={reply} />
+    <div
+      className={`w-full rounded-xl border bg-gray-50 overflow-hidden transition-shadow ${
+        highlighted ? 'border-amber-400 ring-2 ring-amber-400 ring-offset-1' : 'border-gray-200'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-100"
+      >
+        {open ? (
+          <ChevronDown size={13} className="shrink-0 text-gray-400" />
+        ) : (
+          <ChevronRight size={13} className="shrink-0 text-gray-400" />
+        )}
+        <Mail size={12} className="shrink-0 text-gray-400" />
+        <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{who}</span>
+        <span className="shrink-0 rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold text-gray-500">
+          Email
+        </span>
+        <span className="ml-auto shrink-0 text-[11px] text-gray-400">{time}</span>
+      </button>
 
-      {signature && (
-        <div className={`mt-1.5 border-t pt-1.5 ${divider}`}>
-          {showSig ? (
-            <>
-              <Linkified text={signature} className={muted} />
-              <button
-                type="button"
-                onClick={() => setShowSig(false)}
-                className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toggle}`}
-              >
-                <ChevronUp size={10} /> Hide signature
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowSig(true)}
-              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toggle}`}
-            >
-              <ChevronDown size={10} /> Show signature
-            </button>
+      {open ? (
+        <div className="border-t border-gray-100 px-3 py-2.5 space-y-2.5">
+          <Linkified text={reply} className="text-[13px] leading-relaxed text-gray-800" />
+          {signature && (
+            <div className="border-t border-gray-100 pt-2">
+              <Linkified text={signature} className="text-[12px] leading-relaxed text-gray-500" />
+            </div>
           )}
-        </div>
-      )}
-
-      {quoted && (
-        <div className={`mt-1.5 border-t pt-1.5 ${divider}`}>
-          {showQuote ? (
-            <>
-              <div className={`max-h-64 overflow-auto rounded-md px-1 py-0.5 text-[12px] ${muted}`}>
-                <Linkified text={quoted} className={muted} />
+          {quoted && (
+            <div className="border-t border-gray-100 pt-2">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Quoted thread</p>
+              <div className="max-h-72 overflow-auto rounded-md bg-white border border-gray-100 px-2 py-1.5">
+                <Linkified text={quoted} className="text-[12px] leading-relaxed text-gray-500" />
               </div>
-              <button
-                type="button"
-                onClick={() => setShowQuote(false)}
-                className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toggle}`}
-              >
-                <ChevronUp size={10} /> Hide quoted email
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowQuote(true)}
-              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toggle}`}
-            >
-              <ChevronDown size={10} /> Show quoted email
-            </button>
+            </div>
           )}
         </div>
+      ) : (
+        <p className="px-3 pb-2 -mt-0.5 pl-[52px] text-[13px] text-gray-600 truncate">{preview}</p>
       )}
     </div>
   );

@@ -10,9 +10,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ConciergeBell, Loader2, Send, RefreshCw, Clock, Search, X, Mail } from 'lucide-react';
+import { ConciergeBell, Loader2, Send, RefreshCw, Clock, Search, X } from 'lucide-react';
 import { useVenueConciergeRealtime } from '@/lib/realtime/use-venue-concierge-realtime';
-import { ConciergeMessageBody } from '@/components/venue-concierge/ConciergeMessageBody';
+import { ConciergeMessageBody, ConciergeEmailCard } from '@/components/venue-concierge/ConciergeMessageBody';
 import { parseConciergeMessage } from '@/lib/venue-concierge/message-format';
 
 interface TeamMember {
@@ -309,6 +309,19 @@ export default function VenueConciergePage() {
           ) : (
             messages.map((m) => {
               const emailed = parseConciergeMessage(m.body).isEmail;
+              if (emailed) {
+                const who = m.fromConcierge ? `${m.authorName} → You` : 'You → Concierge';
+                return (
+                  <div key={m.id} id={`vc-msg-${m.id}`}>
+                    <ConciergeEmailCard
+                      body={m.body}
+                      who={who}
+                      time={timeLabel(m.createdAt)}
+                      highlighted={highlightId === m.id}
+                    />
+                  </div>
+                );
+              }
               return (
               <div key={m.id} id={`vc-msg-${m.id}`} className={`flex gap-2.5 ${m.fromConcierge ? '' : 'flex-row-reverse'}`}>
                 {m.fromConcierge ? (
@@ -316,7 +329,7 @@ export default function VenueConciergePage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={m.authorAvatar} alt={m.authorName} className="h-8 w-8 shrink-0 rounded-full object-cover" />
                   ) : (
-                    <div className="h-8 w-8 shrink-0 rounded-full bg-gray-900 text-white flex items-center justify-center text-[11px] font-semibold">
+                    <div className="h-8 w-8 shrink-0 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-[11px] font-semibold">
                       {initials(m.authorName)}
                     </div>
                   )
@@ -324,15 +337,13 @@ export default function VenueConciergePage() {
                 <div className={`max-w-[72%] ${m.fromConcierge ? '' : 'text-right'}`}>
                   <div className={`inline-block text-left rounded-2xl px-3.5 py-2 transition-shadow ${
                     m.fromConcierge
-                      ? 'bg-gray-100 text-gray-900 rounded-tl-sm'
-                      : 'bg-gray-900 text-white rounded-tr-sm'
+                      ? 'bg-white border border-gray-200 text-gray-900 rounded-tl-sm'
+                      : 'bg-gray-100 text-gray-900 rounded-tr-sm'
                   } ${highlightId === m.id ? 'ring-2 ring-amber-400 ring-offset-1' : ''}`}>
-                    <ConciergeMessageBody body={m.body} tone={m.fromConcierge ? 'light' : 'dark'} />
+                    <ConciergeMessageBody body={m.body} />
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-1 inline-flex items-center gap-1">
-                    {emailed && <Mail size={10} className="text-gray-400" />}
+                  <p className="text-[10px] text-gray-400 mt-1">
                     {m.authorName} · {timeLabel(m.createdAt)}
-                    {emailed && <span className="text-gray-400">· via email</span>}
                   </p>
                 </div>
               </div>
