@@ -17,7 +17,7 @@ import VenueDirectPanel from '@/components/dashboard/VenueDirectPanel';
 import ContactConversationsTab from '@/components/contacts/ContactConversationsTab';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
-import { bookingTimelineOptions } from '@/lib/booking-timeline';
+import { bookingTimelineOptions, bookingTimelineLabel } from '@/lib/booking-timeline';
 import { isNativeApp } from '@/lib/platform';
 import { getClientCache, setClientCache } from '@/lib/client-cache';
 
@@ -76,6 +76,7 @@ interface VenueCustomer {
   ceremony_type: string | null; guest_count: number | null;
   rehearsal_date: string | null; coordinator_name: string | null;
   coordinator_phone: string | null; catering_notes: string | null;
+  booking_timeline: string | null; venue_matters: string | null;
   /** Read-only, system-attributed traffic source (Meta / Google / Direct / Other). */
   attributed_source?: string | null; pipeline_stage: string;
   pipeline_id?: string | null;
@@ -217,7 +218,8 @@ export default function ContactProfilePanel({
     wedding_date: string; rehearsal_date: string; guest_count: string;
     coordinator_name: string; coordinator_phone: string;
     ceremony_type: string; wedding_space_id: string; catering_notes: string;
-  }>({ wedding_date: '', rehearsal_date: '', guest_count: '', coordinator_name: '', coordinator_phone: '', ceremony_type: '', wedding_space_id: '', catering_notes: '' });
+    booking_timeline: string; venue_matters: string;
+  }>({ wedding_date: '', rehearsal_date: '', guest_count: '', coordinator_name: '', coordinator_phone: '', ceremony_type: '', wedding_space_id: '', catering_notes: '', booking_timeline: '', venue_matters: '' });
   const [savingWedding,  setSavingWedding]  = useState(false);
   const [weddingError,   setWeddingError]   = useState('');
 
@@ -700,6 +702,8 @@ export default function ContactProfilePanel({
       ceremony_type:     venueCustomer?.ceremony_type     || '',
       wedding_space_id:  venueCustomer?.wedding_space_id  || '',
       catering_notes:    venueCustomer?.catering_notes    || '',
+      booking_timeline:  venueCustomer?.booking_timeline  || '',
+      venue_matters:     venueCustomer?.venue_matters     || '',
     });
     setWeddingError('');
     setEditingWedding(true);
@@ -719,6 +723,8 @@ export default function ContactProfilePanel({
       ceremony_type:     weddingForm.ceremony_type     || null,
       wedding_space_id:  weddingForm.wedding_space_id  || null,
       catering_notes:    weddingForm.catering_notes    || null,
+      booking_timeline:  weddingForm.booking_timeline  || null,
+      venue_matters:     weddingForm.venue_matters     || null,
     };
     const res = await fetch(`/api/venue-customers/${venueCustomer.id}`, {
       method: 'PATCH',
@@ -1613,7 +1619,7 @@ export default function ContactProfilePanel({
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Calendar size={15} /> Event Details</h2>
               {!editingWedding && (
-                <button onClick={startEditWedding} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {(venueCustomer?.wedding_date || venueCustomer?.guest_count) ? 'Edit' : 'Add'}</button>
+                <button onClick={startEditWedding} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><Pencil size={11} /> {(venueCustomer?.wedding_date || venueCustomer?.guest_count || venueCustomer?.booking_timeline || venueCustomer?.venue_matters) ? 'Edit' : 'Add'}</button>
               )}
             </div>
             {editingWedding ? (
@@ -1648,6 +1654,20 @@ export default function ContactProfilePanel({
                       {spaces.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Touring Timeline</label>
+                    <select value={weddingForm.booking_timeline} onChange={e => setWeddingForm(p => ({...p,booking_timeline:e.target.value}))}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-gray-400 focus:outline-none">
+                      <option value="">— not answered —</option>
+                      {bookingTimelineOptions(weddingForm.booking_timeline).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">What Matters Most</label>
+                  <input type="text" value={weddingForm.venue_matters} onChange={e => setWeddingForm(p => ({...p,venue_matters:e.target.value}))}
+                    placeholder="e.g. outdoor ceremony space, all-inclusive pricing…"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Notes</label>
@@ -1656,7 +1676,7 @@ export default function ContactProfilePanel({
                 </div>
                 <EditFooter onCancel={() => setEditingWedding(false)} onSave={saveWedding} saving={savingWedding} error={weddingError} />
               </div>
-            ) : venueCustomer && (venueCustomer.wedding_date || venueCustomer.guest_count || venueCustomer.ceremony_type) ? (
+            ) : venueCustomer && (venueCustomer.wedding_date || venueCustomer.guest_count || venueCustomer.ceremony_type || venueCustomer.booking_timeline || venueCustomer.venue_matters) ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
                 {venueCustomer.wedding_date && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Event Date</p><p className="text-gray-900 font-medium">{formatDate(venueCustomer.wedding_date)}</p></div>}
                 {venueCustomer.ceremony_type && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Type</p><p className="text-gray-900 font-medium">{CEREMONY_TYPES.find(c => c.value === venueCustomer.ceremony_type)?.label ?? venueCustomer.ceremony_type}</p></div>}
@@ -1664,6 +1684,8 @@ export default function ContactProfilePanel({
                 {venueCustomer.venue_spaces && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Space</p><p className="text-gray-900 font-medium flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{backgroundColor:venueCustomer.venue_spaces.color}} />{venueCustomer.venue_spaces.name}</p></div>}
                 {venueCustomer.rehearsal_date && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Rehearsal</p><p className="text-gray-900 font-medium">{formatDate(venueCustomer.rehearsal_date)}</p></div>}
                 {venueCustomer.coordinator_name && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Coordinator</p><p className="text-gray-900 font-medium">{venueCustomer.coordinator_name}{venueCustomer.coordinator_phone && <a href={`tel:${venueCustomer.coordinator_phone.replace(/[^\d+]/g, '')}`} className="text-gray-500 font-normal hover:text-gray-900"> · {venueCustomer.coordinator_phone}</a>}</p></div>}
+                {venueCustomer.booking_timeline && <div><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Touring Timeline</p><p className="text-gray-900 font-medium">{bookingTimelineLabel(venueCustomer.booking_timeline)}</p></div>}
+                {venueCustomer.venue_matters && <div className="sm:col-span-2 lg:col-span-4"><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">What Matters Most</p><p className="text-gray-700">{venueCustomer.venue_matters}</p></div>}
                 {venueCustomer.catering_notes && <div className="sm:col-span-2 lg:col-span-4"><p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-0.5">Notes</p><p className="text-gray-700">{venueCustomer.catering_notes}</p></div>}
               </div>
             ) : (

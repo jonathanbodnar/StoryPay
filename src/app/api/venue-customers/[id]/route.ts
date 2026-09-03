@@ -122,6 +122,8 @@ const UPDATABLE = [
   'coordinator_name',
   'coordinator_phone',
   'catering_notes',
+  'booking_timeline',
+  'venue_matters',
   'pipeline_stage',
   'pipeline_id',
   'stage_id',

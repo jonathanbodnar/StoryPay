@@ -350,6 +350,28 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.warn('[public/leads] venue_customers upsert failed:', e);
     }
+
+    // Mirror the lead's inquiry answers onto the contact so the Event Details
+    // card auto-populates (migration 212). Done as a separate best-effort
+    // update so it stays out of the core contact upsert above: a returning
+    // contact is never nulled, and — crucially — contact sync keeps working
+    // even if migration 212 hasn't been applied yet (an unknown column fails
+    // only this statement, not the whole contact upsert). Deploy order then
+    // becomes irrelevant.
+    const inquiry: Record<string, string> = {};
+    if (payload.booking_timeline) inquiry.booking_timeline = payload.booking_timeline;
+    if (payload.venue_matters)    inquiry.venue_matters    = payload.venue_matters;
+    if (Object.keys(inquiry).length > 0) {
+      try {
+        await supabaseAdmin
+          .from('venue_customers')
+          .update(inquiry)
+          .eq('venue_id', venue.id)
+          .eq('customer_email', lr.email.toLowerCase());
+      } catch (e) {
+        console.warn('[public/leads] venue_customers inquiry update failed (migration 212 applied?):', e);
+      }
+    }
   })();
 
   // Place lead in the first stage (preferring "New Lead" when present) of the
