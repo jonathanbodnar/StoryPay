@@ -9,8 +9,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ConciergeBell, Loader2, Send, RefreshCw, Inbox, Search, X } from 'lucide-react';
+import { ConciergeBell, Loader2, Send, RefreshCw, Inbox, Search, X, Mail } from 'lucide-react';
 import { useVenueConciergeRealtime } from '@/lib/realtime/use-venue-concierge-realtime';
+import { ConciergeMessageBody } from '@/components/venue-concierge/ConciergeMessageBody';
+import { parseConciergeMessage } from '@/lib/venue-concierge/message-format';
 
 interface ThreadRow {
   venueId: string;
@@ -277,7 +279,7 @@ export function VenueConciergePanel() {
                           <span className="ml-auto text-[10px] text-gray-400 shrink-0">{timeLabel(m.createdAt)}</span>
                         </div>
                         <p className="text-xs text-gray-600 line-clamp-2 mt-0.5">
-                          <Highlighted text={m.body} tokens={searchTokens} />
+                          <Highlighted text={parseConciergeMessage(m.body).reply || m.body} tokens={searchTokens} />
                         </p>
                       </button>
                     ))}
@@ -323,7 +325,7 @@ export function VenueConciergePanel() {
                         <span className="ml-auto text-[10px] text-gray-400 shrink-0">{timeLabel(t.latestAt)}</span>
                       </div>
                       <p className="text-xs text-gray-500 truncate mt-0.5">
-                        {t.latestFromVenue ? '' : 'You: '}{t.latestBody}
+                        {t.latestFromVenue ? '' : 'You: '}{parseConciergeMessage(t.latestBody).reply || t.latestBody}
                       </p>
                     </button>
                   ))
@@ -358,20 +360,27 @@ export function VenueConciergePanel() {
                 ) : messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-xs text-gray-400">No messages yet.</div>
                 ) : (
-                  messages.map((m) => (
+                  messages.map((m) => {
+                    const emailed = parseConciergeMessage(m.body).isEmail;
+                    return (
                     <div key={m.id} id={`vc-msg-${m.id}`} className={`flex ${m.fromConcierge ? 'flex-row-reverse' : ''}`}>
                       <div className={`max-w-[72%] ${m.fromConcierge ? 'text-right' : ''}`}>
-                        <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap break-words transition-shadow ${
+                        <div className={`inline-block text-left rounded-2xl px-3.5 py-2 transition-shadow ${
                           m.fromConcierge
                             ? 'bg-gray-900 text-white rounded-tr-sm'
                             : 'bg-gray-100 text-gray-900 rounded-tl-sm'
                         } ${highlightId === m.id ? 'ring-2 ring-amber-400 ring-offset-1' : ''}`}>
-                          {m.body}
+                          <ConciergeMessageBody body={m.body} tone={m.fromConcierge ? 'dark' : 'light'} />
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1">{m.authorName} · {timeLabel(m.createdAt)}</p>
+                        <p className="text-[10px] text-gray-400 mt-1 inline-flex items-center gap-1">
+                          {emailed && <Mail size={10} className="text-gray-400" />}
+                          {m.fromConcierge ? m.authorName : `${m.authorName} (venue)`} · {timeLabel(m.createdAt)}
+                          {emailed && <span className="text-gray-400">· via email</span>}
+                        </p>
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
               {otherTyping && (

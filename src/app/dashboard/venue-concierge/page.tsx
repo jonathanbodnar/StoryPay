@@ -10,8 +10,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ConciergeBell, Loader2, Send, RefreshCw, Clock, Search, X } from 'lucide-react';
+import { ConciergeBell, Loader2, Send, RefreshCw, Clock, Search, X, Mail } from 'lucide-react';
 import { useVenueConciergeRealtime } from '@/lib/realtime/use-venue-concierge-realtime';
+import { ConciergeMessageBody } from '@/components/venue-concierge/ConciergeMessageBody';
+import { parseConciergeMessage } from '@/lib/venue-concierge/message-format';
 
 interface TeamMember {
   id: string;
@@ -284,7 +286,7 @@ export default function VenueConciergePage() {
                     <span className="ml-auto text-[10px] text-gray-400 shrink-0">{timeLabel(m.createdAt)}</span>
                   </div>
                   <p className="text-xs text-gray-600 line-clamp-2 mt-0.5">
-                    <Highlighted text={m.body} tokens={searchTokens} />
+                    <Highlighted text={parseConciergeMessage(m.body).reply || m.body} tokens={searchTokens} />
                   </p>
                 </button>
               ))
@@ -305,7 +307,9 @@ export default function VenueConciergePage() {
               </p>
             </div>
           ) : (
-            messages.map((m) => (
+            messages.map((m) => {
+              const emailed = parseConciergeMessage(m.body).isEmail;
+              return (
               <div key={m.id} id={`vc-msg-${m.id}`} className={`flex gap-2.5 ${m.fromConcierge ? '' : 'flex-row-reverse'}`}>
                 {m.fromConcierge ? (
                   m.authorAvatar ? (
@@ -318,19 +322,22 @@ export default function VenueConciergePage() {
                   )
                 ) : null}
                 <div className={`max-w-[72%] ${m.fromConcierge ? '' : 'text-right'}`}>
-                  <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap break-words transition-shadow ${
+                  <div className={`inline-block text-left rounded-2xl px-3.5 py-2 transition-shadow ${
                     m.fromConcierge
                       ? 'bg-gray-100 text-gray-900 rounded-tl-sm'
                       : 'bg-gray-900 text-white rounded-tr-sm'
                   } ${highlightId === m.id ? 'ring-2 ring-amber-400 ring-offset-1' : ''}`}>
-                    {m.body}
+                    <ConciergeMessageBody body={m.body} tone={m.fromConcierge ? 'light' : 'dark'} />
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-1">
+                  <p className="text-[10px] text-gray-400 mt-1 inline-flex items-center gap-1">
+                    {emailed && <Mail size={10} className="text-gray-400" />}
                     {m.authorName} · {timeLabel(m.createdAt)}
+                    {emailed && <span className="text-gray-400">· via email</span>}
                   </p>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
         )}
