@@ -19,6 +19,7 @@ export type SystemEmailCategory =
   | 'auth'
   | 'reporting'
   | 'ai'
+  | 'concierge'
   | 'billing';
 
 export interface SystemEmailDef {
@@ -347,6 +348,30 @@ Reach out while they are hot — open their contact to start the conversation.`,
     },
   },
 
+  // ── Venue Concierge ─────────────────────────────────────────────────────
+  {
+    key: 'venue_concierge_message',
+    label: 'Venue Concierge: New Message',
+    description:
+      'Sent to the venue owner + team when the StoryVenue Concierge team sends them a message from the Venue Concierge inbox in the super-admin backend. The venue can reply straight from their inbox (the reply lands back in the Concierge thread) or open the Venue Concierge tab on desktop / in the app.',
+    trigger:
+      'Fires every time a concierge agent sends a message via the Venue Concierge inbox — POST /api/admin/venue-concierge/messages.',
+    category: 'concierge',
+    editable: true,
+    defaults: {
+      subject: 'New message from your StoryVenue Concierge — {{venue_name}}',
+      heading: '{{author_name}} sent you a message',
+      body: `Hi {{owner_first_name}},
+
+{{author_name}} from your StoryVenue Concierge team just sent you a message:
+
+"{{message_preview}}"
+
+{{reply_hint}}`,
+      button_text: 'Open Venue Concierge',
+    },
+  },
+
   // ── SaaS billing (read-only preview) ────────────────────────────────────
   {
     key: 'billing_trial_ending',
@@ -514,6 +539,7 @@ export const CATEGORY_LABELS: Record<SystemEmailCategory, string> = {
   auth: 'Authentication',
   reporting: 'Reporting',
   ai: 'AI Concierge',
+  concierge: 'Venue Concierge',
   billing: 'Billing',
 };
 
@@ -562,6 +588,16 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
     owner_first_name: 'Sarah',
     venue_name: 'Meadowbrook Estate',
     action_url: `${APP_URL}/dashboard/listing`,
+  },
+  venue_concierge_message: {
+    owner_first_name: 'Sarah',
+    venue_name: 'Meadowbrook Estate',
+    author_name: 'Francine',
+    message_preview:
+      "Hi Sarah! I just finished reviewing your A2P submission — everything looks great and I've kicked it over to the carriers. I'll follow up here the moment it's approved.",
+    reply_hint:
+      'Reply directly to this email and your message goes straight to your concierge — or open the Venue Concierge tab on desktop or in the app.',
+    action_url: `${APP_URL}/dashboard/venue-concierge`,
   },
   // AI Concierge scenarios all share the same variable set.
   ...Object.fromEntries(

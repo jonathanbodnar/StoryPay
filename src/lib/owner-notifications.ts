@@ -14,6 +14,8 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import type { EmailTemplateRow } from '@/lib/email-templates';
+import { SYSTEM_EMAIL_BY_KEY } from '@/lib/system-email-registry';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
 import { sendPushToVenue } from '@/lib/push';
 import { sendNativePush } from '@/lib/native-push';
@@ -533,20 +535,73 @@ export async function notifyVenueOfConciergeMessage(input: {
         venue.email ||
         undefined;
       const canReply = !!buildVenueConciergeReplyToEmail(input.venueId);
-      const brand = venue.brand_color || '#1b1b1b';
       const replyHint = canReply
         ? 'Reply directly to this email and your message goes straight to your concierge — or open the Venue Concierge tab on desktop or in the app.'
         : 'Open the Venue Concierge tab on desktop or in the app to reply.';
 
-      const html = `
-        <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1b1b1b;">
-          <p style="margin:0 0 4px;color:#888;font-size:12px;text-transform:uppercase;letter-spacing:.04em;">StoryVenue Concierge</p>
-          <h2 style="margin:0 0 12px;font-size:20px;">${escapeHtmlBasic(author)} sent you a message</h2>
-          <div style="border-left:3px solid ${escapeHtmlBasic(brand)};padding:2px 0 2px 14px;margin:0 0 18px;white-space:pre-wrap;color:#333;">${escapeHtmlBasic(preview)}</div>
-          <a href="${ctaUrl}" style="display:inline-block;background:#1b1b1b;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px;">Open Venue Concierge</a>
-          <p style="margin:18px 0 0;color:#666;font-size:13px;">${escapeHtmlBasic(replyHint)}</p>
-          <p style="margin:16px 0 0;color:#aaa;font-size:12px;">For ${escapeHtmlBasic(venueName)}</p>
-        </div>`;
+      // Best-effort owner first name for the greeting.
+      let ownerFirst = 'there';
+      try {
+        const { data: ownerRow } = await supabaseAdmin
+          .from('venues')
+          .select('owner_first_name')
+          .eq('id', input.venueId)
+          .maybeSingle();
+        const n = (ownerRow as { owner_first_name?: string | null } | null)?.owner_first_name?.trim();
+        if (n) ownerFirst = n;
+      } catch { /* best-effort */ }
+
+      // Render through the shared, brand-consistent system-email chassis. Copy
+      // is editable in the super-admin System Emails panel
+      // (key: venue_concierge_message) and falls back to the registry defaults.
+      const def = SYSTEM_EMAIL_BY_KEY['venue_concierge_message']!;
+      let subject     = def.defaults.subject;
+      let heading     = def.defaults.heading;
+      let bodyText    = def.defaults.body;
+      let buttonText  = def.defaults.button_text ?? null;
+      try {
+        const { data: override } = await supabaseAdmin
+          .from('system_email_templates')
+          .select('subject, heading, body, button_text')
+          .eq('key', 'venue_concierge_message')
+          .maybeSingle();
+        if (override) {
+          const o = override as { subject?: string | null; heading?: string | null; body?: string | null; button_text?: string | null };
+          subject    = o.subject    || subject;
+          heading    = o.heading    || heading;
+          bodyText   = o.body       || bodyText;
+          buttonText = o.button_text !== undefined ? o.button_text : buttonText;
+        }
+      } catch { /* fall back to registry defaults */ }
+
+      // Subject is plain text → raw vars. HTML body is injected unescaped by the
+      // chassis, so escape any dynamic (user-authored) values first.
+      const resolvedSubject = fillTemplate(subject, { venue_name: venueName, author_name: author });
+      const htmlVars: Record<string, string> = {
+        owner_first_name: escapeHtmlBasic(ownerFirst),
+        author_name:      escapeHtmlBasic(author),
+        venue_name:       escapeHtmlBasic(venueName),
+        message_preview:  escapeHtmlBasic(preview),
+        reply_hint:       escapeHtmlBasic(replyHint),
+      };
+
+      const tplRow: EmailTemplateRow = {
+        type: 'venue_concierge_message',
+        subject,
+        heading,
+        body: bodyText,
+        button_text: buttonText,
+        footer: null,
+        enabled: true,
+      };
+
+      const html = buildEmailHtml({
+        template:  tplRow,
+        vars:      htmlVars,
+        actionUrl: ctaUrl,
+        brandColor: '#1b1b1b',
+        venueName,
+      });
 
       const notifFromEmail =
         process.env.NOTIFICATION_FROM_EMAIL?.trim() || 'notifications@send.storyvenue.com';
@@ -554,7 +609,7 @@ export async function notifyVenueOfConciergeMessage(input: {
         recipients.map((to) =>
           sendEmail({
             to,
-            subject: `New message from your StoryVenue Concierge — ${venueName}`,
+            subject: resolvedSubject,
             html,
             replyTo,
             from: { email: notifFromEmail, name: 'StoryVenue Concierge' },
