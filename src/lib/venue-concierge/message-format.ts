@@ -84,16 +84,49 @@ function findSignatureStart(lines: string[]): number {
   return start;
 }
 
+// Trailing call-to-action phrases that, when they sit right before a link,
+// should become the *visible* hyperlink text (keeping any label prefix plain) —
+// e.g. "Book A Strategy Call: Click Here <url>" → "Book A Strategy Call: [Click Here](url)".
+const CTA_TAIL_RE =
+  /(click here|book (?:a )?(?:strategy )?call|schedule (?:a )?(?:call|demo)|learn more|read more|see more|watch(?: now)?|register|sign up|get started|download|reply here|view(?: here| more| details)?|book now|here)\s*$/i;
+
 /**
- * Tidy an email text fragment for display: unwrap `<https://…>` / `<a@b.com>`
- * angle brackets, drop `*emphasis*` asterisks, and collapse extra blank lines —
- * so it reads like a normal Gmail message instead of raw MIME text.
+ * Tidy an email text fragment for display so it reads like a normal Gmail
+ * message instead of raw MIME text:
+ *   - strip `*emphasis*` asterisks (even `*Label: *` with a trailing space)
+ *   - turn `Anchor <https://…>` into a markdown link `[Anchor](url)` so the
+ *     *words* become the hyperlink (Gmail-style), instead of dumping the raw URL
+ *   - drop `<(740) 880-8586>`-style phone/tel angle-bracket duplicates
+ *   - unwrap any remaining bare `<https://…>` / `<a@b.com>` angle brackets
+ *   - collapse extra blank lines
+ *
+ * The resulting `[text](url)` markdown is understood by the EmailRich renderer.
  */
 export function tidyEmailText(s: string): string {
   return (s ?? '')
+    // 1. Emphasis — handle inner text with leading/trailing spaces (`*Label: *`).
+    .replace(/\*([^*\n]+?)\*/g, '$1')
+    // 2. Anchored links: `Anchor <url>` (possibly wrapped onto the next line) →
+    //    `[Anchor](url)`. Prefer a trailing CTA ("Click Here") as the link text
+    //    and keep any label ("Meet With Me 1:1") plain.
+    .replace(
+      /([^\n<>]*?\S)[ \t]*\n?[ \t]*<\s*(https?:\/\/[^>\s]+?)\s*>/g,
+      (_m, rawAnchor: string, url: string) => {
+        const anchor = rawAnchor.trim();
+        const cta = anchor.match(CTA_TAIL_RE);
+        if (cta && cta.index && cta.index > 0) {
+          const label = anchor.slice(0, cta.index).trimEnd();
+          return `${label} [${cta[1]}](${url})`;
+        }
+        return `[${anchor}](${url})`;
+      },
+    )
+    // 3. Phone / tel angle-bracket duplicates → drop.
+    .replace(/[ \t]*<\(?\d[\d\s()%.+\-]*>/g, '')
+    // 4. Any remaining bare `<url>` / `<email>` → unwrap.
     .replace(/<\s*(https?:\/\/[^>]+?)\s*>/g, '$1')
     .replace(/<\s*([^<>@\s]+@[^<>\s]+?)\s*>/g, '$1')
-    .replace(/\*(\S[^*\n]*?\S|\S)\*/g, '$1')
+    // 5. Whitespace.
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

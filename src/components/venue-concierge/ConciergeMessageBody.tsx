@@ -3,38 +3,10 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight, ChevronDown, Mail } from 'lucide-react';
 import { parseConciergeMessage, tidyEmailText, parseQuoted } from '@/lib/venue-concierge/message-format';
-
-const URL_RE = /(https?:\/\/[^\s<>()]+)/g;
+import { EmailRich } from '@/components/email/EmailRich';
 
 function Linkified({ text, className }: { text: string; className?: string }) {
-  const parts = useMemo(() => {
-    const out: Array<{ t: string; href?: string }> = [];
-    let last = 0;
-    for (const m of text.matchAll(URL_RE)) {
-      const idx = m.index ?? 0;
-      if (idx > last) out.push({ t: text.slice(last, idx) });
-      const url = m[0].replace(/[.,)\]]+$/, '');
-      out.push({ t: url, href: url });
-      last = idx + m[0].length;
-      if (url.length !== m[0].length) out.push({ t: m[0].slice(url.length) });
-    }
-    if (last < text.length) out.push({ t: text.slice(last) });
-    return out;
-  }, [text]);
-
-  return (
-    <span className={`whitespace-pre-wrap break-words ${className ?? ''}`}>
-      {parts.map((p, i) =>
-        p.href ? (
-          <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-            {p.t}
-          </a>
-        ) : (
-          <span key={i}>{p.t}</span>
-        ),
-      )}
-    </span>
-  );
+  return <EmailRich text={text} className={className} linkClassName="underline underline-offset-2 break-all" />;
 }
 
 /**

@@ -44,6 +44,7 @@ import { AttachmentComposerBar, AttachmentGallery, type SupportAttachment } from
 import { RichTextToolbar } from '@/components/support/RichTextToolbar';
 import { markdownLiteToHtml } from '@/lib/support/rich-text-lite';
 import { parseEmailParts, tidyEmailText, parseQuoted } from '@/lib/email-format';
+import { EmailRich } from '@/components/email/EmailRich';
 import { firstUrlIn, LinkPreviewCard } from '@/components/support/LinkPreviewCard';
 import { PresencePill } from '@/components/support/PresencePill';
 import { useThreadPresence } from '@/lib/realtime/use-thread-presence';
@@ -2445,36 +2446,6 @@ function DeliveryStatusIcon({
   return null;
 }
 
-/** Inline linkifier for quoted/signature text — links every URL, no unfurl
- *  card (quoted history shouldn't spawn preview cards). Inherits text color. */
-function InlineLinkified({ text, className }: { text: string; className?: string }) {
-  const parts: React.ReactNode[] = [];
-  const re = /(https?:\/\/[^\s<>()]+)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let i = 0;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-    const raw = m[0];
-    const url = raw.replace(/[.,)\]]+$/, '');
-    parts.push(
-      <a
-        key={i++}
-        href={url}
-        target="_blank"
-        rel="noreferrer"
-        className="underline decoration-current/40 underline-offset-2 hover:decoration-current break-all"
-      >
-        {url}
-      </a>,
-    );
-    if (url.length !== raw.length) parts.push(raw.slice(url.length));
-    last = m.index + raw.length;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return <span className={`whitespace-pre-wrap break-words ${className ?? ''}`}>{parts}</span>;
-}
-
 /** Nested Gmail-style blockquote for a quoted email trail. Colors inherit from
  *  the bubble (via currentColor + opacity) so it reads correctly on light,
  *  violet, emerald, or dark bubbles alike. */
@@ -2497,7 +2468,7 @@ function QuotedThread({ text }: { text: string }) {
             className={g.depth > 0 ? 'border-l-2 border-current/15 pl-2.5' : ''}
             style={g.depth > 1 ? { marginLeft: (g.depth - 1) * 8 } : undefined}
           >
-            <InlineLinkified text={g.text} className="text-[12px] leading-relaxed opacity-70" />
+            <EmailRich text={g.text} className="text-[12px] leading-relaxed opacity-70" />
           </div>
         );
       })}
@@ -2536,7 +2507,7 @@ function CollapsibleBody({
   // Short one-liners with no signature/quoted trail read best inline — no
   // collapse chrome (avoids hiding a two-word reply behind a "click to expand").
   if (oneLine.length <= SNIPPET_LEN && !hasExtra) {
-    return <LinkifiedText text={replyText || '(empty email)'} className={className} />;
+    return <EmailRich text={replyText || '(empty email)'} className={className} />;
   }
 
   const snippet = oneLine.length > SNIPPET_LEN
@@ -2559,12 +2530,12 @@ function CollapsibleBody({
 
   return (
     <div>
-      <LinkifiedText text={replyText} className={className} />
+      <EmailRich text={replyText} className={className} />
 
       {sigText && (
         sigExpanded ? (
           <div className="mt-1.5 border-t border-current/10 pt-1.5">
-            <InlineLinkified text={sigText} className={`opacity-70 ${className}`} />
+            <EmailRich text={sigText} className={`opacity-70 ${className}`} />
             <button
               type="button"
               onClick={() => setSigExpanded(false)}
