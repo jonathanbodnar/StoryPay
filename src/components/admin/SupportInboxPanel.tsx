@@ -45,6 +45,7 @@ import { RichTextToolbar } from '@/components/support/RichTextToolbar';
 import { markdownLiteToHtml } from '@/lib/support/rich-text-lite';
 import { parseEmailParts, tidyEmailText, parseQuoted } from '@/lib/email-format';
 import { EmailRich } from '@/components/email/EmailRich';
+import { EmailThreadCard } from '@/components/email/EmailThreadCard';
 import { firstUrlIn, LinkPreviewCard } from '@/components/support/LinkPreviewCard';
 import { PresencePill } from '@/components/support/PresencePill';
 import { useThreadPresence } from '@/lib/realtime/use-thread-presence';
@@ -2600,6 +2601,29 @@ function MessageBubble({
   // so they're clearly separate from bride conversation bubbles. They're a
   // private side-channel between the concierge and the venue's team.
   if (isVenueDirect) {
+    // Email → shared Gmail-style card (single source of truth SaaS-wide). We keep
+    // a slim violet caption above it so the "Concierge ↔ Venue · bride hidden"
+    // side-channel context isn't lost. In-app (non-email) keeps the violet bubble.
+    if (msg.channel === 'email') {
+      return (
+        <div>
+          <div className="flex items-center gap-2 text-[10px] text-violet-800 mb-1">
+            <Building2 size={11} />
+            <span className="font-semibold uppercase tracking-wide">Venue Direct</span>
+            <span className="rounded-full bg-violet-100 border border-violet-300 px-1.5 py-0.5 text-[9px] font-semibold">
+              Concierge ↔ Venue · bride hidden
+            </span>
+          </div>
+          <EmailThreadCard
+            body={msg.body}
+            who={supportName ? `Venue Direct — ${supportName}` : 'Venue Direct'}
+            time={formatMessageTimestamp(msg.created_at)}
+            defaultOpen={isLatest}
+          />
+          <AttachmentGallery attachments={msg.attachments} />
+        </div>
+      );
+    }
     return (
       <div className="rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 shadow-sm">
         <div className="flex items-center gap-2 text-[10px] text-violet-800 mb-1">
@@ -2616,7 +2640,7 @@ function MessageBubble({
           channel={msg.channel}
           className="text-sm text-violet-900"
           toneClass="border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-200"
-          defaultExpanded={msg.channel !== 'email'}
+          defaultExpanded
         />
         <AttachmentGallery attachments={msg.attachments} />
       </div>
@@ -2666,6 +2690,34 @@ function MessageBubble({
   else if (isConcierge) label = supportName ? `Support — ${supportName}` : 'Support';
   else if (msg.sender_kind === 'team') label = 'Team member';
   else if (msg.sender_kind === 'owner') label = 'Owner';
+
+  // Emails render as the shared full-width Gmail-style card (single source of
+  // truth SaaS-wide) instead of a chat bubble. Sender/direction lives in the
+  // card header (`who`); delivery status rides along as the trailing node.
+  if (isEmail) {
+    return (
+      <div className="space-y-1">
+        <EmailThreadCard
+          body={msg.body}
+          who={label}
+          time={formatMessageTimestamp(msg.created_at)}
+          defaultOpen={isLatest}
+          trailing={
+            !isInbound && !isInternal ? (
+              <DeliveryStatusIcon deliveryStatus={msg.delivery_status} openedAt={msg.opened_at} channel={msg.channel} />
+            ) : null
+          }
+        />
+        <AttachmentGallery attachments={msg.attachments} />
+        {msg.support_internal_note && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1.5 text-[11px] text-amber-800">
+            <StickyNote size={10} className="inline mr-1" />
+            <span className="font-semibold">Note:</span> {msg.support_internal_note}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const bubbleClass = (() => {
     if (isInternal) return 'bg-amber-50 border border-amber-200 text-amber-900';
@@ -3606,32 +3658,18 @@ function TicketsView({
                       {!isLast && <div className={`w-0.5 flex-1 mt-1 rounded-full ${railColor} opacity-30`} />}
                     </div>
                     <div className="flex-1 min-w-0 pb-4">
-                      <div className="flex items-center gap-2 text-[10px] text-gray-500 mb-0.5">
-                        <span className="font-semibold text-gray-700">{label}</span>
-                        {isVenue ? (
-                          <span className="rounded-full bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[9px] font-semibold uppercase">Venue</span>
-                        ) : (
-                          <span className="rounded-full bg-gray-100 text-gray-700 px-1.5 py-0.5 text-[9px] font-semibold uppercase">Support</span>
-                        )}
-                        <span className="text-gray-400">{relativeTime(m.created_at)}</span>
-                        {!isVenue && (
-                          <DeliveryStatusIcon deliveryStatus={m.delivery_status} openedAt={m.opened_at} channel="email" />
-                        )}
-                      </div>
-                      <div className={`rounded-lg px-3 py-2 text-sm border ${
-                        isVenue
-                          ? 'bg-white border-gray-200 text-gray-900'
-                          : 'bg-gray-50 border-gray-200 text-gray-900'
-                      }`}>
-                        <CollapsibleBody
-                          body={m.body}
-                          channel="email"
-                          className=""
-                          toneClass="border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100"
-                          defaultExpanded={isLast}
-                        />
-                        <AttachmentGallery attachments={m.attachments} />
-                      </div>
+                      <EmailThreadCard
+                        body={m.body}
+                        who={isVenue ? `${label} · Venue` : `${label} · Support`}
+                        time={relativeTime(m.created_at)}
+                        defaultOpen={isLast}
+                        trailing={
+                          !isVenue ? (
+                            <DeliveryStatusIcon deliveryStatus={m.delivery_status} openedAt={m.opened_at} channel="email" />
+                          ) : null
+                        }
+                      />
+                      <AttachmentGallery attachments={m.attachments} />
                     </div>
                   </div>
                 );
