@@ -9,8 +9,8 @@
  * (enforced in the sidebar + DirectoryRouteGuard).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ConciergeBell, Loader2, Send, RefreshCw, Clock } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ConciergeBell, Loader2, Send, RefreshCw, Clock, Search, X } from 'lucide-react';
 import { useVenueConciergeRealtime } from '@/lib/realtime/use-venue-concierge-realtime';
 
 interface TeamMember {
@@ -41,6 +41,44 @@ function timeLabel(iso: string): string {
   } catch { return iso; }
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Human-readable date/time variants so "Sep 2", "9/2/2026", "Wednesday",
+ *  "2026-09-02", "4:36 PM" all match a message (browser-local, matching what
+ *  the owner sees in the thread). */
+function dateTimeHaystack(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const parts: string[] = [iso.slice(0, 10)];
+  try {
+    parts.push(d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }));
+    parts.push(d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }));
+    parts.push(d.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: 'numeric' }));
+    parts.push(d.toLocaleDateString(undefined, { weekday: 'long' }));
+    parts.push(d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }));
+  } catch { /* ISO is enough */ }
+  return parts.join(' ');
+}
+
+/** Wrap matched query tokens in <mark> for the search preview. */
+function Highlighted({ text, tokens }: { text: string; tokens: string[] }) {
+  const parts = useMemo(() => {
+    const clean = tokens.filter(Boolean).map(escapeRegExp);
+    if (clean.length === 0) return [{ t: text, hit: false }];
+    const re = new RegExp(`(${clean.join('|')})`, 'ig');
+    return text.split(re).map((t) => ({ t, hit: clean.some((c) => new RegExp(`^${c}$`, 'i').test(t)) }));
+  }, [text, tokens]);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.hit ? <mark key={i} className="bg-amber-200 text-gray-900 rounded px-0.5">{p.t}</mark> : <span key={i}>{p.t}</span>,
+      )}
+    </>
+  );
+}
+
 export default function VenueConciergePage() {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -50,7 +88,20 @@ export default function VenueConciergePage() {
   const [error, setError] = useState<string | null>(null);
   const [venueId, setVenueId] = useState<string | null>(null);
   const [sla, setSla] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [focusMessageId, setFocusMessageId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const focusPendingRef = useRef(false);
+  const searchTokens = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query]);
+
+  const searchResults = useMemo(() => {
+    if (searchTokens.length === 0) return null;
+    return messages.filter((m) => {
+      const hay = [m.body, m.authorName, dateTimeHaystack(m.createdAt)].join(' ').toLowerCase();
+      return searchTokens.every((t) => hay.includes(t));
+    });
+  }, [messages, searchTokens]);
 
   const loadMessages = useCallback(async () => {
     try {
@@ -91,8 +142,28 @@ export default function VenueConciergePage() {
   }, [loadMessages]);
 
   useEffect(() => {
+    if (focusPendingRef.current || searchResults) return;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
+  }, [messages, searchResults]);
+
+  // Jump to + briefly highlight a message picked from search results.
+  useEffect(() => {
+    if (!focusMessageId) return;
+    const el = document.getElementById(`vc-msg-${focusMessageId}`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setHighlightId(focusMessageId);
+    setFocusMessageId(null);
+    focusPendingRef.current = false;
+    const t = setTimeout(() => setHighlightId(null), 2600);
+    return () => clearTimeout(t);
+  }, [focusMessageId, searchResults]);
+
+  const openMatch = useCallback((messageId: string) => {
+    focusPendingRef.current = true;
+    setQuery('');
+    setFocusMessageId(messageId);
+  }, []);
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -169,6 +240,57 @@ export default function VenueConciergePage() {
 
       {/* Thread */}
       <div className="rounded-2xl border border-gray-200 bg-white flex flex-col overflow-hidden" style={{ height: '60vh', minHeight: 380 }}>
+        {/* Search */}
+        <div className="border-b border-gray-100 p-2">
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search messages, name, date, time…"
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-8 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {searchResults !== null ? (
+          <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+            {searchResults.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                <Search size={24} className="text-gray-300 mb-2" />
+                <p className="text-sm text-gray-500">No matches for “{query.trim()}”.</p>
+              </div>
+            ) : (
+              searchResults.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => openMatch(m.id)}
+                  className="w-full text-left px-4 py-2.5 hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-medium text-gray-600 truncate">
+                      {m.fromConcierge ? m.authorName : 'You'}
+                    </span>
+                    <span className="ml-auto text-[10px] text-gray-400 shrink-0">{timeLabel(m.createdAt)}</span>
+                  </div>
+                  <p className="text-xs text-gray-600 line-clamp-2 mt-0.5">
+                    <Highlighted text={m.body} tokens={searchTokens} />
+                  </p>
+                </button>
+              ))
+            )}
+          </div>
+        ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {loading ? (
             <div className="flex items-center justify-center h-full text-sm text-gray-500 gap-2">
@@ -184,7 +306,7 @@ export default function VenueConciergePage() {
             </div>
           ) : (
             messages.map((m) => (
-              <div key={m.id} className={`flex gap-2.5 ${m.fromConcierge ? '' : 'flex-row-reverse'}`}>
+              <div key={m.id} id={`vc-msg-${m.id}`} className={`flex gap-2.5 ${m.fromConcierge ? '' : 'flex-row-reverse'}`}>
                 {m.fromConcierge ? (
                   m.authorAvatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -196,11 +318,11 @@ export default function VenueConciergePage() {
                   )
                 ) : null}
                 <div className={`max-w-[72%] ${m.fromConcierge ? '' : 'text-right'}`}>
-                  <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap break-words ${
+                  <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap break-words transition-shadow ${
                     m.fromConcierge
                       ? 'bg-gray-100 text-gray-900 rounded-tl-sm'
                       : 'bg-gray-900 text-white rounded-tr-sm'
-                  }`}>
+                  } ${highlightId === m.id ? 'ring-2 ring-amber-400 ring-offset-1' : ''}`}>
                     {m.body}
                   </div>
                   <p className="text-[10px] text-gray-400 mt-1">
@@ -211,6 +333,7 @@ export default function VenueConciergePage() {
             ))
           )}
         </div>
+        )}
 
         {otherTyping && (
           <div className="px-4 py-1.5 text-xs text-gray-500 border-t border-gray-100 inline-flex items-center gap-1.5">
