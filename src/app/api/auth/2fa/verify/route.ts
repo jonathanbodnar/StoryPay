@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
   const response = await buildVenueAuthSuccessResponse({
     venueId:    venue.id,
     rememberMe: pending.rememberMe,
+    isNative:   pending.isNative,
   });
   // Clear the pending token now that the real session is set.
   response.cookies.set(TWO_FA_PENDING_COOKIE, '', {

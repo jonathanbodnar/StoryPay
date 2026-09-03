@@ -15,10 +15,13 @@ import { TWOFA_ENABLED } from '@/lib/feature-flags';
  * "Remember me" extends the cookie from 30 days to 365 days.
  */
 export async function POST(request: NextRequest) {
-  const { email, password, rememberMe } = await request.json() as {
+  const { email, password, rememberMe, isNative } = await request.json() as {
     email?: string;
     password?: string;
     rememberMe?: boolean;
+    /** Sent by the Capacitor native app shell — grants the 90-day idle
+     *  session policy instead of the web 8h/7d one. See venue-session.ts. */
+    isNative?: boolean;
   };
 
   if (!email?.trim()) {
@@ -105,6 +108,7 @@ export async function POST(request: NextRequest) {
           venueId:    venue.id,
           issuedAt:   Date.now(),
           rememberMe: Boolean(rememberMe),
+          isNative:   Boolean(isNative),
         });
         const response = NextResponse.json({ requires2FA: true });
         response.cookies.set(TWO_FA_PENDING_COOKIE, pending, {
@@ -142,6 +146,7 @@ export async function POST(request: NextRequest) {
     return buildVenueAuthSuccessResponse({
       venueId:    venue.id,
       rememberMe: Boolean(rememberMe),
+      isNative:   Boolean(isNative),
     });
   }
 
@@ -175,7 +180,7 @@ export async function POST(request: NextRequest) {
 
       if (memberValid) {
         const response = NextResponse.json({ redirect: '/dashboard' });
-        const session = { rememberMe: Boolean(rememberMe) };
+        const session = { rememberMe: Boolean(rememberMe), isNative: Boolean(isNative) };
         setSignedCookie(response, 'venue_id', member.venue_id, {
           path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
         }, session);

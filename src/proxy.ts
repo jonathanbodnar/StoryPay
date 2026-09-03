@@ -7,7 +7,10 @@ const APP_HOSTS = new Set(['app.storyvenue.com']);
  * Tenant-session cookies we verify + lifetime-enforce on every request.
  * See src/lib/venue-session.ts for how they are issued.
  *   <id>       raw tenant/member UUID (read directly by handlers)
- *   <id>_meta  "<iat>.<idle>"  issue time + idle window, both in seconds
+ *   <id>_meta  "<iat>.<idle>.<absCap>"  issue time + idle window + this
+ *              session's own absolute cap, all in seconds. The absCap segment
+ *              is new — older sessions only have "<iat>.<idle>" and fall back
+ *              to the legacy 7-day ABSOLUTE_MAX_SECONDS below.
  *   <id>_sig   HMAC-SHA256(secret, "<id>=<value>.<meta>")
  */
 const SIGNED_COOKIES: Array<{ id: string; table: string }> = [
@@ -15,7 +18,7 @@ const SIGNED_COOKIES: Array<{ id: string; table: string }> = [
   { id: 'member_id', table: 'venue_team_members' },
 ];
 
-const ABSOLUTE_MAX_SECONDS = 60 * 60 * 24 * 7; // 7-day hard cap
+const ABSOLUTE_MAX_SECONDS = 60 * 60 * 24 * 7; // 7-day hard cap (web default/legacy)
 const IDLE_SECONDS = 60 * 60 * 8;              // 8-hour idle (default / legacy)
 
 function getSecret(): string | undefined {
@@ -105,7 +108,7 @@ async function invalidatedBefore(table: string, id: string): Promise<number> {
   return before;
 }
 
-type Reissue = { id: string; value: string; iat: number; idle: number };
+type Reissue = { id: string; value: string; iat: number; idle: number; absCap: number };
 
 export async function proxy(request: NextRequest) {
   const host = request.headers.get('host')?.toLowerCase() ?? '';
@@ -148,11 +151,15 @@ export async function proxy(request: NextRequest) {
         strip();
         continue;
       }
-      const dot = metaVal.indexOf('.');
-      const iat = Number(metaVal.slice(0, dot));
-      const idle = Number(metaVal.slice(dot + 1)) || IDLE_SECONDS;
-      if (!Number.isFinite(iat) || nowSecs - iat > ABSOLUTE_MAX_SECONDS) {
-        strip(); // absolute 7-day cap exceeded
+      // meta is "<iat>.<idle>" (legacy, 2 parts) or "<iat>.<idle>.<absCap>"
+      // (current, 3 parts — lets native sessions carry their own 90-day cap
+      // instead of the global 7-day web default).
+      const parts = metaVal.split('.');
+      const iat = Number(parts[0]);
+      const idle = Number(parts[1]) || IDLE_SECONDS;
+      const absCap = Number(parts[2]) || ABSOLUTE_MAX_SECONDS;
+      if (!Number.isFinite(iat) || nowSecs - iat > absCap) {
+        strip(); // this session's absolute cap exceeded
         continue;
       }
       const before = await invalidatedBefore(table, value);
@@ -160,7 +167,7 @@ export async function proxy(request: NextRequest) {
         strip(); // session revoked server-side
         continue;
       }
-      reissue.push({ id, value, iat, idle });
+      reissue.push({ id, value, iat, idle, absCap });
     } else {
       // Legacy format (pre-metadata): HMAC(id=value). Verify once, then migrate.
       const expectedLegacy = await hmacBase64Url(secret, `${id}=${value}`);
@@ -173,7 +180,7 @@ export async function proxy(request: NextRequest) {
         strip();
         continue;
       }
-      reissue.push({ id, value, iat: nowSecs, idle: IDLE_SECONDS });
+      reissue.push({ id, value, iat: nowSecs, idle: IDLE_SECONDS, absCap: ABSOLUTE_MAX_SECONDS });
     }
   }
 
@@ -198,11 +205,13 @@ export async function proxy(request: NextRequest) {
   // capped by the absolute 7-day limit. Skipped on auth-mutating routes so we
   // never collide with a login/logout Set-Cookie in the same round-trip.
   if (reissue.length > 0 && !mutatesAuthCookies(request.nextUrl.pathname)) {
-    for (const { id, value, iat, idle } of reissue) {
-      const remainingToCap = ABSOLUTE_MAX_SECONDS - (nowSecs - iat);
+    for (const { id, value, iat, idle, absCap } of reissue) {
+      const remainingToCap = absCap - (nowSecs - iat);
       if (remainingToCap <= 0) continue;
       const maxAge = Math.min(idle, remainingToCap);
-      const meta = `${iat}.${idle}`;
+      // Always re-issue in the current 3-part format so legacy (2-part)
+      // sessions are upgraded on their first refresh through the proxy.
+      const meta = `${iat}.${idle}.${absCap}`;
       const sig = await hmacBase64Url(secret, `${id}=${value}.${meta}`);
       const opts = { path: '/', httpOnly: true, secure: true, sameSite: 'lax' as const, maxAge };
       res.cookies.set(id, value, opts);

@@ -160,7 +160,7 @@ function VenueLoginForm() {
       const res = await fetch('/api/auth/sign-in', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password, rememberMe }),
+        body: JSON.stringify({ email: email.trim(), password, rememberMe, isNative: isNativeApp() }),
       });
       const data = await res.json();
       if (!res.ok) {

@@ -27,8 +27,16 @@ import type { NextResponse } from 'next/server';
 export const SIGNED_COOKIE_NAMES = ['venue_id', 'member_id'] as const;
 export type SignedCookieName = (typeof SIGNED_COOKIE_NAMES)[number];
 
-export const ABSOLUTE_MAX_SECONDS = 60 * 60 * 24 * 7; // 7-day hard cap
-export const IDLE_SECONDS = 60 * 60 * 8;              // 8-hour idle (non-remember)
+export const ABSOLUTE_MAX_SECONDS = 60 * 60 * 24 * 7; // 7-day hard cap (web)
+export const IDLE_SECONDS = 60 * 60 * 8;              // 8-hour idle (non-remember, web)
+/**
+ * Native app (Capacitor iOS/Android) sessions get a single, much longer
+ * policy: log out only after 90 days of inactivity. No separate short
+ * absolute cap — the idle window itself doubles as the cap, since the sole
+ * ask for the native app is "log out only after 90 days idle". Set by the
+ * client passing `isNative: true` to the sign-in / 2FA-verify flow.
+ */
+export const NATIVE_MAX_SECONDS = 60 * 60 * 24 * 90;  // 90-day idle (native)
 
 export function sigCookieName(name: string): string {
   return `${name}_sig`;
@@ -84,6 +92,13 @@ type CookieOptions = {
 export type SessionOptions = {
   /** "Remember me": relax the idle window to the 7-day absolute cap. */
   rememberMe?: boolean;
+  /**
+   * Session originated from the Capacitor native app shell. Overrides
+   * rememberMe — native gets a flat 90-day idle window/cap regardless of the
+   * checkbox, since the native login form doesn't need the same distinction
+   * the web form does.
+   */
+  isNative?: boolean;
   /** Override issue time (unix seconds). Used when re-issuing after revocation. */
   iat?: number;
 };
@@ -92,8 +107,9 @@ export type SessionOptions = {
  * Set an id cookie plus its metadata + signature companions.
  *
  * The caller's `maxAge` is intentionally ignored: lifetime is governed centrally
- * by the tiered policy above (8h idle / 7d absolute), so existing call sites need
- * no changes beyond opting a session into "remember me".
+ * by the tiered policy above (8h idle / 7d absolute for web, 90-day idle for
+ * native), so existing call sites need no changes beyond opting a session into
+ * "remember me" / "native".
  */
 export function setSignedCookie(
   res: NextResponse,
@@ -103,9 +119,16 @@ export function setSignedCookie(
   session: SessionOptions = {},
 ): void {
   const iat = session.iat ?? Math.floor(Date.now() / 1000);
-  const idle = session.rememberMe ? ABSOLUTE_MAX_SECONDS : IDLE_SECONDS;
-  const meta = `${iat}.${idle}`;
-  const maxAge = Math.min(idle, ABSOLUTE_MAX_SECONDS);
+  const idle = session.isNative
+    ? NATIVE_MAX_SECONDS
+    : session.rememberMe
+      ? ABSOLUTE_MAX_SECONDS
+      : IDLE_SECONDS;
+  const absCap = session.isNative ? NATIVE_MAX_SECONDS : ABSOLUTE_MAX_SECONDS;
+  // 3-part meta: iat.idle.absCap. proxy.ts falls back to the legacy 7-day cap
+  // when reading older 2-part metas issued before this change.
+  const meta = `${iat}.${idle}.${absCap}`;
+  const maxAge = Math.min(idle, absCap);
   const opts: CookieOptions = { ...options, maxAge };
 
   res.cookies.set(name, value, opts);

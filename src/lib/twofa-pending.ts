@@ -29,6 +29,9 @@ interface PendingPayload {
   venueId:    string;
   issuedAt:   number;       // ms epoch
   rememberMe: boolean;
+  /** Carried through from the initial sign-in call so the native 90-day idle
+   *  session policy still applies after the 2FA code is verified. */
+  isNative?:  boolean;
 }
 
 /** Sign a payload into a compact base64url cookie value. */
