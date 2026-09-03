@@ -43,7 +43,7 @@ import { AgentAvatar } from '@/components/support/AgentAvatar';
 import { AttachmentComposerBar, AttachmentGallery, type SupportAttachment } from '@/components/support/InboxAttachments';
 import { RichTextToolbar } from '@/components/support/RichTextToolbar';
 import { markdownLiteToHtml } from '@/lib/support/rich-text-lite';
-import { splitEmailSignature } from '@/lib/support/email-signature';
+import { parseEmailParts, tidyEmailText, parseQuoted } from '@/lib/email-format';
 import { firstUrlIn, LinkPreviewCard } from '@/components/support/LinkPreviewCard';
 import { PresencePill } from '@/components/support/PresencePill';
 import { useThreadPresence } from '@/lib/realtime/use-thread-presence';
@@ -2445,6 +2445,66 @@ function DeliveryStatusIcon({
   return null;
 }
 
+/** Inline linkifier for quoted/signature text — links every URL, no unfurl
+ *  card (quoted history shouldn't spawn preview cards). Inherits text color. */
+function InlineLinkified({ text, className }: { text: string; className?: string }) {
+  const parts: React.ReactNode[] = [];
+  const re = /(https?:\/\/[^\s<>()]+)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    const raw = m[0];
+    const url = raw.replace(/[.,)\]]+$/, '');
+    parts.push(
+      <a
+        key={i++}
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="underline decoration-current/40 underline-offset-2 hover:decoration-current break-all"
+      >
+        {url}
+      </a>,
+    );
+    if (url.length !== raw.length) parts.push(raw.slice(url.length));
+    last = m.index + raw.length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <span className={`whitespace-pre-wrap break-words ${className ?? ''}`}>{parts}</span>;
+}
+
+/** Nested Gmail-style blockquote for a quoted email trail. Colors inherit from
+ *  the bubble (via currentColor + opacity) so it reads correctly on light,
+ *  violet, emerald, or dark bubbles alike. */
+function QuotedThread({ text }: { text: string }) {
+  const groups = useMemo(() => parseQuoted(text), [text]);
+  return (
+    <div className="space-y-1.5">
+      {groups.map((g, i) => {
+        const isHeader = g.depth === 0 && /^On\b[\s\S]*wrote:/.test(g.text);
+        if (isHeader) {
+          return (
+            <p key={i} className="text-[11px] italic opacity-50 whitespace-pre-wrap break-words">
+              {g.text}
+            </p>
+          );
+        }
+        return (
+          <div
+            key={i}
+            className={g.depth > 0 ? 'border-l-2 border-current/15 pl-2.5' : ''}
+            style={g.depth > 1 ? { marginLeft: (g.depth - 1) * 8 } : undefined}
+          >
+            <InlineLinkified text={g.text} className="text-[12px] leading-relaxed opacity-70" />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CollapsibleBody({
   body,
   channel,
@@ -2458,17 +2518,27 @@ function CollapsibleBody({
   toneClass: string;
   defaultExpanded: boolean;
 }) {
+  const parts = useMemo(() => parseEmailParts(body), [body]);
+  const replyText = useMemo(() => tidyEmailText(parts.reply), [parts.reply]);
+  const sigText = useMemo(() => tidyEmailText(parts.signature), [parts.signature]);
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [sigExpanded, setSigExpanded] = useState(false);
 
+  // Non-email (SMS / notes) stay plain.
   if (channel !== 'email') {
     return <LinkifiedText text={body} className={className} />;
   }
 
-  // Strip whitespace and pull a 110-char single-line preview for the
-  // collapsed row — enough to convey topic without dominating the thread.
-  const oneLine = body.replace(/\s+/g, ' ').trim();
+  const hasExtra = !!(sigText || parts.quoted);
+  const oneLine = replyText.replace(/\s+/g, ' ').trim();
   const SNIPPET_LEN = 110;
+
+  // Short one-liners with no signature/quoted trail read best inline — no
+  // collapse chrome (avoids hiding a two-word reply behind a "click to expand").
+  if (oneLine.length <= SNIPPET_LEN && !hasExtra) {
+    return <LinkifiedText text={replyText || '(empty email)'} className={className} />;
+  }
+
   const snippet = oneLine.length > SNIPPET_LEN
     ? oneLine.slice(0, SNIPPET_LEN).trimEnd() + '…'
     : oneLine || '(empty email)';
@@ -2487,17 +2557,14 @@ function CollapsibleBody({
     );
   }
 
-  // Fold a trailing signature block (sign-off + contact/marketing lines) by
-  // default, same "collapsed until clicked" pattern as the whole-body fold.
-  const { main, signature } = splitEmailSignature(body);
-
   return (
     <div>
-      <LinkifiedText text={main} className={className} />
-      {signature && (
+      <LinkifiedText text={replyText} className={className} />
+
+      {sigText && (
         sigExpanded ? (
           <div className="mt-1.5 border-t border-current/10 pt-1.5">
-            <p className={`whitespace-pre-wrap break-words opacity-70 ${className}`}>{signature}</p>
+            <InlineLinkified text={sigText} className={`opacity-70 ${className}`} />
             <button
               type="button"
               onClick={() => setSigExpanded(false)}
@@ -2517,6 +2584,14 @@ function CollapsibleBody({
           </button>
         )
       )}
+
+      {parts.quoted && (
+        <div className="mt-2 border-t border-current/10 pt-1.5">
+          <p className={`mb-1 text-[10px] font-semibold uppercase tracking-wide opacity-50 ${className}`}>Quoted</p>
+          <QuotedThread text={parts.quoted} />
+        </div>
+      )}
+
       <button
         type="button"
         onClick={() => setExpanded(false)}
@@ -3577,7 +3652,13 @@ function TicketsView({
                           ? 'bg-white border-gray-200 text-gray-900'
                           : 'bg-gray-50 border-gray-200 text-gray-900'
                       }`}>
-                        <LinkifiedText text={m.body} className="" />
+                        <CollapsibleBody
+                          body={m.body}
+                          channel="email"
+                          className=""
+                          toneClass="border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100"
+                          defaultExpanded={isLast}
+                        />
                         <AttachmentGallery attachments={m.attachments} />
                       </div>
                     </div>
