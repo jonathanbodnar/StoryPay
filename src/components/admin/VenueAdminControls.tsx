@@ -14,7 +14,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Loader2, Copy, Send, Eye, KeyRound, CalendarClock, CreditCard, Lock,
-  RotateCcw, Trash2, X, RefreshCw,
+  RotateCcw, Trash2, X, RefreshCw, User, Phone, Mail, MapPin, Check,
 } from 'lucide-react';
 import { DIRECTORY_BADGE_STATUSES, directoryBadgeLabel } from '@/lib/directory-badges';
 import { AddonCheckboxes, type AdminVenueRow, type PlanOpt } from '@/components/admin/VenueManagementPortal';
@@ -31,6 +31,98 @@ async function impersonate(venueId: string) {
     return;
   }
   window.location.href = '/dashboard';
+}
+
+/** Copy-to-clipboard chip used by the contact card. */
+function CopyChip({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => { void navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+      title="Copy"
+      className="shrink-0 rounded-md p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-600"
+    >
+      {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+    </button>
+  );
+}
+
+function ContactRow({ icon: Icon, label, children }: { icon: React.ComponentType<{ className?: string }>; label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 py-1">
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+      <span className="w-24 shrink-0 text-[11px] font-semibold text-gray-400">{label}</span>
+      <div className="min-w-0 flex-1 text-[12px] text-gray-800">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Venue + account-holder contact card — name, phone, email, address and the
+ * primary profile owner, so the team can reach a client fast from the Projects
+ * board (or Venue Management, wherever these controls render).
+ */
+function VenueContactCard({ venue }: { venue: AdminVenueRow }) {
+  const str = (k: string): string => {
+    const v = (venue as Record<string, unknown>)[k];
+    return typeof v === 'string' && v.trim() ? v.trim() : '';
+  };
+  const name = str('name');
+  const phone = str('phone') || str('notification_phone');
+  const email = str('email') || str('notification_email');
+  const owner = str('owner_full_name') || [str('owner_first_name'), str('owner_last_name')].filter(Boolean).join(' ');
+  const cityState = [str('city'), str('state')].filter(Boolean).join(', ');
+  const addrLine2 = [cityState, str('zip')].filter(Boolean).join(' ').trim();
+  const addressParts = [str('address'), addrLine2].filter(Boolean);
+  const mapQuery = [str('address'), cityState, str('zip')].filter(Boolean).join(', ');
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+        <User className="h-3.5 w-3.5" /> Contact
+      </div>
+      <div className="divide-y divide-gray-50">
+        <ContactRow icon={User} label="Venue">
+          <span className="font-medium text-gray-900">{name || '—'}</span>
+        </ContactRow>
+        <ContactRow icon={User} label="Account holder">
+          {owner || <span className="text-gray-400">Not set</span>}
+        </ContactRow>
+        <ContactRow icon={Phone} label="Phone">
+          {phone ? (
+            <span className="flex items-center gap-1">
+              <a href={`tel:${phone.replace(/[^\d+]/g, '')}`} className="text-gray-800 hover:underline">{phone}</a>
+              <CopyChip value={phone} />
+            </span>
+          ) : <span className="text-gray-400">Not set</span>}
+        </ContactRow>
+        <ContactRow icon={Mail} label="Email">
+          {email ? (
+            <span className="flex items-center gap-1 min-w-0">
+              <a href={`mailto:${email}`} className="truncate text-gray-800 hover:underline">{email}</a>
+              <CopyChip value={email} />
+            </span>
+          ) : <span className="text-gray-400">Not set</span>}
+        </ContactRow>
+        <ContactRow icon={MapPin} label="Address">
+          {addressParts.length ? (
+            <span className="flex items-start gap-1 min-w-0">
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-w-0 text-gray-800 hover:underline"
+              >
+                {addressParts.join(', ')}
+              </a>
+              <CopyChip value={addressParts.join(', ')} />
+            </span>
+          ) : <span className="text-gray-400">Not set</span>}
+        </ContactRow>
+      </div>
+    </div>
+  );
 }
 
 export function VenueAdminControls({ venueId, onChanged, onDeleted }: { venueId: string; onChanged?: () => void; onDeleted?: () => void }) {
@@ -161,6 +253,9 @@ export function VenueAdminControls({ venueId, onChanged, onDeleted }: { venueId:
 
   return (
     <div className="space-y-3">
+      {/* Contact — venue + account holder details for fast outreach */}
+      <VenueContactCard venue={venue} />
+
       {/* Plan + badges + toggles */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-gray-200 bg-gray-50/60 p-3">
         <div className="flex items-center gap-1">

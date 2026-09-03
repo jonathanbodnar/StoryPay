@@ -41,6 +41,29 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if (REDACT_VENUE_KEYS.has(k)) continue;
     safe[k] = v;
   }
+
+  // Resolve the account holder (primary profile owner) name so the admin can
+  // see who registered the sub-account. Prefer the linked profile's full_name,
+  // else the owner_first/last captured at signup.
+  let owner_full_name: string | null = null;
+  const ownerId = safe.owner_id as string | null | undefined;
+  if (ownerId) {
+    const { data: ownerProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', ownerId)
+      .maybeSingle();
+    const fn = (ownerProfile as { full_name?: string | null } | null)?.full_name?.trim();
+    if (fn) owner_full_name = fn;
+  }
+  if (!owner_full_name) {
+    const composed = [safe.owner_first_name, safe.owner_last_name]
+      .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+      .join(' ')
+      .trim();
+    owner_full_name = composed || null;
+  }
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
   const pid = safe.directory_plan_id as string | null | undefined;
   const directory_plans = pid ? (planRows || []).find((p) => p.id === pid) ?? null : null;
@@ -50,6 +73,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   return NextResponse.json({
     venue: {
       ...safe,
+      owner_full_name,
       directory_plans,
       login_url: adminToken
         ? `${appUrl}/login/admin/${adminToken}`
