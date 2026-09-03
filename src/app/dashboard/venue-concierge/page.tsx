@@ -14,6 +14,7 @@ import { ConciergeBell, Loader2, Send, RefreshCw, Clock, Search, X } from 'lucid
 import { useVenueConciergeRealtime } from '@/lib/realtime/use-venue-concierge-realtime';
 import { ConciergeMessageBody, ConciergeEmailCard } from '@/components/venue-concierge/ConciergeMessageBody';
 import { parseConciergeMessage } from '@/lib/venue-concierge/message-format';
+import { topBarSafeAreaPadding } from '@/lib/platform';
 
 interface TeamMember {
   id: string;
@@ -95,7 +96,19 @@ export default function VenueConciergePage() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const focusPendingRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(false);
   const searchTokens = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query]);
+
+  // Below `lg` (matches the mobile skin: tab bar + slide-out sidebar) we lock
+  // the page to the viewport so only the message list scrolls — the composer
+  // stays pinned above the tab bar (iMessage-style), no document scrolling.
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px)');
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
 
   const searchResults = useMemo(() => {
     if (searchTokens.length === 0) return null;
@@ -190,7 +203,21 @@ export default function VenueConciergePage() {
   }, [draft, sending, loadMessages]);
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col -mx-6 bg-white sm:-mx-8 lg:mx-0 lg:bg-transparent lg:flex-none lg:gap-5">
+    <div
+      className={
+        isMobile
+          ? 'fixed left-0 right-0 z-30 flex flex-col bg-white'
+          : 'flex flex-col gap-5'
+      }
+      style={
+        isMobile
+          ? {
+              top: `calc(3.5rem + ${topBarSafeAreaPadding()})`,
+              bottom: 'calc(max(env(safe-area-inset-bottom, 0px), 10px) + 74px)',
+            }
+          : undefined
+      }
+    >
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 shrink-0 px-4 pt-3 pb-1 lg:px-0 lg:pt-0 lg:pb-0">
         <h1 className="font-heading text-xl lg:text-2xl text-gray-900 inline-flex items-center gap-2">
