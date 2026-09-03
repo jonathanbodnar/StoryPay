@@ -22,9 +22,12 @@ const DEFAULT_LINK_CLASS =
   'text-blue-600 hover:text-blue-700 underline underline-offset-2 break-all';
 
 // Order matters: bold + markdown link before bare URL so inner URLs aren't
-// double-matched.
-const TOKEN_RE =
-  /\*\*([^*]+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s<>()]+)|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+// double-matched. NOTE: use the source string + a fresh RegExp per call — a
+// shared /g regex would corrupt `lastIndex` across the recursive bold call and
+// spin into an infinite loop (browser freeze).
+const TOKEN_SOURCE =
+  /\*\*([^*]+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s<>()]+)|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/
+    .source;
 
 function shortenUrl(url: string): string {
   if (url.length <= 48) return url;
@@ -43,8 +46,9 @@ export function renderEmailRich(text: string, linkClassName = DEFAULT_LINK_CLASS
   let last = 0;
   let key = 0;
   let m: RegExpExecArray | null;
-  TOKEN_RE.lastIndex = 0;
-  while ((m = TOKEN_RE.exec(text)) !== null) {
+  // Fresh regex per call so the recursive bold render can't clobber lastIndex.
+  const re = new RegExp(TOKEN_SOURCE, 'g');
+  while ((m = re.exec(text)) !== null) {
     if (m.index > last) nodes.push(text.slice(last, m.index));
 
     if (m[1] !== undefined) {
