@@ -190,10 +190,10 @@ export default function VenueConciergePage() {
   }, [draft, sending, loadMessages]);
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col gap-3 lg:flex-none lg:gap-5">
+    <div className="flex flex-1 min-h-0 flex-col -mx-6 bg-white sm:-mx-8 lg:mx-0 lg:bg-transparent lg:flex-none lg:gap-5">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <h1 className="font-heading text-2xl text-gray-900 inline-flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 shrink-0 px-4 pt-3 pb-1 lg:px-0 lg:pt-0 lg:pb-0">
+        <h1 className="font-heading text-xl lg:text-2xl text-gray-900 inline-flex items-center gap-2">
           <ConciergeBell size={20} className="text-gray-900" />
           Venue Concierge
         </h1>
@@ -217,7 +217,7 @@ export default function VenueConciergePage() {
 
       {/* Meet your concierge team */}
       {team.length > 0 && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-3 lg:p-4 shrink-0">
+        <div className="rounded-2xl border border-gray-200 bg-white p-3 lg:p-4 shrink-0 mx-4 mb-1 lg:mx-0 lg:mb-0">
           <div className="flex items-center justify-between mb-2.5 lg:mb-3">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
               Your concierge team
@@ -251,7 +251,7 @@ export default function VenueConciergePage() {
       )}
 
       {/* Thread */}
-      <div className="rounded-2xl border border-gray-200 bg-white flex flex-col overflow-hidden flex-1 min-h-0 lg:flex-none lg:h-[60vh] lg:min-h-[380px]">
+      <div className="bg-white flex flex-col overflow-hidden flex-1 min-h-0 border-t border-gray-100 lg:border lg:border-gray-200 lg:rounded-2xl lg:flex-none lg:h-[60vh] lg:min-h-[380px]">
         {/* Search */}
         <div className="border-b border-gray-100 p-2">
           <div className="relative">
