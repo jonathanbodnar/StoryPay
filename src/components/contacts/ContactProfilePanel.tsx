@@ -8,12 +8,13 @@ import {
   Receipt, Pencil, Copy, RefreshCw, RotateCcw, X as XIcon,
   Plus, Check, Trash2, Upload, Calendar, ClipboardList,
   FileCheck, Activity, User, ChevronDown, ChevronUp, Info,
-  AlertCircle, Undo2, Smartphone, Building2,
+  AlertCircle, Undo2, Smartphone, MessageSquare,
   Bot, Pause, BotOff, Play, Clock,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
 import ContactAiControls from '@/components/ai-concierge/ContactAiControls';
 import VenueDirectPanel from '@/components/dashboard/VenueDirectPanel';
+import ContactConversationsTab from '@/components/contacts/ContactConversationsTab';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 import { isNativeApp } from '@/lib/platform';
@@ -160,7 +161,7 @@ const FILE_STATUS_COLORS: Record<string, string> = {
   approved: 'bg-emerald-100 text-emerald-700',
 };
 
-export type Tab = 'overview' | 'notes' | 'concierge' | 'timeline' | 'payments' | 'tasks' | 'documents';
+export type Tab = 'overview' | 'conversations' | 'notes' | 'concierge' | 'timeline' | 'payments' | 'tasks' | 'documents';
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function ContactProfilePanel({
@@ -1427,8 +1428,8 @@ export default function ContactProfilePanel({
       {/* ── Tabs ── */}
       <div className="flex flex-wrap gap-1 mb-6 border-b border-gray-200">
         {([
-          { id: 'overview',   label: 'Overview',                                                      icon: User },
-          ...(native ? [] : [{ id: 'concierge', label: 'Concierge', icon: Building2 }]),
+          { id: 'overview',      label: 'Overview',                                                   icon: User },
+          { id: 'conversations', label: 'Conversations',                                              icon: MessageSquare },
           { id: 'notes',      label: `Notes${notes.length > 0 ? ` (${notes.length})` : ''}`,         icon: ClipboardList },
           { id: 'timeline',   label: 'Activity',                                                      icon: Activity },
           { id: 'payments',   label: 'Payments',                                                      icon: Receipt },
@@ -1885,7 +1886,20 @@ export default function ContactProfilePanel({
         </div>
       )}
 
-      {/* ── CONCIERGE TAB ── */}
+      {/* ── CONVERSATIONS TAB ── */}
+      {activeTab === 'conversations' && venueCustomer && (
+        <ContactConversationsTab
+          contactId={venueCustomer.id}
+          contactName={[venueCustomer.first_name, venueCustomer.last_name].filter(Boolean).join(' ') || venueCustomer.customer_email || 'this contact'}
+          contactEmail={venueCustomer.customer_email || null}
+          contactPhone={venueCustomer.phone || null}
+        />
+      )}
+
+      {/* ── CONCIERGE (Venue Direct) ──
+          The visible tab was retired in favor of the dedicated Venue Concierge
+          page, but the view stays reachable via existing ?tab=concierge deep
+          links (from the concierge inbox, owner notifications, admin support). */}
       {activeTab === 'concierge' && venueCustomer && (
         <VenueDirectPanel
           contactId={venueCustomer.id}

@@ -9,7 +9,7 @@ export default function ContactDetailPage() {
 
   const initialTab = ((): Tab => {
     const t = (searchParams?.get('tab') || '').toLowerCase();
-    if (t === 'concierge' || t === 'notes' || t === 'timeline' || t === 'payments' || t === 'tasks' || t === 'documents') {
+    if (t === 'conversations' || t === 'concierge' || t === 'notes' || t === 'timeline' || t === 'payments' || t === 'tasks' || t === 'documents') {
       return t as Tab;
     }
     return 'overview';
