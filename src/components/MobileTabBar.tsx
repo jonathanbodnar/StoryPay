@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { Home, MessageCircle, Inbox, Calendar, CreditCard, Users } from 'lucide-react';
+import { Home, MessageCircle, Inbox, Calendar, CreditCard, ConciergeBell, Lock } from 'lucide-react';
 import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
@@ -27,18 +27,19 @@ const PWA_TABS = [
 ];
 
 const NATIVE_TABS = [
-  { label: 'Home',        href: '/dashboard/home',          icon: Home,          match: ['/dashboard/home', '/dashboard'] },
-  { label: 'Lead Inbox',  href: '/dashboard/leads',         icon: Inbox,         match: ['/dashboard/leads'] },
-  { label: 'Messages',    href: '/dashboard/conversations', icon: MessageCircle, match: ['/dashboard/conversations'] },
-  { label: 'Contacts',    href: '/dashboard/contacts',      icon: Users,         match: ['/dashboard/contacts'] },
-  { label: 'Calendar',    href: '/dashboard/calendar',      icon: Calendar,      match: ['/dashboard/calendar'] },
+  { label: 'Home',        href: '/dashboard/home',            icon: Home,          match: ['/dashboard/home', '/dashboard'] },
+  { label: 'Lead Inbox',  href: '/dashboard/leads',           icon: Inbox,         match: ['/dashboard/leads'] },
+  { label: 'Messages',    href: '/dashboard/conversations',   icon: MessageCircle, match: ['/dashboard/conversations'] },
+  { label: 'Concierge',   href: '/dashboard/venue-concierge', icon: ConciergeBell, match: ['/dashboard/venue-concierge'] },
+  { label: 'Calendar',    href: '/dashboard/calendar',        icon: Calendar,      match: ['/dashboard/calendar'] },
 ];
 
-export default function MobileTabBar({ venueId }: { venueId?: string | null }) {
+export default function MobileTabBar({ venueId, hasConciergeAddon = false }: { venueId?: string | null; hasConciergeAddon?: boolean }) {
   const pathname = usePathname();
   const TABS = isNativeApp() ? NATIVE_TABS : PWA_TABS;
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadLeads, setUnreadLeads] = useState(0);
+  const [unreadConcierge, setUnreadConcierge] = useState(0);
 
   // Poll the conversations unread count — same endpoint as the desktop sidebar
   useEffect(() => {
@@ -58,6 +59,26 @@ export default function MobileTabBar({ venueId }: { venueId?: string | null }) {
       window.removeEventListener('storypay:conversations-unread', onEvt);
     };
   }, []);
+
+  // Venue Concierge unread badge — only meaningful when the add-on is active.
+  useEffect(() => {
+    if (!hasConciergeAddon) return;
+    const load = () =>
+      fetch('/api/venue-concierge/unread')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { count?: number } | null) => {
+          if (d && typeof d.count === 'number') setUnreadConcierge(d.count);
+        })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 45_000);
+    const onEvt = () => load();
+    window.addEventListener('storypay:venue-concierge-unread', onEvt);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('storypay:venue-concierge-unread', onEvt);
+    };
+  }, [hasConciergeAddon]);
 
   // New-leads badge — mirrors the desktop sidebar (shared localStorage baseline,
   // cleared when the Lead Inbox is opened).
@@ -127,12 +148,16 @@ export default function MobileTabBar({ venueId }: { venueId?: string | null }) {
           const active = match.some((m) =>
             m === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(m),
           );
+          const isConcierge = label === 'Concierge';
+          const conciergeLocked = isConcierge && !hasConciergeAddon;
           const badgeCount = label === 'Messages'
             ? unreadMessages
             : label === 'Lead Inbox'
               ? unreadLeads
-              : 0;
-          const showBadge = badgeCount > 0;
+              : isConcierge && hasConciergeAddon
+                ? unreadConcierge
+                : 0;
+          const showBadge = badgeCount > 0 && !conciergeLocked;
           return (
             <li key={label}>
               <Link
@@ -147,6 +172,11 @@ export default function MobileTabBar({ venueId }: { venueId?: string | null }) {
               >
                 <span className="relative inline-flex">
                   <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+                  {conciergeLocked && (
+                    <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-gray-200 text-gray-500 ring-2 ring-white">
+                      <Lock size={8} strokeWidth={2.6} />
+                    </span>
+                  )}
                   {showBadge && (
                     <span className="absolute -right-1.5 -top-1 min-w-[16px] rounded-full bg-red-600 px-1 text-center text-[9px] font-bold leading-4 text-white">
                       {badgeCount > 99 ? '99+' : badgeCount}

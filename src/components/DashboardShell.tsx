@@ -328,7 +328,7 @@ export default function DashboardShell({
       </div>
 
       {/* Mobile-only chrome (hidden ≥ lg) */}
-      <MobileTabBar venueId={venue.id} />
+      <MobileTabBar venueId={venue.id} hasConciergeAddon={hasConciergeAddon} />
     </div>
   );
 }
