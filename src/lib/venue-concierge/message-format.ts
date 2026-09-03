@@ -88,43 +88,55 @@ function findSignatureStart(lines: string[]): number {
 // should become the *visible* hyperlink text (keeping any label prefix plain) —
 // e.g. "Book A Strategy Call: Click Here <url>" → "Book A Strategy Call: [Click Here](url)".
 const CTA_TAIL_RE =
-  /(click here|book (?:a )?(?:strategy )?call|schedule (?:a )?(?:call|demo)|learn more|read more|see more|watch(?: now)?|register|sign up|get started|download|reply here|view(?: here| more| details)?|book now|here)\s*$/i;
+  /(click here|book (?:a )?(?:strategy )?call|schedule (?:a )?(?:call|demo)|learn more|read more|see more|watch(?: now)?|register|sign up|get started|download|reply here|view(?: here| more| details)?|book now|here)$/i;
+
+/** Turn an `Anchor <url>` fragment into `[link text](url)`, choosing sensible
+ *  link text so it reads like Gmail: a trailing CTA ("Click Here"), else the
+ *  trailing token ("storyvenue.com"), keeping any bold "Label:" prefix plain. */
+function anchorToMarkdown(rawAnchor: string, rawUrl: string): string {
+  const anchor = rawAnchor.replace(/[ \t]+$/, '');
+  const url = rawUrl.replace(/\s+/g, ''); // rejoin URLs wrapped across lines
+  const cta = anchor.match(CTA_TAIL_RE);
+  if (cta) {
+    if (cta.index === 0) return `[${anchor}](${url})`;
+    const label = anchor.slice(0, cta.index);
+    const sep = /[\s*]$/.test(label) ? '' : ' ';
+    return `${label}${sep}[${cta[1]}](${url})`;
+  }
+  // "Label: value" → link only the trailing token, keep the label plain.
+  const tok = anchor.match(/^([\s\S]*\s)(\S+)$/);
+  if (tok) return `${tok[1]}[${tok[2]}](${url})`;
+  return `[${anchor}](${url})`;
+}
 
 /**
  * Tidy an email text fragment for display so it reads like a normal Gmail
  * message instead of raw MIME text:
- *   - strip `*emphasis*` asterisks (even `*Label: *` with a trailing space)
- *   - turn `Anchor <https://…>` into a markdown link `[Anchor](url)` so the
- *     *words* become the hyperlink (Gmail-style), instead of dumping the raw URL
+ *   - render `*emphasis*` as **bold** (Gmail bolds signature labels like
+ *     `*Text Us:*`, `*Website:*`) — kept as markdown for the EmailRich renderer
+ *   - turn `Anchor <https://…>` into a markdown link `[words](url)` so the
+ *     *words* become the hyperlink (Gmail-style), rejoining URLs that were
+ *     wrapped across multiple lines
  *   - drop `<(740) 880-8586>`-style phone/tel angle-bracket duplicates
  *   - unwrap any remaining bare `<https://…>` / `<a@b.com>` angle brackets
  *   - collapse extra blank lines
  *
- * The resulting `[text](url)` markdown is understood by the EmailRich renderer.
+ * The resulting `**bold**` / `[text](url)` markdown is understood by EmailRich.
  */
 export function tidyEmailText(s: string): string {
   return (s ?? '')
-    // 1. Emphasis — handle inner text with leading/trailing spaces (`*Label: *`).
-    .replace(/\*([^*\n]+?)\*/g, '$1')
-    // 2. Anchored links: `Anchor <url>` (possibly wrapped onto the next line) →
-    //    `[Anchor](url)`. Prefer a trailing CTA ("Click Here") as the link text
-    //    and keep any label ("Meet With Me 1:1") plain.
+    // 1. Emphasis → bold markdown (handles `*Label: *` with inner spaces too).
+    .replace(/\*([^*\n]+?)\*/g, '**$1**')
+    // 2. Anchored links: `Anchor <url>` (URL may wrap onto following lines) →
+    //    `[words](url)`.
     .replace(
-      /([^\n<>]*?\S)[ \t]*\n?[ \t]*<\s*(https?:\/\/[^>\s]+?)\s*>/g,
-      (_m, rawAnchor: string, url: string) => {
-        const anchor = rawAnchor.trim();
-        const cta = anchor.match(CTA_TAIL_RE);
-        if (cta && cta.index && cta.index > 0) {
-          const label = anchor.slice(0, cta.index).trimEnd();
-          return `${label} [${cta[1]}](${url})`;
-        }
-        return `[${anchor}](${url})`;
-      },
+      /([^\n<>]*?\S)[ \t]*\n?[ \t]*<\s*(https?:\/\/[\s\S]*?)\s*>/g,
+      (_m, anchor: string, url: string) => anchorToMarkdown(anchor, url),
     )
     // 3. Phone / tel angle-bracket duplicates → drop.
     .replace(/[ \t]*<\(?\d[\d\s()%.+\-]*>/g, '')
-    // 4. Any remaining bare `<url>` / `<email>` → unwrap.
-    .replace(/<\s*(https?:\/\/[^>]+?)\s*>/g, '$1')
+    // 4. Any remaining bare `<url>` (possibly wrapped) / `<email>` → unwrap.
+    .replace(/<\s*(https?:\/\/[\s\S]*?)\s*>/g, (_m, u: string) => u.replace(/\s+/g, ''))
     .replace(/<\s*([^<>@\s]+@[^<>\s]+?)\s*>/g, '$1')
     // 5. Whitespace.
     .replace(/[ \t]+\n/g, '\n')
@@ -143,8 +155,11 @@ export interface QuoteGroup {
  * markers stripped, so it can render as nested Gmail-style blockquotes.
  */
 export function parseQuoted(quoted: string): QuoteGroup[] {
-  const cleaned = tidyEmailText(quoted);
-  const lines = cleaned.split('\n').map((l) => {
+  // Strip the `>` quote markers FIRST (capturing depth), then group consecutive
+  // same-depth lines, then tidy each block. Doing it in this order means a URL
+  // that was wrapped across several `>`-prefixed lines is rejoined cleanly (no
+  // stray `>` left mid-signature) and tidyEmailText sees marker-free text.
+  const lines = (quoted ?? '').replace(/\r\n/g, '\n').split('\n').map((l) => {
     const m = l.match(/^(\s*>\s?)+/);
     const depth = m ? (m[0].match(/>/g) || []).length : 0;
     const content = l.replace(/^(\s*>\s?)+/, '');
@@ -158,7 +173,7 @@ export function parseQuoted(quoted: string): QuoteGroup[] {
     else groups.push({ depth: ln.depth, text: ln.content });
   }
   return groups
-    .map((g) => ({ depth: g.depth, text: g.text.replace(/\n{3,}/g, '\n\n').trim() }))
+    .map((g) => ({ depth: g.depth, text: tidyEmailText(g.text) }))
     .filter((g) => g.text.length > 0);
 }
 

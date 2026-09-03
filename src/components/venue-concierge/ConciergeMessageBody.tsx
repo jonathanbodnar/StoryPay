@@ -6,7 +6,7 @@ import { parseConciergeMessage, tidyEmailText, parseQuoted } from '@/lib/venue-c
 import { EmailRich } from '@/components/email/EmailRich';
 
 function Linkified({ text, className }: { text: string; className?: string }) {
-  return <EmailRich text={text} className={className} linkClassName="underline underline-offset-2 break-all" />;
+  return <EmailRich text={text} className={className} />;
 }
 
 /**

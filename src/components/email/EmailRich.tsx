@@ -5,8 +5,9 @@ import React from 'react';
 /**
  * Shared inline renderer for tidied email text (see `tidyEmailText`).
  *
- * It understands three inline forms and renders them like a Gmail message:
- *   - markdown links `[words](https://url)` → the *words* become the hyperlink
+ * It understands these inline forms and renders them like a Gmail message:
+ *   - bold `**words**`                     → <strong> (signature labels)
+ *   - markdown links `[words](https://url)`→ the *words* become the hyperlink
  *   - bare URLs `https://…`                → hyperlinked, with giant tracking
  *                                             URLs shortened to `host/…` for
  *                                             readability (full URL stays the href)
@@ -16,12 +17,14 @@ import React from 'react';
  * breaks and signatures keep their shape.
  */
 
+// Gmail-style blue links by default.
 const DEFAULT_LINK_CLASS =
-  'underline decoration-current/40 underline-offset-2 hover:decoration-current break-all';
+  'text-blue-600 hover:text-blue-700 underline underline-offset-2 break-all';
 
-// Order matters: markdown link first so its inner URL isn't matched as a bare URL.
+// Order matters: bold + markdown link before bare URL so inner URLs aren't
+// double-matched.
 const TOKEN_RE =
-  /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s<>()]+)|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+  /\*\*([^*]+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s<>()]+)|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
 
 function shortenUrl(url: string): string {
   if (url.length <= 48) return url;
@@ -44,16 +47,23 @@ export function renderEmailRich(text: string, linkClassName = DEFAULT_LINK_CLASS
   while ((m = TOKEN_RE.exec(text)) !== null) {
     if (m.index > last) nodes.push(text.slice(last, m.index));
 
-    if (m[1] && m[2]) {
+    if (m[1] !== undefined) {
+      // **bold** — render inner recursively so a link inside bold still works.
+      nodes.push(
+        <strong key={key++} className="font-semibold">
+          {renderEmailRich(m[1], linkClassName)}
+        </strong>,
+      );
+    } else if (m[2] && m[3]) {
       // [words](url)
       nodes.push(
-        <a key={key++} href={m[2]} target="_blank" rel="noopener noreferrer" className={linkClassName}>
-          {m[1]}
+        <a key={key++} href={m[3]} target="_blank" rel="noopener noreferrer" className={linkClassName}>
+          {m[2]}
         </a>,
       );
-    } else if (m[3]) {
+    } else if (m[4]) {
       // bare url — trim trailing sentence punctuation out of the href
-      const raw = m[3];
+      const raw = m[4];
       const url = raw.replace(/[.,;:)\]]+$/, '');
       nodes.push(
         <a key={key++} href={url} target="_blank" rel="noopener noreferrer" className={linkClassName}>
@@ -61,11 +71,11 @@ export function renderEmailRich(text: string, linkClassName = DEFAULT_LINK_CLASS
         </a>,
       );
       if (url.length !== raw.length) nodes.push(raw.slice(url.length));
-    } else if (m[4]) {
+    } else if (m[5]) {
       // bare email
       nodes.push(
-        <a key={key++} href={`mailto:${m[4]}`} className={linkClassName}>
-          {m[4]}
+        <a key={key++} href={`mailto:${m[5]}`} className={linkClassName}>
+          {m[5]}
         </a>,
       );
     }
