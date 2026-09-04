@@ -1,0 +1,56 @@
+# Daily ping for the Private Client monthly pipeline reminder.
+# The endpoint only actually sends on the 1st of each month (gated by the DB
+# timestamp private_client_monthly_reminder_next_at), so a daily ping is safe.
+#
+# Enable: GitHub repo → Settings → Secrets and variables → Actions → New repository secret:
+#   MARKETING_CRON_URL     = https://your-app.up.railway.app   (no path, no quotes)
+#   MARKETING_CRON_SECRET  = same value as MARKETING_CRON_SECRET (or CRON_SECRET) on Railway
+#
+# Manual run: Actions tab → "Private Client monthly reminder cron" → Run workflow
+
+name: Private Client monthly reminder cron
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /api/cron/private-client-monthly-reminder
+        env:
+          MARKETING_CRON_URL: ${{ secrets.MARKETING_CRON_URL }}
+          MARKETING_CRON_SECRET: ${{ secrets.MARKETING_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MARKETING_CRON_URL:-}" ] || [ -z "${MARKETING_CRON_SECRET:-}" ]; then
+            echo "::error::Missing secrets. Add MARKETING_CRON_URL and MARKETING_CRON_SECRET on THIS repo (Settings → Secrets → Actions). Forks need their own secrets."
+            exit 1
+          fi
+          # Trim whitespace and strip accidental "quotes" from paste mistakes
+          ORIGIN="${MARKETING_CRON_URL#\"}"
+          ORIGIN="${ORIGIN%\"}"
+          ORIGIN="$(printf '%s' "$ORIGIN" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          ORIGIN="${ORIGIN%/}"
+          SECRET="$(printf '%s' "$MARKETING_CRON_SECRET" | tr -d '\r\n')"
+          SECRET="$(printf '%s' "$SECRET" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          URL="${ORIGIN}/api/cron/private-client-monthly-reminder"
+          echo "Requesting (host only): $(echo "$ORIGIN" | sed -E 's#^https?://##')"
+          # Capture body + HTTP code (curl -f hides body on 4xx/5xx)
+          TMP="$(mktemp)"
+          HTTP=$(curl -sS -o "$TMP" -w "%{http_code}" -H "Authorization: Bearer ${SECRET}" "$URL")
+          BODY="$(cat "$TMP")"
+          rm -f "$TMP"
+          echo "HTTP status: $HTTP"
+          echo "Response body: $BODY"
+          if [ "$HTTP" != "200" ]; then
+            echo "::error::Expected HTTP 200, got $HTTP. If 401, GitHub MARKETING_CRON_SECRET does not match Railway MARKETING_CRON_SECRET or CRON_SECRET. If connection error, check MARKETING_CRON_URL matches NEXT_PUBLIC_APP_URL."
+            exit 1
+          fi
+          if ! echo "$BODY" | grep -q '"ok"'; then
+            echo "::error::Response missing ok:true"
+            exit 1
+          fi
+          echo "Cron ping OK."

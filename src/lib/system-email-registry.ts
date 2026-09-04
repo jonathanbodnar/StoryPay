@@ -526,6 +526,34 @@ It covers your lead funnel, booking analytics, and engagement metrics for the la
       button_text: 'Open your dashboard',
     },
   },
+  {
+    key: 'private_client_monthly_reminder',
+    label: 'Private Client: Monthly Pipeline Reminder',
+    description:
+      'A monthly reminder sent to Private Client venue owners + their team asking them to log in and move any contact who booked a tour or booked a wedding into the correct pipeline stage, so tours/bookings are tracked accurately for their reporting and our monthly review calls. Only goes to venues with the Private Client box checked (is_private_client = true) — controlled entirely by that checkbox.',
+    trigger:
+      'Fires monthly (1st of each month) via the private-client monthly reminder cron for every venue flagged as a Private Client.',
+    schedule: 'Monthly (1st of each month).',
+    category: 'reporting',
+    editable: true,
+    defaults: {
+      subject: 'Your monthly StoryVenue check-in — update your booked tours & weddings',
+      heading: 'A two-minute update keeps your numbers accurate',
+      body: `Hi {{owner_first_name}},
+
+This is your monthly reminder to spend two minutes in StoryVenue keeping your pipeline up to date.
+
+Log in on desktop or in the app and move every contact who has recently:
+
+- Booked a tour → your "Tour Booked" stage
+- Booked a wedding → your "Wedding Booked" stage
+
+Why it matters: these stages are how we track tours and bookings for {{venue_name}}. Keeping them current protects your investment, keeps your reporting clean, and gives us real numbers to work from together on our monthly review call.
+
+It only takes a couple of minutes — and it makes every metric we review trustworthy.`,
+      button_text: 'Update my pipeline',
+    },
+  },
 ];
 
 export const SYSTEM_EMAIL_BY_KEY: Record<string, SystemEmailDef> = Object.fromEntries(
@@ -588,6 +616,11 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
     owner_first_name: 'Sarah',
     venue_name: 'Meadowbrook Estate',
     action_url: `${APP_URL}/dashboard/listing`,
+  },
+  private_client_monthly_reminder: {
+    owner_first_name: 'Sarah',
+    venue_name: 'Meadowbrook Estate',
+    action_url: `${APP_URL}/dashboard/leads`,
   },
   venue_concierge_message: {
     owner_first_name: 'Sarah',
