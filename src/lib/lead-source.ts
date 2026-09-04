@@ -29,16 +29,29 @@
  * but for these four buckets that distinction doesn't matter.
  */
 
-export type LeadSourceBucket = 'meta' | 'google' | 'direct' | 'other';
+export type LeadSourceBucket = 'meta' | 'google' | 'webform' | 'direct' | 'other';
 
-export const LEAD_SOURCE_ORDER: LeadSourceBucket[] = ['meta', 'google', 'direct', 'other'];
+// Named acquisition channels first (Meta / Google / Web Form), then the two
+// "unknown-origin" buckets (Direct / Other) last so Other stays the catch-all.
+export const LEAD_SOURCE_ORDER: LeadSourceBucket[] = ['meta', 'google', 'webform', 'direct', 'other'];
 
 export const LEAD_SOURCE_LABELS: Record<LeadSourceBucket, string> = {
   meta: 'Meta',
   google: 'Google',
+  webform: 'Web Form',
   direct: 'Direct',
   other: 'Other',
 };
+
+/**
+ * Ingest `source` values written by the venue's own embedded web form (see
+ * src/app/api/embed/[venueSlug]/route.ts and /api/public/embed-leads, which
+ * force source='embed' specifically "so it surfaces as its own slice in the
+ * funnel source chips"). This is the definitive, distinct signal for the Web
+ * Form bucket — the directory listing uses source='directory' and imports use
+ * 'contact', so there's no overlap.
+ */
+const WEBFORM_SOURCE_VALUES = new Set(['embed', 'webform', 'web_form']);
 
 /** utm_source / referral tokens that map to Meta (Facebook + Instagram). */
 const META_TOKENS = new Set([
@@ -155,6 +168,16 @@ export function bucketLeadSource(input: LeadSourceInput): LeadSourceBucket {
   ) {
     return 'google';
   }
+
+  // ── Web Form (venue's own embedded form) ──────────────────────────────
+  // Checked AFTER the Meta/Google ad signals above so an ad-driven visitor who
+  // then fills the embed form is still credited to the ad platform (the embed
+  // widget forwards fbclid/utm when present). Only when there's no ad signal do
+  // we credit the form itself — and we key off the ingest `source` (a definitive
+  // channel marker), placing it ahead of the generic "Other"/referrer fallback
+  // so embed leads don't collapse into Other via the host-site referrer.
+  const srcNorm = norm(input.source);
+  if (WEBFORM_SOURCE_VALUES.has(srcNorm)) return 'webform';
 
   // ── Known tag/referral that isn't Meta or Google → Other ──────────────
   const hasTagSignal = Boolean(utmSource) || Boolean(ref);

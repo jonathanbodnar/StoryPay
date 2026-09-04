@@ -115,7 +115,7 @@ type RealtimePayload = {
 };
 
 type LeadFunnelStep = { key: string; label: string; count: number };
-type LeadSourceBucket = 'meta' | 'google' | 'direct' | 'other';
+type LeadSourceBucket = 'meta' | 'google' | 'webform' | 'direct' | 'other';
 type LeadFunnelSource = { key: LeadSourceBucket; label: string; count: number };
 type LeadFunnelPayload = {
   steps: LeadFunnelStep[];
@@ -273,6 +273,7 @@ const FUNNEL_FALLBACK: LeadFunnelStep[] = [
 const SOURCE_DOT: Record<LeadSourceBucket, string> = {
   meta: 'bg-blue-500',
   google: 'bg-amber-500',
+  webform: 'bg-emerald-500',
   direct: 'bg-gray-400',
   other: 'bg-violet-500',
 };
@@ -287,7 +288,7 @@ type FunnelLeadItem = {
 };
 
 const SOURCE_LABEL: Record<LeadSourceBucket, string> = {
-  meta: 'Meta', google: 'Google', direct: 'Direct', other: 'Other',
+  meta: 'Meta', google: 'Google', webform: 'Web Form', direct: 'Direct', other: 'Other',
 };
 
 /**

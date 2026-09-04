@@ -203,7 +203,7 @@ function delta(cur: number, prior: number): string | undefined {
 // ── Document ──────────────────────────────────────────────────────────────────
 
 const SOURCE_COLOR: Record<string, string> = {
-  meta: C.blue, google: C.amber, direct: C.gray500, other: C.violet,
+  meta: C.blue, google: C.amber, webform: C.green, direct: C.gray500, other: C.violet,
 };
 
 function ReportDoc({ d }: { d: BookingReportData }) {

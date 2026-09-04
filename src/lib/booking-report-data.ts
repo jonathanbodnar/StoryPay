@@ -162,7 +162,7 @@ export async function compileBookingReport(venueId: string, days = 30): Promise<
   // Shares the exact bucketing + cumulative-count math with the live
   // dashboard widget and cohort admin analytics (see lib/lead-funnel.ts) so
   // all three consumers stay in lockstep — including the 5th "Qualified" step.
-  const sourceCounts: Record<LeadSourceBucket, number> = { meta: 0, google: 0, direct: 0, other: 0 };
+  const sourceCounts: Record<LeadSourceBucket, number> = { meta: 0, google: 0, webform: 0, direct: 0, other: 0 };
   for (const row of periodLeads) {
     // Skip bulk-imported CRM contacts that were never worked so the report's
     // lead count (and the $/lead value math) reflects genuine inquiries only.

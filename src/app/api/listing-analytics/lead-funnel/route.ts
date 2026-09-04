@@ -121,7 +121,7 @@ export async function GET(req: Request) {
 
   // Per-source lead tallies for the whole range (unaffected by the active
   // filter) so the dashboard can render the "where leads came from" breakdown.
-  const sourceCounts: Record<LeadSourceBucket, number> = { meta: 0, google: 0, direct: 0, other: 0 };
+  const sourceCounts: Record<LeadSourceBucket, number> = { meta: 0, google: 0, webform: 0, direct: 0, other: 0 };
 
   // When a source filter is active, only that source's leads flow through
   // the funnel math — every step and conversion % reflects just that slice.
