@@ -40,7 +40,12 @@ function escapeHtmlBasic(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/** 1st of the following month at 12:00 UTC (~7-8am ET), so a daily cron reliably picks it up. */
+/**
+ * "Due at" marker: 1st of the following month at 12:00 UTC. This is intentionally
+ * BEFORE the 17:00 UTC (12:00 PM EST) cron fire, so the 1st's run always sees the
+ * venue as due and delivers that day at noon Eastern. The actual send time is
+ * governed by when the cron pings (17:00 UTC), not by this hour.
+ */
 function firstOfNextMonthIso(from: Date = new Date()): string {
   return new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 1, 12, 0, 0)).toISOString();
 }

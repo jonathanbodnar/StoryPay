@@ -1,14 +1,15 @@
 /**
  * GET /api/cron/private-client-monthly-reminder
  *
- * Runs daily (e.g. 13:00 UTC). Sends the monthly pipeline-update reminder to
- * every Private Client venue (is_private_client = true) whose
- * private_client_monthly_reminder_next_at is due, then advances it to the 1st
- * of the following month. The daily ping is safe — the DB timestamp gate
- * enforces the true monthly cadence.
+ * Pinged daily at 17:00 UTC (= 12:00 PM Eastern Standard Time). Sends the
+ * monthly pipeline-update reminder to every Private Client venue
+ * (is_private_client = true) whose private_client_monthly_reminder_next_at is
+ * due, then advances it to the 1st of the following month. next_at is always
+ * set to the 1st, so the 17:00 UTC ping only actually delivers on the 1st (at
+ * 12:00 PM EST); every other day is a no-op guarded by the DB timestamp.
  *
  * Railway / GitHub Actions example:
- *   0 13 * * *  GET /api/cron/private-client-monthly-reminder  (Bearer $CRON_SECRET)
+ *   0 17 * * *  GET /api/cron/private-client-monthly-reminder  (Bearer $CRON_SECRET)
  */
 
 import { NextRequest, NextResponse } from 'next/server';

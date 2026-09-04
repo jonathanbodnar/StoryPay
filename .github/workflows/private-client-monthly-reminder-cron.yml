@@ -1,6 +1,15 @@
-# Daily ping for the Private Client monthly pipeline reminder.
-# The endpoint only actually sends on the 1st of each month (gated by the DB
-# timestamp private_client_monthly_reminder_next_at), so a daily ping is safe.
+# Private Client monthly pipeline reminder.
+#
+# Runs daily at 17:00 UTC = 12:00 PM Eastern Standard Time. The endpoint only
+# actually SENDS on the 1st of each month — the per-venue DB timestamp
+# (private_client_monthly_reminder_next_at) is set to the 1st, so the daily
+# 17:00 UTC run finds it due only on the 1st and delivers at 12:00 PM EST. On
+# every other day the run is a no-op (and it also seeds newly-flagged private
+# clients so they're queued for the next 1st).
+#
+# DST note: GitHub cron is fixed UTC and does not shift for daylight saving.
+# 17:00 UTC = 12:00 PM EST (standard time, Nov–Mar) and 1:00 PM EDT (Mar–Nov).
+# Use 16:00 UTC instead if you want noon Eastern to follow the clocks year-round.
 #
 # Enable: GitHub repo → Settings → Secrets and variables → Actions → New repository secret:
 #   MARKETING_CRON_URL     = https://your-app.up.railway.app   (no path, no quotes)
@@ -12,7 +21,7 @@ name: Private Client monthly reminder cron
 
 on:
   schedule:
-    - cron: '0 13 * * *'
+    - cron: '0 17 * * *'
   workflow_dispatch:
 
 jobs:
