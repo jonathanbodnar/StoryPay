@@ -281,7 +281,10 @@ const SOURCE_DOT: Record<LeadSourceBucket, string> = {
 type FunnelLeadItem = {
   id: string;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
   email: string | null;
+  phone: string | null;
   stage: string | null;
   source: LeadSourceBucket;
   created_at: string | null;
@@ -337,7 +340,11 @@ function FunnelLeadsModal({
 
   const q = query.trim().toLowerCase();
   const filtered = q
-    ? leads.filter((l) => l.name.toLowerCase().includes(q) || (l.email ?? '').toLowerCase().includes(q))
+    ? leads.filter((l) =>
+        l.name.toLowerCase().includes(q) ||
+        (l.email ?? '').toLowerCase().includes(q) ||
+        (l.phone ?? '').toLowerCase().includes(q),
+      )
     : leads;
 
   return createPortal(
@@ -401,6 +408,7 @@ function FunnelLeadsModal({
                     {(l.name.trim()[0] ?? '?').toUpperCase()}
                   </span>
                 );
+                const contactLine = [l.email, l.phone].filter(Boolean).join('  ·  ');
                 const meta = (
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-gray-900">{l.name}</span>
@@ -409,6 +417,9 @@ function FunnelLeadsModal({
                       {SOURCE_LABEL[l.source]}
                       {l.stage ? <span className="truncate">· {l.stage}</span> : null}
                     </span>
+                    {contactLine ? (
+                      <span className="mt-0.5 block truncate text-[11px] text-gray-500">{contactLine}</span>
+                    ) : null}
                   </span>
                 );
                 // Open the person's chat thread directly (same deep-link the

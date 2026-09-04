@@ -91,6 +91,7 @@ export async function GET(req: Request) {
     last_name: string | null;
     name: string | null;
     email: string | null;
+    phone: string | null;
   };
 
   const PAGE = 1000;
@@ -99,7 +100,7 @@ export async function GET(req: Request) {
     for (let offset = 0; offset < 200_000; offset += PAGE) {
       let q = supabaseAdmin
         .from('leads')
-        .select('id, status, stage_id, first_touch_utm, source, referral_source, is_ghl_migration, last_inbound_at, created_at, first_name, last_name, name, email')
+        .select('id, status, stage_id, first_touch_utm, source, referral_source, is_ghl_migration, last_inbound_at, created_at, first_name, last_name, name, email, phone')
         .eq('venue_id', venueId)
         .order('created_at', { ascending: false });
       if (days > 0) q = q.gte('created_at', since);
@@ -126,7 +127,10 @@ export async function GET(req: Request) {
   const items: Array<{
     id: string;
     name: string;
+    first_name: string | null;
+    last_name: string | null;
     email: string | null;
+    phone: string | null;
     stage: string | null;
     source: LeadSourceBucket;
     created_at: string | null;
@@ -158,7 +162,10 @@ export async function GET(req: Request) {
     items.push({
       id: row.id,
       name: display,
-      email: row.email,
+      first_name: (row.first_name ?? '').trim() || null,
+      last_name: (row.last_name ?? '').trim() || null,
+      email: (row.email ?? '').trim() || null,
+      phone: (row.phone ?? '').trim() || null,
       stage: stageInfo?.name ?? null,
       source: bucket,
       created_at: row.created_at,
