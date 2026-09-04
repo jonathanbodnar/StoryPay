@@ -16,7 +16,7 @@
  */
 
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
-import { sanitizeSmsText } from '@/lib/ai-text-cleanup';
+import { sanitizeConciergeOutbound } from './sanitize-outbound';
 import { type AiAngleKey, isAiAngleKey } from './types';
 
 // ── Public types ───────────────────────────────────────────────────────────
@@ -167,11 +167,21 @@ export function parseStructuredOutput(raw: string): GenerateSmsResult {
   // Defensive cleanup: strip any orphaned tag fragments DeepSeek may have left
   // behind even after our tolerant tag matching (e.g. a leading "<<sms>>" with
   // no matching close tag, or a trailing "<</sms>>", or stray "<<angle>>...<</angle>>").
+  //
+  // ROOT CAUSE of the "...inviting?</" production leak: when DeepSeek hits the
+  // max-token cap mid-way through emitting the closing "<</sms>>" wrapper, the
+  // response ends with a truncated fragment like "</". The complete-tag regex
+  // above can't match it (there's no matching close), so the plain-text fallback
+  // keeps everything after the angle tag — including that dangling "</". The
+  // final `.replace(/<+\/?\s*$/, '')` below strips any such trailing "<" / "</"
+  // fragment at the source; `sanitizeConciergeOutbound` is the belt-and-braces
+  // net that guarantees it can never reach a bride regardless.
   smsContent = smsContent
     .replace(/^<<?\s*sms\s*>>\s*/i, '')
     .replace(/\s*<<?\s*\/sms\s*>>\s*$/i, '')
     .replace(/<<?\s*angle\s*>>[\s\S]*?<<?\s*\/angle\s*>>/gi, '')
     .replace(/<<?\s*\/?\s*sms\s*>>/gi, '')
+    .replace(/<+\/?\s*$/, '')  // trailing truncated tag fragment ("</", "<", "<<")
     .trim();
 
   const angleRaw = (angleMatch[1] || '').trim().toLowerCase();
@@ -184,7 +194,7 @@ export function parseStructuredOutput(raw: string): GenerateSmsResult {
     };
   }
 
-  const smsText = sanitizeSmsText(smsContent);
+  const smsText = sanitizeConciergeOutbound(smsContent);
   if (!smsText) {
     return {
       ok: false,

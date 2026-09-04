@@ -13,6 +13,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import type { SmsProvider } from './types';
 import { ghlSmsProvider } from './ghl-provider';
+import { sanitizeConciergeOutbound } from '../sanitize-outbound';
 
 const REGISTRY: Record<string, SmsProvider> = {
   ghl: ghlSmsProvider,
@@ -47,7 +48,13 @@ export async function sendAiSms(input: {
   message: string;
 }) {
   const provider = await getSmsProviderForVenue(input.venueId);
-  const result = await provider.send(input);
+  // Final defensive gate: every AI-generated message is sanitized at generation
+  // time, but this is the single choke point that ALL production AI SMS sends
+  // pass through, so we sanitize once more right before handing text to the
+  // carrier. Guarantees no HTML fragment / markdown / exotic punctuation can
+  // ever reach a bride, even if a future caller forgets to clean its text.
+  const message = sanitizeConciergeOutbound(input.message);
+  const result = await provider.send({ ...input, message });
   // Tag the result with the provider key so callers can log which provider sent
   return { ...result, providerKey: provider.key };
 }
