@@ -80,6 +80,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   await sendEmail({
     to,
     subject: `[Test] ${resolvedSubject}`,
+    // Name only → verified default From address with a "StoryVenue" display
+    // name, so test sends match production (inbox shows StoryVenue, not "hello").
+    from: { name: 'StoryVenue' },
     html,
   });
 

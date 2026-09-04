@@ -156,7 +156,6 @@ export async function processPrivateClientMonthlyReminder(): Promise<PrivateClie
 
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
   const actionUrl = `${appUrl}/dashboard/leads`;
-  const notifFromEmail = process.env.NOTIFICATION_FROM_EMAIL?.trim() || 'notifications@send.storyvenue.com';
 
   for (const venue of toSend) {
     const venueName = venue.name || 'your venue';
@@ -209,8 +208,10 @@ export async function processPrivateClientMonthlyReminder(): Promise<PrivateClie
           sendEmail({
             to,
             subject: resolvedSubject,
+            // Name only → uses the verified default From address, so the inbox
+            // shows "StoryVenue" as the sender (not the raw mailbox name).
+            from: { name: 'StoryVenue' },
             html,
-            from: { email: notifFromEmail, name: 'StoryVenue' },
           }),
         ),
       );

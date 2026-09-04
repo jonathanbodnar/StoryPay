@@ -537,8 +537,8 @@ It covers your lead funnel, booking analytics, and engagement metrics for the la
     category: 'reporting',
     editable: true,
     defaults: {
-      subject: 'Your monthly StoryVenue check-in — update your booked tours & weddings',
-      heading: 'A two-minute update keeps your numbers accurate',
+      subject: 'Urgent reminder: please update your latest booked tours and booked weddings',
+      heading: 'Urgent reminder: please update your latest booked tours and booked weddings',
       body: `Hi {{owner_first_name}},
 
 This is your monthly reminder to spend two minutes in StoryVenue keeping your pipeline up to date.
