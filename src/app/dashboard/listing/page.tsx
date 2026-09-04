@@ -277,13 +277,188 @@ const SOURCE_DOT: Record<LeadSourceBucket, string> = {
   other: 'bg-violet-500',
 };
 
+type FunnelLeadItem = {
+  id: string;
+  name: string;
+  email: string | null;
+  stage: string | null;
+  source: LeadSourceBucket;
+  created_at: string | null;
+};
+
+const SOURCE_LABEL: Record<LeadSourceBucket, string> = {
+  meta: 'Meta', google: 'Google', direct: 'Direct', other: 'Other',
+};
+
+/**
+ * Modal listing the actual brides behind one funnel box, each linking straight
+ * to her chat. Fetches lazily on open, honoring the active source filter + date
+ * range, and shows the same cumulative set the funnel number represents.
+ */
+function FunnelLeadsModal({
+  step, label, sourceFilter, dateRange, onClose,
+}: {
+  step: string;
+  label: string;
+  sourceFilter: LeadSourceBucket | null;
+  dateRange: DateRange;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [leads, setLeads] = useState<FunnelLeadItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [truncated, setTruncated] = useState(false);
+  const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          step,
+          from: dateRange.from,
+          to: dateRange.to,
+          tzOffset: String(new Date().getTimezoneOffset()),
+        });
+        if (sourceFilter) params.set('source', sourceFilter);
+        const res = await fetch(`/api/listing-analytics/lead-funnel/leads?${params.toString()}`, { cache: 'no-store' });
+        if (res.ok) {
+          const json = await res.json() as { leads: FunnelLeadItem[]; total: number; truncated: boolean };
+          if (!cancelled) { setLeads(json.leads ?? []); setTotal(json.total ?? 0); setTruncated(!!json.truncated); }
+        }
+      } catch { /* silent */ } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [step, sourceFilter, dateRange.from, dateRange.to]);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? leads.filter((l) => l.name.toLowerCase().includes(q) || (l.email ?? '').toLowerCase().includes(q))
+    : leads;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-gray-100 px-5 py-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">{label}</h3>
+            <p className="mt-0.5 text-xs text-gray-400">
+              {total.toLocaleString()} {total === 1 ? 'contact' : 'contacts'}
+              {sourceFilter ? ` · ${SOURCE_LABEL[sourceFilter]}` : ''}
+              {' · tap a name to open their chat'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {leads.length > 8 && (
+          <div className="border-b border-gray-100 px-5 py-2.5">
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-2.5 py-1.5">
+              <Search size={14} className="text-gray-400" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name or email"
+                className="w-full bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="space-y-2 p-5">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-12 animate-pulse rounded-xl bg-gray-100" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-gray-400">
+              {leads.length === 0 ? 'No contacts in this stage yet.' : 'No matches.'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-50">
+              {filtered.map((l) => {
+                const avatar = (
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white">
+                    {(l.name.trim()[0] ?? '?').toUpperCase()}
+                  </span>
+                );
+                const meta = (
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-gray-900">{l.name}</span>
+                    <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-gray-400">
+                      <span className={`h-1.5 w-1.5 rounded-full ${SOURCE_DOT[l.source]}`} />
+                      {SOURCE_LABEL[l.source]}
+                      {l.stage ? <span className="truncate">· {l.stage}</span> : null}
+                    </span>
+                  </span>
+                );
+                // Open the person's chat thread directly (same deep-link the
+                // Leads page uses). Requires an email to resolve the thread;
+                // rare email-less leads render as a non-clickable row.
+                const email = (l.email ?? '').trim();
+                return (
+                  <li key={l.id}>
+                    {email ? (
+                      <NextLink
+                        href={`/dashboard/conversations?customerFromEmail=${encodeURIComponent(email)}`}
+                        className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-gray-50"
+                      >
+                        {avatar}
+                        {meta}
+                        <MessageCircle size={16} className="shrink-0 text-gray-300" />
+                      </NextLink>
+                    ) : (
+                      <div className="flex items-center gap-3 px-5 py-3 opacity-70">
+                        {avatar}
+                        {meta}
+                        <span className="shrink-0 text-[10px] text-gray-300">no email</span>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {truncated && !loading && (
+          <div className="border-t border-gray-100 px-5 py-2.5 text-center text-[11px] text-gray-400">
+            Showing the first {leads.length.toLocaleString()} of {total.toLocaleString()}. Use search or narrow the date range to find a specific contact.
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function FunnelMetrics({
-  funnel, sourceFilter, onSourceFilterChange,
+  funnel, sourceFilter, onSourceFilterChange, dateRange,
 }: {
   funnel: LeadFunnelPayload | null;
   sourceFilter: LeadSourceBucket | null;
   onSourceFilterChange: (v: LeadSourceBucket | null) => void;
+  dateRange: DateRange;
 }) {
+  const [openStep, setOpenStep] = useState<{ key: string; label: string } | null>(null);
   const steps = funnel?.steps?.length ? funnel.steps : FUNNEL_FALLBACK;
   const conversions = funnel?.conversions ?? [null, null, null, null];
   const sources = funnel?.sources ?? [];
@@ -350,13 +525,23 @@ function FunnelMetrics({
           return (
             <Fragment key={step.key}>
               <div className="flex-1 min-w-0">
-                <div className="h-full rounded-2xl border border-gray-200 bg-gray-50/60 px-4 py-5 text-center">
+                <button
+                  type="button"
+                  disabled={step.count === 0}
+                  onClick={() => setOpenStep({ key: step.key, label: step.label })}
+                  title={step.count === 0 ? undefined : `View the ${step.count.toLocaleString()} ${step.label.toLowerCase()}`}
+                  className={`group h-full w-full rounded-2xl border border-gray-200 bg-gray-50/60 px-4 py-5 text-center transition-all ${
+                    step.count === 0
+                      ? 'cursor-default'
+                      : 'cursor-pointer hover:border-gray-900 hover:bg-white hover:shadow-sm'
+                  }`}
+                >
                   <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gray-900">
                     <Icon size={18} className="text-white" />
                   </div>
-                  <p className="text-3xl font-bold text-gray-900 tabular-nums">{step.count.toLocaleString()}</p>
+                  <p className={`text-3xl font-bold tabular-nums ${step.count === 0 ? 'text-gray-900' : 'text-gray-900 group-hover:text-violet-600'}`}>{step.count.toLocaleString()}</p>
                   <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">{step.label}</p>
-                </div>
+                </button>
               </div>
               {i < steps.length - 1 && (
                 <div className="flex w-14 lg:w-24 shrink-0 flex-col items-center justify-center">
@@ -378,13 +563,20 @@ function FunnelMetrics({
           const Icon = FUNNEL_ICONS[i] ?? Inbox;
           return (
             <div key={step.key}>
-              <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50/60 px-4 py-3">
+              <button
+                type="button"
+                disabled={step.count === 0}
+                onClick={() => setOpenStep({ key: step.key, label: step.label })}
+                className={`flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50/60 px-4 py-3 text-left transition-colors ${
+                  step.count === 0 ? 'cursor-default' : 'cursor-pointer active:bg-white hover:border-gray-900'
+                }`}
+              >
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-900 shrink-0">
                   <Icon size={16} className="text-white" />
                 </div>
                 <p className="flex-1 min-w-0 text-[11px] font-semibold uppercase tracking-wider text-gray-500">{step.label}</p>
                 <p className="text-2xl font-bold text-gray-900 tabular-nums">{step.count.toLocaleString()}</p>
-              </div>
+              </button>
               {i < steps.length - 1 && (
                 <div className="flex items-center gap-2 py-1 pl-9">
                   <div className="h-5 border-l-2 border-dashed border-gray-300" />
@@ -397,6 +589,16 @@ function FunnelMetrics({
           );
         })}
       </div>
+
+      {openStep && (
+        <FunnelLeadsModal
+          step={openStep.key}
+          label={openStep.label}
+          sourceFilter={sourceFilter}
+          dateRange={dateRange}
+          onClose={() => setOpenStep(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1025,7 +1227,7 @@ export default function ListingAnalyticsPage() {
       </div>
 
       {/* ── Booking funnel — first thing on the dashboard, always live ──── */}
-      <FunnelMetrics funnel={funnel} sourceFilter={sourceFilter} onSourceFilterChange={setSourceFilter} />
+      <FunnelMetrics funnel={funnel} sourceFilter={sourceFilter} onSourceFilterChange={setSourceFilter} dateRange={dateRange} />
 
       {/* ── Status banners ─────────────────────────────────────────────── */}
       {error && (
