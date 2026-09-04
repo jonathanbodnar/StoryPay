@@ -391,7 +391,7 @@ function FunnelLeadsModal({
             </div>
           ) : filtered.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm text-gray-400">
-              {leads.length === 0 ? 'No contacts in this stage yet.' : 'No matches.'}
+              {leads.length === 0 ? 'No contacts to show yet.' : 'No matches.'}
             </p>
           ) : (
             <ul className="divide-y divide-gray-50">
@@ -504,7 +504,11 @@ function FunnelMetrics({
             <button
               key={s.key}
               type="button"
-              onClick={() => onSourceFilterChange(active ? null : s.key)}
+              // Clicking a source pill filters the funnel to that entry point AND
+              // opens the same names modal the funnel boxes use — listing the
+              // brides who came in through that source, each linking to her chat.
+              onClick={() => { onSourceFilterChange(s.key); setOpenStep({ key: 'leads', label: `${s.label} leads` }); }}
+              title={s.count === 0 ? undefined : `View the ${s.count.toLocaleString()} ${s.label} ${s.count === 1 ? 'lead' : 'leads'}`}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 active
                   ? 'border-gray-900 bg-gray-900 text-white'
@@ -534,13 +538,13 @@ function FunnelMetrics({
                   className={`group h-full w-full rounded-2xl border border-gray-200 bg-gray-50/60 px-4 py-5 text-center transition-all ${
                     step.count === 0
                       ? 'cursor-default'
-                      : 'cursor-pointer hover:border-gray-900 hover:bg-white hover:shadow-sm'
+                      : 'cursor-pointer hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm'
                   }`}
                 >
                   <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gray-900">
                     <Icon size={18} className="text-white" />
                   </div>
-                  <p className={`text-3xl font-bold tabular-nums ${step.count === 0 ? 'text-gray-900' : 'text-gray-900 group-hover:text-violet-600'}`}>{step.count.toLocaleString()}</p>
+                  <p className="text-3xl font-bold tabular-nums text-gray-900">{step.count.toLocaleString()}</p>
                   <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">{step.label}</p>
                 </button>
               </div>
@@ -569,7 +573,7 @@ function FunnelMetrics({
                 disabled={step.count === 0}
                 onClick={() => setOpenStep({ key: step.key, label: step.label })}
                 className={`flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50/60 px-4 py-3 text-left transition-colors ${
-                  step.count === 0 ? 'cursor-default' : 'cursor-pointer active:bg-white hover:border-gray-900'
+                  step.count === 0 ? 'cursor-default' : 'cursor-pointer active:bg-gray-100 hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-900 shrink-0">
