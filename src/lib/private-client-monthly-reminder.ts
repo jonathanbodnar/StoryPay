@@ -20,6 +20,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { buildEmailHtml, fillTemplate, type EmailTemplateRow } from '@/lib/email-templates';
 import { SYSTEM_EMAIL_BY_KEY } from '@/lib/system-email-registry';
+import { buildVenueConciergeReplyToEmail } from '@/lib/conversations-inbound-email';
 
 const TEMPLATE_KEY = 'private_client_monthly_reminder';
 
@@ -179,6 +180,13 @@ export async function processPrivateClientMonthlyReminder(): Promise<PrivateClie
       continue;
     }
 
+    // Route any reply into this venue's Venue Concierge thread (same signed
+    // per-venue vcreply+ address the concierge notifications use): the reply
+    // lands in venue_concierge_messages as a venue-side message, notifies our
+    // concierges in the support inbox, and they reply from there straight back
+    // into this same thread on the Venue Concierge page.
+    const replyTo = buildVenueConciergeReplyToEmail(venue.id) || undefined;
+
     try {
       const ownerFirst = venue.owner_first_name?.trim() || 'there';
       const resolvedSubject = fillTemplate(subject, { venue_name: venueName, owner_first_name: ownerFirst });
@@ -211,6 +219,7 @@ export async function processPrivateClientMonthlyReminder(): Promise<PrivateClie
             // Name only → uses the verified default From address, so the inbox
             // shows "StoryVenue" as the sender (not the raw mailbox name).
             from: { name: 'StoryVenue' },
+            replyTo,
             html,
           }),
         ),
