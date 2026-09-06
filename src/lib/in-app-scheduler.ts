@@ -15,6 +15,12 @@
  *                                      active conversations feel instant
  *   - ghl-inbound-sync      every 60s  baseline sweep for colder threads
  *                                      (excludes what the hot tier covers)
+ *   - ghl-cold-sweep        every 15m  dormant threads (last activity 14–90d
+ *                                      ago) that aged out of the tiers above;
+ *                                      round-robin, budget-capped so a fresh
+ *                                      reply on a long-quiet thread is still
+ *                                      discovered promptly (see cold sweep in
+ *                                      ghl-inbound-sync-cron.ts)
  *   - concierge-sms-sync    every 20s  inbound SMS replies to venue owner/
  *                                      team members from Private Clients /
  *                                      venue-contact-card direct messages
@@ -111,6 +117,29 @@ const JOBS: ScheduledJob[] = [
         excludeHotTier: { windowMinutes: HOT_WINDOW_MINUTES, cap: HOT_MAX_THREADS },
       });
       return `venues=${r.venuesConsidered} threads=${r.threadsScanned} imported=${r.messagesImported} backfilled=${r.contactIdsBackfilled}`;
+    },
+  },
+  {
+    // Cold tier: dormant threads (last activity 14–90d ago) that have aged out
+    // of the hot + baseline tiers. Round-robin by the cold_swept_at watermark
+    // and capped per run (default 40 threads / 10 per venue), so GHL call volume
+    // stays flat regardless of account size. A 15m cadence keeps a small cold
+    // set revisited well inside the 60m "new reply" alert window, so a genuinely
+    // fresh reply on a long-quiet thread still notifies; larger backlogs simply
+    // take a few cycles to fully cover. All GHL-connected (PIT + OAuth) venues.
+    name: 'ghl-cold-sweep',
+    intervalMs: 15 * 60 * 1000,
+    initialDelayMs: 2 * 60 * 1000,
+    run: async () => {
+      const { runGhlColdThreadSync } = await import('@/lib/ghl-inbound-sync-cron');
+      const r = await runGhlColdThreadSync();
+      if (r.messagesImported > 0) {
+        return `candidates=${r.coldCandidates} threads=${r.threadsScanned} imported=${r.messagesImported}`;
+      }
+      if (r.threadsScanned > 0) {
+        return `candidates=${r.coldCandidates} threads=${r.threadsScanned} imported=0`;
+      }
+      return null;
     },
   },
   {

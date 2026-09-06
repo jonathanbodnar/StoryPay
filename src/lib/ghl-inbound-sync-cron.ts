@@ -482,3 +482,209 @@ export async function runGhlInboundSyncCronSafe(
     throw e;
   }
 }
+
+// ── Cold sweep ────────────────────────────────────────────────────────────────
+
+export interface GhlColdSweepResult {
+  venuesConsidered: number;
+  /** Cold candidates matched by the window+watermark query (before caps). */
+  coldCandidates: number;
+  /** Threads actually polled this run (after per-run + per-venue caps). */
+  threadsScanned: number;
+  messagesImported: number;
+  importedByVenue: Record<string, { venueName: string; imported: number; threads: number }>;
+}
+
+export interface GhlColdSweepOptions {
+  /** Lower bound of "cold": last activity at least this many days ago. Default 14. */
+  minDays?: number;
+  /** Upper bound of "cold": ignore threads dead longer than this. Default 90. */
+  maxDays?: number;
+  /** Per-run thread budget (rate-limit safety valve). Default 40. */
+  maxThreads?: number;
+  /** Per-venue cap within a single run so one big account can't monopolise the
+   *  budget (or its own GHL location's rate limit). Default 10. */
+  maxPerVenue?: number;
+  /** Don't re-poll a thread swept more recently than this many minutes ago, so a
+   *  tiny cold set isn't hammered every run. Default 30. */
+  revisitMinutes?: number;
+}
+
+function coldSweepEnvInt(name: string, fallback: number): number {
+  const raw = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+}
+
+interface ColdCandidateThread extends CandidateThread {
+  venueName: string;
+}
+
+/**
+ * Low-frequency sweep of DORMANT GHL SMS threads — the tier below hot (60 min)
+ * and baseline (~14 days). Without it, a thread that goes quiet for weeks stops
+ * being polled, so a fresh bride reply on it only surfaces when a human next
+ * opens the thread (days late, and — thanks to GHL's backdated dateAdded — no
+ * longer inside the 60-minute "new reply" alert window; see
+ * inbound-notification-gate.ts).
+ *
+ * Design:
+ *   - COLD = conversation_threads.last_message_at between (now-maxDays) and
+ *     (now-minDays). The AFTER-INSERT trigger keeps last_message_at at the newest
+ *     message time (migration 022), so a thread that receives a fresh reply here
+ *     immediately leaves the cold window and re-enters the hot/baseline tiers for
+ *     any follow-ups — no state machine to keep in sync.
+ *   - ROUND-ROBIN via the cold_swept_at watermark (migration 214): always poll
+ *     the least-recently-swept cold threads first, stamp cold_swept_at after, so
+ *     coverage advances evenly and the same threads aren't re-scanned every run.
+ *   - BOUNDED: a per-run thread budget + per-venue cap keep GHL call volume flat
+ *     regardless of account size; the rest wait for the next run. All limits are
+ *     env-tunable (see GhlColdSweepOptions / GHL_COLD_SWEEP_*).
+ *
+ * Ingest, dedupe (by ghl_message_id) and the "new reply" notification gate all
+ * live in syncInboundSmsFromGhlForThread → insertInboundGhlSms, so a discovered
+ * message is handled identically to any other tier: inserted once, and alerted
+ * only if genuinely fresh.
+ *
+ * Best-effort: per-thread errors are logged and skipped; the run never throws.
+ */
+export async function runGhlColdThreadSync(
+  opts: GhlColdSweepOptions = {}
+): Promise<GhlColdSweepResult> {
+  const minDays = Math.max(1, Math.min(365, opts.minDays ?? coldSweepEnvInt('GHL_COLD_SWEEP_MIN_DAYS', 14)));
+  const maxDays = Math.max(minDays + 1, Math.min(3650, opts.maxDays ?? coldSweepEnvInt('GHL_COLD_SWEEP_MAX_DAYS', 90)));
+  const maxThreads = Math.max(1, Math.min(500, opts.maxThreads ?? coldSweepEnvInt('GHL_COLD_SWEEP_MAX_THREADS', 40)));
+  const maxPerVenue = Math.max(1, Math.min(maxThreads, opts.maxPerVenue ?? coldSweepEnvInt('GHL_COLD_SWEEP_MAX_PER_VENUE', 10)));
+  const revisitMinutes = Math.max(0, Math.min(7 * 24 * 60, opts.revisitMinutes ?? coldSweepEnvInt('GHL_COLD_SWEEP_REVISIT_MINUTES', 30)));
+
+  const result: GhlColdSweepResult = {
+    venuesConsidered: 0,
+    coldCandidates: 0,
+    threadsScanned: 0,
+    messagesImported: 0,
+    importedByVenue: {},
+  };
+
+  const venues = await loadGhlVenues();
+  result.venuesConsidered = venues.length;
+  if (venues.length === 0) return result;
+  const venueById = new Map(venues.map((v) => [v.id, v]));
+
+  const now = Date.now();
+  const coldNewer = new Date(now - maxDays * 24 * 60 * 60 * 1000).toISOString(); // last activity no older than this
+  const coldOlder = new Date(now - minDays * 24 * 60 * 60 * 1000).toISOString(); // last activity at least this old
+  const revisitCutoff = new Date(now - revisitMinutes * 60 * 1000).toISOString();
+
+  // Over-fetch (budget × 3, capped) so the per-venue cap can still fill the
+  // run's budget from a diverse venue set instead of one account's backlog.
+  const fetchLimit = Math.min(1500, maxThreads * 3);
+
+  const { data: rows, error } = await supabaseAdmin
+    .from('conversation_threads')
+    .select('id, venue_id, venue_customer_id')
+    .in('venue_id', venues.map((v) => v.id))
+    .not('venue_customer_id', 'is', null)
+    .gte('last_message_at', coldNewer)
+    .lt('last_message_at', coldOlder)
+    .or(`cold_swept_at.is.null,cold_swept_at.lt.${revisitCutoff}`)
+    .order('cold_swept_at', { ascending: true, nullsFirst: true })
+    .order('last_message_at', { ascending: true })
+    .limit(fetchLimit);
+
+  if (error) {
+    console.error('[ghl-cold-sweep] candidate query failed', error.message);
+    return result;
+  }
+
+  const candidates: ColdCandidateThread[] = (rows ?? [])
+    .map((t) => {
+      const r = t as { id: string; venue_id: string; venue_customer_id: string };
+      const v = venueById.get(r.venue_id);
+      if (!v) return null;
+      return { threadId: r.id, venueId: r.venue_id, venueCustomerId: r.venue_customer_id, venueName: v.name };
+    })
+    .filter((t): t is ColdCandidateThread => t !== null);
+  result.coldCandidates = candidates.length;
+  if (candidates.length === 0) return result;
+
+  // Greedy fill to the per-run budget while honouring the per-venue cap. Since
+  // candidates are already ordered oldest-swept-first, this keeps coverage fair
+  // both across runs (watermark) and within a run (per-venue cap).
+  const perVenueCount = new Map<string, number>();
+  const selected: ColdCandidateThread[] = [];
+  for (const c of candidates) {
+    if (selected.length >= maxThreads) break;
+    const used = perVenueCount.get(c.venueId) ?? 0;
+    if (used >= maxPerVenue) continue;
+    perVenueCount.set(c.venueId, used + 1);
+    selected.push(c);
+  }
+  if (selected.length === 0) return result;
+
+  const sweptThreadIds: string[] = [];
+  for (const t of selected) {
+    try {
+      const { imported } = await syncInboundSmsFromGhlForThread({
+        venueId: t.venueId,
+        threadId: t.threadId,
+        venueCustomerId: t.venueCustomerId,
+      });
+      result.threadsScanned++;
+      if (imported > 0) {
+        result.messagesImported += imported;
+        const bucket = (result.importedByVenue[t.venueId] ??= {
+          venueName: t.venueName,
+          imported: 0,
+          threads: 0,
+        });
+        bucket.imported += imported;
+        bucket.threads++;
+      }
+    } catch (e) {
+      console.error('[ghl-cold-sweep] thread sync failed', {
+        threadId: t.threadId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      // Stamp the watermark even on a failed/empty poll so the round-robin
+      // advances and one broken thread can't wedge the sweep on every run.
+      sweptThreadIds.push(t.threadId);
+    }
+  }
+
+  if (sweptThreadIds.length > 0) {
+    const { error: updErr } = await supabaseAdmin
+      .from('conversation_threads')
+      .update({ cold_swept_at: new Date().toISOString() })
+      .in('id', sweptThreadIds);
+    if (updErr) console.warn('[ghl-cold-sweep] watermark update failed', updErr.message);
+  }
+
+  if (result.messagesImported > 0) {
+    console.log('[ghl-cold-sweep] recovered inbound messages', {
+      coldCandidates: result.coldCandidates,
+      threadsScanned: result.threadsScanned,
+      messagesImported: result.messagesImported,
+      importedByVenue: result.importedByVenue,
+    });
+  }
+
+  return result;
+}
+
+/** Route-facing wrapper that records unexpected failures in the Error Log. */
+export async function runGhlColdThreadSyncSafe(
+  opts: GhlColdSweepOptions = {}
+): Promise<GhlColdSweepResult> {
+  try {
+    return await runGhlColdThreadSync(opts);
+  } catch (e) {
+    void logError({
+      level: 'error',
+      source: 'cron',
+      category: 'ghl_cold_sweep_cron',
+      message: 'GHL cold-sweep cron crashed — dormant threads are not being polled for late inbound replies.',
+      error: e,
+    });
+    throw e;
+  }
+}
