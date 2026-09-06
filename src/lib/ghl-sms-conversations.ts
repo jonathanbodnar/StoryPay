@@ -8,6 +8,7 @@ import {
   normalizePhone,
 } from '@/lib/ghl';
 import { notifyOwnerNewMessage } from '@/lib/owner-notifications';
+import { isFreshInboundForAlert } from '@/lib/inbound-notification-gate';
 import { logError } from '@/lib/error-log';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-sms.storypay.placeholder';
@@ -433,43 +434,66 @@ export async function insertInboundGhlSms(params: {
     };
     void broadcastInbound();
 
-    // Slack alert for the support team — fire-and-forget, never blocks the
-    // inbound SMS flow. No-ops if SLACK_SUPPORT_WEBHOOK_URL is unset.
-    void (async () => {
-      try {
-        const { data: v } = await supabaseAdmin
-          .from('venues')
-          .select('name')
-          .eq('id', venueId)
-          .maybeSingle();
-        const { notifyBrideReply } = await import('@/lib/slack-notify');
-        await notifyBrideReply({
-          venueName: (v as { name?: string } | null)?.name || 'Unknown venue',
-          contactName: contactName?.trim() || 'Contact',
-          messagePreview: messageBody.trim(),
-          threadId,
-        });
-      } catch (e) {
-        console.warn('[ghl-sms] slack notify failed', e);
-      }
-    })();
+    // Freshness gate: a "new reply" ping is only accurate for a message whose
+    // TRUE event time is recent. A reply on a long-dormant thread can sit
+    // unseen in GHL and only import days later when the thread is next touched
+    // — its created_at (GHL dateAdded) is then backdated, so firing "New bride
+    // reply" would resurface a stale, already-handled message as brand new
+    // (the White Pine Manor "message from Thursday popped up" incident). Such
+    // late imports are still inserted + broadcast above (inbox stays complete
+    // and the thread still surfaces under "needs reply"); we only skip the
+    // real-time alerts. See inbound-notification-gate.ts.
+    const effectiveCreatedAt =
+      (inserted as { created_at?: string }).created_at || createdAt || null;
+    const isFreshReply = isFreshInboundForAlert(effectiveCreatedAt);
+    if (!isFreshReply) {
+      console.log('[ghl-sms] stale inbound imported — suppressing new-reply alerts', {
+        threadId,
+        ghlMessageId: ghlMessageId || null,
+        createdAt: effectiveCreatedAt,
+      });
+    }
 
-    // Owner notification — fire on EVERY inbound SMS reply, independent of the
-    // AI Concierge state machine. This guarantees the venue owner is emailed
-    // when: (a) a contact replies for the first time after a public-listing
-    // form fill, and (b) any time the AI is active and a contact replies (so
-    // the owner can take the conversation over) — including repeated re-entries
-    // into AI follow-up. Mirrors the inbound-email path. Best-effort and gated
-    // by the venue's email_new_message toggle + recipient email, so it applies
-    // uniformly to every sub-account.
-    notifyOwnerNewMessage({
-      venueId,
-      threadId,
-      fromName:        contactName?.trim() || null,
-      fromEmail:       '',
-      bodyText:        messageBody.trim(),
-      venueCustomerId: customerId,
-    });
+    if (isFreshReply) {
+      // Slack alert for the support team — fire-and-forget, never blocks the
+      // inbound SMS flow. No-ops if SLACK_SUPPORT_WEBHOOK_URL is unset.
+      void (async () => {
+        try {
+          const { data: v } = await supabaseAdmin
+            .from('venues')
+            .select('name')
+            .eq('id', venueId)
+            .maybeSingle();
+          const { notifyBrideReply } = await import('@/lib/slack-notify');
+          await notifyBrideReply({
+            venueName: (v as { name?: string } | null)?.name || 'Unknown venue',
+            contactName: contactName?.trim() || 'Contact',
+            messagePreview: messageBody.trim(),
+            threadId,
+          });
+        } catch (e) {
+          console.warn('[ghl-sms] slack notify failed', e);
+        }
+      })();
+
+      // Owner notification — fire on EVERY fresh inbound SMS reply, independent
+      // of the AI Concierge state machine. This guarantees the venue owner is
+      // emailed when: (a) a contact replies for the first time after a
+      // public-listing form fill, and (b) any time the AI is active and a
+      // contact replies (so the owner can take the conversation over) —
+      // including repeated re-entries into AI follow-up. Mirrors the
+      // inbound-email path. Best-effort and gated by the venue's
+      // email_new_message toggle + recipient email, so it applies uniformly to
+      // every sub-account.
+      notifyOwnerNewMessage({
+        venueId,
+        threadId,
+        fromName:        contactName?.trim() || null,
+        fromEmail:       '',
+        bodyText:        messageBody.trim(),
+        venueCustomerId: customerId,
+      });
+    }
   }
 
   return { ok: true, inserted: true, venueCustomerId: customerId };

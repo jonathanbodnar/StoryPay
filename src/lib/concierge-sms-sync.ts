@@ -21,6 +21,7 @@
  * prompted the ghlRequest 429-retry fix.
  */
 import { supabaseAdmin } from '@/lib/supabase';
+import { isFreshInboundForAlert } from '@/lib/inbound-notification-gate';
 import { getGhlToken, getOrCreateGhlConversationIdsForContact, listGhlConversationMessages } from '@/lib/ghl';
 import {
   ghlApiMessagesFromResponse,
@@ -212,19 +213,31 @@ export async function runConciergeSmsReplySync(): Promise<ConciergeSmsReplySyncR
             }
           })();
 
-          void (async () => {
-            try {
-              const { notifyPrivateClientReply } = await import('@/lib/slack-notify');
-              await notifyPrivateClientReply({
-                venueName: c.venueName,
-                recipientLabel: c.recipientLabel,
-                messagePreview: body,
-                venueId: c.venueId,
-              });
-            } catch (e) {
-              console.warn('[concierge-sms-sync] slack notify failed', e);
-            }
-          })();
+          // Freshness gate (same rationale as the bride-thread inbound path):
+          // a late-imported reply carries a backdated GHL created_at, so firing
+          // a "reply from …" ping would resurface a stale message as new. The
+          // row is still inserted + broadcast above; only the alert is skipped.
+          if (!isFreshInboundForAlert(createdAt)) {
+            console.log('[concierge-sms-sync] stale inbound imported — suppressing reply alert', {
+              venueId: c.venueId,
+              ghlMessageId,
+              createdAt,
+            });
+          } else {
+            void (async () => {
+              try {
+                const { notifyPrivateClientReply } = await import('@/lib/slack-notify');
+                await notifyPrivateClientReply({
+                  venueName: c.venueName,
+                  recipientLabel: c.recipientLabel,
+                  messagePreview: body,
+                  venueId: c.venueId,
+                });
+              } catch (e) {
+                console.warn('[concierge-sms-sync] slack notify failed', e);
+              }
+            })();
+          }
         }
       }
     } catch (e) {
