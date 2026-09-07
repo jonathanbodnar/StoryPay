@@ -111,7 +111,7 @@ function buildDndUpdate(
   nowIso: string,
 ): Record<string, unknown> | null {
   const flags = ghlDndToConversationFlags(
-    (c.dndSettings ?? null) as Record<string, { status?: string } | null | undefined> | null,
+    (c.dndSettings ?? null) as Record<string, { status?: string; message?: string } | null | undefined> | null,
     c.inboundDndSettings ?? null,
   );
 

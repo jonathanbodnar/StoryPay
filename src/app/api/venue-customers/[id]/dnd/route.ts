@@ -26,12 +26,43 @@ const GHL_DND_CHANNELS = ['Call', 'Email', 'SMS', 'WhatsApp', 'GMB', 'FB'] as co
 type GhlDndChannel = (typeof GHL_DND_CHANNELS)[number];
 
 /**
+ * GHL conflates two very different things under a channel's DND entry:
+ *
+ *   1. A genuine consumer OPT-OUT — the contact texted STOP, an admin ticked
+ *      "DND", or the carrier reported an unsubscribe. Message is e.g.
+ *      `STOP_KEYWORD`, a manual note, or empty. This is a compliance signal:
+ *      we must not text them.
+ *   2. A one-off DELIVERABILITY failure — Twilio couldn't deliver a specific
+ *      message (unreachable handset 30003, unknown number 30005, landline
+ *      30006, carrier block, …). GHL stores this as an SMS DND entry with
+ *      status 'active'/'permanent' and a `TWILIO_ERROR_CODE: NNNNN` message.
+ *      It is NOT an opt-out — the contact never asked to stop.
+ *
+ * Historically we mapped BOTH onto `sms_dnd`, which `buildMergeVars` /
+ * `sendAutomationSmsToLead` treat as "never send SMS". So a single transient
+ * carrier hiccup (e.g. the phone was briefly off → 30003) permanently and
+ * SILENTLY suppressed every future SMS to that contact — including their
+ * pricing-guide delivery — with no auto-clear. That produced the 2026-09
+ * White Pine "guide often not sent via SMS" reports: ~66 of their contacts
+ * carried an SMS DND sourced from a Twilio delivery error, not an opt-out.
+ *
+ * Fix: only a genuine consent opt-out sets `sms_dnd`. A deliverability-only
+ * DND falls through, so the guide/AI/sequence SMS is re-attempted; if the
+ * number truly can't receive SMS, GHL still rejects it server-side and the
+ * failure is logged (observable) instead of vanishing forever. The raw GHL
+ * dndSettings JSON is preserved unchanged for the DND management UI.
+ */
+function isSmsDeliverabilityError(message?: string | null): boolean {
+  return /TWILIO_ERROR_CODE/i.test(String(message ?? ''));
+}
+
+/**
  * Derive the flat conversation_dnd_* boolean columns from GHL DND objects.
  * Accepts a permissive shape so it can be shared across modules with slightly
  * different local type aliases for the GHL DND objects.
  */
 export function ghlDndToConversationFlags(
-  dndSettings: Record<string, { status?: string } | null | undefined> | null | undefined,
+  dndSettings: Record<string, { status?: string; message?: string } | null | undefined> | null | undefined,
   inboundDndSettings: { all?: { status?: string } | null } | null | undefined,
 ): {
   sms_dnd: boolean;
@@ -40,8 +71,11 @@ export function ghlDndToConversationFlags(
   conversation_dnd_inbound_sms: boolean;
   conversation_dnd_all: boolean;
 } {
+  const smsEntry   = dndSettings?.['SMS'];
   const emailDnd   = isGhlDndOn(dndSettings?.['Email']?.status);
-  const smsDnd     = isGhlDndOn(dndSettings?.['SMS']?.status);
+  // SMS: honour the DND only when it's a genuine consent opt-out, NOT when it's
+  // a Twilio deliverability error GHL recorded as DND (see note above).
+  const smsDnd     = isGhlDndOn(smsEntry?.status) && !isSmsDeliverabilityError(smsEntry?.message);
   const callDnd    = isGhlDndOn(dndSettings?.['Call']?.status);
   const inboundDnd = isGhlDndOn(inboundDndSettings?.all?.status);
   const allDnd     = emailDnd && smsDnd && callDnd && inboundDnd;
