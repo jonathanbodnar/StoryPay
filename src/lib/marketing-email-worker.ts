@@ -1120,15 +1120,12 @@ export async function sendBookingSystemGuide(
 
           if (sent?.success) {
             emailDelivered = true;
-            // Log the outbound email so the contact trail starts here.
-            if (emailThread) {
-              void logToConversationThread({
-                threadId: emailThread.threadId,
-                venueId,
-                channel: 'email',
-                body: `📧 Guide sent via email:\n${body.slice(0, 600)}`,
-              });
-            }
+            // Record the delivery marker ONLY after a confirmed send, and await
+            // it so a marker-write failure is surfaced (never fire-and-forget).
+            await writeGuideDeliveryMarker(
+              venueId, leadId, emailThread, 'email',
+              `📧 Guide sent via email:\n${body.slice(0, 600)}`,
+            );
           } else {
             // sendEmail already logs the underlying Resend failure to error_logs.
             failures.push(`email_failed: ${sent?.error ?? 'unknown send error'}`);
@@ -1151,14 +1148,12 @@ export async function sendBookingSystemGuide(
 
         if (smsResult.ok && (smsResult as { mergedBody?: string }).mergedBody) {
           smsDelivered = true;
-          if (smsThread) {
-            void logToConversationThread({
-              threadId: smsThread.threadId,
-              venueId,
-              channel: 'sms',
-              body: `📱 Guide sent via SMS:\n${(smsResult as { mergedBody: string }).mergedBody}`,
-            });
-          }
+          // Record the delivery marker ONLY after a confirmed GHL send, and
+          // await it so a marker-write failure is surfaced (never fire-and-forget).
+          await writeGuideDeliveryMarker(
+            venueId, leadId, smsThread, 'sms',
+            `📱 Guide sent via SMS:\n${(smsResult as { mergedBody: string }).mergedBody}`,
+          );
         } else if (!smsResult.ok) {
           failures.push(`sms_failed: ${(smsResult as { error?: string }).error ?? 'unknown'}`);
         }
@@ -1706,17 +1701,20 @@ async function findOrCreateThreadForLead(
 /**
  * Writes a system-generated message to a conversation thread.
  * Updates the thread summary so it appears at the top of the inbox.
- * Never throws.
+ * Never throws — returns { ok } so callers that treat the thread as a
+ * delivery record (e.g. the guide markers) can await the result and surface a
+ * marker-write failure, while legacy fire-and-forget callers can keep ignoring
+ * the return value via `void`.
  */
 async function logToConversationThread(opts: {
   threadId: string;
   venueId: string;
   channel: 'sms' | 'email';
   body: string;
-}): Promise<void> {
+}): Promise<{ ok: boolean; error?: string }> {
   try {
     const preview = opts.body.replace(/\s+/g, ' ').trim().slice(0, 240);
-    await supabaseAdmin.from('conversation_messages').insert({
+    const { error: insertError } = await supabaseAdmin.from('conversation_messages').insert({
       thread_id: opts.threadId,
       visibility: 'external',
       channel: opts.channel,
@@ -1724,6 +1722,7 @@ async function logToConversationThread(opts: {
       sender_kind: 'system',
       external_email_sent: true,
     });
+    if (insertError) return { ok: false, error: insertError.message };
     // The DB trigger updates last_message_at/preview/visibility automatically,
     // but we also keep external_reply_channel correct on the thread.
     await supabaseAdmin
@@ -1736,8 +1735,46 @@ async function logToConversationThread(opts: {
       })
       .eq('id', opts.threadId)
       .eq('venue_id', opts.venueId);
+    return { ok: true };
   } catch (e) {
     console.error('[worker] logToConversationThread error (non-fatal):', e);
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Writes a guide-delivery marker ("📧/📱 Guide sent via …") to the lead's
+ * conversation thread AFTER the underlying send has actually succeeded, so the
+ * inbox thread is a trustworthy delivery record. The marker write is awaited
+ * and any failure — a missing thread or a DB error — is surfaced to the Error
+ * Log (booking_guide) so a "sent but not recorded" gap is observable instead of
+ * a silent fire-and-forget miss. Never throws: a marker-write problem must not
+ * break or double-send the guide delivery, which has already happened.
+ */
+async function writeGuideDeliveryMarker(
+  venueId: string,
+  leadId: string,
+  thread: { threadId: string } | null,
+  channel: 'sms' | 'email',
+  body: string,
+): Promise<void> {
+  try {
+    if (!thread) {
+      await logGuideIssue('warning', venueId, leadId,
+        `Pricing guide ${channel} sent but delivery marker not recorded: no conversation thread`,
+        { channel });
+      return;
+    }
+    const res = await logToConversationThread({ threadId: thread.threadId, venueId, channel, body });
+    if (!res.ok) {
+      await logGuideIssue('warning', venueId, leadId,
+        `Pricing guide ${channel} sent but delivery marker write failed`,
+        { channel, threadId: thread.threadId, error: res.error });
+    }
+  } catch (e) {
+    // Defensive: neither helper above throws, but never let a marker problem
+    // bubble into the delivery path.
+    console.error('[worker] writeGuideDeliveryMarker error (non-fatal):', e);
   }
 }
 
