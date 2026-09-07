@@ -1743,13 +1743,60 @@ async function logToConversationThread(opts: {
 }
 
 /**
- * Writes a guide-delivery marker ("📧/📱 Guide sent via …") to the lead's
- * conversation thread AFTER the underlying send has actually succeeded, so the
- * inbox thread is a trustworthy delivery record. The marker write is awaited
- * and any failure — a missing thread or a DB error — is surfaced to the Error
- * Log (booking_guide) so a "sent but not recorded" gap is observable instead of
- * a silent fire-and-forget miss. Never throws: a marker-write problem must not
- * break or double-send the guide delivery, which has already happened.
+ * Shared delivery-marker writer. Writes a "sent" marker to a lead's
+ * conversation thread AFTER a confirmed successful send, so the inbox thread is
+ * a trustworthy delivery record. The write is AWAITED and any "sent but not
+ * recorded" gap — a missing thread OR a DB insert error — is surfaced to the
+ * Error Log under `category` (e.g. `booking_guide`, `marketing_sequence`) so
+ * it's observable instead of a silent fire-and-forget miss.
+ *
+ * Never throws: a marker problem must never break or double-send the delivery,
+ * which has already happened. Writes exactly one marker per successful send
+ * (single insert), so awaiting it introduces no duplicate markers or re-sends.
+ */
+async function writeAwaitedDeliveryMarker(opts: {
+  venueId: string;
+  leadId: string;
+  thread: { threadId: string } | null;
+  channel: 'sms' | 'email';
+  body: string;
+  category: string;
+  label: string;
+  context?: Record<string, unknown>;
+}): Promise<void> {
+  const { venueId, leadId, thread, channel, body, category, label, context } = opts;
+  const surface = async (message: string, extra: Record<string, unknown>): Promise<void> => {
+    try {
+      await logError({
+        level:   'warning',
+        source:  'api',
+        category,
+        message,
+        venueId,
+        context: { leadId, channel, ...context, ...extra },
+      });
+    } catch { /* logging must never break delivery */ }
+  };
+  try {
+    if (!thread) {
+      await surface(`${label} ${channel} sent but delivery marker not recorded: no conversation thread`, {});
+      return;
+    }
+    const res = await logToConversationThread({ threadId: thread.threadId, venueId, channel, body });
+    if (!res.ok) {
+      await surface(`${label} ${channel} sent but delivery marker write failed`,
+        { threadId: thread.threadId, error: res.error });
+    }
+  } catch (e) {
+    // Defensive: the helpers above don't throw, but never let a marker problem
+    // bubble into the delivery path.
+    console.error('[worker] writeAwaitedDeliveryMarker error (non-fatal):', e);
+  }
+}
+
+/**
+ * Guide-flow wrapper around {@link writeAwaitedDeliveryMarker} — records the
+ * "📧/📱 Guide sent via …" marker under the `booking_guide` category.
  */
 async function writeGuideDeliveryMarker(
   venueId: string,
@@ -1758,24 +1805,11 @@ async function writeGuideDeliveryMarker(
   channel: 'sms' | 'email',
   body: string,
 ): Promise<void> {
-  try {
-    if (!thread) {
-      await logGuideIssue('warning', venueId, leadId,
-        `Pricing guide ${channel} sent but delivery marker not recorded: no conversation thread`,
-        { channel });
-      return;
-    }
-    const res = await logToConversationThread({ threadId: thread.threadId, venueId, channel, body });
-    if (!res.ok) {
-      await logGuideIssue('warning', venueId, leadId,
-        `Pricing guide ${channel} sent but delivery marker write failed`,
-        { channel, threadId: thread.threadId, error: res.error });
-    }
-  } catch (e) {
-    // Defensive: neither helper above throws, but never let a marker problem
-    // bubble into the delivery path.
-    console.error('[worker] writeGuideDeliveryMarker error (non-fatal):', e);
-  }
+  await writeAwaitedDeliveryMarker({
+    venueId, leadId, thread, channel, body,
+    category: 'booking_guide',
+    label:    'Pricing guide',
+  });
 }
 
 /**
@@ -2355,8 +2389,15 @@ async function processOneEnrollment(en: {
     }
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_email', status: emailSkipped ? 'skipped' : 'success' });
     if (send.ok && send.mergedSubject) {
-      void findOrCreateThreadForLead(en.venue_id, en.lead_id).then((threadId) => {
-        if (threadId) void logToConversationThread({ threadId, venueId: en.venue_id, channel: 'email', body: `[Email] ${send.mergedSubject}` });
+      // Record the delivery marker ONLY after the confirmed send, awaited so a
+      // "sent but not recorded" gap is surfaced instead of fire-and-forget.
+      const threadId = await findOrCreateThreadForLead(en.venue_id, en.lead_id);
+      await writeAwaitedDeliveryMarker({
+        venueId: en.venue_id, leadId: en.lead_id,
+        thread: threadId ? { threadId } : null,
+        channel: 'email', body: `[Email] ${send.mergedSubject}`,
+        category: 'marketing_sequence', label: 'Marketing sequence',
+        context: { automationId: en.automation_id, enrollmentId: en.id, stepOrder: idx },
       });
       // Tag lead as contacted + awaiting response when email is sent
       void import('@/lib/system-tags').then(({ applySystemTag, ensureSystemTagsForVenue }) =>
@@ -2407,8 +2448,15 @@ async function processOneEnrollment(en: {
     }
     void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'send_sms', status: softSkip ? 'skipped' : 'success' });
     if (send.ok && send.mergedBody) {
-      void findOrCreateThreadForLead(en.venue_id, en.lead_id).then((threadId) => {
-        if (threadId) void logToConversationThread({ threadId, venueId: en.venue_id, channel: 'sms', body: send.mergedBody! });
+      // Record the delivery marker ONLY after the confirmed send, awaited so a
+      // "sent but not recorded" gap is surfaced instead of fire-and-forget.
+      const threadId = await findOrCreateThreadForLead(en.venue_id, en.lead_id);
+      await writeAwaitedDeliveryMarker({
+        venueId: en.venue_id, leadId: en.lead_id,
+        thread: threadId ? { threadId } : null,
+        channel: 'sms', body: send.mergedBody,
+        category: 'marketing_sequence', label: 'Marketing sequence',
+        context: { automationId: en.automation_id, enrollmentId: en.id, stepOrder: idx },
       });
       // Tag lead as contacted + awaiting response when SMS is sent
       void import('@/lib/system-tags').then(({ applySystemTag, ensureSystemTagsForVenue }) =>
