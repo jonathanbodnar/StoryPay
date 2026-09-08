@@ -125,7 +125,7 @@ type RealtimePayload = {
 };
 
 type LeadFunnelStep = { key: string; label: string; count: number };
-type LeadSourceBucket = 'meta' | 'google' | 'webform' | 'direct' | 'other';
+type LeadSourceBucket = 'meta' | 'google' | 'webform' | 'lead_link' | 'direct' | 'other';
 type LeadFunnelSource = { key: LeadSourceBucket; label: string; count: number };
 type LeadFunnelPayload = {
   steps: LeadFunnelStep[];
@@ -284,6 +284,7 @@ const SOURCE_DOT: Record<LeadSourceBucket, string> = {
   meta: 'bg-blue-500',
   google: 'bg-amber-500',
   webform: 'bg-emerald-500',
+  lead_link: 'bg-rose-500',
   direct: 'bg-gray-400',
   other: 'bg-violet-500',
 };
@@ -301,7 +302,7 @@ type FunnelLeadItem = {
 };
 
 const SOURCE_LABEL: Record<LeadSourceBucket, string> = {
-  meta: 'Meta', google: 'Google', webform: 'Web Form', direct: 'Direct', other: 'Other',
+  meta: 'Meta', google: 'Google', webform: 'Web Form', lead_link: 'Lead Link', direct: 'Direct', other: 'Other',
 };
 
 /**
@@ -1057,6 +1058,11 @@ export default function ListingAnalyticsPage() {
   const [qrWithUtm, setQrWithUtm] = useState(false);
   const [qrGenerating, setQrGenerating] = useState(false);
 
+  // ── Lead Link QR + copy state ──────────────────────────────────────────────
+  const [llQrDataUrl, setLlQrDataUrl] = useState<string | null>(null);
+  const [llQrGenerating, setLlQrGenerating] = useState(false);
+  const [llCopied, setLlCopied] = useState(false);
+
   async function load(range: DateRange) {
     setLoading(true);
     setError('');
@@ -1142,6 +1148,36 @@ export default function ListingAnalyticsPage() {
     const a = document.createElement('a');
     a.href = qrDataUrl;
     a.download = `${data?.venue_slug ?? 'listing'}-qr.png`;
+    a.click();
+  }
+
+  // ── Lead Link helpers ──────────────────────────────────────────────────────
+  const leadLinkUrl = data?.venue_slug
+    ? `${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${data.venue_slug}/links`
+    : '';
+
+  async function copyLeadLink() {
+    if (!leadLinkUrl) return;
+    await navigator.clipboard.writeText(leadLinkUrl);
+    setLlCopied(true);
+    setTimeout(() => setLlCopied(false), 2000);
+  }
+
+  async function generateLeadLinkQr() {
+    if (!leadLinkUrl) return;
+    setLlQrGenerating(true);
+    try {
+      const QRCode = (await import('qrcode')).default;
+      const dataUrl = await QRCode.toDataURL(leadLinkUrl, { width: 400, margin: 2, color: { dark: '#111827', light: '#ffffff' } });
+      setLlQrDataUrl(dataUrl);
+    } catch { /* noop */ } finally { setLlQrGenerating(false); }
+  }
+
+  function downloadLeadLinkQr() {
+    if (!llQrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = llQrDataUrl;
+    a.download = `${data?.venue_slug ?? 'venue'}-lead-link-qr.png`;
     a.click();
   }
 
@@ -1672,6 +1708,62 @@ export default function ListingAnalyticsPage() {
                 <p className="text-xs text-gray-500 -mt-2">
                   Clicks from your link-in-bio landing page — every button visitors tap from your social profiles, for this date range.
                 </p>
+
+                {/* Share card: copyable URL + QR for print / table cards */}
+                {d.venue_slug && !isNativeApp() && (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                    <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Link2 size={13} className="text-gray-400" />
+                          <SectionTitle>Your Lead Link</SectionTitle>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Put this one link in your Instagram, TikTok, and Facebook bios. It sends couples to your listing and pricing guide.
+                        </p>
+                        <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 min-w-0">
+                          <span className="flex-1 truncate font-mono text-[11px] text-gray-600">{leadLinkUrl}</span>
+                          <button
+                            onClick={() => void copyLeadLink()}
+                            className={`shrink-0 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${llCopied ? 'bg-emerald-600 text-white' : 'bg-gray-900 text-white hover:bg-gray-700'}`}
+                          >
+                            {llCopied ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy</>}
+                          </button>
+                          <a
+                            href={leadLinkUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-300"
+                          >
+                            <ArrowUpRight size={11} /> Open
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* QR generator */}
+                      <div className="flex shrink-0 flex-col items-center gap-2">
+                        {llQrDataUrl ? (
+                          <>
+                            <Image src={llQrDataUrl} alt="Lead Link QR code" width={120} height={120} unoptimized className="rounded-xl border border-gray-100" />
+                            <button onClick={downloadLeadLinkQr} className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 transition-colors">
+                              <Download size={11} /> PNG
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => void generateLeadLinkQr()}
+                            disabled={llQrGenerating}
+                            className="flex h-[120px] w-[120px] flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-gray-200 text-[11px] text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-all disabled:opacity-40"
+                          >
+                            {llQrGenerating
+                              ? <RefreshCw size={16} className="animate-spin" />
+                              : <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> QR code</>}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* KPI tiles */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

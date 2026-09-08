@@ -1,16 +1,16 @@
 # Graph Report - homepage  (2026-09-08)
 
 ## Corpus Check
-- 40 files · ~31,627 words
+- 40 files · ~31,883 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 219 nodes · 301 edges · 19 communities (13 shown, 6 thin omitted)
+- 219 nodes · 303 edges · 19 communities (13 shown, 6 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `96a34ee4`
+- Built from commit: `bb832f1c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -64,8 +64,8 @@
 ## Communities (19 total, 6 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.08
-Nodes (20): ListingLeadModal(), Props, Status, TOURING_OPTIONS, ListingTracker(), Props, APP, SaveToWishlistButton() (+12 more)
+Cohesion: 0.11
+Nodes (16): ListingTracker(), Props, APP, SaveToWishlistButton(), VenueFaqItem, VenueFaqSection(), VenueMapEmbed(), VenueSocial (+8 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.16
@@ -80,8 +80,8 @@ Cohesion: 0.10
 Nodes (19): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+11 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.14
-Nodes (10): Ga4Scripts(), LEAD_LINK_EVENTS, LeadLinkTracker(), API_BASE, DIRECTORY_SITE, fetchVenue, generateMetadata(), LinksVenuePayload (+2 more)
+Cohesion: 0.10
+Nodes (14): Ga4Scripts(), LEAD_LINK_EVENTS, LeadLinkTracker(), ListingLeadModal(), Props, Status, TOURING_OPTIONS, API_BASE (+6 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.21
@@ -120,7 +120,7 @@ Nodes (5): Deploy on Railway, Environment variables, Local development, Relation
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `siteUrl()` connect `Community 5` to `Community 0`, `Community 1`, `Community 4`?**
-  _High betweenness centrality (0.092) - this node is a cross-community bridge._
+  _High betweenness centrality (0.088) - this node is a cross-community bridge._
 - **Why does `DirectoryListingBadges()` connect `Community 6` to `Community 0`?**
   _High betweenness centrality (0.035) - this node is a cross-community bridge._
 - **Why does `VenueSeoFooter()` connect `Community 1` to `Community 0`?**
@@ -128,7 +128,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **What connects `eslintConfig`, `nextConfig`, `name` to the rest of the system?**
   _91 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.08387096774193549 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10666666666666667 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
   _Cohesion score 0.08 - nodes in this community are weakly interconnected._
 - **Should `Community 3` be split into smaller, more focused modules?**

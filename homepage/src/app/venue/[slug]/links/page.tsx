@@ -5,10 +5,11 @@ import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import type { ReactNode } from 'react';
 import {
-  BadgeCheck, Facebook, Globe, Instagram, MapPin, Store, FileText, ArrowRight,
+  BadgeCheck, Facebook, Globe, Instagram, MapPin, Store, ArrowRight,
 } from 'lucide-react';
 import { Ga4Scripts } from '@/components/Ga4Scripts';
 import { LeadLinkTracker } from '@/components/LeadLinkTracker';
+import { ListingLeadModal } from '@/components/ListingLeadModal';
 import { siteUrl } from '@/lib/site-url';
 
 const API_BASE = siteUrl(process.env.NEXT_PUBLIC_DASHBOARD_URL, 'https://app.storyvenue.com');
@@ -106,7 +107,6 @@ export default async function VenueLinksPage({
   );
 
   const listingHref = `/venue/${venue.slug}?utm_source=lead_link&utm_medium=bio&utm_campaign=venue_listing`;
-  const pricingHref = `/venue/${venue.slug}?utm_source=lead_link&utm_medium=bio&utm_campaign=pricing_availability`;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#f5f2ed] via-[#fafaf9] to-[#f0ece5]">
@@ -184,12 +184,15 @@ export default async function VenueLinksPage({
             subtitle="Photos, reviews & everything about us"
             platform="listing"
           />
-          <LinkCard
-            href={pricingHref}
-            icon={<FileText size={20} />}
-            title="Download Pricing & Availability"
-            subtitle="Get our full guide sent to you instantly"
-            platform="pricing"
+          {/* Pops the lead-capture modal in-page and records the inquiry as a
+              real lead under the "Lead Link" funnel source. */}
+          <ListingLeadModal
+            venueName={venue.name}
+            venueId={venue.id}
+            venueSlug={venue.slug}
+            apiBase={API_BASE}
+            source="lead_link"
+            variant="card"
           />
         </div>
 

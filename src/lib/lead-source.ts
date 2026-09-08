@@ -29,16 +29,18 @@
  * but for these four buckets that distinction doesn't matter.
  */
 
-export type LeadSourceBucket = 'meta' | 'google' | 'webform' | 'direct' | 'other';
+export type LeadSourceBucket = 'meta' | 'google' | 'webform' | 'lead_link' | 'direct' | 'other';
 
-// Named acquisition channels first (Meta / Google / Web Form), then the two
-// "unknown-origin" buckets (Direct / Other) last so Other stays the catch-all.
-export const LEAD_SOURCE_ORDER: LeadSourceBucket[] = ['meta', 'google', 'webform', 'direct', 'other'];
+// Named acquisition channels first (Meta / Google / Web Form / Lead Link), then
+// the two "unknown-origin" buckets (Direct / Other) last so Other stays the
+// catch-all.
+export const LEAD_SOURCE_ORDER: LeadSourceBucket[] = ['meta', 'google', 'webform', 'lead_link', 'direct', 'other'];
 
 export const LEAD_SOURCE_LABELS: Record<LeadSourceBucket, string> = {
   meta: 'Meta',
   google: 'Google',
   webform: 'Web Form',
+  lead_link: 'Lead Link',
   direct: 'Direct',
   other: 'Other',
 };
@@ -52,6 +54,14 @@ export const LEAD_SOURCE_LABELS: Record<LeadSourceBucket, string> = {
  * 'contact', so there's no overlap.
  */
 const WEBFORM_SOURCE_VALUES = new Set(['embed', 'webform', 'web_form']);
+
+/**
+ * Ingest `source` / utm_source values written by the Lead Link (link-in-bio)
+ * landing page's pricing-guide modal. The Lead Link page submits leads with
+ * source='lead_link' (and utm_source='lead_link') specifically so bio-link
+ * inquiries surface as their own slice in the funnel source chips.
+ */
+const LEAD_LINK_TOKENS = new Set(['lead_link', 'leadlink', 'lead-link']);
 
 /** utm_source / referral tokens that map to Meta (Facebook + Instagram). */
 const META_TOKENS = new Set([
@@ -178,6 +188,12 @@ export function bucketLeadSource(input: LeadSourceInput): LeadSourceBucket {
   // so embed leads don't collapse into Other via the host-site referrer.
   const srcNorm = norm(input.source);
   if (WEBFORM_SOURCE_VALUES.has(srcNorm)) return 'webform';
+
+  // ── Lead Link (link-in-bio landing page) ──────────────────────────────
+  // Checked after the ad-platform signals so an ad-driven visitor who lands on
+  // the Lead Link page is still credited to the ad. Keyed off the definitive
+  // ingest `source`/utm_source markers the Lead Link modal sets.
+  if (LEAD_LINK_TOKENS.has(srcNorm) || LEAD_LINK_TOKENS.has(utmSource)) return 'lead_link';
 
   // ── Known tag/referral that isn't Meta or Google → Other ──────────────
   const hasTagSignal = Boolean(utmSource) || Boolean(ref);

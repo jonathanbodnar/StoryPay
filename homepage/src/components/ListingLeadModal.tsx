@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, FileText, ArrowRight } from 'lucide-react';
 
 const TOURING_OPTIONS = [
   'Immediately — within the next month',
@@ -17,6 +17,17 @@ interface Props {
   venueSlug?: string;
   apiBase: string; // e.g. "https://app.storyvenue.com"
   confirmationBase?: string; // e.g. "" (same origin) or "https://storyvenue.com"
+  /**
+   * Ingest source recorded on the lead. Defaults to 'directory' (the public
+   * listing). The Lead Link page passes 'lead_link' so these inquiries surface
+   * as their own slice in the Booking Funnel source chips.
+   */
+  source?: string;
+  /**
+   * Trigger appearance. 'button' (default) is the full-width dark CTA used on
+   * the listing page. 'card' matches the Lead Link page's link cards.
+   */
+  variant?: 'button' | 'card';
 }
 
 type Status = 'idle' | 'submitting' | 'success' | 'error';
@@ -45,7 +56,7 @@ function captureAttribution(venueId: string): Record<string, string> {
   return out;
 }
 
-export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confirmationBase = '' }: Props) {
+export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confirmationBase = '', source = 'directory', variant = 'button' }: Props) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>('idle');
   const [errMsg, setErrMsg] = useState('');
@@ -69,6 +80,16 @@ export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confi
     setErrMsg('');
 
     try {
+      // First-touch attribution from the URL/referrer. For non-directory
+      // sources (e.g. the Lead Link page, which has a clean URL), stamp the
+      // source into utm_source too when the visitor arrived without tags so
+      // funnel bucketing credits the right channel.
+      const attribution = captureAttribution(venueId);
+      if (source !== 'directory' && !attribution.utm_source) {
+        attribution.utm_source = source;
+        attribution.utm_medium = attribution.utm_medium || 'bio';
+      }
+
       const res = await fetch(`${apiBase}/api/public/leads`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -81,8 +102,8 @@ export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confi
           booking_timeline: form.booking_timeline,
           venue_matters:    form.venue_matters,
           message:          form.message.trim() || undefined,
-          source:           'directory',
-          ...captureAttribution(venueId),
+          source,
+          ...attribution,
         }),
       });
 
@@ -104,16 +125,42 @@ export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confi
   const inputCls =
     'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors';
 
+  const openModal = () => { setOpen(true); setStatus('idle'); setErrMsg(''); };
+
   return (
     <>
-      {/* CTA trigger button */}
-      <button
-        type="button"
-        onClick={() => { setOpen(true); setStatus('idle'); setErrMsg(''); }}
-        className="w-full rounded-2xl bg-[#1b1b1b] px-6 py-4 text-sm font-semibold text-white transition hover:bg-[#2d2d2d] active:scale-[0.98]"
-      >
-        Download Pricing &amp; Availability Guide
-      </button>
+      {/* CTA trigger — card style on the Lead Link page, full-width button
+          elsewhere. The card carries data-track so LeadLinkTracker records the
+          click on the Lead Link dashboard section. */}
+      {variant === 'card' ? (
+        <button
+          type="button"
+          onClick={openModal}
+          data-track="lead_link_click"
+          data-track-platform="pricing"
+          className="group flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#1b1b1b] text-white">
+            <FileText size={20} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold text-gray-900">Download Pricing &amp; Availability</span>
+            <span className="block truncate text-xs text-gray-500">Get our full guide sent to you instantly</span>
+          </span>
+          <ArrowRight
+            size={18}
+            className="shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-gray-500"
+          />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={openModal}
+          className="w-full rounded-2xl bg-[#1b1b1b] px-6 py-4 text-sm font-semibold text-white transition hover:bg-[#2d2d2d] active:scale-[0.98]"
+        >
+          Download Pricing &amp; Availability Guide
+        </button>
+      )}
 
       {/* Modal overlay */}
       {open && (
