@@ -18,6 +18,9 @@ export const EVENT_LABELS: Record<string, string> = {
   contact_form_submit:  'Sent inquiry ✉️',
   listing_impression:   'Found in search',
   session_heartbeat:    'Browsing listing',
+  lead_link_view:       'Opened Lead Link',
+  lead_link_click:      'Clicked a Lead Link button',
+  lead_link_social_click: 'Clicked a Lead Link social',
 };
 
 /** Country code (e.g. "US") → flag emoji. */

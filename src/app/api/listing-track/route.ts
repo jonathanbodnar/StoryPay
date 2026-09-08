@@ -147,6 +147,11 @@ const VALID_EVENTS = new Set([
   'social_click',
   'contact_form_open',
   'contact_form_submit',
+  // Lead Link (link-in-bio) page — kept separate from listing events so they
+  // never pollute listing view/funnel metrics.
+  'lead_link_view',
+  'lead_link_click',
+  'lead_link_social_click',
 ]);
 
 function detectDevice(ua: string): 'mobile' | 'tablet' | 'desktop' {

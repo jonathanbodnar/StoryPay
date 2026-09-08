@@ -8,7 +8,7 @@ import {
   BadgeCheck, Facebook, Globe, Instagram, MapPin, Store, FileText, ArrowRight,
 } from 'lucide-react';
 import { Ga4Scripts } from '@/components/Ga4Scripts';
-import { ListingTracker } from '@/components/ListingTracker';
+import { LeadLinkTracker } from '@/components/LeadLinkTracker';
 import { siteUrl } from '@/lib/site-url';
 
 const API_BASE = siteUrl(process.env.NEXT_PUBLIC_DASHBOARD_URL, 'https://app.storyvenue.com');
@@ -111,7 +111,7 @@ export default async function VenueLinksPage({
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#f5f2ed] via-[#fafaf9] to-[#f0ece5]">
       <Ga4Scripts measurementId={venue.ga4_measurement_id} />
-      {venue.id && <ListingTracker venueId={venue.id} />}
+      {venue.id && <LeadLinkTracker venueId={venue.id} />}
 
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-10 pt-12 sm:pt-16">
         {/* ── Profile header ─────────────────────────────────────────── */}
@@ -163,7 +163,7 @@ export default async function VenueLinksPage({
                   href={url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  data-track="social_click"
+                  data-track="lead_link_social_click"
                   data-track-platform={key}
                   aria-label={meta.label}
                   className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-[#1b1b1b] shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md"
@@ -182,7 +182,6 @@ export default async function VenueLinksPage({
             icon={<Store size={20} />}
             title="Venue Listing"
             subtitle="Photos, reviews & everything about us"
-            track="lead_link_click"
             platform="listing"
           />
           <LinkCard
@@ -190,7 +189,6 @@ export default async function VenueLinksPage({
             icon={<FileText size={20} />}
             title="Download Pricing & Availability"
             subtitle="Get our full guide sent to you instantly"
-            track="lead_link_click"
             platform="pricing"
           />
         </div>
@@ -214,20 +212,18 @@ function LinkCard({
   icon,
   title,
   subtitle,
-  track,
   platform,
 }: {
   href: string;
   icon: ReactNode;
   title: string;
   subtitle: string;
-  track: string;
   platform: string;
 }) {
   return (
     <a
       href={href}
-      data-track={track}
+      data-track="lead_link_click"
       data-track-platform={platform}
       className="group flex items-center gap-4 rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md"
     >

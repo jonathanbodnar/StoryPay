@@ -328,6 +328,11 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
     socialMap[p] = (socialMap[p] ?? 0) + 1;
   }
 
+  // ── Lead Link (link-in-bio) ────────────────────────────────────────────────
+  // Traffic + button clicks on the venue's /venue/{slug}/links page. Events are
+  // recorded under dedicated event types so they never mix with listing metrics.
+  const leadLink = buildLeadLinkMetrics(rows, until, days);
+
   // ── Funnel ────────────────────────────────────────────────────────────────
   const funnel = [
     { step: 'Impressions',    count: impressions.length,          pct: 100 },
@@ -359,8 +364,68 @@ function buildMetrics(rows: EventRow[], leads: { id: string; created_at: string 
     inquiry_dow:            dowCounts,
     photo_views:            photoViews,
     social_clicks:          socialMap,
+    lead_link:              leadLink,
     funnel,
   };
+}
+
+// ── Lead Link metrics builder ──────────────────────────────────────────────────
+// Buttons on the Lead Link page map to a fixed set of labels so the dashboard
+// can render a stable, ordered breakdown even for buttons with zero clicks.
+const LEAD_LINK_BUTTONS: { key: string; label: string }[] = [
+  { key: 'listing',   label: 'Venue Listing' },
+  { key: 'pricing',   label: 'Pricing & Availability' },
+  { key: 'instagram', label: 'Instagram' },
+  { key: 'facebook',  label: 'Facebook' },
+  { key: 'tiktok',    label: 'TikTok' },
+  { key: 'pinterest', label: 'Pinterest' },
+  { key: 'website',   label: 'Website' },
+];
+
+function buildLeadLinkMetrics(rows: EventRow[], until: string, days: number) {
+  const viewRows   = rows.filter(r => r.event_type === 'lead_link_view');
+  const cardRows   = rows.filter(r => r.event_type === 'lead_link_click');
+  const socialRows = rows.filter(r => r.event_type === 'lead_link_social_click');
+  const clickRows  = [...cardRows, ...socialRows];
+
+  const views    = viewRows.length;
+  const visitors = new Set(viewRows.map(r => r.session_id)).size;
+  const totalClicks = clickRows.length;
+
+  // Per-button click counts keyed by event_data.platform.
+  const rawCounts: Record<string, number> = {};
+  for (const row of clickRows) {
+    const p = (row.event_data as { platform?: string })?.platform || 'unknown';
+    rawCounts[p] = (rawCounts[p] ?? 0) + 1;
+  }
+  const buttons = LEAD_LINK_BUTTONS.map(b => ({
+    key: b.key,
+    label: b.label,
+    count: rawCounts[b.key] ?? 0,
+  }));
+
+  // Daily views vs clicks for the trend chart (same UTC axis as `daily`).
+  const dailyMap: Record<string, { views: number; clicks: number }> = {};
+  for (const row of viewRows) {
+    const day = row.created_at.slice(0, 10);
+    (dailyMap[day] ??= { views: 0, clicks: 0 }).views++;
+  }
+  for (const row of clickRows) {
+    const day = row.created_at.slice(0, 10);
+    (dailyMap[day] ??= { views: 0, clicks: 0 }).clicks++;
+  }
+  const daily: { date: string; views: number; clicks: number }[] = [];
+  const endUtc = new Date(until);
+  for (let i = days - 1; i >= 0; i--) {
+    const dt = new Date(endUtc);
+    dt.setUTCDate(endUtc.getUTCDate() - i);
+    const key = dt.toISOString().slice(0, 10);
+    daily.push({ date: key, views: dailyMap[key]?.views ?? 0, clicks: dailyMap[key]?.clicks ?? 0 });
+  }
+
+  const ctr = views ? Math.round((totalClicks / views) * 1000) / 10 : 0;
+
+  return { views, visitors, total_clicks: totalClicks, ctr, buttons, daily };
 }
 
 function buildPriorMetrics(rows: EventRow[], leads: { id: string }[]) {
@@ -403,6 +468,7 @@ function emptyPayload(days: number) {
     scroll_depth: { pct_25: 0, pct_50: 0, pct_75: 0, pct_100: 0 },
     devices: {}, referrers: [], top_countries: [], top_states: [], top_cities: [],
     inquiry_dow: [0,0,0,0,0,0,0], photo_views: [], social_clicks: {},
+    lead_link: { views: 0, visitors: 0, total_clicks: 0, ctr: 0, buttons: [], daily: [] },
     funnel: [],
     prior: { total_views: 0, unique_sessions: 0, contact_form_submits: 0, leads_created: 0, conversion_rate: 0 },
     _migration_pending: true,

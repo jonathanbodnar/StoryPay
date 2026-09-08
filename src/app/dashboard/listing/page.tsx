@@ -37,6 +37,15 @@ import {
 
 type FunnelStep = { step: string; count: number; pct: number | null };
 
+type LeadLinkMetrics = {
+  views: number;
+  visitors: number;
+  total_clicks: number;
+  ctr: number;
+  buttons: { key: string; label: string; count: number }[];
+  daily: { date: string; views: number; clicks: number }[];
+};
+
 type PriorMetrics = {
   total_views: number;
   unique_sessions: number;
@@ -70,6 +79,7 @@ type AnalyticsPayload = {
   inquiry_dow: number[];
   photo_views: { index: number; count: number }[];
   social_clicks: Record<string, number>;
+  lead_link: LeadLinkMetrics;
   funnel: FunnelStep[];
   prior: PriorMetrics;
   is_free_plan?: boolean;
@@ -1635,6 +1645,107 @@ export default function ListingAnalyticsPage() {
               ))}
             </div>
           )}
+          {/* ── Lead Links (link-in-bio performance) ─────────────────────── */}
+          {(() => {
+            const ll = d.lead_link ?? { views: 0, visitors: 0, total_clicks: 0, ctr: 0, buttons: [], daily: [] };
+            const hasLeadLinkData = ll.views > 0 || ll.total_clicks > 0;
+            const activeButtons = (ll.buttons ?? []).filter(b => b.count > 0);
+            const maxButton = Math.max(...(ll.buttons ?? []).map(b => b.count), 1);
+            const chartData = (ll.daily ?? []).map(row => ({ ...row, date: formatDate(row.date) }));
+            const chartHasData = (ll.daily ?? []).some(r => r.views > 0 || r.clicks > 0);
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pt-2">
+                  <Link2 size={16} className="text-gray-400" />
+                  <h2 className="text-base font-semibold text-gray-900">Lead Link™</h2>
+                  {d.venue_slug && (
+                    <a
+                      href={`${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${d.venue_slug}/links`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      View page <ArrowUpRight size={12} />
+                    </a>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 -mt-2">
+                  Clicks from your link-in-bio landing page — every button visitors tap from your social profiles, for this date range.
+                </p>
+
+                {/* KPI tiles */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <KpiCard icon={Eye} label="Page visits" value={ll.views.toLocaleString()} sub="From social bios" color="blue" />
+                  <KpiCard icon={Users} label="Unique visitors" value={ll.visitors.toLocaleString()} sub="Distinct sessions" color="purple" />
+                  <KpiCard icon={MousePointerClick} label="Total clicks" value={ll.total_clicks.toLocaleString()} sub="All buttons" color="green" />
+                  <KpiCard icon={Percent} label="Click-through rate" value={`${ll.ctr}%`} sub="Clicks per visit" color="amber" />
+                </div>
+
+                {hasLeadLinkData ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Clicks by button */}
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
+                      <div className="flex items-center gap-2"><MousePointerClick size={13} className="text-gray-400" /><SectionTitle>Clicks by button</SectionTitle></div>
+                      {activeButtons.length > 0
+                        ? activeButtons
+                            .sort((a, b) => b.count - a.count)
+                            .map(b => <MiniBarRow key={b.key} label={b.label} value={b.count} max={maxButton} />)
+                        : <EmptyState message="No button clicks yet" />}
+                    </div>
+
+                    {/* Visits vs clicks trend */}
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6">
+                      <SectionTitle>Visits vs clicks</SectionTitle>
+                      <p className="text-xs text-gray-400 mt-0.5 mb-5">Daily Lead Link visits and button clicks</p>
+                      {chartHasData ? (
+                        <ResponsiveContainer width="100%" height={200}>
+                          <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="llViewsGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={CHART_BLUE} stopOpacity={0.2} />
+                                <stop offset="100%" stopColor={CHART_BLUE} stopOpacity={0} />
+                              </linearGradient>
+                              <linearGradient id="llClicksGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#10b981" stopOpacity={0.2} />
+                                <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                            <Tooltip content={<ChartTooltip />} />
+                            <Area type="monotone" dataKey="views" name="Visits" stroke={CHART_BLUE} strokeWidth={2} fill="url(#llViewsGrad)" dot={false} activeDot={{ r: 4 }} />
+                            <Area type="monotone" dataKey="clicks" name="Clicks" stroke="#10b981" strokeWidth={2} fill="url(#llClicksGrad)" dot={false} activeDot={{ r: 4 }} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      ) : <EmptyState message="No trend data yet" />}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-8 text-center">
+                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[#1b1b1b]">
+                      <Link2 size={18} className="text-white" />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">No Lead Link clicks yet</p>
+                    <p className="mx-auto mt-1 max-w-sm text-xs text-gray-500">
+                      Add your Lead Link to your Instagram, TikTok, and Facebook bios. Every visit and button tap will show up here.
+                    </p>
+                    {d.venue_slug && (
+                      <a
+                        href={`${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${d.venue_slug}/links`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-4 py-2 text-xs font-semibold text-white hover:bg-black transition-colors"
+                      >
+                        Open my Lead Link <ArrowUpRight size={13} />
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* ── Lead insights (demographics from your own data) ──────── */}
           {insights && insights.total_leads > 0 && (
             <div className="space-y-4">
