@@ -245,17 +245,35 @@ export default function LeadLinkPage() {
             </div>
           </div>
 
-          {/* ── Right column: live preview ───────────────────────────── */}
+          {/* ── Right column: live preview (iPhone mockup) ───────────── */}
           <div className="lg:sticky lg:top-6 lg:self-start">
-            <div className="rounded-[2.5rem] border-[10px] border-[#1b1b1b] bg-[#1b1b1b] shadow-xl">
-              <div className="overflow-hidden rounded-[1.8rem] bg-white">
-                <iframe
-                  key={publicUrl}
-                  src={publicUrl}
-                  title="Lead Link preview"
-                  className="h-[640px] w-full"
-                  loading="lazy"
-                />
+            <div className="mx-auto w-fit">
+              {/* Titanium frame */}
+              <div className="relative rounded-[3.2rem] bg-[#1b1b1b] p-[3px] shadow-2xl ring-1 ring-black/10">
+                <div className="rounded-[3rem] bg-[#1b1b1b] p-2.5">
+                  {/* Side buttons */}
+                  <span className="absolute -left-[2px] top-28 h-7 w-[3px] rounded-l bg-[#3a3a3c]" />
+                  <span className="absolute -left-[2px] top-40 h-12 w-[3px] rounded-l bg-[#3a3a3c]" />
+                  <span className="absolute -left-[2px] top-56 h-12 w-[3px] rounded-l bg-[#3a3a3c]" />
+                  <span className="absolute -right-[2px] top-44 h-16 w-[3px] rounded-r bg-[#3a3a3c]" />
+
+                  {/* Screen (renders the page at true iPhone width, scaled to fit) */}
+                  <div
+                    className="relative overflow-hidden rounded-[2.4rem] bg-white"
+                    style={{ width: 280, height: 606 }}
+                  >
+                    {/* Dynamic Island */}
+                    <div className="pointer-events-none absolute left-1/2 top-2 z-10 h-[22px] w-[84px] -translate-x-1/2 rounded-full bg-black" />
+                    <iframe
+                      key={publicUrl}
+                      src={publicUrl}
+                      title="Lead Link preview"
+                      loading="lazy"
+                      className="origin-top-left border-0"
+                      style={{ width: 390, height: 844, transform: 'scale(0.7179)' }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             <p className="mt-3 text-center text-xs text-gray-400">Live preview — this is exactly what brides see.</p>
