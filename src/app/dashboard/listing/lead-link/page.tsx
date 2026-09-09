@@ -5,7 +5,14 @@ import Link from 'next/link';
 import {
   ArrowLeft, Link2, Copy, Check, ExternalLink, Loader2, AlertCircle,
   Instagram, Facebook, Globe, Store, FileText, Share2, Sparkles,
+  Link as LinkIcon, Calendar, Video, Play, Camera, Image as ImageIcon,
+  Star, Heart, Gift, Music, MapPin, Phone, Mail, Utensils, Ticket,
+  ShoppingBag, Users, Plus, Trash2, type LucideIcon,
 } from 'lucide-react';
+import {
+  LEAD_LINK_ICON_KEYS, LEAD_LINK_MAX_LINKS,
+  type LeadLinkIconKey, type LeadLinkCustomLink,
+} from '@/lib/lead-link-icons';
 
 const DIRECTORY_SITE = (
   process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL ||
@@ -18,7 +25,25 @@ type Listing = {
   name: string | null;
   is_published: boolean | null;
   social_links: Record<string, string> | null;
+  lead_link_links: LeadLinkCustomLink[] | null;
 };
+
+// Key → lucide icon. Must stay in sync with LEAD_LINK_ICON_KEYS and the public
+// renderer in the weddingdirectory repo.
+const LEAD_LINK_ICONS: Record<LeadLinkIconKey, LucideIcon> = {
+  link: LinkIcon, calendar: Calendar, video: Video, play: Play,
+  camera: Camera, image: ImageIcon, star: Star, heart: Heart, gift: Gift,
+  music: Music, 'map-pin': MapPin, phone: Phone, mail: Mail, globe: Globe,
+  'file-text': FileText, utensils: Utensils, ticket: Ticket,
+  'shopping-bag': ShoppingBag, sparkles: Sparkles, users: Users,
+};
+
+function normalizeUrl(raw: string): string {
+  const t = raw.trim();
+  if (!t) return '';
+  if (/^https?:\/\//i.test(t)) return t;
+  return `https://${t}`;
+}
 
 const CARD = 'rounded-3xl border border-gray-200 bg-white p-6 sm:p-8';
 
@@ -60,11 +85,29 @@ function SocialIcon({ platform, className }: { platform: string; className?: str
   }
 }
 
+function coerceLinks(raw: unknown): LeadLinkCustomLink[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, LEAD_LINK_MAX_LINKS).map((r) => {
+    const o = (r ?? {}) as Partial<LeadLinkCustomLink>;
+    const icon = LEAD_LINK_ICON_KEYS.includes(o.icon as LeadLinkIconKey)
+      ? (o.icon as LeadLinkIconKey)
+      : 'link';
+    return { label: String(o.label ?? ''), url: String(o.url ?? ''), icon };
+  });
+}
+
 export default function LeadLinkPage() {
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Custom links editor
+  const [links, setLinks] = useState<LeadLinkCustomLink[]>([]);
+  const [savingLinks, setSavingLinks] = useState(false);
+  const [linksSaved, setLinksSaved] = useState(false);
+  const [iconPickerOpen, setIconPickerOpen] = useState<number | null>(null);
+  const [previewNonce, setPreviewNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +116,10 @@ export default function LeadLinkPage() {
         const res = await fetch('/api/listing/me', { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to load your listing');
         const json = (await res.json()) as { listing: Listing };
-        if (!cancelled) setListing(json.listing);
+        if (!cancelled) {
+          setListing(json.listing);
+          setLinks(coerceLinks(json.listing?.lead_link_links));
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Load failed');
       } finally {
@@ -86,6 +132,49 @@ export default function LeadLinkPage() {
   const slug = listing?.slug ?? '';
   const publicUrl = slug ? `${DIRECTORY_SITE}/venue/${slug}/links` : '';
   const displayUrl = publicUrl.replace(/^https?:\/\//, '');
+
+  function addLink() {
+    if (links.length >= LEAD_LINK_MAX_LINKS) return;
+    setLinks((prev) => [...prev, { label: '', url: '', icon: 'link' }]);
+  }
+
+  function updateLink(i: number, patch: Partial<LeadLinkCustomLink>) {
+    setLinks((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }
+
+  function removeLink(i: number) {
+    setLinks((prev) => prev.filter((_, idx) => idx !== i));
+    setIconPickerOpen(null);
+  }
+
+  async function saveLinks() {
+    setSavingLinks(true);
+    setError('');
+    try {
+      const cleaned = links
+        .map((l) => ({ label: l.label.trim(), url: normalizeUrl(l.url), icon: l.icon }))
+        .filter((l) => l.label || l.url);
+      const res = await fetch('/api/listing/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_link_links: cleaned }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Failed to save your links');
+      }
+      const json = (await res.json()) as { listing: Listing };
+      setLinks(coerceLinks(json.listing?.lead_link_links));
+      setIconPickerOpen(null);
+      setLinksSaved(true);
+      setTimeout(() => setLinksSaved(false), 2200);
+      setPreviewNonce((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSavingLinks(false);
+    }
+  }
 
   const socials = useMemo(
     () =>
@@ -264,6 +353,117 @@ export default function LeadLinkPage() {
                 </div>
               </div>
             </div>
+
+            {/* Custom links editor */}
+            <div className={CARD}>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">
+                  <LinkIcon size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-heading text-lg text-gray-900">Your own links</h2>
+                  <p className="mt-0.5 text-sm text-gray-500">
+                    Add up to {LEAD_LINK_MAX_LINKS} custom buttons — a booking calendar, video tour,
+                    menu, anything. Every one opens in a new tab.
+                  </p>
+
+                  <div className="mt-4 space-y-3">
+                    {links.length === 0 && (
+                      <p className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-400">
+                        No custom links yet — add your first below.
+                      </p>
+                    )}
+
+                    {links.map((l, i) => {
+                      const Icon = LEAD_LINK_ICONS[l.icon] ?? LinkIcon;
+                      return (
+                        <div key={i} className="rounded-2xl border border-gray-200 p-3">
+                          <div className="flex items-center gap-2">
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setIconPickerOpen(iconPickerOpen === i ? null : i)}
+                                className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1b1b1b] text-white hover:bg-black"
+                                aria-label="Choose icon"
+                              >
+                                <Icon size={18} />
+                              </button>
+                              {iconPickerOpen === i && (
+                                <div className="absolute left-0 top-12 z-20 w-64 rounded-2xl border border-gray-200 bg-white p-2 shadow-xl">
+                                  <div className="grid grid-cols-5 gap-1">
+                                    {LEAD_LINK_ICON_KEYS.map((key) => {
+                                      const KIcon = LEAD_LINK_ICONS[key];
+                                      const active = key === l.icon;
+                                      return (
+                                        <button
+                                          key={key}
+                                          type="button"
+                                          onClick={() => { updateLink(i, { icon: key }); setIconPickerOpen(null); }}
+                                          className={`flex h-10 w-10 items-center justify-center rounded-lg ${active ? 'bg-[#1b1b1b] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                                          aria-label={key}
+                                        >
+                                          <KIcon size={17} />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <input
+                              value={l.label}
+                              onChange={(e) => updateLink(i, { label: e.target.value })}
+                              maxLength={60}
+                              placeholder="Button label (e.g. Book a Tour)"
+                              className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => removeLink(i)}
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
+                              aria-label="Remove link"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+
+                          <input
+                            value={l.url}
+                            onChange={(e) => updateLink(i, { url: e.target.value })}
+                            maxLength={500}
+                            inputMode="url"
+                            placeholder="https://…"
+                            className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={addLink}
+                      disabled={links.length >= LEAD_LINK_MAX_LINKS}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Plus size={15} /> Add link{links.length > 0 ? ` (${links.length}/${LEAD_LINK_MAX_LINKS})` : ''}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveLinks}
+                      disabled={savingLinks}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
+                    >
+                      {savingLinks ? <Loader2 size={15} className="animate-spin" /> : linksSaved ? <Check size={15} /> : null}
+                      {savingLinks ? 'Saving…' : linksSaved ? 'Saved!' : 'Save links'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* ── Right column: live preview (iPhone mockup) ───────────── */}
@@ -286,8 +486,8 @@ export default function LeadLinkPage() {
                     {/* Dynamic Island */}
                     <div className="pointer-events-none absolute left-1/2 top-2 z-10 h-[22px] w-[84px] -translate-x-1/2 rounded-full bg-black" />
                     <iframe
-                      key={publicUrl}
-                      src={publicUrl}
+                      key={`${publicUrl}#${previewNonce}`}
+                      src={previewNonce ? `${publicUrl}?v=${previewNonce}` : publicUrl}
                       title="Lead Link preview"
                       loading="lazy"
                       className="origin-top-left border-0"

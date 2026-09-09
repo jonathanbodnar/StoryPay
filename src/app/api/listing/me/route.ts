@@ -39,6 +39,7 @@ const SELECT_COLUMNS = [
   'social_links',
   'faq',
   'show_map',
+  'lead_link_links',
   'created_at',
   'updated_at',
 ].join(',');

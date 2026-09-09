@@ -1,4 +1,5 @@
 import type { ListingWritableField } from '@/lib/directory';
+import { LEAD_LINK_ICON_KEY_SET, LEAD_LINK_MAX_LINKS } from '@/lib/lead-link-icons';
 
 const SOCIAL_KEYS = new Set(['facebook', 'instagram', 'tiktok', 'pinterest', 'website']);
 
@@ -33,6 +34,31 @@ export function sanitizeListingUpdates(
     out.notification_phone = normalizeUsPhone(out.notification_phone);
   }
 
+  if ('lead_link_links' in out) {
+    out.lead_link_links = sanitizeLeadLinkLinks(out.lead_link_links);
+  }
+
+  return out;
+}
+
+/**
+ * Custom Lead Link buttons: up to 3 rows of { label, url, icon }. Like FAQ we
+ * preserve partially-filled rows so adding a blank row (or typing a URL before
+ * the label) doesn't vanish on the next save. Unknown icons fall back to
+ * 'link'; the public renderer decides whether a URL is complete enough to link.
+ */
+function sanitizeLeadLinkLinks(raw: unknown): { label: string; url: string; icon: string }[] {
+  if (!Array.isArray(raw)) return [];
+  const out: { label: string; url: string; icon: string }[] = [];
+  for (const row of raw.slice(0, LEAD_LINK_MAX_LINKS)) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as { label?: unknown; url?: unknown; icon?: unknown };
+    const label = String(r.label ?? '').trim().slice(0, 60);
+    const url = String(r.url ?? '').trim().slice(0, 500);
+    const iconRaw = String(r.icon ?? 'link').trim();
+    const icon = LEAD_LINK_ICON_KEY_SET.has(iconRaw) ? iconRaw : 'link';
+    out.push({ label, url, icon });
+  }
   return out;
 }
 

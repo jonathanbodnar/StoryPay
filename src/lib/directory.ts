@@ -43,6 +43,8 @@ export const LISTING_WRITABLE_FIELDS = [
   'faq',
   /** When true and lat/lng set, public listing shows embedded map */
   'show_map',
+  /** [{ label, url, icon }, ...] max 3 — extra custom buttons on the Lead Link page */
+  'lead_link_links',
 ] as const;
 
 export type ListingWritableField = (typeof LISTING_WRITABLE_FIELDS)[number];
