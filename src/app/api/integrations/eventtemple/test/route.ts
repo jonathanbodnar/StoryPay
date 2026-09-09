@@ -17,7 +17,7 @@ export async function POST() {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('eventtemple_api_key, eventtemple_org_id, eventtemple_stage_id')
+    .select('eventtemple_api_key, eventtemple_org_id, eventtemple_stage_id, eventtemple_referral_source_id')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -25,6 +25,7 @@ export async function POST() {
     eventtemple_api_key?: string | null;
     eventtemple_org_id?: string | null;
     eventtemple_stage_id?: string | null;
+    eventtemple_referral_source_id?: string | null;
   } | null;
   if (!v?.eventtemple_api_key || !v?.eventtemple_org_id) {
     return NextResponse.json({ error: 'Event Temple is not connected.' }, { status: 400 });
@@ -40,6 +41,7 @@ export async function POST() {
       message: 'This is a test lead sent from StoryVenue to verify your Event Temple integration is working correctly.',
     },
     v.eventtemple_stage_id ?? undefined,
+    v.eventtemple_referral_source_id ?? undefined,
   );
 
   if (!result.ok) {

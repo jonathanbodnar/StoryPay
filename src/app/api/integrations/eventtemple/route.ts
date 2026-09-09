@@ -13,8 +13,10 @@ import {
   fetchEventTempleOrganizations,
   fetchEventTemplePipelines,
   fetchEventTempleStages,
+  fetchEventTempleReferralSources,
   type EventTemplePipeline,
   type EventTempleStage,
+  type EventTempleReferralSource,
 } from '@/lib/eventtemple';
 
 export const dynamic = 'force-dynamic';
@@ -30,21 +32,24 @@ type VenueETRow = {
   eventtemple_org_id?: string | null;
   eventtemple_pipeline_id?: string | null;
   eventtemple_stage_id?: string | null;
+  eventtemple_referral_source_id?: string | null;
 };
 
 const SELECT_COLS =
-  'eventtemple_api_key, eventtemple_org_id, eventtemple_pipeline_id, eventtemple_stage_id';
+  'eventtemple_api_key, eventtemple_org_id, eventtemple_pipeline_id, eventtemple_stage_id, eventtemple_referral_source_id';
 
-/** Load pipelines + stages, tolerating partial failures (older ET plans, etc.). */
-async function loadPipelinesAndStages(apiKey: string, orgId: string): Promise<{
+/** Load routing options (pipelines, stages, referral sources), tolerating partial failures. */
+async function loadRoutingOptions(apiKey: string, orgId: string): Promise<{
   pipelines: EventTemplePipeline[];
   stages: EventTempleStage[];
+  referralSources: EventTempleReferralSource[];
 }> {
-  const [pipelines, stages] = await Promise.all([
+  const [pipelines, stages, referralSources] = await Promise.all([
     fetchEventTemplePipelines(apiKey, orgId).catch(() => [] as EventTemplePipeline[]),
     fetchEventTempleStages(apiKey, orgId).catch(() => [] as EventTempleStage[]),
+    fetchEventTempleReferralSources(apiKey, orgId).catch(() => [] as EventTempleReferralSource[]),
   ]);
-  return { pipelines, stages };
+  return { pipelines, stages, referralSources };
 }
 
 export async function GET() {
@@ -64,18 +69,19 @@ export async function GET() {
   if (!apiKey || !orgId) {
     return NextResponse.json({
       connected: false, apiKey: null, orgId: null,
-      organizations: [], pipelines: [], stages: [], pipelineId: null, stageId: null,
+      organizations: [], pipelines: [], stages: [], referralSources: [],
+      pipelineId: null, stageId: null, referralSourceId: null,
     });
   }
 
-  // Fetch org + pipelines + stages so the card can show routing options.
+  // Fetch org + routing options so the card can show them.
   let organizations: Array<{ id: string; name: string }> = [];
   try {
     organizations = await fetchEventTempleOrganizations(apiKey, orgId);
   } catch {
     // Non-fatal — key may be stale; still report connected so the UI can show it.
   }
-  const { pipelines, stages } = await loadPipelinesAndStages(apiKey, orgId);
+  const { pipelines, stages, referralSources } = await loadRoutingOptions(apiKey, orgId);
 
   return NextResponse.json({
     connected: true,
@@ -84,8 +90,10 @@ export async function GET() {
     organizations,
     pipelines,
     stages,
+    referralSources,
     pipelineId: v?.eventtemple_pipeline_id ?? null,
     stageId: v?.eventtemple_stage_id ?? null,
+    referralSourceId: v?.eventtemple_referral_source_id ?? null,
   });
 }
 
@@ -120,20 +128,23 @@ export async function POST(req: NextRequest) {
 
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-  const { pipelines, stages } = await loadPipelinesAndStages(apiKey, orgId);
+  const { pipelines, stages, referralSources } = await loadRoutingOptions(apiKey, orgId);
 
-  return NextResponse.json({ connected: true, organizations, orgId, pipelines, stages, pipelineId: null, stageId: null });
+  return NextResponse.json({
+    connected: true, organizations, orgId, pipelines, stages, referralSources,
+    pipelineId: null, stageId: null, referralSourceId: null,
+  });
 }
 
 export async function PATCH(req: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { pipelineId?: string | null; stageId?: string | null };
+  let body: { pipelineId?: string | null; stageId?: string | null; referralSourceId?: string | null };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-  // Must be connected before choosing a pipeline/stage.
+  // Must be connected before choosing routing options.
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('eventtemple_api_key, eventtemple_org_id')
@@ -149,16 +160,25 @@ export async function PATCH(req: NextRequest) {
     const s = String(x).trim();
     return s ? s : null;
   };
-  const pipelineId = norm(body.pipelineId);
-  const stageId = norm(body.stageId);
+
+  // Only update the keys actually present in the request so a partial save
+  // (e.g. changing the referral source) never clobbers pipeline/stage.
+  const patch: Record<string, string | null> = {};
+  if ('pipelineId' in body)       patch.eventtemple_pipeline_id = norm(body.pipelineId);
+  if ('stageId' in body)          patch.eventtemple_stage_id = norm(body.stageId);
+  if ('referralSourceId' in body) patch.eventtemple_referral_source_id = norm(body.referralSourceId);
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 });
+  }
 
   const { error: upErr } = await supabaseAdmin
     .from('venues')
-    .update({ eventtemple_pipeline_id: pipelineId, eventtemple_stage_id: stageId })
+    .update(patch)
     .eq('id', venueId);
 
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
-  return NextResponse.json({ ok: true, pipelineId, stageId });
+  return NextResponse.json({ ok: true, ...patch });
 }
 
 export async function DELETE() {
@@ -172,6 +192,7 @@ export async function DELETE() {
       eventtemple_org_id: null,
       eventtemple_pipeline_id: null,
       eventtemple_stage_id: null,
+      eventtemple_referral_source_id: null,
     })
     .eq('id', venueId);
 

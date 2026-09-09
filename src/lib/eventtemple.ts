@@ -65,6 +65,37 @@ export async function fetchEventTempleOrganizations(
   })).filter((o) => o.id);
 }
 
+export interface EventTempleReferralSource {
+  id: string;
+  name: string;
+}
+
+/**
+ * List the venue's referral sources. Used to let the venue map StoryVenue leads
+ * to a native Event Temple referral source (fills the booking's Referral Source
+ * field instead of only noting the source in text).
+ */
+export async function fetchEventTempleReferralSources(
+  apiKey: string,
+  orgId: string,
+): Promise<EventTempleReferralSource[]> {
+  const res = await fetch(`${EVENTTEMPLE_API}/referral_sources?page[size]=100`, {
+    method: 'GET',
+    headers: etHeaders(apiKey, orgId),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Event Temple referral sources fetch failed (${res.status}): ${text.slice(0, 200)}`);
+  }
+  const json = await res.json().catch(() => ({})) as {
+    data?: Array<{ id?: string | number; attributes?: { name?: string } }>;
+  };
+  const rows = Array.isArray(json.data) ? json.data : [];
+  return rows
+    .map((row) => ({ id: String(row.id ?? ''), name: String(row.attributes?.name ?? '') }))
+    .filter((r) => r.id);
+}
+
 export interface EventTemplePipeline {
   id: string;
   name: string;
@@ -239,6 +270,7 @@ export async function pushLeadToEventTemple(
   orgId: string,
   lead: EventTempleLead,
   stageId?: string | null,
+  referralSourceId?: string | null,
 ): Promise<{ ok: boolean; bookingId?: string; error?: string }> {
   try {
     // Event Temple requires first_name, last_name and email on a new contact.
@@ -271,6 +303,13 @@ export async function pushLeadToEventTemple(
     const stageNum = stageId != null && String(stageId).trim() ? Number(stageId) : NaN;
     if (Number.isFinite(stageNum)) {
       attributes.stage_id = stageNum;
+    }
+
+    // Set the native Event Temple referral source when the venue has mapped one,
+    // so the booking's Referral Source field is populated (not just the note).
+    const refNum = referralSourceId != null && String(referralSourceId).trim() ? Number(referralSourceId) : NaN;
+    if (Number.isFinite(refNum)) {
+      attributes.referral_source_id = refNum;
     }
 
     const res = await fetch(`${EVENTTEMPLE_API}/bookings`, {
@@ -332,7 +371,7 @@ export async function maybePushLeadToEventTemple(
   try {
     const { data: venue } = await supabaseAdmin
       .from('venues')
-      .select('eventtemple_api_key, eventtemple_org_id, eventtemple_stage_id')
+      .select('eventtemple_api_key, eventtemple_org_id, eventtemple_stage_id, eventtemple_referral_source_id')
       .eq('id', venueId)
       .maybeSingle();
 
@@ -340,6 +379,7 @@ export async function maybePushLeadToEventTemple(
       eventtemple_api_key?: string | null;
       eventtemple_org_id?: string | null;
       eventtemple_stage_id?: string | null;
+      eventtemple_referral_source_id?: string | null;
     } | null;
     if (!v?.eventtemple_api_key || !v?.eventtemple_org_id) return;
 
@@ -363,6 +403,7 @@ export async function maybePushLeadToEventTemple(
         utm_content:      lead.utm_content ?? undefined,
       },
       v.eventtemple_stage_id ?? undefined,
+      v.eventtemple_referral_source_id ?? undefined,
     );
 
     if (!result.ok) {

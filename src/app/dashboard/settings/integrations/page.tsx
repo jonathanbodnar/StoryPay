@@ -289,6 +289,7 @@ function TripleseatCard() {
 interface ETOrganization { id: string; name: string }
 interface ETPipeline { id: string; name: string }
 interface ETStage { id: string; name: string; pipeline_id: string; position: number }
+interface ETReferralSource { id: string; name: string }
 
 function EventTempleCard() {
   const [status, setStatus] = useState<'loading' | 'connected' | 'disconnected'>('loading');
@@ -299,6 +300,8 @@ function EventTempleCard() {
   const [stages, setStages] = useState<ETStage[]>([]);
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [stageId, setStageId] = useState<string | null>(null);
+  const [referralSources, setReferralSources] = useState<ETReferralSource[]>([]);
+  const [referralSourceId, setReferralSourceId] = useState<string | null>(null);
 
   const [inputKey, setInputKey] = useState('');
   const [inputOrg, setInputOrg] = useState('');
@@ -317,15 +320,17 @@ function EventTempleCard() {
     setStatus('loading');
     try {
       const r = await fetch('/api/integrations/eventtemple', { cache: 'no-store' });
-      const d = await r.json() as { connected: boolean; apiKey: string | null; orgId: string | null; organizations: ETOrganization[]; pipelines?: ETPipeline[]; stages?: ETStage[]; pipelineId?: string | null; stageId?: string | null };
+      const d = await r.json() as { connected: boolean; apiKey: string | null; orgId: string | null; organizations: ETOrganization[]; pipelines?: ETPipeline[]; stages?: ETStage[]; referralSources?: ETReferralSource[]; pipelineId?: string | null; stageId?: string | null; referralSourceId?: string | null };
       setStatus(d.connected ? 'connected' : 'disconnected');
       setMaskedKey(d.apiKey ?? '');
       setOrgId(d.orgId);
       setOrganizations(d.organizations ?? []);
       setPipelines(d.pipelines ?? []);
       setStages(d.stages ?? []);
+      setReferralSources(d.referralSources ?? []);
       setPipelineId(d.pipelineId ?? null);
       setStageId(d.stageId ?? null);
+      setReferralSourceId(d.referralSourceId ?? null);
     } catch {
       setStatus('disconnected');
     }
@@ -345,7 +350,7 @@ function EventTempleCard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: inputKey.trim(), orgId: inputOrg.trim() }),
       });
-      const d = await r.json() as { connected?: boolean; organizations?: ETOrganization[]; orgId?: string | null; pipelines?: ETPipeline[]; stages?: ETStage[]; error?: string };
+      const d = await r.json() as { connected?: boolean; organizations?: ETOrganization[]; orgId?: string | null; pipelines?: ETPipeline[]; stages?: ETStage[]; referralSources?: ETReferralSource[]; error?: string };
       if (!r.ok) { flash(false, d.error ?? 'Connection failed.'); return; }
       setInputKey('');
       setInputOrg('');
@@ -354,8 +359,10 @@ function EventTempleCard() {
       setOrgId(d.orgId ?? null);
       setPipelines(d.pipelines ?? []);
       setStages(d.stages ?? []);
+      setReferralSources(d.referralSources ?? []);
       setPipelineId(null);
       setStageId(null);
+      setReferralSourceId(null);
       setStatus('connected');
       flash(true, 'Event Temple connected successfully.');
       void load();
@@ -386,8 +393,10 @@ function EventTempleCard() {
     setOrganizations([]);
     setPipelines([]);
     setStages([]);
+    setReferralSources([]);
     setPipelineId(null);
     setStageId(null);
+    setReferralSourceId(null);
     setDisconnecting(false);
     flash(true, 'Event Temple disconnected.');
   }
@@ -405,6 +414,21 @@ function EventTempleCard() {
       flash(true, nextStageId ? 'Lead routing saved.' : 'Using Event Temple default pipeline.');
     } catch {
       flash(false, 'Network error saving pipeline selection.');
+    }
+  }
+
+  async function saveReferralSource(nextId: string | null) {
+    setReferralSourceId(nextId);
+    try {
+      const r = await fetch('/api/integrations/eventtemple', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ referralSourceId: nextId }),
+      });
+      if (!r.ok) { flash(false, 'Could not save referral source.'); return; }
+      flash(true, nextId ? 'Referral source saved.' : 'Referral source cleared.');
+    } catch {
+      flash(false, 'Network error saving referral source.');
     }
   }
 
@@ -497,6 +521,29 @@ function EventTempleCard() {
                   )}
                   <p className="text-[11px] text-gray-400">
                     New lead bookings are created on this stage. Leave as “Event Temple default” to let Event Temple decide.
+                  </p>
+                </div>
+              )}
+
+              {/* Referral source mapping */}
+              {referralSources.length > 0 && (
+                <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Referral source</p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <label className="text-xs font-medium text-gray-700 shrink-0 sm:w-16">Source</label>
+                    <select
+                      value={referralSourceId ?? ''}
+                      onChange={(e) => void saveReferralSource(e.target.value || null)}
+                      className="w-full max-w-xs rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:border-gray-400 focus:outline-none"
+                    >
+                      <option value="">None (source stays in the note)</option>
+                      {referralSources.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    Tags each new booking with this Event Temple referral source so it shows in the Referral Source field and your reports. Create a “StoryVenue” source in Event Temple to track these leads cleanly.
                   </p>
                 </div>
               )}
