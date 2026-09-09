@@ -5,14 +5,13 @@ import Link from 'next/link';
 import {
   ArrowLeft, Link2, Copy, Check, ExternalLink, Loader2, AlertCircle,
   Instagram, Facebook, Globe, Store, FileText, Share2, Sparkles,
-  Link as LinkIcon, Calendar, Video, Play, Camera, Image as ImageIcon,
-  Star, Heart, Gift, Music, MapPin, Phone, Mail, Utensils, Ticket,
-  ShoppingBag, Users, Plus, Trash2, type LucideIcon,
+  Link as LinkIcon, Plus, Trash2,
 } from 'lucide-react';
 import {
   LEAD_LINK_ICON_KEYS, LEAD_LINK_MAX_LINKS,
   type LeadLinkIconKey, type LeadLinkCustomLink,
 } from '@/lib/lead-link-icons';
+import { LEAD_LINK_ICON_COMPONENTS } from '@/lib/lead-link-icon-map';
 
 const DIRECTORY_SITE = (
   process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL ||
@@ -26,16 +25,6 @@ type Listing = {
   is_published: boolean | null;
   social_links: Record<string, string> | null;
   lead_link_links: LeadLinkCustomLink[] | null;
-};
-
-// Key → lucide icon. Must stay in sync with LEAD_LINK_ICON_KEYS and the public
-// renderer in the weddingdirectory repo.
-const LEAD_LINK_ICONS: Record<LeadLinkIconKey, LucideIcon> = {
-  link: LinkIcon, calendar: Calendar, video: Video, play: Play,
-  camera: Camera, image: ImageIcon, star: Star, heart: Heart, gift: Gift,
-  music: Music, 'map-pin': MapPin, phone: Phone, mail: Mail, globe: Globe,
-  'file-text': FileText, utensils: Utensils, ticket: Ticket,
-  'shopping-bag': ShoppingBag, sparkles: Sparkles, users: Users,
 };
 
 function normalizeUrl(raw: string): string {
@@ -375,7 +364,7 @@ export default function LeadLinkPage() {
                     )}
 
                     {links.map((l, i) => {
-                      const Icon = LEAD_LINK_ICONS[l.icon] ?? LinkIcon;
+                      const Icon = LEAD_LINK_ICON_COMPONENTS[l.icon] ?? LinkIcon;
                       return (
                         <div key={i} className="rounded-2xl border border-gray-200 p-3">
                           <div className="flex items-center gap-2">
@@ -390,9 +379,9 @@ export default function LeadLinkPage() {
                               </button>
                               {iconPickerOpen === i && (
                                 <div className="absolute left-0 top-12 z-20 w-64 rounded-2xl border border-gray-200 bg-white p-2 shadow-xl">
-                                  <div className="grid grid-cols-5 gap-1">
+                                  <div className="grid max-h-60 grid-cols-5 gap-1 overflow-y-auto pr-1">
                                     {LEAD_LINK_ICON_KEYS.map((key) => {
-                                      const KIcon = LEAD_LINK_ICONS[key];
+                                      const KIcon = LEAD_LINK_ICON_COMPONENTS[key];
                                       const active = key === l.icon;
                                       return (
                                         <button
