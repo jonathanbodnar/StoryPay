@@ -35,6 +35,11 @@ export interface VenueFeatureRow {
    *  legacy clients kept on a non-SMS plan (e.g. Bride Booking System)
    *  who still need SMS enabled through their existing A2P registration. */
   sms_admin_override?: boolean | null;
+  /** Admin "Venue Concierge" flag (Venue Management → Venue Concierge). When on,
+   *  this venue can message the StoryVenue Concierge team from Conversations
+   *  regardless of plan tier — it is the single source of truth for granting
+   *  concierge messaging to a venue that isn't on an All-Inclusive plan. */
+  venue_concierge?: boolean | null;
 }
 
 export interface PlanFeatureRow {
@@ -50,9 +55,10 @@ export interface VenueFeatureAccess {
   /** AI Concierge feature available (add-on purchased/bundled or legacy) +
    *  bride replies routed to the super-admin concierge inbox. */
   hasConcierge: boolean;
-  /** Can message the StoryVenue Concierge team from Conversations. This is a
-   *  plan-tier feature (any All-Inclusive plan, or legacy) — NOT the concierge
-   *  add-on. $97 / free plans get Contact Support but not concierge messaging. */
+  /** Can message the StoryVenue Concierge team from Conversations. Granted by
+   *  any All-Inclusive plan, a legacy plan, OR the admin "Venue Concierge" flag
+   *  (Venue Management → Venue Concierge). $97 / free plans without that flag
+   *  get Contact Support but not concierge messaging. */
   canMessageConcierge: boolean;
   /** Legacy / grandfathered plan — gets all add-ons. */
   isLegacy: boolean;
@@ -61,7 +67,7 @@ export interface VenueFeatureAccess {
 }
 
 export const VENUE_FEATURE_COLUMNS =
-  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override';
+  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override, venue_concierge';
 export const PLAN_FEATURE_COLUMNS  = 'slug, name, is_legacy, feature_flags';
 
 function isLegacyPlan(plan: PlanFeatureRow | null): boolean {
@@ -95,11 +101,14 @@ export function resolveVenueFeatureAccess(
   // Super admin force-on: grants SMS on a plan that wouldn't otherwise
   // include it, without changing the venue's actual plan assignment.
   const smsAdminOverride = venue?.sms_admin_override === true;
+  // Admin "Venue Concierge" flag — single source of truth for unlocking
+  // concierge messaging on a venue that isn't on an All-Inclusive/legacy plan.
+  const venueConciergeGranted = venue?.venue_concierge === true;
 
   return {
     hasSms:              legacy || isAllInclusive || smsAdminOverride,
     hasConcierge:        !conciergeAdminDisabled && (legacy || conciergeBundled || conciergePurchased),
-    canMessageConcierge: legacy || isAllInclusive,
+    canMessageConcierge: legacy || isAllInclusive || venueConciergeGranted,
     isLegacy:            legacy,
     planSlug:            slug,
   };
