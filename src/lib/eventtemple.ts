@@ -100,11 +100,12 @@ export async function fetchEventTempleReferralSources(
     throw new Error(`Event Temple referral sources fetch failed (${res.status}): ${text.slice(0, 200)}`);
   }
   const json = await res.json().catch(() => ({})) as {
-    data?: Array<{ id?: string | number; attributes?: { name?: string } }>;
+    data?: Array<{ id?: string | number; attributes?: { name?: string; value?: string } }>;
   };
   const rows = Array.isArray(json.data) ? json.data : [];
   return rows
-    .map((row) => ({ id: String(row.id ?? ''), name: String(row.attributes?.name ?? '') }))
+    // Referral sources expose their label as `value` (not `name`).
+    .map((row) => ({ id: String(row.id ?? ''), name: String(row.attributes?.value ?? row.attributes?.name ?? '') }))
     .filter((r) => r.id);
 }
 
@@ -131,11 +132,12 @@ export async function fetchEventTempleBookingTypes(
     throw new Error(`Event Temple booking types fetch failed (${res.status}): ${text.slice(0, 200)}`);
   }
   const json = await res.json().catch(() => ({})) as {
-    data?: Array<{ id?: string | number; attributes?: { name?: string } }>;
+    data?: Array<{ id?: string | number; attributes?: { name?: string; value?: string } }>;
   };
   const rows = Array.isArray(json.data) ? json.data : [];
   return rows
-    .map((row) => ({ id: String(row.id ?? ''), name: String(row.attributes?.name ?? '') }))
+    // Booking types expose their label as `value` (not `name`).
+    .map((row) => ({ id: String(row.id ?? ''), name: String(row.attributes?.value ?? row.attributes?.name ?? '') }))
     .filter((r) => r.id);
 }
 
