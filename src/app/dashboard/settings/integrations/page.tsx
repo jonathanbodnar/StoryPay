@@ -526,6 +526,72 @@ function EventTempleCard() {
   );
 }
 
+// ── HoneyBook (via Zapier) Helper Card ────────────────────────────────────────
+
+function HoneyBookCard() {
+  return (
+    <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div className="px-6 py-5 flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50">
+          <svg viewBox="0 0 32 32" className="h-6 w-6" fill="none">
+            <rect width="32" height="32" rx="8" fill="#f59e0b" />
+            <text x="16" y="22" textAnchor="middle" fontSize="12" fontWeight="700" fill="white" fontFamily="sans-serif">HB</text>
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">HoneyBook</h2>
+            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-orange-700">Via Zapier</span>
+          </div>
+          <p className="mt-1 text-sm text-gray-500 leading-relaxed">
+            HoneyBook doesn&apos;t offer a direct connection, but you can still send new StoryVenue leads
+            straight into HoneyBook using Zapier — no coding required.
+          </p>
+
+          <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3.5 text-sm text-gray-600 leading-relaxed">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">How to connect</span>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Generate a StoryVenue API key below (in the Zapier section) and copy it.</li>
+              <li>In Zapier, create a Zap with the <strong>StoryVenue → New Lead</strong> trigger.</li>
+              <li>Add a <strong>HoneyBook → Create Client</strong> (or Create Project) action.</li>
+              <li>Map the lead&apos;s name, email, and phone across, then turn the Zap on.</li>
+            </ol>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              href={ZAPIER_INVITE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition-all"
+            >
+              Open Zapier <ExternalLink size={14} />
+            </a>
+            <a
+              href="https://help.honeybook.com/en/articles/2209205-automate-tasks-with-zapier"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-all"
+            >
+              HoneyBook&apos;s Zapier guide <ExternalLink size={14} />
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Good to know */}
+      <div className="border-t border-gray-100 px-6 py-4 text-sm text-gray-500">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">Good to know</span>
+        <ul className="space-y-1">
+          <li className="flex items-start gap-2"><CheckCircle2 size={13} className="text-emerald-500 mt-0.5 shrink-0" /><span>New leads flow from StoryVenue into HoneyBook as new clients or projects.</span></li>
+          <li className="flex items-start gap-2"><AlertCircle size={13} className="text-gray-400 mt-0.5 shrink-0" /><span className="text-gray-400">HoneyBook&apos;s Zapier connection requires their Essential or Premium plan.</span></li>
+          <li className="flex items-start gap-2"><AlertCircle size={13} className="text-gray-400 mt-0.5 shrink-0" /><span className="text-gray-400">HoneyBook custom fields aren&apos;t supported over Zapier, so extra details map into the project notes/details field.</span></li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 // ── Calendly Integration Card ─────────────────────────────────────────────────
 
 interface CalendlyStatus {
@@ -857,6 +923,9 @@ export default function IntegrationsPage() {
 
       {/* ── Event Temple card ────────────────────────────────────────── */}
       <EventTempleCard />
+
+      {/* ── HoneyBook (via Zapier) card ──────────────────────────────── */}
+      <HoneyBookCard />
 
       {/* ── Calendly card ────────────────────────────────────────────── */}
       <CalendlyCard />

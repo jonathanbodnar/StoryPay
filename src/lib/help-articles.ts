@@ -1214,6 +1214,63 @@ If you're convinced data should be there but isn't
 - Make sure your tracker isn't blocked by an ad-blocker on your test browser (the tracker is first-party so most ad-blockers don't touch it, but some aggressive ones do).
 - Ask AI can help you check your event counts — just describe what you're looking for.`,
       },
+      {
+        id: 'listing-lead-link',
+        title: 'Lead Link™ — your link-in-bio landing page',
+        tags: ['lead link', 'link in bio', 'link tree', 'linktree', 'instagram', 'tiktok', 'facebook', 'social', 'bio link', 'social media', 'landing page', 'links page'],
+        body: `Lead Link™ is a ready-made "link in bio" landing page that turns your social media followers into leads. Instead of posting your website in your Instagram, TikTok, or Facebook bio, you post one Lead Link — a clean landing page that guides brides straight to booking.
+
+Where to find it
+Path: Venue listing → Lead Link™ (sidebar).
+
+Your Lead Link address
+Your page lives at your venue's storyvenue.com address ending in /links. Copy it from the Lead Link page and paste it into your social profiles' "link in bio" field.
+
+It builds itself from your listing
+Lead Link automatically pulls in:
+- Your venue name and photo
+- The social handles you've already added to your listing (so brides can find all your profiles in one place)
+
+Two built-in buttons (always shown)
+- Venue listing — opens your public storyvenue.com listing
+- Download Pricing & Availability — opens a quick lead-capture form right on the page. When a bride fills it out, a real lead is created and your Speed to Lead follow-up begins automatically — just like your listing's inquiry form.
+
+Live preview
+An iPhone-style preview on the page shows exactly what brides see on their phone. It refreshes after you save changes.
+
+Why it helps
+- One simple link for every social profile
+- Captures leads from organic social traffic that would otherwise bounce
+- Every button click and lead is tracked (see the companion article on custom links, QR codes, and tracking)`,
+      },
+      {
+        id: 'listing-lead-link-custom',
+        title: 'Lead Link™ — custom buttons, QR code, and click tracking',
+        tags: ['lead link', 'custom links', 'buttons', 'icons', 'icon pack', 'qr code', 'print', 'table card', 'tracking', 'clicks', 'booking funnel', 'source', 'analytics'],
+        body: `Beyond the two built-in buttons, your Lead Link™ page can be customized and fully tracked.
+
+Add your own buttons (up to 3)
+On the Lead Link page, use "Your own links" to add up to 3 custom buttons — for example Book a Tour, Video Tour, Menu, or a Google review link. For each one:
+1. Click Add link
+2. Pick an icon from the icon pack
+3. Enter a label (e.g. "Book a Tour") and the URL
+4. Click Save links
+
+Custom links always open in a new tab so brides never lose your Lead Link page.
+
+Generate a QR code
+The Lead Link page includes a QR code generator. Download the QR image and print it on table cards, signage, brochures, or flyers so people can scan straight to your Lead Link in person — great for open houses and bridal shows.
+
+Track every click
+Your analytics dashboard shows how your Lead Link is performing:
+- How many times the page was viewed
+- How many times each button was clicked
+
+These numbers respect the date filters on your dashboard, so you can compare periods.
+
+Leads get their own source
+Leads captured through the "Download Pricing & Availability" form on your Lead Link show up under their own "Lead Link" source in your Booking Funnel — so you can see exactly how much business your social bio link is driving, instead of it being lumped into "Other".`,
+      },
     ],
   },
   {
@@ -3034,6 +3091,74 @@ To disconnect: click Disconnect. Your existing QuickBooks data is not deleted.`,
 You'll be redirected to FreshBooks to authorise access. After approving, the card shows Connected.
 
 Invoices and charges sync to FreshBooks automatically. Use Sync Now for a manual sync. Disconnect at any time from the same page.`,
+      },
+      {
+        id: 'int-tripleseat',
+        title: 'Connecting Tripleseat',
+        tags: ['tripleseat', 'crm', 'venue crm', 'lead', 'integration', 'sync', 'connect', 'catering', 'events'],
+        body: `The Tripleseat integration automatically sends every new StoryVenue lead into your Tripleseat account, so your team can work all your inquiries from one place.
+
+To connect
+1. Go to Settings → Integrations → Tripleseat card → Connect.
+2. In Tripleseat, find your public API key (Tripleseat: Settings → API → Public Key).
+3. Paste the key into StoryVenue and click Connect.
+4. If your Tripleseat account has more than one location, choose which location new leads should be created under.
+
+What gets sent
+When a new lead comes in (from your listing form, Lead Link, directory, or a marketing form), StoryVenue sends Tripleseat:
+- First and last name, email, and phone
+- Wedding/event date and guest count (when provided)
+- The bride's message
+- Where the lead came from (UTM attribution)
+
+Every lead is labeled with the source "StoryVenue - Bride Booking System™" so it's easy to spot and report on inside Tripleseat.
+
+Test and manage
+- Click Send test lead to push a sample lead and confirm everything's working.
+- The connection is one-way (StoryVenue → Tripleseat).
+- Update the selected location or Disconnect at any time from the same card.`,
+      },
+      {
+        id: 'int-eventtemple',
+        title: 'Connecting Event Temple',
+        tags: ['event temple', 'eventtemple', 'crm', 'venue crm', 'lead', 'booking', 'integration', 'sync', 'connect', 'api key', 'org'],
+        body: `The Event Temple integration automatically sends every new StoryVenue lead into Event Temple as a lead booking, so your sales team can pick it up right away.
+
+To connect
+1. Go to Settings → Integrations → Event Temple card → Connect.
+2. In Event Temple, get your API key (Settings → Developers → API) and your API-ORG identifier (Settings → Overview).
+3. Paste both into StoryVenue and click Connect. StoryVenue checks the credentials before saving.
+
+What gets sent
+When a new lead comes in, StoryVenue creates in Event Temple:
+- A contact with the bride's name, email, and phone
+- A booking marked as a lead, with the wedding/event date
+
+The bride's message, guest count, the source "StoryVenue - Bride Booking System™", and where the lead came from (UTM attribution) are added as a note on that booking. (Event Temple doesn't have a built-in "lead source" field, so the source is recorded in the note.)
+
+Test and manage
+- Click Send test lead to push a sample lead and confirm the connection.
+- The connection is one-way (StoryVenue → Event Temple).
+- Disconnect at any time from the same card.`,
+      },
+      {
+        id: 'int-honeybook',
+        title: 'Connecting HoneyBook (via Zapier)',
+        tags: ['honeybook', 'zapier', 'crm', 'lead', 'integration', 'connect', 'automation', 'no direct'],
+        body: `HoneyBook doesn't offer a direct connection, but you can still send new StoryVenue leads straight into HoneyBook using Zapier — no coding required.
+
+How to connect
+1. In StoryVenue, go to Settings → Integrations → Zapier section and generate an API key (copy it — it's shown only once).
+2. In Zapier, create a new Zap with the StoryVenue "New Lead" trigger and connect it using your API key.
+3. Add a HoneyBook action — "Create Client" or "Create Project".
+4. Map the lead's name, email, and phone into the HoneyBook fields, then turn the Zap on.
+
+New StoryVenue leads will now appear in HoneyBook automatically.
+
+Good to know
+- HoneyBook's Zapier connection requires their Essential or Premium plan.
+- HoneyBook custom fields aren't supported over Zapier, so any extra details map into the project's notes/details field.
+- The HoneyBook card on the Integrations page links straight to Zapier and to HoneyBook's own Zapier guide.`,
       },
     ],
   },
