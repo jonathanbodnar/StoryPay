@@ -209,6 +209,7 @@ Five tabs covering every aspect of how your calendar works:
 - Sends every new StoryVenue lead into Event Temple automatically as a lead booking.
 - Connect at Settings → Integrations → Event Temple card → Connect, then paste your Event Temple API key (Settings → Developers → API) and your API-ORG identifier (Settings → Overview).
 - What flows over: a new contact (name, email, phone) plus a booking marked as a lead, with the wedding date on the booking. The message, guest count, source "StoryVenue - Bride Booking System™", and UTM attribution are added as a note on the booking.
+- Pipeline routing: on the Event Temple card you can choose which Pipeline (and starting Stage) new lead bookings are created in; leave it on "Event Temple default" to let Event Temple decide.
 - Use "Send test lead" to confirm it's working. One-way (StoryVenue → Event Temple). Disconnect anytime.
 
 ### HoneyBook (via Zapier)

@@ -3136,6 +3136,9 @@ When a new lead comes in, StoryVenue creates in Event Temple:
 
 The bride's message, guest count, the source "StoryVenue - Bride Booking System™", and where the lead came from (UTM attribution) are added as a note on that booking. (Event Temple doesn't have a built-in "lead source" field, so the source is recorded in the note.)
 
+Choose which pipeline leads land in
+On the Event Temple card you can pick a Pipeline (and a starting Stage within it) for new lead bookings. Leads are created on that stage so they land at the top of the pipeline you choose. Leave it on "Event Temple default" to let Event Temple decide.
+
 Test and manage
 - Click Send test lead to push a sample lead and confirm the connection.
 - The connection is one-way (StoryVenue → Event Temple).

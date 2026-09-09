@@ -64,6 +64,88 @@ export async function fetchEventTempleOrganizations(
   })).filter((o) => o.id);
 }
 
+export interface EventTemplePipeline {
+  id: string;
+  name: string;
+}
+
+export interface EventTempleStage {
+  id: string;
+  name: string;
+  pipeline_id: string;
+  position: number;
+}
+
+/**
+ * List the venue's booking pipelines. Used to let the venue choose which
+ * pipeline new lead bookings should be created in.
+ */
+export async function fetchEventTemplePipelines(
+  apiKey: string,
+  orgId: string,
+): Promise<EventTemplePipeline[]> {
+  const res = await fetch(`${EVENTTEMPLE_API}/pipelines?page[size]=100`, {
+    method: 'GET',
+    headers: etHeaders(apiKey, orgId),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Event Temple pipelines fetch failed (${res.status}): ${text.slice(0, 200)}`);
+  }
+  const json = await res.json().catch(() => ({})) as {
+    data?: Array<{ id?: string | number; attributes?: { name?: string } }>;
+  };
+  const rows = Array.isArray(json.data) ? json.data : [];
+  return rows
+    .map((row) => ({ id: String(row.id ?? ''), name: String(row.attributes?.name ?? '') }))
+    .filter((p) => p.id);
+}
+
+/**
+ * List the stages across the venue's pipelines. Each stage belongs to a
+ * pipeline (relationships.pipeline / attributes.pipeline_id). Selecting a stage
+ * is how a booking is routed into a specific pipeline — the chosen stage id is
+ * sent as `stage_id` on booking creation.
+ */
+export async function fetchEventTempleStages(
+  apiKey: string,
+  orgId: string,
+): Promise<EventTempleStage[]> {
+  const res = await fetch(`${EVENTTEMPLE_API}/stages?include=pipeline&page[size]=200`, {
+    method: 'GET',
+    headers: etHeaders(apiKey, orgId),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Event Temple stages fetch failed (${res.status}): ${text.slice(0, 200)}`);
+  }
+  const json = await res.json().catch(() => ({})) as {
+    data?: Array<{
+      id?: string | number;
+      attributes?: { name?: string; position?: number; pipeline_id?: string | number };
+      relationships?: { pipeline?: { data?: { id?: string | number } | null } };
+    }>;
+  };
+  const rows = Array.isArray(json.data) ? json.data : [];
+  return rows
+    .map((row) => {
+      const pipelineId =
+        row.attributes?.pipeline_id != null
+          ? String(row.attributes.pipeline_id)
+          : row.relationships?.pipeline?.data?.id != null
+            ? String(row.relationships.pipeline.data.id)
+            : '';
+      return {
+        id: String(row.id ?? ''),
+        name: String(row.attributes?.name ?? ''),
+        pipeline_id: pipelineId,
+        position: typeof row.attributes?.position === 'number' ? row.attributes.position : 0,
+      };
+    })
+    .filter((s) => s.id)
+    .sort((a, b) => a.position - b.position);
+}
+
 export interface EventTempleLead {
   first_name?: string;
   last_name?: string;
@@ -145,6 +227,7 @@ export async function pushLeadToEventTemple(
   apiKey: string,
   orgId: string,
   lead: EventTempleLead,
+  stageId?: string | null,
 ): Promise<{ ok: boolean; bookingId?: string; error?: string }> {
   try {
     // Event Temple requires first_name, last_name and email on a new contact.
@@ -169,6 +252,14 @@ export async function pushLeadToEventTemple(
     if (eventDate) {
       attributes.start_date = eventDate;
       attributes.end_date = eventDate;
+    }
+
+    // Route the booking into the venue's chosen pipeline by placing it on the
+    // selected stage. A stage belongs to a pipeline, so setting stage_id is how
+    // Event Temple decides which pipeline the booking lands in.
+    const stageNum = stageId != null && String(stageId).trim() ? Number(stageId) : NaN;
+    if (Number.isFinite(stageNum)) {
+      attributes.stage_id = stageNum;
     }
 
     const res = await fetch(`${EVENTTEMPLE_API}/bookings`, {
@@ -230,11 +321,15 @@ export async function maybePushLeadToEventTemple(
   try {
     const { data: venue } = await supabaseAdmin
       .from('venues')
-      .select('eventtemple_api_key, eventtemple_org_id')
+      .select('eventtemple_api_key, eventtemple_org_id, eventtemple_stage_id')
       .eq('id', venueId)
       .maybeSingle();
 
-    const v = venue as { eventtemple_api_key?: string | null; eventtemple_org_id?: string | null } | null;
+    const v = venue as {
+      eventtemple_api_key?: string | null;
+      eventtemple_org_id?: string | null;
+      eventtemple_stage_id?: string | null;
+    } | null;
     if (!v?.eventtemple_api_key || !v?.eventtemple_org_id) return;
 
     const result = await pushLeadToEventTemple(
@@ -256,6 +351,7 @@ export async function maybePushLeadToEventTemple(
         utm_term:         lead.utm_term ?? undefined,
         utm_content:      lead.utm_content ?? undefined,
       },
+      v.eventtemple_stage_id ?? undefined,
     );
 
     if (!result.ok) {

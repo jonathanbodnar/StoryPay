@@ -287,12 +287,18 @@ function TripleseatCard() {
 // ── Event Temple Integration Card ─────────────────────────────────────────────
 
 interface ETOrganization { id: string; name: string }
+interface ETPipeline { id: string; name: string }
+interface ETStage { id: string; name: string; pipeline_id: string; position: number }
 
 function EventTempleCard() {
   const [status, setStatus] = useState<'loading' | 'connected' | 'disconnected'>('loading');
   const [maskedKey, setMaskedKey] = useState('');
   const [orgId, setOrgId] = useState<string | null>(null);
   const [organizations, setOrganizations] = useState<ETOrganization[]>([]);
+  const [pipelines, setPipelines] = useState<ETPipeline[]>([]);
+  const [stages, setStages] = useState<ETStage[]>([]);
+  const [pipelineId, setPipelineId] = useState<string | null>(null);
+  const [stageId, setStageId] = useState<string | null>(null);
 
   const [inputKey, setInputKey] = useState('');
   const [inputOrg, setInputOrg] = useState('');
@@ -311,11 +317,15 @@ function EventTempleCard() {
     setStatus('loading');
     try {
       const r = await fetch('/api/integrations/eventtemple', { cache: 'no-store' });
-      const d = await r.json() as { connected: boolean; apiKey: string | null; orgId: string | null; organizations: ETOrganization[] };
+      const d = await r.json() as { connected: boolean; apiKey: string | null; orgId: string | null; organizations: ETOrganization[]; pipelines?: ETPipeline[]; stages?: ETStage[]; pipelineId?: string | null; stageId?: string | null };
       setStatus(d.connected ? 'connected' : 'disconnected');
       setMaskedKey(d.apiKey ?? '');
       setOrgId(d.orgId);
       setOrganizations(d.organizations ?? []);
+      setPipelines(d.pipelines ?? []);
+      setStages(d.stages ?? []);
+      setPipelineId(d.pipelineId ?? null);
+      setStageId(d.stageId ?? null);
     } catch {
       setStatus('disconnected');
     }
@@ -335,13 +345,17 @@ function EventTempleCard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: inputKey.trim(), orgId: inputOrg.trim() }),
       });
-      const d = await r.json() as { connected?: boolean; organizations?: ETOrganization[]; orgId?: string | null; error?: string };
+      const d = await r.json() as { connected?: boolean; organizations?: ETOrganization[]; orgId?: string | null; pipelines?: ETPipeline[]; stages?: ETStage[]; error?: string };
       if (!r.ok) { flash(false, d.error ?? 'Connection failed.'); return; }
       setInputKey('');
       setInputOrg('');
       setShowConnect(false);
       setOrganizations(d.organizations ?? []);
       setOrgId(d.orgId ?? null);
+      setPipelines(d.pipelines ?? []);
+      setStages(d.stages ?? []);
+      setPipelineId(null);
+      setStageId(null);
       setStatus('connected');
       flash(true, 'Event Temple connected successfully.');
       void load();
@@ -370,13 +384,46 @@ function EventTempleCard() {
     setMaskedKey('');
     setOrgId(null);
     setOrganizations([]);
+    setPipelines([]);
+    setStages([]);
+    setPipelineId(null);
+    setStageId(null);
     setDisconnecting(false);
     flash(true, 'Event Temple disconnected.');
+  }
+
+  async function saveRouting(nextPipelineId: string | null, nextStageId: string | null) {
+    setPipelineId(nextPipelineId);
+    setStageId(nextStageId);
+    try {
+      const r = await fetch('/api/integrations/eventtemple', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pipelineId: nextPipelineId, stageId: nextStageId }),
+      });
+      if (!r.ok) { flash(false, 'Could not save pipeline selection.'); return; }
+      flash(true, nextStageId ? 'Lead routing saved.' : 'Using Event Temple default pipeline.');
+    } catch {
+      flash(false, 'Network error saving pipeline selection.');
+    }
+  }
+
+  // When the venue picks a pipeline, default the stage to that pipeline's first
+  // stage (lowest position) so leads land at the top of the pipeline.
+  function onPipelineChange(nextPipelineId: string) {
+    if (!nextPipelineId) { void saveRouting(null, null); return; }
+    const firstStage = stages
+      .filter((s) => s.pipeline_id === nextPipelineId)
+      .sort((a, b) => a.position - b.position)[0];
+    void saveRouting(nextPipelineId, firstStage ? firstStage.id : null);
   }
 
   const isLoading = status === 'loading';
   const isConnected = status === 'connected';
   const orgName = organizations.find((o) => o.id === orgId)?.name ?? organizations[0]?.name ?? null;
+  const stagesForPipeline = pipelineId
+    ? stages.filter((s) => s.pipeline_id === pipelineId).sort((a, b) => a.position - b.position)
+    : [];
 
   return (
     <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">
@@ -416,6 +463,43 @@ function EventTempleCard() {
               ) : orgId ? (
                 <p className="text-xs text-gray-500">API-ORG: <code className="font-mono text-gray-700">{orgId}</code></p>
               ) : null}
+
+              {/* Pipeline / stage routing */}
+              {pipelines.length > 0 && (
+                <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Where new leads go</p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <label className="text-xs font-medium text-gray-700 shrink-0 sm:w-16">Pipeline</label>
+                    <select
+                      value={pipelineId ?? ''}
+                      onChange={(e) => onPipelineChange(e.target.value)}
+                      className="w-full max-w-xs rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:border-gray-400 focus:outline-none"
+                    >
+                      <option value="">Event Temple default</option>
+                      {pipelines.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {pipelineId && stagesForPipeline.length > 0 && (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <label className="text-xs font-medium text-gray-700 shrink-0 sm:w-16">Stage</label>
+                      <select
+                        value={stageId ?? ''}
+                        onChange={(e) => void saveRouting(pipelineId, e.target.value || null)}
+                        className="w-full max-w-xs rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:border-gray-400 focus:outline-none"
+                      >
+                        {stagesForPipeline.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-400">
+                    New lead bookings are created on this stage. Leave as “Event Temple default” to let Event Temple decide.
+                  </p>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-2">
                 <button
