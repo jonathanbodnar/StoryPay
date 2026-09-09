@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import { getVenueId } from '@/lib/auth-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
-import { pushLeadToEventTemple } from '@/lib/eventtemple';
+import { pushLeadToEventTemple, resolveEventTempleRouting } from '@/lib/eventtemple';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -17,7 +17,7 @@ export async function POST() {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('eventtemple_api_key, eventtemple_org_id, eventtemple_stage_id, eventtemple_referral_source_id')
+    .select('eventtemple_api_key, eventtemple_org_id, eventtemple_stage_id, eventtemple_referral_source_id, eventtemple_booking_type_id')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -26,10 +26,16 @@ export async function POST() {
     eventtemple_org_id?: string | null;
     eventtemple_stage_id?: string | null;
     eventtemple_referral_source_id?: string | null;
+    eventtemple_booking_type_id?: string | null;
   } | null;
   if (!v?.eventtemple_api_key || !v?.eventtemple_org_id) {
     return NextResponse.json({ error: 'Event Temple is not connected.' }, { status: 400 });
   }
+
+  const routing = await resolveEventTempleRouting(venueId, v.eventtemple_api_key, v.eventtemple_org_id, {
+    referralSourceId: v.eventtemple_referral_source_id,
+    bookingTypeId: v.eventtemple_booking_type_id,
+  });
 
   const result = await pushLeadToEventTemple(
     v.eventtemple_api_key,
@@ -41,7 +47,8 @@ export async function POST() {
       message: 'This is a test lead sent from StoryVenue to verify your Event Temple integration is working correctly.',
     },
     v.eventtemple_stage_id ?? undefined,
-    v.eventtemple_referral_source_id ?? undefined,
+    routing.referralSourceId ?? undefined,
+    routing.bookingTypeId ?? undefined,
   );
 
   if (!result.ok) {

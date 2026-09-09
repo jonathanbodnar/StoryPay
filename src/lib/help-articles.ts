@@ -3139,8 +3139,12 @@ The bride's message, guest count, booking timeline, what matters most to her, an
 Choose which pipeline leads land in
 On the Event Temple card you can pick a Pipeline (and a starting Stage within it) for new lead bookings. Leads are created on that stage so they land at the top of the pipeline you choose. Leave it on "Event Temple default" to let Event Temple decide.
 
-Tag the referral source
-You can also map new bookings to an Event Temple Referral Source, so the booking's native Referral Source field is filled in (and shows in your Event Temple reports) instead of the source only living in the note. Create a referral source called "StoryVenue" in Event Temple, then pick it on the card. Leave it on "None" to keep the source in the note. Once the referral source (or pipeline/stage) is set, you can build Event Temple Workflows that route or act on those StoryVenue leads automatically.
+Referral source and booking type (auto-filled)
+StoryVenue also fills two native Event Temple fields on every booking so they don't just live in the note:
+- Referral Source — we automatically use a source named "StoryVenue - Bride Booking System" when it exists in your account. Create that referral source once in Event Temple (Settings) and it fills in going forward. You can also pick a different source on the card.
+- Booking Type — we automatically use "Wedding" when it exists. You can pick a different type on the card.
+
+Event Temple's API can't create referral sources or booking types, so the names above must already exist in Event Temple for us to select them — otherwise the field is left blank and the info stays in the note. Once the referral source, booking type, pipeline, or stage is set, you can build Event Temple Workflows that route or act on those StoryVenue leads automatically.
 
 Test and manage
 - Click Send test lead to push a sample lead and confirm the connection.

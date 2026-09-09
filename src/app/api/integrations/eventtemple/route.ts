@@ -14,9 +14,11 @@ import {
   fetchEventTemplePipelines,
   fetchEventTempleStages,
   fetchEventTempleReferralSources,
+  fetchEventTempleBookingTypes,
   type EventTemplePipeline,
   type EventTempleStage,
   type EventTempleReferralSource,
+  type EventTempleBookingType,
 } from '@/lib/eventtemple';
 
 export const dynamic = 'force-dynamic';
@@ -33,23 +35,26 @@ type VenueETRow = {
   eventtemple_pipeline_id?: string | null;
   eventtemple_stage_id?: string | null;
   eventtemple_referral_source_id?: string | null;
+  eventtemple_booking_type_id?: string | null;
 };
 
 const SELECT_COLS =
-  'eventtemple_api_key, eventtemple_org_id, eventtemple_pipeline_id, eventtemple_stage_id, eventtemple_referral_source_id';
+  'eventtemple_api_key, eventtemple_org_id, eventtemple_pipeline_id, eventtemple_stage_id, eventtemple_referral_source_id, eventtemple_booking_type_id';
 
-/** Load routing options (pipelines, stages, referral sources), tolerating partial failures. */
+/** Load routing options (pipelines, stages, referral sources, booking types), tolerating partial failures. */
 async function loadRoutingOptions(apiKey: string, orgId: string): Promise<{
   pipelines: EventTemplePipeline[];
   stages: EventTempleStage[];
   referralSources: EventTempleReferralSource[];
+  bookingTypes: EventTempleBookingType[];
 }> {
-  const [pipelines, stages, referralSources] = await Promise.all([
+  const [pipelines, stages, referralSources, bookingTypes] = await Promise.all([
     fetchEventTemplePipelines(apiKey, orgId).catch(() => [] as EventTemplePipeline[]),
     fetchEventTempleStages(apiKey, orgId).catch(() => [] as EventTempleStage[]),
     fetchEventTempleReferralSources(apiKey, orgId).catch(() => [] as EventTempleReferralSource[]),
+    fetchEventTempleBookingTypes(apiKey, orgId).catch(() => [] as EventTempleBookingType[]),
   ]);
-  return { pipelines, stages, referralSources };
+  return { pipelines, stages, referralSources, bookingTypes };
 }
 
 export async function GET() {
@@ -69,8 +74,8 @@ export async function GET() {
   if (!apiKey || !orgId) {
     return NextResponse.json({
       connected: false, apiKey: null, orgId: null,
-      organizations: [], pipelines: [], stages: [], referralSources: [],
-      pipelineId: null, stageId: null, referralSourceId: null,
+      organizations: [], pipelines: [], stages: [], referralSources: [], bookingTypes: [],
+      pipelineId: null, stageId: null, referralSourceId: null, bookingTypeId: null,
     });
   }
 
@@ -81,7 +86,7 @@ export async function GET() {
   } catch {
     // Non-fatal — key may be stale; still report connected so the UI can show it.
   }
-  const { pipelines, stages, referralSources } = await loadRoutingOptions(apiKey, orgId);
+  const { pipelines, stages, referralSources, bookingTypes } = await loadRoutingOptions(apiKey, orgId);
 
   return NextResponse.json({
     connected: true,
@@ -91,9 +96,11 @@ export async function GET() {
     pipelines,
     stages,
     referralSources,
+    bookingTypes,
     pipelineId: v?.eventtemple_pipeline_id ?? null,
     stageId: v?.eventtemple_stage_id ?? null,
     referralSourceId: v?.eventtemple_referral_source_id ?? null,
+    bookingTypeId: v?.eventtemple_booking_type_id ?? null,
   });
 }
 
@@ -128,11 +135,11 @@ export async function POST(req: NextRequest) {
 
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-  const { pipelines, stages, referralSources } = await loadRoutingOptions(apiKey, orgId);
+  const { pipelines, stages, referralSources, bookingTypes } = await loadRoutingOptions(apiKey, orgId);
 
   return NextResponse.json({
-    connected: true, organizations, orgId, pipelines, stages, referralSources,
-    pipelineId: null, stageId: null, referralSourceId: null,
+    connected: true, organizations, orgId, pipelines, stages, referralSources, bookingTypes,
+    pipelineId: null, stageId: null, referralSourceId: null, bookingTypeId: null,
   });
 }
 
@@ -140,7 +147,7 @@ export async function PATCH(req: NextRequest) {
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { pipelineId?: string | null; stageId?: string | null; referralSourceId?: string | null };
+  let body: { pipelineId?: string | null; stageId?: string | null; referralSourceId?: string | null; bookingTypeId?: string | null };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
@@ -167,6 +174,7 @@ export async function PATCH(req: NextRequest) {
   if ('pipelineId' in body)       patch.eventtemple_pipeline_id = norm(body.pipelineId);
   if ('stageId' in body)          patch.eventtemple_stage_id = norm(body.stageId);
   if ('referralSourceId' in body) patch.eventtemple_referral_source_id = norm(body.referralSourceId);
+  if ('bookingTypeId' in body)    patch.eventtemple_booking_type_id = norm(body.bookingTypeId);
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 });
@@ -193,6 +201,7 @@ export async function DELETE() {
       eventtemple_pipeline_id: null,
       eventtemple_stage_id: null,
       eventtemple_referral_source_id: null,
+      eventtemple_booking_type_id: null,
     })
     .eq('id', venueId);
 

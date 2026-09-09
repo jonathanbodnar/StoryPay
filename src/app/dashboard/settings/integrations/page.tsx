@@ -290,6 +290,7 @@ interface ETOrganization { id: string; name: string }
 interface ETPipeline { id: string; name: string }
 interface ETStage { id: string; name: string; pipeline_id: string; position: number }
 interface ETReferralSource { id: string; name: string }
+interface ETBookingType { id: string; name: string }
 
 function EventTempleCard() {
   const [status, setStatus] = useState<'loading' | 'connected' | 'disconnected'>('loading');
@@ -302,6 +303,8 @@ function EventTempleCard() {
   const [stageId, setStageId] = useState<string | null>(null);
   const [referralSources, setReferralSources] = useState<ETReferralSource[]>([]);
   const [referralSourceId, setReferralSourceId] = useState<string | null>(null);
+  const [bookingTypes, setBookingTypes] = useState<ETBookingType[]>([]);
+  const [bookingTypeId, setBookingTypeId] = useState<string | null>(null);
 
   const [inputKey, setInputKey] = useState('');
   const [inputOrg, setInputOrg] = useState('');
@@ -320,7 +323,7 @@ function EventTempleCard() {
     setStatus('loading');
     try {
       const r = await fetch('/api/integrations/eventtemple', { cache: 'no-store' });
-      const d = await r.json() as { connected: boolean; apiKey: string | null; orgId: string | null; organizations: ETOrganization[]; pipelines?: ETPipeline[]; stages?: ETStage[]; referralSources?: ETReferralSource[]; pipelineId?: string | null; stageId?: string | null; referralSourceId?: string | null };
+      const d = await r.json() as { connected: boolean; apiKey: string | null; orgId: string | null; organizations: ETOrganization[]; pipelines?: ETPipeline[]; stages?: ETStage[]; referralSources?: ETReferralSource[]; bookingTypes?: ETBookingType[]; pipelineId?: string | null; stageId?: string | null; referralSourceId?: string | null; bookingTypeId?: string | null };
       setStatus(d.connected ? 'connected' : 'disconnected');
       setMaskedKey(d.apiKey ?? '');
       setOrgId(d.orgId);
@@ -328,9 +331,11 @@ function EventTempleCard() {
       setPipelines(d.pipelines ?? []);
       setStages(d.stages ?? []);
       setReferralSources(d.referralSources ?? []);
+      setBookingTypes(d.bookingTypes ?? []);
       setPipelineId(d.pipelineId ?? null);
       setStageId(d.stageId ?? null);
       setReferralSourceId(d.referralSourceId ?? null);
+      setBookingTypeId(d.bookingTypeId ?? null);
     } catch {
       setStatus('disconnected');
     }
@@ -350,7 +355,7 @@ function EventTempleCard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: inputKey.trim(), orgId: inputOrg.trim() }),
       });
-      const d = await r.json() as { connected?: boolean; organizations?: ETOrganization[]; orgId?: string | null; pipelines?: ETPipeline[]; stages?: ETStage[]; referralSources?: ETReferralSource[]; error?: string };
+      const d = await r.json() as { connected?: boolean; organizations?: ETOrganization[]; orgId?: string | null; pipelines?: ETPipeline[]; stages?: ETStage[]; referralSources?: ETReferralSource[]; bookingTypes?: ETBookingType[]; error?: string };
       if (!r.ok) { flash(false, d.error ?? 'Connection failed.'); return; }
       setInputKey('');
       setInputOrg('');
@@ -360,9 +365,11 @@ function EventTempleCard() {
       setPipelines(d.pipelines ?? []);
       setStages(d.stages ?? []);
       setReferralSources(d.referralSources ?? []);
+      setBookingTypes(d.bookingTypes ?? []);
       setPipelineId(null);
       setStageId(null);
       setReferralSourceId(null);
+      setBookingTypeId(null);
       setStatus('connected');
       flash(true, 'Event Temple connected successfully.');
       void load();
@@ -394,9 +401,11 @@ function EventTempleCard() {
     setPipelines([]);
     setStages([]);
     setReferralSources([]);
+    setBookingTypes([]);
     setPipelineId(null);
     setStageId(null);
     setReferralSourceId(null);
+    setBookingTypeId(null);
     setDisconnecting(false);
     flash(true, 'Event Temple disconnected.');
   }
@@ -429,6 +438,21 @@ function EventTempleCard() {
       flash(true, nextId ? 'Referral source saved.' : 'Referral source cleared.');
     } catch {
       flash(false, 'Network error saving referral source.');
+    }
+  }
+
+  async function saveBookingType(nextId: string | null) {
+    setBookingTypeId(nextId);
+    try {
+      const r = await fetch('/api/integrations/eventtemple', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingTypeId: nextId }),
+      });
+      if (!r.ok) { flash(false, 'Could not save booking type.'); return; }
+      flash(true, nextId ? 'Booking type saved.' : 'Booking type cleared.');
+    } catch {
+      flash(false, 'Network error saving booking type.');
     }
   }
 
@@ -543,7 +567,30 @@ function EventTempleCard() {
                     </select>
                   </div>
                   <p className="text-[11px] text-gray-400">
-                    Tags each new booking with this Event Temple referral source so it shows in the Referral Source field and your reports. Create a “StoryVenue” source in Event Temple to track these leads cleanly.
+                    Tags each new booking with this Event Temple referral source so it shows in the Referral Source field and your reports. We auto-select a source named “StoryVenue - Bride Booking System” when one exists (Event Temple’s API can’t create it, so add it once in Event Temple).
+                  </p>
+                </div>
+              )}
+
+              {/* Booking type mapping */}
+              {bookingTypes.length > 0 && (
+                <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Booking type</p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <label className="text-xs font-medium text-gray-700 shrink-0 sm:w-16">Type</label>
+                    <select
+                      value={bookingTypeId ?? ''}
+                      onChange={(e) => void saveBookingType(e.target.value || null)}
+                      className="w-full max-w-xs rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:border-gray-400 focus:outline-none"
+                    >
+                      <option value="">None</option>
+                      {bookingTypes.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    Sets each new booking’s Booking Type field. We auto-select “Wedding” when it exists in your Event Temple account.
                   </p>
                 </div>
               )}

@@ -24,6 +24,18 @@ const JSON_API = 'application/vnd.api+json';
 
 const SOURCE_LABEL = 'StoryVenue - Bride Booking System™';
 
+// Names we auto-match against the venue's existing Event Temple settings.
+// Event Temple's API only lets us LIST referral sources / booking types (no
+// create endpoint), so these must already exist in the venue's account; if a
+// match isn't found we simply skip that native field.
+const AUTO_REFERRAL_SOURCE_NAME = SOURCE_LABEL;
+const AUTO_BOOKING_TYPE_NAME = 'Wedding';
+
+/** Case/whitespace-insensitive name match used for auto-mapping. */
+function normalizeName(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 function etHeaders(apiKey: string, orgId: string): Record<string, string> {
   return {
     'X-API-KEY': apiKey,
@@ -86,6 +98,37 @@ export async function fetchEventTempleReferralSources(
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Event Temple referral sources fetch failed (${res.status}): ${text.slice(0, 200)}`);
+  }
+  const json = await res.json().catch(() => ({})) as {
+    data?: Array<{ id?: string | number; attributes?: { name?: string } }>;
+  };
+  const rows = Array.isArray(json.data) ? json.data : [];
+  return rows
+    .map((row) => ({ id: String(row.id ?? ''), name: String(row.attributes?.name ?? '') }))
+    .filter((r) => r.id);
+}
+
+export interface EventTempleBookingType {
+  id: string;
+  name: string;
+}
+
+/**
+ * List the venue's booking types. Used to let the venue map StoryVenue leads to
+ * a native Event Temple booking type (fills the booking's Booking Type field),
+ * and to auto-match a "Wedding" type.
+ */
+export async function fetchEventTempleBookingTypes(
+  apiKey: string,
+  orgId: string,
+): Promise<EventTempleBookingType[]> {
+  const res = await fetch(`${EVENTTEMPLE_API}/booking_types?page[size]=100`, {
+    method: 'GET',
+    headers: etHeaders(apiKey, orgId),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Event Temple booking types fetch failed (${res.status}): ${text.slice(0, 200)}`);
   }
   const json = await res.json().catch(() => ({})) as {
     data?: Array<{ id?: string | number; attributes?: { name?: string } }>;
@@ -201,20 +244,20 @@ export interface EventTempleLead {
  * booking property, formatted so venue staff can read it at a glance.
  */
 export function buildEventTempleNote(lead: EventTempleLead): string {
-  // Event Temple note content is plain text (no HTML/markdown), and its UI
-  // collapses newlines onto one line — so we lead with a headline and prefix
-  // each detail with a "•" bullet, which stays readable even when collapsed.
-  // Raw form slugs (e.g. booking timeline "ready_now") are humanised so venue
-  // staff see friendly labels instead of internal values.
-  const details: string[] = [];
+  // Event Temple renders note content as HTML — plain "\n" newlines collapse
+  // onto a single line (the "jumbled" look). We join lines with <br> so each
+  // field lands on its own line, matching what a user gets typing in ET's note
+  // editor. Values are HTML-escaped and raw form slugs (e.g. booking timeline
+  // "ready_now") are humanised into friendly labels.
+  const lines: string[] = [`New lead via ${SOURCE_LABEL}`];
 
-  if (typeof lead.guest_count === 'number') details.push(`Guest count: ${lead.guest_count}`);
+  if (typeof lead.guest_count === 'number') lines.push(`Guest count: ${lead.guest_count}`);
 
   if (lead.booking_timeline) {
-    details.push(`Booking timeline: ${bookingTimelineLabel(lead.booking_timeline) || lead.booking_timeline}`);
+    lines.push(`Booking timeline: ${bookingTimelineLabel(lead.booking_timeline) || lead.booking_timeline}`);
   }
-  if (lead.venue_matters) details.push(`What matters most: ${lead.venue_matters}`);
-  if (lead.message)       details.push(`Message: ${lead.message}`);
+  if (lead.venue_matters) lines.push(`What matters most: ${lead.venue_matters}`);
+  if (lead.message)       lines.push(`Message: ${lead.message}`);
 
   const utm = [
     lead.utm_source   && `source=${lead.utm_source}`,
@@ -223,11 +266,17 @@ export function buildEventTempleNote(lead: EventTempleLead): string {
     lead.utm_term     && `term=${lead.utm_term}`,
     lead.utm_content  && `content=${lead.utm_content}`,
   ].filter(Boolean);
-  if (utm.length) details.push(`Attribution: ${utm.join(', ')}`);
+  if (utm.length) lines.push(`Attribution: ${utm.join(', ')}`);
 
-  const headline = `New lead via ${SOURCE_LABEL}`;
-  if (details.length === 0) return headline;
-  return `${headline}\n${details.map((d) => `• ${d}`).join('\n')}`;
+  return lines.map(escapeHtml).join('<br>');
+}
+
+/** Escape HTML so lead-provided values can't inject markup into the note. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 /**
@@ -271,6 +320,7 @@ export async function pushLeadToEventTemple(
   lead: EventTempleLead,
   stageId?: string | null,
   referralSourceId?: string | null,
+  bookingTypeId?: string | null,
 ): Promise<{ ok: boolean; bookingId?: string; error?: string }> {
   try {
     // Event Temple requires first_name, last_name and email on a new contact.
@@ -312,6 +362,12 @@ export async function pushLeadToEventTemple(
       attributes.referral_source_id = refNum;
     }
 
+    // Set the native Event Temple booking type (e.g. "Wedding") when mapped.
+    const btNum = bookingTypeId != null && String(bookingTypeId).trim() ? Number(bookingTypeId) : NaN;
+    if (Number.isFinite(btNum)) {
+      attributes.booking_type_id = btNum;
+    }
+
     const res = await fetch(`${EVENTTEMPLE_API}/bookings`, {
       method: 'POST',
       headers: etHeaders(apiKey, orgId),
@@ -346,6 +402,57 @@ export async function pushLeadToEventTemple(
 }
 
 /**
+ * Resolve the referral source + booking type ids to send with a booking.
+ *
+ * Precedence: a value the venue explicitly picked on the integration card wins.
+ * When unset, we auto-match by name against the venue's existing Event Temple
+ * settings ("StoryVenue - Bride Booking System™" and "Wedding") and cache the
+ * resolved id back onto the venue row so future pushes skip the lookup. Event
+ * Temple has no create API for these, so an unmatched name is simply skipped.
+ * Never throws — returns whatever it could resolve.
+ */
+export async function resolveEventTempleRouting(
+  venueId: string,
+  apiKey: string,
+  orgId: string,
+  stored: { referralSourceId?: string | null; bookingTypeId?: string | null },
+): Promise<{ referralSourceId: string | null; bookingTypeId: string | null }> {
+  let referralSourceId = stored.referralSourceId ?? null;
+  let bookingTypeId = stored.bookingTypeId ?? null;
+  const patch: Record<string, string> = {};
+
+  try {
+    if (!referralSourceId) {
+      const sources = await fetchEventTempleReferralSources(apiKey, orgId).catch(() => []);
+      const match = sources.find((s) => normalizeName(s.name) === normalizeName(AUTO_REFERRAL_SOURCE_NAME));
+      if (match) {
+        referralSourceId = match.id;
+        patch.eventtemple_referral_source_id = match.id;
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  try {
+    if (!bookingTypeId) {
+      const types = await fetchEventTempleBookingTypes(apiKey, orgId).catch(() => []);
+      const match = types.find((t) => normalizeName(t.name) === normalizeName(AUTO_BOOKING_TYPE_NAME));
+      if (match) {
+        bookingTypeId = match.id;
+        patch.eventtemple_booking_type_id = match.id;
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  if (Object.keys(patch).length > 0) {
+    try {
+      await supabaseAdmin.from('venues').update(patch).eq('id', venueId);
+    } catch { /* caching is best-effort */ }
+  }
+
+  return { referralSourceId, bookingTypeId };
+}
+
+/**
  * If this venue has Event Temple connected, push the lead in the background.
  * Reads credentials from the venue row — never throws.
  */
@@ -371,7 +478,7 @@ export async function maybePushLeadToEventTemple(
   try {
     const { data: venue } = await supabaseAdmin
       .from('venues')
-      .select('eventtemple_api_key, eventtemple_org_id, eventtemple_stage_id, eventtemple_referral_source_id')
+      .select('eventtemple_api_key, eventtemple_org_id, eventtemple_stage_id, eventtemple_referral_source_id, eventtemple_booking_type_id')
       .eq('id', venueId)
       .maybeSingle();
 
@@ -380,8 +487,16 @@ export async function maybePushLeadToEventTemple(
       eventtemple_org_id?: string | null;
       eventtemple_stage_id?: string | null;
       eventtemple_referral_source_id?: string | null;
+      eventtemple_booking_type_id?: string | null;
     } | null;
     if (!v?.eventtemple_api_key || !v?.eventtemple_org_id) return;
+
+    // Auto-fill the native Referral Source + Booking Type by name when the venue
+    // hasn't picked them explicitly (cached back onto the venue for next time).
+    const routing = await resolveEventTempleRouting(venueId, v.eventtemple_api_key, v.eventtemple_org_id, {
+      referralSourceId: v.eventtemple_referral_source_id,
+      bookingTypeId: v.eventtemple_booking_type_id,
+    });
 
     const result = await pushLeadToEventTemple(
       v.eventtemple_api_key,
@@ -403,7 +518,8 @@ export async function maybePushLeadToEventTemple(
         utm_content:      lead.utm_content ?? undefined,
       },
       v.eventtemple_stage_id ?? undefined,
-      v.eventtemple_referral_source_id ?? undefined,
+      routing.referralSourceId ?? undefined,
+      routing.bookingTypeId ?? undefined,
     );
 
     if (!result.ok) {
