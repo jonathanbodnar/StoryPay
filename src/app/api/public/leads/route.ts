@@ -487,7 +487,7 @@ export async function POST(request: NextRequest) {
 
   // Tripleseat integration — push lead data if the venue has connected their
   // Tripleseat account. Fire-and-forget; never blocks the response.
-  void maybePushLeadToTripleseat(venue.id, {
+  const crmLead = {
     first_name:       firstName || null,
     last_name:        lastName  || null,
     email:            lr.email,
@@ -502,7 +502,13 @@ export async function POST(request: NextRequest) {
     utm_campaign:     payload.utm_campaign ?? null,
     utm_term:         payload.utm_term ?? null,
     utm_content:      payload.utm_content ?? null,
-  }).catch(() => {});
+  };
+  void maybePushLeadToTripleseat(venue.id, crmLead).catch(() => {});
+
+  // Event Temple integration — same fire-and-forget push if connected.
+  void import('@/lib/eventtemple').then(({ maybePushLeadToEventTemple }) =>
+    maybePushLeadToEventTemple(venue.id, crmLead),
+  ).catch(() => {});
 
   // Meta (Facebook) ad tracking is handled entirely client-side by the Meta
   // Pixel snippet rendered on the thank-you page (see MetaPixelScript), using

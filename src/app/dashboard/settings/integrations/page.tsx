@@ -284,6 +284,248 @@ function TripleseatCard() {
   );
 }
 
+// ── Event Temple Integration Card ─────────────────────────────────────────────
+
+interface ETOrganization { id: string; name: string }
+
+function EventTempleCard() {
+  const [status, setStatus] = useState<'loading' | 'connected' | 'disconnected'>('loading');
+  const [maskedKey, setMaskedKey] = useState('');
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [organizations, setOrganizations] = useState<ETOrganization[]>([]);
+
+  const [inputKey, setInputKey] = useState('');
+  const [inputOrg, setInputOrg] = useState('');
+  const [showConnect, setShowConnect] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const flash = (ok: boolean, text: string) => {
+    setMsg({ ok, text });
+    setTimeout(() => setMsg(null), 4000);
+  };
+
+  const load = useCallback(async () => {
+    setStatus('loading');
+    try {
+      const r = await fetch('/api/integrations/eventtemple', { cache: 'no-store' });
+      const d = await r.json() as { connected: boolean; apiKey: string | null; orgId: string | null; organizations: ETOrganization[] };
+      setStatus(d.connected ? 'connected' : 'disconnected');
+      setMaskedKey(d.apiKey ?? '');
+      setOrgId(d.orgId);
+      setOrganizations(d.organizations ?? []);
+    } catch {
+      setStatus('disconnected');
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function connect() {
+    if (!inputKey.trim() || !inputOrg.trim()) {
+      flash(false, 'Paste both your Event Temple API key and API-ORG identifier.');
+      return;
+    }
+    setSaving(true); setMsg(null);
+    try {
+      const r = await fetch('/api/integrations/eventtemple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: inputKey.trim(), orgId: inputOrg.trim() }),
+      });
+      const d = await r.json() as { connected?: boolean; organizations?: ETOrganization[]; orgId?: string | null; error?: string };
+      if (!r.ok) { flash(false, d.error ?? 'Connection failed.'); return; }
+      setInputKey('');
+      setInputOrg('');
+      setShowConnect(false);
+      setOrganizations(d.organizations ?? []);
+      setOrgId(d.orgId ?? null);
+      setStatus('connected');
+      flash(true, 'Event Temple connected successfully.');
+      void load();
+    } catch {
+      flash(false, 'Network error — check your connection and try again.');
+    } finally { setSaving(false); }
+  }
+
+  async function sendTest() {
+    setTesting(true); setMsg(null);
+    try {
+      const r = await fetch('/api/integrations/eventtemple/test', { method: 'POST' });
+      const d = await r.json() as { ok?: boolean; bookingId?: string; error?: string };
+      if (r.ok && d.ok) flash(true, `Test lead sent to Event Temple${d.bookingId ? ` (booking #${d.bookingId})` : ''}.`);
+      else flash(false, d.error ?? 'Test lead failed.');
+    } catch {
+      flash(false, 'Network error.');
+    } finally { setTesting(false); }
+  }
+
+  async function disconnect() {
+    if (!confirm('Disconnect Event Temple? New leads will stop being sent over.')) return;
+    setDisconnecting(true);
+    await fetch('/api/integrations/eventtemple', { method: 'DELETE' });
+    setStatus('disconnected');
+    setMaskedKey('');
+    setOrgId(null);
+    setOrganizations([]);
+    setDisconnecting(false);
+    flash(true, 'Event Temple disconnected.');
+  }
+
+  const isLoading = status === 'loading';
+  const isConnected = status === 'connected';
+  const orgName = organizations.find((o) => o.id === orgId)?.name ?? organizations[0]?.name ?? null;
+
+  return (
+    <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      {/* Header row */}
+      <div className="px-6 py-5 flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50">
+          <svg viewBox="0 0 32 32" className="h-6 w-6" fill="none">
+            <rect width="32" height="32" rx="8" fill="#4f46e5" />
+            <text x="16" y="22" textAnchor="middle" fontSize="12" fontWeight="700" fill="white" fontFamily="sans-serif">ET</text>
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Event Temple</h2>
+            {isLoading ? (
+              <Loader2 size={13} className="animate-spin text-gray-400" />
+            ) : isConnected ? (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">Connected</span>
+            ) : (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">Not connected</span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-gray-500 leading-relaxed">
+            Automatically create a lead booking in Event Temple the moment a bride submits your form — contact
+            details, wedding date, message, and UTM attribution, all mapped over instantly.
+          </p>
+
+          {/* Connected state */}
+          {isConnected && (
+            <div className="mt-3 space-y-3">
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <ShieldCheck size={13} className="text-emerald-500" />
+                <span>API key: <code className="font-mono text-gray-700">{maskedKey}</code></span>
+              </div>
+              {orgName ? (
+                <p className="text-xs text-gray-500">Organization: <strong className="text-gray-700">{orgName}</strong></p>
+              ) : orgId ? (
+                <p className="text-xs text-gray-500">API-ORG: <code className="font-mono text-gray-700">{orgId}</code></p>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => void sendTest()}
+                  disabled={testing}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-all"
+                >
+                  {testing ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                  Send test lead
+                </button>
+                <button
+                  onClick={() => void disconnect()}
+                  disabled={disconnecting}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60 transition-all"
+                >
+                  {disconnecting ? <Loader2 size={13} className="animate-spin" /> : <Unlink size={13} />}
+                  Disconnect
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Disconnected state */}
+          {!isConnected && !isLoading && (
+            <div className="mt-3">
+              {!showConnect ? (
+                <button
+                  onClick={() => setShowConnect(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition-all"
+                >
+                  <Link2 size={14} /> Connect Event Temple
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                      API key
+                      <a
+                        href="https://client.eventtemple.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 font-normal text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-0.5"
+                      >
+                        Find it in Event Temple <ExternalLink size={10} />
+                      </a>
+                    </label>
+                    <input
+                      type="text"
+                      value={inputKey}
+                      onChange={(e) => setInputKey(e.target.value)}
+                      placeholder="Paste your Event Temple API key"
+                      className="w-full max-w-md rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors font-mono"
+                    />
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      In Event Temple: Settings → Developers → API → copy your <strong>API key</strong>.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">API-ORG identifier</label>
+                    <input
+                      type="text"
+                      value={inputOrg}
+                      onChange={(e) => setInputOrg(e.target.value)}
+                      placeholder="Paste your API-ORG identifier"
+                      className="w-full max-w-md rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none transition-colors font-mono"
+                    />
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      In Event Temple: Settings → Overview → the <strong>API-ORG</strong> is listed at the top.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => void connect()}
+                      disabled={saving || !inputKey.trim() || !inputOrg.trim()}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-all"
+                    >
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                      {saving ? 'Connecting…' : 'Connect'}
+                    </button>
+                    <button
+                      onClick={() => { setShowConnect(false); setInputKey(''); setInputOrg(''); }}
+                      className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Feedback message */}
+          {msg && (
+            <div className={`mt-3 flex items-center gap-1.5 text-sm font-medium ${msg.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+              {msg.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+              {msg.text}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* What gets sent */}
+      <div className="border-t border-gray-100 px-6 py-4 text-sm text-gray-500">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">What gets pushed to Event Temple</span>
+        <p>Creates a <strong>lead booking</strong> with a new contact — name, email, phone, wedding date — plus a note carrying the message, source and UTM attribution. Sent the moment a lead submits your form. No sync back — data only flows from StoryVenue to Event Temple.</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Calendly Integration Card ─────────────────────────────────────────────────
 
 interface CalendlyStatus {
@@ -612,6 +854,9 @@ export default function IntegrationsPage() {
 
       {/* ── Tripleseat card ──────────────────────────────────────────── */}
       <TripleseatCard />
+
+      {/* ── Event Temple card ────────────────────────────────────────── */}
+      <EventTempleCard />
 
       {/* ── Calendly card ────────────────────────────────────────────── */}
       <CalendlyCard />

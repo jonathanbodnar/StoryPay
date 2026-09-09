@@ -455,23 +455,28 @@ export async function POST(
       .catch((e) => console.warn('[form submit] guide delivery failed:', e));
   }
 
-  // Tripleseat integration — push lead to the venue's Tripleseat account if connected.
+  // CRM integrations — push lead to the venue's Tripleseat / Event Temple
+  // accounts if connected. Fire-and-forget; never blocks the response.
   if (createdLeadId && emailVal) {
+    const crmLead = {
+      first_name:   firstNameVal || null,
+      last_name:    lastNameVal  || null,
+      email:        emailVal,
+      phone:        phoneVal     || null,
+      wedding_date: null,
+      guest_count:  null,
+      message:      null,
+      utm_source:   utm.utm_source   ?? null,
+      utm_medium:   utm.utm_medium   ?? null,
+      utm_campaign: utm.utm_campaign ?? null,
+      utm_term:     utm.utm_term     ?? null,
+      utm_content:  utm.utm_content  ?? null,
+    };
     void import('@/lib/tripleseat').then(({ maybePushLeadToTripleseat }) =>
-      maybePushLeadToTripleseat(formRow.venue_id, {
-        first_name:   firstNameVal || null,
-        last_name:    lastNameVal  || null,
-        email:        emailVal,
-        phone:        phoneVal     || null,
-        wedding_date: null,
-        guest_count:  null,
-        message:      null,
-        utm_source:   utm.utm_source   ?? null,
-        utm_medium:   utm.utm_medium   ?? null,
-        utm_campaign: utm.utm_campaign ?? null,
-        utm_term:     utm.utm_term     ?? null,
-        utm_content:  utm.utm_content  ?? null,
-      }).catch(() => {}),
+      maybePushLeadToTripleseat(formRow.venue_id, crmLead).catch(() => {}),
+    ).catch(() => {});
+    void import('@/lib/eventtemple').then(({ maybePushLeadToEventTemple }) =>
+      maybePushLeadToEventTemple(formRow.venue_id, crmLead).catch(() => {}),
     ).catch(() => {});
   }
 
