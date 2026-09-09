@@ -17,6 +17,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
+import { bookingTimelineLabel } from '@/lib/booking-timeline';
 
 const EVENTTEMPLE_API = 'https://api.eventtemple.com/v2';
 const JSON_API = 'application/vnd.api+json';
@@ -169,12 +170,20 @@ export interface EventTempleLead {
  * booking property, formatted so venue staff can read it at a glance.
  */
 export function buildEventTempleNote(lead: EventTempleLead): string {
-  const lines: string[] = [`Source: ${SOURCE_LABEL}`];
+  // Event Temple note content is plain text (no HTML/markdown), and its UI
+  // collapses newlines onto one line — so we lead with a headline and prefix
+  // each detail with a "•" bullet, which stays readable even when collapsed.
+  // Raw form slugs (e.g. booking timeline "ready_now") are humanised so venue
+  // staff see friendly labels instead of internal values.
+  const details: string[] = [];
 
-  if (lead.booking_timeline) lines.push(`Booking Timeline: ${lead.booking_timeline}`);
-  if (lead.venue_matters)    lines.push(`What Matters Most: ${lead.venue_matters}`);
-  if (typeof lead.guest_count === 'number') lines.push(`Guest Count: ${lead.guest_count}`);
-  if (lead.message)          lines.push(`Message: ${lead.message}`);
+  if (typeof lead.guest_count === 'number') details.push(`Guest count: ${lead.guest_count}`);
+
+  if (lead.booking_timeline) {
+    details.push(`Booking timeline: ${bookingTimelineLabel(lead.booking_timeline) || lead.booking_timeline}`);
+  }
+  if (lead.venue_matters) details.push(`What matters most: ${lead.venue_matters}`);
+  if (lead.message)       details.push(`Message: ${lead.message}`);
 
   const utm = [
     lead.utm_source   && `source=${lead.utm_source}`,
@@ -183,9 +192,11 @@ export function buildEventTempleNote(lead: EventTempleLead): string {
     lead.utm_term     && `term=${lead.utm_term}`,
     lead.utm_content  && `content=${lead.utm_content}`,
   ].filter(Boolean);
-  if (utm.length) lines.push(`Attribution: ${utm.join(', ')}`);
+  if (utm.length) details.push(`Attribution: ${utm.join(', ')}`);
 
-  return lines.join('\n');
+  const headline = `New lead via ${SOURCE_LABEL}`;
+  if (details.length === 0) return headline;
+  return `${headline}\n${details.map((d) => `• ${d}`).join('\n')}`;
 }
 
 /**
