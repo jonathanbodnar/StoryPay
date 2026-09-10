@@ -119,6 +119,7 @@ const listingItems: NavItem[] = [
   { label: 'Venue Listing', href: '/dashboard/listing/venue-listing', icon: Store, navId: 'nav_listing_dashboard' },
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
   { label: 'Lead Link™', href: '/dashboard/listing/lead-link', icon: Link2, navId: 'nav_listing_lead_link' },
+  { label: 'Bride Portal', href: '/dashboard/bride-portal', icon: Gem, navId: 'nav_listing_bride_portal' },
   { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: CircleDollarSign, navId: 'nav_listing_pricing_guide' },
   { label: 'Speed to Lead System™', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
   // Verified & Sponsored is managed internally — not shown in venue sidebar.
@@ -149,6 +150,7 @@ const MOBILE_ALLOWED_NAV_IDS = new Set<string>([
   'nav_listing_analytics',
   'nav_listing_directory',
   'nav_listing_lead_link',
+  'nav_listing_bride_portal',
   // Payments — all
   'nav_payments_new',
   'nav_offerings',

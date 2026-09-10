@@ -44,6 +44,12 @@ export function CoupleNav() {
 
   return (
     <nav className="flex flex-wrap items-center gap-4 text-sm">
+      <Link href="/couple/wedding" className="text-gray-700 hover:text-gray-900">
+        My wedding
+      </Link>
+      <Link href="/couple/messages" className="text-gray-700 hover:text-gray-900">
+        Messages
+      </Link>
       <Link href="/couple/dashboard" className="text-gray-700 hover:text-gray-900">
         Wish list
       </Link>
