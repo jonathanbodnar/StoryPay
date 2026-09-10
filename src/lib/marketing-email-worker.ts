@@ -2193,11 +2193,74 @@ async function sendTemplateToLead(
   return r.success ? { ok: true, mergedSubject } : { ok: false, error: r.error };
 }
 
+/**
+ * How long a claimed enrollment is leased to a single worker. Must comfortably
+ * exceed the time to run one chain of immediate steps; if a worker dies
+ * mid-chain the lease expires and a later tick resumes from the last persisted
+ * step (each step commits current_step_index as it advances).
+ */
+const ENROLLMENT_LEASE_MS = 10 * 60 * 1000;
+
+type ClaimedEnrollment = {
+  id: string;
+  automation_id: string;
+  venue_id: string;
+  lead_id: string;
+  current_step_index: number;
+  status: string;
+};
+
+/**
+ * Atomically lease an enrollment to this worker so overlapping cron invocations
+ * (Railway cron + GitHub Actions backup + the 60s self-ping) and multiple
+ * replicas can't process — and therefore send — the same step twice.
+ *
+ * Correctness: two concurrent callers issue the same conditional UPDATE. Postgres
+ * serialises the row update and re-evaluates the WHERE against the committed row,
+ * so the first flips `locked_until` into the future and the second matches zero
+ * rows. We RETURN the freshly-read row so the caller always acts on the current
+ * `current_step_index`, never the stale value from the batch SELECT (which is
+ * how a just-advanced step used to get re-sent).
+ *
+ * `requireDue` gates on next_run_at for the cron path; the manual "run now" path
+ * passes false to force execution regardless of schedule.
+ */
+async function claimEnrollment(id: string, opts: { requireDue: boolean }): Promise<ClaimedEnrollment | null> {
+  const nowIso = new Date().toISOString();
+  const leaseIso = new Date(Date.now() + ENROLLMENT_LEASE_MS).toISOString();
+  let q = supabaseAdmin
+    .from('marketing_automation_enrollments')
+    .update({ locked_until: leaseIso })
+    .eq('id', id)
+    .eq('status', 'active')
+    .or(`locked_until.is.null,locked_until.lt.${nowIso}`);
+  if (opts.requireDue) q = q.lte('next_run_at', nowIso);
+  const { data, error } = await q.select('id, automation_id, venue_id, lead_id, current_step_index, status');
+  if (error) { console.error('[marketing claim]', error); return null; }
+  const row = (data ?? [])[0];
+  return row ? (row as ClaimedEnrollment) : null;
+}
+
+/** Release the lease so a delay step's next due run can be claimed again. */
+async function releaseEnrollment(id: string): Promise<void> {
+  try {
+    await supabaseAdmin
+      .from('marketing_automation_enrollments')
+      .update({ locked_until: null })
+      .eq('id', id);
+  } catch (e) {
+    console.warn('[marketing release]', e instanceof Error ? e.message : e);
+  }
+}
+
 export async function processAutomationEnrollmentsBatch(): Promise<{ processed: number }> {
   const now = new Date().toISOString();
+  // NB: do not filter on locked_until here — an *expired* lease (crashed worker)
+  // must still be selectable so claimEnrollment can reclaim it. Dedup + expiry
+  // are both handled atomically inside claimEnrollment.
   const { data: due, error } = await supabaseAdmin
     .from('marketing_automation_enrollments')
-    .select('id, automation_id, venue_id, lead_id, current_step_index, status')
+    .select('id')
     .eq('status', 'active')
     .lte('next_run_at', now)
     .limit(BATCH);
@@ -2205,14 +2268,16 @@ export async function processAutomationEnrollmentsBatch(): Promise<{ processed: 
 
   let n = 0;
   for (const en of due) {
-    const result = await processEnrollmentChain(en as {
-      id: string;
-      automation_id: string;
-      venue_id: string;
-      lead_id: string;
-      current_step_index: number;
-    });
-    if (result !== 'unknown') n++;
+    // Claim before processing — only the worker whose atomic UPDATE wins runs the
+    // chain. The claim re-reads the fresh row so we never act on a stale step.
+    const claimed = await claimEnrollment((en as { id: string }).id, { requireDue: true });
+    if (!claimed) continue; // another worker/replica owns this enrollment
+    try {
+      const result = await processEnrollmentChain(claimed);
+      if (result !== 'unknown') n++;
+    } finally {
+      await releaseEnrollment(claimed.id);
+    }
   }
   return { processed: n };
 }
@@ -2242,10 +2307,16 @@ export async function runEnrollmentsNow(enrollmentIds: string[]): Promise<{ proc
 
   let n = 0;
   for (const en of data) {
-    const result = await processEnrollmentChain(
-      en as { id: string; automation_id: string; venue_id: string; lead_id: string; current_step_index: number },
-    );
-    if (result !== 'unknown') n++;
+    // Same atomic claim as the cron path so a manual "Advance selected" can't
+    // collide with an in-flight cron run (or a double click) and double-send.
+    const claimed = await claimEnrollment((en as { id: string }).id, { requireDue: false });
+    if (!claimed) continue;
+    try {
+      const result = await processEnrollmentChain(claimed);
+      if (result !== 'unknown') n++;
+    } finally {
+      await releaseEnrollment(claimed.id);
+    }
   }
   return { processed: n };
 }
@@ -2845,6 +2916,16 @@ export async function processCampaignsCron(): Promise<{ campaigns: number; recip
     const row = r as { id: string; campaign_id: string; venue_id: string; lead_id: string; email: string };
     const templateId = templateByCampaign.get(row.campaign_id);
     if (!templateId) continue;
+    // Atomically claim this recipient (queued → sending) so overlapping cron
+    // invocations / replicas can't both send to the same lead. Only the worker
+    // whose UPDATE matches the still-queued row proceeds.
+    const { data: claimedRecip } = await supabaseAdmin
+      .from('marketing_campaign_recipients')
+      .update({ status: 'sending' })
+      .eq('id', row.id)
+      .eq('status', 'queued')
+      .select('id');
+    if (!claimedRecip?.length) continue; // another worker already took this recipient
     const { data: tmpl } = await supabaseAdmin
       .from('marketing_email_templates')
       .select('subject, preheader, definition_json')
