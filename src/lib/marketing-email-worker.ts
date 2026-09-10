@@ -979,13 +979,18 @@ export async function onMarketingFormSubmitted(
     // for the next cron tick. If step 1 is a Wait it will schedule itself
     // for later and return; if it's SMS/Email it fires right now.
     if (enrollmentId) {
-      await processEnrollmentChain({
-        id: enrollmentId,
-        automation_id: row.id,
-        venue_id: venueId,
-        lead_id: leadId,
-        current_step_index: 0,
-      });
+      // Claim before the immediate run: the enrollment was created with
+      // next_run_at=now, so the marketing cron can pick up the SAME fresh
+      // enrollment concurrently. Without this claim, step 0 fires here AND in the
+      // cron → the duplicate first message. The claim guarantees exactly one runs.
+      const claimed = await claimEnrollment(enrollmentId, { requireDue: false });
+      if (claimed) {
+        try {
+          await processEnrollmentChain(claimed);
+        } finally {
+          await releaseEnrollment(claimed.id);
+        }
+      }
     }
   }
 }
