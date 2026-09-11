@@ -778,7 +778,7 @@ export default function CoupleSitePage() {
         <h2 className="text-sm font-semibold text-gray-900">Guestbook</h2>
         <Toggle label="Guestbook (well-wishes from guests)" checked={site.show_guestbook} onChange={(v) => set('show_guestbook', v)} />
         {site.show_guestbook && (
-          <Toggle label="Review guestbook posts before they show" checked={site.guestbook_moderated} onChange={(v) => set('guestbook_moderated', v)} indent />
+          <Toggle label="Review guestbook posts before they show" checked={site.guestbook_moderated} onChange={(v) => set('guestbook_moderated', v)} />
         )}
         {gb.length > 0 && (
           <div className="space-y-2 pt-1">
@@ -896,7 +896,12 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
   coupleName: string;
   storyHtml: string;
 }) {
+  // Single source of truth: these mirror the live minisite's brand palette
+  // (weddingdirectory globals.css) so the preview is pixel-faithful.
   const INK = '#1b1b1b';
+  const WARM = '#f5f5f4';
+  const LINE = '#e7e5e4';
+  const MUTED = '#78716c';
   const dateLine = profile?.wedding_date
     ? new Date(`${profile.wedding_date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     : null;
@@ -919,9 +924,9 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
     countdown: cd ? (
       <div key="cd" className="mt-5 flex items-stretch justify-center gap-1.5">
         {cd.map((c) => (
-          <div key={c.l} className="flex w-[46px] flex-col items-center rounded-2xl border border-[#ece9e4] bg-white px-1 py-2">
+          <div key={c.l} className="flex w-[46px] flex-col items-center rounded-[5px] border bg-white px-1 py-2" style={{ borderColor: LINE }}>
             <span className="text-lg font-semibold tabular-nums" style={{ color: INK }}>{String(c.v).padStart(2, '0')}</span>
-            <span className="mt-0.5 text-[8px] uppercase tracking-wide text-gray-400">{c.l}</span>
+            <span className="mt-0.5 text-[8px] uppercase tracking-wide" style={{ color: MUTED }}>{c.l}</span>
           </div>
         ))}
       </div>
@@ -929,33 +934,34 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
     story: cleanStory ? (
       <div
         key="story"
-        className="story-content mx-auto mt-5 max-w-full text-left text-[12px] leading-relaxed text-gray-700 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_p]:my-1"
+        className="story-content mx-auto mt-5 max-w-full text-left text-[12px] leading-relaxed [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_p]:my-1"
+        style={{ color: INK }}
         dangerouslySetInnerHTML={{ __html: cleanStory }}
       />
     ) : null,
     gallery: gallery.length > 0 ? (
       <div key="gal" className="mt-5 columns-3 gap-[5px] [&>*]:mb-[5px]">
         {gallery.map((url, i) => (
-          <Image key={`${url}-${i}`} src={url} alt="" width={120} height={120} unoptimized className="h-auto w-full rounded-[3px] object-cover" />
+          <Image key={`${url}-${i}`} src={url} alt="" width={120} height={120} unoptimized className="h-auto w-full rounded-[5px] object-cover" />
         ))}
       </div>
     ) : null,
     links: (hasVenue && site.show_venue) || linkItems.length > 0 ? (
       <div key="links" className="mt-5 space-y-2">
         {hasVenue && site.show_venue && (
-          <div className="flex items-center gap-2.5 rounded-2xl border border-[#ece9e4] bg-white px-3 py-2.5">
+          <div className="flex items-center gap-2.5 rounded-[5px] border bg-white px-3 py-2.5" style={{ borderColor: LINE }}>
             <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-white" style={{ background: INK }}><MapPin size={14} /></span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[9px] uppercase tracking-wide text-gray-400">Our Venue</span>
+              <span className="block text-[9px] uppercase tracking-wide" style={{ color: MUTED }}>Our Venue</span>
               <span className="block truncate text-[12px] font-semibold" style={{ color: INK }}>Tap for directions</span>
             </span>
-            <Navigation size={14} className="flex-none text-gray-400" />
+            <Navigation size={14} className="flex-none" style={{ color: MUTED }} />
           </div>
         )}
         {linkItems.map((l, i) => {
           const Icon = LEAD_LINK_ICON_COMPONENTS[(l.icon as keyof typeof LEAD_LINK_ICON_COMPONENTS)] ?? LEAD_LINK_ICON_COMPONENTS.link;
           return (
-            <div key={i} className="flex items-center gap-2.5 rounded-2xl border border-[#ece9e4] bg-white px-3 py-2.5">
+            <div key={i} className="flex items-center gap-2.5 rounded-[5px] border bg-white px-3 py-2.5" style={{ borderColor: LINE }}>
               <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-white" style={{ background: INK }}><Icon size={14} /></span>
               <span className="block flex-1 truncate text-[12px] font-semibold" style={{ color: INK }}>{l.label || 'Link'}</span>
             </div>
@@ -984,13 +990,13 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
         <div className="absolute -left-[2px] top-[8.5rem] h-12 w-[3px] rounded-l bg-gray-700" />
         <div className="absolute -right-[2px] top-32 h-16 w-[3px] rounded-r bg-gray-700" />
         <div className="rounded-[3rem] border-[6px] border-gray-900 bg-gray-900 p-[3px] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.45)]">
-          <div className="relative overflow-hidden rounded-[2.6rem] bg-[#faf7f2]">
+          <div className="relative overflow-hidden rounded-[2.6rem]" style={{ background: WARM }}>
             {/* Dynamic Island */}
             <div className="pointer-events-none absolute left-1/2 top-2.5 z-30 h-[26px] w-[92px] -translate-x-1/2 rounded-full bg-black" />
             <div className="relative h-[620px] overflow-y-auto">
               <div className="px-4 pb-28 pt-10">
             {site.cover_url && (
-              <div className="relative mb-[-36px] h-24 w-full overflow-hidden rounded-[3px]">
+              <div className="relative mb-[-36px] h-24 w-full overflow-hidden rounded-[5px] border" style={{ borderColor: LINE }}>
                 <Image src={site.cover_url} alt="" fill unoptimized sizes="320px" className="object-cover" />
               </div>
             )}
@@ -1004,7 +1010,7 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
               </div>
               <h2 className="mt-3 font-heading text-xl italic" style={{ color: INK }}>{coupleName}</h2>
               {dateLine && (
-                <p className="mt-1 flex items-center justify-center gap-1 text-[11px] text-gray-500">
+                <p className="mt-1 flex items-center justify-center gap-1 text-[11px]" style={{ color: MUTED }}>
                   <CalendarHeart size={12} /> {dateLine}
                 </p>
               )}
@@ -1012,7 +1018,7 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
               {socials.length > 0 && (
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                   {socials.map(({ Icon }, i) => (
-                    <span key={i} className="flex h-8 w-8 items-center justify-center rounded-full border border-[#ece9e4] bg-white text-gray-500"><Icon size={14} /></span>
+                    <span key={i} className="flex h-8 w-8 items-center justify-center rounded-full border bg-white" style={{ borderColor: LINE, color: MUTED }}><Icon size={14} /></span>
                   ))}
                 </div>
               )}
