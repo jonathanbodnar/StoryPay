@@ -7,7 +7,7 @@ import {
   Loader2, CheckCircle2, Copy, Check, ExternalLink, Upload, Trash2, Plus,
   QrCode, Eye, EyeOff, Globe, Lock, Video, Bold, AlignLeft, AlignCenter, AlignRight,
   GripVertical, ChevronDown, Clock, Type, Images, Link2, MapPin,
-  Settings, Instagram, Facebook, Music2, CalendarHeart, Navigation, Radio,
+  Settings, Instagram, Facebook, Music2, CalendarHeart, Navigation, Radio, CalendarPlus,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 import { LEAD_LINK_ICON_KEYS } from '@/lib/lead-link-icons';
@@ -983,6 +983,7 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
 
   return (
     <div>
+      <style>{`.sv-phone-scroll{scrollbar-width:none;-ms-overflow-style:none;overscroll-behavior:contain}.sv-phone-scroll::-webkit-scrollbar{display:none;width:0;height:0}`}</style>
       <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-gray-400">Live preview</p>
       <div className="relative mx-auto w-[300px]">
         {/* side buttons */}
@@ -993,7 +994,7 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
           <div className="relative overflow-hidden rounded-[2.6rem]" style={{ background: WARM }}>
             {/* Dynamic Island */}
             <div className="pointer-events-none absolute left-1/2 top-2.5 z-30 h-[26px] w-[92px] -translate-x-1/2 rounded-full bg-black" />
-            <div className="relative h-[620px] overflow-y-auto">
+            <div className="sv-phone-scroll relative h-[620px] overflow-y-auto overflow-x-hidden">
               <div className="px-4 pb-28 pt-10">
             {site.cover_url && (
               <div className="relative mb-[-36px] h-24 w-full overflow-hidden rounded-[5px] border" style={{ borderColor: LINE }}>
@@ -1015,6 +1016,11 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
                 </p>
               )}
               {site.headline && <p className="mt-2 text-[12px]" style={{ color: INK }}>{site.headline}</p>}
+              {profile?.wedding_date && (
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full border bg-white px-3 py-1 text-[10px] font-medium" style={{ borderColor: LINE, color: INK }}>
+                  <CalendarPlus size={11} /> Add to calendar
+                </span>
+              )}
               {socials.length > 0 && (
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                   {socials.map(({ Icon }, i) => (
@@ -1030,11 +1036,11 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
 
             {hasVenue && (
               <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
-                <span className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-[12px] font-semibold text-white shadow-lg" style={{ background: INK }}>
-                  <CalendarHeart size={13} /> RSVP
+                <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full px-5 py-2 text-[11px] font-semibold text-white shadow-lg" style={{ background: INK }}>
+                  <CalendarHeart size={12} className="shrink-0" /> RSVP
                   {shortDate && (
                     <>
-                      <span className="h-3 w-px bg-white/30" />
+                      <span className="h-3 w-px flex-none bg-white/30" />
                       <span className="font-medium text-white/85">{shortDate}</span>
                     </>
                   )}

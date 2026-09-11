@@ -45,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
 
   const { data: profile } = await supabaseAdmin
     .from('couple_profiles')
-    .select('first_name, display_name, partner_first_name, wedding_date, instagram_url, facebook_url, tiktok_url, pinterest_url')
+    .select('first_name, display_name, partner_first_name, wedding_date, wedding_time, instagram_url, facebook_url, tiktok_url, pinterest_url')
     .eq('id', site.couple_id)
     .maybeSingle();
 
@@ -54,6 +54,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     display_name?: string | null;
     partner_first_name?: string | null;
     wedding_date?: string | null;
+    wedding_time?: string | null;
     instagram_url?: string | null;
     facebook_url?: string | null;
     tiktok_url?: string | null;
@@ -135,6 +136,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     photoUrl: site.photo_url,
     coverUrl: site.cover_url,
     weddingDate: p.wedding_date ?? null,
+    weddingTime: p.wedding_time ?? null,
     socials,
     customLinks: publicCoupleSiteLinks(site.custom_links),
     gallery: publicGallery(site.gallery),

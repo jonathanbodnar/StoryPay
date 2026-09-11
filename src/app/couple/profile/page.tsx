@@ -24,6 +24,7 @@ type Profile = {
   tiktok_url: string | null;
   pinterest_url: string | null;
   wedding_date: string | null;
+  wedding_time: string | null;
 };
 
 const INPUT =
@@ -66,6 +67,7 @@ export default function CoupleProfilePage() {
     tiktok_url: null,
     pinterest_url: null,
     wedding_date: null,
+    wedding_time: null,
   });
 
   const load = useCallback(async () => {
@@ -114,6 +116,7 @@ export default function CoupleProfilePage() {
         tiktok_url: p.tiktok_url ?? null,
         pinterest_url: p.pinterest_url ?? null,
         wedding_date: p.wedding_date ?? null,
+        wedding_time: p.wedding_time ?? null,
       });
     }
     setLoading(false);
@@ -178,6 +181,7 @@ export default function CoupleProfilePage() {
           tiktok_url: (p.tiktok_url as string | null) ?? prev.tiktok_url,
           pinterest_url: (p.pinterest_url as string | null) ?? prev.pinterest_url,
           wedding_date: (p.wedding_date as string | null) ?? prev.wedding_date,
+          wedding_time: (p.wedding_time as string | null) ?? prev.wedding_time,
         }));
       }
       if (typeof data.email === 'string') {
@@ -367,6 +371,16 @@ export default function CoupleProfilePage() {
               value={form.wedding_date ?? ''}
               onChange={(e) => set('wedding_date', e.target.value || null)}
             />
+          </div>
+          <div>
+            <label className={LABEL}>Start time</label>
+            <input
+              type="time"
+              className={INPUT}
+              value={form.wedding_time ?? ''}
+              onChange={(e) => set('wedding_time', e.target.value || null)}
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Used for the guest &ldquo;Add to calendar&rdquo; button.</p>
           </div>
           <div>
             <label className={LABEL}>Estimated guest count</label>

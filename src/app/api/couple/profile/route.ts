@@ -99,6 +99,12 @@ export async function PATCH(request: NextRequest) {
     else if (typeof w === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(w)) patch.wedding_date = w;
   }
 
+  if ('wedding_time' in body) {
+    const t = body.wedding_time;
+    if (t === null || t === '') patch.wedding_time = null;
+    else if (typeof t === 'string' && /^\d{2}:\d{2}$/.test(t)) patch.wedding_time = t;
+  }
+
   const { data: existing } = await supabaseAdmin
     .from('couple_profiles')
     .select('id')
