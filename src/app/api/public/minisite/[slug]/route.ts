@@ -152,6 +152,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     gallery: publicGallery(site.gallery),
     embedHtml: site.embed_enabled ? site.embed_html : null,
     embedTitle: site.embed_title,
+    embedMode: site.embed_mode === 'live' ? 'live' : 'page',
     sectionOrder: sanitizeSectionOrder(site.section_order),
     showCountdown: site.show_countdown,
     showGuestbook: site.show_guestbook,

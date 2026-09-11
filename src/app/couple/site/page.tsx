@@ -93,6 +93,7 @@ type Site = {
   embed_html: string | null;
   embed_enabled: boolean;
   embed_title: string | null;
+  embed_mode: 'page' | 'live';
   section_order: string[] | null;
   show_countdown: boolean;
   show_venue: boolean;
@@ -110,7 +111,7 @@ const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gra
 const DEFAULT_SITE: Site = {
   slug: null, is_published: false, headline: null, partner_name: null, story: null, story_html: null,
   photo_url: null, cover_url: null, custom_links: [], gallery: [],
-  embed_html: null, embed_enabled: false, embed_title: null, section_order: DEFAULT_ORDER,
+  embed_html: null, embed_enabled: false, embed_title: null, embed_mode: 'page', section_order: DEFAULT_ORDER,
   show_countdown: true, show_venue: true, show_guestbook: true, show_registry: true,
   guestbook_moderated: false,
 };
@@ -171,6 +172,7 @@ export default function CoupleSitePage() {
       ...(incoming as Partial<Site>),
       custom_links: (incoming.custom_links as Link[]) ?? [],
       gallery: (incoming.gallery as string[]) ?? [],
+      embed_mode: incoming.embed_mode === 'live' ? 'live' : 'page',
     });
     setOrder(sanitizeOrder(incoming.section_order));
   }, []);
@@ -301,6 +303,7 @@ export default function CoupleSitePage() {
       embed_html: merged.embed_html,
       embed_enabled: merged.embed_enabled,
       embed_title: merged.embed_title,
+      embed_mode: merged.embed_mode,
       section_order: order,
       show_countdown: merged.show_countdown,
       show_venue: merged.show_venue,
@@ -409,7 +412,11 @@ export default function CoupleSitePage() {
     story: { title: 'Your story', icon: <Type size={16} />, summary: htmlToPreview(site.story_html || storySeed).slice(0, 60) || 'Not added yet' },
     gallery: { title: 'Photo gallery', icon: <Images size={16} />, summary: `${(site.gallery ?? []).length} photo${(site.gallery ?? []).length === 1 ? '' : 's'}` },
     links: { title: 'Links', icon: <Link2 size={16} />, summary: `${hasVenue && site.show_venue ? 'Venue + ' : ''}${links.length} link${links.length === 1 ? '' : 's'}` },
-    embed: { title: 'Livestream / embed', icon: <Video size={16} />, summary: site.embed_enabled ? (site.embed_title || 'On') : 'Off' },
+    embed: {
+      title: 'Live video / embed',
+      icon: <Video size={16} />,
+      summary: site.embed_enabled ? (site.embed_mode === 'live' ? 'Live cover' : site.embed_title || 'On') : 'Off',
+    },
   };
 
   function renderSectionBody(key: SectionKey) {
@@ -561,34 +568,75 @@ export default function CoupleSitePage() {
             )}
           </div>
         );
-      case 'embed':
+      case 'embed': {
+        const isLive = site.embed_mode === 'live';
+        const seg = (active: boolean) =>
+          `flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-2.5 text-sm font-medium transition-colors ${
+            active ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+          }`;
         return (
           <div className="space-y-3">
-            <p className="text-xs text-gray-500">
-              Paste an embed from YouTube, Vimeo, Zoom, StreamYard, and more. We keep only the safe player, so scripts can never run on your page.
-            </p>
             <div>
-              <label className={LABEL}>Section title (optional)</label>
-              <input className={INPUT} value={site.embed_title ?? ''} onChange={(e) => set('embed_title', e.target.value || null)} placeholder="Watch our livestream" />
+              <label className={LABEL}>What is this embed?</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => set('embed_mode', 'live')} className={seg(isLive)}>
+                  <Radio size={14} /> Live video
+                </button>
+                <button type="button" onClick={() => set('embed_mode', 'page')} className={seg(!isLive)}>
+                  <Video size={14} /> Website embed
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                {isLive ? (
+                  <>
+                    <span className="font-medium text-gray-700">Live video.</span> Stays hidden until your event, then
+                    automatically takes over your cover photo at your start time — and reverts to the cover afterward (or if
+                    it can’t load). Guests can tap it to go full screen. No reason to add it early; it only shows during the event.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-gray-700">Website embed.</span> Any embed (map, playlist, form, non-live
+                    video…) shown in its own section on your page. It never touches your cover photo.
+                  </>
+                )}
+              </p>
             </div>
+
+            {!isLive && (
+              <div>
+                <label className={LABEL}>Section title (optional)</label>
+                <input className={INPUT} value={site.embed_title ?? ''} onChange={(e) => set('embed_title', e.target.value || null)} placeholder="Featured" />
+              </div>
+            )}
+
             <div>
-              <label className={LABEL}>Embed code</label>
+              <label className={LABEL}>{isLive ? 'Live video embed code' : 'Embed code'}</label>
               <textarea
                 className={`${INPUT} min-h-[90px] font-mono text-xs`}
                 value={site.embed_html ?? ''}
                 onChange={(e) => set('embed_html', e.target.value || null)}
                 placeholder='<iframe src="https://..." allowfullscreen></iframe>'
               />
+              <p className="mt-1 text-[11px] text-gray-400">
+                Paste from YouTube, Vimeo, Zoom, StreamYard, Google Maps, and more. We keep only the safe player — scripts can never run on your page.
+              </p>
             </div>
-            <Toggle label="Show the livestream / embed on my page" checked={site.embed_enabled} onChange={(v) => set('embed_enabled', v)} />
-            <p className="rounded-[10px] bg-gray-50 px-3 py-2 text-xs text-gray-500">
-              <span className="font-medium text-gray-700">Auto go-live:</span> set a start time on your{' '}
-              <a href="/couple/profile" className="underline">profile</a> and, during the event, your cover photo
-              automatically switches to this livestream — then returns to the cover afterward (or if the feed can’t
-              load). Guests can tap it to go full screen.
-            </p>
+
+            <Toggle
+              label={isLive ? 'Enable live cover for my event' : 'Show this embed on my page'}
+              checked={site.embed_enabled}
+              onChange={(v) => set('embed_enabled', v)}
+            />
+
+            {isLive && (
+              <p className="rounded-[10px] bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Set a start time on your <a href="/couple/profile" className="underline">profile</a> so we know when to go live.
+                Before the event, guests just see your cover photo.
+              </p>
+            )}
           </div>
         );
+      }
     }
   }
 
@@ -1045,10 +1093,10 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
         })}
       </div>
     ) : null,
-    embed: site.embed_enabled && site.embed_html ? (
+    embed: site.embed_enabled && site.embed_html && site.embed_mode === 'page' ? (
       <div key="embed" className="mt-5">
         <p className="flex items-center justify-center gap-1.5 text-[12px] font-semibold" style={{ color: INK }}>
-          <Radio size={12} /> {site.embed_title || 'Livestream'}
+          <Radio size={12} /> {site.embed_title || 'Featured'}
         </p>
         <div className="mt-2 flex aspect-video w-full items-center justify-center rounded-lg bg-gray-900 text-[10px] text-white/70">
           <Video size={16} className="mr-1" /> Player preview
@@ -1075,6 +1123,11 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
             {site.cover_url && (
               <div className="relative mb-[-36px] h-24 w-full overflow-hidden rounded-[10px] border" style={{ borderColor: LINE }}>
                 <Image src={site.cover_url} alt="" fill unoptimized sizes="320px" className="object-cover" />
+                {site.embed_enabled && site.embed_html && site.embed_mode === 'live' && (
+                  <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-[9px] font-semibold text-white">
+                    <Radio size={9} /> Live video at event time
+                  </span>
+                )}
               </div>
             )}
             <div className="relative z-10 flex flex-col items-center text-center">

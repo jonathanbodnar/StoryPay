@@ -10,6 +10,7 @@ import {
   sanitizeCoupleSiteLinks,
   sanitizeGallery,
   sanitizeEmbedHtml,
+  sanitizeEmbedMode,
   sanitizeSectionOrder,
   hashSitePassword,
   isSiteExpired,
@@ -131,6 +132,7 @@ export async function PUT(request: NextRequest) {
   // Embed (livestream / special element) — only a rebuilt https iframe is stored.
   if ('embed_html' in body) patch.embed_html = sanitizeEmbedHtml(body.embed_html);
   if ('embed_title' in body) patch.embed_title = str(body.embed_title, 80);
+  if ('embed_mode' in body) patch.embed_mode = sanitizeEmbedMode(body.embed_mode);
 
   for (const key of ['show_countdown', 'show_venue', 'show_guestbook', 'show_registry', 'guestbook_moderated', 'embed_enabled'] as const) {
     if (key in body) patch[key] = Boolean(body[key]);

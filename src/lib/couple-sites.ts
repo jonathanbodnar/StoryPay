@@ -54,6 +54,9 @@ export interface CoupleSiteRow {
   embed_html: string | null;
   embed_enabled: boolean;
   embed_title: string | null;
+  /** 'page' = website/HTML embed shown in a section; 'live' = live video that
+   *  takes over the cover during the event (hidden otherwise). */
+  embed_mode: 'page' | 'live';
   section_order: string[] | null;
   story_html: string | null;
   show_countdown: boolean;
@@ -68,7 +71,12 @@ export interface CoupleSiteRow {
 // NOTE: site_password_hash is deliberately NOT in this shared column list — it is
 // fetched only where needed (public gate / unlock) so it never leaks to a client.
 export const COUPLE_SITE_COLUMNS =
-  'id, couple_id, slug, is_published, headline, partner_name, story, story_html, photo_url, cover_url, custom_links, gallery, embed_html, embed_enabled, embed_title, section_order, show_countdown, show_venue, show_guestbook, show_registry, guestbook_moderated, created_at, updated_at';
+  'id, couple_id, slug, is_published, headline, partner_name, story, story_html, photo_url, cover_url, custom_links, gallery, embed_html, embed_enabled, embed_title, embed_mode, section_order, show_countdown, show_venue, show_guestbook, show_registry, guestbook_moderated, created_at, updated_at';
+
+/** Clamp the embed purpose to a known value; unknown/absent → 'page'. */
+export function sanitizeEmbedMode(raw: unknown): 'page' | 'live' {
+  return raw === 'live' ? 'live' : 'page';
+}
 
 /**
  * Top-level paths already used by the weddingdirectory app (storyvenue.com) plus
