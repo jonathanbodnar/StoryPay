@@ -82,10 +82,22 @@ export default async function DashboardLayout({
    }
  }
 
- // Bride Portal is an "included" add-on gated by the admin Bride Portal flag
- // (single source of truth). Enabled unless an admin explicitly turned it off.
- const hasBridePortal =
-   (venueRow as { bride_portal?: boolean | null } | null)?.bride_portal !== false;
+ // Bride Portal is a paid / private-client feature. No-plan (grandfathered) and
+ // legacy venues get it, as do All-Inclusive plans. The $97 and Free plans only
+ // get it when an admin checks the Bride Portal box (single source of truth).
+ const bridePlanId = (venueRow as { directory_plan_id?: string | null } | null)?.directory_plan_id ?? null;
+ const bridePortalFlag = (venueRow as { bride_portal?: boolean | null } | null)?.bride_portal === true;
+ let hasBridePortal = !bridePlanId || navAccess.isLegacyPlan || bridePortalFlag;
+ if (!hasBridePortal && bridePlanId) {
+   const { data: bridePlan } = await supabaseAdmin
+     .from('directory_plans')
+     .select('slug')
+     .eq('id', bridePlanId)
+     .maybeSingle();
+   if (String((bridePlan as { slug?: string | null } | null)?.slug ?? '').toLowerCase().includes('all-inclusive')) {
+     hasBridePortal = true;
+   }
+ }
 
  // ── Trial state ───────────────────────────────────────────────────────────
  // We compute trial status from directory_trial_ends_at at request time (there

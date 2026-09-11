@@ -40,10 +40,10 @@ export interface VenueFeatureRow {
    *  regardless of plan tier — it is the single source of truth for granting
    *  concierge messaging to a venue that isn't on an All-Inclusive plan. */
   venue_concierge?: boolean | null;
-  /** Admin "Bride Portal" add-on flag (Venue Management → Bride Portal). Single
-   *  source of truth for whether the venue can connect booked couples through
-   *  the Bride Portal. Included (default TRUE) until we decide how to package it;
-   *  an admin can turn it off to hide/lock the feature for a venue. */
+  /** Admin "Bride Portal" override flag (Venue Management / Project Management →
+   *  Bride Portal). Legacy + All-Inclusive plans get the Bride Portal from their
+   *  plan; for $97 / Free plans this flag (default FALSE) is the single source of
+   *  truth that overrides the gate and unlocks the feature. */
   bride_portal?: boolean | null;
 }
 
@@ -65,8 +65,8 @@ export interface VenueFeatureAccess {
    *  (Venue Management → Venue Concierge). $97 / free plans without that flag
    *  get Contact Support but not concierge messaging. */
   canMessageConcierge: boolean;
-  /** Bride Portal add-on enabled for this venue (admin "Bride Portal" flag).
-   *  Included by default — only false when an admin explicitly turns it off. */
+  /** Bride Portal available for this venue. Legacy + All-Inclusive plans get it
+   *  automatically; $97 / Free plans only when the admin Bride Portal box is on. */
   hasBridePortal: boolean;
   /** Legacy / grandfathered plan — gets all add-ons. */
   isLegacy: boolean;
@@ -112,8 +112,11 @@ export function resolveVenueFeatureAccess(
   // Admin "Venue Concierge" flag — single source of truth for unlocking
   // concierge messaging on a venue that isn't on an All-Inclusive/legacy plan.
   const venueConciergeGranted = venue?.venue_concierge === true;
-  // Bride Portal is "included" — enabled unless an admin explicitly turns it off.
-  const bridePortalEnabled = venue?.bride_portal !== false;
+  // Bride Portal is a paid / private-client feature. Legacy and All-Inclusive
+  // plans get it automatically; the $97 and Free plans do NOT — an admin must
+  // check the Bride Portal box (bride_portal = true) to override the gate. The
+  // checkbox is the single source of truth for granting it off-plan.
+  const bridePortalEnabled = legacy || isAllInclusive || venue?.bride_portal === true;
 
   return {
     hasSms:              legacy || isAllInclusive || smsAdminOverride,

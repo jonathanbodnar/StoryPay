@@ -214,6 +214,13 @@ const FEATURE_OUTCOMES: Record<string, FeatureOutcome> = {
     upgradeNote:
       'Included with the Venue Concierge add-on.',
   },
+  nav_listing_bride_portal: {
+    headline: 'Stay connected after the "I do\'s"',
+    outcome:
+      'Give every booked couple one private portal to plan their day with you — guest list, RSVPs, meal selections, and shared messaging in one place. No more chasing headcounts across email, texts, and spreadsheets, and a differentiator you can upsell into your packages.',
+    upgradeNote:
+      'Included on private-client plans — book a demo to add it to yours.',
+  },
   nav_listing_dashboard: {
     headline: 'Get found by couples searching right now',
     outcome:
@@ -246,9 +253,12 @@ export interface LockedFeatureBodyProps {
 function LockedFeatureBody({ featureName, navId, onNavigate }: LockedFeatureBodyProps) {
   const copy = getOutcome(navId);
   const [demoOpen, setDemoOpen] = useState(false);
-  // AI Concierge and Venue Concierge are demo-led, higher-tier features —
-  // funnel to "schedule a demo" rather than a self-serve upgrade.
-  const isDemoLed = navId === 'nav_marketing_ai_concierge' || navId === 'nav_venue_concierge';
+  // AI Concierge, Venue Concierge, and Bride Portal are demo-led, higher-tier
+  // features — funnel to "schedule a demo" rather than a self-serve upgrade.
+  const isDemoLed =
+    navId === 'nav_marketing_ai_concierge' ||
+    navId === 'nav_venue_concierge' ||
+    navId === 'nav_listing_bride_portal';
 
   return (
     <div className="text-center">

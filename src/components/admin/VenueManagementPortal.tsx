@@ -266,8 +266,11 @@ export function AddonCheckboxes({
   const smsOverrideOn = venue.sms_admin_override === true;
   const privateClientOn = venue.is_private_client === true;
   const venueConciergeOn = venue.venue_concierge === true;
-  // Bride Portal is included by default — treat missing/null as ON.
-  const bridePortalOn = venue.bride_portal !== false;
+  // Bride Portal: legacy + All-Inclusive plans get it automatically; the $97 /
+  // Free plans need the admin override flag. The checkbox is the single source
+  // of truth for granting it off-plan.
+  const bridePortalFromPlan = isLegacy || (plan?.slug ?? '').toLowerCase().includes('all-inclusive');
+  const bridePortalOn = venue.bride_portal === true || bridePortalFromPlan;
 
   // Effective (displayed) states — plan-included addons show as checked
   // automatically (single source of truth with the plan assignment).
@@ -403,12 +406,17 @@ export function AddonCheckboxes({
         )}
       </label>
 
-      {/* Bride Portal — add-on flag. Single source of truth for whether the
-          venue can connect booked couples through the Bride Portal. Included by
-          default; turning it off hides + locks the feature for that venue. */}
+      {/* Bride Portal — paid / private-client feature. Legacy + All-Inclusive
+          plans get it automatically (PLAN badge). For $97 / Free plans this
+          checkbox is the single source of truth that overrides the gate and
+          unlocks it (guest list, RSVP, meal selections, shared messaging). */}
       <label
         className={`inline-flex items-center gap-1 text-[11px] ${busy ? 'opacity-50' : 'cursor-pointer'}`}
-        title="Bride Portal add-on: lets the venue connect booked couples (guest list, RSVP, meal selections, shared messaging). Included by default."
+        title={
+          bridePortalFromPlan
+            ? 'Included in their plan (Legacy / All-Inclusive)'
+            : 'Override: unlock the Bride Portal for this $97 / Free venue'
+        }
       >
         <input
           type="checkbox"
@@ -418,7 +426,10 @@ export function AddonCheckboxes({
           className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
         />
         <span className="font-medium text-gray-600">Bride Portal</span>
-        {bridePortalOn && (
+        {bridePortalOn && bridePortalFromPlan && (
+          <span className="rounded-full bg-blue-50 border border-blue-200 px-1 py-0 text-[8px] font-semibold text-blue-600 leading-tight">PLAN</span>
+        )}
+        {bridePortalOn && !bridePortalFromPlan && (
           <span className="rounded-full bg-rose-50 border border-rose-200 px-1 py-0 text-[8px] font-semibold text-rose-600 leading-tight">ON</span>
         )}
       </label>
