@@ -467,7 +467,7 @@ export default function CoupleSitePage() {
         return (
           <div className="space-y-3">
             {hasVenue && (
-              <div className="rounded-[5px] border border-gray-200 bg-gray-50 p-3">
+              <div className="rounded-[10px] border border-gray-200 bg-gray-50 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
                     <div className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-[#1b1b1b] text-white"><MapPin size={16} /></div>
@@ -493,7 +493,7 @@ export default function CoupleSitePage() {
                 <div
                   onDragOver={(e) => { e.preventDefault(); if (linkDrag !== null && linkOver !== i) setLinkOver(i); }}
                   onDrop={() => reorderLink(i)}
-                  className={`rounded-[5px] border bg-white p-3 ${linkDrag === i ? 'border-dashed border-gray-900 opacity-50' : 'border-gray-200'}`}
+                  className={`rounded-[10px] border bg-white p-3 ${linkDrag === i ? 'border-dashed border-gray-900 opacity-50' : 'border-gray-200'}`}
                 >
                   <div className="flex items-center gap-2">
                     <button
@@ -565,8 +565,8 @@ export default function CoupleSitePage() {
   }
 
   return (
-    <div className="space-y-8 xl:mx-[calc(50%-50vw)] xl:w-screen xl:px-6">
-      <div className="xl:mx-auto xl:grid xl:max-w-6xl xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start xl:gap-8">
+    <div className="space-y-8 lg:mx-[calc(50%-50vw)] lg:w-screen lg:px-6">
+      <div className="lg:mx-auto lg:grid lg:max-w-6xl lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
         <div className="min-w-0 space-y-8">
           <div>
             <h1 className="font-heading text-2xl text-gray-900">Your wedding website</h1>
@@ -583,7 +583,7 @@ export default function CoupleSitePage() {
           )}
 
           {/* Header — always visible, mirrors the top of the page on the phone */}
-          <section className="space-y-5 rounded-[5px] border border-gray-200 bg-white p-4 sm:p-5">
+          <section className="space-y-5 rounded-[10px] border border-gray-200 bg-white p-4 sm:p-5">
             <div>
               <h2 className="text-sm font-semibold text-gray-900">Your header</h2>
               <p className="mt-0.5 text-xs text-gray-400">The top of your page — cover, photo, names and headline. This is the first thing guests see.</p>
@@ -738,7 +738,7 @@ export default function CoupleSitePage() {
                 <div
                   onDragOver={(e) => { e.preventDefault(); if (dragKey && overKey !== key) setOverKey(key); }}
                   onDrop={() => reorderSection(key)}
-                  className={`rounded-[5px] border bg-white transition-all ${dragKey === key ? 'border-dashed border-gray-900 opacity-50' : 'border-gray-200'}`}
+                  className={`rounded-[10px] border bg-white transition-all ${dragKey === key ? 'border-dashed border-gray-900 opacity-50' : 'border-gray-200'}`}
                 >
                   <div className="flex items-center gap-1 p-2">
                     <button
@@ -783,7 +783,7 @@ export default function CoupleSitePage() {
         {gb.length > 0 && (
           <div className="space-y-2 pt-1">
             {gb.map((e) => (
-              <div key={e.id} className={`rounded-[5px] border p-3 ${e.is_hidden ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'}`}>
+              <div key={e.id} className={`rounded-[10px] border p-3 ${e.is_hidden ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{e.guest_name}{e.is_hidden && <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-600">Hidden</span>}</p>
@@ -815,12 +815,12 @@ export default function CoupleSitePage() {
             </button>
           </div>
 
-          <p className="pb-6 text-center text-xs text-gray-400 xl:hidden">Previewing as {coupleName}</p>
+          <p className="pb-6 text-center text-xs text-gray-400 lg:hidden">Previewing as {coupleName}</p>
         </div>
 
-        {/* Live phone preview (large screens) */}
-        <aside className="hidden xl:block">
-          <div className="xl:sticky xl:top-6">
+        {/* Live phone preview — iPad + desktop only, follows scroll */}
+        <aside className="hidden lg:block">
+          <div className="lg:sticky lg:top-6">
             <PhonePreview
               site={site}
               profile={profile}
@@ -841,7 +841,7 @@ function Panel({ open, onToggle, icon, title, summary, children }: {
   open: boolean; onToggle: () => void; icon: React.ReactNode; title: string; summary: string; children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[5px] border border-gray-200 bg-white">
+    <div className="rounded-[10px] border border-gray-200 bg-white">
       <button type="button" onClick={onToggle} className="flex w-full items-center gap-2.5 p-3 text-left hover:bg-gray-50">
         <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-gray-100 text-gray-600">{icon}</span>
         <span className="min-w-0 flex-1">
@@ -924,7 +924,7 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
     countdown: cd ? (
       <div key="cd" className="mt-5 flex items-stretch justify-center gap-1.5">
         {cd.map((c) => (
-          <div key={c.l} className="flex w-[46px] flex-col items-center rounded-[5px] border bg-white px-1 py-2" style={{ borderColor: LINE }}>
+          <div key={c.l} className="flex w-[46px] flex-col items-center rounded-[10px] border bg-white px-1 py-2" style={{ borderColor: LINE }}>
             <span className="text-lg font-semibold tabular-nums" style={{ color: INK }}>{String(c.v).padStart(2, '0')}</span>
             <span className="mt-0.5 text-[8px] uppercase tracking-wide" style={{ color: MUTED }}>{c.l}</span>
           </div>
@@ -942,14 +942,14 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
     gallery: gallery.length > 0 ? (
       <div key="gal" className="mt-5 columns-3 gap-[5px] [&>*]:mb-[5px]">
         {gallery.map((url, i) => (
-          <Image key={`${url}-${i}`} src={url} alt="" width={120} height={120} unoptimized className="h-auto w-full rounded-[5px] object-cover" />
+          <Image key={`${url}-${i}`} src={url} alt="" width={120} height={120} unoptimized className="h-auto w-full rounded-[10px] object-cover" />
         ))}
       </div>
     ) : null,
     links: (hasVenue && site.show_venue) || linkItems.length > 0 ? (
       <div key="links" className="mt-5 space-y-2">
         {hasVenue && site.show_venue && (
-          <div className="flex items-center gap-2.5 rounded-[5px] border bg-white px-3 py-2.5" style={{ borderColor: LINE }}>
+          <div className="flex items-center gap-2.5 rounded-[10px] border bg-white px-3 py-2.5" style={{ borderColor: LINE }}>
             <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-white" style={{ background: INK }}><MapPin size={14} /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-[9px] uppercase tracking-wide" style={{ color: MUTED }}>Our Venue</span>
@@ -961,7 +961,7 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
         {linkItems.map((l, i) => {
           const Icon = LEAD_LINK_ICON_COMPONENTS[(l.icon as keyof typeof LEAD_LINK_ICON_COMPONENTS)] ?? LEAD_LINK_ICON_COMPONENTS.link;
           return (
-            <div key={i} className="flex items-center gap-2.5 rounded-[5px] border bg-white px-3 py-2.5" style={{ borderColor: LINE }}>
+            <div key={i} className="flex items-center gap-2.5 rounded-[10px] border bg-white px-3 py-2.5" style={{ borderColor: LINE }}>
               <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-white" style={{ background: INK }}><Icon size={14} /></span>
               <span className="block flex-1 truncate text-[12px] font-semibold" style={{ color: INK }}>{l.label || 'Link'}</span>
             </div>
@@ -997,7 +997,7 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
             <div className="sv-phone-scroll relative h-[620px] overflow-y-auto overflow-x-hidden">
               <div className="px-4 pb-28 pt-10">
             {site.cover_url && (
-              <div className="relative mb-[-36px] h-24 w-full overflow-hidden rounded-[5px] border" style={{ borderColor: LINE }}>
+              <div className="relative mb-[-36px] h-24 w-full overflow-hidden rounded-[10px] border" style={{ borderColor: LINE }}>
                 <Image src={site.cover_url} alt="" fill unoptimized sizes="320px" className="object-cover" />
               </div>
             )}
@@ -1084,7 +1084,7 @@ function StoryEditor({ seed, onChange }: { seed: string; onChange: (html: string
   ];
 
   return (
-    <div className="rounded-[5px] border border-gray-200 bg-white">
+    <div className="rounded-[10px] border border-gray-200 bg-white">
       <style>{`.story-ce:empty:before{content:attr(data-placeholder);color:#9ca3af}`}</style>
       <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 p-1.5">
         <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={() => cmd('bold')} title="Bold"><Bold size={15} /></button>
@@ -1112,7 +1112,7 @@ function StoryEditor({ seed, onChange }: { seed: string; onChange: (html: string
 
 function Toggle({ label, checked, onChange, indent }: { label: string; checked: boolean; onChange: (v: boolean) => void; indent?: boolean }) {
   return (
-    <label className={`flex cursor-pointer items-center justify-between gap-4 ${label ? 'rounded-[5px] border border-gray-200 bg-white px-4 py-3' : ''} ${indent ? 'ml-4' : ''}`}>
+    <label className={`flex cursor-pointer items-center justify-between gap-4 ${label ? 'rounded-[10px] border border-gray-200 bg-white px-4 py-3' : ''} ${indent ? 'ml-4' : ''}`}>
       {label && <span className="text-sm text-gray-700">{label}</span>}
       <button
         type="button"
@@ -1155,7 +1155,7 @@ function CoverField({ value, onPick, onClear }: { value: string | null; onPick: 
       <label className={LABEL}>Cover / banner (optional)</label>
       <div
         onClick={() => ref.current?.click()}
-        className="relative flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-[5px] border border-dashed border-gray-300 bg-gray-50 hover:border-gray-400"
+        className="relative flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-gray-300 bg-gray-50 hover:border-gray-400"
       >
         {value ? (
           <Image src={value} alt="Cover" fill unoptimized sizes="600px" className="object-cover" />
