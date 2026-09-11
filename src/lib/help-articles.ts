@@ -3223,6 +3223,33 @@ The couple creates reception tables (name + number of seats) and seats each gues
 Sharing controls
 You choose which wedding details the couple sees (wedding date, guest count, space / room, coordinator) from the toggles on the Wedding Hub page.`,
       },
+      {
+        id: 'wedding-hub-website',
+        title: 'Wedding Hub — the free couple wedding website',
+        tags: ['wedding website', 'wedding site', 'minisite', 'link in bio', 'linktree', 'couple website', 'rsvp online', 'guestbook', 'countdown', 'registry link', 'share with guests', 'the knot', 'zola'],
+        body: `Every couple in Wedding Hub can build a free, mobile-first wedding website right inside their StoryVenue login — no separate Knot or Zola account needed. It lives at storyvenue.com/their-custom-link, so they have one link to share on invitations, texts, and social profiles. It's a simple, linktree-style page dressed up as a wedding website — quick to set up, beautiful on a phone.
+
+Why it matters for you
+It keeps your booked couples inside StoryVenue instead of scattering across other tools, and — when they turn on the "Our Venue" card — their wedding website links straight back to your public venue listing. That's extra exposure to every guest who visits their page. It's a genuine differentiator you can mention in tours and packages: "book with us and you get a free wedding website."
+
+What the couple can add
+- Their own custom link (e.g. storyvenue.com/jenny-and-mike), checked for availability as they type
+- A main photo, an optional cover banner, their names, a headline, and their story
+- A live countdown to the big day
+- Their Instagram, Facebook, TikTok, and Pinterest
+- Up to six custom link buttons (registry, hotel block, travel, livestream, schedule — anything), each with an icon, all opening in a new tab
+- An "Our Venue" card that links guests to your listing
+- Online RSVP — guests find their invitation by name and reply with headcount, meal choice, and dietary notes
+- A guestbook where guests can leave well-wishes (the couple can approve posts before they show)
+
+How a couple sets it up
+1. They log in at app.storyvenue.com and open Website in the top navigation
+2. They pick their link, add a photo and a few details, and choose which sections to show
+3. They click Publish — and can copy the link or download a QR code for save-the-dates and table cards
+
+How to point a couple to it
+Once you're connected in Wedding Hub, just tell them to log in and open the Website tab. If they RSVP through Wedding Hub's guest list, those responses flow into the same live rollup you already see (attending / declined / headcount / meal tallies) — no extra work for you.`,
+      },
     ],
   },
   {
