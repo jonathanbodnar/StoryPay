@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronRight,
   UtensilsCrossed,
+  Armchair,
 } from 'lucide-react';
 
 type GuestSummary = {
@@ -67,6 +68,14 @@ type GuestDetailRow = {
   guest_group: string | null;
 };
 
+type TableRow = {
+  id: string;
+  name: string;
+  capacity: number;
+  seated: number;
+  parties: number;
+};
+
 const VISIBILITY_LABELS: { key: keyof Visibility; label: string }[] = [
   { key: 'wedding_date', label: 'Wedding date' },
   { key: 'guest_count', label: 'Guest count' },
@@ -98,6 +107,7 @@ export default function BridePortalPage() {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [guestDetail, setGuestDetail] = useState<Record<string, GuestDetailRow[]>>({});
+  const [tableDetail, setTableDetail] = useState<Record<string, TableRow[]>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -147,7 +157,10 @@ export default function BridePortalPage() {
       try {
         const res = await fetch(`/api/venue/bride-portal/${id}/guests`);
         const data = await res.json().catch(() => ({}));
-        if (res.ok) setGuestDetail((prev) => ({ ...prev, [id]: Array.isArray(data.guests) ? data.guests : [] }));
+        if (res.ok) {
+          setGuestDetail((prev) => ({ ...prev, [id]: Array.isArray(data.guests) ? data.guests : [] }));
+          setTableDetail((prev) => ({ ...prev, [id]: Array.isArray(data.tables) ? data.tables : [] }));
+        }
       } finally {
         setLoadingDetailId(null);
       }
@@ -425,6 +438,23 @@ export default function BridePortalPage() {
                               {Object.entries(g.mealCounts).map(([meal, count]) => (
                                 <span key={meal} className="rounded-full border border-gray-200 bg-white px-2 py-0.5">
                                   {meal}: <strong>{count}</strong>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Seating layout (aggregate only — day-of room setup) */}
+                          {tableDetail[l.id] && tableDetail[l.id].length > 0 && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                              <Armchair className="h-3.5 w-3.5 text-gray-400" />
+                              {tableDetail[l.id].map((t) => (
+                                <span
+                                  key={t.id}
+                                  className={`rounded-full border px-2 py-0.5 ${
+                                    t.seated > t.capacity ? 'border-red-200 bg-red-50 text-red-600' : 'border-gray-200 bg-white'
+                                  }`}
+                                >
+                                  {t.name}: <strong>{t.seated}</strong>/{t.capacity}
                                 </span>
                               ))}
                             </div>

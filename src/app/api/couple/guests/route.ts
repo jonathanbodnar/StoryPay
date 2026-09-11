@@ -11,7 +11,9 @@ type RsvpStatus = (typeof RSVP_STATUSES)[number];
 
 /** Columns returned to the bride (she owns the full record incl. contact info). */
 const GUEST_COLUMNS =
-  'id, full_name, email, phone, address, party_size, rsvp_status, meal_choice, dietary_notes, guest_group, notes, rsvp_token, invited_at, responded_at, invite_sent_count, created_at, updated_at';
+  'id, full_name, email, phone, address, party_size, rsvp_status, meal_choice, dietary_notes, guest_group, notes, table_id, rsvp_token, invited_at, responded_at, invite_sent_count, created_at, updated_at';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface GuestInput {
   full_name: string;
@@ -24,6 +26,7 @@ export interface GuestInput {
   dietary_notes: string | null;
   guest_group: string | null;
   notes: string | null;
+  table_id: string | null;
 }
 
 function str(v: unknown, max: number): string | null {
@@ -65,6 +68,18 @@ export function sanitizeGuest(
     const status = String(body.rsvp_status ?? 'pending');
     if (!RSVP_STATUSES.includes(status as RsvpStatus)) return { error: 'invalid rsvp_status' };
     out.rsvp_status = status as RsvpStatus;
+  }
+
+  // Table assignment is optional on both create and update. Null clears it.
+  if ('table_id' in body) {
+    const raw = body.table_id;
+    if (raw === null || raw === '') {
+      out.table_id = null;
+    } else if (typeof raw === 'string' && UUID_RE.test(raw)) {
+      out.table_id = raw;
+    } else {
+      return { error: 'invalid table_id' };
+    }
   }
 
   return { data: out };

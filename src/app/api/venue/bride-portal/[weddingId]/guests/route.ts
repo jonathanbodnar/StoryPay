@@ -32,20 +32,44 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const { data: rows, error } = await supabaseAdmin
-    .from('wedding_guests')
-    .select('id, full_name, party_size, rsvp_status, meal_choice, dietary_notes, guest_group')
-    .eq('couple_wedding_id', weddingId)
-    .order('guest_group', { ascending: true })
-    .order('full_name', { ascending: true });
+  const [{ data: rows, error }, { data: tableRows }] = await Promise.all([
+    supabaseAdmin
+      .from('wedding_guests')
+      .select('id, full_name, party_size, rsvp_status, meal_choice, dietary_notes, guest_group, table_id')
+      .eq('couple_wedding_id', weddingId)
+      .order('guest_group', { ascending: true })
+      .order('full_name', { ascending: true }),
+    supabaseAdmin
+      .from('wedding_tables')
+      .select('id, name, capacity, sort_order')
+      .eq('couple_wedding_id', weddingId)
+      .order('sort_order', { ascending: true }),
+  ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const guests = (rows ?? []) as Array<Record<string, unknown>>;
   const mealOptions = ((link as { meal_options?: unknown }).meal_options ?? []) as string[];
 
+  // Aggregate seated headcount per table (party_size sum) so the venue can plan
+  // the room layout without touching guest contact PII.
+  const tables = ((tableRows ?? []) as Array<{ id: string; name: string; capacity: number; sort_order: number }>).map(
+    (t) => {
+      let seated = 0;
+      let parties = 0;
+      for (const g of guests) {
+        if ((g as { table_id?: string | null }).table_id === t.id) {
+          parties += 1;
+          seated += Math.max(1, Number((g as { party_size?: number }).party_size) || 1);
+        }
+      }
+      return { id: t.id, name: t.name, capacity: t.capacity, seated, parties };
+    },
+  );
+
   return NextResponse.json({
     guests,
+    tables,
     mealOptions: Array.isArray(mealOptions) ? mealOptions : [],
     summary: summarizeWeddingGuests(guests as never),
   });
