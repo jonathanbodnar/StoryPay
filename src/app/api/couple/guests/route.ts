@@ -11,7 +11,7 @@ type RsvpStatus = (typeof RSVP_STATUSES)[number];
 
 /** Columns returned to the bride (she owns the full record incl. contact info). */
 const GUEST_COLUMNS =
-  'id, full_name, email, phone, address, party_size, rsvp_status, meal_choice, dietary_notes, guest_group, notes, created_at, updated_at';
+  'id, full_name, email, phone, address, party_size, rsvp_status, meal_choice, dietary_notes, guest_group, notes, rsvp_token, invited_at, responded_at, invite_sent_count, created_at, updated_at';
 
 export interface GuestInput {
   full_name: string;

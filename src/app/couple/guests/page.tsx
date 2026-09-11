@@ -12,6 +12,9 @@ import {
   UtensilsCrossed,
   Pencil,
   Check,
+  Send,
+  Link2,
+  MailCheck,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
@@ -29,6 +32,10 @@ type Guest = {
   dietary_notes: string | null;
   guest_group: string | null;
   notes: string | null;
+  rsvp_token: string;
+  invited_at: string | null;
+  responded_at: string | null;
+  invite_sent_count: number | null;
 };
 
 type Summary = {
@@ -79,6 +86,11 @@ export default function CoupleGuestsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Guest>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [invitingAll, setInvitingAll] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [inviteNote, setInviteNote] = useState('');
 
   const load = useCallback(async () => {
     const supabase = getCoupleSupabase();
@@ -165,6 +177,65 @@ export default function CoupleGuestsPage() {
     }
   }
 
+  function rsvpLink(token: string): string {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}/rsvp/${token}`;
+  }
+
+  async function copyLink(g: Guest) {
+    try {
+      await navigator.clipboard.writeText(rsvpLink(g.rsvp_token));
+      setCopiedId(g.id);
+      setTimeout(() => setCopiedId((c) => (c === g.id ? null : c)), 1500);
+    } catch {
+      /* clipboard blocked — no-op */
+    }
+  }
+
+  async function inviteGuest(g: Guest) {
+    if (!g.email) return;
+    setInvitingId(g.id);
+    setError('');
+    setInviteNote('');
+    try {
+      const res = await coupleAuthedFetch(`/api/couple/guests/${g.id}/invite`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(typeof data.error === 'string' ? data.error : 'Invite failed to send');
+        return;
+      }
+      setInviteNote(`Invite sent to ${g.full_name.split(/\s+/)[0]}.`);
+      await load();
+    } finally {
+      setInvitingId(null);
+    }
+  }
+
+  async function inviteAll() {
+    setInvitingAll(true);
+    setError('');
+    setInviteNote('');
+    try {
+      const res = await coupleAuthedFetch('/api/couple/guests/invite-all', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(typeof data.error === 'string' ? data.error : 'Could not send invites');
+        return;
+      }
+      const parts: string[] = [];
+      if (data.sent) parts.push(`${data.sent} invite${data.sent === 1 ? '' : 's'} sent`);
+      if (data.failed) parts.push(`${data.failed} failed`);
+      if (data.skippedNoEmail) parts.push(`${data.skippedNoEmail} skipped (no email)`);
+      setInviteNote(parts.length ? parts.join(' · ') : 'No one to invite yet.');
+      await load();
+    } finally {
+      setInvitingAll(false);
+    }
+  }
+
   async function saveMeals(next: string[]) {
     setSavingMeals(true);
     try {
@@ -210,6 +281,8 @@ export default function CoupleGuestsPage() {
       setBusyId(null);
     }
   }
+
+  const invitableCount = guests.filter((g) => g.email && !g.responded_at).length;
 
   if (loading) {
     return (
@@ -355,12 +428,35 @@ export default function CoupleGuestsPage() {
 
       {/* Guest list */}
       <section className="mt-8">
-        <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-gray-400" />
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-            Guests {guests.length > 0 && <span className="text-gray-400">({guests.length})</span>}
-          </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-gray-400" />
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Guests {guests.length > 0 && <span className="text-gray-400">({guests.length})</span>}
+            </h2>
+          </div>
+          {invitableCount > 0 && (
+            <button
+              type="button"
+              disabled={invitingAll}
+              onClick={() => void inviteAll()}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#8b6f47] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {invitingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              Email RSVP links ({invitableCount})
+            </button>
+          )}
         </div>
+        {guests.length > 0 && (
+          <p className="mt-1 text-xs text-gray-400">
+            Send each guest their own link — they RSVP themselves and your counts update automatically.
+          </p>
+        )}
+        {inviteNote && (
+          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            {inviteNote}
+          </div>
+        )}
         {guests.length === 0 ? (
           <p className="mt-3 text-sm text-gray-400">No guests yet. Add your first guest above.</p>
         ) : (
@@ -391,10 +487,11 @@ export default function CoupleGuestsPage() {
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-900">
+                      <p className="flex flex-wrap items-center gap-1.5 font-medium text-gray-900">
                         {g.full_name}
-                        {g.party_size > 1 && <span className="ml-1.5 text-xs text-gray-400">party of {g.party_size}</span>}
-                        {g.guest_group && <span className="ml-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">{g.guest_group}</span>}
+                        {g.party_size > 1 && <span className="text-xs text-gray-400">party of {g.party_size}</span>}
+                        {g.guest_group && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">{g.guest_group}</span>}
+                        <InviteChip guest={g} />
                       </p>
                       {(g.email || g.phone) && (
                         <p className="truncate text-xs text-gray-500">{[g.email, g.phone].filter(Boolean).join(' · ')}</p>
@@ -402,6 +499,30 @@ export default function CoupleGuestsPage() {
                       {g.dietary_notes && <p className="mt-0.5 text-xs text-amber-600">Dietary: {g.dietary_notes}</p>}
                     </div>
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void copyLink(g)}
+                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        title="Copy RSVP link"
+                      >
+                        {copiedId === g.id ? <Check className="h-4 w-4 text-emerald-600" /> : <Link2 className="h-4 w-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!g.email || invitingId === g.id}
+                        onClick={() => void inviteGuest(g)}
+                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                        title={g.email ? (g.invited_at ? 'Resend invite' : 'Send invite') : 'Add an email to invite'}
+                      >
+                        {invitingId === g.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : g.invited_at ? (
+                          <MailCheck className="h-4 w-4" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                        {g.invited_at ? 'Resend' : 'Invite'}
+                      </button>
                       <select
                         value={g.rsvp_status}
                         disabled={busyId === g.id}
@@ -444,6 +565,35 @@ export default function CoupleGuestsPage() {
         )}
       </section>
     </div>
+  );
+}
+
+function InviteChip({ guest }: { guest: Guest }) {
+  if (guest.responded_at) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+        <MailCheck className="h-3 w-3" /> Responded
+      </span>
+    );
+  }
+  if (guest.invited_at) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600">
+        <Send className="h-3 w-3" /> Invited
+      </span>
+    );
+  }
+  if (!guest.email) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+        No email
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+      Not invited
+    </span>
   );
 }
 

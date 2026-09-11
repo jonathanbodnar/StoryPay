@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const GUEST_COLUMNS =
-  'id, full_name, email, phone, address, party_size, rsvp_status, meal_choice, dietary_notes, guest_group, notes, created_at, updated_at';
+  'id, full_name, email, phone, address, party_size, rsvp_status, meal_choice, dietary_notes, guest_group, notes, rsvp_token, invited_at, responded_at, invite_sent_count, created_at, updated_at';
 
 /**
  * Confirm the guest row belongs to the authenticated bride. Guests carry the
