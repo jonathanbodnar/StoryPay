@@ -134,3 +134,96 @@ export async function getVenueSummary(
     .maybeSingle();
   return (data as CoupleWeddingVenue | null) ?? null;
 }
+
+// ── Venue-controlled visibility of wedding data to the bride ─────────────────
+
+/** Wedding-data categories the venue can choose to share with the bride. */
+export const BRIDE_PORTAL_VISIBILITY_KEYS = [
+  'wedding_date',
+  'guest_count',
+  'space',
+  'coordinator',
+] as const;
+
+export type BridePortalVisibilityKey = (typeof BRIDE_PORTAL_VISIBILITY_KEYS)[number];
+export type BridePortalVisibility = Record<BridePortalVisibilityKey, boolean>;
+
+/**
+ * Resolve a venue's stored visibility JSON into an explicit map. Categories
+ * default to shared (true) — the venue opts OUT by unchecking. An empty {}
+ * therefore means "share everything", which is the sensible out-of-the-box
+ * behaviour for a relationship-deepening portal.
+ */
+export function resolveBridePortalVisibility(
+  raw: Record<string, unknown> | null | undefined,
+): BridePortalVisibility {
+  const out = {} as BridePortalVisibility;
+  for (const key of BRIDE_PORTAL_VISIBILITY_KEYS) {
+    out[key] = raw?.[key] !== false;
+  }
+  return out;
+}
+
+export interface VenueBridePortalConfig {
+  /** Add-on enabled (admin Bride Portal flag; included by default). */
+  enabled: boolean;
+  visibility: BridePortalVisibility;
+}
+
+/** Load a venue's Bride Portal add-on flag + visibility settings. */
+export async function getVenueBridePortalConfig(
+  venueId: string,
+): Promise<VenueBridePortalConfig> {
+  const { data } = await supabaseAdmin
+    .from('venues')
+    .select('bride_portal, bride_portal_visibility')
+    .eq('id', venueId)
+    .maybeSingle();
+  const row = (data ?? {}) as { bride_portal?: boolean | null; bride_portal_visibility?: Record<string, unknown> | null };
+  return {
+    enabled: row.bride_portal !== false,
+    visibility: resolveBridePortalVisibility(row.bride_portal_visibility),
+  };
+}
+
+// ── Guest list summary (shared by bride + venue rollups) ─────────────────────
+
+export interface WeddingGuestSummary {
+  /** Total guest rows (invited parties). */
+  total: number;
+  attending: number;
+  declined: number;
+  pending: number;
+  /** Sum of party_size across attending rows — the venue headcount. */
+  headcount: number;
+  /** Meal choice → count of attending guests who picked it. */
+  mealCounts: Record<string, number>;
+}
+
+export interface WeddingGuestRowLite {
+  rsvp_status?: string | null;
+  party_size?: number | null;
+  meal_choice?: string | null;
+}
+
+export function summarizeWeddingGuests(rows: WeddingGuestRowLite[]): WeddingGuestSummary {
+  const summary: WeddingGuestSummary = {
+    total: rows.length,
+    attending: 0,
+    declined: 0,
+    pending: 0,
+    headcount: 0,
+    mealCounts: {},
+  };
+  for (const r of rows) {
+    const status = r.rsvp_status === 'attending' || r.rsvp_status === 'declined' ? r.rsvp_status : 'pending';
+    summary[status] += 1;
+    if (status === 'attending') {
+      const size = Math.max(1, Number(r.party_size) || 1);
+      summary.headcount += size;
+      const meal = (r.meal_choice ?? '').trim();
+      if (meal) summary.mealCounts[meal] = (summary.mealCounts[meal] ?? 0) + size;
+    }
+  }
+  return summary;
+}

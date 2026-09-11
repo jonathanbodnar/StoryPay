@@ -27,7 +27,7 @@ import {
   Gem,
   Target,
   ConciergeBell,
-  HeartHandshake,
+  Heart,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import { isNativeApp, topBarSafeAreaPadding } from '@/lib/platform';
@@ -64,13 +64,15 @@ interface SidebarProps {
   isFreePlan?: boolean;
   /** True when the venue has the Venue Concierge add-on (or plan bundles it). */
   hasConciergeAddon?: boolean;
+  /** True when the venue has the Bride Portal add-on enabled (default on). */
+  hasBridePortal?: boolean;
 }
 
 const topMenuItems: NavItem[] = [
   { label: 'Lead Inbox', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
   { label: 'Venue Concierge', href: '/dashboard/venue-concierge', icon: ConciergeBell, navId: 'nav_venue_concierge' },
-  { label: 'Bride Portal', href: '/dashboard/bride-portal', icon: HeartHandshake, navId: 'nav_listing_bride_portal' },
+  { label: 'Bride Portal', href: '/dashboard/bride-portal', icon: Heart, navId: 'nav_listing_bride_portal' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
 ];
@@ -197,6 +199,7 @@ export default function Sidebar({
   isLegacyPlan = false,
   isFreePlan = false,
   hasConciergeAddon = false,
+  hasBridePortal = false,
 }: SidebarProps) {
   const isOwner = role === 'owner';
   const isAdmin = role === 'owner' || role === 'admin';
@@ -240,6 +243,9 @@ export default function Sidebar({
     // Venue Concierge is add-on-gated, independent of plan nav permissions —
     // locked for everyone without the add-on (including legacy/full-access).
     if (navId === 'nav_venue_concierge') return hasConciergeAddon;
+    // Bride Portal is add-on-gated (included by default) — locked only when an
+    // admin turns it off, independent of plan nav permissions.
+    if (navId === 'nav_listing_bride_portal') return hasBridePortal;
     // Free-tier items are always locked regardless of nav_permissions in the DB.
     if (isFreePlan && FREE_TIER_LOCKED_NAV_IDS.has(navId)) return false;
     return allowedNavIds === null || allowedNavIds.includes(navId);

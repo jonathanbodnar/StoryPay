@@ -6,6 +6,7 @@ export interface FeatureAccess {
   hasSms: boolean;
   hasConcierge: boolean;
   canMessageConcierge: boolean;
+  hasBridePortal: boolean;
   isLegacy: boolean;
   planSlug: string | null;
 }

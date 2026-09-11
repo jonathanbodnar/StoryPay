@@ -5,8 +5,12 @@ import {
   getActiveCoupleWedding,
   getPendingInviteForEmail,
   getVenueSummary,
+  getVenueBridePortalConfig,
+  summarizeWeddingGuests,
   coupleReaderRef,
+  type BridePortalVisibility,
   type CoupleWeddingRow,
+  type WeddingGuestSummary,
 } from '@/lib/couple-weddings';
 import { sendEmail } from '@/lib/email';
 
@@ -89,10 +93,46 @@ async function unreadForBride(threadId: string, coupleId: string): Promise<numbe
   return count ?? 0;
 }
 
+async function loadGuestSummary(coupleWeddingId: string): Promise<WeddingGuestSummary> {
+  const { data } = await supabaseAdmin
+    .from('wedding_guests')
+    .select('rsvp_status, party_size, meal_choice')
+    .eq('couple_wedding_id', coupleWeddingId);
+  return summarizeWeddingGuests((data ?? []) as { rsvp_status: string | null; party_size: number | null; meal_choice: string | null }[]);
+}
+
+/**
+ * Apply the venue's visibility settings to the loaded wedding details: null out
+ * any category the venue chose not to share so hidden data never reaches the
+ * bride's client. Returns the redacted details plus the boolean `shared` map so
+ * the UI can render only the cards the venue enabled.
+ */
+function applyVisibility(
+  wedding: WeddingDetails | null,
+  visibility: BridePortalVisibility,
+): { wedding: WeddingDetails | null; shared: BridePortalVisibility } {
+  if (!wedding) return { wedding: null, shared: visibility };
+  return {
+    wedding: {
+      ...wedding,
+      wedding_date: visibility.wedding_date ? wedding.wedding_date : null,
+      guest_count: visibility.guest_count ? wedding.guest_count : null,
+      space_name: visibility.space ? wedding.space_name : null,
+      coordinator_name: visibility.coordinator ? wedding.coordinator_name : null,
+      coordinator_phone: visibility.coordinator ? wedding.coordinator_phone : null,
+    },
+    shared: visibility,
+  };
+}
+
 async function serializeLink(link: CoupleWeddingRow, coupleId: string) {
   const venue = await getVenueSummary(link.venue_id);
-  const wedding =
-    link.status === 'linked' ? await loadWeddingDetails(link.venue_id, link.venue_customer_id) : null;
+  const isLinked = link.status === 'linked';
+
+  const rawWedding = isLinked ? await loadWeddingDetails(link.venue_id, link.venue_customer_id) : null;
+  const { enabled: portalEnabled, visibility } = await getVenueBridePortalConfig(link.venue_id);
+  const { wedding, shared } = applyVisibility(rawWedding, visibility);
+  const guests = isLinked ? await loadGuestSummary(link.id) : null;
 
   let thread: { id: string; unread: number } | null = null;
   if (link.status === 'linked' && link.venue_customer_id) {
@@ -117,6 +157,9 @@ async function serializeLink(link: CoupleWeddingRow, coupleId: string) {
     linked_at: link.linked_at,
     venue,
     wedding,
+    shared,
+    guests,
+    portalEnabled,
     thread,
   };
 }

@@ -66,6 +66,9 @@ export type AdminVenueRow = Record<string, unknown> & {
   /** Feature flag: enables full concierge routing (bride replies → support
    *  inbox). Requires BOTH is_private_client AND venue_concierge = true. */
   venue_concierge?: boolean | null;
+  /** Bride Portal add-on flag — single source of truth for Bride Portal access.
+   *  Included (default true); admin can turn off to lock the feature. */
+  bride_portal?: boolean | null;
   directory_subscription_status?: string | null;
   directory_trial_ends_at?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
@@ -263,6 +266,8 @@ export function AddonCheckboxes({
   const smsOverrideOn = venue.sms_admin_override === true;
   const privateClientOn = venue.is_private_client === true;
   const venueConciergeOn = venue.venue_concierge === true;
+  // Bride Portal is included by default — treat missing/null as ON.
+  const bridePortalOn = venue.bride_portal !== false;
 
   // Effective (displayed) states — plan-included addons show as checked
   // automatically (single source of truth with the plan assignment).
@@ -395,6 +400,26 @@ export function AddonCheckboxes({
         )}
         {venueConciergeOn && !privateClientOn && (
           <span className="rounded-full bg-orange-50 border border-orange-200 px-1 py-0 text-[8px] font-semibold text-orange-600 leading-tight">NEEDS PC</span>
+        )}
+      </label>
+
+      {/* Bride Portal — add-on flag. Single source of truth for whether the
+          venue can connect booked couples through the Bride Portal. Included by
+          default; turning it off hides + locks the feature for that venue. */}
+      <label
+        className={`inline-flex items-center gap-1 text-[11px] ${busy ? 'opacity-50' : 'cursor-pointer'}`}
+        title="Bride Portal add-on: lets the venue connect booked couples (guest list, RSVP, meal selections, shared messaging). Included by default."
+      >
+        <input
+          type="checkbox"
+          checked={bridePortalOn}
+          disabled={busy}
+          onChange={(e) => void onPatch(venue.id, { bride_portal: e.target.checked })}
+          className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
+        />
+        <span className="font-medium text-gray-600">Bride Portal</span>
+        {bridePortalOn && (
+          <span className="rounded-full bg-rose-50 border border-rose-200 px-1 py-0 text-[8px] font-semibold text-rose-600 leading-tight">ON</span>
         )}
       </label>
     </div>

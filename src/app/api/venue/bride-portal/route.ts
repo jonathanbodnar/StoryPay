@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
-import { type CoupleWeddingRow } from '@/lib/couple-weddings';
+import {
+  getVenueBridePortalConfig,
+  summarizeWeddingGuests,
+  type CoupleWeddingRow,
+  type WeddingGuestSummary,
+} from '@/lib/couple-weddings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -47,6 +52,27 @@ export async function GET() {
     return { name, email, wedding_date: vc?.wedding_date ?? null };
   }
 
+  // Guest-list rollup per linked couple (headcount + RSVP counts).
+  const linkedIds = all.filter((r) => r.status === 'linked').map((r) => r.id);
+  const guestSummaryByWedding = new Map<string, WeddingGuestSummary>();
+  if (linkedIds.length) {
+    const { data: guestRows } = await supabaseAdmin
+      .from('wedding_guests')
+      .select('couple_wedding_id, rsvp_status, party_size, meal_choice')
+      .in('couple_wedding_id', linkedIds);
+    const grouped = new Map<string, Array<{ rsvp_status: string | null; party_size: number | null; meal_choice: string | null }>>();
+    for (const g of (guestRows ?? []) as Array<{ couple_wedding_id: string; rsvp_status: string | null; party_size: number | null; meal_choice: string | null }>) {
+      const arr = grouped.get(g.couple_wedding_id) ?? [];
+      arr.push({ rsvp_status: g.rsvp_status, party_size: g.party_size, meal_choice: g.meal_choice });
+      grouped.set(g.couple_wedding_id, arr);
+    }
+    for (const id of linkedIds) {
+      guestSummaryByWedding.set(id, summarizeWeddingGuests(grouped.get(id) ?? []));
+    }
+  }
+
+  const { enabled, visibility } = await getVenueBridePortalConfig(venueId);
+
   const requests = all
     .filter((r) => r.status === 'pending' && r.initiated_by === 'bride')
     .map((r) => {
@@ -75,8 +101,9 @@ export async function GET() {
       linked_at: r.linked_at,
       // A venue-initiated pending row is an outstanding invite awaiting the bride.
       pending_kind: r.status === 'pending' ? (r.initiated_by === 'venue' ? 'invite_sent' : 'request') : null,
+      guests: r.status === 'linked' ? guestSummaryByWedding.get(r.id) ?? null : null,
     };
   });
 
-  return NextResponse.json({ requests, links });
+  return NextResponse.json({ requests, links, enabled, visibility });
 }

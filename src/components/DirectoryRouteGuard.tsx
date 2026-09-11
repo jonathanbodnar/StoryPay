@@ -16,10 +16,12 @@ import { LockedFeatureOverlay } from '@/components/LockedFeatureView';
 export function DirectoryRouteGuard({
   allowedNavIds,
   hasConciergeAddon = false,
+  hasBridePortal = false,
   children,
 }: {
   allowedNavIds: string[] | null;
   hasConciergeAddon?: boolean;
+  hasBridePortal?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -29,6 +31,16 @@ export function DirectoryRouteGuard({
   if (pathname.startsWith('/dashboard/venue-concierge') && !hasConciergeAddon) {
     return (
       <LockedFeatureOverlay featureName="Venue Concierge" navId="nav_venue_concierge">
+        {children}
+      </LockedFeatureOverlay>
+    );
+  }
+
+  // Bride Portal is add-on-gated (included by default) — enforce even for
+  // legacy/full-access venues that bypass plan gating.
+  if (pathname.startsWith('/dashboard/bride-portal') && !hasBridePortal) {
+    return (
+      <LockedFeatureOverlay featureName="Bride Portal" navId="nav_listing_bride_portal">
         {children}
       </LockedFeatureOverlay>
     );

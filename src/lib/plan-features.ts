@@ -40,6 +40,11 @@ export interface VenueFeatureRow {
    *  regardless of plan tier — it is the single source of truth for granting
    *  concierge messaging to a venue that isn't on an All-Inclusive plan. */
   venue_concierge?: boolean | null;
+  /** Admin "Bride Portal" add-on flag (Venue Management → Bride Portal). Single
+   *  source of truth for whether the venue can connect booked couples through
+   *  the Bride Portal. Included (default TRUE) until we decide how to package it;
+   *  an admin can turn it off to hide/lock the feature for a venue. */
+  bride_portal?: boolean | null;
 }
 
 export interface PlanFeatureRow {
@@ -60,6 +65,9 @@ export interface VenueFeatureAccess {
    *  (Venue Management → Venue Concierge). $97 / free plans without that flag
    *  get Contact Support but not concierge messaging. */
   canMessageConcierge: boolean;
+  /** Bride Portal add-on enabled for this venue (admin "Bride Portal" flag).
+   *  Included by default — only false when an admin explicitly turns it off. */
+  hasBridePortal: boolean;
   /** Legacy / grandfathered plan — gets all add-ons. */
   isLegacy: boolean;
   /** Resolved plan slug (lowercase) or null when the venue has no plan. */
@@ -67,7 +75,7 @@ export interface VenueFeatureAccess {
 }
 
 export const VENUE_FEATURE_COLUMNS =
-  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override, venue_concierge';
+  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override, venue_concierge, bride_portal';
 export const PLAN_FEATURE_COLUMNS  = 'slug, name, is_legacy, feature_flags';
 
 function isLegacyPlan(plan: PlanFeatureRow | null): boolean {
@@ -104,11 +112,14 @@ export function resolveVenueFeatureAccess(
   // Admin "Venue Concierge" flag — single source of truth for unlocking
   // concierge messaging on a venue that isn't on an All-Inclusive/legacy plan.
   const venueConciergeGranted = venue?.venue_concierge === true;
+  // Bride Portal is "included" — enabled unless an admin explicitly turns it off.
+  const bridePortalEnabled = venue?.bride_portal !== false;
 
   return {
     hasSms:              legacy || isAllInclusive || smsAdminOverride,
     hasConcierge:        !conciergeAdminDisabled && (legacy || conciergeBundled || conciergePurchased),
     canMessageConcierge: legacy || isAllInclusive || venueConciergeGranted,
+    hasBridePortal:      bridePortalEnabled,
     isLegacy:            legacy,
     planSlug:            slug,
   };
@@ -127,7 +138,7 @@ export async function loadVenueFeatureAccess(venueId: string): Promise<VenueFeat
 
   if (!venue) {
     // Unknown venue — safest default is no access to gated features.
-    return { hasSms: false, hasConcierge: false, canMessageConcierge: false, isLegacy: false, planSlug: null };
+    return { hasSms: false, hasConcierge: false, canMessageConcierge: false, hasBridePortal: false, isLegacy: false, planSlug: null };
   }
 
   const v = venue as VenueFeatureRow;

@@ -30,7 +30,7 @@ export default async function DashboardLayout({
  // don't hit the venues table 3 times per page render.
  const { data: venueRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge')
+   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge, bride_portal')
    .eq('id', user.venueId)
    .maybeSingle();
 
@@ -81,6 +81,11 @@ export default async function DashboardLayout({
      if (ff.addon_concierge_included) hasConciergeAddon = true;
    }
  }
+
+ // Bride Portal is an "included" add-on gated by the admin Bride Portal flag
+ // (single source of truth). Enabled unless an admin explicitly turned it off.
+ const hasBridePortal =
+   (venueRow as { bride_portal?: boolean | null } | null)?.bride_portal !== false;
 
  // ── Trial state ───────────────────────────────────────────────────────────
  // We compute trial status from directory_trial_ends_at at request time (there
@@ -165,6 +170,7 @@ export default async function DashboardLayout({
  isLegacyPlan={navAccess.isLegacyPlan}
  isFreePlan={navAccess.isFreePlan}
  hasConciergeAddon={hasConciergeAddon}
+ hasBridePortal={hasBridePortal}
 directoryBillingPending={directoryBillingPending}
 trialCountdown={showTrialCountdown}
  trialDaysRemaining={trialDaysRemaining}

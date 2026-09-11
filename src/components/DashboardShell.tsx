@@ -37,6 +37,7 @@ export default function DashboardShell({
   isLegacyPlan = false,
   isFreePlan = false,
   hasConciergeAddon = false,
+  hasBridePortal = false,
   directoryBillingPending = false,
   trialCountdown = false,
   trialDaysRemaining = 0,
@@ -57,6 +58,8 @@ export default function DashboardShell({
   isFreePlan?: boolean;
   /** True when the venue has the Venue Concierge add-on (or plan bundles it). */
   hasConciergeAddon?: boolean;
+  /** True when the venue has the Bride Portal add-on enabled (default on). */
+  hasBridePortal?: boolean;
   /** Directory SaaS: priced plan assigned, payment still required. */
   directoryBillingPending?: boolean;
   /** True when the venue is on an active (not-yet-expired) Venue Pro trial. */
@@ -197,6 +200,7 @@ export default function DashboardShell({
         isLegacyPlan={isLegacyPlan}
         isFreePlan={isFreePlan}
         hasConciergeAddon={hasConciergeAddon}
+        hasBridePortal={hasBridePortal}
       />
 
       <div
@@ -323,7 +327,7 @@ export default function DashboardShell({
             </div>
           ) : null}
 
-          <DirectoryRouteGuard allowedNavIds={allowedNavIds} hasConciergeAddon={hasConciergeAddon}>{children}</DirectoryRouteGuard>
+          <DirectoryRouteGuard allowedNavIds={allowedNavIds} hasConciergeAddon={hasConciergeAddon} hasBridePortal={hasBridePortal}>{children}</DirectoryRouteGuard>
         </main>
       </div>
 

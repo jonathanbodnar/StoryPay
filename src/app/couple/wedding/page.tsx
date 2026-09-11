@@ -38,6 +38,21 @@ type Wedding = {
   space_name: string | null;
 } | null;
 
+type Shared = {
+  wedding_date: boolean;
+  guest_count: boolean;
+  space: boolean;
+  coordinator: boolean;
+};
+
+type GuestSummary = {
+  total: number;
+  attending: number;
+  declined: number;
+  pending: number;
+  headcount: number;
+} | null;
+
 type Link_ = {
   id: string;
   status: 'pending' | 'linked' | 'declined' | 'revoked';
@@ -46,6 +61,8 @@ type Link_ = {
   linked_at: string | null;
   venue: Venue;
   wedding: Wedding;
+  shared: Shared | null;
+  guests: GuestSummary;
   thread: { id: string; unread: number } | null;
 };
 
@@ -273,12 +290,52 @@ export default function CoupleWeddingPage() {
               </Link>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <Detail icon={<CalendarDays className="h-4 w-4" />} label="Wedding date" value={fmtDate(link.wedding?.wedding_date ?? null)} />
-              <Detail icon={<Users className="h-4 w-4" />} label="Guest count" value={link.wedding?.guest_count != null ? String(link.wedding.guest_count) : null} />
-              <Detail icon={<Heart className="h-4 w-4" />} label="Space" value={link.wedding?.space_name ?? null} />
-              <Detail icon={<UserCheck className="h-4 w-4" />} label="Coordinator" value={link.wedding?.coordinator_name ?? null} />
-            </div>
+            {(() => {
+              const shared = link.shared;
+              const show = {
+                wedding_date: shared?.wedding_date !== false,
+                guest_count: shared?.guest_count !== false,
+                space: shared?.space !== false,
+                coordinator: shared?.coordinator !== false,
+              };
+              const anyShared = show.wedding_date || show.guest_count || show.space || show.coordinator;
+              if (!anyShared) return null;
+              return (
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {show.wedding_date && (
+                    <Detail icon={<CalendarDays className="h-4 w-4" />} label="Wedding date" value={fmtDate(link.wedding?.wedding_date ?? null)} />
+                  )}
+                  {show.guest_count && (
+                    <Detail icon={<Users className="h-4 w-4" />} label="Guest count" value={link.wedding?.guest_count != null ? String(link.wedding.guest_count) : null} />
+                  )}
+                  {show.space && (
+                    <Detail icon={<Heart className="h-4 w-4" />} label="Space" value={link.wedding?.space_name ?? null} />
+                  )}
+                  {show.coordinator && (
+                    <Detail icon={<UserCheck className="h-4 w-4" />} label="Coordinator" value={link.wedding?.coordinator_name ?? null} />
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Guest list summary — bride owns and manages it */}
+            <Link
+              href="/couple/guests"
+              className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50/50 px-4 py-3 transition-colors hover:border-gray-200 hover:bg-gray-50"
+            >
+              <div className="flex items-center gap-2.5">
+                <Users className="h-4 w-4 text-gray-400" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Guest list & RSVPs</p>
+                  <p className="text-xs text-gray-500">
+                    {link.guests && link.guests.total > 0
+                      ? `${link.guests.attending} attending · ${link.guests.pending} awaiting · ${link.guests.total} invited`
+                      : 'Add your guests, track RSVPs and meal choices'}
+                  </p>
+                </div>
+              </div>
+              <span className="text-sm font-medium text-gray-700 underline">Manage</span>
+            </Link>
 
             <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-4 text-sm">
               {link.venue?.slug && (
