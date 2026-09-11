@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
   const sendResult = await sendEmail({
     to: email,
     from: { name: venueName, email: brandEmail },
-    subject: `${venueName} invited you to your wedding portal`,
+    subject: `${venueName} invited you to your Wedding Hub`,
     html: `
 <div style="font-family:'Open Sans',Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827">
   <p>Hi${name ? ` ${name.split(/\s+/)[0]}` : ''},</p>

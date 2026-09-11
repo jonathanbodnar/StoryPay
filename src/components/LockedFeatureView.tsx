@@ -217,7 +217,7 @@ const FEATURE_OUTCOMES: Record<string, FeatureOutcome> = {
   nav_listing_bride_portal: {
     headline: 'Stay connected after the "I do\'s"',
     outcome:
-      'Give every booked couple one private portal to plan their day with you — guest list, RSVPs, meal selections, and shared messaging in one place. No more chasing headcounts across email, texts, and spreadsheets, and a differentiator you can upsell into your packages.',
+      'Give every booked couple a private Wedding Hub to plan their day with you — guest list, RSVPs, meal selections, and shared messaging in one place. No more chasing headcounts across email, texts, and spreadsheets, and a differentiator you can upsell into your packages.',
     upgradeNote:
       'Included on private-client plans — book a demo to add it to yours.',
   },

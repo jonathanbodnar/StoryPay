@@ -227,11 +227,11 @@ export default function BridePortalPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="flex items-center gap-2">
         <Heart className="h-6 w-6 text-rose-500" />
-        <h1 className="text-2xl font-semibold text-gray-900">Bride Portal</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Wedding Hub</h1>
       </div>
       <p className="mt-1 text-sm text-gray-500">
         Connect your booked couples so they can see their wedding details and message you in one place — a single source of
-        truth between you and every bride.
+        truth between you and every couple.
       </p>
 
       {error && (

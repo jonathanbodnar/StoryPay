@@ -415,7 +415,7 @@ export function AddonCheckboxes({
         title={
           bridePortalFromPlan
             ? 'Included in their plan (Legacy / All-Inclusive)'
-            : 'Override: unlock the Bride Portal for this $97 / Free venue'
+            : 'Override: unlock the Wedding Hub for this $97 / Free venue'
         }
       >
         <input
@@ -425,7 +425,7 @@ export function AddonCheckboxes({
           onChange={(e) => void onPatch(venue.id, { bride_portal: e.target.checked })}
           className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
         />
-        <span className="font-medium text-gray-600">Bride Portal</span>
+        <span className="font-medium text-gray-600">Wedding Hub</span>
         {bridePortalOn && bridePortalFromPlan && (
           <span className="rounded-full bg-blue-50 border border-blue-200 px-1 py-0 text-[8px] font-semibold text-blue-600 leading-tight">PLAN</span>
         )}

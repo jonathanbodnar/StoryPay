@@ -40,7 +40,7 @@ export function DirectoryRouteGuard({
   // legacy/full-access venues that bypass plan gating.
   if (pathname.startsWith('/dashboard/bride-portal') && !hasBridePortal) {
     return (
-      <LockedFeatureOverlay featureName="Bride Portal" navId="nav_listing_bride_portal">
+      <LockedFeatureOverlay featureName="Wedding Hub" navId="nav_listing_bride_portal">
         {children}
       </LockedFeatureOverlay>
     );
