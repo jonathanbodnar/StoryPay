@@ -18,6 +18,7 @@ import {
   UtensilsCrossed,
   Armchair,
 } from 'lucide-react';
+import WeddingHubGate from '@/components/WeddingHubGate';
 
 type GuestSummary = {
   total: number;
@@ -90,7 +91,17 @@ function fmtDate(d: string | null): string {
   return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export default function BridePortalPage() {
+export default function WeddingHubPage() {
+  // Temporary private-beta password gate (code 7111). Children — and their data
+  // fetches — only mount after the gate is unlocked. Remove once fully released.
+  return (
+    <WeddingHubGate>
+      <WeddingHubContent />
+    </WeddingHubGate>
+  );
+}
+
+function WeddingHubContent() {
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [links, setLinks] = useState<LinkItem[]>([]);

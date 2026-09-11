@@ -1,0 +1,32 @@
+---
+description: Data-safety rules for schema / migration / stored-data changes
+alwaysApply: true
+---
+
+# Never lose user data when iterating
+
+Whenever a task touches **stored data or its shape** — anything in `migrations/`,
+`*.sql`, DB columns, JSONB fields (e.g. `meal_options`, `custom_links`,
+`*_visibility`), guest/table/RSVP/minisite/proposal/CRM data, or the code that
+reads/writes them — you MUST first read `docs/DATA_MIGRATIONS.md` and follow it,
+and you MUST proactively warn the user about any risk to existing data plus the
+safe path, BEFORE writing code.
+
+Rules of thumb (full detail + a worked seating example live in the doc):
+
+- **Expand → migrate → contract.** Never rename/drop/repurpose a column in place.
+  Add the new thing, backfill, switch reads, drop the old later (separate deploys).
+  Prefer **additive** changes; old rows get a `DEFAULT`.
+- **Tolerant reader.** New code must read old *and* new shapes and default missing
+  fields (like the existing `sanitize*` helpers). Prefer **migrate-on-write** over
+  bulk rewrites.
+- **Keep the source of truth stable.** When "how X works" changes (e.g. seating),
+  add capability as extra optional fields; don't replace the field old data lives in.
+- **Protect the user:** soft-delete (`is_hidden`) over hard delete; `ON DELETE SET
+  NULL` so deleting a parent doesn't wipe children; idempotent migrations
+  (`IF [NOT] EXISTS`) ending with `NOTIFY pgrst, 'reload schema';`; batch backfills.
+- **Gate behavioral changes behind a flag; test on the demo couple**
+  (`thewestfolks@gmail.com`); remember Supabase PITR is the safety net.
+
+If a requested change would or could affect data already in the mix, STOP and tell
+the user the risk and the expand/contract plan before proceeding.
