@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -113,8 +113,11 @@ export default function CoupleSitePage() {
   const [openKey, setOpenKey] = useState<SectionKey | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dragKey, setDragKey] = useState<SectionKey | null>(null);
+  const [overKey, setOverKey] = useState<SectionKey | null>(null);
   const [galleryDrag, setGalleryDrag] = useState<number | null>(null);
+  const [galleryOver, setGalleryOver] = useState<number | null>(null);
   const [linkDrag, setLinkDrag] = useState<number | null>(null);
+  const [linkOver, setLinkOver] = useState<number | null>(null);
 
   // Story editor seed (set once from loaded data)
   const [storySeed, setStorySeed] = useState('');
@@ -239,9 +242,10 @@ export default function CoupleSitePage() {
   }
 
   function reorderGallery(to: number) {
-    if (galleryDrag === null || galleryDrag === to) return;
+    if (galleryDrag === null || galleryDrag === to) { setGalleryOver(null); return; }
     set('gallery', arrayMove(site.gallery ?? [], galleryDrag, to));
     setGalleryDrag(null);
+    setGalleryOver(null);
   }
 
   async function savePassword(value: string | null) {
@@ -344,19 +348,21 @@ export default function CoupleSitePage() {
     set('custom_links', links.filter((_, idx) => idx !== i));
   }
   function reorderLink(to: number) {
-    if (linkDrag === null || linkDrag === to) return;
+    if (linkDrag === null || linkDrag === to) { setLinkOver(null); return; }
     set('custom_links', arrayMove(links, linkDrag, to));
     setLinkDrag(null);
+    setLinkOver(null);
   }
 
   // ── section drag/drop ────────────────────────────────────────────────────
   function reorderSection(target: SectionKey) {
-    if (!dragKey || dragKey === target) { setDragKey(null); return; }
+    if (!dragKey || dragKey === target) { setDragKey(null); setOverKey(null); return; }
     const from = order.indexOf(dragKey);
     const to = order.indexOf(target);
-    if (from < 0 || to < 0) { setDragKey(null); return; }
+    if (from < 0 || to < 0) { setDragKey(null); setOverKey(null); return; }
     setOrder(arrayMove(order, from, to));
     setDragKey(null);
+    setOverKey(null);
   }
 
   async function moderate(id: string, is_hidden: boolean) {
@@ -413,10 +419,16 @@ export default function CoupleSitePage() {
                   key={`${url}-${i}`}
                   draggable
                   onDragStart={() => setGalleryDrag(i)}
-                  onDragEnd={() => setGalleryDrag(null)}
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragEnd={() => { setGalleryDrag(null); setGalleryOver(null); }}
+                  onDragOver={(e) => { e.preventDefault(); if (galleryDrag !== null && galleryOver !== i) setGalleryOver(i); }}
                   onDrop={() => reorderGallery(i)}
-                  className={`group relative aspect-square cursor-grab overflow-hidden rounded-xl border bg-gray-50 active:cursor-grabbing ${galleryDrag === i ? 'border-gray-900 opacity-60' : 'border-gray-200'}`}
+                  className={`group relative aspect-square cursor-grab overflow-hidden rounded-xl border bg-gray-50 transition-all active:cursor-grabbing ${
+                    galleryDrag === i
+                      ? 'border-dashed border-gray-900 opacity-40'
+                      : galleryDrag !== null && galleryOver === i
+                        ? 'border-gray-900 ring-2 ring-gray-900 ring-offset-1'
+                        : 'border-gray-200'
+                  }`}
                 >
                   <Image src={url} alt={`Photo ${i + 1}`} fill unoptimized sizes="180px" className="object-cover" />
                   <button
@@ -472,19 +484,23 @@ export default function CoupleSitePage() {
             <p className="text-xs text-gray-500">Registry, hotel block, travel, schedule — anything. Drag to reorder.</p>
             {links.map((l, i) => {
               const Icon = LEAD_LINK_ICON_COMPONENTS[(l.icon as keyof typeof LEAD_LINK_ICON_COMPONENTS)] ?? LEAD_LINK_ICON_COMPONENTS.link;
+              const dropHere = linkDrag !== null && linkDrag !== i && linkOver === i;
+              const lineAbove = dropHere && (linkDrag as number) > i;
+              const lineBelow = dropHere && (linkDrag as number) < i;
               return (
+                <Fragment key={i}>
+                {lineAbove && <div className="pointer-events-none mx-1 h-1 rounded-full bg-gray-900" />}
                 <div
-                  key={i}
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragOver={(e) => { e.preventDefault(); if (linkDrag !== null && linkOver !== i) setLinkOver(i); }}
                   onDrop={() => reorderLink(i)}
-                  className={`rounded-[5px] border bg-white p-3 ${linkDrag === i ? 'border-gray-900 opacity-70' : 'border-gray-200'}`}
+                  className={`rounded-[5px] border bg-white p-3 ${linkDrag === i ? 'border-dashed border-gray-900 opacity-50' : 'border-gray-200'}`}
                 >
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       draggable
                       onDragStart={() => setLinkDrag(i)}
-                      onDragEnd={() => setLinkDrag(null)}
+                      onDragEnd={() => { setLinkDrag(null); setLinkOver(null); }}
                       className="flex-none cursor-grab rounded-lg p-1 text-gray-300 hover:text-gray-500 active:cursor-grabbing"
                       title="Drag to reorder"
                     >
@@ -512,6 +528,8 @@ export default function CoupleSitePage() {
                     })}
                   </div>
                 </div>
+                {lineBelow && <div className="pointer-events-none mx-1 h-1 rounded-full bg-gray-900" />}
+                </Fragment>
               );
             })}
             {links.length < COUPLE_SITE_MAX_LINKS && (
@@ -709,39 +727,47 @@ export default function CoupleSitePage() {
           {order.map((key) => {
             const meta = sectionMeta[key];
             const isOpen = openKey === key;
+            const fromIdx = dragKey ? order.indexOf(dragKey) : -1;
+            const overIdx = order.indexOf(key);
+            const dropHere = dragKey && dragKey !== key && overKey === key;
+            const lineAbove = dropHere && fromIdx > overIdx;
+            const lineBelow = dropHere && fromIdx < overIdx;
             return (
-              <div
-                key={key}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => reorderSection(key)}
-                className={`rounded-[5px] border bg-white transition-shadow ${dragKey === key ? 'border-gray-900 opacity-70' : 'border-gray-200'}`}
-              >
-                <div className="flex items-center gap-1 p-2">
-                  <button
-                    type="button"
-                    draggable
-                    onDragStart={() => setDragKey(key)}
-                    onDragEnd={() => setDragKey(null)}
-                    className="flex-none cursor-grab rounded-lg p-1.5 text-gray-300 hover:text-gray-500 active:cursor-grabbing"
-                    title="Drag to reorder"
-                  >
-                    <GripVertical size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOpenKey(isOpen ? null : key)}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left hover:bg-gray-50"
-                  >
-                    <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-gray-100 text-gray-600">{meta.icon}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium text-gray-900">{meta.title}</span>
-                      <span className="block truncate text-xs text-gray-400">{meta.summary}</span>
-                    </span>
-                    <ChevronDown size={16} className={`flex-none text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                  </button>
+              <Fragment key={key}>
+                {lineAbove && <div className="pointer-events-none mx-1 h-1 rounded-full bg-gray-900" />}
+                <div
+                  onDragOver={(e) => { e.preventDefault(); if (dragKey && overKey !== key) setOverKey(key); }}
+                  onDrop={() => reorderSection(key)}
+                  className={`rounded-[5px] border bg-white transition-all ${dragKey === key ? 'border-dashed border-gray-900 opacity-50' : 'border-gray-200'}`}
+                >
+                  <div className="flex items-center gap-1 p-2">
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={() => setDragKey(key)}
+                      onDragEnd={() => { setDragKey(null); setOverKey(null); }}
+                      className="flex-none cursor-grab rounded-lg p-1.5 text-gray-300 hover:text-gray-500 active:cursor-grabbing"
+                      title="Drag to reorder"
+                    >
+                      <GripVertical size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOpenKey(isOpen ? null : key)}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left hover:bg-gray-50"
+                    >
+                      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-gray-100 text-gray-600">{meta.icon}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-gray-900">{meta.title}</span>
+                        <span className="block truncate text-xs text-gray-400">{meta.summary}</span>
+                      </span>
+                      <ChevronDown size={16} className={`flex-none text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+                  {isOpen && <div className="border-t border-gray-100 p-4">{renderSectionBody(key)}</div>}
                 </div>
-                {isOpen && <div className="border-t border-gray-100 p-4">{renderSectionBody(key)}</div>}
-              </div>
+                {lineBelow && <div className="pointer-events-none mx-1 h-1 rounded-full bg-gray-900" />}
+              </Fragment>
             );
           })}
         </div>
