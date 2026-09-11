@@ -559,6 +559,12 @@ export default function CoupleSitePage() {
               />
             </div>
             <Toggle label="Show the livestream / embed on my page" checked={site.embed_enabled} onChange={(v) => set('embed_enabled', v)} />
+            <p className="rounded-[10px] bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              <span className="font-medium text-gray-700">Auto go-live:</span> set a start time on your{' '}
+              <a href="/couple/profile" className="underline">profile</a> and, during the event, your cover photo
+              automatically switches to this livestream — then returns to the cover afterward (or if the feed can’t
+              load). Guests can tap it to go full screen.
+            </p>
           </div>
         );
     }
