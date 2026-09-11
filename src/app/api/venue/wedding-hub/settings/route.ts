@@ -44,7 +44,7 @@ export async function PATCH(request: NextRequest) {
 
   const { error } = await supabaseAdmin
     .from('venues')
-    .update({ bride_portal_visibility: next })
+    .update({ wedding_hub_visibility: next })
     .eq('id', venueId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

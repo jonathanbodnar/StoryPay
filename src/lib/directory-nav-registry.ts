@@ -46,7 +46,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_listing_analytics', label: 'Listing — Analytics', pathPrefix: '/dashboard/listing/analytics', group: 'listing' },
   { id: 'nav_listing_reviews', label: 'Listing — Reviews', pathPrefix: '/dashboard/listing/reviews', group: 'listing' },
   { id: 'nav_listing_lead_link', label: 'Listing — Lead Link', pathPrefix: '/dashboard/listing/lead-link', group: 'listing' },
-  { id: 'nav_listing_bride_portal', label: 'Wedding Hub', pathPrefix: '/dashboard/bride-portal', group: 'listing' },
+  { id: 'nav_listing_bride_portal', label: 'Wedding Hub', pathPrefix: '/dashboard/wedding-hub', group: 'listing' },
   { id: 'nav_listing_directory', label: 'Listing — Verified & Sponsored', pathPrefix: '/dashboard/listing/directory', group: 'listing' },
   { id: 'nav_listing_ad_tracking', label: 'Listing — Ad Tracking', pathPrefix: '/dashboard/listing/ad-tracking', group: 'listing' },
   { id: 'nav_listing_directory_billing', label: 'Plans & billing', pathPrefix: '/dashboard/directory-billing', group: 'listing' },

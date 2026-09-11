@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * POST /api/venue/bride-portal/decide
+ * POST /api/venue/wedding-hub/decide
  * Body: { id: string, action: 'approve' | 'deny' }
  * Venue approves or denies a bride-initiated connection request.
  */

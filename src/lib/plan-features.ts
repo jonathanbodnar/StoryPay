@@ -40,11 +40,11 @@ export interface VenueFeatureRow {
    *  regardless of plan tier — it is the single source of truth for granting
    *  concierge messaging to a venue that isn't on an All-Inclusive plan. */
   venue_concierge?: boolean | null;
-  /** Admin "Bride Portal" override flag (Venue Management / Project Management →
-   *  Bride Portal). Legacy + All-Inclusive plans get the Bride Portal from their
+  /** Admin "Wedding Hub" override flag (Venue Management / Project Management →
+   *  Wedding Hub). Legacy + All-Inclusive plans get the Wedding Hub from their
    *  plan; for $97 / Free plans this flag (default FALSE) is the single source of
-   *  truth that overrides the gate and unlocks the feature. */
-  bride_portal?: boolean | null;
+   *  truth that overrides the gate and unlocks the feature. (DB col: wedding_hub) */
+  wedding_hub?: boolean | null;
 }
 
 export interface PlanFeatureRow {
@@ -75,7 +75,7 @@ export interface VenueFeatureAccess {
 }
 
 export const VENUE_FEATURE_COLUMNS =
-  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override, venue_concierge, bride_portal';
+  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override, venue_concierge, wedding_hub';
 export const PLAN_FEATURE_COLUMNS  = 'slug, name, is_legacy, feature_flags';
 
 function isLegacyPlan(plan: PlanFeatureRow | null): boolean {
@@ -112,11 +112,11 @@ export function resolveVenueFeatureAccess(
   // Admin "Venue Concierge" flag — single source of truth for unlocking
   // concierge messaging on a venue that isn't on an All-Inclusive/legacy plan.
   const venueConciergeGranted = venue?.venue_concierge === true;
-  // Bride Portal is a paid / private-client feature. Legacy and All-Inclusive
+  // Wedding Hub is a paid / private-client feature. Legacy and All-Inclusive
   // plans get it automatically; the $97 and Free plans do NOT — an admin must
-  // check the Bride Portal box (bride_portal = true) to override the gate. The
+  // check the Wedding Hub box (wedding_hub = true) to override the gate. The
   // checkbox is the single source of truth for granting it off-plan.
-  const bridePortalEnabled = legacy || isAllInclusive || venue?.bride_portal === true;
+  const bridePortalEnabled = legacy || isAllInclusive || venue?.wedding_hub === true;
 
   return {
     hasSms:              legacy || isAllInclusive || smsAdminOverride,

@@ -289,7 +289,7 @@ export async function POST(request: NextRequest) {
   <p>${invitedName ? `<strong>${invitedName}</strong>` : 'A couple'} asked to connect with ${venueName} on their StoryVenue Wedding Hub.</p>
   ${message ? `<p style="color:#374151"><em>&ldquo;${message.replace(/</g, '&lt;')}&rdquo;</em></p>` : ''}
   <p>Review and approve this request from your dashboard:</p>
-  <p><a href="${APP_URL}/dashboard/bride-portal" style="color:#111827;font-weight:600;text-decoration:underline">Open Wedding Hub</a></p>
+  <p><a href="${APP_URL}/dashboard/wedding-hub" style="color:#111827;font-weight:600;text-decoration:underline">Open Wedding Hub</a></p>
 </div>`,
       });
     } catch (e) {

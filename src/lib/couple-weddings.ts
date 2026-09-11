@@ -177,13 +177,13 @@ export async function getVenueBridePortalConfig(
   venueId: string,
 ): Promise<VenueBridePortalConfig> {
   const [{ data }, access] = await Promise.all([
-    supabaseAdmin.from('venues').select('bride_portal_visibility').eq('id', venueId).maybeSingle(),
+    supabaseAdmin.from('venues').select('wedding_hub_visibility').eq('id', venueId).maybeSingle(),
     loadVenueFeatureAccess(venueId),
   ]);
-  const row = (data ?? {}) as { bride_portal_visibility?: Record<string, unknown> | null };
+  const row = (data ?? {}) as { wedding_hub_visibility?: Record<string, unknown> | null };
   return {
     enabled: access.hasBridePortal,
-    visibility: resolveBridePortalVisibility(row.bride_portal_visibility),
+    visibility: resolveBridePortalVisibility(row.wedding_hub_visibility),
   };
 }
 

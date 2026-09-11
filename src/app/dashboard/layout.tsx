@@ -30,7 +30,7 @@ export default async function DashboardLayout({
  // don't hit the venues table 3 times per page render.
  const { data: venueRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge, bride_portal')
+   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge, wedding_hub')
    .eq('id', user.venueId)
    .maybeSingle();
 
@@ -86,7 +86,7 @@ export default async function DashboardLayout({
  // legacy venues get it, as do All-Inclusive plans. The $97 and Free plans only
  // get it when an admin checks the Bride Portal box (single source of truth).
  const bridePlanId = (venueRow as { directory_plan_id?: string | null } | null)?.directory_plan_id ?? null;
- const bridePortalFlag = (venueRow as { bride_portal?: boolean | null } | null)?.bride_portal === true;
+ const bridePortalFlag = (venueRow as { wedding_hub?: boolean | null } | null)?.wedding_hub === true;
  let hasBridePortal = !bridePlanId || navAccess.isLegacyPlan || bridePortalFlag;
  if (!hasBridePortal && bridePlanId) {
    const { data: bridePlan } = await supabaseAdmin

@@ -15,7 +15,7 @@ function isEmail(s: string): boolean {
 }
 
 /**
- * POST /api/venue/bride-portal/invite
+ * POST /api/venue/wedding-hub/invite
  * Body: { email: string, name?: string }
  * Invites a booked couple to the bride portal. Finds (or creates) the matching
  * venue_customer, mints a claim token, and emails the couple a claim link.

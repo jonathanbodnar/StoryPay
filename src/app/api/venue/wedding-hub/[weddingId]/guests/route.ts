@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * GET /api/venue/bride-portal/[weddingId]/guests
+ * GET /api/venue/wedding-hub/[weddingId]/guests
  *
  * Read-only guest rollup for a connected couple. The bride owns the guest list;
  * the venue sees planning fields (name, party size, RSVP, meal, dietary, group)
