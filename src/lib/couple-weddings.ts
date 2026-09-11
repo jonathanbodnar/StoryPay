@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { loadVenueFeatureAccess } from '@/lib/plan-features';
 
 /**
  * Server-side helpers for the "bride portal" bridge (couple_weddings).
@@ -165,23 +166,23 @@ export function resolveBridePortalVisibility(
 }
 
 export interface VenueBridePortalConfig {
-  /** Add-on enabled (admin Bride Portal flag; included by default). */
+  /** Whether the venue can use the Bride Portal at all. Reflects the real gate:
+   *  legacy + All-Inclusive plans, or the admin Bride Portal override flag. */
   enabled: boolean;
   visibility: BridePortalVisibility;
 }
 
-/** Load a venue's Bride Portal add-on flag + visibility settings. */
+/** Load a venue's Bride Portal access + visibility settings. */
 export async function getVenueBridePortalConfig(
   venueId: string,
 ): Promise<VenueBridePortalConfig> {
-  const { data } = await supabaseAdmin
-    .from('venues')
-    .select('bride_portal, bride_portal_visibility')
-    .eq('id', venueId)
-    .maybeSingle();
-  const row = (data ?? {}) as { bride_portal?: boolean | null; bride_portal_visibility?: Record<string, unknown> | null };
+  const [{ data }, access] = await Promise.all([
+    supabaseAdmin.from('venues').select('bride_portal_visibility').eq('id', venueId).maybeSingle(),
+    loadVenueFeatureAccess(venueId),
+  ]);
+  const row = (data ?? {}) as { bride_portal_visibility?: Record<string, unknown> | null };
   return {
-    enabled: row.bride_portal !== false,
+    enabled: access.hasBridePortal,
     visibility: resolveBridePortalVisibility(row.bride_portal_visibility),
   };
 }
