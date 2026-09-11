@@ -7,6 +7,7 @@ import {
   Loader2, CheckCircle2, Copy, Check, ExternalLink, Upload, Trash2, Plus,
   QrCode, Eye, EyeOff, Globe, Lock, Video, Bold, AlignLeft, AlignCenter, AlignRight,
   GripVertical, ChevronDown, Clock, Type, Images, Link2, MapPin,
+  Settings, Instagram, Facebook, Music2, CalendarHeart, Navigation, Radio,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 import { LEAD_LINK_ICON_KEYS } from '@/lib/lead-link-icons';
@@ -100,13 +101,18 @@ export default function CoupleSitePage() {
   const [error, setError] = useState('');
   const [flash, setFlash] = useState('');
   const [site, setSite] = useState<Site>(DEFAULT_SITE);
-  const [profile, setProfile] = useState<{ first_name?: string | null; display_name?: string | null; partner_first_name?: string | null; wedding_date?: string | null } | null>(null);
+  const [profile, setProfile] = useState<{
+    first_name?: string | null; display_name?: string | null; partner_first_name?: string | null; wedding_date?: string | null;
+    instagram_url?: string | null; facebook_url?: string | null; tiktok_url?: string | null; pinterest_url?: string | null;
+  } | null>(null);
   const [hasVenue, setHasVenue] = useState(false);
   const [baseUrl, setBaseUrl] = useState('https://storyvenue.com');
 
   // Section order + accordion open/close + drag state
   const [order, setOrder] = useState<SectionKey[]>(DEFAULT_ORDER);
   const [openKey, setOpenKey] = useState<SectionKey | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [urlOpen, setUrlOpen] = useState(false);
   const [dragKey, setDragKey] = useState<SectionKey | null>(null);
   const [galleryDrag, setGalleryDrag] = useState<number | null>(null);
   const [linkDrag, setLinkDrag] = useState<number | null>(null);
@@ -542,150 +548,163 @@ export default function CoupleSitePage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="font-heading text-2xl text-gray-900">Your wedding website</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Build your page block by block. Drag the <GripVertical size={13} className="inline align-[-2px] text-gray-400" /> handles to reorder, tap a section to edit, then Save.
-        </p>
-      </div>
-
-      {error && <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
-      {flash && (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          <CheckCircle2 size={14} /> {flash}
-        </div>
-      )}
-
-      {/* Publish + URL + QR */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-8 xl:mx-[calc(50%-50vw)] xl:w-screen xl:px-6">
+      <div className="xl:mx-auto xl:grid xl:max-w-6xl xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start xl:gap-8">
+        <div className="min-w-0 space-y-8">
           <div>
-            <p className="text-sm font-semibold text-gray-900">{site.is_published ? 'Live' : 'Not published'}</p>
-            <p className="text-xs text-gray-500">
-              {site.is_published ? 'Anyone with your link can view it.' : 'Only you can see it until you publish.'}
+            <h1 className="font-heading text-2xl text-gray-900">Your wedding website</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Build your page block by block. Drag the <GripVertical size={13} className="inline align-[-2px] text-gray-400" /> handles to reorder, tap a section to edit, then Save.
             </p>
           </div>
-          <button
-            onClick={() => void togglePublish()}
-            disabled={publishing}
-            className={`rounded-2xl px-5 py-2.5 text-sm font-medium text-white transition-opacity disabled:opacity-60 ${site.is_published ? 'bg-gray-700 hover:opacity-85' : 'bg-[#1b1b1b] hover:opacity-85'}`}
-          >
-            {publishing ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null}
-            {site.is_published ? 'Unpublish' : 'Publish'}
-          </button>
-        </div>
 
-        {site.slug && (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <a href={publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 hover:bg-gray-100">
-              <Globe size={14} /> {publicUrl} <ExternalLink size={13} className="text-gray-400" />
-            </a>
-            <button onClick={copyUrl} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-              {copied ? <><Check size={14} className="text-emerald-600" /> Copied</> : <><Copy size={14} /> Copy</>}
-            </button>
-            <button onClick={() => void generateQr()} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-              <QrCode size={14} /> QR code
-            </button>
-          </div>
-        )}
-        {qr && (
-          <div className="mt-4">
-            <Image src={qr} alt="QR code" width={140} height={140} unoptimized className="rounded-xl border border-gray-100" />
-          </div>
-        )}
-      </div>
-
-      {/* Private password */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="flex items-center gap-2">
-          <Lock size={16} className="text-gray-500" />
-          <h2 className="text-sm font-semibold text-gray-900">Private password</h2>
-          {hasPassword && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-              <Check size={12} /> On
-            </span>
+          {error && <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
+          {flash && (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              <CheckCircle2 size={14} /> {flash}
+            </div>
           )}
-        </div>
-        <p className="mt-1 text-xs text-gray-500">
-          Optional. Share your wedding details only with your guests — visitors must enter this password before your page shows anything.
-        </p>
-        {pwFlash && (
-          <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-            <CheckCircle2 size={14} /> {pwFlash}
-          </div>
-        )}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            type="text"
-            className={`${INPUT} max-w-xs`}
-            value={pwInput}
-            onChange={(e) => setPwInput(e.target.value)}
-            placeholder={hasPassword ? 'Enter a new password' : 'Choose a password'}
-          />
-          <button
-            type="button"
-            onClick={() => void savePassword(pwInput)}
-            disabled={pwSaving || pwInput.trim().length < 3}
-            className="rounded-2xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
+
+          {/* Settings — publish + private password */}
+          <Panel
+            open={settingsOpen}
+            onToggle={() => setSettingsOpen((v) => !v)}
+            icon={<Settings size={16} />}
+            title="Settings"
+            summary={`${site.is_published ? 'Live' : 'Not published'}${hasPassword ? ' · Password on' : ''}`}
           >
-            {pwSaving ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null} {hasPassword ? 'Update' : 'Set password'}
-          </button>
-          {hasPassword && (
-            <button
-              type="button"
-              onClick={() => void savePassword(null)}
-              disabled={pwSaving}
-              className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-            >
-              Remove
-            </button>
-          )}
-        </div>
-      </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{site.is_published ? 'Live' : 'Not published'}</p>
+                <p className="text-xs text-gray-500">
+                  {site.is_published ? 'Anyone with your link can view it.' : 'Only you can see it until you publish.'}
+                </p>
+              </div>
+              <button
+                onClick={() => void togglePublish()}
+                disabled={publishing}
+                className={`rounded-2xl px-5 py-2.5 text-sm font-medium text-white transition-opacity disabled:opacity-60 ${site.is_published ? 'bg-gray-700 hover:opacity-85' : 'bg-[#1b1b1b] hover:opacity-85'}`}
+              >
+                {publishing ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null}
+                {site.is_published ? 'Unpublish' : 'Publish'}
+              </button>
+            </div>
 
-      {/* Basics */}
-      <section className="space-y-5">
-        <h2 className="text-sm font-semibold text-gray-900">The basics</h2>
+            {site.slug && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <a href={publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 hover:bg-gray-100">
+                  <Globe size={14} /> {publicUrl} <ExternalLink size={13} className="text-gray-400" />
+                </a>
+                <button onClick={copyUrl} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  {copied ? <><Check size={14} className="text-emerald-600" /> Copied</> : <><Copy size={14} /> Copy</>}
+                </button>
+                <button onClick={() => void generateQr()} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  <QrCode size={14} /> QR code
+                </button>
+              </div>
+            )}
+            {qr && (
+              <div className="mt-4">
+                <Image src={qr} alt="QR code" width={140} height={140} unoptimized className="rounded-xl border border-gray-100" />
+              </div>
+            )}
 
-        <div>
-          <label className={LABEL}>Your link (storyvenue.com/…)</label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400">{baseUrl.replace(/^https?:\/\//, '')}/</span>
-            <input className={INPUT} value={slugInput} onChange={(e) => setSlugInput(e.target.value)} placeholder="jenny-and-mike" />
-          </div>
-          <p className="mt-1 h-4 text-[11px]">
-            {slugState === 'checking' && <span className="text-gray-400">Checking…</span>}
-            {slugState === 'ok' && <span className="text-emerald-600">Available</span>}
-            {slugState === 'taken' && <span className="text-red-600">Already taken — try another</span>}
-            {slugState === 'invalid' && <span className="text-red-600">Use at least 3 letters/numbers; avoid reserved words</span>}
-          </p>
-        </div>
+            <div className="mt-5 border-t border-gray-100 pt-5">
+              <div className="flex items-center gap-2">
+                <Lock size={16} className="text-gray-500" />
+                <h3 className="text-sm font-semibold text-gray-900">Private password</h3>
+                {hasPassword && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                    <Check size={12} /> On
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Optional. Share your wedding details only with your guests — visitors must enter this password before your page shows anything.
+              </p>
+              {pwFlash && (
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  <CheckCircle2 size={14} /> {pwFlash}
+                </div>
+              )}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  className={`${INPUT} max-w-xs`}
+                  value={pwInput}
+                  onChange={(e) => setPwInput(e.target.value)}
+                  placeholder={hasPassword ? 'Enter a new password' : 'Choose a password'}
+                />
+                <button
+                  type="button"
+                  onClick={() => void savePassword(pwInput)}
+                  disabled={pwSaving || pwInput.trim().length < 3}
+                  className="rounded-2xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
+                >
+                  {pwSaving ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null} {hasPassword ? 'Update' : 'Set password'}
+                </button>
+                {hasPassword && (
+                  <button
+                    type="button"
+                    onClick={() => void savePassword(null)}
+                    disabled={pwSaving}
+                    className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </Panel>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={LABEL}>Your name</label>
-            <input className={INPUT} value={profile?.first_name || profile?.display_name || ''} disabled placeholder="From your profile" />
-            <p className="mt-1 text-[11px] text-gray-400">Set on your profile.</p>
-          </div>
-          <div>
-            <label className={LABEL}>Partner&rsquo;s name</label>
-            <input className={INPUT} value={profile?.partner_first_name || site.partner_name || ''} disabled placeholder="From your profile" />
-            <p className="mt-1 text-[11px] text-gray-400">Set on your profile.</p>
-          </div>
-        </div>
+          {/* Custom URL (formerly “the basics”) */}
+          <Panel
+            open={urlOpen}
+            onToggle={() => setUrlOpen((v) => !v)}
+            icon={<Globe size={16} />}
+            title="Custom URL"
+            summary={slugInput.trim() ? `${baseUrl.replace(/^https?:\/\//, '')}/${slugInput.trim()}` : 'Choose your link'}
+          >
+            <div className="space-y-5">
+              <div>
+                <label className={LABEL}>Your link (storyvenue.com/…)</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-400">{baseUrl.replace(/^https?:\/\//, '')}/</span>
+                  <input className={INPUT} value={slugInput} onChange={(e) => setSlugInput(e.target.value)} placeholder="jenny-and-mike" />
+                </div>
+                <p className="mt-1 h-4 text-[11px]">
+                  {slugState === 'checking' && <span className="text-gray-400">Checking…</span>}
+                  {slugState === 'ok' && <span className="text-emerald-600">Available</span>}
+                  {slugState === 'taken' && <span className="text-red-600">Already taken — try another</span>}
+                  {slugState === 'invalid' && <span className="text-red-600">Use at least 3 letters/numbers; avoid reserved words</span>}
+                </p>
+              </div>
 
-        <div>
-          <label className={LABEL}>Headline</label>
-          <input className={INPUT} value={site.headline ?? ''} onChange={(e) => set('headline', e.target.value || null)} placeholder="We're getting married!" />
-        </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={LABEL}>Your name</label>
+                  <input className={INPUT} value={profile?.first_name || profile?.display_name || ''} disabled placeholder="From your profile" />
+                  <p className="mt-1 text-[11px] text-gray-400">Set on your profile.</p>
+                </div>
+                <div>
+                  <label className={LABEL}>Partner&rsquo;s name</label>
+                  <input className={INPUT} value={profile?.partner_first_name || site.partner_name || ''} disabled placeholder="From your profile" />
+                  <p className="mt-1 text-[11px] text-gray-400">Set on your profile.</p>
+                </div>
+              </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <ImageField label="Main photo" value={site.photo_url} onPick={(f) => void uploadImage('photo_url', f)} onClear={() => set('photo_url', null)} rounded />
-        </div>
+              <div>
+                <label className={LABEL}>Headline</label>
+                <input className={INPUT} value={site.headline ?? ''} onChange={(e) => set('headline', e.target.value || null)} placeholder="We're getting married!" />
+              </div>
 
-        <CoverField value={site.cover_url} onPick={(f) => void uploadImage('cover_url', f)} onClear={() => set('cover_url', null)} />
-      </section>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ImageField label="Main photo" value={site.photo_url} onPick={(f) => void uploadImage('photo_url', f)} onClear={() => set('photo_url', null)} rounded />
+              </div>
+
+              <CoverField value={site.cover_url} onPick={(f) => void uploadImage('cover_url', f)} onClear={() => set('cover_url', null)} />
+            </div>
+          </Panel>
 
       {/* Reorderable page blocks */}
       <section className="space-y-3">
@@ -763,18 +782,224 @@ export default function CoupleSitePage() {
         )}
       </section>
 
-      {/* Save bar */}
-      <div className="sticky bottom-4 flex justify-end">
-        <button
-          onClick={() => void save()}
-          disabled={saving}
-          className="rounded-2xl bg-[#1b1b1b] px-6 py-3 text-sm font-medium text-white shadow-lg transition-opacity hover:opacity-85 disabled:opacity-60"
-        >
-          {saving ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null} Save changes
-        </button>
-      </div>
+          {/* Save bar */}
+          <div className="sticky bottom-4 flex justify-end">
+            <button
+              onClick={() => void save()}
+              disabled={saving}
+              className="rounded-2xl bg-[#1b1b1b] px-6 py-3 text-sm font-medium text-white shadow-lg transition-opacity hover:opacity-85 disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null} Save changes
+            </button>
+          </div>
 
-      <p className="pb-6 text-center text-xs text-gray-400">Previewing as {coupleName}</p>
+          <p className="pb-6 text-center text-xs text-gray-400 xl:hidden">Previewing as {coupleName}</p>
+        </div>
+
+        {/* Live phone preview (large screens) */}
+        <aside className="hidden xl:block">
+          <div className="xl:sticky xl:top-6">
+            <PhonePreview
+              site={site}
+              profile={profile}
+              order={order}
+              hasVenue={hasVenue}
+              coupleName={coupleName}
+              storyHtml={site.story_html || storySeed}
+            />
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/** Collapsible card (no drag handle) for config sections like Settings / Custom URL. */
+function Panel({ open, onToggle, icon, title, summary, children }: {
+  open: boolean; onToggle: () => void; icon: React.ReactNode; title: string; summary: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white">
+      <button type="button" onClick={onToggle} className="flex w-full items-center gap-2.5 p-3 text-left hover:bg-gray-50">
+        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-gray-100 text-gray-600">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-gray-900">{title}</span>
+          <span className="block truncate text-xs text-gray-400">{summary}</span>
+        </span>
+        <ChevronDown size={16} className={`flex-none text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="border-t border-gray-100 p-4 sm:p-5">{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * Live phone preview of the wedding page from the current editor state.
+ * Story HTML is defensively sanitized client-side, and the embed is shown as a
+ * placeholder (never executed) so nothing runs in the couple's authed origin.
+ */
+function sanitizePreviewHtml(html: string): string {
+  if (typeof document === 'undefined' || !html) return '';
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  tpl.content.querySelectorAll('script,style,iframe,object,embed,link,meta,form').forEach((n) => n.remove());
+  tpl.content.querySelectorAll('*').forEach((el) => {
+    Array.from(el.attributes).forEach((a) => {
+      const n = a.name.toLowerCase();
+      if (n.startsWith('on')) el.removeAttribute(a.name);
+      if ((n === 'href' || n === 'src') && /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
+    });
+  });
+  return tpl.innerHTML;
+}
+
+function previewCountdown(dateStr: string): { v: number; l: string }[] | null {
+  const t = new Date(`${dateStr}T00:00:00`).getTime();
+  if (Number.isNaN(t)) return null;
+  const diff = t - Date.now();
+  if (diff <= 0) return null;
+  return [
+    { v: Math.floor(diff / 86400000), l: 'days' },
+    { v: Math.floor((diff % 86400000) / 3600000), l: 'hrs' },
+    { v: Math.floor((diff % 3600000) / 60000), l: 'min' },
+    { v: Math.floor((diff % 60000) / 1000), l: 'sec' },
+  ];
+}
+
+function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }: {
+  site: Site;
+  profile: { wedding_date?: string | null; instagram_url?: string | null; facebook_url?: string | null; tiktok_url?: string | null; pinterest_url?: string | null } | null;
+  order: SectionKey[];
+  hasVenue: boolean;
+  coupleName: string;
+  storyHtml: string;
+}) {
+  const INK = '#1b1b1b';
+  const dateLine = profile?.wedding_date
+    ? new Date(`${profile.wedding_date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : null;
+  const initials = coupleName.split(/\s*&\s*|\s+/).map((w) => w.charAt(0)).join('').slice(0, 2).toUpperCase();
+  const gallery = site.gallery ?? [];
+  const linkItems = (site.custom_links ?? []).filter((l) => l.label || l.url);
+  const cd = site.show_countdown && profile?.wedding_date ? previewCountdown(profile.wedding_date) : null;
+  const cleanStory = sanitizePreviewHtml(storyHtml);
+  const socials = [
+    profile?.instagram_url && { Icon: Instagram },
+    profile?.facebook_url && { Icon: Facebook },
+    profile?.tiktok_url && { Icon: Music2 },
+    profile?.pinterest_url && { Icon: Link2 },
+  ].filter(Boolean) as { Icon: typeof Instagram }[];
+
+  const blocks: Record<SectionKey, React.ReactNode> = {
+    countdown: cd ? (
+      <div key="cd" className="mt-5 flex items-stretch justify-center gap-1.5">
+        {cd.map((c) => (
+          <div key={c.l} className="flex w-[46px] flex-col items-center rounded-2xl border border-[#ece9e4] bg-white px-1 py-2">
+            <span className="text-lg font-semibold tabular-nums" style={{ color: INK }}>{String(c.v).padStart(2, '0')}</span>
+            <span className="mt-0.5 text-[8px] uppercase tracking-wide text-gray-400">{c.l}</span>
+          </div>
+        ))}
+      </div>
+    ) : null,
+    story: cleanStory ? (
+      <div
+        key="story"
+        className="story-content mx-auto mt-5 max-w-full text-left text-[12px] leading-relaxed text-gray-700 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_p]:my-1"
+        dangerouslySetInnerHTML={{ __html: cleanStory }}
+      />
+    ) : null,
+    gallery: gallery.length > 0 ? (
+      <div key="gal" className="mt-5 columns-3 gap-[5px] [&>*]:mb-[5px]">
+        {gallery.map((url, i) => (
+          <Image key={`${url}-${i}`} src={url} alt="" width={120} height={120} unoptimized className="h-auto w-full rounded-[3px] object-cover" />
+        ))}
+      </div>
+    ) : null,
+    links: (hasVenue && site.show_venue) || linkItems.length > 0 ? (
+      <div key="links" className="mt-5 space-y-2">
+        {hasVenue && site.show_venue && (
+          <div className="flex items-center gap-2.5 rounded-2xl border border-[#ece9e4] bg-white px-3 py-2.5">
+            <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-white" style={{ background: INK }}><MapPin size={14} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[9px] uppercase tracking-wide text-gray-400">Our Venue</span>
+              <span className="block truncate text-[12px] font-semibold" style={{ color: INK }}>Tap for directions</span>
+            </span>
+            <Navigation size={14} className="flex-none text-gray-400" />
+          </div>
+        )}
+        {linkItems.map((l, i) => {
+          const Icon = LEAD_LINK_ICON_COMPONENTS[(l.icon as keyof typeof LEAD_LINK_ICON_COMPONENTS)] ?? LEAD_LINK_ICON_COMPONENTS.link;
+          return (
+            <div key={i} className="flex items-center gap-2.5 rounded-2xl border border-[#ece9e4] bg-white px-3 py-2.5">
+              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-white" style={{ background: INK }}><Icon size={14} /></span>
+              <span className="block flex-1 truncate text-[12px] font-semibold" style={{ color: INK }}>{l.label || 'Link'}</span>
+            </div>
+          );
+        })}
+      </div>
+    ) : null,
+    embed: site.embed_enabled && site.embed_html ? (
+      <div key="embed" className="mt-5">
+        <p className="flex items-center justify-center gap-1.5 text-[12px] font-semibold" style={{ color: INK }}>
+          <Radio size={12} /> {site.embed_title || 'Livestream'}
+        </p>
+        <div className="mt-2 flex aspect-video w-full items-center justify-center rounded-lg bg-gray-900 text-[10px] text-white/70">
+          <Video size={16} className="mr-1" /> Player preview
+        </div>
+      </div>
+    ) : null,
+  };
+
+  return (
+    <div>
+      <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-gray-400">Live preview</p>
+      <div className="mx-auto w-[340px] rounded-[2.4rem] border-[10px] border-gray-900 bg-gray-900 shadow-2xl">
+        <div className="relative h-[640px] overflow-y-auto rounded-[1.7rem] bg-[#faf7f2]">
+          <div className="sticky top-0 z-10 flex justify-center bg-transparent pt-2">
+            <div className="h-1.5 w-16 rounded-full bg-black/15" />
+          </div>
+          <div className="px-4 pb-24 pt-2">
+            {site.cover_url && (
+              <div className="relative mb-[-36px] h-24 w-full overflow-hidden rounded-[3px]">
+                <Image src={site.cover_url} alt="" fill unoptimized sizes="320px" className="object-cover" />
+              </div>
+            )}
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-white shadow-md">
+                {site.photo_url ? (
+                  <Image src={site.photo_url} alt="" fill unoptimized sizes="80px" className="object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-white" style={{ background: INK }}>{initials || '♥'}</span>
+                )}
+              </div>
+              <h2 className="mt-3 font-heading text-xl italic" style={{ color: INK }}>{coupleName}</h2>
+              {dateLine && (
+                <p className="mt-1 flex items-center justify-center gap-1 text-[11px] text-gray-500">
+                  <CalendarHeart size={12} /> {dateLine}
+                </p>
+              )}
+              {site.headline && <p className="mt-2 text-[12px]" style={{ color: INK }}>{site.headline}</p>}
+              {socials.length > 0 && (
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                  {socials.map(({ Icon }, i) => (
+                    <span key={i} className="flex h-8 w-8 items-center justify-center rounded-full border border-[#ece9e4] bg-white text-gray-500"><Icon size={14} /></span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {order.map((key) => blocks[key] ?? null)}
+          </div>
+
+          {hasVenue && (
+            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
+              <span className="inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-[12px] font-semibold text-white shadow-lg" style={{ background: INK }}>
+                <CalendarHeart size={13} /> RSVP
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
