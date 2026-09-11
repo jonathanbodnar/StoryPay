@@ -12,6 +12,8 @@ import {
   sanitizeEmbedHtml,
   sanitizeSectionOrder,
   hashSitePassword,
+  isSiteExpired,
+  releaseExpiredSite,
   type CoupleSiteRow,
 } from '@/lib/couple-sites';
 import { sanitizeStoryHtml, storyHtmlToPlain } from '@/lib/sanitize-story';
@@ -36,7 +38,7 @@ export async function GET(request: NextRequest) {
   const user = await getCoupleAuthUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const [site, { data: profile }, wedding] = await Promise.all([
+  const [siteInitial, { data: profile }, wedding] = await Promise.all([
     getCoupleSiteByCoupleId(user.id),
     supabaseAdmin
       .from('couple_profiles')
@@ -45,6 +47,15 @@ export async function GET(request: NextRequest) {
       .maybeSingle(),
     getActiveCoupleWedding(user.id),
   ]);
+
+  // Auto-close: once 30+ days past the wedding, unpublish + release the slug so
+  // it reflects as closed when the couple opens the editor (content is kept).
+  let site = siteInitial;
+  const weddingDate = (profile as { wedding_date?: string | null } | null)?.wedding_date ?? null;
+  if (site && (site.is_published || site.slug) && isSiteExpired(weddingDate)) {
+    await releaseExpiredSite(user.id);
+    site = await getCoupleSiteByCoupleId(user.id);
+  }
 
   let hasPassword = false;
   if (site) {

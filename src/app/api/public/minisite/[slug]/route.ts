@@ -7,6 +7,8 @@ import {
   publicGallery,
   minisiteUnlockToken,
   sanitizeSectionOrder,
+  isSiteExpired,
+  releaseExpiredSite,
   type CoupleSiteRow,
 } from '@/lib/couple-sites';
 
@@ -60,6 +62,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     tiktok_url?: string | null;
     pinterest_url?: string | null;
   };
+
+  // Auto-close: 30+ days after the wedding the site unpublishes and its slug is
+  // released. Enforce lazily here so an expired link stops resolving (and frees
+  // up) the first time it's hit after the window.
+  if (isSiteExpired(p.wedding_date ?? null)) {
+    await releaseExpiredSite(site.couple_id);
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
   const coupleName = coupleDisplayName(p, site.partner_name);
 

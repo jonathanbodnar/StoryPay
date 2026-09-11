@@ -8,6 +8,7 @@ import {
   QrCode, Eye, EyeOff, Globe, Lock, Video, Bold, AlignLeft, AlignCenter, AlignRight,
   GripVertical, ChevronDown, Clock, Type, Images, Link2, MapPin,
   Settings, Instagram, Facebook, Music2, CalendarHeart, Navigation, Radio, CalendarPlus,
+  AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 import { LEAD_LINK_ICON_KEYS } from '@/lib/lead-link-icons';
@@ -40,6 +41,27 @@ function arrayMove<T>(arr: T[], from: number, to: number): T[] {
   const [item] = next.splice(from, 1);
   next.splice(to, 0, item);
   return next;
+}
+
+// A published site auto-closes 30 days after the wedding: it unpublishes and its
+// custom link is released for another couple (content is kept). Keep this in
+// sync with SITE_AUTO_CLOSE_DAYS in couple-sites.ts.
+const AUTO_CLOSE_DAYS = 30;
+function autoCloseInfo(weddingDate?: string | null): {
+  daysLeft: number; closeLabel: string; expired: boolean; weddingPassed: boolean;
+} | null {
+  if (!weddingDate || !/^\d{4}-\d{2}-\d{2}$/.test(weddingDate)) return null;
+  const wd = new Date(`${weddingDate}T00:00:00`);
+  if (Number.isNaN(wd.getTime())) return null;
+  const close = new Date(wd);
+  close.setDate(close.getDate() + AUTO_CLOSE_DAYS + 1);
+  const now = Date.now();
+  return {
+    daysLeft: Math.max(0, Math.ceil((close.getTime() - now) / 86_400_000)),
+    closeLabel: close.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }),
+    expired: now >= close.getTime(),
+    weddingPassed: now >= wd.getTime(),
+  };
 }
 
 function escapeHtml(s: string): string {
@@ -588,6 +610,46 @@ export default function CoupleSitePage() {
             </div>
           )}
 
+          {/* Auto-close ribbon: countdown after the wedding, then a closed/restart notice. */}
+          {(() => {
+            const ac = autoCloseInfo(profile?.wedding_date);
+            if (!ac || !ac.weddingPassed) return null;
+            if (ac.expired) {
+              return (
+                <div className="flex flex-wrap items-start gap-3 rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-gray-500" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900">Your wedding site has closed</p>
+                    <p className="mt-0.5 text-gray-600">
+                      It automatically unpublished and released your custom link {AUTO_CLOSE_DAYS} days after your wedding, so
+                      it&rsquo;s now free for someone else. Your content is saved — to restart, pick a new link and publish again.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSettingsOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-3 py-2 text-sm font-medium text-white hover:opacity-85"
+                  >
+                    <RotateCcw size={14} /> Restart
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <div className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <Clock size={18} className="mt-0.5 shrink-0 text-amber-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">
+                    Your site closes in {ac.daysLeft} {ac.daysLeft === 1 ? 'day' : 'days'} (on {ac.closeLabel})
+                  </p>
+                  <p className="mt-0.5 text-amber-800">
+                    {AUTO_CLOSE_DAYS} days after the wedding it automatically unpublishes and your custom link is released for
+                    another couple. Enjoy it until then — or unpublish anytime in Settings.
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Header — always visible, mirrors the top of the page on the phone */}
           <section className="space-y-5 rounded-[10px] border border-gray-200 bg-white p-4 sm:p-5">
             <div>
@@ -658,6 +720,14 @@ export default function CoupleSitePage() {
                 {site.is_published ? 'Unpublish' : 'Publish'}
               </button>
             </div>
+
+            <p className="mt-3 flex items-start gap-1.5 text-xs text-gray-400">
+              <Clock size={13} className="mt-0.5 shrink-0" />
+              <span>
+                Your site automatically closes {AUTO_CLOSE_DAYS} days after your wedding — it unpublishes and your custom
+                link is released so another couple can use it. Your content stays saved if you ever want to restart.
+              </span>
+            </p>
 
             {site.slug && (
               <div className="mt-4 flex flex-wrap items-center gap-2">

@@ -233,6 +233,48 @@ export function coupleDisplayName(
   return bride || partner || 'Our Wedding';
 }
 
+// ── Auto-close after the wedding ───────────────────────────────────────────
+// A published minisite automatically closes SITE_AUTO_CLOSE_DAYS after the
+// wedding: it unpublishes AND releases its slug so another couple can claim it.
+// The couple's content is kept — they can pick a new link and publish again to
+// restart. This is enforced lazily (on read / on slug-claim) so it needs no
+// cron and no schema change.
+export const SITE_AUTO_CLOSE_DAYS = 30;
+
+/** Epoch ms when a site closes (end of the Nth day after the wedding), or null. */
+export function siteAutoCloseAt(weddingDate: string | null | undefined): number | null {
+  if (!weddingDate || !/^\d{4}-\d{2}-\d{2}$/.test(weddingDate)) return null;
+  const d = new Date(`${weddingDate}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  // Close at the start of the day AFTER the grace window (so day 30 is inclusive).
+  d.setDate(d.getDate() + SITE_AUTO_CLOSE_DAYS + 1);
+  return d.getTime();
+}
+
+/** True once the auto-close moment has passed. */
+export function isSiteExpired(weddingDate: string | null | undefined, now: number = Date.now()): boolean {
+  const at = siteAutoCloseAt(weddingDate);
+  return at != null && now >= at;
+}
+
+/** Unpublish + release the slug for a couple whose site has auto-closed. */
+export async function releaseExpiredSite(coupleId: string): Promise<void> {
+  await supabaseAdmin
+    .from('couple_sites')
+    .update({ is_published: false, slug: null })
+    .eq('couple_id', coupleId);
+}
+
+/** Fetch a couple's wedding date (for auto-close checks). */
+async function getCoupleWeddingDate(coupleId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from('couple_profiles')
+    .select('wedding_date')
+    .eq('id', coupleId)
+    .maybeSingle();
+  return (data as { wedding_date?: string | null } | null)?.wedding_date ?? null;
+}
+
 /** Load a bride's site row (creates nothing). */
 export async function getCoupleSiteByCoupleId(coupleId: string): Promise<CoupleSiteRow | null> {
   const { data } = await supabaseAdmin
@@ -243,7 +285,9 @@ export async function getCoupleSiteByCoupleId(coupleId: string): Promise<CoupleS
   return (data as CoupleSiteRow | null) ?? null;
 }
 
-/** True if a slug is taken by a DIFFERENT couple. */
+/** True if a slug is taken by a DIFFERENT couple whose site has NOT auto-closed.
+ *  If the current holder has expired (30+ days past their wedding), we release
+ *  the slug on the spot so the new couple can take it. */
 export async function isCoupleSlugTaken(slug: string, exceptCoupleId: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from('couple_sites')
@@ -251,5 +295,13 @@ export async function isCoupleSlugTaken(slug: string, exceptCoupleId: string): P
     .eq('slug', slug)
     .maybeSingle();
   const row = data as { couple_id: string } | null;
-  return Boolean(row && row.couple_id !== exceptCoupleId);
+  if (!row || row.couple_id === exceptCoupleId) return false;
+
+  // Free up a slug still held by a couple whose site has auto-closed.
+  const holderWeddingDate = await getCoupleWeddingDate(row.couple_id);
+  if (isSiteExpired(holderWeddingDate)) {
+    await releaseExpiredSite(row.couple_id);
+    return false;
+  }
+  return true;
 }
