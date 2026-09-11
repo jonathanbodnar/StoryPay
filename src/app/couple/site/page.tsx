@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
   Loader2, CheckCircle2, Copy, Check, ExternalLink, Upload, Trash2, Plus,
-  QrCode, Eye, EyeOff, Globe,
+  QrCode, Eye, EyeOff, Globe, Lock, Video,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 import { LEAD_LINK_ICON_KEYS } from '@/lib/lead-link-icons';
@@ -25,6 +25,9 @@ type Site = {
   cover_url: string | null;
   custom_links: Link[] | null;
   gallery: string[] | null;
+  embed_html: string | null;
+  embed_enabled: boolean;
+  embed_title: string | null;
   show_countdown: boolean;
   show_venue: boolean;
   show_guestbook: boolean;
@@ -42,6 +45,7 @@ const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gra
 const DEFAULT_SITE: Site = {
   slug: null, is_published: false, headline: null, partner_name: null, story: null,
   photo_url: null, cover_url: null, custom_links: [], gallery: [],
+  embed_html: null, embed_enabled: false, embed_title: null,
   show_countdown: true, show_venue: true, show_guestbook: true, show_registry: true,
   guestbook_moderated: false,
 };
@@ -57,6 +61,12 @@ export default function CoupleSitePage() {
   const [profile, setProfile] = useState<{ first_name?: string | null; display_name?: string | null; partner_first_name?: string | null; wedding_date?: string | null } | null>(null);
   const [hasVenue, setHasVenue] = useState(false);
   const [baseUrl, setBaseUrl] = useState('https://storyvenue.com');
+
+  // Private password gate
+  const [hasPassword, setHasPassword] = useState(false);
+  const [pwInput, setPwInput] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwFlash, setPwFlash] = useState('');
 
   // slug availability
   const [slugInput, setSlugInput] = useState('');
@@ -86,6 +96,7 @@ export default function CoupleSitePage() {
     if (data.site) setSite({ ...DEFAULT_SITE, ...data.site, custom_links: data.site.custom_links ?? [], gallery: data.site.gallery ?? [] });
     if (data.profile) setProfile(data.profile);
     setHasVenue(Boolean(data.hasVenue));
+    setHasPassword(Boolean(data.hasPassword));
     if (typeof data.publicBaseUrl === 'string') setBaseUrl(data.publicBaseUrl.replace(/\/$/, ''));
     if (data.site?.slug) setSlugInput(data.site.slug);
     setLoading(false);
@@ -173,6 +184,23 @@ export default function CoupleSitePage() {
     set('gallery', (site.gallery ?? []).filter((_, idx) => idx !== i));
   }
 
+  async function savePassword(value: string | null) {
+    setPwFlash(''); setError(''); setPwSaving(true);
+    try {
+      const res = await coupleAuthedFetch('/api/couple/site', {
+        method: 'PUT',
+        body: JSON.stringify({ site_password: value ?? '' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error ?? 'Could not update password'); return; }
+      setHasPassword(Boolean(data.hasPassword));
+      setPwInput('');
+      setPwFlash(value ? 'Password set — your page is now private.' : 'Password removed — your page is public again.');
+    } finally {
+      setPwSaving(false);
+    }
+  }
+
   function buildPayload(overrides: Partial<Site> = {}): Partial<Site> {
     const merged = { ...site, ...overrides };
     return {
@@ -184,6 +212,9 @@ export default function CoupleSitePage() {
       cover_url: merged.cover_url,
       custom_links: merged.custom_links ?? [],
       gallery: merged.gallery ?? [],
+      embed_html: merged.embed_html,
+      embed_enabled: merged.embed_enabled,
+      embed_title: merged.embed_title,
       show_countdown: merged.show_countdown,
       show_venue: merged.show_venue,
       show_guestbook: merged.show_guestbook,
@@ -325,6 +356,54 @@ export default function CoupleSitePage() {
         )}
       </div>
 
+      {/* Private password */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="flex items-center gap-2">
+          <Lock size={16} className="text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-900">Private password</h2>
+          {hasPassword && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+              <Check size={12} /> On
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-gray-500">
+          Optional. Share your wedding details only with your guests — visitors must enter this password before your page shows anything.
+        </p>
+        {pwFlash && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            <CheckCircle2 size={14} /> {pwFlash}
+          </div>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            className={`${INPUT} max-w-xs`}
+            value={pwInput}
+            onChange={(e) => setPwInput(e.target.value)}
+            placeholder={hasPassword ? 'Enter a new password' : 'Choose a password'}
+          />
+          <button
+            type="button"
+            onClick={() => void savePassword(pwInput)}
+            disabled={pwSaving || pwInput.trim().length < 3}
+            className="rounded-2xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
+          >
+            {pwSaving ? <Loader2 className="inline h-4 w-4 animate-spin mr-1" /> : null} {hasPassword ? 'Update' : 'Set password'}
+          </button>
+          {hasPassword && (
+            <button
+              type="button"
+              onClick={() => void savePassword(null)}
+              disabled={pwSaving}
+              className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Basics */}
       <section className="space-y-5">
         <h2 className="text-sm font-semibold text-gray-900">The basics</h2>
@@ -463,6 +542,31 @@ export default function CoupleSitePage() {
             <Plus size={15} /> Add link
           </button>
         )}
+      </section>
+
+      {/* Embed (livestream / special element) */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Video size={16} className="text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-900">Livestream / embed</h2>
+        </div>
+        <p className="-mt-1 text-xs text-gray-500">
+          Paste an embed from YouTube, Vimeo, Zoom, StreamYard, and more. We keep only the safe player, so scripts can never run on your page.
+        </p>
+        <div>
+          <label className={LABEL}>Section title (optional)</label>
+          <input className={INPUT} value={site.embed_title ?? ''} onChange={(e) => set('embed_title', e.target.value || null)} placeholder="Watch our livestream" />
+        </div>
+        <div>
+          <label className={LABEL}>Embed code</label>
+          <textarea
+            className={`${INPUT} min-h-[90px] font-mono text-xs`}
+            value={site.embed_html ?? ''}
+            onChange={(e) => set('embed_html', e.target.value || null)}
+            placeholder='<iframe src="https://..." allowfullscreen></iframe>'
+          />
+        </div>
+        <Toggle label="Show the livestream / embed on my page" checked={site.embed_enabled} onChange={(v) => set('embed_enabled', v)} />
       </section>
 
       {/* Sections */}

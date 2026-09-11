@@ -9,6 +9,8 @@ import {
   normalizeCoupleSlug,
   sanitizeCoupleSiteLinks,
   sanitizeGallery,
+  sanitizeEmbedHtml,
+  hashSitePassword,
   type CoupleSiteRow,
 } from '@/lib/couple-sites';
 
@@ -42,10 +44,21 @@ export async function GET(request: NextRequest) {
     getActiveCoupleWedding(user.id),
   ]);
 
+  let hasPassword = false;
+  if (site) {
+    const { data: pw } = await supabaseAdmin
+      .from('couple_sites')
+      .select('site_password_hash')
+      .eq('couple_id', user.id)
+      .maybeSingle();
+    hasPassword = Boolean((pw as { site_password_hash?: string | null } | null)?.site_password_hash);
+  }
+
   return NextResponse.json({
     site,
     profile: profile ?? null,
     hasVenue: Boolean(wedding && wedding.status === 'linked'),
+    hasPassword,
     publicBaseUrl: DIRECTORY_SITE,
   });
 }
@@ -92,8 +105,24 @@ export async function PUT(request: NextRequest) {
   if ('custom_links' in body) patch.custom_links = sanitizeCoupleSiteLinks(body.custom_links);
   if ('gallery' in body) patch.gallery = sanitizeGallery(body.gallery);
 
-  for (const key of ['show_countdown', 'show_venue', 'show_guestbook', 'show_registry', 'guestbook_moderated'] as const) {
+  // Embed (livestream / special element) — only a rebuilt https iframe is stored.
+  if ('embed_html' in body) patch.embed_html = sanitizeEmbedHtml(body.embed_html);
+  if ('embed_title' in body) patch.embed_title = str(body.embed_title, 80);
+
+  for (const key of ['show_countdown', 'show_venue', 'show_guestbook', 'show_registry', 'guestbook_moderated', 'embed_enabled'] as const) {
     if (key in body) patch[key] = Boolean(body[key]);
+  }
+
+  // Optional private password gate. Non-empty string sets it; null/'' clears it.
+  if ('site_password' in body) {
+    const raw = body.site_password;
+    if (raw === null || raw === '') {
+      patch.site_password_hash = null;
+    } else if (typeof raw === 'string' && raw.length >= 3) {
+      patch.site_password_hash = hashSitePassword(raw.slice(0, 128));
+    } else {
+      return NextResponse.json({ error: 'Password must be at least 3 characters.' }, { status: 400 });
+    }
   }
 
   // Publish gate: require a slug before going live.
@@ -107,6 +136,15 @@ export async function PUT(request: NextRequest) {
       }
     }
     patch.is_published = wantPublish;
+  }
+
+  async function currentHasPassword(): Promise<boolean> {
+    const { data } = await supabaseAdmin
+      .from('couple_sites')
+      .select('site_password_hash')
+      .eq('couple_id', user!.id)
+      .maybeSingle();
+    return Boolean((data as { site_password_hash?: string | null } | null)?.site_password_hash);
   }
 
   let row: CoupleSiteRow | null;
@@ -123,7 +161,7 @@ export async function PUT(request: NextRequest) {
     row = data as CoupleSiteRow;
   } else {
     if (Object.keys(patch).length === 0) {
-      return NextResponse.json({ ok: true, site: existing });
+      return NextResponse.json({ ok: true, site: existing, hasPassword: await currentHasPassword() });
     }
     const { data, error } = await supabaseAdmin
       .from('couple_sites')
@@ -138,5 +176,5 @@ export async function PUT(request: NextRequest) {
     row = data as CoupleSiteRow;
   }
 
-  return NextResponse.json({ ok: true, site: row });
+  return NextResponse.json({ ok: true, site: row, hasPassword: await currentHasPassword() });
 }

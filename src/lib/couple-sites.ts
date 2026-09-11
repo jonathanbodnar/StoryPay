@@ -1,3 +1,4 @@
+import { scryptSync, randomBytes, timingSafeEqual, createHmac } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { LEAD_LINK_ICON_KEY_SET } from '@/lib/lead-link-icons';
 import { slugify } from '@/lib/directory';
@@ -28,6 +29,9 @@ export interface CoupleSiteRow {
   cover_url: string | null;
   custom_links: CoupleSiteLink[] | null;
   gallery: string[] | null;
+  embed_html: string | null;
+  embed_enabled: boolean;
+  embed_title: string | null;
   show_countdown: boolean;
   show_venue: boolean;
   show_guestbook: boolean;
@@ -37,8 +41,10 @@ export interface CoupleSiteRow {
   updated_at: string;
 }
 
+// NOTE: site_password_hash is deliberately NOT in this shared column list — it is
+// fetched only where needed (public gate / unlock) so it never leaks to a client.
 export const COUPLE_SITE_COLUMNS =
-  'id, couple_id, slug, is_published, headline, partner_name, story, photo_url, cover_url, custom_links, gallery, show_countdown, show_venue, show_guestbook, show_registry, guestbook_moderated, created_at, updated_at';
+  'id, couple_id, slug, is_published, headline, partner_name, story, photo_url, cover_url, custom_links, gallery, embed_html, embed_enabled, embed_title, show_countdown, show_venue, show_guestbook, show_registry, guestbook_moderated, created_at, updated_at';
 
 /**
  * Top-level paths already used by the weddingdirectory app (storyvenue.com) plus
@@ -101,6 +107,84 @@ export function sanitizeGallery(raw: unknown): string[] {
 /** Public gallery URLs (same rules; safe to expose). */
 export function publicGallery(gallery: string[] | null | undefined): string[] {
   return sanitizeGallery(gallery);
+}
+
+/**
+ * Accept pasted embed code and return a SINGLE, rebuilt <iframe> that can only
+ * point at an https source with a controlled attribute set — no <script>, no
+ * on* handlers, no srcdoc. Returns null if there is no usable https iframe.
+ * The rendered wrapper supplies a responsive 16:9 box.
+ */
+const IFRAME_ALLOW_RE = /^[a-z0-9;()'"\-\s./:*=]+$/i;
+export function sanitizeEmbedHtml(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const input = raw.trim();
+  if (!input) return null;
+
+  const srcMatch = input.match(/<iframe[^>]*\ssrc\s*=\s*["']([^"']+)["']/i);
+  const src = srcMatch?.[1]?.trim();
+  if (!src || !/^https:\/\//i.test(src) || src.length > 800) return null;
+
+  const allowMatch = input.match(/\sallow\s*=\s*["']([^"']*)["']/i);
+  let allow = allowMatch?.[1]?.trim() ?? '';
+  if (allow && !IFRAME_ALLOW_RE.test(allow)) allow = '';
+  allow = allow.slice(0, 200);
+
+  const allowFs = /allowfullscreen/i.test(input);
+  const safeSrc = src.replace(/"/g, '%22').replace(/</g, '%3C').replace(/>/g, '%3E');
+
+  return (
+    `<iframe src="${safeSrc}"` +
+    (allow ? ` allow="${allow}"` : '') +
+    (allowFs ? ' allowfullscreen' : '') +
+    ' loading="lazy" referrerpolicy="strict-origin-when-cross-origin"' +
+    ' style="position:absolute;top:0;left:0;width:100%;height:100%;border:0"></iframe>'
+  );
+}
+
+// ── Optional private password gate ─────────────────────────────────────────
+const MINISITE_SECRET = process.env.LEAD_WEBHOOK_SECRET || '';
+
+/** scrypt hash string: "scrypt$<saltHex>$<hashHex>". */
+export function hashSitePassword(pw: string): string {
+  const salt = randomBytes(16);
+  const hash = scryptSync(pw, salt, 32);
+  return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
+}
+
+export function verifySitePassword(pw: string, stored: string | null | undefined): boolean {
+  if (!stored || typeof stored !== 'string') return false;
+  const parts = stored.split('$');
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
+  try {
+    const salt = Buffer.from(parts[1], 'hex');
+    const expected = Buffer.from(parts[2], 'hex');
+    const actual = scryptSync(pw, salt, expected.length);
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A proof-of-unlock token bound to the slug + current password hash. Handed to
+ * the browser (as a cookie by weddingdirectory) after a correct password, then
+ * presented back to the public GET. Rotating the password invalidates old
+ * tokens automatically because the hash changes.
+ */
+export function minisiteUnlockToken(slug: string, passwordHash: string): string {
+  return createHmac('sha256', MINISITE_SECRET).update(`${slug}:${passwordHash}`).digest('hex');
+}
+
+/** Fetch just the password hash for a slug (server-only gate checks). */
+export async function getCoupleSitePasswordHash(slug: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from('couple_sites')
+    .select('site_password_hash')
+    .eq('slug', slug)
+    .eq('is_published', true)
+    .maybeSingle();
+  return (data as { site_password_hash?: string | null } | null)?.site_password_hash ?? null;
 }
 
 /** Only links that have both a label and a real outbound http(s) URL. */

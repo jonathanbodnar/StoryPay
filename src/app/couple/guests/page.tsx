@@ -15,6 +15,7 @@ import {
   Send,
   Link2,
   MailCheck,
+  Mail,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
@@ -91,6 +92,13 @@ export default function CoupleGuestsPage() {
   const [invitingAll, setInvitingAll] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [inviteNote, setInviteNote] = useState('');
+
+  // Email blast
+  const [blastSubject, setBlastSubject] = useState('');
+  const [blastMessage, setBlastMessage] = useState('');
+  const [blastAttendingOnly, setBlastAttendingOnly] = useState(false);
+  const [blastSending, setBlastSending] = useState(false);
+  const [blastNote, setBlastNote] = useState('');
 
   const load = useCallback(async () => {
     const supabase = getCoupleSupabase();
@@ -233,6 +241,34 @@ export default function CoupleGuestsPage() {
       await load();
     } finally {
       setInvitingAll(false);
+    }
+  }
+
+  async function sendBlast(e: React.FormEvent) {
+    e.preventDefault();
+    if (!blastSubject.trim() || blastMessage.trim().length < 2) return;
+    setBlastSending(true);
+    setBlastNote('');
+    setError('');
+    try {
+      const res = await coupleAuthedFetch('/api/couple/guests/blast', {
+        method: 'POST',
+        body: JSON.stringify({ subject: blastSubject, message: blastMessage, attendingOnly: blastAttendingOnly }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(typeof data.error === 'string' ? data.error : 'Could not send email');
+        return;
+      }
+      const parts: string[] = [];
+      if (data.sent) parts.push(`${data.sent} sent`);
+      if (data.failed) parts.push(`${data.failed} failed`);
+      if (data.skippedNoEmail) parts.push(`${data.skippedNoEmail} without email skipped`);
+      setBlastNote(parts.length ? parts.join(' · ') : 'No guests with an email yet.');
+      setBlastSubject('');
+      setBlastMessage('');
+    } finally {
+      setBlastSending(false);
     }
   }
 
@@ -427,6 +463,50 @@ export default function CoupleGuestsPage() {
               className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-[#1b1b1b] px-6 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
             >
               {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add guest
+            </button>
+          </div>
+        </form>
+      </section>
+
+      {/* Email your guests */}
+      <section className="mt-8">
+        <div className="flex items-center gap-2">
+          <Mail className="h-4 w-4 text-gray-400" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Email your guests</h2>
+        </div>
+        <p className="mt-1 text-xs text-gray-400">Send an update to your guest list. Replies come straight to your inbox.</p>
+        <form onSubmit={sendBlast} className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+          <input
+            className={INPUT}
+            placeholder="Subject (e.g. Wedding weekend details)"
+            value={blastSubject}
+            onChange={(e) => setBlastSubject(e.target.value)}
+          />
+          <textarea
+            className={`${INPUT} mt-3 min-h-[120px]`}
+            placeholder="Write your message… (we'll greet each guest by name)"
+            value={blastMessage}
+            onChange={(e) => setBlastMessage(e.target.value)}
+          />
+          {blastNote && (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{blastNote}</div>
+          )}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={blastAttendingOnly}
+                onChange={(e) => setBlastAttendingOnly(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-[#1b1b1b] focus:ring-gray-300"
+              />
+              Only email guests marked Attending
+            </label>
+            <button
+              type="submit"
+              disabled={blastSending || !blastSubject.trim() || blastMessage.trim().length < 2}
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-[#1b1b1b] px-6 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
+            >
+              {blastSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send email
             </button>
           </div>
         </form>

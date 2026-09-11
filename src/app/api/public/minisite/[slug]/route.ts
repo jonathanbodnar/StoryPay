@@ -5,6 +5,7 @@ import {
   coupleDisplayName,
   publicCoupleSiteLinks,
   publicGallery,
+  minisiteUnlockToken,
   type CoupleSiteRow,
 } from '@/lib/couple-sites';
 
@@ -22,18 +23,18 @@ const DIRECTORY_SITE = (
  * bride-approved display fields — never guest data. Consumed server-side by the
  * weddingdirectory app that renders storyvenue.com/<slug>.
  */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   if (!slug || slug.length > 90) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const { data: siteRow } = await supabaseAdmin
     .from('couple_sites')
-    .select(COUPLE_SITE_COLUMNS)
+    .select(`${COUPLE_SITE_COLUMNS}, site_password_hash`)
     .eq('slug', slug)
     .eq('is_published', true)
     .maybeSingle();
 
-  const site = siteRow as CoupleSiteRow | null;
+  const site = siteRow as (CoupleSiteRow & { site_password_hash?: string | null }) | null;
   if (!site) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const { data: profile } = await supabaseAdmin
@@ -52,6 +53,22 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
     tiktok_url?: string | null;
     pinterest_url?: string | null;
   };
+
+  const coupleName = coupleDisplayName(p, site.partner_name);
+
+  // ── Optional password gate ────────────────────────────────────────────────
+  // When a password is set, return ONLY the couple name + a locked flag until
+  // the caller presents a valid unlock token (?k=), so private details never
+  // leave the server for the wrong visitor.
+  const passwordHash = site.site_password_hash ?? null;
+  if (passwordHash) {
+    const provided = req.nextUrl.searchParams.get('k') ?? '';
+    const expected = minisiteUnlockToken(slug, passwordHash);
+    const ok = provided.length === expected.length && provided === expected;
+    if (!ok) {
+      return NextResponse.json({ locked: true, slug: site.slug, coupleName });
+    }
+  }
 
   // Is the couple linked to a venue? Drives both the "Our Venue" card and
   // whether public "find your RSVP" is offered.
@@ -97,8 +114,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
   };
 
   return NextResponse.json({
+    locked: false,
     slug: site.slug,
-    coupleName: coupleDisplayName(p, site.partner_name),
+    coupleName,
     headline: site.headline,
     story: site.story,
     photoUrl: site.photo_url,
@@ -107,6 +125,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
     socials,
     customLinks: publicCoupleSiteLinks(site.custom_links),
     gallery: publicGallery(site.gallery),
+    embedHtml: site.embed_enabled ? site.embed_html : null,
+    embedTitle: site.embed_title,
     showCountdown: site.show_countdown,
     showGuestbook: site.show_guestbook,
     rsvpEnabled,
