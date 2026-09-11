@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -1012,6 +1012,57 @@ function previewCountdown(dateStr: string): { v: number; l: string }[] | null {
   ];
 }
 
+/** Shortest-column masonry that matches the live site exactly (no row gaps).
+ *  Two columns to mirror the mobile look inside the narrow preview. */
+function PreviewGallery({ images }: { images: string[] }) {
+  const COLS = 2;
+  const GAP = 5;
+  const [ratios, setRatios] = useState<number[]>([]);
+  useEffect(() => {
+    if (images.length === 0) { setRatios([]); return; }
+    let alive = true;
+    const rs = new Array(images.length).fill(1);
+    let done = 0;
+    images.forEach((url, i) => {
+      const img = new window.Image();
+      const finish = (r: number) => {
+        rs[i] = r > 0 && Number.isFinite(r) ? r : 1;
+        if (alive && ++done === images.length) setRatios([...rs]);
+      };
+      img.onload = () => finish(img.naturalHeight / img.naturalWidth);
+      img.onerror = () => finish(1);
+      img.src = url;
+    });
+    return () => { alive = false; };
+  }, [images]);
+
+  const buckets = useMemo(() => {
+    const heights = new Array(COLS).fill(0);
+    const b: number[][] = Array.from({ length: COLS }, () => []);
+    images.forEach((_, i) => {
+      const r = ratios[i] ?? 1;
+      let c = 0;
+      for (let k = 1; k < COLS; k++) if (heights[k] < heights[c]) c = k;
+      b[c].push(i);
+      heights[c] += r;
+    });
+    return b;
+  }, [images, ratios]);
+
+  return (
+    <div className="mt-5 flex items-start" style={{ gap: GAP }}>
+      {buckets.map((bucket, c) => (
+        <div key={c} className="flex min-w-0 flex-1 flex-col" style={{ gap: GAP }}>
+          {bucket.map((i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={`${images[i]}-${i}`} src={images[i]} alt="" className="h-auto w-full rounded-[10px] object-cover" />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }: {
   site: Site;
   profile: { wedding_date?: string | null; instagram_url?: string | null; facebook_url?: string | null; tiktok_url?: string | null; pinterest_url?: string | null } | null;
@@ -1063,13 +1114,7 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
         dangerouslySetInnerHTML={{ __html: cleanStory }}
       />
     ) : null,
-    gallery: gallery.length > 0 ? (
-      <div key="gal" className="mt-5 columns-3 gap-[5px] [&>*]:mb-[5px]">
-        {gallery.map((url, i) => (
-          <Image key={`${url}-${i}`} src={url} alt="" width={120} height={120} unoptimized className="h-auto w-full rounded-[10px] object-cover" />
-        ))}
-      </div>
-    ) : null,
+    gallery: gallery.length > 0 ? <PreviewGallery key="gal" images={gallery} /> : null,
     links: (hasVenue && site.show_venue) || linkItems.length > 0 ? (
       <div key="links" className="mt-5 space-y-2">
         {hasVenue && site.show_venue && (
