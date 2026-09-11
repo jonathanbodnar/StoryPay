@@ -53,6 +53,9 @@ export function CoupleNav() {
       <Link href="/couple/seating" className="text-gray-700 hover:text-gray-900">
         Seating
       </Link>
+      <Link href="/couple/site" className="text-gray-700 hover:text-gray-900">
+        Website
+      </Link>
       <Link href="/couple/messages" className="text-gray-700 hover:text-gray-900">
         Messages
       </Link>
