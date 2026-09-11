@@ -19,6 +19,8 @@ import {
   Armchair,
 } from 'lucide-react';
 import WeddingHubGate from '@/components/WeddingHubGate';
+import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
+import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
 
 type GuestSummary = {
   total: number;
@@ -119,6 +121,7 @@ function WeddingHubContent() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [guestDetail, setGuestDetail] = useState<Record<string, GuestDetailRow[]>>({});
   const [tableDetail, setTableDetail] = useState<Record<string, TableRow[]>>({});
+  const [layoutDetail, setLayoutDetail] = useState<Record<string, WeddingLayout>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -166,16 +169,37 @@ function WeddingHubContent() {
     if (!guestDetail[id]) {
       setLoadingDetailId(id);
       try {
-        const res = await fetch(`/api/venue/wedding-hub/${id}/guests`);
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          setGuestDetail((prev) => ({ ...prev, [id]: Array.isArray(data.guests) ? data.guests : [] }));
-          setTableDetail((prev) => ({ ...prev, [id]: Array.isArray(data.tables) ? data.tables : [] }));
+        const [gRes, lRes] = await Promise.all([
+          fetch(`/api/venue/wedding-hub/${id}/guests`),
+          fetch(`/api/venue/wedding-hub/${id}/layout`),
+        ]);
+        const gData = await gRes.json().catch(() => ({}));
+        if (gRes.ok) {
+          setGuestDetail((prev) => ({ ...prev, [id]: Array.isArray(gData.guests) ? gData.guests : [] }));
+          setTableDetail((prev) => ({ ...prev, [id]: Array.isArray(gData.tables) ? gData.tables : [] }));
         }
+        const lData = await lRes.json().catch(() => ({}));
+        setLayoutDetail((prev) => ({ ...prev, [id]: lData.layout ? (lData.layout as WeddingLayout) : EMPTY_LAYOUT }));
       } finally {
         setLoadingDetailId(null);
       }
     }
+  }
+
+  async function saveVenueLayout(weddingId: string, next: WeddingLayout) {
+    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/layout`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ layout: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      if (data.layout) setLayoutDetail((prev) => ({ ...prev, [weddingId]: data.layout as WeddingLayout }));
+      return { ok: false, conflict: true, layout: data.layout as WeddingLayout | undefined };
+    }
+    if (!res.ok) return { ok: false };
+    if (data.layout) setLayoutDetail((prev) => ({ ...prev, [weddingId]: data.layout as WeddingLayout }));
+    return { ok: true, layout: data.layout as WeddingLayout | undefined };
   }
 
   async function decide(id: string, action: 'approve' | 'deny') {
@@ -503,6 +527,25 @@ function WeddingHubContent() {
                             The couple owns and manages this list. Guest contact details stay private to them.
                           </p>
                         </>
+                      )}
+
+                      {/* Room layout — shared drag-and-drop floor plan (venue can edit too) */}
+                      {layoutDetail[l.id] !== undefined && loadingDetailId !== l.id && (
+                        <div className="mt-5">
+                          <div className="mb-2 flex items-center gap-2">
+                            <Armchair className="h-4 w-4 text-gray-400" />
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Room layout</h3>
+                          </div>
+                          <RoomCanvas
+                            initialLayout={layoutDetail[l.id]}
+                            tables={(tableDetail[l.id] ?? []).map((t) => ({ id: t.id, name: t.name, capacity: t.capacity }))}
+                            seatedByTable={Object.fromEntries((tableDetail[l.id] ?? []).map((t) => [t.id, t.seated]))}
+                            onSave={(next) => saveVenueLayout(l.id, next)}
+                          />
+                          <p className="mt-2 text-[11px] text-gray-400">
+                            You and the couple share this floor plan. Table counts update live from their guest list.
+                          </p>
+                        </div>
                       )}
                     </div>
                   )}

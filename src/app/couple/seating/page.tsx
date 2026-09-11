@@ -15,6 +15,8 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
+import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
+import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
 
 type Rsvp = 'pending' | 'attending' | 'declined';
 
@@ -48,6 +50,8 @@ export default function CoupleSeatingPage() {
 
   const [guests, setGuests] = useState<Guest[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
+  const [view, setView] = useState<'seating' | 'layout'>('seating');
+  const [layout, setLayout] = useState<WeddingLayout>(EMPTY_LAYOUT);
 
   const [newName, setNewName] = useState('');
   const [newCap, setNewCap] = useState(8);
@@ -66,9 +70,10 @@ export default function CoupleSeatingPage() {
       router.replace('/couple/login');
       return;
     }
-    const [tRes, gRes] = await Promise.all([
+    const [tRes, gRes, lRes] = await Promise.all([
       coupleAuthedFetch('/api/couple/tables'),
       coupleAuthedFetch('/api/couple/guests'),
+      coupleAuthedFetch('/api/couple/layout'),
     ]);
     if (tRes.status === 401 || gRes.status === 401) {
       router.replace('/couple/login');
@@ -81,10 +86,27 @@ export default function CoupleSeatingPage() {
     }
     const tData = await tRes.json().catch(() => ({}));
     const gData = await gRes.json().catch(() => ({}));
+    const lData = await lRes.json().catch(() => ({}));
     setTables(Array.isArray(tData.tables) ? tData.tables : []);
     setGuests(Array.isArray(gData.guests) ? gData.guests : []);
+    if (lData.layout) setLayout(lData.layout);
     setLoading(false);
   }, [router]);
+
+  async function saveLayout(next: WeddingLayout) {
+    const res = await coupleAuthedFetch('/api/couple/layout', {
+      method: 'PUT',
+      body: JSON.stringify({ layout: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      if (data.layout) setLayout(data.layout);
+      return { ok: false, conflict: true, layout: data.layout };
+    }
+    if (!res.ok) return { ok: false };
+    if (data.layout) setLayout(data.layout);
+    return { ok: true, layout: data.layout };
+  }
 
   useEffect(() => {
     void load();
@@ -211,9 +233,34 @@ export default function CoupleSeatingPage() {
         </p>
       </div>
 
+      <div className="mt-4 inline-flex rounded-xl border border-gray-200 bg-white p-1 text-sm">
+        <button
+          type="button"
+          onClick={() => setView('seating')}
+          className={`rounded-lg px-3 py-1.5 font-medium ${view === 'seating' ? 'bg-[#1b1b1b] text-white' : 'text-gray-600 hover:text-gray-900'}`}
+        >
+          Seating
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('layout')}
+          className={`rounded-lg px-3 py-1.5 font-medium ${view === 'layout' ? 'bg-[#1b1b1b] text-white' : 'text-gray-600 hover:text-gray-900'}`}
+        >
+          Room layout
+        </button>
+      </div>
+
       {error && (
         <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
       )}
+
+      {view === 'layout' && (
+        <div className="mt-6">
+          <RoomCanvas initialLayout={layout} tables={tables} seatedByTable={seatedByTable} onSave={saveLayout} />
+        </div>
+      )}
+
+      {view === 'seating' && (<>
 
       {/* Add table */}
       <form onSubmit={createTable} className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-4">
@@ -397,6 +444,8 @@ export default function CoupleSeatingPage() {
           </ul>
         )}
       </section>
+
+      </>)}
     </div>
   );
 }
