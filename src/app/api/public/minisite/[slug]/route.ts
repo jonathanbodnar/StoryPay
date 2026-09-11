@@ -4,6 +4,7 @@ import {
   COUPLE_SITE_COLUMNS,
   coupleDisplayName,
   publicCoupleSiteLinks,
+  publicGallery,
   type CoupleSiteRow,
 } from '@/lib/couple-sites';
 
@@ -37,13 +38,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
 
   const { data: profile } = await supabaseAdmin
     .from('couple_profiles')
-    .select('first_name, display_name, wedding_date, instagram_url, facebook_url, tiktok_url, pinterest_url')
+    .select('first_name, display_name, partner_first_name, wedding_date, instagram_url, facebook_url, tiktok_url, pinterest_url')
     .eq('id', site.couple_id)
     .maybeSingle();
 
   const p = (profile ?? {}) as {
     first_name?: string | null;
     display_name?: string | null;
+    partner_first_name?: string | null;
     wedding_date?: string | null;
     instagram_url?: string | null;
     facebook_url?: string | null;
@@ -104,6 +106,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
     weddingDate: p.wedding_date ?? null,
     socials,
     customLinks: publicCoupleSiteLinks(site.custom_links),
+    gallery: publicGallery(site.gallery),
     showCountdown: site.show_countdown,
     showGuestbook: site.show_guestbook,
     rsvpEnabled,

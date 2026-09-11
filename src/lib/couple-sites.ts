@@ -12,6 +12,7 @@ import { slugify } from '@/lib/directory';
  */
 
 export const COUPLE_SITE_MAX_LINKS = 6;
+export const COUPLE_SITE_MAX_GALLERY = 9;
 
 export type CoupleSiteLink = { label: string; url: string; icon: string };
 
@@ -26,6 +27,7 @@ export interface CoupleSiteRow {
   photo_url: string | null;
   cover_url: string | null;
   custom_links: CoupleSiteLink[] | null;
+  gallery: string[] | null;
   show_countdown: boolean;
   show_venue: boolean;
   show_guestbook: boolean;
@@ -36,7 +38,7 @@ export interface CoupleSiteRow {
 }
 
 export const COUPLE_SITE_COLUMNS =
-  'id, couple_id, slug, is_published, headline, partner_name, story, photo_url, cover_url, custom_links, show_countdown, show_venue, show_guestbook, show_registry, guestbook_moderated, created_at, updated_at';
+  'id, couple_id, slug, is_published, headline, partner_name, story, photo_url, cover_url, custom_links, gallery, show_countdown, show_venue, show_guestbook, show_registry, guestbook_moderated, created_at, updated_at';
 
 /**
  * Top-level paths already used by the weddingdirectory app (storyvenue.com) plus
@@ -80,6 +82,27 @@ export function sanitizeCoupleSiteLinks(raw: unknown): CoupleSiteLink[] {
   return out;
 }
 
+/** Up to COUPLE_SITE_MAX_GALLERY image URLs (must be http(s)); dedupes + trims. */
+export function sanitizeGallery(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const url = item.trim().slice(0, 800);
+    if (!/^https?:\/\//i.test(url) || seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+    if (out.length >= COUPLE_SITE_MAX_GALLERY) break;
+  }
+  return out;
+}
+
+/** Public gallery URLs (same rules; safe to expose). */
+export function publicGallery(gallery: string[] | null | undefined): string[] {
+  return sanitizeGallery(gallery);
+}
+
 /** Only links that have both a label and a real outbound http(s) URL. */
 export function publicCoupleSiteLinks(links: CoupleSiteLink[] | null | undefined): CoupleSiteLink[] {
   return (Array.isArray(links) ? links : [])
@@ -87,13 +110,17 @@ export function publicCoupleSiteLinks(links: CoupleSiteLink[] | null | undefined
     .slice(0, COUPLE_SITE_MAX_LINKS);
 }
 
-/** "Jenny & Mike" from the bride's first name + partner name (best effort). */
+/**
+ * "Jenny & Mike" from the bride's first name + partner name. Partner name is
+ * sourced from the profile (partner_first_name) with the legacy
+ * couple_sites.partner_name kept as a tolerant fallback for older data.
+ */
 export function coupleDisplayName(
-  profile: { first_name?: string | null; display_name?: string | null } | null,
+  profile: { first_name?: string | null; display_name?: string | null; partner_first_name?: string | null } | null,
   partnerName: string | null | undefined,
 ): string {
   const bride = (profile?.first_name || profile?.display_name || '').trim();
-  const partner = (partnerName || '').trim();
+  const partner = (profile?.partner_first_name || partnerName || '').trim();
   if (bride && partner) return `${bride} & ${partner}`;
   return bride || partner || 'Our Wedding';
 }

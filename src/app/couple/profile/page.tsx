@@ -2,12 +2,15 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, CheckCircle2 } from 'lucide-react';
+import { Loader2, CheckCircle2, KeyRound } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
 type Profile = {
   first_name: string | null;
   last_name: string | null;
+  partner_first_name: string | null;
+  partner_last_name: string | null;
+  guest_count: number | null;
   display_name: string | null;
   phone: string | null;
   address_line1: string | null;
@@ -37,9 +40,19 @@ export default function CoupleProfilePage() {
   const [savedFlash, setSavedFlash] = useState('');
   const [email, setEmail] = useState('');
   const [originalEmail, setOriginalEmail] = useState('');
+
+  // Password change (uses the logged-in couple session).
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwFlash, setPwFlash] = useState('');
   const [form, setForm] = useState<Profile>({
     first_name: null,
     last_name: null,
+    partner_first_name: null,
+    partner_last_name: null,
+    guest_count: null,
     display_name: null,
     phone: null,
     address_line1: null,
@@ -85,6 +98,9 @@ export default function CoupleProfilePage() {
       setForm({
         first_name: firstFromMeta,
         last_name: lastFromMeta,
+        partner_first_name: p.partner_first_name ?? null,
+        partner_last_name: p.partner_last_name ?? null,
+        guest_count: typeof p.guest_count === 'number' ? p.guest_count : null,
         display_name: p.display_name ?? null,
         phone: p.phone ?? null,
         address_line1: p.address_line1 ?? null,
@@ -146,6 +162,9 @@ export default function CoupleProfilePage() {
           ...prev,
           first_name: (p.first_name as string | null) ?? prev.first_name,
           last_name: (p.last_name as string | null) ?? prev.last_name,
+          partner_first_name: (p.partner_first_name as string | null) ?? prev.partner_first_name,
+          partner_last_name: (p.partner_last_name as string | null) ?? prev.partner_last_name,
+          guest_count: typeof p.guest_count === 'number' ? (p.guest_count as number) : prev.guest_count,
           display_name: (p.display_name as string | null) ?? prev.display_name,
           phone: (p.phone as string | null) ?? prev.phone,
           address_line1: (p.address_line1 as string | null) ?? prev.address_line1,
@@ -168,6 +187,28 @@ export default function CoupleProfilePage() {
       setSavedFlash('Profile saved.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError('');
+    setPwFlash('');
+    if (pw.length < 8) { setPwError('Use at least 8 characters.'); return; }
+    if (pw !== pw2) { setPwError('Passwords do not match.'); return; }
+    setPwSaving(true);
+    try {
+      const supabase = getCoupleSupabase();
+      const { error: pwErr } = await supabase.auth.updateUser({ password: pw });
+      if (pwErr) {
+        setPwError(pwErr.message || 'Could not update password.');
+        return;
+      }
+      setPw('');
+      setPw2('');
+      setPwFlash('Password updated.');
+    } finally {
+      setPwSaving(false);
     }
   }
 
@@ -217,6 +258,29 @@ export default function CoupleProfilePage() {
               className={`${INPUT} ${requiredMissing.last_name ? INPUT_REQUIRED_MISSING : ''}`}
               value={form.last_name ?? ''}
               onChange={(e) => set('last_name', e.target.value || null)}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={LABEL}>Partner&rsquo;s first name</label>
+            <input
+              type="text"
+              className={INPUT}
+              value={form.partner_first_name ?? ''}
+              onChange={(e) => set('partner_first_name', e.target.value || null)}
+              placeholder="Alex"
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Partner&rsquo;s last name</label>
+            <input
+              type="text"
+              className={INPUT}
+              value={form.partner_last_name ?? ''}
+              onChange={(e) => set('partner_last_name', e.target.value || null)}
+              placeholder="Rivera"
             />
           </div>
         </div>
@@ -294,14 +358,32 @@ export default function CoupleProfilePage() {
           </div>
         </div>
 
-        <div>
-          <label className={LABEL}>Wedding date</label>
-          <input
-            type="date"
-            className={INPUT}
-            value={form.wedding_date ?? ''}
-            onChange={(e) => set('wedding_date', e.target.value || null)}
-          />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={LABEL}>Wedding date</label>
+            <input
+              type="date"
+              className={INPUT}
+              value={form.wedding_date ?? ''}
+              onChange={(e) => set('wedding_date', e.target.value || null)}
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Estimated guest count</label>
+            <input
+              type="number"
+              min={0}
+              max={2000}
+              className={INPUT}
+              value={form.guest_count ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                set('guest_count', v === '' ? null : Math.max(0, Math.min(2000, Number(v) || 0)));
+              }}
+              placeholder="e.g. 120"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Roughly how many guests you expect — helps your venue plan.</p>
+          </div>
         </div>
 
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Social (https://)</p>
@@ -326,6 +408,56 @@ export default function CoupleProfilePage() {
           className="rounded-2xl bg-[#1b1b1b] px-6 py-3 text-sm font-medium text-white hover:opacity-85 transition-opacity disabled:opacity-60"
         >
           {saving ? <Loader2 className="inline h-4 w-4 animate-spin mr-1" /> : null} Save profile
+        </button>
+      </form>
+
+      {/* Password */}
+      <form onSubmit={(e) => void changePassword(e)} className="mt-10 max-w-xl border-t border-gray-100 pt-8 space-y-5">
+        <div className="flex items-center gap-2">
+          <KeyRound className="h-4 w-4 text-gray-400" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Password</h2>
+        </div>
+        <p className="-mt-2 text-xs text-gray-400">Set or change the password you use to log in.</p>
+
+        {pwError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{pwError}</div>
+        )}
+        {pwFlash && (
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            <CheckCircle2 size={14} /> {pwFlash}
+          </div>
+        )}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={LABEL}>New password</label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              className={INPUT}
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              placeholder="At least 8 characters"
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Confirm new password</label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              className={INPUT}
+              value={pw2}
+              onChange={(e) => setPw2(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={pwSaving || !pw || !pw2}
+          className="rounded-2xl border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors disabled:opacity-60"
+        >
+          {pwSaving ? <Loader2 className="inline h-4 w-4 animate-spin mr-1" /> : null} Update password
         </button>
       </form>
     </div>

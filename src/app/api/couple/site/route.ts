@@ -8,6 +8,7 @@ import {
   isCoupleSlugTaken,
   normalizeCoupleSlug,
   sanitizeCoupleSiteLinks,
+  sanitizeGallery,
   type CoupleSiteRow,
 } from '@/lib/couple-sites';
 
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
     getCoupleSiteByCoupleId(user.id),
     supabaseAdmin
       .from('couple_profiles')
-      .select('first_name, last_name, display_name, wedding_date, instagram_url, facebook_url, tiktok_url, pinterest_url')
+      .select('first_name, last_name, display_name, partner_first_name, partner_last_name, wedding_date, instagram_url, facebook_url, tiktok_url, pinterest_url')
       .eq('id', user.id)
       .maybeSingle(),
     getActiveCoupleWedding(user.id),
@@ -89,6 +90,7 @@ export async function PUT(request: NextRequest) {
   if ('photo_url' in body) patch.photo_url = str(body.photo_url, 800);
   if ('cover_url' in body) patch.cover_url = str(body.cover_url, 800);
   if ('custom_links' in body) patch.custom_links = sanitizeCoupleSiteLinks(body.custom_links);
+  if ('gallery' in body) patch.gallery = sanitizeGallery(body.gallery);
 
   for (const key of ['show_countdown', 'show_venue', 'show_guestbook', 'show_registry', 'guestbook_moderated'] as const) {
     if (key in body) patch[key] = Boolean(body[key]);

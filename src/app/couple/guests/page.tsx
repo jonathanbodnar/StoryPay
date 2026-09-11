@@ -384,41 +384,47 @@ export default function CoupleGuestsPage() {
           <Plus className="h-4 w-4 text-gray-400" />
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Add a guest</h2>
         </div>
-        <form onSubmit={addGuest} className="mt-3 rounded-2xl border border-gray-200 bg-white p-4">
+        <form onSubmit={addGuest} className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <input required className={INPUT} placeholder="Full name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
             <input className={INPUT} placeholder="Email (optional)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             <input className={INPUT} placeholder="Phone (optional)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             <input className={INPUT} placeholder="Group / table (optional)" value={form.guest_group} onChange={(e) => setForm({ ...form, guest_group: e.target.value })} />
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-500">Party of</label>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Party size</label>
               <input
                 type="number"
                 min={1}
                 max={30}
-                className={`${INPUT} w-24`}
+                className={INPUT}
                 value={form.party_size}
                 onChange={(e) => setForm({ ...form, party_size: Math.max(1, Math.min(30, Number(e.target.value) || 1)) })}
               />
             </div>
-            <select className={INPUT} value={form.meal_choice} onChange={(e) => setForm({ ...form, meal_choice: e.target.value })}>
-              <option value="">Meal choice (optional)</option>
-              {mealOptions.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Meal choice</label>
+              <select className={INPUT} value={form.meal_choice} onChange={(e) => setForm({ ...form, meal_choice: e.target.value })}>
+                <option value="">Optional</option>
+                {mealOptions.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
             <input className={`${INPUT} sm:col-span-2`} placeholder="Dietary notes / allergies (optional)" value={form.dietary_notes} onChange={(e) => setForm({ ...form, dietary_notes: e.target.value })} />
           </div>
-          <div className="mt-3 flex items-center gap-3">
-            <select className={`${INPUT} w-40`} value={form.rsvp_status} onChange={(e) => setForm({ ...form, rsvp_status: e.target.value as Rsvp })}>
-              {RSVP_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-gray-100 pt-4">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">RSVP status</label>
+              <select className={`${INPUT} w-44`} value={form.rsvp_status} onChange={(e) => setForm({ ...form, rsvp_status: e.target.value as Rsvp })}>
+                {RSVP_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
             <button
               type="submit"
               disabled={adding || !form.full_name.trim()}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-[#1b1b1b] px-6 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
             >
               {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add guest
             </button>

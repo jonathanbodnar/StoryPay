@@ -24,12 +24,15 @@ type Site = {
   photo_url: string | null;
   cover_url: string | null;
   custom_links: Link[] | null;
+  gallery: string[] | null;
   show_countdown: boolean;
   show_venue: boolean;
   show_guestbook: boolean;
   show_registry: boolean;
   guestbook_moderated: boolean;
 };
+
+const MAX_GALLERY = 9;
 type GuestbookEntry = { id: string; guest_name: string; message: string; is_hidden: boolean; created_at: string };
 
 const INPUT =
@@ -38,7 +41,7 @@ const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gra
 
 const DEFAULT_SITE: Site = {
   slug: null, is_published: false, headline: null, partner_name: null, story: null,
-  photo_url: null, cover_url: null, custom_links: [],
+  photo_url: null, cover_url: null, custom_links: [], gallery: [],
   show_countdown: true, show_venue: true, show_guestbook: true, show_registry: true,
   guestbook_moderated: false,
 };
@@ -51,7 +54,7 @@ export default function CoupleSitePage() {
   const [error, setError] = useState('');
   const [flash, setFlash] = useState('');
   const [site, setSite] = useState<Site>(DEFAULT_SITE);
-  const [profile, setProfile] = useState<{ first_name?: string | null; display_name?: string | null; wedding_date?: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ first_name?: string | null; display_name?: string | null; partner_first_name?: string | null; wedding_date?: string | null } | null>(null);
   const [hasVenue, setHasVenue] = useState(false);
   const [baseUrl, setBaseUrl] = useState('https://storyvenue.com');
 
@@ -66,6 +69,10 @@ export default function CoupleSitePage() {
   // guestbook
   const [gb, setGb] = useState<GuestbookEntry[]>([]);
 
+  // gallery
+  const [galleryBusy, setGalleryBusy] = useState(false);
+  const galleryRef = useRef<HTMLInputElement>(null);
+
   const publicUrl = site.slug ? `${baseUrl}/${site.slug}` : '';
 
   const load = useCallback(async () => {
@@ -76,7 +83,7 @@ export default function CoupleSitePage() {
     const res = await coupleAuthedFetch('/api/couple/site');
     if (res.status === 401) { router.replace('/couple/login'); return; }
     const data = await res.json().catch(() => ({}));
-    if (data.site) setSite({ ...DEFAULT_SITE, ...data.site, custom_links: data.site.custom_links ?? [] });
+    if (data.site) setSite({ ...DEFAULT_SITE, ...data.site, custom_links: data.site.custom_links ?? [], gallery: data.site.gallery ?? [] });
     if (data.profile) setProfile(data.profile);
     setHasVenue(Boolean(data.hasVenue));
     if (typeof data.publicBaseUrl === 'string') setBaseUrl(data.publicBaseUrl.replace(/\/$/, ''));
@@ -129,6 +136,43 @@ export default function CoupleSitePage() {
     }
   }
 
+  async function uploadOne(file: File): Promise<string | null> {
+    const signRes = await coupleAuthedFetch('/api/couple/site/image', {
+      method: 'POST',
+      body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size }),
+    });
+    const sign = await signRes.json().catch(() => ({}));
+    if (!signRes.ok) { setError(sign.error ?? 'Upload failed'); return null; }
+    const put = await fetch(sign.signedUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+    });
+    if (!put.ok) { setError('Upload failed'); return null; }
+    return sign.publicUrl as string;
+  }
+
+  async function addGalleryFiles(files: FileList) {
+    setError('');
+    setGalleryBusy(true);
+    try {
+      for (const file of Array.from(files)) {
+        // Re-check the live count each iteration so we never exceed the cap.
+        if ((site.gallery ?? []).length >= MAX_GALLERY) break;
+        const url = await uploadOne(file);
+        if (url) {
+          setSite((prev) => ({ ...prev, gallery: [...(prev.gallery ?? []), url].slice(0, MAX_GALLERY) }));
+        }
+      }
+    } finally {
+      setGalleryBusy(false);
+    }
+  }
+
+  function removeGalleryImage(i: number) {
+    set('gallery', (site.gallery ?? []).filter((_, idx) => idx !== i));
+  }
+
   function buildPayload(overrides: Partial<Site> = {}): Partial<Site> {
     const merged = { ...site, ...overrides };
     return {
@@ -139,6 +183,7 @@ export default function CoupleSitePage() {
       photo_url: merged.photo_url,
       cover_url: merged.cover_url,
       custom_links: merged.custom_links ?? [],
+      gallery: merged.gallery ?? [],
       show_countdown: merged.show_countdown,
       show_venue: merged.show_venue,
       show_guestbook: merged.show_guestbook,
@@ -156,7 +201,7 @@ export default function CoupleSitePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data.error ?? 'Save failed'); return false; }
-      if (data.site) { setSite({ ...DEFAULT_SITE, ...data.site, custom_links: data.site.custom_links ?? [] }); if (data.site.slug) setSlugInput(data.site.slug); }
+      if (data.site) { setSite({ ...DEFAULT_SITE, ...data.site, custom_links: data.site.custom_links ?? [], gallery: data.site.gallery ?? [] }); if (data.site.slug) setSlugInput(data.site.slug); }
       setFlash('Saved.');
       return true;
     } finally {
@@ -173,7 +218,7 @@ export default function CoupleSitePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data.error ?? 'Could not update'); return; }
-      if (data.site) setSite({ ...DEFAULT_SITE, ...data.site, custom_links: data.site.custom_links ?? [] });
+      if (data.site) setSite({ ...DEFAULT_SITE, ...data.site, custom_links: data.site.custom_links ?? [], gallery: data.site.gallery ?? [] });
       setFlash(data.site?.is_published ? 'Your site is live!' : 'Your site is now private.');
     } finally {
       setPublishing(false);
@@ -223,7 +268,7 @@ export default function CoupleSitePage() {
     return <div className="flex justify-center py-20 text-gray-400"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
-  const coupleName = [profile?.first_name || profile?.display_name, site.partner_name].filter(Boolean).join(' & ') || 'Your names';
+  const coupleName = [profile?.first_name || profile?.display_name, profile?.partner_first_name || site.partner_name].filter(Boolean).join(' & ') || 'Your names';
 
   return (
     <div className="space-y-8">
@@ -311,7 +356,8 @@ export default function CoupleSitePage() {
           </div>
           <div>
             <label className={LABEL}>Partner&rsquo;s name</label>
-            <input className={INPUT} value={site.partner_name ?? ''} onChange={(e) => set('partner_name', e.target.value || null)} placeholder="Mike" />
+            <input className={INPUT} value={profile?.partner_first_name || site.partner_name || ''} disabled placeholder="From your profile" />
+            <p className="mt-1 text-[11px] text-gray-400">Set on your profile.</p>
           </div>
         </div>
 
@@ -329,6 +375,51 @@ export default function CoupleSitePage() {
           <ImageField label="Main photo" value={site.photo_url} onPick={(f) => void uploadImage('photo_url', f)} onClear={() => set('photo_url', null)} rounded />
           <ImageField label="Cover / banner (optional)" value={site.cover_url} onPick={(f) => void uploadImage('cover_url', f)} onClear={() => set('cover_url', null)} />
         </div>
+      </section>
+
+      {/* Photo gallery */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-900">Photo gallery</h2>
+          <span className="text-xs text-gray-400">{(site.gallery ?? []).length}/{MAX_GALLERY}</span>
+        </div>
+        <p className="-mt-1 text-xs text-gray-500">Add up to {MAX_GALLERY} photos — they show as a pretty grid on your page.</p>
+
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          {(site.gallery ?? []).map((url, i) => (
+            <div key={`${url}-${i}`} className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+              <Image src={url} alt={`Photo ${i + 1}`} fill unoptimized sizes="180px" className="object-cover" />
+              <button
+                type="button"
+                onClick={() => removeGalleryImage(i)}
+                className="absolute right-1.5 top-1.5 rounded-lg bg-black/55 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/75 group-hover:opacity-100"
+                title="Remove"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+
+          {(site.gallery ?? []).length < MAX_GALLERY && (
+            <button
+              type="button"
+              onClick={() => galleryRef.current?.click()}
+              disabled={galleryBusy}
+              className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-300 bg-white text-gray-400 transition-colors hover:border-gray-400 hover:text-gray-600 disabled:opacity-60"
+            >
+              {galleryBusy ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+              <span className="text-[11px] font-medium">{galleryBusy ? 'Uploading…' : 'Add photos'}</span>
+            </button>
+          )}
+        </div>
+        <input
+          ref={galleryRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => { const fs = e.target.files; if (fs && fs.length) void addGalleryFiles(fs); e.currentTarget.value = ''; }}
+        />
       </section>
 
       {/* Links */}
@@ -430,14 +521,16 @@ export default function CoupleSitePage() {
 
 function Toggle({ label, checked, onChange, indent }: { label: string; checked: boolean; onChange: (v: boolean) => void; indent?: boolean }) {
   return (
-    <label className={`flex cursor-pointer items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 ${indent ? 'ml-4' : ''}`}>
+    <label className={`flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3 ${indent ? 'ml-4' : ''}`}>
       <span className="text-sm text-gray-700">{label}</span>
       <button
         type="button"
+        role="switch"
+        aria-checked={checked}
         onClick={() => onChange(!checked)}
-        className={`relative h-6 w-11 flex-none rounded-full transition-colors ${checked ? 'bg-[#1b1b1b]' : 'bg-gray-200'}`}
+        className={`relative inline-flex h-6 w-11 flex-none items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-1 ${checked ? 'bg-[#1b1b1b]' : 'bg-gray-200'}`}
       >
-        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform duration-200 ${checked ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
       </button>
     </label>
   );

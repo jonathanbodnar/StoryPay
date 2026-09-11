@@ -71,6 +71,16 @@ export async function PATCH(request: NextRequest) {
     display_name: derivedDisplay,
   };
 
+  if ('partner_first_name' in body) patch.partner_first_name = str(body.partner_first_name, 80) ?? null;
+  if ('partner_last_name' in body) patch.partner_last_name = str(body.partner_last_name, 80) ?? null;
+  if ('guest_count' in body) {
+    const g = body.guest_count;
+    if (g === null || g === '') patch.guest_count = null;
+    else {
+      const n = Number(g);
+      patch.guest_count = Number.isFinite(n) ? Math.max(0, Math.min(2000, Math.round(n))) : null;
+    }
+  }
   if ('phone' in body) patch.phone = str(body.phone, 40) ?? null;
   if ('address_line1' in body) patch.address_line1 = str(body.address_line1, 200) ?? null;
   if ('address_line2' in body) patch.address_line2 = str(body.address_line2, 200) ?? null;
