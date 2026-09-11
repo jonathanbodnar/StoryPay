@@ -4,9 +4,14 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { safeRedirect } from '@/lib/safe-redirect';
 import { setSignedCookie } from '@/lib/venue-session';
 
-/** Generate a fresh URL-safe magic-link token (mirrors request-login). */
+/**
+ * Generate a fresh magic-link token (mirrors request-login). Must be a UUID —
+ * `venues.login_token` is a `uuid` column, so a base64url value fails the cast
+ * and the rotate-on-use UPDATE silently no-ops, leaving the link replayable
+ * until its original expiry instead of being single-use.
+ */
 function newLoginToken(): string {
-  return crypto.randomBytes(24).toString('base64url');
+  return crypto.randomUUID();
 }
 
 export async function GET(

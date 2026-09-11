@@ -128,14 +128,36 @@ export async function POST(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
 
-    // Rotate venue login_token (legacy magic link path)
-    const { data: updated, error: upErr } = await supabaseAdmin
-      .from('venues')
-      .update({ login_token: crypto.randomUUID() })
-      .eq('id', id)
-      .select('login_token')
-      .single();
-    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+    // Rotate venue login_token (magic link path). Stamp a fresh 24h expiry and
+    // clear last-used so the emitted /login/<token> link passes the redemption
+    // gate in /api/auth/venue/[token] (which rejects a null/expired expiry).
+    // Fall back gracefully if the expiry columns aren't present on this schema.
+    const resetExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    let updated: { login_token: string | null } | null = null;
+    {
+      const withExpiry = await supabaseAdmin
+        .from('venues')
+        .update({
+          login_token: crypto.randomUUID(),
+          login_token_expires_at: resetExpiresAt,
+          login_token_last_used_at: null,
+        })
+        .eq('id', id)
+        .select('login_token')
+        .single();
+      if (withExpiry.error) {
+        const slim = await supabaseAdmin
+          .from('venues')
+          .update({ login_token: crypto.randomUUID() })
+          .eq('id', id)
+          .select('login_token')
+          .single();
+        if (slim.error) return NextResponse.json({ error: slim.error.message }, { status: 500 });
+        updated = slim.data as { login_token: string | null } | null;
+      } else {
+        updated = withExpiry.data as { login_token: string | null } | null;
+      }
+    }
 
     const loginUrl = updated?.login_token ? `${appUrl}/login/${updated.login_token}` : null;
 

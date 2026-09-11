@@ -8,9 +8,15 @@ import { rateLimitAny, getClientIp } from '@/lib/rate-limit';
 /** Magic-link token lifetime: 24 hours from issue. */
 const LOGIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** Generate a fresh URL-safe magic-link token. */
+/**
+ * Generate a fresh magic-link token. `venues.login_token` is a `uuid` column,
+ * so the token MUST be a UUID — a base64url string fails the cast and the
+ * rotate UPDATE silently no-ops (leaving a stale/expired token that the
+ * redemption route rejects). UUID v4 (122 bits) is ample for a 24h single-use
+ * token, especially behind the per-IP/per-email rate limits above.
+ */
 function newLoginToken(): string {
-  return crypto.randomBytes(24).toString('base64url');
+  return crypto.randomUUID();
 }
 
 export async function POST(request: NextRequest) {
