@@ -934,7 +934,7 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
     story: cleanStory ? (
       <div
         key="story"
-        className="story-content mx-auto mt-5 max-w-full text-left text-[12px] leading-relaxed [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_p]:my-1"
+        className="story-content mx-auto mt-5 max-w-full break-words text-left text-[12px] leading-relaxed [overflow-wrap:anywhere] [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_p]:my-1"
         style={{ color: INK }}
         dangerouslySetInnerHTML={{ __html: cleanStory }}
       />
