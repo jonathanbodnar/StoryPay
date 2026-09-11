@@ -6,8 +6,14 @@ import {
   publicCoupleSiteLinks,
   publicGallery,
   minisiteUnlockToken,
+  sanitizeSectionOrder,
   type CoupleSiteRow,
 } from '@/lib/couple-sites';
+
+function venueMapsUrl(name: string | null, address: string | null, city: string | null, state: string | null): string {
+  const dest = [name, address || [city, state].filter(Boolean).join(', ')].filter(Boolean).join(', ');
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`;
+}
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -84,24 +90,30 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   const rsvpEnabled = Boolean(venueId);
 
   // Optional "Our Venue" card — uses public listing fields only.
-  let venue: { name: string; city: string | null; state: string | null; coverUrl: string | null; listingUrl: string } | null = null;
+  let venue: {
+    name: string; city: string | null; state: string | null; address: string | null;
+    coverUrl: string | null; listingUrl: string; mapsUrl: string;
+  } | null = null;
   if (site.show_venue && venueId) {
     const { data: v } = await supabaseAdmin
       .from('venues')
-      .select('slug, name, cover_image_url, location_city, location_state, is_published')
+      .select('slug, name, cover_image_url, location_city, location_state, location_full, is_published')
       .eq('id', venueId)
       .maybeSingle();
     const vv = v as {
       slug: string | null; name: string | null; cover_image_url: string | null;
-      location_city: string | null; location_state: string | null; is_published: boolean | null;
+      location_city: string | null; location_state: string | null; location_full: string | null; is_published: boolean | null;
     } | null;
     if (vv && vv.is_published && vv.slug) {
+      const address = vv.location_full || [vv.location_city, vv.location_state].filter(Boolean).join(', ') || null;
       venue = {
         name: vv.name ?? 'Our venue',
         city: vv.location_city,
         state: vv.location_state,
+        address,
         coverUrl: vv.cover_image_url,
         listingUrl: `${DIRECTORY_SITE}/venue/${vv.slug}`,
+        mapsUrl: venueMapsUrl(vv.name, vv.location_full, vv.location_city, vv.location_state),
       };
     }
   }
@@ -119,6 +131,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     coupleName,
     headline: site.headline,
     story: site.story,
+    storyHtml: site.story_html ?? null,
     photoUrl: site.photo_url,
     coverUrl: site.cover_url,
     weddingDate: p.wedding_date ?? null,
@@ -127,6 +140,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     gallery: publicGallery(site.gallery),
     embedHtml: site.embed_enabled ? site.embed_html : null,
     embedTitle: site.embed_title,
+    sectionOrder: sanitizeSectionOrder(site.section_order),
     showCountdown: site.show_countdown,
     showGuestbook: site.show_guestbook,
     rsvpEnabled,

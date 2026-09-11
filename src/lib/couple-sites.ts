@@ -15,6 +15,28 @@ import { slugify } from '@/lib/directory';
 export const COUPLE_SITE_MAX_LINKS = 6;
 export const COUPLE_SITE_MAX_GALLERY = 9;
 
+/** Reorderable public-page blocks, in their default top-to-bottom order. */
+export const SECTION_KEYS = ['countdown', 'story', 'gallery', 'links', 'embed'] as const;
+export type SectionKey = (typeof SECTION_KEYS)[number];
+export const DEFAULT_SECTION_ORDER: SectionKey[] = [...SECTION_KEYS];
+
+/** Valid ordered block list: keep known keys in given order, then append any missing. */
+export function sanitizeSectionOrder(raw: unknown): SectionKey[] {
+  const known = new Set<string>(SECTION_KEYS);
+  const seen = new Set<string>();
+  const out: SectionKey[] = [];
+  if (Array.isArray(raw)) {
+    for (const k of raw) {
+      if (typeof k === 'string' && known.has(k) && !seen.has(k)) {
+        seen.add(k);
+        out.push(k as SectionKey);
+      }
+    }
+  }
+  for (const k of DEFAULT_SECTION_ORDER) if (!seen.has(k)) out.push(k);
+  return out;
+}
+
 export type CoupleSiteLink = { label: string; url: string; icon: string };
 
 export interface CoupleSiteRow {
@@ -32,6 +54,8 @@ export interface CoupleSiteRow {
   embed_html: string | null;
   embed_enabled: boolean;
   embed_title: string | null;
+  section_order: string[] | null;
+  story_html: string | null;
   show_countdown: boolean;
   show_venue: boolean;
   show_guestbook: boolean;
@@ -44,7 +68,7 @@ export interface CoupleSiteRow {
 // NOTE: site_password_hash is deliberately NOT in this shared column list — it is
 // fetched only where needed (public gate / unlock) so it never leaks to a client.
 export const COUPLE_SITE_COLUMNS =
-  'id, couple_id, slug, is_published, headline, partner_name, story, photo_url, cover_url, custom_links, gallery, embed_html, embed_enabled, embed_title, show_countdown, show_venue, show_guestbook, show_registry, guestbook_moderated, created_at, updated_at';
+  'id, couple_id, slug, is_published, headline, partner_name, story, story_html, photo_url, cover_url, custom_links, gallery, embed_html, embed_enabled, embed_title, section_order, show_countdown, show_venue, show_guestbook, show_registry, guestbook_moderated, created_at, updated_at';
 
 /**
  * Top-level paths already used by the weddingdirectory app (storyvenue.com) plus

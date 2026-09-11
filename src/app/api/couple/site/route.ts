@@ -10,9 +10,11 @@ import {
   sanitizeCoupleSiteLinks,
   sanitizeGallery,
   sanitizeEmbedHtml,
+  sanitizeSectionOrder,
   hashSitePassword,
   type CoupleSiteRow,
 } from '@/lib/couple-sites';
+import { sanitizeStoryHtml, storyHtmlToPlain } from '@/lib/sanitize-story';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -100,6 +102,16 @@ export async function PUT(request: NextRequest) {
   if ('headline' in body) patch.headline = str(body.headline, 120);
   if ('partner_name' in body) patch.partner_name = str(body.partner_name, 80);
   if ('story' in body) patch.story = str(body.story, 4000);
+
+  // Rich story: sanitize HTML and keep the plain `story` column in sync so
+  // previews/metadata (and old readers) keep working.
+  if ('story_html' in body) {
+    const cleanHtml = sanitizeStoryHtml(body.story_html);
+    patch.story_html = cleanHtml;
+    patch.story = storyHtmlToPlain(cleanHtml);
+  }
+
+  if ('section_order' in body) patch.section_order = sanitizeSectionOrder(body.section_order);
   if ('photo_url' in body) patch.photo_url = str(body.photo_url, 800);
   if ('cover_url' in body) patch.cover_url = str(body.cover_url, 800);
   if ('custom_links' in body) patch.custom_links = sanitizeCoupleSiteLinks(body.custom_links);
