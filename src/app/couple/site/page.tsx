@@ -157,6 +157,9 @@ export default function CoupleSitePage() {
       applySite(data.site);
       const seed = (data.site.story_html as string) || (data.site.story ? plainToHtml(data.site.story as string) : '');
       setStorySeed(seed);
+      // Seed story_html into state so a save that never opens the story editor
+      // still round-trips the existing story (never wipes plain `story`).
+      setSite((prev) => ({ ...prev, story_html: seed || null }));
       if (data.site.slug) setSlugInput(data.site.slug);
     }
     if (data.profile) setProfile(data.profile);
