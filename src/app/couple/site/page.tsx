@@ -112,7 +112,6 @@ export default function CoupleSitePage() {
   const [order, setOrder] = useState<SectionKey[]>(DEFAULT_ORDER);
   const [openKey, setOpenKey] = useState<SectionKey | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [urlOpen, setUrlOpen] = useState(false);
   const [dragKey, setDragKey] = useState<SectionKey | null>(null);
   const [galleryDrag, setGalleryDrag] = useState<number | null>(null);
   const [linkDrag, setLinkDrag] = useState<number | null>(null);
@@ -456,7 +455,7 @@ export default function CoupleSitePage() {
         return (
           <div className="space-y-3">
             {hasVenue && (
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+              <div className="rounded-[5px] border border-gray-200 bg-gray-50 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
                     <div className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-[#1b1b1b] text-white"><MapPin size={16} /></div>
@@ -478,7 +477,7 @@ export default function CoupleSitePage() {
                   key={i}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => reorderLink(i)}
-                  className={`rounded-2xl border bg-white p-3 ${linkDrag === i ? 'border-gray-900 opacity-70' : 'border-gray-200'}`}
+                  className={`rounded-[5px] border bg-white p-3 ${linkDrag === i ? 'border-gray-900 opacity-70' : 'border-gray-200'}`}
                 >
                   <div className="flex items-center gap-2">
                     <button
@@ -565,7 +564,39 @@ export default function CoupleSitePage() {
             </div>
           )}
 
-          {/* Settings — publish + private password */}
+          {/* Header — always visible, mirrors the top of the page on the phone */}
+          <section className="space-y-5 rounded-[5px] border border-gray-200 bg-white p-4 sm:p-5">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">Your header</h2>
+              <p className="mt-0.5 text-xs text-gray-400">The top of your page — cover, photo, names and headline. This is the first thing guests see.</p>
+            </div>
+
+            <CoverField value={site.cover_url} onPick={(f) => void uploadImage('cover_url', f)} onClear={() => set('cover_url', null)} />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ImageField label="Main photo" value={site.photo_url} onPick={(f) => void uploadImage('photo_url', f)} onClear={() => set('photo_url', null)} rounded />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={LABEL}>Your name</label>
+                <input className={INPUT} value={profile?.first_name || profile?.display_name || ''} disabled placeholder="From your profile" />
+                <p className="mt-1 text-[11px] text-gray-400">Set on your profile.</p>
+              </div>
+              <div>
+                <label className={LABEL}>Partner&rsquo;s name</label>
+                <input className={INPUT} value={profile?.partner_first_name || site.partner_name || ''} disabled placeholder="From your profile" />
+                <p className="mt-1 text-[11px] text-gray-400">Set on your profile.</p>
+              </div>
+            </div>
+
+            <div>
+              <label className={LABEL}>Headline</label>
+              <input className={INPUT} value={site.headline ?? ''} onChange={(e) => set('headline', e.target.value || null)} placeholder="We're getting married!" />
+            </div>
+          </section>
+
+          {/* Settings — custom URL + publish + private password */}
           <Panel
             open={settingsOpen}
             onToggle={() => setSettingsOpen((v) => !v)}
@@ -573,6 +604,20 @@ export default function CoupleSitePage() {
             title="Settings"
             summary={`${site.is_published ? 'Live' : 'Not published'}${hasPassword ? ' · Password on' : ''}`}
           >
+            <div className="mb-5">
+              <label className={LABEL}>Custom URL (storyvenue.com/…)</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-400">{baseUrl.replace(/^https?:\/\//, '')}/</span>
+                <input className={INPUT} value={slugInput} onChange={(e) => setSlugInput(e.target.value)} placeholder="jenny-and-mike" />
+              </div>
+              <p className="mt-1 h-4 text-[11px]">
+                {slugState === 'checking' && <span className="text-gray-400">Checking…</span>}
+                {slugState === 'ok' && <span className="text-emerald-600">Available</span>}
+                {slugState === 'taken' && <span className="text-red-600">Already taken — try another</span>}
+                {slugState === 'invalid' && <span className="text-red-600">Use at least 3 letters/numbers; avoid reserved words</span>}
+              </p>
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-gray-900">{site.is_published ? 'Live' : 'Not published'}</p>
@@ -657,55 +702,6 @@ export default function CoupleSitePage() {
             </div>
           </Panel>
 
-          {/* Custom URL (formerly “the basics”) */}
-          <Panel
-            open={urlOpen}
-            onToggle={() => setUrlOpen((v) => !v)}
-            icon={<Globe size={16} />}
-            title="Custom URL"
-            summary={slugInput.trim() ? `${baseUrl.replace(/^https?:\/\//, '')}/${slugInput.trim()}` : 'Choose your link'}
-          >
-            <div className="space-y-5">
-              <div>
-                <label className={LABEL}>Your link (storyvenue.com/…)</label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-400">{baseUrl.replace(/^https?:\/\//, '')}/</span>
-                  <input className={INPUT} value={slugInput} onChange={(e) => setSlugInput(e.target.value)} placeholder="jenny-and-mike" />
-                </div>
-                <p className="mt-1 h-4 text-[11px]">
-                  {slugState === 'checking' && <span className="text-gray-400">Checking…</span>}
-                  {slugState === 'ok' && <span className="text-emerald-600">Available</span>}
-                  {slugState === 'taken' && <span className="text-red-600">Already taken — try another</span>}
-                  {slugState === 'invalid' && <span className="text-red-600">Use at least 3 letters/numbers; avoid reserved words</span>}
-                </p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className={LABEL}>Your name</label>
-                  <input className={INPUT} value={profile?.first_name || profile?.display_name || ''} disabled placeholder="From your profile" />
-                  <p className="mt-1 text-[11px] text-gray-400">Set on your profile.</p>
-                </div>
-                <div>
-                  <label className={LABEL}>Partner&rsquo;s name</label>
-                  <input className={INPUT} value={profile?.partner_first_name || site.partner_name || ''} disabled placeholder="From your profile" />
-                  <p className="mt-1 text-[11px] text-gray-400">Set on your profile.</p>
-                </div>
-              </div>
-
-              <div>
-                <label className={LABEL}>Headline</label>
-                <input className={INPUT} value={site.headline ?? ''} onChange={(e) => set('headline', e.target.value || null)} placeholder="We're getting married!" />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <ImageField label="Main photo" value={site.photo_url} onPick={(f) => void uploadImage('photo_url', f)} onClear={() => set('photo_url', null)} rounded />
-              </div>
-
-              <CoverField value={site.cover_url} onPick={(f) => void uploadImage('cover_url', f)} onClear={() => set('cover_url', null)} />
-            </div>
-          </Panel>
-
       {/* Reorderable page blocks */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Your page sections</h2>
@@ -718,7 +714,7 @@ export default function CoupleSitePage() {
                 key={key}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => reorderSection(key)}
-                className={`rounded-2xl border bg-white transition-shadow ${dragKey === key ? 'border-gray-900 opacity-70' : 'border-gray-200'}`}
+                className={`rounded-[5px] border bg-white transition-shadow ${dragKey === key ? 'border-gray-900 opacity-70' : 'border-gray-200'}`}
               >
                 <div className="flex items-center gap-1 p-2">
                   <button
@@ -761,7 +757,7 @@ export default function CoupleSitePage() {
         {gb.length > 0 && (
           <div className="space-y-2 pt-1">
             {gb.map((e) => (
-              <div key={e.id} className={`rounded-2xl border p-3 ${e.is_hidden ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'}`}>
+              <div key={e.id} className={`rounded-[5px] border p-3 ${e.is_hidden ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{e.guest_name}{e.is_hidden && <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-600">Hidden</span>}</p>
@@ -819,7 +815,7 @@ function Panel({ open, onToggle, icon, title, summary, children }: {
   open: boolean; onToggle: () => void; icon: React.ReactNode; title: string; summary: string; children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white">
+    <div className="rounded-[5px] border border-gray-200 bg-white">
       <button type="button" onClick={onToggle} className="flex w-full items-center gap-2.5 p-3 text-left hover:bg-gray-50">
         <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-gray-100 text-gray-600">{icon}</span>
         <span className="min-w-0 flex-1">
@@ -877,6 +873,9 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
   const INK = '#1b1b1b';
   const dateLine = profile?.wedding_date
     ? new Date(`${profile.wedding_date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : null;
+  const shortDate = profile?.wedding_date
+    ? new Date(`${profile.wedding_date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
   const initials = coupleName.split(/\s*&\s*|\s+/).map((w) => w.charAt(0)).join('').slice(0, 2).toUpperCase();
   const gallery = site.gallery ?? [];
@@ -953,12 +952,17 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
   return (
     <div>
       <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-gray-400">Live preview</p>
-      <div className="mx-auto w-[340px] rounded-[2.4rem] border-[10px] border-gray-900 bg-gray-900 shadow-2xl">
-        <div className="relative h-[640px] overflow-y-auto rounded-[1.7rem] bg-[#faf7f2]">
-          <div className="sticky top-0 z-10 flex justify-center bg-transparent pt-2">
-            <div className="h-1.5 w-16 rounded-full bg-black/15" />
-          </div>
-          <div className="px-4 pb-24 pt-2">
+      <div className="relative mx-auto w-[300px]">
+        {/* side buttons */}
+        <div className="absolute -left-[2px] top-24 h-7 w-[3px] rounded-l bg-gray-700" />
+        <div className="absolute -left-[2px] top-[8.5rem] h-12 w-[3px] rounded-l bg-gray-700" />
+        <div className="absolute -right-[2px] top-32 h-16 w-[3px] rounded-r bg-gray-700" />
+        <div className="rounded-[3rem] border-[6px] border-gray-900 bg-gray-900 p-[3px] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.45)]">
+          <div className="relative overflow-hidden rounded-[2.6rem] bg-[#faf7f2]">
+            {/* Dynamic Island */}
+            <div className="pointer-events-none absolute left-1/2 top-2.5 z-30 h-[26px] w-[92px] -translate-x-1/2 rounded-full bg-black" />
+            <div className="relative h-[620px] overflow-y-auto">
+              <div className="px-4 pb-28 pt-10">
             {site.cover_url && (
               <div className="relative mb-[-36px] h-24 w-full overflow-hidden rounded-[3px]">
                 <Image src={site.cover_url} alt="" fill unoptimized sizes="320px" className="object-cover" />
@@ -989,15 +993,23 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
             </div>
 
             {order.map((key) => blocks[key] ?? null)}
-          </div>
-
-          {hasVenue && (
-            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
-              <span className="inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-[12px] font-semibold text-white shadow-lg" style={{ background: INK }}>
-                <CalendarHeart size={13} /> RSVP
-              </span>
+              </div>
             </div>
-          )}
+
+            {hasVenue && (
+              <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
+                <span className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-[12px] font-semibold text-white shadow-lg" style={{ background: INK }}>
+                  <CalendarHeart size={13} /> RSVP
+                  {shortDate && (
+                    <>
+                      <span className="h-3 w-px bg-white/30" />
+                      <span className="font-medium text-white/85">{shortDate}</span>
+                    </>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1034,7 +1046,7 @@ function StoryEditor({ seed, onChange }: { seed: string; onChange: (html: string
   ];
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white">
+    <div className="rounded-[5px] border border-gray-200 bg-white">
       <style>{`.story-ce:empty:before{content:attr(data-placeholder);color:#9ca3af}`}</style>
       <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 p-1.5">
         <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={() => cmd('bold')} title="Bold"><Bold size={15} /></button>
@@ -1062,7 +1074,7 @@ function StoryEditor({ seed, onChange }: { seed: string; onChange: (html: string
 
 function Toggle({ label, checked, onChange, indent }: { label: string; checked: boolean; onChange: (v: boolean) => void; indent?: boolean }) {
   return (
-    <label className={`flex cursor-pointer items-center justify-between gap-4 ${label ? 'rounded-2xl border border-gray-200 bg-white px-4 py-3' : ''} ${indent ? 'ml-4' : ''}`}>
+    <label className={`flex cursor-pointer items-center justify-between gap-4 ${label ? 'rounded-[5px] border border-gray-200 bg-white px-4 py-3' : ''} ${indent ? 'ml-4' : ''}`}>
       {label && <span className="text-sm text-gray-700">{label}</span>}
       <button
         type="button"
@@ -1105,7 +1117,7 @@ function CoverField({ value, onPick, onClear }: { value: string | null; onPick: 
       <label className={LABEL}>Cover / banner (optional)</label>
       <div
         onClick={() => ref.current?.click()}
-        className="relative flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-dashed border-gray-300 bg-gray-50 hover:border-gray-400"
+        className="relative flex h-36 w-full cursor-pointer items-center justify-center overflow-hidden rounded-[5px] border border-dashed border-gray-300 bg-gray-50 hover:border-gray-400"
       >
         {value ? (
           <Image src={value} alt="Cover" fill unoptimized sizes="600px" className="object-cover" />
