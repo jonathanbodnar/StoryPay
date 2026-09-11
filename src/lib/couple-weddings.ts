@@ -205,6 +205,8 @@ export interface WeddingGuestRowLite {
   rsvp_status?: string | null;
   party_size?: number | null;
   meal_choice?: string | null;
+  /** Per-attendee breakdown: [{ meal, dietary }]. Empty/absent on legacy rows. */
+  party_meals?: Array<{ meal?: string | null; dietary?: string | null }> | null;
 }
 
 export function summarizeWeddingGuests(rows: WeddingGuestRowLite[]): WeddingGuestSummary {
@@ -222,8 +224,18 @@ export function summarizeWeddingGuests(rows: WeddingGuestRowLite[]): WeddingGues
     if (status === 'attending') {
       const size = Math.max(1, Number(r.party_size) || 1);
       summary.headcount += size;
-      const meal = (r.meal_choice ?? '').trim();
-      if (meal) summary.mealCounts[meal] = (summary.mealCounts[meal] ?? 0) + size;
+
+      // Prefer the per-attendee breakdown; fall back to the single meal_choice
+      // (counted once per party member) for legacy rows with no breakdown.
+      const perPerson = Array.isArray(r.party_meals)
+        ? r.party_meals.map((m) => (m?.meal ?? '').trim()).filter(Boolean)
+        : [];
+      if (perPerson.length > 0) {
+        for (const meal of perPerson) summary.mealCounts[meal] = (summary.mealCounts[meal] ?? 0) + 1;
+      } else {
+        const meal = (r.meal_choice ?? '').trim();
+        if (meal) summary.mealCounts[meal] = (summary.mealCounts[meal] ?? 0) + size;
+      }
     }
   }
   return summary;

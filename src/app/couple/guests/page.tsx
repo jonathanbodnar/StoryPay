@@ -31,6 +31,7 @@ type Guest = {
   rsvp_status: Rsvp;
   meal_choice: string | null;
   dietary_notes: string | null;
+  party_meals: Array<{ meal?: string | null; dietary?: string | null }> | null;
   guest_group: string | null;
   notes: string | null;
   rsvp_token: string;
@@ -581,6 +582,14 @@ export default function CoupleGuestsPage() {
                       </p>
                       {(g.email || g.phone) && (
                         <p className="truncate text-xs text-gray-500">{[g.email, g.phone].filter(Boolean).join(' · ')}</p>
+                      )}
+                      {Array.isArray(g.party_meals) && g.party_meals.some((m) => m?.meal || m?.dietary) && (
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          Meals:{' '}
+                          {g.party_meals
+                            .map((m, i) => `${i + 1}. ${m?.meal || '—'}${m?.dietary ? ` (${m.dietary})` : ''}`)
+                            .join('  ·  ')}
+                        </p>
                       )}
                       {g.dietary_notes && <p className="mt-0.5 text-xs text-amber-600">Dietary: {g.dietary_notes}</p>}
                     </div>

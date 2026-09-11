@@ -35,7 +35,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const [{ data: rows, error }, { data: tableRows }] = await Promise.all([
     supabaseAdmin
       .from('wedding_guests')
-      .select('id, full_name, party_size, rsvp_status, meal_choice, dietary_notes, guest_group, table_id')
+      .select('id, full_name, party_size, rsvp_status, meal_choice, dietary_notes, party_meals, guest_group, table_id')
       .eq('couple_wedding_id', weddingId)
       .order('guest_group', { ascending: true })
       .order('full_name', { ascending: true }),

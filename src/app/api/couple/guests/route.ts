@@ -11,7 +11,7 @@ type RsvpStatus = (typeof RSVP_STATUSES)[number];
 
 /** Columns returned to the bride (she owns the full record incl. contact info). */
 const GUEST_COLUMNS =
-  'id, full_name, email, phone, address, party_size, rsvp_status, meal_choice, dietary_notes, guest_group, notes, table_id, rsvp_token, invited_at, responded_at, invite_sent_count, created_at, updated_at';
+  'id, full_name, email, phone, address, party_size, rsvp_status, meal_choice, dietary_notes, party_meals, guest_group, notes, table_id, rsvp_token, invited_at, responded_at, invite_sent_count, created_at, updated_at';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

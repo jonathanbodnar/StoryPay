@@ -15,6 +15,8 @@ export const runtime = 'nodejs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+type PartyMeal = { meal: string | null; dietary: string | null };
+
 interface GuestRow {
   id: string;
   full_name: string;
@@ -22,6 +24,7 @@ interface GuestRow {
   rsvp_status: string | null;
   meal_choice: string | null;
   dietary_notes: string | null;
+  party_meals: PartyMeal[] | null;
   responded_at: string | null;
   couple_wedding_id: string;
   couple_id: string | null;
@@ -32,7 +35,7 @@ async function loadGuestByToken(token: string): Promise<GuestRow | null> {
   const { data } = await supabaseAdmin
     .from('wedding_guests')
     .select(
-      'id, full_name, party_size, rsvp_status, meal_choice, dietary_notes, responded_at, couple_wedding_id, couple_id, venue_id',
+      'id, full_name, party_size, rsvp_status, meal_choice, dietary_notes, party_meals, responded_at, couple_wedding_id, couple_id, venue_id',
     )
     .eq('rsvp_token', token)
     .maybeSingle();
@@ -93,6 +96,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       rsvpStatus: guest.rsvp_status ?? 'pending',
       mealChoice: guest.meal_choice,
       dietaryNotes: guest.dietary_notes,
+      partyMeals: Array.isArray(guest.party_meals) ? guest.party_meals : [],
       responded: Boolean(guest.responded_at),
     },
     wedding: {
@@ -141,24 +145,44 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const invited = Math.max(1, Number(guest.party_size) || 1);
     const raw = Number(body.headcount);
     const headcount = Number.isFinite(raw) ? Math.round(raw) : invited;
-    update.party_size = Math.min(30, Math.max(1, headcount || invited));
+    const size = Math.min(30, Math.max(1, headcount || invited));
+    update.party_size = size;
 
-    // Only accept a meal that's actually on the couple's list.
-    const meal = str(body.meal_choice, 120);
-    if (meal) {
-      const { data: weddingRow } = await supabaseAdmin
-        .from('couple_weddings')
-        .select('meal_options')
-        .eq('id', guest.couple_wedding_id)
-        .maybeSingle();
-      const optsRaw = (weddingRow as { meal_options?: unknown } | null)?.meal_options ?? [];
-      const opts = Array.isArray(optsRaw) ? (optsRaw as string[]) : [];
-      update.meal_choice = opts.includes(meal) ? meal : null;
+    // Meals must be on the couple's list.
+    const { data: weddingRow } = await supabaseAdmin
+      .from('couple_weddings')
+      .select('meal_options')
+      .eq('id', guest.couple_wedding_id)
+      .maybeSingle();
+    const optsRaw = (weddingRow as { meal_options?: unknown } | null)?.meal_options ?? [];
+    const opts = Array.isArray(optsRaw) ? (optsRaw as string[]) : [];
+    const validMeal = (m: unknown): string | null => {
+      const s = str(m, 120);
+      return s && opts.includes(s) ? s : null;
+    };
+
+    if (Array.isArray(body.party)) {
+      // New per-attendee shape: each person picks their own meal + allergies.
+      const entries: PartyMeal[] = (body.party as unknown[])
+        .slice(0, size)
+        .map((p) => {
+          const rec = (p ?? {}) as Record<string, unknown>;
+          return { meal: validMeal(rec.meal), dietary: str(rec.dietary, 300) };
+        });
+      update.party_meals = entries;
+      // Keep legacy columns in sync so existing couple/venue views still work:
+      // first chosen meal + combined allergies across the party.
+      update.meal_choice = entries.find((e) => e.meal)?.meal ?? null;
+      const allergies = entries.map((e) => e.dietary).filter(Boolean) as string[];
+      update.dietary_notes = allergies.length ? allergies.join('; ').slice(0, 500) : null;
     } else {
-      update.meal_choice = null;
+      // Legacy single-meal shape (e.g. the emailed RSVP page).
+      const meal = validMeal(body.meal_choice);
+      const dietary = str(body.dietary_notes, 500);
+      update.meal_choice = meal;
+      update.dietary_notes = dietary;
+      update.party_meals = meal || dietary ? [{ meal, dietary: dietary ? dietary.slice(0, 300) : null }] : [];
     }
-
-    update.dietary_notes = str(body.dietary_notes, 500);
   }
 
   const { error } = await supabaseAdmin
