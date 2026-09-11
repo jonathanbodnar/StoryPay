@@ -27,6 +27,7 @@ import {
   Gem,
   Target,
   ConciergeBell,
+  HeartHandshake,
 } from 'lucide-react';
 import { classNames } from '@/lib/utils';
 import { isNativeApp, topBarSafeAreaPadding } from '@/lib/platform';
@@ -69,6 +70,7 @@ const topMenuItems: NavItem[] = [
   { label: 'Lead Inbox', href: '/dashboard/leads', icon: Inbox, navId: 'nav_main_leads' },
   { label: 'Conversations', href: '/dashboard/conversations', icon: MessageCircle, navId: 'nav_main_conversations' },
   { label: 'Venue Concierge', href: '/dashboard/venue-concierge', icon: ConciergeBell, navId: 'nav_venue_concierge' },
+  { label: 'Bride Portal', href: '/dashboard/bride-portal', icon: HeartHandshake, navId: 'nav_listing_bride_portal' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: Users, navId: 'nav_main_contacts' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: Calendar, navId: 'nav_main_calendar' },
 ];
@@ -119,7 +121,6 @@ const listingItems: NavItem[] = [
   { label: 'Venue Listing', href: '/dashboard/listing/venue-listing', icon: Store, navId: 'nav_listing_dashboard' },
   { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
   { label: 'Lead Link™', href: '/dashboard/listing/lead-link', icon: Link2, navId: 'nav_listing_lead_link' },
-  { label: 'Bride Portal', href: '/dashboard/bride-portal', icon: Gem, navId: 'nav_listing_bride_portal' },
   { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: CircleDollarSign, navId: 'nav_listing_pricing_guide' },
   { label: 'Speed to Lead System™', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
   // Verified & Sponsored is managed internally — not shown in venue sidebar.
