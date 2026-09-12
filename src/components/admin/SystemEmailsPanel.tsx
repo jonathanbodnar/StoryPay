@@ -49,6 +49,7 @@ const CATEGORY_COLORS: Record<SystemEmailCategory, string> = {
   ai:           'bg-indigo-50 text-indigo-700 border-indigo-200',
   concierge:    'bg-gray-900/5 text-gray-800 border-gray-300',
   billing:      'bg-rose-50 text-rose-700 border-rose-200',
+  wedding_hub:  'bg-pink-50 text-pink-700 border-pink-200',
 };
 
 function CategoryBadge({ cat }: { cat: SystemEmailCategory }) {

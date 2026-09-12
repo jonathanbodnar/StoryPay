@@ -20,7 +20,8 @@ export type SystemEmailCategory =
   | 'reporting'
   | 'ai'
   | 'concierge'
-  | 'billing';
+  | 'billing'
+  | 'wedding_hub';
 
 export interface SystemEmailDef {
   key: string;
@@ -372,6 +373,44 @@ Reach out while they are hot — open their contact to start the conversation.`,
     },
   },
 
+  // ── Wedding Hub (both editable) ─────────────────────────────────────────
+  {
+    key: 'wedding_hub_invite',
+    label: 'Wedding Hub: Invite a Couple',
+    description:
+      'Sent to a bride/couple when a venue invites them to connect on the Wedding Hub, so she can see her shared wedding details and message the venue in one place.',
+    trigger: 'Fires when a venue sends (or resends) an invite from Wedding Hub → "Invite a couple".',
+    category: 'wedding_hub',
+    editable: true,
+    defaults: {
+      subject: '{{venue_name}} invited you to your Wedding Hub',
+      heading: 'You are invited to connect',
+      body: `Hi {{bride_first_name}},
+
+{{venue_name}} invited you to connect on StoryVenue — one place to see your wedding details and message your venue directly.
+
+Click below to accept the invite. You'll confirm your details before anything is shared.`,
+      button_text: 'Connect with {{venue_name}}',
+    },
+  },
+  {
+    key: 'wedding_hub_connected',
+    label: 'Wedding Hub: Couple Connected',
+    description:
+      'Sent to the venue owner when a bride accepts their Wedding Hub invite and connects her account to the venue.',
+    trigger: 'Fires when a bride accepts a venue-sent invite (couple claim flow).',
+    category: 'wedding_hub',
+    editable: true,
+    defaults: {
+      subject: '{{bride_name}} connected to your Wedding Hub',
+      heading: '{{bride_name}} just connected',
+      body: `Hi {{owner_first_name}},
+
+{{bride_name}} accepted your invite and connected to {{venue_name}} on the Wedding Hub. You can now see the wedding details you've chosen to share and message each other in one place.`,
+      button_text: 'Open Wedding Hub',
+    },
+  },
+
   // ── SaaS billing (read-only preview) ────────────────────────────────────
   {
     key: 'billing_trial_ending',
@@ -569,6 +608,7 @@ export const CATEGORY_LABELS: Record<SystemEmailCategory, string> = {
   ai: 'AI Concierge',
   concierge: 'Venue Concierge',
   billing: 'Billing',
+  wedding_hub: 'Wedding Hub',
 };
 
 /** Sample variables for test sends and browser previews. */
@@ -621,6 +661,17 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
     owner_first_name: 'Sarah',
     venue_name: 'Meadowbrook Estate',
     action_url: `${APP_URL}/dashboard/leads`,
+  },
+  wedding_hub_invite: {
+    bride_first_name: 'Emily',
+    venue_name: 'Meadowbrook Estate',
+    action_url: `${APP_URL}/couple/claim/example-token`,
+  },
+  wedding_hub_connected: {
+    owner_first_name: 'Sarah',
+    bride_name: 'Emily Carter',
+    venue_name: 'Meadowbrook Estate',
+    action_url: `${APP_URL}/dashboard/wedding-hub`,
   },
   venue_concierge_message: {
     owner_first_name: 'Sarah',

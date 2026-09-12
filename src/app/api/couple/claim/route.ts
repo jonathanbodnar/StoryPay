@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getCoupleAuthUser } from '@/lib/couple-server';
 import { type CoupleWeddingRow } from '@/lib/couple-weddings';
+import { sendWeddingHubConnectedEmail } from '@/lib/wedding-hub-emails';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -110,5 +111,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Could not accept this invite. It may have just been claimed.' }, { status: 409 });
   }
 
+  // Best-effort: let the venue know their invite was accepted. Never blocks
+  // the claim itself — a bounced/misconfigured notification shouldn't undo it.
+  void notifyVenueOfConnection((updated as { venue_id: string }).venue_id, invite);
+
   return NextResponse.json({ ok: true });
+}
+
+async function notifyVenueOfConnection(venueId: string, invite: CoupleWeddingRow): Promise<void> {
+  try {
+    const { data: venue } = await supabaseAdmin
+      .from('venues')
+      .select('name, email, notification_email, owner_first_name')
+      .eq('id', venueId)
+      .maybeSingle();
+    if (!venue) return;
+
+    const v = venue as { name: string | null; email: string | null; notification_email: string | null; owner_first_name: string | null };
+    const toEmail = (v.notification_email || v.email || '').trim();
+    if (!toEmail) return;
+
+    await sendWeddingHubConnectedEmail({
+      toEmail,
+      ownerFirstName: v.owner_first_name?.trim() || 'there',
+      brideName: (invite.invited_name ?? '').trim() || (invite.invited_email ?? '').trim() || 'Your couple',
+      venueName: v.name?.trim() || 'your venue',
+    });
+  } catch (err) {
+    console.error('[couple/claim] notifyVenueOfConnection failed:', err);
+  }
 }

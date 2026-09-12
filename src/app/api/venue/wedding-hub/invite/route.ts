@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
-import { sendEmail } from '@/lib/email';
+import { sendWeddingHubInviteEmail } from '@/lib/wedding-hub-emails';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -126,20 +126,13 @@ export async function POST(request: NextRequest) {
   }
 
   const claimUrl = `${APP_URL}/couple/claim/${token}`;
-  const sendResult = await sendEmail({
-    to: email,
-    from: { name: venueName, email: brandEmail },
-    subject: `${venueName} invited you to your Wedding Hub`,
-    html: `
-<div style="font-family:'Open Sans',Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827">
-  <p>Hi${name ? ` ${name.split(/\s+/)[0]}` : ''},</p>
-  <p><strong>${venueName}</strong> invited you to connect on StoryVenue — one place to see your wedding details and message the venue directly.</p>
-  <p style="margin:22px 0">
-    <a href="${claimUrl}" style="background:#1b1b1b;color:#fff;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:600;display:inline-block">Connect with ${venueName}</a>
-  </p>
-  <p style="font-size:13px;color:#6b7280">Or paste this link into your browser:<br><a href="${claimUrl}" style="color:#1b1b1b">${claimUrl}</a></p>
-  <p style="font-size:12px;color:#9ca3af">This invite expires in ${INVITE_TTL_DAYS} days.</p>
-</div>`,
+  const sendResult = await sendWeddingHubInviteEmail({
+    toEmail: email,
+    brideFirstName: name ? name.split(/\s+/)[0] : '',
+    venueName,
+    claimUrl,
+    expiresInDays: INVITE_TTL_DAYS,
+    brandEmail,
   });
 
   if (!sendResult.success) {
