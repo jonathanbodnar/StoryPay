@@ -119,7 +119,10 @@ const DEFAULT_SITE: Site = {
 export default function CoupleSitePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const lastSavedSig = useRef<string | null>(null);
+  const hydrated = useRef(false);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState('');
   const [flash, setFlash] = useState('');
@@ -289,10 +292,20 @@ export default function CoupleSitePage() {
     }
   }
 
+  // Only ever persist a slug that's safe: the current one, or a new one that's
+  // been confirmed available. A half-typed/invalid slug never gets written
+  // (keeps the existing link), so autosave can't error or claim garbage.
+  function safeSlug(): string | null {
+    const raw = slugInput.trim();
+    if (raw && raw === site.slug) return site.slug;
+    if (raw && slugState === 'ok') return raw;
+    return site.slug ?? null;
+  }
+
   function buildPayload(overrides: Partial<Site> = {}): Partial<Site> {
     const merged = { ...site, ...overrides };
     return {
-      slug: (slugInput.trim() || null) as string | null,
+      slug: safeSlug(),
       headline: merged.headline,
       partner_name: merged.partner_name,
       story_html: merged.story_html,
@@ -313,22 +326,42 @@ export default function CoupleSitePage() {
     };
   }
 
-  async function save(overrides: Partial<Site> = {}) {
-    setError(''); setFlash(''); setSaving(true);
+  async function autosave(payload: Partial<Site>, sig: string) {
+    setSaveState('saving'); setError('');
     try {
       const res = await coupleAuthedFetch('/api/couple/site', {
         method: 'PUT',
-        body: JSON.stringify(buildPayload(overrides)),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(data.error ?? 'Save failed'); return false; }
-      if (data.site) { applySite(data.site); if (data.site.slug) setSlugInput(data.site.slug); }
-      setFlash('Saved.');
-      return true;
-    } finally {
-      setSaving(false);
+      if (!res.ok) { setSaveState('error'); setError(data.error ?? 'Auto-save failed'); return; }
+      lastSavedSig.current = sig;
+      // Reflect a server-normalized slug so the public link stays accurate.
+      if (data.site?.slug && data.site.slug !== site.slug) {
+        setSite((prev) => ({ ...prev, slug: data.site.slug as string }));
+        setSlugInput(data.site.slug as string);
+      }
+      setSaveState('saved');
+    } catch {
+      setSaveState('error'); setError('Auto-save failed — check your connection.');
     }
   }
+
+  // Debounced autosave: whenever the page content/order/slug changes, persist it
+  // automatically ~0.8s later. A signature guard prevents redundant saves and
+  // loops from server-echoed state.
+  useEffect(() => {
+    if (loading) return;
+    const payload = buildPayload();
+    const sig = JSON.stringify(payload);
+    if (!hydrated.current) { hydrated.current = true; lastSavedSig.current = sig; return; }
+    if (sig === lastSavedSig.current) return;
+    if (slugState === 'checking') return; // wait for slug availability to resolve
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => { void autosave(payload, sig); }, 800);
+    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [site, order, slugInput, slugState, loading]);
 
   async function togglePublish() {
     setError(''); setPublishing(true);
@@ -339,7 +372,7 @@ export default function CoupleSitePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data.error ?? 'Could not update'); return; }
-      if (data.site) applySite(data.site);
+      if (data.site) { applySite(data.site); hydrated.current = false; }
       setFlash(data.site?.is_published ? 'Your site is live!' : 'Your site is now private.');
     } finally {
       setPublishing(false);
@@ -644,11 +677,30 @@ export default function CoupleSitePage() {
     <div className="space-y-8 lg:mx-[calc(50%-50vw)] lg:w-screen lg:px-6">
       <div className="lg:mx-auto lg:grid lg:max-w-6xl lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
         <div className="min-w-0 space-y-8">
-          <div>
-            <h1 className="font-heading text-2xl text-gray-900">Your wedding website</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Build your page block by block. Drag the <GripVertical size={13} className="inline align-[-2px] text-gray-400" /> handles to reorder, tap a section to edit, then Save.
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="font-heading text-2xl text-gray-900">Your wedding website</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Build your page block by block. Drag the <GripVertical size={13} className="inline align-[-2px] text-gray-400" /> handles to reorder and tap a section to edit — everything saves automatically.
+              </p>
+            </div>
+            <div className="mt-1 shrink-0 text-xs">
+              {saveState === 'saving' && (
+                <span className="flex items-center gap-1.5 text-gray-500"><Loader2 size={13} className="animate-spin" /> Saving…</span>
+              )}
+              {saveState === 'saved' && (
+                <span className="flex items-center gap-1.5 text-emerald-600"><Check size={13} /> Saved</span>
+              )}
+              {saveState === 'error' && (
+                <button
+                  type="button"
+                  onClick={() => { const p = buildPayload(); void autosave(p, JSON.stringify(p)); }}
+                  className="flex items-center gap-1.5 text-red-600 hover:underline"
+                >
+                  <AlertTriangle size={13} /> Couldn&rsquo;t save — retry
+                </button>
+              )}
+            </div>
           </div>
 
           {error && <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
@@ -927,17 +979,6 @@ export default function CoupleSitePage() {
           </div>
         )}
       </section>
-
-          {/* Save bar */}
-          <div className="sticky bottom-4 flex justify-end">
-            <button
-              onClick={() => void save()}
-              disabled={saving}
-              className="rounded-2xl bg-[#1b1b1b] px-6 py-3 text-sm font-medium text-white shadow-lg transition-opacity hover:opacity-85 disabled:opacity-60"
-            >
-              {saving ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null} Save changes
-            </button>
-          </div>
 
           <p className="pb-6 text-center text-xs text-gray-400 lg:hidden">Previewing as {coupleName}</p>
         </div>
