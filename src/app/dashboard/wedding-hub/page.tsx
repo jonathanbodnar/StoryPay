@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Loader2,
   Heart,
@@ -17,6 +17,8 @@ import {
   ChevronRight,
   UtensilsCrossed,
   Armchair,
+  Search,
+  UserPlus,
 } from 'lucide-react';
 import WeddingHubGate from '@/components/WeddingHubGate';
 import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
@@ -79,6 +81,21 @@ type TableRow = {
   parties: number;
 };
 
+/** A row from the venue's merged contact list (StoryVenue + GHL + LunarPay). */
+type ContactHit = {
+  id: string | number;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+};
+
+function contactDisplayName(c: ContactHit): string {
+  if (c.name) return c.name;
+  return [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email || 'Unknown';
+}
+
 const VISIBILITY_LABELS: { key: keyof Visibility; label: string }[] = [
   { key: 'wedding_date', label: 'Wedding date' },
   { key: 'guest_count', label: 'Guest count' },
@@ -110,8 +127,22 @@ function WeddingHubContent() {
   const [error, setError] = useState('');
   const [actingId, setActingId] = useState<string | null>(null);
 
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteName, setInviteName] = useState('');
+  // Invite a couple: search the venue's own contacts, or fall back to creating
+  // a brand-new contact (name + phone + email required, same as everywhere
+  // else a contact is created in the dashboard).
+  const [inviteMode, setInviteMode] = useState<'search' | 'new'>('search');
+  const [inviteQuery, setInviteQuery] = useState('');
+  const [inviteResults, setInviteResults] = useState<ContactHit[]>([]);
+  const [inviteSearching, setInviteSearching] = useState(false);
+  const [inviteDropdownOpen, setInviteDropdownOpen] = useState(false);
+  const [inviteSelected, setInviteSelected] = useState<ContactHit | null>(null);
+  const inviteSearchRef = useRef<HTMLDivElement>(null);
+
+  const [newFirst, setNewFirst] = useState('');
+  const [newLast, setNewLast] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+
   const [inviting, setInviting] = useState(false);
   const [inviteFlash, setInviteFlash] = useState('');
 
@@ -222,16 +253,131 @@ function WeddingHubContent() {
     }
   }
 
+  const searchInviteContacts = useCallback(async (q: string) => {
+    if (!q || q.trim().length < 2) {
+      setInviteResults([]);
+      return;
+    }
+    setInviteSearching(true);
+    try {
+      const res = await fetch(`/api/customers?search=${encodeURIComponent(q.trim())}&limit=8`);
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const items = (Array.isArray(data) ? data : data.data ?? []) as ContactHit[];
+        setInviteResults(items);
+      }
+    } catch {
+      setInviteResults([]);
+    } finally {
+      setInviteSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (inviteMode !== 'search' || inviteSelected) return;
+    const t = setTimeout(() => void searchInviteContacts(inviteQuery), 300);
+    return () => clearTimeout(t);
+  }, [inviteQuery, inviteMode, inviteSelected, searchInviteContacts]);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (inviteSearchRef.current && !inviteSearchRef.current.contains(e.target as Node)) setInviteDropdownOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  function selectInviteContact(c: ContactHit) {
+    setInviteSelected(c);
+    setInviteQuery(contactDisplayName(c));
+    setInviteDropdownOpen(false);
+  }
+
+  function clearInviteSelection() {
+    setInviteSelected(null);
+    setInviteQuery('');
+    setInviteResults([]);
+  }
+
+  function switchInviteToNew() {
+    setInviteMode('new');
+    setInviteSelected(null);
+    setInviteQuery('');
+    setInviteResults([]);
+    setInviteDropdownOpen(false);
+  }
+
+  function switchInviteToSearch() {
+    setInviteMode('search');
+    setNewFirst('');
+    setNewLast('');
+    setNewEmail('');
+    setNewPhone('');
+  }
+
+  const canSubmitInvite =
+    inviteMode === 'search'
+      ? Boolean(inviteSelected?.email)
+      : Boolean(newFirst.trim() && newLast.trim() && newEmail.trim() && newPhone.trim());
+
+  function resetInviteForm() {
+    clearInviteSelection();
+    setNewFirst('');
+    setNewLast('');
+    setNewEmail('');
+    setNewPhone('');
+    setInviteMode('search');
+  }
+
   async function sendInvite(e: React.FormEvent) {
     e.preventDefault();
-    setInviting(true);
     setError('');
     setInviteFlash('');
+
+    let email = '';
+    let name = '';
+
+    if (inviteMode === 'search') {
+      if (!inviteSelected?.email) {
+        setError('Search for a contact and select one, or switch to “New contact”.');
+        return;
+      }
+      email = inviteSelected.email;
+      name = contactDisplayName(inviteSelected);
+    } else {
+      const first = newFirst.trim();
+      const last = newLast.trim();
+      const em = newEmail.trim();
+      const ph = newPhone.trim();
+      if (!first) { setError('First name is required.'); return; }
+      if (!last) { setError('Last name is required.'); return; }
+      if (!em) { setError('Email is required.'); return; }
+      if (!ph) { setError('Phone is required.'); return; }
+      email = em;
+      name = `${first} ${last}`.trim();
+    }
+
+    setInviting(true);
     try {
+      if (inviteMode === 'new') {
+        // Create the contact first, exactly like every other "add contact" flow
+        // in the dashboard (name + phone + email required).
+        const createRes = await fetch('/api/customers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ firstName: newFirst.trim(), lastName: newLast.trim(), email: newEmail.trim(), phone: newPhone.trim() }),
+        });
+        const createData = await createRes.json().catch(() => ({}));
+        if (!createRes.ok) {
+          setError(typeof createData.error === 'string' ? createData.error : 'Could not create contact');
+          return;
+        }
+      }
+
       const res = await fetch('/api/venue/wedding-hub/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail.trim(), name: inviteName.trim() || undefined }),
+        body: JSON.stringify({ email, name: name || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -239,8 +385,7 @@ function WeddingHubContent() {
         return;
       }
       setInviteFlash(data.already === 'linked' ? 'That couple is already connected.' : 'Invite sent.');
-      setInviteEmail('');
-      setInviteName('');
+      resetInviteForm();
       await load();
     } finally {
       setInviting(false);
@@ -364,33 +509,149 @@ function WeddingHubContent() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Invite a couple</h2>
         </div>
         <form onSubmit={sendInvite} className="mt-3 rounded-2xl border border-gray-200 bg-white p-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Email</label>
-              <input
-                type="email"
-                required
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="bride@email.com"
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Name (optional)</label>
-              <input
-                type="text"
-                value={inviteName}
-                onChange={(e) => setInviteName(e.target.value)}
-                placeholder="Jordan Smith"
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200"
-              />
-            </div>
+          <div className="mb-3 flex gap-1">
+            <button
+              type="button"
+              onClick={switchInviteToSearch}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                inviteMode === 'search' ? 'bg-gray-900/5 text-gray-900' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              <Search className="h-3 w-3" /> My contacts
+            </button>
+            <button
+              type="button"
+              onClick={switchInviteToNew}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                inviteMode === 'new' ? 'bg-gray-900/5 text-gray-900' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              <UserPlus className="h-3 w-3" /> New contact
+            </button>
           </div>
+
+          {inviteMode === 'search' ? (
+            <div ref={inviteSearchRef} className="relative">
+              {inviteSelected ? (
+                <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-900">{contactDisplayName(inviteSelected)}</p>
+                    <p className="truncate text-xs text-gray-500">
+                      {[inviteSelected.email, inviteSelected.phone].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearInviteSelection}
+                    className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={inviteQuery}
+                      onChange={(e) => {
+                        setInviteQuery(e.target.value);
+                        setInviteDropdownOpen(true);
+                      }}
+                      onFocus={() => inviteQuery.trim().length >= 2 && setInviteDropdownOpen(true)}
+                      placeholder="Search by name, phone, or email…"
+                      className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200"
+                    />
+                    {inviteSearching && (
+                      <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-300" />
+                    )}
+                  </div>
+                  {inviteDropdownOpen && inviteQuery.trim().length >= 2 && (
+                    <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                      {inviteResults.length > 0 ? (
+                        inviteResults.map((c) => (
+                          <button
+                            key={String(c.id)}
+                            type="button"
+                            onClick={() => selectInviteContact(c)}
+                            className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-sm transition-colors hover:bg-gray-50"
+                          >
+                            <span className="min-w-0 truncate font-medium text-gray-900">{contactDisplayName(c)}</span>
+                            <span className="shrink-0 truncate text-xs text-gray-400">
+                              {[c.email, c.phone].filter(Boolean).join(' · ')}
+                            </span>
+                          </button>
+                        ))
+                      ) : !inviteSearching ? (
+                        <div className="px-3.5 py-3 text-sm text-gray-500">
+                          No contacts found.{' '}
+                          <button type="button" onClick={switchInviteToNew} className="font-medium text-gray-900 hover:underline">
+                            Create new contact
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-3 rounded-xl border border-gray-200 p-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">First name</label>
+                <input
+                  type="text"
+                  required
+                  value={newFirst}
+                  onChange={(e) => setNewFirst(e.target.value)}
+                  placeholder="Jordan"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Last name</label>
+                <input
+                  type="text"
+                  required
+                  value={newLast}
+                  onChange={(e) => setNewLast(e.target.value)}
+                  placeholder="Smith"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="bride@email.com"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Phone</label>
+                <input
+                  type="tel"
+                  required
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="(555) 000-0000"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200"
+                />
+              </div>
+              <p className="text-xs text-gray-400 sm:col-span-2">
+                This creates a new contact in your Contacts list, then invites them to the Wedding Hub.
+              </p>
+            </div>
+          )}
+
           <div className="mt-3 flex items-center gap-3">
             <button
               type="submit"
-              disabled={inviting || !inviteEmail.trim()}
+              disabled={inviting || !canSubmitInvite}
               className="inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
             >
               {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send invite
