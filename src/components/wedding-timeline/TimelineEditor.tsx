@@ -353,7 +353,8 @@ export default function TimelineEditor({ initial, onSave, heading, dateLabel }: 
                 value={ev.time}
                 onChange={(e) => updateRow(ev.id, { time: e.target.value })}
                 onBlur={sortByTime}
-                className="w-28 shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none"
+                style={{ accentColor: '#1b1b1b' }}
+                className="w-28 shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
               />
               <input
                 type="text"
