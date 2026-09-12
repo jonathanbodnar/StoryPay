@@ -25,6 +25,8 @@ import {
 import WeddingHubGate from '@/components/WeddingHubGate';
 import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
 import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
+import TimelineEditor from '@/components/wedding-timeline/TimelineEditor';
+import { EMPTY_TIMELINE, type WeddingTimeline } from '@/lib/wedding-timeline';
 
 type GuestSummary = {
   total: number;
@@ -156,6 +158,7 @@ function WeddingHubContent() {
   const [guestDetail, setGuestDetail] = useState<Record<string, GuestDetailRow[]>>({});
   const [tableDetail, setTableDetail] = useState<Record<string, TableRow[]>>({});
   const [layoutDetail, setLayoutDetail] = useState<Record<string, WeddingLayout>>({});
+  const [timelineDetail, setTimelineDetail] = useState<Record<string, WeddingTimeline>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -203,9 +206,10 @@ function WeddingHubContent() {
     if (!guestDetail[id]) {
       setLoadingDetailId(id);
       try {
-        const [gRes, lRes] = await Promise.all([
+        const [gRes, lRes, tRes] = await Promise.all([
           fetch(`/api/venue/wedding-hub/${id}/guests`),
           fetch(`/api/venue/wedding-hub/${id}/layout`),
+          fetch(`/api/venue/wedding-hub/${id}/timeline`),
         ]);
         const gData = await gRes.json().catch(() => ({}));
         if (gRes.ok) {
@@ -214,6 +218,8 @@ function WeddingHubContent() {
         }
         const lData = await lRes.json().catch(() => ({}));
         setLayoutDetail((prev) => ({ ...prev, [id]: lData.layout ? (lData.layout as WeddingLayout) : EMPTY_LAYOUT }));
+        const tData = await tRes.json().catch(() => ({}));
+        setTimelineDetail((prev) => ({ ...prev, [id]: tData.timeline ? (tData.timeline as WeddingTimeline) : EMPTY_TIMELINE }));
       } finally {
         setLoadingDetailId(null);
       }
@@ -234,6 +240,22 @@ function WeddingHubContent() {
     if (!res.ok) return { ok: false };
     if (data.layout) setLayoutDetail((prev) => ({ ...prev, [weddingId]: data.layout as WeddingLayout }));
     return { ok: true, layout: data.layout as WeddingLayout | undefined };
+  }
+
+  async function saveVenueTimeline(weddingId: string, next: WeddingTimeline) {
+    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/timeline`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timeline: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      if (data.timeline) setTimelineDetail((prev) => ({ ...prev, [weddingId]: data.timeline as WeddingTimeline }));
+      return { ok: false, conflict: true, timeline: data.timeline as WeddingTimeline | undefined };
+    }
+    if (!res.ok) return { ok: false };
+    if (data.timeline) setTimelineDetail((prev) => ({ ...prev, [weddingId]: data.timeline as WeddingTimeline }));
+    return { ok: true, timeline: data.timeline as WeddingTimeline | undefined };
   }
 
   async function decide(id: string, action: 'approve' | 'deny') {
@@ -817,6 +839,25 @@ function WeddingHubContent() {
                           />
                           <p className="mt-2 text-[11px] text-gray-400">
                             You and the couple share this floor plan. Table counts update live from their guest list.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Day-of timeline — shared schedule (venue can edit too) */}
+                      {timelineDetail[l.id] !== undefined && loadingDetailId !== l.id && (
+                        <div className="mt-5">
+                          <div className="mb-2 flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-gray-400" />
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Day-of timeline</h3>
+                          </div>
+                          <TimelineEditor
+                            initial={timelineDetail[l.id]}
+                            onSave={(next) => saveVenueTimeline(l.id, next)}
+                            heading={l.name || undefined}
+                            dateLabel={l.wedding_date ? fmtDate(l.wedding_date) : undefined}
+                          />
+                          <p className="mt-2 text-[11px] text-gray-400">
+                            You and the couple share this schedule. Download a PNG or PDF to hand to your day-of team.
                           </p>
                         </div>
                       )}
