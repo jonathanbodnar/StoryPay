@@ -27,6 +27,9 @@ import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
 import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
 import TimelineEditor from '@/components/wedding-timeline/TimelineEditor';
 import { EMPTY_TIMELINE, type WeddingTimeline } from '@/lib/wedding-timeline';
+import InspirationBoard from '@/components/wedding-inspiration/InspirationBoard';
+import { EMPTY_INSPIRATION, type WeddingInspiration } from '@/lib/wedding-inspiration';
+import { Images } from 'lucide-react';
 
 type GuestSummary = {
   total: number;
@@ -159,6 +162,7 @@ function WeddingHubContent() {
   const [tableDetail, setTableDetail] = useState<Record<string, TableRow[]>>({});
   const [layoutDetail, setLayoutDetail] = useState<Record<string, WeddingLayout>>({});
   const [timelineDetail, setTimelineDetail] = useState<Record<string, WeddingTimeline>>({});
+  const [inspirationDetail, setInspirationDetail] = useState<Record<string, WeddingInspiration>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -206,10 +210,11 @@ function WeddingHubContent() {
     if (!guestDetail[id]) {
       setLoadingDetailId(id);
       try {
-        const [gRes, lRes, tRes] = await Promise.all([
+        const [gRes, lRes, tRes, iRes] = await Promise.all([
           fetch(`/api/venue/wedding-hub/${id}/guests`),
           fetch(`/api/venue/wedding-hub/${id}/layout`),
           fetch(`/api/venue/wedding-hub/${id}/timeline`),
+          fetch(`/api/venue/wedding-hub/${id}/inspiration`),
         ]);
         const gData = await gRes.json().catch(() => ({}));
         if (gRes.ok) {
@@ -220,6 +225,8 @@ function WeddingHubContent() {
         setLayoutDetail((prev) => ({ ...prev, [id]: lData.layout ? (lData.layout as WeddingLayout) : EMPTY_LAYOUT }));
         const tData = await tRes.json().catch(() => ({}));
         setTimelineDetail((prev) => ({ ...prev, [id]: tData.timeline ? (tData.timeline as WeddingTimeline) : EMPTY_TIMELINE }));
+        const iData = await iRes.json().catch(() => ({}));
+        setInspirationDetail((prev) => ({ ...prev, [id]: iData.inspiration ? (iData.inspiration as WeddingInspiration) : EMPTY_INSPIRATION }));
       } finally {
         setLoadingDetailId(null);
       }
@@ -256,6 +263,22 @@ function WeddingHubContent() {
     if (!res.ok) return { ok: false };
     if (data.timeline) setTimelineDetail((prev) => ({ ...prev, [weddingId]: data.timeline as WeddingTimeline }));
     return { ok: true, timeline: data.timeline as WeddingTimeline | undefined };
+  }
+
+  async function saveVenueInspiration(weddingId: string, next: WeddingInspiration) {
+    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/inspiration`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inspiration: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      if (data.inspiration) setInspirationDetail((prev) => ({ ...prev, [weddingId]: data.inspiration as WeddingInspiration }));
+      return { ok: false, conflict: true, inspiration: data.inspiration as WeddingInspiration | undefined };
+    }
+    if (!res.ok) return { ok: false };
+    if (data.inspiration) setInspirationDetail((prev) => ({ ...prev, [weddingId]: data.inspiration as WeddingInspiration }));
+    return { ok: true, inspiration: data.inspiration as WeddingInspiration | undefined };
   }
 
   async function decide(id: string, action: 'approve' | 'deny') {
@@ -858,6 +881,23 @@ function WeddingHubContent() {
                           />
                           <p className="mt-2 text-[11px] text-gray-400">
                             You and the couple share this schedule. Download a PNG or PDF to hand to your day-of team.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Inspiration board — shared style/mood board (venue can edit too) */}
+                      {inspirationDetail[l.id] !== undefined && loadingDetailId !== l.id && (
+                        <div className="mt-5">
+                          <div className="mb-2 flex items-center gap-2">
+                            <Images className="h-4 w-4 text-gray-400" />
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Inspiration board</h3>
+                          </div>
+                          <InspirationBoard
+                            initial={inspirationDetail[l.id]}
+                            onSave={(next) => saveVenueInspiration(l.id, next)}
+                          />
+                          <p className="mt-2 text-[11px] text-gray-400">
+                            The couple curates this from Pinterest and links; you share the same board and can add to it.
                           </p>
                         </div>
                       )}

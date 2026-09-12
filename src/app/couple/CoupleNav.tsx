@@ -56,6 +56,9 @@ export function CoupleNav() {
       <Link href="/couple/timeline" className="text-gray-700 hover:text-gray-900">
         Timeline
       </Link>
+      <Link href="/couple/inspiration" className="text-gray-700 hover:text-gray-900">
+        Inspiration
+      </Link>
       <Link href="/couple/site" className="text-gray-700 hover:text-gray-900">
         Wedding website
       </Link>
