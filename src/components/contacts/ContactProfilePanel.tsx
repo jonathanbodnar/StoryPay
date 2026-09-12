@@ -10,11 +10,14 @@ import {
   FileCheck, Activity, User, ChevronDown, ChevronUp, Info,
   AlertCircle, Undo2, Smartphone, MessageSquare,
   Bot, Pause, BotOff, Play, Clock, Heart,
+  UtensilsCrossed, Armchair,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
 import ContactAiControls from '@/components/ai-concierge/ContactAiControls';
 import VenueDirectPanel from '@/components/dashboard/VenueDirectPanel';
 import ContactConversationsTab from '@/components/contacts/ContactConversationsTab';
+import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
+import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 import { bookingTimelineOptions } from '@/lib/booking-timeline';
@@ -1695,6 +1698,11 @@ export default function ContactProfilePanel({
             </div>
           </div>
 
+          {/* Wedding Hub — guest list, RSVPs & shared room layout, once connected */}
+          {venueCustomer?.weddingHub?.status === 'linked' && (
+            <WeddingHubDetailCard coupleWeddingId={venueCustomer.weddingHub.coupleWeddingId} />
+          )}
+
           {/* ── Venue Spaces ── */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
             <div className="flex items-center justify-between mb-3">
@@ -2317,6 +2325,214 @@ export default function ContactProfilePanel({
       )}
     </div>
   );
+}
+
+// ── Wedding Hub guest list + room layout, embedded in the contact profile ───
+// Same data + same endpoints as the venue's Wedding Hub page card, just
+// surfaced here too so a venue doesn't have to leave the contact to see it.
+// Single source of truth: this reads live from the couple's guest list and
+// shared room layout, it never copies/caches that data onto the contact.
+
+interface WhGuestRow {
+  id: string;
+  full_name: string;
+  party_size: number;
+  rsvp_status: 'pending' | 'attending' | 'declined';
+  meal_choice: string | null;
+  dietary_notes: string | null;
+  guest_group: string | null;
+}
+interface WhTableRow {
+  id: string;
+  name: string;
+  capacity: number;
+  seated: number;
+  parties: number;
+}
+interface WhGuestSummary {
+  total: number;
+  attending: number;
+  declined: number;
+  pending: number;
+  headcount: number;
+  mealCounts: Record<string, number>;
+}
+
+function WeddingHubDetailCard({ coupleWeddingId }: { coupleWeddingId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [guests, setGuests] = useState<WhGuestRow[]>([]);
+  const [tables, setTables] = useState<WhTableRow[]>([]);
+  const [summary, setSummary] = useState<WhGuestSummary | null>(null);
+  const [layout, setLayout] = useState<WeddingLayout>(EMPTY_LAYOUT);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [gRes, lRes] = await Promise.all([
+          fetch(`/api/venue/wedding-hub/${coupleWeddingId}/guests`),
+          fetch(`/api/venue/wedding-hub/${coupleWeddingId}/layout`),
+        ]);
+        const gData = await gRes.json().catch(() => ({}));
+        const lData = await lRes.json().catch(() => ({}));
+        if (cancelled) return;
+        if (gRes.ok) {
+          setGuests(Array.isArray(gData.guests) ? gData.guests : []);
+          setTables(Array.isArray(gData.tables) ? gData.tables : []);
+          setSummary((gData.summary as WhGuestSummary) ?? null);
+        }
+        setLayout(lData.layout ? (lData.layout as WeddingLayout) : EMPTY_LAYOUT);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [coupleWeddingId]);
+
+  async function saveLayout(next: WeddingLayout) {
+    const res = await fetch(`/api/venue/wedding-hub/${coupleWeddingId}/layout`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ layout: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      if (data.layout) setLayout(data.layout as WeddingLayout);
+      return { ok: false, conflict: true, layout: data.layout as WeddingLayout | undefined };
+    }
+    if (!res.ok) return { ok: false };
+    if (data.layout) setLayout(data.layout as WeddingLayout);
+    return { ok: true, layout: data.layout as WeddingLayout | undefined };
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-heading text-base text-gray-900 flex items-center gap-2">
+          <Heart size={15} /> Wedding Hub
+        </h2>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading guest list…
+        </div>
+      ) : guests.length === 0 ? (
+        <p className="text-sm text-gray-400">The couple hasn&apos;t added any guests yet.</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <WhStat label="Attending" value={summary?.attending ?? 0} tone="emerald" />
+            <WhStat label="Declined" value={summary?.declined ?? 0} tone="gray" />
+            <WhStat label="Awaiting" value={summary?.pending ?? 0} tone="amber" />
+            <WhStat label="Headcount" value={summary?.headcount ?? 0} tone="rose" />
+          </div>
+
+          {summary && Object.keys(summary.mealCounts).length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              <UtensilsCrossed className="h-3.5 w-3.5 text-gray-400" />
+              {Object.entries(summary.mealCounts).map(([meal, count]) => (
+                <span key={meal} className="rounded-full border border-gray-200 bg-white px-2 py-0.5">
+                  {meal}: <strong>{count}</strong>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {tables.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              <Armchair className="h-3.5 w-3.5 text-gray-400" />
+              {tables.map((t) => (
+                <span
+                  key={t.id}
+                  className={`rounded-full border px-2 py-0.5 ${
+                    t.seated > t.capacity ? 'border-red-200 bg-red-50 text-red-600' : 'border-gray-200 bg-white'
+                  }`}
+                >
+                  {t.name}: <strong>{t.seated}</strong>/{t.capacity}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-3 overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-wide text-gray-400">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Guest</th>
+                  <th className="px-3 py-2 font-semibold">Party</th>
+                  <th className="px-3 py-2 font-semibold">RSVP</th>
+                  <th className="px-3 py-2 font-semibold">Meal</th>
+                  <th className="px-3 py-2 font-semibold">Dietary</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {guests.map((r) => (
+                  <tr key={r.id}>
+                    <td className="px-3 py-2">
+                      <span className="font-medium text-gray-900">{r.full_name}</span>
+                      {r.guest_group && <span className="ml-1 text-xs text-gray-400">· {r.guest_group}</span>}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">{r.party_size}</td>
+                    <td className="px-3 py-2"><WhRsvpBadge status={r.rsvp_status} /></td>
+                    <td className="px-3 py-2 text-gray-600">{r.meal_choice || '—'}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.dietary_notes || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11px] text-gray-400">
+            The couple owns and manages this list. Guest contact details stay private to them.
+          </p>
+        </>
+      )}
+
+      {!loading && (
+        <div className="mt-5">
+          <div className="mb-2 flex items-center gap-2">
+            <Armchair className="h-4 w-4 text-gray-400" />
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Room layout</h3>
+          </div>
+          <RoomCanvas
+            initialLayout={layout}
+            tables={tables.map((t) => ({ id: t.id, name: t.name, capacity: t.capacity }))}
+            seatedByTable={Object.fromEntries(tables.map((t) => [t.id, t.seated]))}
+            onSave={saveLayout}
+          />
+          <p className="mt-2 text-[11px] text-gray-400">
+            You and the couple share this floor plan. Table counts update live from their guest list.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WhStat({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'gray' | 'rose' }) {
+  const tones: Record<string, string> = {
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    gray: 'border-gray-200 bg-white text-gray-600',
+    rose: 'border-rose-200 bg-rose-50 text-rose-700',
+  };
+  return (
+    <div className={`rounded-xl border px-3 py-2 ${tones[tone]}`}>
+      <p className="text-lg font-semibold leading-none">{value}</p>
+      <p className="mt-1 text-[11px] font-medium uppercase tracking-wide opacity-80">{label}</p>
+    </div>
+  );
+}
+
+function WhRsvpBadge({ status }: { status: 'pending' | 'attending' | 'declined' }) {
+  const map = {
+    attending: 'bg-emerald-50 text-emerald-700',
+    declined: 'bg-gray-100 text-gray-500',
+    pending: 'bg-amber-50 text-amber-700',
+  } as const;
+  const label = status === 'attending' ? 'Attending' : status === 'declined' ? 'Declined' : 'Awaiting';
+  return <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${map[status]}`}>{label}</span>;
 }
 
 /**
