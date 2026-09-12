@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Loader2,
   Heart,
@@ -19,6 +20,7 @@ import {
   Armchair,
   Search,
   UserPlus,
+  User,
 } from 'lucide-react';
 import WeddingHubGate from '@/components/WeddingHubGate';
 import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
@@ -54,6 +56,7 @@ type LinkItem = {
   linked_at: string | null;
   pending_kind: 'invite_sent' | 'request' | null;
   guests: GuestSummary | null;
+  venue_customer_id: string | null;
 };
 
 type Visibility = {
@@ -684,30 +687,39 @@ function WeddingHubContent() {
               const rows = guestDetail[l.id];
               return (
                 <li key={l.id}>
-                  <button
-                    type="button"
-                    onClick={() => void toggleGuests(l.id)}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50"
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex w-full items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => void toggleGuests(l.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    >
                       {open ? <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" /> : <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />}
                       <div className="min-w-0">
                         <p className="truncate font-medium text-gray-900">{l.name || l.email || 'Couple'}</p>
                         {l.email && <p className="truncate text-xs text-gray-500">{l.email}</p>}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-3 text-right">
+                    </button>
+                    <div className="flex shrink-0 items-center gap-3 text-right">
                       {g && g.total > 0 && (
                         <span className="hidden items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-600 sm:inline-flex">
                           <Users className="h-3 w-3" /> {g.headcount} attending · {g.total} invited
                         </span>
                       )}
                       <span className="hidden text-xs text-gray-400 sm:inline">Wedding {fmtDate(l.wedding_date)}</span>
+                      {l.venue_customer_id && (
+                        <Link
+                          href={`/dashboard/contacts/${l.venue_customer_id}`}
+                          title="View contact profile"
+                          className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-100"
+                        >
+                          <User className="h-3 w-3" /> <span className="hidden sm:inline">View contact</span>
+                        </Link>
+                      )}
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
                         <CheckCircle2 className="h-3 w-3" /> Connected
                       </span>
                     </div>
-                  </button>
+                  </div>
 
                   {open && (
                     <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-4">

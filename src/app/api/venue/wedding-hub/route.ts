@@ -102,6 +102,8 @@ export async function GET() {
       // A venue-initiated pending row is an outstanding invite awaiting the bride.
       pending_kind: r.status === 'pending' ? (r.initiated_by === 'venue' ? 'invite_sent' : 'request') : null,
       guests: r.status === 'linked' ? guestSummaryByWedding.get(r.id) ?? null : null,
+      // So the dashboard can deep-link to this couple's contact profile.
+      venue_customer_id: r.venue_customer_id,
     };
   });
 

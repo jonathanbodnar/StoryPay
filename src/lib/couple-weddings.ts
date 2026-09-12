@@ -115,6 +115,42 @@ export async function ensureThreadForCustomer(
   return (created as { id: string } | null)?.id ?? null;
 }
 
+// ── Wedding Hub status surfaced on the venue's contact profile ──────────────
+// Single source of truth: always read live from couple_weddings rather than
+// caching a "connected" flag on venue_customers, so it can never go stale if
+// a link is later revoked/declined elsewhere.
+
+export interface WeddingHubStatus {
+  coupleWeddingId: string;
+  status: 'linked' | 'pending';
+  initiatedBy: 'venue' | 'bride';
+  linkedAt: string | null;
+}
+
+/**
+ * The Wedding Hub connection status for a given venue_customer, if any.
+ * Prefers a 'linked' row over a 'pending' one (a couple can have at most one
+ * active row per venue in practice, but this stays defensive).
+ */
+export async function getWeddingHubStatusForVenueCustomer(
+  venueId: string,
+  venueCustomerId: string,
+): Promise<WeddingHubStatus | null> {
+  const { data } = await supabaseAdmin
+    .from('couple_weddings')
+    .select('id, status, initiated_by, linked_at')
+    .eq('venue_id', venueId)
+    .eq('venue_customer_id', venueCustomerId)
+    .in('status', ['linked', 'pending'])
+    .order('status', { ascending: true }) // 'linked' < 'pending' alphabetically — linked wins
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  const row = data as { id: string; status: 'linked' | 'pending'; initiated_by: 'venue' | 'bride'; linked_at: string | null };
+  return { coupleWeddingId: row.id, status: row.status, initiatedBy: row.initiated_by, linkedAt: row.linked_at };
+}
+
 /** Public venue summary shown to a bride for a linked/pending wedding. */
 export interface CoupleWeddingVenue {
   id: string;

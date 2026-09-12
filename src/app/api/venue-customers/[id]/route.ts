@@ -15,6 +15,7 @@ import {
 import { applySmsDndForVenueCustomer, clearSmsDndForVenueCustomer } from '@/lib/sms-compliance';
 import { schedulePushVenueCustomerToGhl } from '@/lib/ghl-push-contact';
 import { bucketLeadSource, isMetaPaidAd } from '@/lib/lead-source';
+import { getWeddingHubStatusForVenueCustomer } from '@/lib/couple-weddings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -93,7 +94,8 @@ export async function GET(
       stage_id: (r.stage_id as string | null) ?? null,
     });
     const attributed_source = await resolveAttributedSource(venueId, String(r.customer_email ?? ''));
-    return NextResponse.json({ ...row, attributed_source, ...(ctx ? { pipeline_context: ctx } : {}) });
+    const weddingHub = await getWeddingHubStatusForVenueCustomer(venueId, id);
+    return NextResponse.json({ ...row, attributed_source, weddingHub, ...(ctx ? { pipeline_context: ctx } : {}) });
   } catch (err) {
     console.error('[venue-customers GET by id]', err);
     const msg = err instanceof Error ? err.message : String(err);
@@ -203,7 +205,8 @@ export async function PATCH(
       stage_id: (r.stage_id as string | null) ?? null,
     });
     const attributed_source = await resolveAttributedSource(venueId, String(r.customer_email ?? ''));
-    return NextResponse.json({ ...row, attributed_source, ...(ctx ? { pipeline_context: ctx } : {}) });
+    const weddingHub = await getWeddingHubStatusForVenueCustomer(venueId, id);
+    return NextResponse.json({ ...row, attributed_source, weddingHub, ...(ctx ? { pipeline_context: ctx } : {}) });
   }
 
   updates.updated_at = new Date().toISOString();
@@ -321,7 +324,8 @@ export async function PATCH(
     }
 
     const attributed_source = await resolveAttributedSource(venueId, String(rr.customer_email ?? ''));
-    return NextResponse.json({ ...refreshed, attributed_source, ...(ctx ? { pipeline_context: ctx } : {}) });
+    const weddingHub = await getWeddingHubStatusForVenueCustomer(venueId, id);
+    return NextResponse.json({ ...refreshed, attributed_source, weddingHub, ...(ctx ? { pipeline_context: ctx } : {}) });
   } catch (err) {
     console.error('[venue-customers PATCH refetch]', err);
     const msg = err instanceof Error ? err.message : String(err);

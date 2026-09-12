@@ -9,7 +9,7 @@ import {
   Plus, Check, Trash2, Upload, Calendar, ClipboardList,
   FileCheck, Activity, User, ChevronDown, ChevronUp, Info,
   AlertCircle, Undo2, Smartphone, MessageSquare,
-  Bot, Pause, BotOff, Play, Clock,
+  Bot, Pause, BotOff, Play, Clock, Heart,
 } from 'lucide-react';
 import RefundModal from '@/components/RefundModal';
 import ContactAiControls from '@/components/ai-concierge/ContactAiControls';
@@ -83,6 +83,9 @@ interface VenueCustomer {
   stage_id?: string | null;
   pipeline_context?: PipelineContext;
   venue_spaces: { id: string; name: string; color: string } | null;
+  /** Live Wedding Hub connection status — read fresh from couple_weddings on
+   *  every fetch (never cached/duplicated on the row itself). */
+  weddingHub?: { coupleWeddingId: string; status: 'linked' | 'pending'; initiatedBy: 'venue' | 'bride'; linkedAt: string | null } | null;
 }
 
 interface Proposal {
@@ -1628,6 +1631,7 @@ export default function ContactProfilePanel({
           <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Calendar size={15} /> Event Details</h2>
+              <WeddingHubBadge status={venueCustomer?.weddingHub} />
             </div>
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2312,5 +2316,42 @@ export default function ContactProfilePanel({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Wedding Hub connection status badge for the contact profile. Always driven
+ * by the live `weddingHub` field on the venue_customer row (fetched fresh
+ * from couple_weddings server-side) — this is the single source of truth,
+ * never a locally-set flag that could drift from reality.
+ */
+function WeddingHubBadge({
+  status,
+}: {
+  status?: { coupleWeddingId: string; status: 'linked' | 'pending'; initiatedBy: 'venue' | 'bride'; linkedAt: string | null } | null;
+}) {
+  if (!status) return null;
+
+  if (status.status === 'linked') {
+    return (
+      <Link
+        href="/dashboard/wedding-hub"
+        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+      >
+        <Heart size={12} /> Connected to Wedding Hub
+      </Link>
+    );
+  }
+
+  // Pending — either the venue invited and is waiting, or the couple asked to
+  // connect and the venue needs to approve.
+  return (
+    <Link
+      href="/dashboard/wedding-hub"
+      className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
+    >
+      <Heart size={12} />
+      {status.initiatedBy === 'venue' ? 'Wedding Hub invite sent' : 'Wants to connect — review request'}
+    </Link>
   );
 }
