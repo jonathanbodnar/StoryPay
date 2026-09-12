@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getCoupleAuthUser } from '@/lib/couple-server';
+import { syncWeddingFieldsToVenue } from '@/lib/couple-weddings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -141,6 +142,16 @@ export async function PATCH(request: NextRequest) {
   if (error) {
     console.error('[couple/profile]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Wedding date + guest count are shared with a linked venue's contact record
+  // (single source of truth once connected) — push whichever of these the
+  // bride actually changed over to her venue's Event Details.
+  if ('wedding_date' in patch || 'guest_count' in patch) {
+    void syncWeddingFieldsToVenue(user.id, {
+      wedding_date: 'wedding_date' in patch ? (patch.wedding_date as string | null) : undefined,
+      guest_count: 'guest_count' in patch ? (patch.guest_count as number | null) : undefined,
+    });
   }
 
   return NextResponse.json({

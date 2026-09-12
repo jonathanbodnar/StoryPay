@@ -15,7 +15,7 @@ import {
 import { applySmsDndForVenueCustomer, clearSmsDndForVenueCustomer } from '@/lib/sms-compliance';
 import { schedulePushVenueCustomerToGhl } from '@/lib/ghl-push-contact';
 import { bucketLeadSource, isMetaPaidAd } from '@/lib/lead-source';
-import { getWeddingHubStatusForVenueCustomer } from '@/lib/couple-weddings';
+import { getWeddingHubStatusForVenueCustomer, syncWeddingFieldsToCouple } from '@/lib/couple-weddings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -235,6 +235,16 @@ export async function PATCH(
     } else {
       await clearSmsDndForVenueCustomer({ venueId, venueCustomerId: id });
     }
+  }
+
+  // Wedding date + guest count are shared with a linked couple's own profile
+  // (single source of truth once connected) — push whichever of these the
+  // venue actually changed over to the bride's profile.
+  if ('wedding_date' in updates || 'guest_count' in updates) {
+    void syncWeddingFieldsToCouple(venueId, id, {
+      wedding_date: 'wedding_date' in updates ? (updates.wedding_date as string | null) : undefined,
+      guest_count: 'guest_count' in updates ? (updates.guest_count as number | null) : undefined,
+    });
   }
 
   // SaaS is the system of record for contacts post-sync. Push any change to a

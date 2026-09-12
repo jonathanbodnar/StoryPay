@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getCoupleAuthUser } from '@/lib/couple-server';
-import { type CoupleWeddingRow } from '@/lib/couple-weddings';
+import { type CoupleWeddingRow, reconcileWeddingFieldsOnLink } from '@/lib/couple-weddings';
 import { sendWeddingHubConnectedEmail } from '@/lib/wedding-hub-emails';
 
 export const dynamic = 'force-dynamic';
@@ -114,6 +114,12 @@ export async function POST(request: NextRequest) {
   // Best-effort: let the venue know their invite was accepted. Never blocks
   // the claim itself — a bounced/misconfigured notification shouldn't undo it.
   void notifyVenueOfConnection((updated as { venue_id: string }).venue_id, invite);
+
+  // One-time sync so wedding date / guest count agree on both sides the
+  // moment they connect (fills only whichever side is genuinely empty).
+  if (invite.venue_customer_id) {
+    void reconcileWeddingFieldsOnLink(user.id, invite.venue_customer_id);
+  }
 
   return NextResponse.json({ ok: true });
 }

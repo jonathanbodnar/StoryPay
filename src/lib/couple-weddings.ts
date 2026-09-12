@@ -115,6 +115,108 @@ export async function ensureThreadForCustomer(
   return (created as { id: string } | null)?.id ?? null;
 }
 
+// ── Wedding date / guest count: single source of truth across couple + venue ─
+//
+// `couple_profiles.wedding_date`/`guest_count` (bride's own copy, drives her
+// wedding website) and `venue_customers.wedding_date`/`guest_count` (venue's
+// copy, drives Event Details + the bride-portal display) are separate columns
+// that predate the Wedding Hub connection. Once linked, we keep them in sync:
+// whichever side saves a change pushes it to the other, and — the moment a
+// couple first links to a venue — any existing gap is reconciled once,
+// filling only the side that's genuinely empty (never overwriting a value
+// either party already entered).
+
+export interface WeddingSyncFields {
+  wedding_date?: string | null;
+  guest_count?: number | null;
+}
+
+/** After the couple saves her own profile, push changed fields to her linked venue_customer row. */
+export async function syncWeddingFieldsToVenue(
+  coupleId: string,
+  fields: WeddingSyncFields,
+): Promise<void> {
+  if (fields.wedding_date === undefined && fields.guest_count === undefined) return;
+  const { data } = await supabaseAdmin
+    .from('couple_weddings')
+    .select('venue_customer_id')
+    .eq('couple_id', coupleId)
+    .eq('status', 'linked')
+    .maybeSingle();
+  const venueCustomerId = (data as { venue_customer_id: string | null } | null)?.venue_customer_id;
+  if (!venueCustomerId) return;
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (fields.wedding_date !== undefined) patch.wedding_date = fields.wedding_date;
+  if (fields.guest_count !== undefined) patch.guest_count = fields.guest_count;
+
+  const { error } = await supabaseAdmin.from('venue_customers').update(patch).eq('id', venueCustomerId);
+  if (error) console.error('[couple-weddings] syncWeddingFieldsToVenue', error);
+}
+
+/** After the venue saves Event Details, push changed fields to the linked couple's own profile. */
+export async function syncWeddingFieldsToCouple(
+  venueId: string,
+  venueCustomerId: string,
+  fields: WeddingSyncFields,
+): Promise<void> {
+  if (fields.wedding_date === undefined && fields.guest_count === undefined) return;
+  const { data } = await supabaseAdmin
+    .from('couple_weddings')
+    .select('couple_id')
+    .eq('venue_id', venueId)
+    .eq('venue_customer_id', venueCustomerId)
+    .eq('status', 'linked')
+    .maybeSingle();
+  const coupleId = (data as { couple_id: string | null } | null)?.couple_id;
+  if (!coupleId) return;
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (fields.wedding_date !== undefined) patch.wedding_date = fields.wedding_date;
+  if (fields.guest_count !== undefined) patch.guest_count = fields.guest_count;
+
+  const { error } = await supabaseAdmin.from('couple_profiles').update(patch).eq('id', coupleId);
+  if (error) console.error('[couple-weddings] syncWeddingFieldsToCouple', error);
+}
+
+/**
+ * One-time reconciliation the moment a couple/venue link is created. Fills a
+ * genuinely-empty field from the other side; never overwrites a value either
+ * party already entered (a real conflict is left alone rather than guessed at).
+ */
+export async function reconcileWeddingFieldsOnLink(
+  coupleId: string,
+  venueCustomerId: string,
+): Promise<void> {
+  const [{ data: cp }, { data: vc }] = await Promise.all([
+    supabaseAdmin.from('couple_profiles').select('wedding_date, guest_count').eq('id', coupleId).maybeSingle(),
+    supabaseAdmin.from('venue_customers').select('wedding_date, guest_count').eq('id', venueCustomerId).maybeSingle(),
+  ]);
+  const couple = cp as { wedding_date: string | null; guest_count: number | null } | null;
+  const venue = vc as { wedding_date: string | null; guest_count: number | null } | null;
+  if (!couple || !venue) return;
+
+  const couplePatch: Record<string, unknown> = {};
+  const venuePatch: Record<string, unknown> = {};
+
+  if (couple.wedding_date == null && venue.wedding_date != null) couplePatch.wedding_date = venue.wedding_date;
+  else if (venue.wedding_date == null && couple.wedding_date != null) venuePatch.wedding_date = couple.wedding_date;
+
+  if (couple.guest_count == null && venue.guest_count != null) couplePatch.guest_count = venue.guest_count;
+  else if (venue.guest_count == null && couple.guest_count != null) venuePatch.guest_count = couple.guest_count;
+
+  if (Object.keys(couplePatch).length) {
+    couplePatch.updated_at = new Date().toISOString();
+    const { error } = await supabaseAdmin.from('couple_profiles').update(couplePatch).eq('id', coupleId);
+    if (error) console.error('[couple-weddings] reconcile -> couple_profiles', error);
+  }
+  if (Object.keys(venuePatch).length) {
+    venuePatch.updated_at = new Date().toISOString();
+    const { error } = await supabaseAdmin.from('venue_customers').update(venuePatch).eq('id', venueCustomerId);
+    if (error) console.error('[couple-weddings] reconcile -> venue_customers', error);
+  }
+}
+
 // ── Wedding Hub status surfaced on the venue's contact profile ──────────────
 // Single source of truth: always read live from couple_weddings rather than
 // caching a "connected" flag on venue_customers, so it can never go stale if
