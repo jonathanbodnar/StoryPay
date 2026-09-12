@@ -104,6 +104,20 @@ type Site = {
 
 type GuestbookEntry = { id: string; guest_name: string; message: string; is_hidden: boolean; created_at: string };
 
+/** Timestamp shown next to each guestbook entry, e.g. "4-6-28 9:00pm". */
+function formatWhen(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  const year = d.getFullYear() % 100;
+  let hours = d.getHours();
+  const minutes = d.getMinutes().toString().padStart(2, '0');
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  hours = hours % 12 || 12;
+  return `${month}-${day}-${year} ${hours}:${minutes}${ampm}`;
+}
+
 const INPUT =
   'w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200';
 const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500';
@@ -961,9 +975,13 @@ export default function CoupleSitePage() {
             {gb.map((e) => (
               <div key={e.id} className={`rounded-[10px] border p-3 ${e.is_hidden ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'}`}>
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{e.guest_name}{e.is_hidden && <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-600">Hidden</span>}</p>
-                    <p className="text-sm text-gray-600">{e.message}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">
+                      {e.guest_name}
+                      {e.is_hidden && <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-600">Hidden</span>}
+                    </p>
+                    <p className="text-xs text-gray-400">{formatWhen(e.created_at)}</p>
+                    <p className="mt-1 text-sm text-gray-600">{e.message}</p>
                   </div>
                   <div className="flex flex-none gap-1">
                     <button onClick={() => void moderate(e.id, !e.is_hidden)} title={e.is_hidden ? 'Show' : 'Hide'} className="rounded-lg border border-gray-200 p-1.5 text-gray-500 hover:bg-gray-100">
