@@ -171,6 +171,16 @@ export async function GET(request: NextRequest) {
   const link = await getActiveCoupleWedding(user.id);
   const pendingInviteRow = user.email ? await getPendingInviteForEmail(user.email) : null;
 
+  // The couple's own saved wedding date (source of truth on couple_profiles).
+  // Returned un-redacted so the dashboard countdown always shows whenever a
+  // date is set, independent of the venue's per-field visibility toggles.
+  const { data: coupleProfile } = await supabaseAdmin
+    .from('couple_profiles')
+    .select('wedding_date')
+    .eq('id', user.id)
+    .maybeSingle();
+  const coupleWeddingDate = (coupleProfile as { wedding_date?: string | null } | null)?.wedding_date ?? null;
+
   let pendingInvite: { id: string; venue: Awaited<ReturnType<typeof getVenueSummary>> } | null = null;
   // Only surface an unclaimed invite when the bride isn't already actively linked
   // to that venue (avoids showing a stale invite for a venue she already joined).
@@ -184,6 +194,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     link: link ? await serializeLink(link, user.id) : null,
     pendingInvite,
+    coupleWeddingDate,
   });
 }
 

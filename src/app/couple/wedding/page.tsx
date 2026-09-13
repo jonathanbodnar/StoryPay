@@ -28,7 +28,6 @@ import {
   UserCircle2,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
-import { daysUntil } from '@/lib/wedding-checklist';
 
 type Venue = {
   id: string;
@@ -101,6 +100,7 @@ export default function CoupleWeddingPage() {
   const [loading, setLoading] = useState(true);
   const [link, setLink] = useState<Link_ | null>(null);
   const [pendingInvite, setPendingInvite] = useState<{ id: string; venue: Venue } | null>(null);
+  const [coupleWeddingDate, setCoupleWeddingDate] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -131,6 +131,7 @@ export default function CoupleWeddingPage() {
     }
     setLink(data.link ?? null);
     setPendingInvite(data.pendingInvite ?? null);
+    setCoupleWeddingDate(typeof data.coupleWeddingDate === 'string' ? data.coupleWeddingDate : null);
     setLoading(false);
   }, [router]);
 
@@ -224,11 +225,10 @@ export default function CoupleWeddingPage() {
     return [v.location_city, v.location_state].filter(Boolean).join(', ') || null;
   }, [link]);
 
-  const weddingDateShared = link?.shared?.wedding_date !== false;
-  const daysToWedding =
-    link?.status === 'linked' && weddingDateShared ? daysUntil(link.wedding?.wedding_date ?? null) : null;
-  const weddingDateLabel =
-    link?.status === 'linked' && weddingDateShared ? fmtDate(link.wedding?.wedding_date ?? null) : null;
+  // Countdown always shows whenever a wedding date is saved — the couple's own
+  // date is source of truth (falls back to the venue-shared date), so venue
+  // visibility toggles never hide it, and it re-renders live if the date changes.
+  const countdownDate = coupleWeddingDate || link?.wedding?.wedding_date || null;
 
   if (loading) {
     return (
@@ -245,25 +245,7 @@ export default function CoupleWeddingPage() {
           <h1 className="font-heading text-2xl text-gray-900">Wedding Planner</h1>
           <p className="mt-1 text-sm text-gray-500">Everything you need to plan your wedding in one place.</p>
         </div>
-        {daysToWedding !== null && daysToWedding >= 0 && (
-          <div className="shrink-0 rounded-2xl border border-gray-200 bg-white px-5 py-3 text-center shadow-sm">
-            <div className="flex items-center justify-center gap-1.5 text-[#1b1b1b]">
-              <CalendarDays className="h-3.5 w-3.5" />
-              <span className="text-[11px] font-semibold uppercase tracking-wide">
-                {daysToWedding === 0 ? "Today!" : 'Countdown'}
-              </span>
-            </div>
-            {daysToWedding === 0 ? (
-              <p className="mt-1 font-heading text-base text-[#1b1b1b]">It&apos;s your big day!</p>
-            ) : (
-              <>
-                <p className="mt-1 font-heading text-3xl leading-none text-[#1b1b1b]">{daysToWedding}</p>
-                <p className="text-xs text-gray-500">days to go</p>
-              </>
-            )}
-            {weddingDateLabel && <p className="mt-1 text-[11px] text-gray-400">{weddingDateLabel}</p>}
-          </div>
-        )}
+        {countdownDate && <WeddingCountdown date={countdownDate} />}
       </div>
 
       {error && (
@@ -331,18 +313,34 @@ export default function CoupleWeddingPage() {
             </div>
 
             {(link.venue?.address || link.venue?.phone || link.venue?.email || link.venue?.primary_contact) && (
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-4 space-y-1.5 text-sm text-gray-600">
                 {link.venue?.address && (
-                  <Detail icon={<MapPin className="h-4 w-4" />} label="Address" value={link.venue.address} />
+                  <p className="flex items-start gap-2">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                    <span>{link.venue.address}</span>
+                  </p>
                 )}
                 {link.venue?.primary_contact && (
-                  <Detail icon={<UserCircle2 className="h-4 w-4" />} label="Primary contact" value={link.venue.primary_contact} />
+                  <p className="flex items-center gap-2">
+                    <UserCircle2 className="h-4 w-4 shrink-0 text-gray-400" />
+                    <span>{link.venue.primary_contact}</span>
+                  </p>
                 )}
                 {link.venue?.phone && (
-                  <Detail icon={<Phone className="h-4 w-4" />} label="Phone" value={link.venue.phone} />
+                  <p className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 shrink-0 text-gray-400" />
+                    <a href={`tel:${link.venue.phone.replace(/[^\d+]/g, '')}`} className="hover:text-gray-900 hover:underline">
+                      {link.venue.phone}
+                    </a>
+                  </p>
                 )}
                 {link.venue?.email && (
-                  <Detail icon={<Mail className="h-4 w-4" />} label="Email" value={link.venue.email} />
+                  <p className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 shrink-0 text-gray-400" />
+                    <a href={`mailto:${link.venue.email}`} className="hover:text-gray-900 hover:underline">
+                      {link.venue.email}
+                    </a>
+                  </p>
                 )}
               </div>
             )}
@@ -583,6 +581,57 @@ function WeddingHubTools({ unread }: { unread: number }) {
           <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
         </Link>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Live wedding countdown — days / hrs / min / sec cells, ticking every second.
+ * Mirrors the couple's public wedding-website countdown (weddingdirectory
+ * minisite/Countdown.tsx) so the look is consistent across both surfaces.
+ */
+function WeddingCountdown({ date }: { date: string }) {
+  const target = useMemo(() => new Date(`${date}T00:00:00`).getTime(), [date]);
+  const [now, setNow] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  if (Number.isNaN(target)) return null;
+
+  const diff = target - now;
+  if (diff <= 0) {
+    return (
+      <div className="shrink-0 rounded-2xl border border-gray-200 bg-white px-5 py-3 text-center shadow-sm">
+        <p className="font-heading text-base text-[#1b1b1b]">You&apos;re married! 🤍</p>
+        <p className="mt-0.5 text-[11px] text-gray-400">{fmtDate(date)}</p>
+      </div>
+    );
+  }
+
+  const cells: [number, string][] = [
+    [Math.floor(diff / 86400000), 'days'],
+    [Math.floor((diff % 86400000) / 3600000), 'hrs'],
+    [Math.floor((diff % 3600000) / 60000), 'min'],
+    [Math.floor((diff % 60000) / 1000), 'sec'],
+  ];
+
+  return (
+    <div className="shrink-0">
+      <div className="flex items-stretch gap-2">
+        {cells.map(([value, label]) => (
+          <div
+            key={label}
+            className="flex w-[62px] flex-col items-center rounded-2xl border border-gray-200 bg-white px-2 py-2.5 shadow-sm"
+          >
+            <span className="text-2xl font-semibold tabular-nums text-[#1b1b1b]">{String(value).padStart(2, '0')}</span>
+            <span className="mt-0.5 text-[10px] uppercase tracking-wide text-gray-400">{label}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-1.5 text-right text-[11px] text-gray-400">{fmtDate(date)}</p>
     </div>
   );
 }
