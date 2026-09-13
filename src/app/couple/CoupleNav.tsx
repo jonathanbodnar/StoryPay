@@ -21,19 +21,21 @@ import {
   Contact,
   Images,
   Globe,
+  Send,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
-const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode }[] = [
+const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode; ownerOnly?: boolean }[] = [
   { href: '/couple/wedding', label: 'Wedding Planner home', desc: 'Your wedding overview', icon: <Home className="h-5 w-5" /> },
   { href: '/couple/guests', label: 'Guests & RSVPs', desc: 'Track invites, meals & replies', icon: <Users className="h-5 w-5" /> },
   { href: '/couple/seating', label: 'Seating', desc: 'Arrange tables & assign guests', icon: <Armchair className="h-5 w-5" /> },
   { href: '/couple/timeline', label: 'Day-of timeline', desc: 'Plan your day minute by minute', icon: <Clock className="h-5 w-5" /> },
   { href: '/couple/checklist', label: 'Checklist', desc: 'Every to-do with a countdown', icon: <ListChecks className="h-5 w-5" /> },
-  { href: '/couple/budget', label: 'Budget', desc: 'Track spending — private to you', icon: <Wallet className="h-5 w-5" /> },
+  { href: '/couple/budget', label: 'Budget', desc: 'Track spending — private to you', icon: <Wallet className="h-5 w-5" />, ownerOnly: true },
   { href: '/couple/vendors', label: 'Vendors', desc: 'All your day-of contacts', icon: <Contact className="h-5 w-5" /> },
   { href: '/couple/inspiration', label: 'Inspiration', desc: 'Your style & mood board', icon: <Images className="h-5 w-5" /> },
   { href: '/couple/site', label: 'Wedding website', desc: 'Your public wedding page', icon: <Globe className="h-5 w-5" /> },
+  { href: '/couple/invite-guests', label: 'Invite to website', desc: 'Email guests your wedding site', icon: <Send className="h-5 w-5" />, ownerOnly: true },
   { href: '/couple/messages', label: 'Messages', desc: 'Chat directly with your venue', icon: <MessageCircle className="h-5 w-5" /> },
 ];
 
@@ -187,7 +189,8 @@ export function CoupleNav() {
 }
 
 function WeddingPlannerModal({ onClose, hideBudget }: { onClose: () => void; hideBudget: boolean }) {
-  const tools = hideBudget ? HUB_TOOLS.filter((t) => t.href !== '/couple/budget') : HUB_TOOLS;
+  // `hideBudget` is really "is a collaborator" — hide all owner-only tools.
+  const tools = hideBudget ? HUB_TOOLS.filter((t) => !t.ownerOnly) : HUB_TOOLS;
   return (
     <div
       role="dialog"
