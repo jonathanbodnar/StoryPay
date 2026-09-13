@@ -88,7 +88,7 @@ interface VenueCustomer {
   venue_spaces: { id: string; name: string; color: string } | null;
   /** Live Wedding Planner connection status — read fresh from couple_weddings on
    *  every fetch (never cached/duplicated on the row itself). */
-  weddingHub?: { coupleWeddingId: string; status: 'linked' | 'pending'; initiatedBy: 'venue' | 'bride'; linkedAt: string | null } | null;
+  weddingPlanner?: { coupleWeddingId: string; status: 'linked' | 'pending'; initiatedBy: 'venue' | 'bride'; linkedAt: string | null } | null;
 }
 
 interface Proposal {
@@ -1634,7 +1634,7 @@ export default function ContactProfilePanel({
           <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-base text-gray-900 flex items-center gap-2"><Calendar size={15} /> Event Details</h2>
-              <WeddingHubBadge status={venueCustomer?.weddingHub} />
+              <WeddingPlannerBadge status={venueCustomer?.weddingPlanner} />
             </div>
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1699,8 +1699,8 @@ export default function ContactProfilePanel({
           </div>
 
           {/* Wedding Planner — guest list, RSVPs & shared room layout, once connected */}
-          {venueCustomer?.weddingHub?.status === 'linked' && (
-            <WeddingHubDetailCard coupleWeddingId={venueCustomer.weddingHub.coupleWeddingId} />
+          {venueCustomer?.weddingPlanner?.status === 'linked' && (
+            <WeddingPlannerDetailCard coupleWeddingId={venueCustomer.weddingPlanner.coupleWeddingId} />
           )}
 
           {/* ── Venue Spaces ── */}
@@ -2358,7 +2358,7 @@ interface WhGuestSummary {
   mealCounts: Record<string, number>;
 }
 
-function WeddingHubDetailCard({ coupleWeddingId }: { coupleWeddingId: string }) {
+function WeddingPlannerDetailCard({ coupleWeddingId }: { coupleWeddingId: string }) {
   const [loading, setLoading] = useState(true);
   const [guests, setGuests] = useState<WhGuestRow[]>([]);
   const [tables, setTables] = useState<WhTableRow[]>([]);
@@ -2371,8 +2371,8 @@ function WeddingHubDetailCard({ coupleWeddingId }: { coupleWeddingId: string }) 
       setLoading(true);
       try {
         const [gRes, lRes] = await Promise.all([
-          fetch(`/api/venue/wedding-hub/${coupleWeddingId}/guests`),
-          fetch(`/api/venue/wedding-hub/${coupleWeddingId}/layout`),
+          fetch(`/api/venue/wedding-planner/${coupleWeddingId}/guests`),
+          fetch(`/api/venue/wedding-planner/${coupleWeddingId}/layout`),
         ]);
         const gData = await gRes.json().catch(() => ({}));
         const lData = await lRes.json().catch(() => ({}));
@@ -2391,7 +2391,7 @@ function WeddingHubDetailCard({ coupleWeddingId }: { coupleWeddingId: string }) 
   }, [coupleWeddingId]);
 
   async function saveLayout(next: WeddingLayout) {
-    const res = await fetch(`/api/venue/wedding-hub/${coupleWeddingId}/layout`, {
+    const res = await fetch(`/api/venue/wedding-planner/${coupleWeddingId}/layout`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ layout: next }),
@@ -2537,11 +2537,11 @@ function WhRsvpBadge({ status }: { status: 'pending' | 'attending' | 'declined' 
 
 /**
  * Wedding Planner connection status badge for the contact profile. Always driven
- * by the live `weddingHub` field on the venue_customer row (fetched fresh
+ * by the live `weddingPlanner` field on the venue_customer row (fetched fresh
  * from couple_weddings server-side) — this is the single source of truth,
  * never a locally-set flag that could drift from reality.
  */
-function WeddingHubBadge({
+function WeddingPlannerBadge({
   status,
 }: {
   status?: { coupleWeddingId: string; status: 'linked' | 'pending'; initiatedBy: 'venue' | 'bride'; linkedAt: string | null } | null;
@@ -2551,7 +2551,7 @@ function WeddingHubBadge({
   if (status.status === 'linked') {
     return (
       <Link
-        href="/dashboard/wedding-hub"
+        href="/dashboard/wedding-planner"
         className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
       >
         <Heart size={12} /> Connected to Wedding Planner
@@ -2563,7 +2563,7 @@ function WeddingHubBadge({
   // connect and the venue needs to approve.
   return (
     <Link
-      href="/dashboard/wedding-hub"
+      href="/dashboard/wedding-planner"
       className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
     >
       <Heart size={12} />

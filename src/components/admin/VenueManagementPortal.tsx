@@ -67,8 +67,8 @@ export type AdminVenueRow = Record<string, unknown> & {
    *  inbox). Requires BOTH is_private_client AND venue_concierge = true. */
   venue_concierge?: boolean | null;
   /** Wedding Planner add-on flag — single source of truth for Wedding Planner access.
-   *  (DB col: wedding_hub) $97 / Free plans require this on to unlock. */
-  wedding_hub?: boolean | null;
+   *  (DB col: wedding_planner) $97 / Free plans require this on to unlock. */
+  wedding_planner?: boolean | null;
   directory_subscription_status?: string | null;
   directory_trial_ends_at?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
@@ -270,7 +270,7 @@ export function AddonCheckboxes({
   // Free plans need the admin override flag. The checkbox is the single source
   // of truth for granting it off-plan.
   const bridePortalFromPlan = isLegacy || (plan?.slug ?? '').toLowerCase().includes('all-inclusive');
-  const bridePortalOn = venue.wedding_hub === true || bridePortalFromPlan;
+  const bridePortalOn = venue.wedding_planner === true || bridePortalFromPlan;
 
   // Effective (displayed) states — plan-included addons show as checked
   // automatically (single source of truth with the plan assignment).
@@ -422,7 +422,7 @@ export function AddonCheckboxes({
           type="checkbox"
           checked={bridePortalOn}
           disabled={busy}
-          onChange={(e) => void onPatch(venue.id, { wedding_hub: e.target.checked })}
+          onChange={(e) => void onPatch(venue.id, { wedding_planner: e.target.checked })}
           className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
         />
         <span className="font-medium text-gray-600">Wedding Planner</span>

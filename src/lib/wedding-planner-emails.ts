@@ -1,7 +1,7 @@
 /**
  * Wedding Planner transactional emails:
- *   - wedding_hub_invite     — sent to the bride when a venue invites her to connect.
- *   - wedding_hub_connected  — sent to the venue owner when the bride accepts.
+ *   - wedding_planner_invite     — sent to the bride when a venue invites her to connect.
+ *   - wedding_planner_connected  — sent to the venue owner when the bride accepts.
  *
  * Both are editable System Email Templates (super admin → System Emails),
  * falling back to the registry defaults in system-email-registry.ts when no
@@ -27,7 +27,7 @@ interface TemplateOverride {
   button_text: string | null;
 }
 
-async function loadTemplate(key: 'wedding_hub_invite' | 'wedding_hub_connected'): Promise<TemplateOverride> {
+async function loadTemplate(key: 'wedding_planner_invite' | 'wedding_planner_connected'): Promise<TemplateOverride> {
   const def = SYSTEM_EMAIL_BY_KEY[key]!;
   const { data } = await supabaseAdmin
     .from('system_email_templates')
@@ -70,7 +70,7 @@ function buildHtml(tpl: TemplateOverride, vars: Record<string, string>, footerTe
 
 // ── Bride invite ─────────────────────────────────────────────────────────────
 
-export interface SendWeddingHubInviteParams {
+export interface SendWeddingPlannerInviteParams {
   toEmail: string;
   brideFirstName: string;
   venueName: string;
@@ -81,8 +81,8 @@ export interface SendWeddingHubInviteParams {
   brandEmail?: string;
 }
 
-export async function sendWeddingHubInviteEmail(
-  params: SendWeddingHubInviteParams,
+export async function sendWeddingPlannerInviteEmail(
+  params: SendWeddingPlannerInviteParams,
 ): Promise<{ success: boolean; error?: string }> {
   const { toEmail, brideFirstName, venueName, claimUrl, expiresInDays, brandEmail } = params;
   const vars: Record<string, string> = {
@@ -90,7 +90,7 @@ export async function sendWeddingHubInviteEmail(
     venue_name: venueName,
     action_url: claimUrl,
   };
-  const tpl = await loadTemplate('wedding_hub_invite');
+  const tpl = await loadTemplate('wedding_planner_invite');
   const subject = fillTemplate(tpl.subject, vars);
   const html = buildHtml(
     tpl,
@@ -102,7 +102,7 @@ export async function sendWeddingHubInviteEmail(
 
 // ── Venue "couple connected" notification ───────────────────────────────────
 
-export interface SendWeddingHubConnectedParams {
+export interface SendWeddingPlannerConnectedParams {
   toEmail: string;
   cc?: string[];
   ownerFirstName: string;
@@ -110,17 +110,17 @@ export interface SendWeddingHubConnectedParams {
   venueName: string;
 }
 
-export async function sendWeddingHubConnectedEmail(
-  params: SendWeddingHubConnectedParams,
+export async function sendWeddingPlannerConnectedEmail(
+  params: SendWeddingPlannerConnectedParams,
 ): Promise<{ success: boolean; error?: string }> {
   const { toEmail, cc, ownerFirstName, brideName, venueName } = params;
   const vars: Record<string, string> = {
     owner_first_name: ownerFirstName.trim() || 'there',
     bride_name: brideName.trim() || 'Your couple',
     venue_name: venueName,
-    action_url: `${APP_URL}/dashboard/wedding-hub`,
+    action_url: `${APP_URL}/dashboard/wedding-planner`,
   };
-  const tpl = await loadTemplate('wedding_hub_connected');
+  const tpl = await loadTemplate('wedding_planner_connected');
   const subject = fillTemplate(tpl.subject, vars);
   const html = buildHtml(tpl, vars, 'Sent by StoryVenue · Wedding Planner');
   return sendEmail({ to: toEmail, cc, subject, html });

@@ -43,8 +43,8 @@ export interface VenueFeatureRow {
   /** Admin "Wedding Planner" override flag (Venue Management / Project Management →
    *  Wedding Planner). Legacy + All-Inclusive plans get the Wedding Planner from their
    *  plan; for $97 / Free plans this flag (default FALSE) is the single source of
-   *  truth that overrides the gate and unlocks the feature. (DB col: wedding_hub) */
-  wedding_hub?: boolean | null;
+   *  truth that overrides the gate and unlocks the feature. (DB col: wedding_planner) */
+  wedding_planner?: boolean | null;
 }
 
 export interface PlanFeatureRow {
@@ -75,7 +75,7 @@ export interface VenueFeatureAccess {
 }
 
 export const VENUE_FEATURE_COLUMNS =
-  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override, venue_concierge, wedding_hub';
+  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override, venue_concierge, wedding_planner';
 export const PLAN_FEATURE_COLUMNS  = 'slug, name, is_legacy, feature_flags';
 
 function isLegacyPlan(plan: PlanFeatureRow | null): boolean {
@@ -114,9 +114,9 @@ export function resolveVenueFeatureAccess(
   const venueConciergeGranted = venue?.venue_concierge === true;
   // Wedding Planner is a paid / private-client feature. Legacy and All-Inclusive
   // plans get it automatically; the $97 and Free plans do NOT — an admin must
-  // check the Wedding Planner box (wedding_hub = true) to override the gate. The
+  // check the Wedding Planner box (wedding_planner = true) to override the gate. The
   // checkbox is the single source of truth for granting it off-plan.
-  const bridePortalEnabled = legacy || isAllInclusive || venue?.wedding_hub === true;
+  const bridePortalEnabled = legacy || isAllInclusive || venue?.wedding_planner === true;
 
   return {
     hasSms:              legacy || isAllInclusive || smsAdminOverride,

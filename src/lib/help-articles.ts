@@ -3173,13 +3173,13 @@ Good to know
     ],
   },
   {
-    id: 'wedding-hub',
+    id: 'wedding-planner',
     label: 'Wedding Planner',
     iconName: 'Heart',
     color: '#f43f5e',
     articles: [
       {
-        id: 'wedding-hub-overview',
+        id: 'wedding-planner-overview',
         title: 'Wedding Planner — one shared place for you and your couples',
         tags: ['wedding planner', 'wedding hub', 'bride portal', 'couple portal', 'portal', 'shared', 'connect couple', 'booked couple', 'planning', 'invite couple', 'link couple'],
         body: `Wedding Planner is one shared place for you and each booked couple to plan the wedding together — guest list, RSVPs, seating, meal selections, and messaging, all in one spot. The couple sees the same "Wedding Planner" inside their own StoryVenue login, so both sides always know where to go.
@@ -3206,7 +3206,7 @@ Availability
 Wedding Planner is included on private-client (Legacy / All-Inclusive) plans. On the $97 and Free plans it's an add-on — if it's locked, you'll see a short overview and a "Schedule a demo" button. It's a great way to add value to (or upsell into) your wedding packages.`,
       },
       {
-        id: 'wedding-hub-guests-seating',
+        id: 'wedding-planner-guests-seating',
         title: 'Wedding Planner — guest lists, RSVPs, and seating',
         tags: ['wedding planner', 'wedding hub', 'guest list', 'rsvp', 'meal', 'dietary', 'headcount', 'seating', 'tables', 'seating chart', 'invitations', 'beo'],
         body: `Inside a connected Wedding Planner, the couple manages the wedding-day details and you get exactly the planning information you need — without handling their guests' personal contact info.
@@ -3224,7 +3224,7 @@ Sharing controls
 You choose which wedding details the couple sees (wedding date, guest count, space / room, coordinator) from the toggles on the Wedding Planner page.`,
       },
       {
-        id: 'wedding-hub-website',
+        id: 'wedding-planner-website',
         title: 'Wedding Planner — the free couple wedding website',
         tags: ['wedding website', 'wedding site', 'minisite', 'link in bio', 'linktree', 'couple website', 'rsvp online', 'guestbook', 'countdown', 'registry link', 'share with guests', 'the knot', 'zola'],
         body: `Every couple in Wedding Planner can build a free, mobile-first wedding website right inside their StoryVenue login — no separate Knot or Zola account needed. It lives at storyvenue.com/their-custom-link, so they have one link to share on invitations, texts, and social profiles. It's a simple, linktree-style page dressed up as a wedding website — quick to set up, beautiful on a phone.

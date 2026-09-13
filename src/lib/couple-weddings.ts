@@ -238,7 +238,7 @@ export async function reconcileWeddingFieldsOnLink(
 // caching a "connected" flag on venue_customers, so it can never go stale if
 // a link is later revoked/declined elsewhere.
 
-export interface WeddingHubStatus {
+export interface WeddingPlannerStatus {
   coupleWeddingId: string;
   status: 'linked' | 'pending';
   initiatedBy: 'venue' | 'bride';
@@ -250,10 +250,10 @@ export interface WeddingHubStatus {
  * Prefers a 'linked' row over a 'pending' one (a couple can have at most one
  * active row per venue in practice, but this stays defensive).
  */
-export async function getWeddingHubStatusForVenueCustomer(
+export async function getWeddingPlannerStatusForVenueCustomer(
   venueId: string,
   venueCustomerId: string,
-): Promise<WeddingHubStatus | null> {
+): Promise<WeddingPlannerStatus | null> {
   const { data } = await supabaseAdmin
     .from('couple_weddings')
     .select('id, status, initiated_by, linked_at')
@@ -385,13 +385,13 @@ export async function getVenueBridePortalConfig(
   venueId: string,
 ): Promise<VenueBridePortalConfig> {
   const [{ data }, access] = await Promise.all([
-    supabaseAdmin.from('venues').select('wedding_hub_visibility').eq('id', venueId).maybeSingle(),
+    supabaseAdmin.from('venues').select('wedding_planner_visibility').eq('id', venueId).maybeSingle(),
     loadVenueFeatureAccess(venueId),
   ]);
-  const row = (data ?? {}) as { wedding_hub_visibility?: Record<string, unknown> | null };
+  const row = (data ?? {}) as { wedding_planner_visibility?: Record<string, unknown> | null };
   return {
     enabled: access.hasBridePortal,
-    visibility: resolveBridePortalVisibility(row.wedding_hub_visibility),
+    visibility: resolveBridePortalVisibility(row.wedding_planner_visibility),
   };
 }
 

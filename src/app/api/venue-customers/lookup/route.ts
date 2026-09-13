@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getEffectiveVenueId } from '@/lib/effective-venue';
-import { getWeddingHubStatusForVenueCustomer } from '@/lib/couple-weddings';
+import { getWeddingPlannerStatusForVenueCustomer } from '@/lib/couple-weddings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -33,11 +33,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: plainErr.message }, { status: 500 });
     }
     if (!plain) return NextResponse.json(null);
-    const weddingHub = await getWeddingHubStatusForVenueCustomer(venueId, (plain as { id: string }).id);
-    return NextResponse.json({ ...plain, weddingHub });
+    const weddingPlanner = await getWeddingPlannerStatusForVenueCustomer(venueId, (plain as { id: string }).id);
+    return NextResponse.json({ ...plain, weddingPlanner });
   }
 
   if (!data) return NextResponse.json(null);
-  const weddingHub = await getWeddingHubStatusForVenueCustomer(venueId, (data as { id: string }).id);
-  return NextResponse.json({ ...data, weddingHub });
+  const weddingPlanner = await getWeddingPlannerStatusForVenueCustomer(venueId, (data as { id: string }).id);
+  return NextResponse.json({ ...data, weddingPlanner });
 }

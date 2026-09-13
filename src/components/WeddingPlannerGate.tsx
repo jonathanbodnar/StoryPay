@@ -14,9 +14,9 @@ import { Heart, Lock } from 'lucide-react';
  * feature is fully released, remove this wrapper.
  */
 const GATE_CODE = '7111';
-const STORAGE_KEY = 'wedding_hub_beta_unlocked';
+const STORAGE_KEY = 'wedding_planner_beta_unlocked';
 
-export default function WeddingHubGate({ children }: { children: React.ReactNode }) {
+export default function WeddingPlannerGate({ children }: { children: React.ReactNode }) {
   const [unlocked, setUnlocked] = useState(false);
   const [ready, setReady] = useState(false);
   const [value, setValue] = useState('');

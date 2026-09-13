@@ -21,7 +21,7 @@ export type SystemEmailCategory =
   | 'ai'
   | 'concierge'
   | 'billing'
-  | 'wedding_hub';
+  | 'wedding_planner';
 
 export interface SystemEmailDef {
   key: string;
@@ -375,12 +375,12 @@ Reach out while they are hot — open their contact to start the conversation.`,
 
   // ── Wedding Planner (both editable) ─────────────────────────────────────────
   {
-    key: 'wedding_hub_invite',
+    key: 'wedding_planner_invite',
     label: 'Wedding Planner: Invite a Couple',
     description:
       'Sent to a bride/couple when a venue invites them to connect on the Wedding Planner, so she can see her shared wedding details and message the venue in one place.',
     trigger: 'Fires when a venue sends (or resends) an invite from Wedding Planner → "Invite a couple".',
-    category: 'wedding_hub',
+    category: 'wedding_planner',
     editable: true,
     defaults: {
       subject: '{{venue_name}} invited you to your Wedding Planner',
@@ -394,12 +394,12 @@ Click below to accept the invite. You'll confirm your details before anything is
     },
   },
   {
-    key: 'wedding_hub_connected',
+    key: 'wedding_planner_connected',
     label: 'Wedding Planner: Couple Connected',
     description:
       'Sent to the venue owner when a bride accepts their Wedding Planner invite and connects her account to the venue.',
     trigger: 'Fires when a bride accepts a venue-sent invite (couple claim flow).',
-    category: 'wedding_hub',
+    category: 'wedding_planner',
     editable: true,
     defaults: {
       subject: '{{bride_name}} connected to your Wedding Planner',
@@ -608,7 +608,7 @@ export const CATEGORY_LABELS: Record<SystemEmailCategory, string> = {
   ai: 'AI Concierge',
   concierge: 'Venue Concierge',
   billing: 'Billing',
-  wedding_hub: 'Wedding Planner',
+  wedding_planner: 'Wedding Planner',
 };
 
 /** Sample variables for test sends and browser previews. */
@@ -662,16 +662,16 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
     venue_name: 'Meadowbrook Estate',
     action_url: `${APP_URL}/dashboard/leads`,
   },
-  wedding_hub_invite: {
+  wedding_planner_invite: {
     bride_first_name: 'Emily',
     venue_name: 'Meadowbrook Estate',
     action_url: `${APP_URL}/couple/claim/example-token`,
   },
-  wedding_hub_connected: {
+  wedding_planner_connected: {
     owner_first_name: 'Sarah',
     bride_name: 'Emily Carter',
     venue_name: 'Meadowbrook Estate',
-    action_url: `${APP_URL}/dashboard/wedding-hub`,
+    action_url: `${APP_URL}/dashboard/wedding-planner`,
   },
   venue_concierge_message: {
     owner_first_name: 'Sarah',

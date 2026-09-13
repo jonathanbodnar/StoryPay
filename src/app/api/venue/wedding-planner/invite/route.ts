@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
-import { sendWeddingHubInviteEmail } from '@/lib/wedding-hub-emails';
+import { sendWeddingPlannerInviteEmail } from '@/lib/wedding-planner-emails';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -15,7 +15,7 @@ function isEmail(s: string): boolean {
 }
 
 /**
- * POST /api/venue/wedding-hub/invite
+ * POST /api/venue/wedding-planner/invite
  * Body: { email: string, name?: string }
  * Invites a booked couple to the bride portal. Finds (or creates) the matching
  * venue_customer, mints a claim token, and emails the couple a claim link.
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
   }
 
   const claimUrl = `${APP_URL}/couple/claim/${token}`;
-  const sendResult = await sendWeddingHubInviteEmail({
+  const sendResult = await sendWeddingPlannerInviteEmail({
     toEmail: email,
     brideFirstName: name ? name.split(/\s+/)[0] : '',
     venueName,

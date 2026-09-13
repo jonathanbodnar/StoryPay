@@ -22,7 +22,7 @@ import {
   UserPlus,
   User,
 } from 'lucide-react';
-import WeddingHubGate from '@/components/WeddingHubGate';
+import WeddingPlannerGate from '@/components/WeddingPlannerGate';
 import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
 import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
 import TimelineEditor from '@/components/wedding-timeline/TimelineEditor';
@@ -122,17 +122,17 @@ function fmtDate(d: string | null): string {
   return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export default function WeddingHubPage() {
+export default function WeddingPlannerPage() {
   // Temporary private-beta password gate (code 7111). Children — and their data
   // fetches — only mount after the gate is unlocked. Remove once fully released.
   return (
-    <WeddingHubGate>
-      <WeddingHubContent />
-    </WeddingHubGate>
+    <WeddingPlannerGate>
+      <WeddingPlannerContent />
+    </WeddingPlannerGate>
   );
 }
 
-function WeddingHubContent() {
+function WeddingPlannerContent() {
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [links, setLinks] = useState<LinkItem[]>([]);
@@ -172,7 +172,7 @@ function WeddingHubContent() {
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/venue/wedding-hub');
+    const res = await fetch('/api/venue/wedding-planner');
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError(typeof data.error === 'string' ? data.error : 'Failed to load');
@@ -195,7 +195,7 @@ function WeddingHubContent() {
     setVisibility(next);
     setSavingVis(true);
     try {
-      const res = await fetch('/api/venue/wedding-hub/settings', {
+      const res = await fetch('/api/venue/wedding-planner/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ visibility: next }),
@@ -217,12 +217,12 @@ function WeddingHubContent() {
       setLoadingDetailId(id);
       try {
         const [gRes, lRes, tRes, iRes, ckRes, vnRes] = await Promise.all([
-          fetch(`/api/venue/wedding-hub/${id}/guests`),
-          fetch(`/api/venue/wedding-hub/${id}/layout`),
-          fetch(`/api/venue/wedding-hub/${id}/timeline`),
-          fetch(`/api/venue/wedding-hub/${id}/inspiration`),
-          fetch(`/api/venue/wedding-hub/${id}/checklist`),
-          fetch(`/api/venue/wedding-hub/${id}/vendors`),
+          fetch(`/api/venue/wedding-planner/${id}/guests`),
+          fetch(`/api/venue/wedding-planner/${id}/layout`),
+          fetch(`/api/venue/wedding-planner/${id}/timeline`),
+          fetch(`/api/venue/wedding-planner/${id}/inspiration`),
+          fetch(`/api/venue/wedding-planner/${id}/checklist`),
+          fetch(`/api/venue/wedding-planner/${id}/vendors`),
         ]);
         const gData = await gRes.json().catch(() => ({}));
         if (gRes.ok) {
@@ -246,7 +246,7 @@ function WeddingHubContent() {
   }
 
   async function saveVenueLayout(weddingId: string, next: WeddingLayout) {
-    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/layout`, {
+    const res = await fetch(`/api/venue/wedding-planner/${weddingId}/layout`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ layout: next }),
@@ -262,7 +262,7 @@ function WeddingHubContent() {
   }
 
   async function saveVenueTimeline(weddingId: string, next: WeddingTimeline) {
-    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/timeline`, {
+    const res = await fetch(`/api/venue/wedding-planner/${weddingId}/timeline`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ timeline: next }),
@@ -278,7 +278,7 @@ function WeddingHubContent() {
   }
 
   async function saveVenueInspiration(weddingId: string, next: WeddingInspiration) {
-    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/inspiration`, {
+    const res = await fetch(`/api/venue/wedding-planner/${weddingId}/inspiration`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ inspiration: next }),
@@ -294,7 +294,7 @@ function WeddingHubContent() {
   }
 
   async function resolveVenueInspirationLink(weddingId: string, url: string) {
-    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/inspiration/resolve-link`, {
+    const res = await fetch(`/api/venue/wedding-planner/${weddingId}/inspiration/resolve-link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
@@ -305,7 +305,7 @@ function WeddingHubContent() {
   }
 
   async function saveVenueChecklist(weddingId: string, next: WeddingChecklist) {
-    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/checklist`, {
+    const res = await fetch(`/api/venue/wedding-planner/${weddingId}/checklist`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ checklist: next }),
@@ -321,7 +321,7 @@ function WeddingHubContent() {
   }
 
   async function saveVenueVendors(weddingId: string, next: WeddingVendors) {
-    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/vendors`, {
+    const res = await fetch(`/api/venue/wedding-planner/${weddingId}/vendors`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vendors: next }),
@@ -340,7 +340,7 @@ function WeddingHubContent() {
     setActingId(id);
     setError('');
     try {
-      const res = await fetch('/api/venue/wedding-hub/decide', {
+      const res = await fetch('/api/venue/wedding-planner/decide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, action }),
@@ -477,7 +477,7 @@ function WeddingHubContent() {
         }
       }
 
-      const res = await fetch('/api/venue/wedding-hub/invite', {
+      const res = await fetch('/api/venue/wedding-planner/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, name: name || undefined }),

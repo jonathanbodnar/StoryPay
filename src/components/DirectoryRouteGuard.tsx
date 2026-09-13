@@ -38,7 +38,7 @@ export function DirectoryRouteGuard({
 
   // Bride Portal is add-on-gated (included by default) — enforce even for
   // legacy/full-access venues that bypass plan gating.
-  if (pathname.startsWith('/dashboard/wedding-hub') && !hasBridePortal) {
+  if (pathname.startsWith('/dashboard/wedding-planner') && !hasBridePortal) {
     return (
       <LockedFeatureOverlay featureName="Wedding Planner" navId="nav_listing_bride_portal">
         {children}

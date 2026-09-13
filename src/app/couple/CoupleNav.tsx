@@ -158,12 +158,12 @@ export function CoupleNav() {
         </div>
       </nav>
 
-      {hubOpen && <WeddingHubModal onClose={() => setHubOpen(false)} />}
+      {hubOpen && <WeddingPlannerModal onClose={() => setHubOpen(false)} />}
     </>
   );
 }
 
-function WeddingHubModal({ onClose }: { onClose: () => void }) {
+function WeddingPlannerModal({ onClose }: { onClose: () => void }) {
   return (
     <div
       role="dialog"

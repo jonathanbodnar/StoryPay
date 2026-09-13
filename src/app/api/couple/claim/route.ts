@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getCoupleAuthUser } from '@/lib/couple-server';
 import { type CoupleWeddingRow, reconcileWeddingFieldsOnLink } from '@/lib/couple-weddings';
-import { sendWeddingHubConnectedEmail } from '@/lib/wedding-hub-emails';
+import { sendWeddingPlannerConnectedEmail } from '@/lib/wedding-planner-emails';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -137,7 +137,7 @@ async function notifyVenueOfConnection(venueId: string, invite: CoupleWeddingRow
     const toEmail = (v.notification_email || v.email || '').trim();
     if (!toEmail) return;
 
-    await sendWeddingHubConnectedEmail({
+    await sendWeddingPlannerConnectedEmail({
       toEmail,
       ownerFirstName: v.owner_first_name?.trim() || 'there',
       brideName: (invite.invited_name ?? '').trim() || (invite.invited_email ?? '').trim() || 'Your couple',

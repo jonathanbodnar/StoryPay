@@ -392,7 +392,7 @@ export default function CoupleWeddingPage() {
               <span className="text-sm font-medium text-gray-700 underline">Manage</span>
             </Link>
 
-            <WeddingHubTools unread={link.thread?.unread ?? 0} />
+            <WeddingPlannerTools unread={link.thread?.unread ?? 0} />
 
             <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-4 text-sm">
               {link.venue?.slug && (
@@ -541,7 +541,7 @@ const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactN
   { href: '/couple/site', label: 'Wedding website', desc: 'Your public wedding page', icon: <Globe className="h-5 w-5" /> },
 ];
 
-function WeddingHubTools({ unread }: { unread: number }) {
+function WeddingPlannerTools({ unread }: { unread: number }) {
   return (
     <div className="mt-6">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Plan your wedding</h3>

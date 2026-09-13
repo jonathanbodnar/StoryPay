@@ -228,6 +228,10 @@ const nextConfig: NextConfig = {
       // AI Concierge moved from settings → marketing (May 2026). Forward
       // bookmarks + any old email CTAs.
       { source: "/dashboard/settings/ai-concierge", destination: "/dashboard/marketing/ai-concierge", permanent: true },
+      // Wedding Hub → Wedding Planner (Sep 2026). Forward old bookmarks and any
+      // links in previously-sent emails so they don't 404.
+      { source: "/dashboard/wedding-hub", destination: "/dashboard/wedding-planner", permanent: true },
+      { source: "/dashboard/wedding-hub/:path*", destination: "/dashboard/wedding-planner/:path*", permanent: true },
     ];
   },
 };
