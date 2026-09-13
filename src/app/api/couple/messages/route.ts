@@ -5,6 +5,7 @@ import {
   getActiveCoupleWedding,
   ensureThreadForCustomer,
   coupleReaderRef,
+  canCoupleTextVenue,
 } from '@/lib/couple-weddings';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,8 @@ interface SerializedMessage {
   created_at: string;
   mine: boolean;
   author: string;
+  channel: 'sms' | 'email';
+  sent: boolean;
 }
 
 async function resolveContext(coupleId: string, coupleEmail: string | undefined) {
@@ -65,7 +68,7 @@ export async function GET(request: NextRequest) {
 
   const { data: rows, error } = await supabaseAdmin
     .from('conversation_messages')
-    .select('id, body, created_at, sender_kind, visibility, support_only')
+    .select('id, body, created_at, sender_kind, visibility, support_only, channel, external_email_sent')
     .eq('thread_id', ctx.threadId)
     .eq('visibility', 'external')
     .eq('support_only', false)
@@ -77,7 +80,14 @@ export async function GET(request: NextRequest) {
   }
 
   const messages: SerializedMessage[] = (rows ?? []).map((m) => {
-    const row = m as { id: string; body: string; created_at: string; sender_kind: string };
+    const row = m as {
+      id: string;
+      body: string;
+      created_at: string;
+      sender_kind: string;
+      channel?: string | null;
+      external_email_sent?: boolean | null;
+    };
     const mine = row.sender_kind === 'contact';
     return {
       id: row.id,
@@ -85,6 +95,8 @@ export async function GET(request: NextRequest) {
       created_at: row.created_at,
       mine,
       author: mine ? 'You' : ctx.venueName,
+      channel: row.channel === 'sms' ? 'sms' : 'email',
+      sent: row.external_email_sent === true,
     };
   });
 
@@ -94,14 +106,16 @@ export async function GET(request: NextRequest) {
     { onConflict: 'thread_id,reader_ref' },
   );
 
-  return NextResponse.json({ linked: true, venueName: ctx.venueName, messages });
+  const canText = await canCoupleTextVenue(ctx.venueId);
+
+  return NextResponse.json({ linked: true, venueName: ctx.venueName, messages, canText });
 }
 
 export async function POST(request: NextRequest) {
   const user = await getCoupleAuthUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { body?: string };
+  let body: { body?: string; channel?: string };
   try {
     body = await request.json();
   } catch {
@@ -116,6 +130,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'You are not connected to a venue yet.' }, { status: 400 });
   }
 
+  // Never trust the client's requested channel for SMS — re-check the venue's
+  // A2P + plan qualification server-side before tagging (and delivering) the
+  // message as a text.
+  let channel: 'sms' | 'email' = 'email';
+  if (body.channel === 'sms') {
+    channel = (await canCoupleTextVenue(ctx.venueId)) ? 'sms' : 'email';
+  }
+
   const contactEmail = (user.email ?? '').trim().toLowerCase() || null;
 
   const { data: inserted, error: insErr } = await supabaseAdmin
@@ -123,7 +145,7 @@ export async function POST(request: NextRequest) {
     .insert({
       thread_id: ctx.threadId,
       visibility: 'external',
-      channel: 'email',
+      channel,
       body: text,
       sender_kind: 'contact',
       contact_from_name: ctx.brideName,
@@ -168,7 +190,7 @@ export async function POST(request: NextRequest) {
         venueCustomerId: ctx.venueCustomerId,
         messageId,
         body: text,
-        channel: 'email',
+        channel,
         senderKind: 'contact',
         sentByVenueSupport: false,
         supportAgentId: null,
@@ -212,6 +234,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    message: { id: messageId, body: text, created_at: createdAt, mine: true, author: 'You' },
+    message: { id: messageId, body: text, created_at: createdAt, mine: true, author: 'You', channel, sent: false },
   });
 }

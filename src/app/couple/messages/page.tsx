@@ -3,15 +3,29 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Send, ArrowLeft } from 'lucide-react';
+import { Loader2, Send, ArrowLeft, MessageSquare, Mail, Check, Lock } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
-type Message = { id: string; body: string; created_at: string; mine: boolean; author: string };
+type Channel = 'sms' | 'email';
+
+type Message = {
+  id: string;
+  body: string;
+  created_at: string;
+  mine: boolean;
+  author: string;
+  channel: Channel;
+  sent: boolean;
+};
 
 function fmtTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function classNames(...xs: (string | false | null | undefined)[]): string {
+  return xs.filter(Boolean).join(' ');
 }
 
 export default function CoupleMessagesPage() {
@@ -20,6 +34,8 @@ export default function CoupleMessagesPage() {
   const [linked, setLinked] = useState(true);
   const [venueName, setVenueName] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [canText, setCanText] = useState(false);
+  const [channel, setChannel] = useState<Channel>('email');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -48,6 +64,7 @@ export default function CoupleMessagesPage() {
       }
       setLinked(true);
       setVenueName(typeof data.venueName === 'string' ? data.venueName : null);
+      setCanText(data.canText === true);
       setMessages((prev) => {
         const next = Array.isArray(data.messages) ? (data.messages as Message[]) : [];
         if (next.length !== prev.length) scrollOnNext.current = true;
@@ -61,6 +78,12 @@ export default function CoupleMessagesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // If texting isn't available for this venue, never leave the composer
+  // pointed at a channel the bride can't actually use.
+  useEffect(() => {
+    if (!canText && channel === 'sms') setChannel('email');
+  }, [canText, channel]);
 
   // Light polling so venue replies appear without a manual refresh.
   useEffect(() => {
@@ -85,7 +108,7 @@ export default function CoupleMessagesPage() {
     try {
       const res = await coupleAuthedFetch('/api/couple/messages', {
         method: 'POST',
-        body: JSON.stringify({ body: text }),
+        body: JSON.stringify({ body: text, channel }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -135,29 +158,51 @@ export default function CoupleMessagesPage() {
         </div>
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto py-4">
+      <div className="flex-1 space-y-2.5 overflow-y-auto py-4">
         {messages.length === 0 ? (
           <div className="py-16 text-center text-sm text-gray-400">
             No messages yet. Say hello to {venueName || 'your venue'} 👋
           </div>
         ) : (
-          messages.map((m) => (
-            <div key={m.id} className={m.mine ? 'flex justify-end' : 'flex justify-start'}>
-              <div className="max-w-[80%]">
+          messages.map((m) => {
+            const ChannelIcon = m.channel === 'sms' ? MessageSquare : Mail;
+            const channelLabel = m.channel === 'sms' ? 'SMS' : 'Email';
+            return (
+              <div
+                key={m.id}
+                className={classNames(
+                  'flex max-w-[85%] items-start gap-1.5',
+                  m.mine ? 'ml-auto flex-row-reverse' : 'mr-auto',
+                )}
+              >
                 <div
-                  className={[
-                    'rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap break-words',
-                    m.mine ? 'bg-[#1b1b1b] text-white' : 'border border-gray-200 bg-white text-gray-900',
-                  ].join(' ')}
+                  className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-gray-600"
+                  title={channelLabel}
+                  aria-label={channelLabel}
                 >
-                  {m.body}
+                  <ChannelIcon size={10} strokeWidth={2} />
                 </div>
-                <p className={`mt-1 text-[11px] text-gray-400 ${m.mine ? 'text-right' : 'text-left'}`}>
-                  {m.mine ? 'You' : m.author} · {fmtTime(m.created_at)}
-                </p>
+                <div className={classNames('flex min-w-0 flex-col gap-0.5', m.mine ? 'items-end' : 'items-start')}>
+                  <div
+                    className={classNames(
+                      'max-w-full rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap break-words',
+                      m.mine ? 'bg-[#1b1b1b] text-white' : 'border border-gray-200 bg-white text-gray-900',
+                    )}
+                  >
+                    {m.body}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 px-1 text-[11px] text-gray-400">
+                    <span>{m.mine ? 'You' : m.author} · {fmtTime(m.created_at)}</span>
+                    {m.mine && m.sent && (
+                      <span className="inline-flex items-center gap-0.5 text-emerald-600" title={`${channelLabel} delivered`}>
+                        <Check size={10} strokeWidth={3} /> Sent
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={bottomRef} />
       </div>
@@ -165,10 +210,40 @@ export default function CoupleMessagesPage() {
       {error && <div className="mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
 
       <div className="border-t border-gray-200 pt-3">
+        <div className="mb-2 flex rounded-2xl bg-gray-100 p-1">
+          <button
+            type="button"
+            onClick={() => canText && setChannel('sms')}
+            title={canText ? undefined : 'Texting isn\u2019t set up for this venue yet — messages will be sent by email.'}
+            className={classNames(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors',
+              channel === 'sms' && canText
+                ? 'border border-gray-200 bg-white text-gray-900'
+                : canText
+                  ? 'text-gray-600 hover:text-gray-900'
+                  : 'cursor-not-allowed text-gray-300',
+            )}
+          >
+            {canText ? <MessageSquare size={14} /> : <Lock size={12} />}
+            Text
+          </button>
+          <button
+            type="button"
+            onClick={() => setChannel('email')}
+            className={classNames(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-colors',
+              channel === 'email' ? 'border border-gray-200 bg-white text-gray-900' : 'text-gray-600 hover:text-gray-900',
+            )}
+          >
+            <Mail size={14} />
+            Email
+          </button>
+        </div>
+
         <div className="flex items-end gap-2">
           <textarea
             className="min-h-[44px] max-h-40 flex-1 resize-none rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200"
-            placeholder={`Message ${venueName || 'your venue'}…`}
+            placeholder={`Message ${venueName || 'your venue'} by ${channel === 'sms' ? 'text' : 'email'}…`}
             value={draft}
             rows={1}
             onChange={(e) => setDraft(e.target.value)}
