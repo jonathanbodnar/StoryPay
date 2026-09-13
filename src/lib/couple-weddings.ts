@@ -39,6 +39,22 @@ export function coupleReaderRef(coupleId: string): string {
 }
 
 /**
+ * Can this venue's bride send/receive real SMS in the Wedding Hub Messages tab?
+ * Requires BOTH the plan-level gate (hasSms) AND that the venue's A2P 10DLC
+ * registration is actually verified — texting a real carrier number on an
+ * unregistered brand/campaign risks the messages being filtered or the
+ * number being flagged, so we're stricter here than the venue's own SMS
+ * composer (which only checks the plan).
+ */
+export async function canCoupleTextVenue(venueId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin.from('venues').select('a2p_verified').eq('id', venueId).maybeSingle();
+  const a2pVerified = (data as { a2p_verified?: boolean | null } | null)?.a2p_verified === true;
+  if (!a2pVerified) return false;
+  const access = await loadVenueFeatureAccess(venueId);
+  return access.hasSms;
+}
+
+/**
  * The single active (linked first, else pending) wedding link for a couple.
  * Linked links win over pending so a claimed wedding always surfaces.
  */
@@ -261,6 +277,35 @@ export interface CoupleWeddingVenue {
   cover_image_url: string | null;
   location_city: string | null;
   location_state: string | null;
+  /** Full mailing address, e.g. "123 Main St, Columbus, OH 43215". */
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  /** The venue's primary point of contact (owner) for the bride to reach out to. */
+  primary_contact: string | null;
+}
+
+interface VenueSummaryRow {
+  id: string;
+  slug: string | null;
+  name: string | null;
+  cover_image_url: string | null;
+  location_city: string | null;
+  location_state: string | null;
+  brand_address: string | null;
+  brand_city: string | null;
+  brand_state: string | null;
+  brand_zip: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  brand_phone: string | null;
+  phone: string | null;
+  brand_email: string | null;
+  email: string | null;
+  owner_first_name: string | null;
+  owner_last_name: string | null;
 }
 
 export async function getVenueSummary(
@@ -268,10 +313,35 @@ export async function getVenueSummary(
 ): Promise<CoupleWeddingVenue | null> {
   const { data } = await supabaseAdmin
     .from('venues')
-    .select('id, slug, name, cover_image_url, location_city, location_state')
+    .select(
+      'id, slug, name, cover_image_url, location_city, location_state, brand_address, brand_city, brand_state, brand_zip, address, city, state, zip, brand_phone, phone, brand_email, email, owner_first_name, owner_last_name',
+    )
     .eq('id', venueId)
     .maybeSingle();
-  return (data as CoupleWeddingVenue | null) ?? null;
+  if (!data) return null;
+  const row = data as unknown as VenueSummaryRow;
+
+  const line1 = (row.brand_address || row.address || '').trim();
+  const cityStateZip = [
+    row.brand_city || row.city || '',
+    [row.brand_state || row.state || '', row.brand_zip || row.zip || ''].filter(Boolean).join(' '),
+  ]
+    .filter(Boolean)
+    .join(', ');
+  const address = [line1, cityStateZip].filter(Boolean).join(', ') || null;
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    cover_image_url: row.cover_image_url,
+    location_city: row.location_city,
+    location_state: row.location_state,
+    address,
+    phone: row.brand_phone || row.phone || null,
+    email: row.brand_email || row.email || null,
+    primary_contact: [row.owner_first_name, row.owner_last_name].filter(Boolean).join(' ').trim() || null,
+  };
 }
 
 // ── Venue-controlled visibility of wedding data to the bride ─────────────────

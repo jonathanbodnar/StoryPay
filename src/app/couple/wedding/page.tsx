@@ -23,8 +23,12 @@ import {
   Wallet,
   Globe,
   ChevronRight,
+  Mail,
+  Phone,
+  UserCircle2,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
+import { daysUntil } from '@/lib/wedding-checklist';
 
 type Venue = {
   id: string;
@@ -33,6 +37,10 @@ type Venue = {
   cover_image_url: string | null;
   location_city: string | null;
   location_state: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  primary_contact: string | null;
 } | null;
 
 type Wedding = {
@@ -216,6 +224,12 @@ export default function CoupleWeddingPage() {
     return [v.location_city, v.location_state].filter(Boolean).join(', ') || null;
   }, [link]);
 
+  const weddingDateShared = link?.shared?.wedding_date !== false;
+  const daysToWedding =
+    link?.status === 'linked' && weddingDateShared ? daysUntil(link.wedding?.wedding_date ?? null) : null;
+  const weddingDateLabel =
+    link?.status === 'linked' && weddingDateShared ? fmtDate(link.wedding?.wedding_date ?? null) : null;
+
   if (loading) {
     return (
       <div className="flex justify-center py-20 text-gray-400">
@@ -226,11 +240,30 @@ export default function CoupleWeddingPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-heading text-2xl text-gray-900">Wedding Hub</h1>
-          <p className="mt-1 text-sm text-gray-500">Everything you need to plan your wedding, all in one place.</p>
+          <p className="mt-1 text-sm text-gray-500">Everything you need to plan your wedding in one place.</p>
         </div>
+        {daysToWedding !== null && daysToWedding >= 0 && (
+          <div className="shrink-0 rounded-2xl border border-gray-200 bg-white px-5 py-3 text-center shadow-sm">
+            <div className="flex items-center justify-center gap-1.5 text-[#1b1b1b]">
+              <CalendarDays className="h-3.5 w-3.5" />
+              <span className="text-[11px] font-semibold uppercase tracking-wide">
+                {daysToWedding === 0 ? "Today!" : 'Countdown'}
+              </span>
+            </div>
+            {daysToWedding === 0 ? (
+              <p className="mt-1 font-heading text-base text-[#1b1b1b]">It&apos;s your big day!</p>
+            ) : (
+              <>
+                <p className="mt-1 font-heading text-3xl leading-none text-[#1b1b1b]">{daysToWedding}</p>
+                <p className="text-xs text-gray-500">days to go</p>
+              </>
+            )}
+            {weddingDateLabel && <p className="mt-1 text-[11px] text-gray-400">{weddingDateLabel}</p>}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -296,6 +329,23 @@ export default function CoupleWeddingPage() {
                 )}
               </Link>
             </div>
+
+            {(link.venue?.address || link.venue?.phone || link.venue?.email || link.venue?.primary_contact) && (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {link.venue?.address && (
+                  <Detail icon={<MapPin className="h-4 w-4" />} label="Address" value={link.venue.address} />
+                )}
+                {link.venue?.primary_contact && (
+                  <Detail icon={<UserCircle2 className="h-4 w-4" />} label="Primary contact" value={link.venue.primary_contact} />
+                )}
+                {link.venue?.phone && (
+                  <Detail icon={<Phone className="h-4 w-4" />} label="Phone" value={link.venue.phone} />
+                )}
+                {link.venue?.email && (
+                  <Detail icon={<Mail className="h-4 w-4" />} label="Email" value={link.venue.email} />
+                )}
+              </div>
+            )}
 
             {(() => {
               const shared = link.shared;
