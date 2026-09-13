@@ -1,6 +1,14 @@
+import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { CoupleNav } from './CoupleNav';
 import { CoupleLogo } from './CoupleLogo';
+
+export const metadata: Metadata = {
+  title: {
+    default: 'Wedding Hub',
+    template: '%s · Wedding Hub',
+  },
+};
 
 export default function CoupleLayout({ children }: { children: ReactNode }) {
   return (

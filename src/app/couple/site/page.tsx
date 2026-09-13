@@ -8,7 +8,7 @@ import {
   QrCode, Eye, EyeOff, Globe, Lock, Video, Bold, AlignLeft, AlignCenter, AlignRight,
   GripVertical, ChevronDown, Clock, Type, Images, Link2, MapPin,
   Settings, Instagram, Facebook, Music2, CalendarHeart, Navigation, Radio, CalendarPlus,
-  AlertTriangle, RotateCcw,
+  AlertTriangle, RotateCcw, Gift,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 import { LEAD_LINK_ICON_KEYS } from '@/lib/lead-link-icons';
@@ -19,8 +19,9 @@ const COUPLE_SITE_MAX_LINKS = 6;
 const MAX_GALLERY = 9;
 
 // Reorderable public-page blocks (kept in sync with couple-sites.ts server-side).
-const SECTION_KEYS = ['countdown', 'story', 'gallery', 'links', 'embed'] as const;
+const SECTION_KEYS = ['countdown', 'story', 'gallery', 'links', 'registry', 'embed'] as const;
 type SectionKey = (typeof SECTION_KEYS)[number];
+const MAX_REGISTRY = 12;
 const DEFAULT_ORDER: SectionKey[] = [...SECTION_KEYS];
 
 function sanitizeOrder(raw: unknown): SectionKey[] {
@@ -79,6 +80,7 @@ function htmlToPreview(html: string | null | undefined): string {
 }
 
 type Link = { label: string; url: string; icon: string };
+type RegistryItem = { label: string; url: string };
 type Site = {
   slug: string | null;
   is_published: boolean;
@@ -90,6 +92,7 @@ type Site = {
   cover_url: string | null;
   custom_links: Link[] | null;
   gallery: string[] | null;
+  registry_items: RegistryItem[] | null;
   embed_html: string | null;
   embed_enabled: boolean;
   embed_title: string | null;
@@ -124,7 +127,7 @@ const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gra
 
 const DEFAULT_SITE: Site = {
   slug: null, is_published: false, headline: null, partner_name: null, story: null, story_html: null,
-  photo_url: null, cover_url: null, custom_links: [], gallery: [],
+  photo_url: null, cover_url: null, custom_links: [], gallery: [], registry_items: [],
   embed_html: null, embed_enabled: false, embed_title: null, embed_mode: 'page', section_order: DEFAULT_ORDER,
   show_countdown: true, show_venue: true, show_guestbook: true, show_registry: true,
   guestbook_moderated: false,
@@ -189,6 +192,7 @@ export default function CoupleSitePage() {
       ...(incoming as Partial<Site>),
       custom_links: (incoming.custom_links as Link[]) ?? [],
       gallery: (incoming.gallery as string[]) ?? [],
+      registry_items: (incoming.registry_items as RegistryItem[]) ?? [],
       embed_mode: incoming.embed_mode === 'live' ? 'live' : 'page',
     });
     setOrder(sanitizeOrder(incoming.section_order));
@@ -327,6 +331,7 @@ export default function CoupleSitePage() {
       cover_url: merged.cover_url,
       custom_links: merged.custom_links ?? [],
       gallery: merged.gallery ?? [],
+      registry_items: merged.registry_items ?? [],
       embed_html: merged.embed_html,
       embed_enabled: merged.embed_enabled,
       embed_title: merged.embed_title,
@@ -426,6 +431,19 @@ export default function CoupleSitePage() {
     setLinkOver(null);
   }
 
+  // ── registry links ───────────────────────────────────────────────────────
+  const registry = site.registry_items ?? [];
+  function updateRegistry(i: number, patch: Partial<RegistryItem>) {
+    set('registry_items', registry.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+  function addRegistry() {
+    if (registry.length >= MAX_REGISTRY) return;
+    set('registry_items', [...registry, { label: '', url: '' }]);
+  }
+  function removeRegistry(i: number) {
+    set('registry_items', registry.filter((_, idx) => idx !== i));
+  }
+
   // ── section drag/drop ────────────────────────────────────────────────────
   function reorderSection(target: SectionKey) {
     if (!dragKey || dragKey === target) { setDragKey(null); setOverKey(null); return; }
@@ -459,6 +477,11 @@ export default function CoupleSitePage() {
     story: { title: 'Your story', icon: <Type size={16} />, summary: htmlToPreview(site.story_html || storySeed).slice(0, 60) || 'Not added yet' },
     gallery: { title: 'Photo gallery', icon: <Images size={16} />, summary: `${(site.gallery ?? []).length} photo${(site.gallery ?? []).length === 1 ? '' : 's'}` },
     links: { title: 'Links', icon: <Link2 size={16} />, summary: `${hasVenue && site.show_venue ? 'Venue + ' : ''}${links.length} link${links.length === 1 ? '' : 's'}` },
+    registry: {
+      title: 'Gift registry',
+      icon: <Gift size={16} />,
+      summary: site.show_registry ? `${registry.length} registr${registry.length === 1 ? 'y' : 'ies'}` : 'Hidden',
+    },
     embed: {
       title: 'Live video / embed',
       icon: <Video size={16} />,
@@ -612,6 +635,55 @@ export default function CoupleSitePage() {
               <button onClick={addLink} className="inline-flex items-center gap-1.5 rounded-2xl border border-dashed border-gray-300 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50">
                 <Plus size={15} /> Add link
               </button>
+            )}
+          </div>
+        );
+      case 'registry':
+        return (
+          <div className="space-y-3">
+            <Toggle label="Show your gift registry on your website" checked={site.show_registry} onChange={(v) => set('show_registry', v)} />
+            <p className="text-xs text-gray-500">
+              Paste links to any registries you use — Amazon, Zola, Target, Crate &amp; Barrel, a honeymoon fund, anything.
+              Guests tap through to the store. We don&apos;t host anything.
+            </p>
+            {site.show_registry && (
+              <>
+                {registry.map((r, i) => (
+                  <div key={i} className="rounded-[10px] border border-gray-200 bg-white p-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-[#1b1b1b] text-white"><Gift size={16} /></div>
+                      <input
+                        className={INPUT}
+                        placeholder="Store name (e.g. Amazon)"
+                        value={r.label}
+                        maxLength={80}
+                        onChange={(e) => updateRegistry(i, { label: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeRegistry(i)}
+                        className="flex-none rounded-lg p-2 text-gray-400 hover:bg-gray-50 hover:text-red-500"
+                        title="Remove"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    <input
+                      className={`${INPUT} mt-2`}
+                      placeholder="https://…"
+                      inputMode="url"
+                      value={r.url}
+                      maxLength={500}
+                      onChange={(e) => updateRegistry(i, { url: e.target.value })}
+                    />
+                  </div>
+                ))}
+                {registry.length < MAX_REGISTRY && (
+                  <button onClick={addRegistry} className="inline-flex items-center gap-1.5 rounded-2xl border border-dashed border-gray-300 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50">
+                    <Plus size={15} /> Add registry
+                  </button>
+                )}
+              </>
             )}
           </div>
         );
@@ -1145,6 +1217,7 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
   const initials = coupleName.split(/\s*&\s*|\s+/).map((w) => w.charAt(0)).join('').slice(0, 2).toUpperCase();
   const gallery = site.gallery ?? [];
   const linkItems = (site.custom_links ?? []).filter((l) => l.label || l.url);
+  const registryItems = site.show_registry ? (site.registry_items ?? []).filter((r) => r.label || r.url) : [];
   const cd = site.show_countdown && profile?.wedding_date ? previewCountdown(profile.wedding_date) : null;
   const cleanStory = sanitizePreviewHtml(storyHtml);
   const socials = [
@@ -1195,6 +1268,22 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
             </div>
           );
         })}
+      </div>
+    ) : null,
+    registry: registryItems.length > 0 ? (
+      <div key="registry" className="mt-5">
+        <p className="flex items-center justify-center gap-1.5 text-[12px] font-semibold" style={{ color: INK }}>
+          <Gift size={12} /> Gift registry
+        </p>
+        <div className="mt-2 space-y-2">
+          {registryItems.map((r, i) => (
+            <div key={i} className="flex items-center gap-2.5 rounded-[10px] border bg-white px-3 py-2.5" style={{ borderColor: LINE }}>
+              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-white" style={{ background: INK }}><Gift size={14} /></span>
+              <span className="block flex-1 truncate text-[12px] font-semibold" style={{ color: INK }}>{r.label || 'Registry'}</span>
+              <ExternalLink size={14} className="flex-none" style={{ color: MUTED }} />
+            </div>
+          ))}
+        </div>
       </div>
     ) : null,
     embed: site.embed_enabled && site.embed_html && site.embed_mode === 'page' ? (

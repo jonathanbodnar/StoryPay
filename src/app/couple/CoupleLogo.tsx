@@ -23,15 +23,25 @@ export function CoupleLogo() {
   const href = session ? '/couple/wedding' : '/';
 
   return (
-    <Link href={href} className="inline-flex items-center" aria-label="StoryVenue home">
-      <Image
-        src="/storyvenue-logo-dark.png"
-        alt="StoryVenue"
-        width={130}
-        height={32}
-        priority
-        className="h-7 w-auto"
-      />
-    </Link>
+    <div className="flex items-center gap-2.5">
+      <Link href={href} className="inline-flex items-center" aria-label="StoryVenue home">
+        <Image
+          src="/storyvenue-logo-dark.png"
+          alt="StoryVenue"
+          width={130}
+          height={32}
+          priority
+          className="h-7 w-auto"
+        />
+      </Link>
+      {session && (
+        <>
+          <span className="h-5 w-px bg-gray-200" aria-hidden />
+          <span className="rounded-full bg-[#1b1b1b] px-2.5 py-1 text-[11px] font-semibold tracking-wide text-white">
+            Wedding Hub
+          </span>
+        </>
+      )}
+    </div>
   );
 }

@@ -29,7 +29,11 @@ import TimelineEditor from '@/components/wedding-timeline/TimelineEditor';
 import { EMPTY_TIMELINE, type WeddingTimeline } from '@/lib/wedding-timeline';
 import InspirationBoard from '@/components/wedding-inspiration/InspirationBoard';
 import { EMPTY_INSPIRATION, type WeddingInspiration } from '@/lib/wedding-inspiration';
-import { Images } from 'lucide-react';
+import ChecklistEditor from '@/components/wedding-checklist/ChecklistEditor';
+import { EMPTY_CHECKLIST, type WeddingChecklist } from '@/lib/wedding-checklist';
+import VendorDirectory from '@/components/wedding-vendors/VendorDirectory';
+import { EMPTY_VENDORS, type WeddingVendors } from '@/lib/wedding-vendors';
+import { Images, ListChecks, Contact } from 'lucide-react';
 
 type GuestSummary = {
   total: number;
@@ -163,6 +167,8 @@ function WeddingHubContent() {
   const [layoutDetail, setLayoutDetail] = useState<Record<string, WeddingLayout>>({});
   const [timelineDetail, setTimelineDetail] = useState<Record<string, WeddingTimeline>>({});
   const [inspirationDetail, setInspirationDetail] = useState<Record<string, WeddingInspiration>>({});
+  const [checklistDetail, setChecklistDetail] = useState<Record<string, WeddingChecklist>>({});
+  const [vendorsDetail, setVendorsDetail] = useState<Record<string, WeddingVendors>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -210,11 +216,13 @@ function WeddingHubContent() {
     if (!guestDetail[id]) {
       setLoadingDetailId(id);
       try {
-        const [gRes, lRes, tRes, iRes] = await Promise.all([
+        const [gRes, lRes, tRes, iRes, ckRes, vnRes] = await Promise.all([
           fetch(`/api/venue/wedding-hub/${id}/guests`),
           fetch(`/api/venue/wedding-hub/${id}/layout`),
           fetch(`/api/venue/wedding-hub/${id}/timeline`),
           fetch(`/api/venue/wedding-hub/${id}/inspiration`),
+          fetch(`/api/venue/wedding-hub/${id}/checklist`),
+          fetch(`/api/venue/wedding-hub/${id}/vendors`),
         ]);
         const gData = await gRes.json().catch(() => ({}));
         if (gRes.ok) {
@@ -227,6 +235,10 @@ function WeddingHubContent() {
         setTimelineDetail((prev) => ({ ...prev, [id]: tData.timeline ? (tData.timeline as WeddingTimeline) : EMPTY_TIMELINE }));
         const iData = await iRes.json().catch(() => ({}));
         setInspirationDetail((prev) => ({ ...prev, [id]: iData.inspiration ? (iData.inspiration as WeddingInspiration) : EMPTY_INSPIRATION }));
+        const ckData = await ckRes.json().catch(() => ({}));
+        setChecklistDetail((prev) => ({ ...prev, [id]: ckData.checklist ? (ckData.checklist as WeddingChecklist) : EMPTY_CHECKLIST }));
+        const vnData = await vnRes.json().catch(() => ({}));
+        setVendorsDetail((prev) => ({ ...prev, [id]: vnData.vendors ? (vnData.vendors as WeddingVendors) : EMPTY_VENDORS }));
       } finally {
         setLoadingDetailId(null);
       }
@@ -290,6 +302,38 @@ function WeddingHubContent() {
     const data = await res.json().catch(() => ({}));
     const preview = data?.preview ?? {};
     return { imageUrl: preview.imageUrl ?? null, title: preview.title ?? null };
+  }
+
+  async function saveVenueChecklist(weddingId: string, next: WeddingChecklist) {
+    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/checklist`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checklist: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      if (data.checklist) setChecklistDetail((prev) => ({ ...prev, [weddingId]: data.checklist as WeddingChecklist }));
+      return { ok: false, conflict: true, checklist: data.checklist as WeddingChecklist | undefined };
+    }
+    if (!res.ok) return { ok: false };
+    if (data.checklist) setChecklistDetail((prev) => ({ ...prev, [weddingId]: data.checklist as WeddingChecklist }));
+    return { ok: true, checklist: data.checklist as WeddingChecklist | undefined };
+  }
+
+  async function saveVenueVendors(weddingId: string, next: WeddingVendors) {
+    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/vendors`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendors: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      if (data.vendors) setVendorsDetail((prev) => ({ ...prev, [weddingId]: data.vendors as WeddingVendors }));
+      return { ok: false, conflict: true, vendors: data.vendors as WeddingVendors | undefined };
+    }
+    if (!res.ok) return { ok: false };
+    if (data.vendors) setVendorsDetail((prev) => ({ ...prev, [weddingId]: data.vendors as WeddingVendors }));
+    return { ok: true, vendors: data.vendors as WeddingVendors | undefined };
   }
 
   async function decide(id: string, action: 'approve' | 'deny') {
@@ -910,6 +954,43 @@ function WeddingHubContent() {
                           />
                           <p className="mt-2 text-[11px] text-gray-400">
                             The couple curates this from Pinterest and links; you share the same board and can add to it.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Planning checklist — shared task list (venue can edit too) */}
+                      {checklistDetail[l.id] !== undefined && loadingDetailId !== l.id && (
+                        <div className="mt-5">
+                          <div className="mb-2 flex items-center gap-2">
+                            <ListChecks className="h-4 w-4 text-gray-400" />
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Planning checklist</h3>
+                          </div>
+                          <ChecklistEditor
+                            initial={checklistDetail[l.id]}
+                            onSave={(next) => saveVenueChecklist(l.id, next)}
+                            weddingDate={l.wedding_date}
+                            audience="venue"
+                          />
+                          <p className="mt-2 text-[11px] text-gray-400">
+                            You and the couple share this checklist — help them check things off as the day approaches.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Vendor directory — shared day-of contacts (venue can edit too) */}
+                      {vendorsDetail[l.id] !== undefined && loadingDetailId !== l.id && (
+                        <div className="mt-5">
+                          <div className="mb-2 flex items-center gap-2">
+                            <Contact className="h-4 w-4 text-gray-400" />
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Vendors</h3>
+                          </div>
+                          <VendorDirectory
+                            initial={vendorsDetail[l.id]}
+                            onSave={(next) => saveVenueVendors(l.id, next)}
+                            audience="venue"
+                          />
+                          <p className="mt-2 text-[11px] text-gray-400">
+                            Everyone working this wedding, in one place — you and the couple share this list.
                           </p>
                         </div>
                       )}

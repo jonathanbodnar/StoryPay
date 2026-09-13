@@ -14,9 +14,10 @@ import { slugify } from '@/lib/directory';
 
 export const COUPLE_SITE_MAX_LINKS = 6;
 export const COUPLE_SITE_MAX_GALLERY = 9;
+export const COUPLE_SITE_MAX_REGISTRY = 12;
 
 /** Reorderable public-page blocks, in their default top-to-bottom order. */
-export const SECTION_KEYS = ['countdown', 'story', 'gallery', 'links', 'embed'] as const;
+export const SECTION_KEYS = ['countdown', 'story', 'gallery', 'links', 'registry', 'embed'] as const;
 export type SectionKey = (typeof SECTION_KEYS)[number];
 export const DEFAULT_SECTION_ORDER: SectionKey[] = [...SECTION_KEYS];
 
@@ -39,6 +40,10 @@ export function sanitizeSectionOrder(raw: unknown): SectionKey[] {
 
 export type CoupleSiteLink = { label: string; url: string; icon: string };
 
+/** A gift-registry link the couple shows publicly (e.g. Amazon, Zola, Target).
+ *  We only ever store the store/label + an outbound URL — never anything hosted. */
+export type RegistryItem = { label: string; url: string };
+
 export interface CoupleSiteRow {
   id: string;
   couple_id: string;
@@ -51,6 +56,7 @@ export interface CoupleSiteRow {
   cover_url: string | null;
   custom_links: CoupleSiteLink[] | null;
   gallery: string[] | null;
+  registry_items: RegistryItem[] | null;
   embed_html: string | null;
   embed_enabled: boolean;
   embed_title: string | null;
@@ -71,7 +77,7 @@ export interface CoupleSiteRow {
 // NOTE: site_password_hash is deliberately NOT in this shared column list — it is
 // fetched only where needed (public gate / unlock) so it never leaks to a client.
 export const COUPLE_SITE_COLUMNS =
-  'id, couple_id, slug, is_published, headline, partner_name, story, story_html, photo_url, cover_url, custom_links, gallery, embed_html, embed_enabled, embed_title, embed_mode, section_order, show_countdown, show_venue, show_guestbook, show_registry, guestbook_moderated, created_at, updated_at';
+  'id, couple_id, slug, is_published, headline, partner_name, story, story_html, photo_url, cover_url, custom_links, gallery, registry_items, embed_html, embed_enabled, embed_title, embed_mode, section_order, show_countdown, show_venue, show_guestbook, show_registry, guestbook_moderated, created_at, updated_at';
 
 /** Clamp the embed purpose to a known value; unknown/absent → 'page'. */
 export function sanitizeEmbedMode(raw: unknown): 'page' | 'live' {
@@ -139,6 +145,27 @@ export function sanitizeGallery(raw: unknown): string[] {
 /** Public gallery URLs (same rules; safe to expose). */
 export function publicGallery(gallery: string[] | null | undefined): string[] {
   return sanitizeGallery(gallery);
+}
+
+/** Up to COUPLE_SITE_MAX_REGISTRY rows of { label, url }; requires an http(s) URL. */
+export function sanitizeRegistryItems(raw: unknown): RegistryItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: RegistryItem[] = [];
+  for (const row of raw.slice(0, COUPLE_SITE_MAX_REGISTRY)) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as { label?: unknown; url?: unknown };
+    const label = String(r.label ?? '').trim().slice(0, 80);
+    const url = String(r.url ?? '').trim().slice(0, 500);
+    out.push({ label, url });
+  }
+  return out;
+}
+
+/** Only registry rows with a label and a real outbound http(s) URL (safe to expose). */
+export function publicRegistryItems(items: RegistryItem[] | null | undefined): RegistryItem[] {
+  return (Array.isArray(items) ? items : [])
+    .filter((i) => i && typeof i.url === 'string' && /^https?:\/\//i.test(i.url.trim()) && String(i.label ?? '').trim().length > 0)
+    .slice(0, COUPLE_SITE_MAX_REGISTRY);
 }
 
 /**

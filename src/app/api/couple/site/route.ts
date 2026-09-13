@@ -9,6 +9,7 @@ import {
   normalizeCoupleSlug,
   sanitizeCoupleSiteLinks,
   sanitizeGallery,
+  sanitizeRegistryItems,
   sanitizeEmbedHtml,
   sanitizeEmbedMode,
   sanitizeSectionOrder,
@@ -128,6 +129,7 @@ export async function PUT(request: NextRequest) {
   if ('cover_url' in body) patch.cover_url = str(body.cover_url, 800);
   if ('custom_links' in body) patch.custom_links = sanitizeCoupleSiteLinks(body.custom_links);
   if ('gallery' in body) patch.gallery = sanitizeGallery(body.gallery);
+  if ('registry_items' in body) patch.registry_items = sanitizeRegistryItems(body.registry_items);
 
   // Embed (livestream / special element) — only a rebuilt https iframe is stored.
   if ('embed_html' in body) patch.embed_html = sanitizeEmbedHtml(body.embed_html);

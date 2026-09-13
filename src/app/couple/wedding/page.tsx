@@ -16,6 +16,13 @@ import {
   CheckCircle2,
   Clock,
   X,
+  Armchair,
+  Images,
+  ListChecks,
+  Contact,
+  Wallet,
+  Globe,
+  ChevronRight,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
@@ -221,8 +228,8 @@ export default function CoupleWeddingPage() {
     <div>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl text-gray-900">My wedding</h1>
-          <p className="mt-1 text-sm text-gray-500">Connect with your venue to plan and message in one place.</p>
+          <h1 className="font-heading text-2xl text-gray-900">Wedding Hub</h1>
+          <p className="mt-1 text-sm text-gray-500">Everything you need to plan your wedding, all in one place.</p>
         </div>
       </div>
 
@@ -336,6 +343,8 @@ export default function CoupleWeddingPage() {
               </div>
               <span className="text-sm font-medium text-gray-700 underline">Manage</span>
             </Link>
+
+            <WeddingHubTools unread={link.thread?.unread ?? 0} />
 
             <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-4 text-sm">
               {link.venue?.slug && (
@@ -469,6 +478,61 @@ export default function CoupleWeddingPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode }[] = [
+  { href: '/couple/guests', label: 'Guests & RSVPs', desc: 'Track invites, meals & replies', icon: <Users className="h-5 w-5" /> },
+  { href: '/couple/seating', label: 'Seating', desc: 'Arrange tables & assign guests', icon: <Armchair className="h-5 w-5" /> },
+  { href: '/couple/timeline', label: 'Day-of timeline', desc: 'Plan your day minute by minute', icon: <Clock className="h-5 w-5" /> },
+  { href: '/couple/checklist', label: 'Checklist', desc: 'Every to-do with a countdown', icon: <ListChecks className="h-5 w-5" /> },
+  { href: '/couple/budget', label: 'Budget', desc: 'Track spending — private to you', icon: <Wallet className="h-5 w-5" /> },
+  { href: '/couple/vendors', label: 'Vendors', desc: 'All your day-of contacts', icon: <Contact className="h-5 w-5" /> },
+  { href: '/couple/inspiration', label: 'Inspiration', desc: 'Your style & mood board', icon: <Images className="h-5 w-5" /> },
+  { href: '/couple/site', label: 'Wedding website', desc: 'Your public wedding page', icon: <Globe className="h-5 w-5" /> },
+];
+
+function WeddingHubTools({ unread }: { unread: number }) {
+  return (
+    <div className="mt-6">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Plan your wedding</h3>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {HUB_TOOLS.map((t) => (
+          <Link
+            key={t.href}
+            href={t.href}
+            className="group flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300 hover:bg-gray-50"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1b1b1b] text-white">
+              {t.icon}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-900">{t.label}</p>
+              <p className="truncate text-xs text-gray-500">{t.desc}</p>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        ))}
+        <Link
+          href="/couple/messages"
+          className="group flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300 hover:bg-gray-50"
+        >
+          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1b1b1b] text-white">
+            <MessageCircle className="h-5 w-5" />
+            {unread > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                {unread}
+              </span>
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-gray-900">Messages</p>
+            <p className="truncate text-xs text-gray-500">Chat directly with your venue</p>
+          </div>
+          <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      </div>
     </div>
   );
 }
