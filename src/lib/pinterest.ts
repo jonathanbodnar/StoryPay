@@ -1,7 +1,7 @@
 /**
  * Pinterest OAuth 2.0 + read helpers (v5 API).
  *
- * Per-couple connection powering the Wedding Hub inspiration board. Follows the
+ * Per-couple connection powering the Wedding Planner inspiration board. Follows the
  * QuickBooks/FreshBooks OAuth template (src/lib/accounting.ts): confidential
  * client, Basic-auth token exchange, refresh-token rotation. Tokens are stored
  * (encrypted) in the couple_integrations table.

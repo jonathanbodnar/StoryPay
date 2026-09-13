@@ -25,7 +25,7 @@ import {
 import { getCoupleSupabase } from '@/lib/couple-browser';
 
 const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode }[] = [
-  { href: '/couple/wedding', label: 'Wedding Hub home', desc: 'Your wedding overview', icon: <Home className="h-5 w-5" /> },
+  { href: '/couple/wedding', label: 'Wedding Planner home', desc: 'Your wedding overview', icon: <Home className="h-5 w-5" /> },
   { href: '/couple/guests', label: 'Guests & RSVPs', desc: 'Track invites, meals & replies', icon: <Users className="h-5 w-5" /> },
   { href: '/couple/seating', label: 'Seating', desc: 'Arrange tables & assign guests', icon: <Armchair className="h-5 w-5" /> },
   { href: '/couple/timeline', label: 'Day-of timeline', desc: 'Plan your day minute by minute', icon: <Clock className="h-5 w-5" /> },
@@ -61,7 +61,7 @@ export function CoupleNav() {
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
-  // Close the Wedding Hub modal on Escape, and lock body scroll while it's open.
+  // Close the Wedding Planner modal on Escape, and lock body scroll while it's open.
   useEffect(() => {
     if (!hubOpen) return;
     function onKey(e: KeyboardEvent) {
@@ -110,7 +110,7 @@ export function CoupleNav() {
           aria-haspopup="dialog"
           aria-expanded={hubOpen}
         >
-          <LayoutGrid className="h-4 w-4" /> Wedding Hub
+          <LayoutGrid className="h-4 w-4" /> Wedding Planner
         </button>
         <Link
           href="/couple/messages"
@@ -168,7 +168,7 @@ function WeddingHubModal({ onClose }: { onClose: () => void }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Wedding Hub"
+      aria-label="Wedding Planner"
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16 sm:pt-24"
       onClick={onClose}
     >
@@ -182,7 +182,7 @@ function WeddingHubModal({ onClose }: { onClose: () => void }) {
               <LayoutGrid className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="font-heading text-lg text-gray-900">Wedding Hub</h2>
+              <h2 className="font-heading text-lg text-gray-900">Wedding Planner</h2>
               <p className="text-xs text-gray-500">Jump to any part of your planning.</p>
             </div>
           </div>

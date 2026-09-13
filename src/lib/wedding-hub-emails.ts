@@ -1,5 +1,5 @@
 /**
- * Wedding Hub transactional emails:
+ * Wedding Planner transactional emails:
  *   - wedding_hub_invite     — sent to the bride when a venue invites her to connect.
  *   - wedding_hub_connected  — sent to the venue owner when the bride accepts.
  *
@@ -122,6 +122,6 @@ export async function sendWeddingHubConnectedEmail(
   };
   const tpl = await loadTemplate('wedding_hub_connected');
   const subject = fillTemplate(tpl.subject, vars);
-  const html = buildHtml(tpl, vars, 'Sent by StoryVenue · Wedding Hub');
+  const html = buildHtml(tpl, vars, 'Sent by StoryVenue · Wedding Planner');
   return sendEmail({ to: toEmail, cc, subject, html });
 }

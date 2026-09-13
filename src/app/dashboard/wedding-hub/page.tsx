@@ -510,7 +510,7 @@ function WeddingHubContent() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="flex items-center gap-2">
         <Heart className="h-6 w-6 text-rose-500" />
-        <h1 className="text-2xl font-semibold text-gray-900">Wedding Hub</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Wedding Planner</h1>
       </div>
       <p className="mt-1 text-sm text-gray-500">
         Connect your booked couples so they can see their wedding details and message you in one place — a single source of
@@ -746,7 +746,7 @@ function WeddingHubContent() {
                 />
               </div>
               <p className="text-xs text-gray-400 sm:col-span-2">
-                This creates a new contact in your Contacts list, then invites them to the Wedding Hub.
+                This creates a new contact in your Contacts list, then invites them to the Wedding Planner.
               </p>
             </div>
           )}

@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import { Heart, Lock } from 'lucide-react';
 
 /**
- * Temporary beta password gate for the Wedding Hub while the feature is still
+ * Temporary beta password gate for the Wedding Planner while the feature is still
  * being iterated on. Children are not mounted (and their data fetches don't
  * fire) until the correct code is entered. Unlock is remembered per-browser.
  *
  * NOTE: This is a soft gate — the code lives client-side and only deters casual
  * access during the beta. It is not a security boundary; real access control is
- * still enforced by auth + the plan/flag gating around the Wedding Hub. Once the
+ * still enforced by auth + the plan/flag gating around the Wedding Planner. Once the
  * feature is fully released, remove this wrapper.
  */
 const GATE_CODE = '7111';
@@ -59,9 +59,9 @@ export default function WeddingHubGate({ children }: { children: React.ReactNode
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-50">
           <Heart className="h-6 w-6 text-rose-500" />
         </div>
-        <h1 className="mt-4 text-lg font-semibold text-gray-900">Wedding Hub — Beta</h1>
+        <h1 className="mt-4 text-lg font-semibold text-gray-900">Wedding Planner — Beta</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Wedding Hub is in private beta. Enter your access code to continue.
+          Wedding Planner is in private beta. Enter your access code to continue.
         </p>
 
         <div className="mt-5">
@@ -91,7 +91,7 @@ export default function WeddingHubGate({ children }: { children: React.ReactNode
           type="submit"
           className="mt-4 w-full rounded-xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85"
         >
-          Unlock Wedding Hub
+          Unlock Wedding Planner
         </button>
       </form>
     </div>

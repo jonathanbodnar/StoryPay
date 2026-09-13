@@ -3174,25 +3174,25 @@ Good to know
   },
   {
     id: 'wedding-hub',
-    label: 'Wedding Hub',
+    label: 'Wedding Planner',
     iconName: 'Heart',
     color: '#f43f5e',
     articles: [
       {
         id: 'wedding-hub-overview',
-        title: 'Wedding Hub — one shared place for you and your couples',
-        tags: ['wedding hub', 'bride portal', 'couple portal', 'portal', 'shared', 'connect couple', 'booked couple', 'planning', 'invite couple', 'link couple'],
-        body: `Wedding Hub is one shared place for you and each booked couple to plan the wedding together — guest list, RSVPs, seating, meal selections, and messaging, all in one spot. The couple sees the same "Wedding Hub" inside their own StoryVenue login, so both sides always know where to go.
+        title: 'Wedding Planner — one shared place for you and your couples',
+        tags: ['wedding planner', 'wedding hub', 'bride portal', 'couple portal', 'portal', 'shared', 'connect couple', 'booked couple', 'planning', 'invite couple', 'link couple'],
+        body: `Wedding Planner is one shared place for you and each booked couple to plan the wedding together — guest list, RSVPs, seating, meal selections, and messaging, all in one spot. The couple sees the same "Wedding Planner" inside their own StoryVenue login, so both sides always know where to go.
 
-Tagline: Wedding Hub — one shared place for you and your venue.
+Tagline: Wedding Planner — one shared place for you and your venue.
 
 Where to find it
-Sidebar → Wedding Hub (heart icon). It's a top-level menu item, right after Venue Concierge.
+Sidebar → Wedding Planner (heart icon). It's a top-level menu item, right after Venue Concierge.
 
 Connecting a couple (works both ways)
-- You invite them: open Wedding Hub, enter the couple's email, and send an invite. They get a link to connect.
+- You invite them: open Wedding Planner, enter the couple's email, and send an invite. They get a link to connect.
 - They request you: a couple can find your venue and request to connect.
-Either way, you approve the link from your Wedding Hub. One couple links to one venue.
+Either way, you approve the link from your Wedding Planner. One couple links to one venue.
 
 What you get once connected
 - A live guest-list rollup: total invited, attending / declined / awaiting, headcount, and meal tallies for your BEO.
@@ -3200,34 +3200,34 @@ What you get once connected
 - A shared message thread with the couple, so wedding-day details don't get lost across email and texts.
 
 You decide what's shared
-On the Wedding Hub page you can toggle which wedding details the couple sees — wedding date, guest count, space / room, and coordinator.
+On the Wedding Planner page you can toggle which wedding details the couple sees — wedding date, guest count, space / room, and coordinator.
 
 Availability
-Wedding Hub is included on private-client (Legacy / All-Inclusive) plans. On the $97 and Free plans it's an add-on — if it's locked, you'll see a short overview and a "Schedule a demo" button. It's a great way to add value to (or upsell into) your wedding packages.`,
+Wedding Planner is included on private-client (Legacy / All-Inclusive) plans. On the $97 and Free plans it's an add-on — if it's locked, you'll see a short overview and a "Schedule a demo" button. It's a great way to add value to (or upsell into) your wedding packages.`,
       },
       {
         id: 'wedding-hub-guests-seating',
-        title: 'Wedding Hub — guest lists, RSVPs, and seating',
-        tags: ['wedding hub', 'guest list', 'rsvp', 'meal', 'dietary', 'headcount', 'seating', 'tables', 'seating chart', 'invitations', 'beo'],
-        body: `Inside a connected Wedding Hub, the couple manages the wedding-day details and you get exactly the planning information you need — without handling their guests' personal contact info.
+        title: 'Wedding Planner — guest lists, RSVPs, and seating',
+        tags: ['wedding planner', 'wedding hub', 'guest list', 'rsvp', 'meal', 'dietary', 'headcount', 'seating', 'tables', 'seating chart', 'invitations', 'beo'],
+        body: `Inside a connected Wedding Planner, the couple manages the wedding-day details and you get exactly the planning information you need — without handling their guests' personal contact info.
 
 Guest list & RSVPs (couple-owned)
 The couple builds their own guest list — names, party size, meal choice, dietary notes, and groups — and can email self-service RSVP links to their guests. Guests RSVP on a simple mobile page and pick their meal.
 
 What you see (no contact PII)
-On your Wedding Hub, expand a connected couple to see a live rollup: attending / declined / awaiting counts, total headcount, and a meal-by-meal tally for your catering and BEO. You do not see guest emails, phone numbers, or addresses — those stay with the couple.
+On your Wedding Planner, expand a connected couple to see a live rollup: attending / declined / awaiting counts, total headcount, and a meal-by-meal tally for your catering and BEO. You do not see guest emails, phone numbers, or addresses — those stay with the couple.
 
 Seating chart
 The couple creates reception tables (name + number of seats) and seats each guest party. Seats fill by party size, with an over-capacity warning if a table is oversubscribed. On your side, you see the table layout with seated / capacity counts — handy for planning the room on the day.
 
 Sharing controls
-You choose which wedding details the couple sees (wedding date, guest count, space / room, coordinator) from the toggles on the Wedding Hub page.`,
+You choose which wedding details the couple sees (wedding date, guest count, space / room, coordinator) from the toggles on the Wedding Planner page.`,
       },
       {
         id: 'wedding-hub-website',
-        title: 'Wedding Hub — the free couple wedding website',
+        title: 'Wedding Planner — the free couple wedding website',
         tags: ['wedding website', 'wedding site', 'minisite', 'link in bio', 'linktree', 'couple website', 'rsvp online', 'guestbook', 'countdown', 'registry link', 'share with guests', 'the knot', 'zola'],
-        body: `Every couple in Wedding Hub can build a free, mobile-first wedding website right inside their StoryVenue login — no separate Knot or Zola account needed. It lives at storyvenue.com/their-custom-link, so they have one link to share on invitations, texts, and social profiles. It's a simple, linktree-style page dressed up as a wedding website — quick to set up, beautiful on a phone.
+        body: `Every couple in Wedding Planner can build a free, mobile-first wedding website right inside their StoryVenue login — no separate Knot or Zola account needed. It lives at storyvenue.com/their-custom-link, so they have one link to share on invitations, texts, and social profiles. It's a simple, linktree-style page dressed up as a wedding website — quick to set up, beautiful on a phone.
 
 Why it matters for you
 It keeps your booked couples inside StoryVenue instead of scattering across other tools, and — when they turn on the "Our Venue" card — their wedding website links straight back to your public venue listing. That's extra exposure to every guest who visits their page. It's a genuine differentiator you can mention in tours and packages: "book with us and you get a free wedding website."
@@ -3248,7 +3248,7 @@ How a couple sets it up
 3. They click Publish — and can copy the link or download a QR code for save-the-dates and table cards
 
 How to point a couple to it
-Once you're connected in Wedding Hub, just tell them to log in and open the Website tab. If they RSVP through Wedding Hub's guest list, those responses flow into the same live rollup you already see (attending / declined / headcount / meal tallies) — no extra work for you.`,
+Once you're connected in Wedding Planner, just tell them to log in and open the Website tab. If they RSVP through Wedding Planner's guest list, those responses flow into the same live rollup you already see (attending / declined / headcount / meal tallies) — no extra work for you.`,
       },
     ],
   },

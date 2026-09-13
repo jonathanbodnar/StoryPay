@@ -86,7 +86,7 @@ interface VenueCustomer {
   stage_id?: string | null;
   pipeline_context?: PipelineContext;
   venue_spaces: { id: string; name: string; color: string } | null;
-  /** Live Wedding Hub connection status — read fresh from couple_weddings on
+  /** Live Wedding Planner connection status — read fresh from couple_weddings on
    *  every fetch (never cached/duplicated on the row itself). */
   weddingHub?: { coupleWeddingId: string; status: 'linked' | 'pending'; initiatedBy: 'venue' | 'bride'; linkedAt: string | null } | null;
 }
@@ -1698,7 +1698,7 @@ export default function ContactProfilePanel({
             </div>
           </div>
 
-          {/* Wedding Hub — guest list, RSVPs & shared room layout, once connected */}
+          {/* Wedding Planner — guest list, RSVPs & shared room layout, once connected */}
           {venueCustomer?.weddingHub?.status === 'linked' && (
             <WeddingHubDetailCard coupleWeddingId={venueCustomer.weddingHub.coupleWeddingId} />
           )}
@@ -2327,8 +2327,8 @@ export default function ContactProfilePanel({
   );
 }
 
-// ── Wedding Hub guest list + room layout, embedded in the contact profile ───
-// Same data + same endpoints as the venue's Wedding Hub page card, just
+// ── Wedding Planner guest list + room layout, embedded in the contact profile ───
+// Same data + same endpoints as the venue's Wedding Planner page card, just
 // surfaced here too so a venue doesn't have to leave the contact to see it.
 // Single source of truth: this reads live from the couple's guest list and
 // shared room layout, it never copies/caches that data onto the contact.
@@ -2410,7 +2410,7 @@ function WeddingHubDetailCard({ coupleWeddingId }: { coupleWeddingId: string }) 
     <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-heading text-base text-gray-900 flex items-center gap-2">
-          <Heart size={15} /> Wedding Hub
+          <Heart size={15} /> Wedding Planner
         </h2>
       </div>
 
@@ -2536,7 +2536,7 @@ function WhRsvpBadge({ status }: { status: 'pending' | 'attending' | 'declined' 
 }
 
 /**
- * Wedding Hub connection status badge for the contact profile. Always driven
+ * Wedding Planner connection status badge for the contact profile. Always driven
  * by the live `weddingHub` field on the venue_customer row (fetched fresh
  * from couple_weddings server-side) — this is the single source of truth,
  * never a locally-set flag that could drift from reality.
@@ -2554,7 +2554,7 @@ function WeddingHubBadge({
         href="/dashboard/wedding-hub"
         className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
       >
-        <Heart size={12} /> Connected to Wedding Hub
+        <Heart size={12} /> Connected to Wedding Planner
       </Link>
     );
   }
@@ -2567,7 +2567,7 @@ function WeddingHubBadge({
       className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
     >
       <Heart size={12} />
-      {status.initiatedBy === 'venue' ? 'Wedding Hub invite sent' : 'Wants to connect — review request'}
+      {status.initiatedBy === 'venue' ? 'Wedding Planner invite sent' : 'Wants to connect — review request'}
     </Link>
   );
 }

@@ -78,7 +78,7 @@ export default function CoupleChecklistPage() {
             href="/couple/wedding"
             className="mt-4 inline-flex rounded-2xl bg-[#1b1b1b] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85"
           >
-            Go to Wedding Hub
+            Go to Wedding Planner
           </Link>
         </div>
       </div>

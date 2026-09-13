@@ -114,8 +114,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
      *  support inbox, concierge team can manage/handoff). Requires BOTH
      *  is_private_client AND venue_concierge to be true to activate. */
     venue_concierge?: boolean;
-    /** Wedding Hub add-on flag (DB col: wedding_hub) — when off, the venue
-     *  can't connect couples through the Wedding Hub (nav + routes locked). */
+    /** Wedding Planner add-on flag (DB col: wedding_hub) — when off, the venue
+     *  can't connect couples through the Wedding Planner (nav + routes locked). */
     wedding_hub?: boolean;
   };
   try {
@@ -283,8 +283,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     updates.venue_concierge = body.venue_concierge;
   }
 
-  // ── Wedding Hub add-on flag (DB col: wedding_hub) ─────────────────────────
-  // Single source of truth for whether the venue can use the Wedding Hub.
+  // ── Wedding Planner add-on flag (DB col: wedding_hub) ─────────────────────────
+  // Single source of truth for whether the venue can use the Wedding Planner.
   if (typeof body.wedding_hub === 'boolean') {
     updates.wedding_hub = body.wedding_hub;
   }

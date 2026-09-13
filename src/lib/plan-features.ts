@@ -40,8 +40,8 @@ export interface VenueFeatureRow {
    *  regardless of plan tier — it is the single source of truth for granting
    *  concierge messaging to a venue that isn't on an All-Inclusive plan. */
   venue_concierge?: boolean | null;
-  /** Admin "Wedding Hub" override flag (Venue Management / Project Management →
-   *  Wedding Hub). Legacy + All-Inclusive plans get the Wedding Hub from their
+  /** Admin "Wedding Planner" override flag (Venue Management / Project Management →
+   *  Wedding Planner). Legacy + All-Inclusive plans get the Wedding Planner from their
    *  plan; for $97 / Free plans this flag (default FALSE) is the single source of
    *  truth that overrides the gate and unlocks the feature. (DB col: wedding_hub) */
   wedding_hub?: boolean | null;
@@ -112,9 +112,9 @@ export function resolveVenueFeatureAccess(
   // Admin "Venue Concierge" flag — single source of truth for unlocking
   // concierge messaging on a venue that isn't on an All-Inclusive/legacy plan.
   const venueConciergeGranted = venue?.venue_concierge === true;
-  // Wedding Hub is a paid / private-client feature. Legacy and All-Inclusive
+  // Wedding Planner is a paid / private-client feature. Legacy and All-Inclusive
   // plans get it automatically; the $97 and Free plans do NOT — an admin must
-  // check the Wedding Hub box (wedding_hub = true) to override the gate. The
+  // check the Wedding Planner box (wedding_hub = true) to override the gate. The
   // checkbox is the single source of truth for granting it off-plan.
   const bridePortalEnabled = legacy || isAllInclusive || venue?.wedding_hub === true;
 

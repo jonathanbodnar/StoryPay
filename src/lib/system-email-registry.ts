@@ -373,17 +373,17 @@ Reach out while they are hot — open their contact to start the conversation.`,
     },
   },
 
-  // ── Wedding Hub (both editable) ─────────────────────────────────────────
+  // ── Wedding Planner (both editable) ─────────────────────────────────────────
   {
     key: 'wedding_hub_invite',
-    label: 'Wedding Hub: Invite a Couple',
+    label: 'Wedding Planner: Invite a Couple',
     description:
-      'Sent to a bride/couple when a venue invites them to connect on the Wedding Hub, so she can see her shared wedding details and message the venue in one place.',
-    trigger: 'Fires when a venue sends (or resends) an invite from Wedding Hub → "Invite a couple".',
+      'Sent to a bride/couple when a venue invites them to connect on the Wedding Planner, so she can see her shared wedding details and message the venue in one place.',
+    trigger: 'Fires when a venue sends (or resends) an invite from Wedding Planner → "Invite a couple".',
     category: 'wedding_hub',
     editable: true,
     defaults: {
-      subject: '{{venue_name}} invited you to your Wedding Hub',
+      subject: '{{venue_name}} invited you to your Wedding Planner',
       heading: 'You are invited to connect',
       body: `Hi {{bride_first_name}},
 
@@ -395,19 +395,19 @@ Click below to accept the invite. You'll confirm your details before anything is
   },
   {
     key: 'wedding_hub_connected',
-    label: 'Wedding Hub: Couple Connected',
+    label: 'Wedding Planner: Couple Connected',
     description:
-      'Sent to the venue owner when a bride accepts their Wedding Hub invite and connects her account to the venue.',
+      'Sent to the venue owner when a bride accepts their Wedding Planner invite and connects her account to the venue.',
     trigger: 'Fires when a bride accepts a venue-sent invite (couple claim flow).',
     category: 'wedding_hub',
     editable: true,
     defaults: {
-      subject: '{{bride_name}} connected to your Wedding Hub',
+      subject: '{{bride_name}} connected to your Wedding Planner',
       heading: '{{bride_name}} just connected',
       body: `Hi {{owner_first_name}},
 
-{{bride_name}} accepted your invite and connected to {{venue_name}} on the Wedding Hub. You can now see the wedding details you've chosen to share and message each other in one place.`,
-      button_text: 'Open Wedding Hub',
+{{bride_name}} accepted your invite and connected to {{venue_name}} on the Wedding Planner. You can now see the wedding details you've chosen to share and message each other in one place.`,
+      button_text: 'Open Wedding Planner',
     },
   },
 
@@ -608,7 +608,7 @@ export const CATEGORY_LABELS: Record<SystemEmailCategory, string> = {
   ai: 'AI Concierge',
   concierge: 'Venue Concierge',
   billing: 'Billing',
-  wedding_hub: 'Wedding Hub',
+  wedding_hub: 'Wedding Planner',
 };
 
 /** Sample variables for test sends and browser previews. */

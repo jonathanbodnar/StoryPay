@@ -38,7 +38,7 @@ export function CoupleLogo() {
         <>
           <span className="h-5 w-px bg-gray-200" aria-hidden />
           <span className="rounded-full bg-[#1b1b1b] px-2.5 py-1 text-[11px] font-semibold tracking-wide text-white">
-            Wedding Hub
+            Wedding Planner
           </span>
         </>
       )}

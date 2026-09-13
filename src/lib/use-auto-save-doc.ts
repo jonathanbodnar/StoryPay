@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * useAutoSaveDoc — shared auto-save state machine for the Wedding Hub editors
+ * useAutoSaveDoc — shared auto-save state machine for the Wedding Planner editors
  * (checklist / vendors / budget). Mirrors the hand-rolled logic in
  * InspirationBoard: everything auto-saves, discrete actions save immediately,
  * continuous typing is debounced, and a `rev` token drives optimistic

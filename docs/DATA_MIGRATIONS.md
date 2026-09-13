@@ -60,7 +60,7 @@ code stopped referencing them. Do this for every field change.
   and end with `NOTIFY pgrst, 'reload schema';`.
 - **Backfills are batched & resumable** — never one giant `UPDATE` that locks a
   table. Add indexes `CONCURRENTLY`.
-- **Gate behavioral changes behind a flag** (like the Wedding Hub add-on flag) so
+- **Gate behavioral changes behind a flag** (like the Wedding Planner add-on flag) so
   you can roll out to new/opted-in users and roll back instantly.
 - **Test on the demo couple** (`thewestfolks@gmail.com`) before wide release.
 

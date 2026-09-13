@@ -39,7 +39,7 @@ export function coupleReaderRef(coupleId: string): string {
 }
 
 /**
- * Can this venue's bride send/receive real SMS in the Wedding Hub Messages tab?
+ * Can this venue's bride send/receive real SMS in the Wedding Planner Messages tab?
  * Requires BOTH the plan-level gate (hasSms) AND that the venue's A2P 10DLC
  * registration is actually verified — texting a real carrier number on an
  * unregistered brand/campaign risks the messages being filtered or the
@@ -136,7 +136,7 @@ export async function ensureThreadForCustomer(
 // `couple_profiles.wedding_date`/`guest_count` (bride's own copy, drives her
 // wedding website) and `venue_customers.wedding_date`/`guest_count` (venue's
 // copy, drives Event Details + the bride-portal display) are separate columns
-// that predate the Wedding Hub connection. Once linked, we keep them in sync:
+// that predate the Wedding Planner connection. Once linked, we keep them in sync:
 // whichever side saves a change pushes it to the other, and — the moment a
 // couple first links to a venue — any existing gap is reconciled once,
 // filling only the side that's genuinely empty (never overwriting a value
@@ -233,7 +233,7 @@ export async function reconcileWeddingFieldsOnLink(
   }
 }
 
-// ── Wedding Hub status surfaced on the venue's contact profile ──────────────
+// ── Wedding Planner status surfaced on the venue's contact profile ──────────────
 // Single source of truth: always read live from couple_weddings rather than
 // caching a "connected" flag on venue_customers, so it can never go stale if
 // a link is later revoked/declined elsewhere.
@@ -246,7 +246,7 @@ export interface WeddingHubStatus {
 }
 
 /**
- * The Wedding Hub connection status for a given venue_customer, if any.
+ * The Wedding Planner connection status for a given venue_customer, if any.
  * Prefers a 'linked' row over a 'pending' one (a couple can have at most one
  * active row per venue in practice, but this stays defensive).
  */

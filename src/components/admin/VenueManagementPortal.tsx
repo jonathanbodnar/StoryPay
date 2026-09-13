@@ -66,7 +66,7 @@ export type AdminVenueRow = Record<string, unknown> & {
   /** Feature flag: enables full concierge routing (bride replies → support
    *  inbox). Requires BOTH is_private_client AND venue_concierge = true. */
   venue_concierge?: boolean | null;
-  /** Wedding Hub add-on flag — single source of truth for Wedding Hub access.
+  /** Wedding Planner add-on flag — single source of truth for Wedding Planner access.
    *  (DB col: wedding_hub) $97 / Free plans require this on to unlock. */
   wedding_hub?: boolean | null;
   directory_subscription_status?: string | null;
@@ -415,7 +415,7 @@ export function AddonCheckboxes({
         title={
           bridePortalFromPlan
             ? 'Included in their plan (Legacy / All-Inclusive)'
-            : 'Override: unlock the Wedding Hub for this $97 / Free venue'
+            : 'Override: unlock the Wedding Planner for this $97 / Free venue'
         }
       >
         <input
@@ -425,7 +425,7 @@ export function AddonCheckboxes({
           onChange={(e) => void onPatch(venue.id, { wedding_hub: e.target.checked })}
           className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
         />
-        <span className="font-medium text-gray-600">Wedding Hub</span>
+        <span className="font-medium text-gray-600">Wedding Planner</span>
         {bridePortalOn && bridePortalFromPlan && (
           <span className="rounded-full bg-blue-50 border border-blue-200 px-1 py-0 text-[8px] font-semibold text-blue-600 leading-tight">PLAN</span>
         )}

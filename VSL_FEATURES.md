@@ -54,15 +54,15 @@ Every phase's message copy is fully editable, supports merge tags (first name, v
 
 ---
 
-### 6. Wedding Hub (venue side)
+### 6. Wedding Planner (venue side)
 
-**What it does:** Once a booked couple connects their own Wedding Hub account to the venue (either the venue invites them, or the couple requests the connection and the venue approves), the venue gets:
+**What it does:** Once a booked couple connects their own Wedding Planner account to the venue (either the venue invites them, or the couple requests the connection and the venue approves), the venue gets:
 - A live roster of every connected couple, with guest RSVP counts (attending / pending / total) visible at a glance.
 - The couple's full guest list, RSVP status, and per-guest meal/allergy choices — the same data the couple manages on her end, always current.
 - A shared room/seating layout canvas — the venue and the couple can both view (and, depending on settings, edit) the actual floor plan, table placement, and seating chart together, with conflict-safe saving so simultaneous edits never overwrite each other.
-- A one-click link from any connected couple's card straight to that couple's full contact profile — and, conversely, a Wedding Hub status badge and full guest/seating detail card embedded right inside that couple's contact profile, so a venue never has to leave the contact to see her wedding details.
+- A one-click link from any connected couple's card straight to that couple's full contact profile — and, conversely, a Wedding Planner status badge and full guest/seating detail card embedded right inside that couple's contact profile, so a venue never has to leave the contact to see her wedding details.
 - Wedding date and guest count are automatically kept in sync between the couple's own profile and the venue's contact record the moment either side updates it, so the two can never show conflicting information.
-- Search-and-invite: venues can search their own existing contacts by name, phone, or email to send a Wedding Hub invite, or create a brand-new contact on the spot if the couple isn't in the system yet.
+- Search-and-invite: venues can search their own existing contacts by name, phone, or email to send a Wedding Planner invite, or create a brand-new contact on the spot if the couple isn't in the system yet.
 - Automatic system emails: the couple gets a branded invite email when a venue invites her to connect; the venue owner gets a notification email the moment she accepts.
 
 **Outcome:** The venue always has an up-to-the-minute view of every wedding's guest count, RSVPs, meal counts, and table assignments — sourced directly from the couple, with zero double data entry and zero risk of the venue's copy drifting out of sync with the couple's.
@@ -71,7 +71,7 @@ Every phase's message copy is fully editable, supports merge tags (first name, v
 
 ### 7. Contacts & CRM
 
-**What it does:** A centralized client database that auto-populates from proposals, forms, calendar bookings, Wedding Hub connections, and manual entry. Every interaction — proposals, payments, messages, tags, AI conversations, Wedding Hub guest/seating data — is linked to the one contact record. Supports CSV import/export and duplicate merging.
+**What it does:** A centralized client database that auto-populates from proposals, forms, calendar bookings, Wedding Planner connections, and manual entry. Every interaction — proposals, payments, messages, tags, AI conversations, Wedding Planner guest/seating data — is linked to the one contact record. Supports CSV import/export and duplicate merging.
 
 **Outcome:** One source of truth per client. When a bride calls asking about her balance, her guest count, or anything else, the answer is a single click away instead of a hunt across four different tools.
 
@@ -172,7 +172,7 @@ Each report is date-range filterable (defaulting to year-to-date), previewed in-
 
 ### 16. Push Notifications & Progressive Web App
 
-**What it does:** Real-time push notifications for new payments, signed proposals, new leads, and AI/Wedding Hub handoffs — delivered even when the app isn't open, on an installable PWA (and native iOS/Android app) that lives on the owner's home screen.
+**What it does:** Real-time push notifications for new payments, signed proposals, new leads, and AI/Wedding Planner handoffs — delivered even when the app isn't open, on an installable PWA (and native iOS/Android app) that lives on the owner's home screen.
 
 **Outcome:** The owner knows the instant a deposit hits or a contract is signed, without needing to check email or log into a dashboard.
 
@@ -188,7 +188,7 @@ Each report is date-range filterable (defaulting to year-to-date), previewed in-
 
 ### 18. Email Templates & Deliverability
 
-**What it does:** Branded default templates for every system touchpoint — proposals, invoices, payment confirmations, reminders, lead notifications, AI handoffs, and Wedding Hub invite/connection emails. Fully venue-customizable with merge variables. Auto-generated plain-text versions, preheader injection, List-Unsubscribe headers, and CAN-SPAM compliance are handled automatically.
+**What it does:** Branded default templates for every system touchpoint — proposals, invoices, payment confirmations, reminders, lead notifications, AI handoffs, and Wedding Planner invite/connection emails. Fully venue-customizable with merge variables. Auto-generated plain-text versions, preheader injection, List-Unsubscribe headers, and CAN-SPAM compliance are handled automatically.
 
 **Outcome:** Every automated email is consistently branded, compliant, and built to land in the inbox rather than spam — without the owner writing a single email from scratch.
 
@@ -223,7 +223,7 @@ Each report is date-range filterable (defaulting to year-to-date), previewed in-
 
 ---
 
-## PART 2 — BRIDE / COUPLE SIDE ("Wedding Hub")
+## PART 2 — BRIDE / COUPLE SIDE ("Wedding Planner")
 
 ### 1. Account & Profile
 
@@ -241,7 +241,7 @@ Each report is date-range filterable (defaulting to year-to-date), previewed in-
 
 ---
 
-### 3. Connect With Your Venue (Wedding Hub linking)
+### 3. Connect With Your Venue (Wedding Planner linking)
 
 **What it does:** Once booked, a couple searches for and requests to connect with her specific venue (or accepts an invite the venue already sent). Once connected:
 - Her wedding date, guest count, assigned space, and coordinator info are shown to her automatically, pulled straight from the venue.

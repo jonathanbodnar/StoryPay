@@ -283,13 +283,13 @@ export async function POST(request: NextRequest) {
       const venueName = v.name || 'your venue';
       await sendEmail({
         to,
-        subject: `New Wedding Hub request${invitedName ? ` from ${invitedName}` : ''}`,
+        subject: `New Wedding Planner request${invitedName ? ` from ${invitedName}` : ''}`,
         html: `
 <div style="font-family:'Open Sans',Arial,sans-serif;font-size:15px;line-height:1.6;color:#111827">
-  <p>${invitedName ? `<strong>${invitedName}</strong>` : 'A couple'} asked to connect with ${venueName} on their StoryVenue Wedding Hub.</p>
+  <p>${invitedName ? `<strong>${invitedName}</strong>` : 'A couple'} asked to connect with ${venueName} on their StoryVenue Wedding Planner.</p>
   ${message ? `<p style="color:#374151"><em>&ldquo;${message.replace(/</g, '&lt;')}&rdquo;</em></p>` : ''}
   <p>Review and approve this request from your dashboard:</p>
-  <p><a href="${APP_URL}/dashboard/wedding-hub" style="color:#111827;font-weight:600;text-decoration:underline">Open Wedding Hub</a></p>
+  <p><a href="${APP_URL}/dashboard/wedding-hub" style="color:#111827;font-weight:600;text-decoration:underline">Open Wedding Planner</a></p>
 </div>`,
       });
     } catch (e) {

@@ -5,8 +5,8 @@ import { CoupleLogo } from './CoupleLogo';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Wedding Hub',
-    template: '%s · Wedding Hub',
+    default: 'Wedding Planner',
+    template: '%s · Wedding Planner',
   },
 };
 
