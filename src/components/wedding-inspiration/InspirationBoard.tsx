@@ -1,11 +1,10 @@
 'use client';
 
-import { forwardRef, useCallback, useImperativeHandle, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Plus,
   Trash2,
   Loader2,
-  Save,
   Check,
   AlertTriangle,
   Image as ImageIcon,
@@ -60,7 +59,6 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
 ) {
   const [rev, setRev] = useState<number>(initial?.rev ?? 0);
   const [items, setItems] = useState<InspirationItem[]>(initial?.items ?? []);
-  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [conflict, setConflict] = useState(false);
@@ -70,28 +68,101 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
   const [adding, setAdding] = useState(false);
   const [brokenImageIds, setBrokenImageIds] = useState<Set<string>>(new Set());
 
-  const mutate = useCallback((updater: (prev: InspirationItem[]) => InspirationItem[]) => {
-    setItems((prev) => updater(prev));
-    setDirty(true);
-    setSavedFlash(false);
-    setConflict(false);
+  // Everything auto-saves. Refs (not state) back the debounced/async save path
+  // so it always reads the latest values regardless of React's render timing.
+  const itemsRef = useRef<InspirationItem[]>(initial?.items ?? []);
+  const revRef = useRef<number>(initial?.rev ?? 0);
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savingRef = useRef(false);
+  const rerunRef = useRef(false);
+
+  const persist = useCallback(async () => {
+    if (savingRef.current) {
+      rerunRef.current = true;
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    setError('');
+    try {
+      const cleaned = sanitizeInspiration({ rev: revRef.current, items: itemsRef.current });
+      const res = await onSaveRef.current({ rev: revRef.current, items: cleaned.items });
+      if (res.conflict) {
+        if (res.inspiration) {
+          itemsRef.current = res.inspiration.items;
+          revRef.current = res.inspiration.rev;
+          setItems(res.inspiration.items);
+          setRev(res.inspiration.rev);
+        }
+        setConflict(true);
+        return;
+      }
+      if (!res.ok) {
+        setError('Could not save. Please try again.');
+        return;
+      }
+      if (res.inspiration) {
+        itemsRef.current = res.inspiration.items;
+        revRef.current = res.inspiration.rev;
+        setItems(res.inspiration.items);
+        setRev(res.inspiration.rev);
+      }
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2000);
+    } finally {
+      setSaving(false);
+      savingRef.current = false;
+      if (rerunRef.current) {
+        rerunRef.current = false;
+        void persist();
+      }
+    }
   }, []);
+
+  /** Apply a local change and auto-save it — immediately for discrete actions
+   * (add/remove/reorder/import), debounced for continuous typing (notes). */
+  const applyAndSave = useCallback(
+    (next: InspirationItem[], opts?: { immediate?: boolean }) => {
+      itemsRef.current = next;
+      setItems(next);
+      setConflict(false);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (opts?.immediate) {
+        void persist();
+      } else {
+        saveTimerRef.current = setTimeout(() => void persist(), 900);
+      }
+    },
+    [persist],
+  );
+
+  // Flush a pending debounced save (e.g. a note edit) if the board unmounts.
+  useEffect(
+    () => () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        void persist();
+      }
+    },
+    [persist],
+  );
 
   const addItems = useCallback(
     (newItems: InspirationItem[]) => {
       if (!newItems.length) return;
-      mutate((prev) => {
-        const seen = new Set(prev.map((i) => i.imageUrl || i.linkUrl || i.id));
-        const deduped = newItems.filter((i) => {
-          const key = i.imageUrl || i.linkUrl || i.id;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        return [...prev, ...deduped];
+      const seen = new Set(itemsRef.current.map((i) => i.imageUrl || i.linkUrl || i.id));
+      const deduped = newItems.filter((i) => {
+        const key = i.imageUrl || i.linkUrl || i.id;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
+      if (!deduped.length) return;
+      applyAndSave([...itemsRef.current, ...deduped], { immediate: true });
     },
-    [mutate],
+    [applyAndSave],
   );
 
   useImperativeHandle(ref, () => ({ addItems }), [addItems]);
@@ -136,51 +207,22 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
   }
 
   function remove(id: string) {
-    mutate((prev) => prev.filter((i) => i.id !== id));
+    applyAndSave(
+      itemsRef.current.filter((i) => i.id !== id),
+      { immediate: true },
+    );
   }
   function move(id: string, dir: -1 | 1) {
-    mutate((prev) => {
-      const idx = prev.findIndex((i) => i.id === id);
-      const next = idx + dir;
-      if (idx < 0 || next < 0 || next >= prev.length) return prev;
-      const copy = [...prev];
-      [copy[idx], copy[next]] = [copy[next], copy[idx]];
-      return copy;
-    });
+    const prev = itemsRef.current;
+    const idx = prev.findIndex((i) => i.id === id);
+    const next = idx + dir;
+    if (idx < 0 || next < 0 || next >= prev.length) return;
+    const copy = [...prev];
+    [copy[idx], copy[next]] = [copy[next], copy[idx]];
+    applyAndSave(copy, { immediate: true });
   }
   function setNote(id: string, note: string) {
-    mutate((prev) => prev.map((i) => (i.id === id ? { ...i, note } : i)));
-  }
-
-  async function save() {
-    setSaving(true);
-    setError('');
-    try {
-      const cleaned = sanitizeInspiration({ rev, items });
-      const res = await onSave({ rev, items: cleaned.items });
-      if (res.conflict) {
-        if (res.inspiration) {
-          setItems(res.inspiration.items);
-          setRev(res.inspiration.rev);
-        }
-        setConflict(true);
-        setDirty(false);
-        return;
-      }
-      if (!res.ok) {
-        setError('Could not save. Please try again.');
-        return;
-      }
-      if (res.inspiration) {
-        setItems(res.inspiration.items);
-        setRev(res.inspiration.rev);
-      }
-      setDirty(false);
-      setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 2500);
-    } finally {
-      setSaving(false);
-    }
+    applyAndSave(itemsRef.current.map((i) => (i.id === id ? { ...i, note } : i)));
   }
 
   return (
@@ -232,15 +274,17 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving || !dirty}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : savedFlash ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-          {savedFlash ? 'Saved' : 'Save'}
-        </button>
+        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+          {saving ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+            </>
+          ) : savedFlash ? (
+            <span className="flex items-center gap-1 text-emerald-600">
+              <Check className="h-3.5 w-3.5" /> Saved
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {pinterest?.connected && (
@@ -257,7 +301,7 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
       {conflict && (
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>The board was updated by someone else, so we loaded the latest version. Re-add your changes and save again.</span>
+          <span>The board was updated by someone else, so we loaded the latest version. Re-add any changes you made.</span>
         </div>
       )}
       {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
@@ -362,7 +406,8 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
       {items.length > 0 && (
         <div className="mt-4 flex items-center gap-2 text-xs text-gray-400">
           <Plus className="h-3.5 w-3.5" />
-          Drag order with the arrows, add notes, then Save. Both you and your {pinterest ? 'venue' : 'couple'} see this board.
+          Drag order with the arrows and add notes — changes save automatically. Both you and your{' '}
+          {pinterest ? 'venue' : 'couple'} see this board.
         </div>
       )}
     </div>
