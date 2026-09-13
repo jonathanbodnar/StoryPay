@@ -339,7 +339,14 @@ export default function CoupleWeddingPage() {
                   {link.venue?.address && (
                     <li className="flex items-center gap-3 text-sm text-gray-600">
                       <MapPin className="h-4 w-4 shrink-0 text-gray-400" />
-                      <span>{link.venue.address}</span>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(link.venue.address)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="transition-colors hover:text-gray-900 hover:underline"
+                      >
+                        {link.venue.address}
+                      </a>
                     </li>
                   )}
                   {link.venue?.primary_contact && (
@@ -667,7 +674,7 @@ function WeddingCountdown({ date }: { date: string }) {
           </div>
         ))}
       </div>
-      <p className="mt-1.5 text-right text-[11px] text-gray-400">{fmtDate(date)}</p>
+      <p className="mt-1.5 text-right text-[11px] text-gray-400">until your wedding · {fmtDate(date)}</p>
     </div>
   );
 }
