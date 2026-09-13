@@ -267,8 +267,8 @@ export default function CoupleWeddingPage() {
         <div className="mt-6 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-600">
           {isReadOnly ? <Eye className="h-4 w-4 shrink-0 text-gray-400" /> : <Pencil className="h-4 w-4 shrink-0 text-gray-400" />}
           <span>
-            You have <strong className="text-gray-900">{isReadOnly ? 'view-only' : 'edit'}</strong> access to this Wedding
-            Planner. The couple&apos;s budget stays private to them.
+            You have <strong className="text-gray-900">{isReadOnly ? 'view-only' : 'edit'}</strong>{' '}
+            access to this Wedding Planner. The couple&apos;s budget stays private to them.
           </span>
         </div>
       )}
