@@ -3,13 +3,45 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { LayoutGrid, MessageCircle, ChevronDown, User, Gift, LogOut } from 'lucide-react';
+import {
+  LayoutGrid,
+  MessageCircle,
+  ChevronDown,
+  ChevronRight,
+  User,
+  Gift,
+  LogOut,
+  X,
+  Home,
+  Users,
+  Armchair,
+  Clock,
+  ListChecks,
+  Wallet,
+  Contact,
+  Images,
+  Globe,
+} from 'lucide-react';
 import { getCoupleSupabase } from '@/lib/couple-browser';
+
+const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode }[] = [
+  { href: '/couple/wedding', label: 'Wedding Hub home', desc: 'Your wedding overview', icon: <Home className="h-5 w-5" /> },
+  { href: '/couple/guests', label: 'Guests & RSVPs', desc: 'Track invites, meals & replies', icon: <Users className="h-5 w-5" /> },
+  { href: '/couple/seating', label: 'Seating', desc: 'Arrange tables & assign guests', icon: <Armchair className="h-5 w-5" /> },
+  { href: '/couple/timeline', label: 'Day-of timeline', desc: 'Plan your day minute by minute', icon: <Clock className="h-5 w-5" /> },
+  { href: '/couple/checklist', label: 'Checklist', desc: 'Every to-do with a countdown', icon: <ListChecks className="h-5 w-5" /> },
+  { href: '/couple/budget', label: 'Budget', desc: 'Track spending — private to you', icon: <Wallet className="h-5 w-5" /> },
+  { href: '/couple/vendors', label: 'Vendors', desc: 'All your day-of contacts', icon: <Contact className="h-5 w-5" /> },
+  { href: '/couple/inspiration', label: 'Inspiration', desc: 'Your style & mood board', icon: <Images className="h-5 w-5" /> },
+  { href: '/couple/site', label: 'Wedding website', desc: 'Your public wedding page', icon: <Globe className="h-5 w-5" /> },
+  { href: '/couple/messages', label: 'Messages', desc: 'Chat directly with your venue', icon: <MessageCircle className="h-5 w-5" /> },
+];
 
 export function CoupleNav() {
   const router = useRouter();
   const [session, setSession] = useState<boolean | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hubOpen, setHubOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,6 +60,21 @@ export function CoupleNav() {
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
+
+  // Close the Wedding Hub modal on Escape, and lock body scroll while it's open.
+  useEffect(() => {
+    if (!hubOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setHubOpen(false);
+    }
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [hubOpen]);
 
   async function signOut() {
     const supabase = getCoupleSupabase();
@@ -54,58 +101,122 @@ export function CoupleNav() {
   }
 
   return (
-    <nav className="flex items-center gap-1.5 text-sm">
-      <Link
-        href="/couple/wedding"
-        className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900"
-      >
-        <LayoutGrid className="h-4 w-4" /> Wedding Hub
-      </Link>
-      <Link
-        href="/couple/messages"
-        className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900"
-      >
-        <MessageCircle className="h-4 w-4" /> Messages
-      </Link>
-
-      <div ref={menuRef} className="relative">
+    <>
+      <nav className="flex items-center gap-1.5 text-sm">
         <button
           type="button"
-          onClick={() => setMenuOpen((o) => !o)}
-          className="inline-flex items-center gap-1 rounded-xl px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
+          onClick={() => setHubOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900"
+          aria-haspopup="dialog"
+          aria-expanded={hubOpen}
         >
-          <User className="h-4 w-4" /> Account
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+          <LayoutGrid className="h-4 w-4" /> Wedding Hub
         </button>
-        {menuOpen && (
-          <div
-            role="menu"
-            className="absolute right-0 z-30 mt-1 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+        <Link
+          href="/couple/messages"
+          className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900"
+        >
+          <MessageCircle className="h-4 w-4" /> Messages
+        </Link>
+
+        <div ref={menuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            className="inline-flex items-center gap-1 rounded-xl px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
           >
-            <MenuLink href="/couple/profile" icon={<User className="h-4 w-4" />} onClick={() => setMenuOpen(false)}>
-              Profile
-            </MenuLink>
-            <MenuLink href="/couple/dashboard" icon={<Gift className="h-4 w-4" />} onClick={() => setMenuOpen(false)}>
-              Wish list
-            </MenuLink>
-            <div className="my-1 border-t border-gray-100" />
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenuOpen(false);
-                void signOut();
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+            <User className="h-4 w-4" /> Account
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 z-30 mt-1 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
             >
-              <LogOut className="h-4 w-4" /> Log out
-            </button>
+              <MenuLink href="/couple/profile" icon={<User className="h-4 w-4" />} onClick={() => setMenuOpen(false)}>
+                Profile
+              </MenuLink>
+              <MenuLink href="/couple/dashboard" icon={<Gift className="h-4 w-4" />} onClick={() => setMenuOpen(false)}>
+                Wish list
+              </MenuLink>
+              <div className="my-1 border-t border-gray-100" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void signOut();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+              >
+                <LogOut className="h-4 w-4" /> Log out
+              </button>
+            </div>
+          )}
+        </div>
+      </nav>
+
+      {hubOpen && <WeddingHubModal onClose={() => setHubOpen(false)} />}
+    </>
+  );
+}
+
+function WeddingHubModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Wedding Hub"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16 sm:pt-24"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1b1b1b] text-white">
+              <LayoutGrid className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-heading text-lg text-gray-900">Wedding Hub</h2>
+              <p className="text-xs text-gray-500">Jump to any part of your planning.</p>
+            </div>
           </div>
-        )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid gap-3 p-5 sm:grid-cols-2">
+          {HUB_TOOLS.map((t) => (
+            <Link
+              key={t.href}
+              href={t.href}
+              onClick={onClose}
+              className="group flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300 hover:bg-gray-50"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1b1b1b] text-white">
+                {t.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-gray-900">{t.label}</p>
+                <p className="truncate text-xs text-gray-500">{t.desc}</p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          ))}
+        </div>
       </div>
-    </nav>
+    </div>
   );
 }
 
