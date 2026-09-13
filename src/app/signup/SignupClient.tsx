@@ -9,6 +9,7 @@ import { ModeToggle } from '@/app/login/LoginClient';
 import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 import { checkPassword } from '@/lib/password-policy';
 import { trackClient } from '@/lib/analytics-client';
+import { isNativeApp } from '@/lib/platform';
 
 /** Collect UTM / referrer attribution from the current URL for acquisition analytics. */
 function collectAttribution(sp: URLSearchParams): Record<string, string> {
@@ -43,12 +44,18 @@ export function SignupClient() {
 
   const [mode, setMode] = useState<AuthMode>(initialMode);
 
+  // Couple signup is free and runs fully in-app. Venue signup can lead into a
+  // paid plan, so it is never rendered inside the native binary — a native
+  // visitor to /signup is forced to couple mode with no toggle to switch away.
+  const native = isNativeApp();
+  const effectiveMode: AuthMode = native ? 'couple' : mode;
+
   const loginHref = useMemo(() => {
     const params = new URLSearchParams();
-    params.set('as', mode);
+    params.set('as', effectiveMode);
     if (nextParam) params.set('next', nextParam);
     return `/login?${params.toString()}`;
-  }, [mode, nextParam]);
+  }, [effectiveMode, nextParam]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
@@ -60,9 +67,9 @@ export function SignupClient() {
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-7">
-          <ModeToggle mode={mode} onChange={setMode} />
+          {!native && <ModeToggle mode={mode} onChange={setMode} />}
 
-          {mode === 'venue' ? <VenueSignupForm /> : <CoupleSignupForm />}
+          {effectiveMode === 'venue' ? <VenueSignupForm /> : <CoupleSignupForm />}
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-5">
@@ -146,10 +153,16 @@ function VenueSignupForm() {
       // tracking page so analytics platforms can record the registration.
       // For free-plan signups originating from the marketing site we skip
       // the plan-picker step entirely — straight to success → dashboard.
-      const target =
+      let target =
         planParam === 'free'
           ? '/signup/success?plan=free'
           : data.redirect ?? '/signup/success?plan=free';
+      // When venue signup was opened from the native app's system-browser
+      // hand-off, carry the flag through so the success page tells the user to
+      // tap Done and return to the app instead of auto-navigating in-browser.
+      if (searchParams.get('ret') === 'app' && target.startsWith('/signup/success')) {
+        target += (target.includes('?') ? '&' : '?') + 'ret=app';
+      }
       router.replace(target);
     } catch {
       setError('Network error. Please try again.');
@@ -380,7 +393,9 @@ function CoupleSignupForm() {
         return;
       }
 
-      router.replace('/couple/dashboard');
+      // Native brides land in the "My wedding" hub; the web keeps the
+      // wish-list dashboard as the default landing area.
+      router.replace(isNativeApp() ? '/couple/wedding' : '/couple/dashboard');
     } finally {
       setLoading(false);
     }
