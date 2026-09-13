@@ -281,6 +281,17 @@ function WeddingHubContent() {
     return { ok: true, inspiration: data.inspiration as WeddingInspiration | undefined };
   }
 
+  async function resolveVenueInspirationLink(weddingId: string, url: string) {
+    const res = await fetch(`/api/venue/wedding-hub/${weddingId}/inspiration/resolve-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json().catch(() => ({}));
+    const preview = data?.preview ?? {};
+    return { imageUrl: preview.imageUrl ?? null, title: preview.title ?? null };
+  }
+
   async function decide(id: string, action: 'approve' | 'deny') {
     setActingId(id);
     setError('');
@@ -895,6 +906,7 @@ function WeddingHubContent() {
                           <InspirationBoard
                             initial={inspirationDetail[l.id]}
                             onSave={(next) => saveVenueInspiration(l.id, next)}
+                            resolveLink={(url) => resolveVenueInspirationLink(l.id, url)}
                           />
                           <p className="mt-2 text-[11px] text-gray-400">
                             The couple curates this from Pinterest and links; you share the same board and can add to it.

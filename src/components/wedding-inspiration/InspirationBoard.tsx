@@ -68,6 +68,7 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
 
   const [urlInput, setUrlInput] = useState('');
   const [adding, setAdding] = useState(false);
+  const [brokenImageIds, setBrokenImageIds] = useState<Set<string>>(new Set());
 
   const mutate = useCallback((updater: (prev: InspirationItem[]) => InspirationItem[]) => {
     setItems((prev) => updater(prev));
@@ -95,29 +96,22 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
 
   useImperativeHandle(ref, () => ({ addItems }), [addItems]);
 
-  function addImage() {
+  /**
+   * Single "Add" flow for pasted URLs. Always resolves server-side when possible
+   * (handles direct image links AND page links with an og:image alike — see
+   * fetchLinkPreview), so there's no more "Image vs Link" button to mis-click.
+   * Falls back to using the raw URL as the image if no resolver is wired up.
+   */
+  async function addUrl() {
     const url = safeHttpUrl(urlInput);
     if (!url) {
-      setError('Enter a valid image URL (starting with http).');
-      return;
-    }
-    setError('');
-    addItems([
-      { id: newInspirationId(), type: 'image', imageUrl: url, linkUrl: url, title: null, note: null, source: 'manual' },
-    ]);
-    setUrlInput('');
-  }
-
-  async function addLink() {
-    const url = safeHttpUrl(urlInput);
-    if (!url) {
-      setError('Enter a valid link (starting with http).');
+      setError('Enter a valid URL (starting with http).');
       return;
     }
     setError('');
     setAdding(true);
     try {
-      let imageUrl: string | null = null;
+      let imageUrl: string | null = url;
       let title: string | null = null;
       if (resolveLink) {
         const preview = await resolveLink(url).catch(() => ({ imageUrl: null, title: null }));
@@ -127,7 +121,7 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
       addItems([
         {
           id: newInspirationId(),
-          type: 'link',
+          type: imageUrl ? 'image' : 'link',
           imageUrl,
           linkUrl: url,
           title: title || hostnameOf(url),
@@ -228,21 +222,12 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
             />
             <button
               type="button"
-              onClick={addImage}
-              disabled={!urlInput.trim()}
-              className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-2.5 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              title="Add as image"
-            >
-              <ImageIcon className="h-4 w-4" /> Image
-            </button>
-            <button
-              type="button"
-              onClick={() => void addLink()}
+              onClick={() => void addUrl()}
               disabled={!urlInput.trim() || adding}
               className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-2.5 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              title="Add as link (fetches a preview)"
+              title="Add — pulls in a preview image automatically"
             >
-              {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <LinkIcon className="h-4 w-4" />} Link
+              {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add
             </button>
           </div>
         </div>
@@ -296,13 +281,14 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
                 rel="noopener noreferrer"
                 className="block"
               >
-                {item.imageUrl ? (
+                {item.imageUrl && !brokenImageIds.has(item.id) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={item.imageUrl}
                     alt={item.title || 'Inspiration'}
                     loading="lazy"
                     className="w-full object-cover"
+                    onError={() => setBrokenImageIds((prev) => new Set(prev).add(item.id))}
                   />
                 ) : (
                   <div className="flex aspect-[4/3] items-center justify-center bg-gray-50 p-4 text-center">
