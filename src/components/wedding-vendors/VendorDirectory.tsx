@@ -43,11 +43,27 @@ export default function VendorDirectory({ initial, onSave, audience = 'couple' }
       email: '',
       note: null,
     };
-    update((prev) => ({ ...prev, items: [...prev.items, item] }), { immediate: true });
+    // Add the blank row locally only — the server's tolerant reader strips
+    // empty vendors, so we wait to persist until the couple fills a field in.
+    update((prev) => ({ ...prev, items: [...prev.items, item] }), { save: false });
   }
 
   function patch(id: string, p: Partial<VendorContact>, immediate = false) {
-    update((prev) => ({ ...prev, items: prev.items.map((v) => (v.id === id ? { ...v, ...p } : v)) }), { immediate });
+    // Only persist once the row has something the server will keep — otherwise a
+    // still-blank row (e.g. just picking a category) would be stripped on save
+    // and vanish. The next edit that adds content saves the whole row.
+    const current = doc.items.find((v) => v.id === id);
+    const merged = { ...current, ...p } as VendorContact;
+    const savable = Boolean(
+      merged.businessName?.trim() ||
+        merged.contactName?.trim() ||
+        merged.phone?.trim() ||
+        merged.email?.trim(),
+    );
+    update(
+      (prev) => ({ ...prev, items: prev.items.map((v) => (v.id === id ? { ...v, ...p } : v)) }),
+      savable ? { immediate } : { save: false },
+    );
   }
 
   function remove(id: string) {

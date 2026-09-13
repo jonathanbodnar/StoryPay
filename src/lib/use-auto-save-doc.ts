@@ -76,13 +76,17 @@ export function useAutoSaveDoc<T extends { rev: number }>(
   }, []);
 
   /** Apply a local change and auto-save it. `immediate` for discrete actions
-   * (add/remove/toggle), debounced for continuous typing. */
+   * (add/remove/toggle), debounced for continuous typing. Pass `save: false` to
+   * update local state WITHOUT persisting yet — used when adding an empty row
+   * that a tolerant server reader would otherwise strip on save (e.g. a blank
+   * vendor). The next real edit to that row will persist it. */
   const update = useCallback(
-    (updater: (prev: T) => T, opts?: { immediate?: boolean }) => {
+    (updater: (prev: T) => T, opts?: { immediate?: boolean; save?: boolean }) => {
       const next = updater(docRef.current);
       docRef.current = next;
       setDocState(next);
       setConflict(false);
+      if (opts?.save === false) return;
       if (timerRef.current) clearTimeout(timerRef.current);
       if (opts?.immediate) {
         void persist();
