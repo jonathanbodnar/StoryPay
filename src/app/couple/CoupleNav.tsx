@@ -22,7 +22,7 @@ import {
   Images,
   Globe,
 } from 'lucide-react';
-import { getCoupleSupabase } from '@/lib/couple-browser';
+import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
 const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode }[] = [
   { href: '/couple/wedding', label: 'Wedding Planner home', desc: 'Your wedding overview', icon: <Home className="h-5 w-5" /> },
@@ -40,6 +40,7 @@ const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactN
 export function CoupleNav() {
   const router = useRouter();
   const [session, setSession] = useState<boolean | null>(null);
+  const [isCollaborator, setIsCollaborator] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -52,6 +53,28 @@ export function CoupleNav() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Determine whether this account is a collaborator (not the owning couple) so
+  // we can hide the owner-private Budget tool from the nav.
+  useEffect(() => {
+    if (!session) {
+      setIsCollaborator(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await coupleAuthedFetch('/api/couple/wedding');
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled) setIsCollaborator(data.access === 'edit' || data.access === 'view');
+      } catch {
+        if (!cancelled) setIsCollaborator(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -158,12 +181,13 @@ export function CoupleNav() {
         </div>
       </nav>
 
-      {hubOpen && <WeddingPlannerModal onClose={() => setHubOpen(false)} />}
+      {hubOpen && <WeddingPlannerModal onClose={() => setHubOpen(false)} hideBudget={isCollaborator} />}
     </>
   );
 }
 
-function WeddingPlannerModal({ onClose }: { onClose: () => void }) {
+function WeddingPlannerModal({ onClose, hideBudget }: { onClose: () => void; hideBudget: boolean }) {
+  const tools = hideBudget ? HUB_TOOLS.filter((t) => t.href !== '/couple/budget') : HUB_TOOLS;
   return (
     <div
       role="dialog"
@@ -197,7 +221,7 @@ function WeddingPlannerModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="grid gap-3 p-5 sm:grid-cols-2">
-          {HUB_TOOLS.map((t) => (
+          {tools.map((t) => (
             <Link
               key={t.href}
               href={t.href}

@@ -823,6 +823,9 @@ function WeddingPlannerContent() {
 
                   {open && (
                     <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-4">
+                      {/* Wedding coordinator — venue assigns/invites the couple's coordinator */}
+                      <CoordinatorCard weddingId={l.id} />
+
                       {loadingDetailId === l.id && !rows ? (
                         <div className="flex items-center gap-2 text-sm text-gray-400">
                           <Loader2 className="h-4 w-4 animate-spin" /> Loading guest list…
@@ -1024,6 +1027,146 @@ function WeddingPlannerContent() {
             ))}
           </ul>
         </section>
+      )}
+    </div>
+  );
+}
+
+type CoordinatorRow = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  status: 'invited' | 'active' | 'revoked';
+};
+
+/**
+ * Venue-side card to invite/assign the couple's wedding coordinator. The
+ * coordinator joins as an EDIT collaborator (role='coordinator'), separate from
+ * the couple's own 5-invite cap, and populates the wedding's coordinator fields.
+ */
+function CoordinatorCard({ weddingId }: { weddingId: string }) {
+  const [coordinator, setCoordinator] = useState<CoordinatorRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [flash, setFlash] = useState('');
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/venue/wedding-planner/${weddingId}/coordinator`);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) setCoordinator((data.coordinator as CoordinatorRow) ?? null);
+    setLoading(false);
+  }, [weddingId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr('');
+    setFlash('');
+    if (!name.trim() || !email.trim() || !phone.trim()) {
+      setErr('Name, email, and phone are all required.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/venue/wedding-planner/${weddingId}/coordinator`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(typeof data.error === 'string' ? data.error : 'Could not send the coordinator invite.');
+        return;
+      }
+      setFlash(coordinator ? 'Coordinator updated & re-invited.' : 'Coordinator invited.');
+      setOpen(false);
+      setName('');
+      setEmail('');
+      setPhone('');
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const inputCls =
+    'w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200';
+
+  return (
+    <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-gray-400" />
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Wedding coordinator</h3>
+        </div>
+        {!loading && (
+          <button
+            type="button"
+            onClick={() => {
+              setOpen((o) => !o);
+              if (coordinator) {
+                setName(coordinator.name ?? '');
+                setEmail(coordinator.email ?? '');
+                setPhone(coordinator.phone ?? '');
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <UserPlus className="h-3.5 w-3.5" /> {coordinator ? 'Update' : 'Assign coordinator'}
+          </button>
+        )}
+      </div>
+
+      {flash && <p className="mt-2 text-xs text-emerald-700">{flash}</p>}
+
+      {!loading && coordinator && !open && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-gray-900">{coordinator.name || coordinator.email}</p>
+            <p className="truncate text-xs text-gray-500">{[coordinator.email, coordinator.phone].filter(Boolean).join(' · ')}</p>
+          </div>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+              coordinator.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+            }`}
+          >
+            {coordinator.status === 'active' ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+            {coordinator.status === 'active' ? 'Active' : 'Invite sent'}
+          </span>
+        </div>
+      )}
+
+      {!loading && !coordinator && !open && (
+        <p className="mt-2 text-xs text-gray-400">
+          Invite the couple&apos;s coordinator to help plan with edit access — separate from the couple&apos;s own invites.
+        </p>
+      )}
+
+      {open && (
+        <form onSubmit={submit} className="mt-3 grid gap-3 sm:grid-cols-3">
+          <input className={inputCls} placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className={inputCls} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input className={inputCls} type="tel" placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          {err && <p className="text-xs text-red-600 sm:col-span-3">{err}</p>}
+          <div className="sm:col-span-3">
+            <button
+              type="submit"
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send coordinator invite
+            </button>
+          </div>
+        </form>
       )}
     </div>
   );

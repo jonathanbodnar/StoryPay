@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getCoupleAuthUser } from '@/lib/couple-server';
+import { resolveCoupleWeddingContext } from '@/lib/couple-server';
 import { sendRsvpInvite } from '@/lib/rsvp-invite';
 
 export const dynamic = 'force-dynamic';
@@ -11,8 +11,9 @@ export const runtime = 'nodejs';
  * Emails one guest their personal RSVP link (send or resend). Bride-only.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const { user, wedding: link } = gate.ctx;
 
   const { id } = await params;
 
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .from('wedding_guests')
     .select('id, full_name, email, rsvp_token, invite_sent_count, venue_id')
     .eq('id', id)
-    .eq('couple_id', user.id)
+    .eq('couple_wedding_id', link.id)
     .maybeSingle();
 
   const g = guest as
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     supabaseAdmin
       .from('couple_profiles')
       .select('display_name, first_name, last_name, wedding_date')
-      .eq('id', user.id)
+      .eq('id', link.couple_id)
       .maybeSingle(),
     supabaseAdmin.from('venues').select('name').eq('id', g.venue_id).maybeSingle(),
   ]);

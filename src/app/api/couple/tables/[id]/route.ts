@@ -1,29 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getCoupleAuthUser } from '@/lib/couple-server';
+import { resolveCoupleWeddingContext } from '@/lib/couple-server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const TABLE_COLUMNS = 'id, name, capacity, sort_order, created_at';
 
-async function ownsTable(tableId: string, coupleId: string): Promise<boolean> {
+/**
+ * Scope by couple_wedding_id (the wedding) rather than couple_id so that edit
+ * collaborators can manage the same wedding's tables. The gate already proved
+ * write access to this wedding.
+ */
+async function tableInWedding(tableId: string, coupleWeddingId: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from('wedding_tables')
     .select('id')
     .eq('id', tableId)
-    .eq('couple_id', coupleId)
+    .eq('couple_wedding_id', coupleWeddingId)
     .maybeSingle();
   return Boolean(data);
 }
 
 /** PATCH — rename / recapacity / reorder a table. */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const weddingId = gate.ctx.wedding.id;
 
   const { id } = await params;
-  if (!(await ownsTable(id, user.id))) {
+  if (!(await tableInWedding(id, weddingId))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
@@ -57,7 +63,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     .from('wedding_tables')
     .update(patch)
     .eq('id', id)
-    .eq('couple_id', user.id)
+    .eq('couple_wedding_id', weddingId)
     .select(TABLE_COLUMNS)
     .single();
 
@@ -70,15 +76,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 /** DELETE — remove a table (its guests are auto-unassigned). */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const weddingId = gate.ctx.wedding.id;
 
   const { id } = await params;
   const { error } = await supabaseAdmin
     .from('wedding_tables')
     .delete()
     .eq('id', id)
-    .eq('couple_id', user.id);
+    .eq('couple_wedding_id', weddingId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

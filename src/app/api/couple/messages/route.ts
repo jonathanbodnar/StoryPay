@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getCoupleAuthUser } from '@/lib/couple-server';
+import { resolveCoupleWeddingContext } from '@/lib/couple-server';
 import {
-  getActiveCoupleWedding,
   ensureThreadForCustomer,
   coupleReaderRef,
   canCoupleTextVenue,
+  type CoupleWeddingRow,
 } from '@/lib/couple-weddings';
 
 export const dynamic = 'force-dynamic';
@@ -21,9 +21,15 @@ interface SerializedMessage {
   sent: boolean;
 }
 
-async function resolveContext(coupleId: string, coupleEmail: string | undefined) {
-  const link = await getActiveCoupleWedding(coupleId);
-  if (!link || link.status !== 'linked' || !link.venue_customer_id) {
+/**
+ * Build the shared conversation context. `link` is the resolved wedding (owner's
+ * thread) and `ownerCoupleId` is always the OWNING couple — the venue thread is
+ * identified by the couple, never by a collaborator, so the venue always sees a
+ * single consistent counterpart. `coupleEmail` is only used as a display
+ * fallback for the sender name.
+ */
+async function resolveContext(link: CoupleWeddingRow, coupleEmail: string | undefined) {
+  if (link.status !== 'linked' || !link.venue_customer_id) {
     return { error: 'not_linked' as const };
   }
   const threadId = await ensureThreadForCustomer(link.venue_id, link.venue_customer_id);
@@ -39,7 +45,7 @@ async function resolveContext(coupleId: string, coupleEmail: string | undefined)
   const { data: profile } = await supabaseAdmin
     .from('couple_profiles')
     .select('display_name, first_name, last_name')
-    .eq('id', coupleId)
+    .eq('id', link.couple_id)
     .maybeSingle();
   const p = profile as { display_name?: string | null; first_name?: string | null; last_name?: string | null } | null;
   const brideName =
@@ -57,11 +63,16 @@ async function resolveContext(coupleId: string, coupleEmail: string | undefined)
   };
 }
 
+// Viewing the venue thread is allowed for the owner and EDIT collaborators, but
+// blocked for view-only collaborators (write:true rejects 'view'). Sending stays
+// owner-only (see POST) so the venue never sees a message from anyone but the
+// couple.
 export async function GET(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
+  if (!gate.ok) return gate.res;
+  const { user, wedding } = gate.ctx;
 
-  const ctx = await resolveContext(user.id, user.email);
+  const ctx = await resolveContext(wedding, user.email);
   if ('error' in ctx) {
     return NextResponse.json({ error: ctx.error, messages: [], venueName: null, linked: false });
   }
@@ -111,9 +122,13 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ linked: true, venueName: ctx.venueName, messages, canText });
 }
 
+// Sending is OWNER-ONLY. Collaborators (even edit) can read the thread but not
+// post, so the venue's conversation stays unambiguously with the couple and we
+// avoid identity confusion in the shared thread.
 export async function POST(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
+  if (!gate.ok) return gate.res;
+  const { user, wedding } = gate.ctx;
 
   let body: { body?: string; channel?: string };
   try {
@@ -125,7 +140,7 @@ export async function POST(request: NextRequest) {
   if (!text) return NextResponse.json({ error: 'Message is empty.' }, { status: 400 });
   if (text.length > 5000) return NextResponse.json({ error: 'Message is too long.' }, { status: 400 });
 
-  const ctx = await resolveContext(user.id, user.email);
+  const ctx = await resolveContext(wedding, user.email);
   if ('error' in ctx) {
     return NextResponse.json({ error: 'You are not connected to a venue yet.' }, { status: 400 });
   }

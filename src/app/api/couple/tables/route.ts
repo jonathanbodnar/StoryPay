@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getCoupleAuthUser } from '@/lib/couple-server';
-import { getActiveCoupleWedding } from '@/lib/couple-weddings';
+import { resolveCoupleWeddingContext } from '@/lib/couple-server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,13 +15,9 @@ function clampCapacity(v: unknown): number {
 
 /** GET — the bride's reception tables for her linked wedding. */
 export async function GET(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const link = await getActiveCoupleWedding(user.id);
-  if (!link || link.status !== 'linked') {
-    return NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 });
-  }
+  const gate = await resolveCoupleWeddingContext(request, { requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const link = gate.ctx.wedding;
 
   const { data, error } = await supabaseAdmin
     .from('wedding_tables')
@@ -37,13 +32,9 @@ export async function GET(request: NextRequest) {
 
 /** POST — create a table. Body: { name: string, capacity?: number } */
 export async function POST(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const link = await getActiveCoupleWedding(user.id);
-  if (!link || link.status !== 'linked') {
-    return NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 });
-  }
+  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const link = gate.ctx.wedding;
 
   let body: Record<string, unknown>;
   try {
@@ -69,7 +60,7 @@ export async function POST(request: NextRequest) {
     .from('wedding_tables')
     .insert({
       couple_wedding_id: link.id,
-      couple_id: user.id,
+      couple_id: link.couple_id,
       venue_id: link.venue_id,
       name,
       capacity: 'capacity' in body ? clampCapacity(body.capacity) : 8,

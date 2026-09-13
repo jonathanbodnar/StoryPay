@@ -27,7 +27,9 @@ interface TemplateOverride {
   button_text: string | null;
 }
 
-async function loadTemplate(key: 'wedding_planner_invite' | 'wedding_planner_connected'): Promise<TemplateOverride> {
+async function loadTemplate(
+  key: 'wedding_planner_invite' | 'wedding_planner_connected' | 'wedding_planner_collaborator_invite',
+): Promise<TemplateOverride> {
   const def = SYSTEM_EMAIL_BY_KEY[key]!;
   const { data } = await supabaseAdmin
     .from('system_email_templates')
@@ -97,6 +99,40 @@ export async function sendWeddingPlannerInviteEmail(
     vars,
     `This invite expires in ${expiresInDays} days. Sent by StoryVenue on behalf of ${venueName}.`,
   );
+  return sendEmail({ to: toEmail, subject, html, from: { name: venueName, email: brandEmail } });
+}
+
+// ── Wedding Planner collaborator invite ─────────────────────────────────────
+
+export interface SendWeddingPlannerCollaboratorInviteParams {
+  toEmail: string;
+  /** The invitee's first name (prefilled on the accept page). */
+  inviteeFirstName: string;
+  /** Who invited them — the couple's name, or the venue name for a coordinator. */
+  inviterName: string;
+  venueName: string;
+  /** Plain-English summary of what they'll be able to do. */
+  accessSummary: string;
+  /** The accept-invite URL (carries the secret token). */
+  acceptUrl: string;
+  /** Optional verified brand email — falls back to the default From. */
+  brandEmail?: string;
+}
+
+export async function sendWeddingPlannerCollaboratorInviteEmail(
+  params: SendWeddingPlannerCollaboratorInviteParams,
+): Promise<{ success: boolean; error?: string }> {
+  const { toEmail, inviteeFirstName, inviterName, venueName, accessSummary, acceptUrl, brandEmail } = params;
+  const vars: Record<string, string> = {
+    invitee_first_name: inviteeFirstName.trim() || 'there',
+    inviter_name: inviterName.trim() || 'A couple',
+    venue_name: venueName,
+    access_summary: accessSummary,
+    action_url: acceptUrl,
+  };
+  const tpl = await loadTemplate('wedding_planner_collaborator_invite');
+  const subject = fillTemplate(tpl.subject, vars);
+  const html = buildHtml(tpl, vars, `Sent by StoryVenue on behalf of ${inviterName.trim() || venueName}.`);
   return sendEmail({ to: toEmail, subject, html, from: { name: venueName, email: brandEmail } });
 }
 

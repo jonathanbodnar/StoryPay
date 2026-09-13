@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getCoupleAuthUser } from '@/lib/couple-server';
-import { getActiveCoupleWedding } from '@/lib/couple-weddings';
+import { resolveCoupleWeddingContext } from '@/lib/couple-server';
 import { sanitizeChecklist, type WeddingChecklist } from '@/lib/wedding-checklist';
 
 export const dynamic = 'force-dynamic';
@@ -18,25 +17,17 @@ async function loadChecklist(weddingId: string): Promise<WeddingChecklist> {
 
 /** GET — the couple's planning checklist for her linked wedding. */
 export async function GET(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const link = await getActiveCoupleWedding(user.id);
-  if (!link || link.status !== 'linked') {
-    return NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 });
-  }
+  const gate = await resolveCoupleWeddingContext(request, { requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const link = gate.ctx.wedding;
   return NextResponse.json({ checklist: await loadChecklist(link.id) });
 }
 
 /** PUT — replace the checklist. Optimistic concurrency via `checklist.rev`. */
 export async function PUT(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const link = await getActiveCoupleWedding(user.id);
-  if (!link || link.status !== 'linked') {
-    return NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 });
-  }
+  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const link = gate.ctx.wedding;
 
   let body: { checklist?: unknown };
   try {

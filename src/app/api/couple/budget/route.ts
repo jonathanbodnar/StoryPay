@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getCoupleAuthUser } from '@/lib/couple-server';
-import { getActiveCoupleWedding } from '@/lib/couple-weddings';
+import { resolveCoupleWeddingContext } from '@/lib/couple-server';
 import { sanitizeBudget, type WeddingBudget } from '@/lib/wedding-budget';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * Budget is COUPLE-PRIVATE. There is deliberately no venue counterpart to this
+ * Budget is OWNER-PRIVATE. There is deliberately no venue counterpart to this
  * route, and no venue-facing endpoint selects couple_weddings.budget, so the
- * venue never sees it.
+ * venue never sees it. Wedding Planner collaborators (view OR edit) are also
+ * locked out here via `ownerOnly` — budget stays private to the owning couple.
  */
 
 async function loadBudget(weddingId: string): Promise<WeddingBudget> {
@@ -22,27 +22,19 @@ async function loadBudget(weddingId: string): Promise<WeddingBudget> {
   return sanitizeBudget((data as { budget?: unknown } | null)?.budget);
 }
 
-/** GET — the couple's private budget for her linked wedding. */
+/** GET — the couple's private budget for her linked wedding. Owner only. */
 export async function GET(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const link = await getActiveCoupleWedding(user.id);
-  if (!link || link.status !== 'linked') {
-    return NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 });
-  }
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const link = gate.ctx.wedding;
   return NextResponse.json({ budget: await loadBudget(link.id) });
 }
 
-/** PUT — replace the budget. Optimistic concurrency via `budget.rev`. */
+/** PUT — replace the budget. Owner only. Optimistic concurrency via `budget.rev`. */
 export async function PUT(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const link = await getActiveCoupleWedding(user.id);
-  if (!link || link.status !== 'linked') {
-    return NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 });
-  }
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const link = gate.ctx.wedding;
 
   let body: { budget?: unknown };
   try {

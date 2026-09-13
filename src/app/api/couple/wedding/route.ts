@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getCoupleAuthUser } from '@/lib/couple-server';
 import {
   getActiveCoupleWedding,
+  resolveCoupleWeddingAccess,
   getPendingInviteForEmail,
   getVenueSummary,
   getVenueBridePortalConfig,
@@ -168,16 +169,25 @@ export async function GET(request: NextRequest) {
   const user = await getCoupleAuthUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const link = await getActiveCoupleWedding(user.id);
-  const pendingInviteRow = user.email ? await getPendingInviteForEmail(user.email) : null;
+  // Resolve the caller's active wedding AND access level. Owner sees her own
+  // wedding; an active collaborator sees the wedding she was invited into (with
+  // 'edit' or 'view'). Anyone else has no active wedding.
+  const resolved = await resolveCoupleWeddingAccess(user.id);
+  const link = resolved?.wedding ?? null;
+  const access = resolved?.access ?? null;
 
-  // The couple's own saved wedding date (source of truth on couple_profiles).
-  // Returned un-redacted so the dashboard countdown always shows whenever a
-  // date is set, independent of the venue's per-field visibility toggles.
+  // Collaborators never see the "connect with a venue" self-serve invite flow.
+  const pendingInviteRow =
+    access === null && user.email ? await getPendingInviteForEmail(user.email) : null;
+
+  // The wedding countdown reads the OWNING couple's saved date (source of truth
+  // on couple_profiles) so collaborators see the same countdown the owner does,
+  // independent of the venue's per-field visibility toggles.
+  const countdownCoupleId = link?.couple_id ?? user.id;
   const { data: coupleProfile } = await supabaseAdmin
     .from('couple_profiles')
     .select('wedding_date')
-    .eq('id', user.id)
+    .eq('id', countdownCoupleId)
     .maybeSingle();
   const coupleWeddingDate = (coupleProfile as { wedding_date?: string | null } | null)?.wedding_date ?? null;
 
@@ -195,6 +205,8 @@ export async function GET(request: NextRequest) {
     link: link ? await serializeLink(link, user.id) : null,
     pendingInvite,
     coupleWeddingDate,
+    // 'owner' | 'edit' | 'view' | null — drives read-only mode + Budget hiding.
+    access,
   });
 }
 

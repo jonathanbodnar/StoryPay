@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getCoupleAuthUser } from '@/lib/couple-server';
-import { getActiveCoupleWedding, summarizeWeddingGuests } from '@/lib/couple-weddings';
+import { resolveCoupleWeddingContext } from '@/lib/couple-server';
+import { summarizeWeddingGuests } from '@/lib/couple-weddings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -87,13 +87,9 @@ export function sanitizeGuest(
 
 /** GET — the bride's guest list, meal options, and RSVP summary. */
 export async function GET(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const link = await getActiveCoupleWedding(user.id);
-  if (!link || link.status !== 'linked') {
-    return NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 });
-  }
+  const gate = await resolveCoupleWeddingContext(request, { requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const link = gate.ctx.wedding;
 
   const [{ data: guests }, { data: weddingRow }] = await Promise.all([
     supabaseAdmin
@@ -116,13 +112,9 @@ export async function GET(request: NextRequest) {
 
 /** POST — add a guest to the bride's list. */
 export async function POST(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const link = await getActiveCoupleWedding(user.id);
-  if (!link || link.status !== 'linked') {
-    return NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 });
-  }
+  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const link = gate.ctx.wedding;
 
   let body: Record<string, unknown>;
   try {
@@ -138,7 +130,9 @@ export async function POST(request: NextRequest) {
     .from('wedding_guests')
     .insert({
       couple_wedding_id: link.id,
-      couple_id: user.id,
+      // Attribute to the OWNING couple (not the acting collaborator) so the
+      // wedding's rows stay consistently owned regardless of who added them.
+      couple_id: link.couple_id,
       venue_id: link.venue_id,
       venue_customer_id: link.venue_customer_id,
       ...result.data,

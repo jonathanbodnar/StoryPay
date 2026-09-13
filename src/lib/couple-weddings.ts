@@ -73,6 +73,66 @@ export async function getActiveCoupleWedding(
   return (data as CoupleWeddingRow | null) ?? null;
 }
 
+// ── Wedding Planner collaborator access ─────────────────────────────────────
+//
+// Beyond the owning couple (the bride who linked the wedding via couple_id),
+// up to 5 people she invites — plus at most one venue-assigned coordinator —
+// can be granted access to her Wedding Planner. Access is one of:
+//   - 'owner' : she owns the wedding (couple_weddings.couple_id = user.id)
+//   - 'edit'  : an active collaborator with access_level='edit'
+//   - 'view'  : an active collaborator with access_level='view' (read-only)
+// Budget is the one tool that stays owner-only regardless of collaborator level.
+
+export type WeddingAccessLevel = 'owner' | 'edit' | 'view';
+
+export interface ResolvedCoupleWedding {
+  wedding: CoupleWeddingRow;
+  access: WeddingAccessLevel;
+  /** The collaborator row id when access is a collaborator (not owner). */
+  collaboratorId: string | null;
+}
+
+/**
+ * Resolve BOTH the caller's active wedding AND their access level in one place.
+ *
+ * Owner always wins: if the user owns an active wedding via couple_id we return
+ * that (access='owner'), so a person who happens to both own a wedding and be a
+ * collaborator elsewhere sees their own. Otherwise we look up an ACTIVE
+ * collaborator row bound to this user and return the wedding it points at with
+ * the granted access level. Returns null when the user has neither.
+ */
+export async function resolveCoupleWeddingAccess(
+  userId: string,
+): Promise<ResolvedCoupleWedding | null> {
+  const owned = await getActiveCoupleWedding(userId);
+  if (owned) return { wedding: owned, access: 'owner', collaboratorId: null };
+
+  const { data: collab } = await supabaseAdmin
+    .from('wedding_planner_collaborators')
+    .select('id, couple_wedding_id, access_level')
+    .eq('collaborator_user_id', userId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!collab) return null;
+  const c = collab as { id: string; couple_wedding_id: string; access_level: string | null };
+
+  const { data: w } = await supabaseAdmin
+    .from('couple_weddings')
+    .select('*')
+    .eq('id', c.couple_wedding_id)
+    .in('status', ['pending', 'linked'])
+    .maybeSingle();
+  if (!w) return null;
+
+  return {
+    wedding: w as CoupleWeddingRow,
+    access: c.access_level === 'edit' ? 'edit' : 'view',
+    collaboratorId: c.id,
+  };
+}
+
 /**
  * A pending venue -> bride invite addressed to this email that has NOT yet been
  * claimed (couple_id still NULL). Used to prompt a freshly-signed-up bride to

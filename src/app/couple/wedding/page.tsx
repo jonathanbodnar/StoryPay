@@ -26,6 +26,10 @@ import {
   Mail,
   Phone,
   UserCircle2,
+  Eye,
+  Pencil,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
@@ -99,6 +103,7 @@ export default function CoupleWeddingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [link, setLink] = useState<Link_ | null>(null);
+  const [access, setAccess] = useState<'owner' | 'edit' | 'view' | null>(null);
   const [pendingInvite, setPendingInvite] = useState<{ id: string; venue: Venue } | null>(null);
   const [coupleWeddingDate, setCoupleWeddingDate] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -130,6 +135,7 @@ export default function CoupleWeddingPage() {
       return;
     }
     setLink(data.link ?? null);
+    setAccess(data.access === 'owner' || data.access === 'edit' || data.access === 'view' ? data.access : null);
     setPendingInvite(data.pendingInvite ?? null);
     setCoupleWeddingDate(typeof data.coupleWeddingDate === 'string' ? data.coupleWeddingDate : null);
     setLoading(false);
@@ -230,6 +236,10 @@ export default function CoupleWeddingPage() {
   // visibility toggles never hide it, and it re-renders live if the date changes.
   const countdownDate = coupleWeddingDate || link?.wedding?.wedding_date || null;
 
+  const isOwner = access === 'owner';
+  const isCollaborator = access === 'edit' || access === 'view';
+  const isReadOnly = access === 'view';
+
   if (loading) {
     return (
       <div className="flex justify-center py-20 text-gray-400">
@@ -250,6 +260,17 @@ export default function CoupleWeddingPage() {
 
       {error && (
         <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
+      )}
+
+      {/* Collaborator context banner: this person was invited into someone's planner. */}
+      {isCollaborator && (
+        <div className="mt-6 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-600">
+          {isReadOnly ? <Eye className="h-4 w-4 shrink-0 text-gray-400" /> : <Pencil className="h-4 w-4 shrink-0 text-gray-400" />}
+          <span>
+            You have <strong className="text-gray-900">{isReadOnly ? 'view-only' : 'edit'}</strong> access to this Wedding
+            Planner. The couple&apos;s budget stays private to them.
+          </span>
+        </div>
       )}
 
       {/* State: venue invited this bride (unclaimed) */}
@@ -313,35 +334,43 @@ export default function CoupleWeddingPage() {
             </div>
 
             {(link.venue?.address || link.venue?.phone || link.venue?.email || link.venue?.primary_contact) && (
-              <div className="mt-4 space-y-1.5 text-sm text-gray-600">
-                {link.venue?.address && (
-                  <p className="flex items-start gap-2">
-                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
-                    <span>{link.venue.address}</span>
-                  </p>
-                )}
-                {link.venue?.primary_contact && (
-                  <p className="flex items-center gap-2">
-                    <UserCircle2 className="h-4 w-4 shrink-0 text-gray-400" />
-                    <span>{link.venue.primary_contact}</span>
-                  </p>
-                )}
-                {link.venue?.phone && (
-                  <p className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 shrink-0 text-gray-400" />
-                    <a href={`tel:${link.venue.phone.replace(/[^\d+]/g, '')}`} className="hover:text-gray-900 hover:underline">
-                      {link.venue.phone}
-                    </a>
-                  </p>
-                )}
-                {link.venue?.email && (
-                  <p className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 shrink-0 text-gray-400" />
-                    <a href={`mailto:${link.venue.email}`} className="hover:text-gray-900 hover:underline">
-                      {link.venue.email}
-                    </a>
-                  </p>
-                )}
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <ul className="space-y-2.5">
+                  {link.venue?.address && (
+                    <li className="flex items-center gap-3 text-sm text-gray-600">
+                      <MapPin className="h-4 w-4 shrink-0 text-gray-400" />
+                      <span>{link.venue.address}</span>
+                    </li>
+                  )}
+                  {link.venue?.primary_contact && (
+                    <li className="flex items-center gap-3 text-sm text-gray-600">
+                      <UserCircle2 className="h-4 w-4 shrink-0 text-gray-400" />
+                      <span>{link.venue.primary_contact}</span>
+                    </li>
+                  )}
+                  {link.venue?.phone && (
+                    <li className="flex items-center gap-3 text-sm text-gray-600">
+                      <Phone className="h-4 w-4 shrink-0 text-gray-400" />
+                      <a
+                        href={`tel:${link.venue.phone.replace(/[^\d+]/g, '')}`}
+                        className="transition-colors hover:text-gray-900 hover:underline"
+                      >
+                        {link.venue.phone}
+                      </a>
+                    </li>
+                  )}
+                  {link.venue?.email && (
+                    <li className="flex items-center gap-3 text-sm text-gray-600">
+                      <Mail className="h-4 w-4 shrink-0 text-gray-400" />
+                      <a
+                        href={`mailto:${link.venue.email}`}
+                        className="transition-colors hover:text-gray-900 hover:underline"
+                      >
+                        {link.venue.email}
+                      </a>
+                    </li>
+                  )}
+                </ul>
               </div>
             )}
 
@@ -392,7 +421,10 @@ export default function CoupleWeddingPage() {
               <span className="text-sm font-medium text-gray-700 underline">Manage</span>
             </Link>
 
-            <WeddingPlannerTools unread={link.thread?.unread ?? 0} />
+            <WeddingPlannerTools unread={link.thread?.unread ?? 0} showBudget={isOwner} />
+
+            {/* Owner-only: manage the up-to-5 people invited into the planner. */}
+            {isOwner && <CollaboratorsCard />}
 
             <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-4 text-sm">
               {link.venue?.slug && (
@@ -405,14 +437,16 @@ export default function CoupleWeddingPage() {
                   View venue listing
                 </a>
               )}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void disconnect()}
-                className="text-gray-400 underline hover:text-gray-600 disabled:opacity-60"
-              >
-                Disconnect
-              </button>
+              {isOwner && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void disconnect()}
+                  className="text-gray-400 underline hover:text-gray-600 disabled:opacity-60"
+                >
+                  Disconnect
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -541,12 +575,14 @@ const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactN
   { href: '/couple/site', label: 'Wedding website', desc: 'Your public wedding page', icon: <Globe className="h-5 w-5" /> },
 ];
 
-function WeddingPlannerTools({ unread }: { unread: number }) {
+function WeddingPlannerTools({ unread, showBudget }: { unread: number; showBudget: boolean }) {
+  // Budget is private to the owning couple — hide it entirely for collaborators.
+  const tools = showBudget ? HUB_TOOLS : HUB_TOOLS.filter((t) => t.href !== '/couple/budget');
   return (
     <div className="mt-6">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Plan your wedding</h3>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {HUB_TOOLS.map((t) => (
+        {tools.map((t) => (
           <Link
             key={t.href}
             href={t.href}
@@ -632,6 +668,252 @@ function WeddingCountdown({ date }: { date: string }) {
         ))}
       </div>
       <p className="mt-1.5 text-right text-[11px] text-gray-400">{fmtDate(date)}</p>
+    </div>
+  );
+}
+
+type Collaborator = {
+  id: string;
+  invited_by: 'couple' | 'venue';
+  role: string | null;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  access_level: 'view' | 'edit';
+  status: 'invited' | 'active' | 'revoked';
+  created_at: string;
+};
+
+/**
+ * Owner-only card to manage the up-to-5 people invited into the Wedding Planner.
+ * Each invitee gets their own account and view/edit access to every tool except
+ * the private budget. A venue-assigned coordinator (invited_by='venue') also
+ * shows here as read-only info.
+ */
+function CollaboratorsCard() {
+  const [rows, setRows] = useState<Collaborator[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [max, setMax] = useState(5);
+  const [remaining, setRemaining] = useState(5);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [level, setLevel] = useState<'view' | 'edit'>('view');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [flash, setFlash] = useState('');
+
+  const load = useCallback(async () => {
+    const res = await coupleAuthedFetch('/api/couple/collaborators');
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setRows(Array.isArray(data.collaborators) ? data.collaborators : []);
+      if (typeof data.max === 'number') setMax(data.max);
+      if (typeof data.remaining === 'number') setRemaining(data.remaining);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function invite(e: React.FormEvent) {
+    e.preventDefault();
+    setErr('');
+    setFlash('');
+    if (!name.trim()) { setErr('A name is required.'); return; }
+    if (!email.trim()) { setErr('An email is required.'); return; }
+    if (!phone.trim()) { setErr('A phone number is required.'); return; }
+    setBusy(true);
+    try {
+      const res = await coupleAuthedFetch('/api/couple/collaborators', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim(), access_level: level }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(typeof data.error === 'string' ? data.error : 'Could not send the invite.');
+        return;
+      }
+      setFlash('Invite sent.');
+      setName('');
+      setEmail('');
+      setPhone('');
+      setLevel('view');
+      setOpen(false);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeLevel(id: string, next: 'view' | 'edit') {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, access_level: next } : r)));
+    await coupleAuthedFetch('/api/couple/collaborators', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, access_level: next }),
+    });
+    await load();
+  }
+
+  async function remove(id: string) {
+    setRows((prev) => prev.filter((r) => r.id !== id));
+    await coupleAuthedFetch(`/api/couple/collaborators?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await load();
+  }
+
+  const coupleInvited = rows.filter((r) => r.invited_by === 'couple');
+  const coordinator = rows.find((r) => r.invited_by === 'venue');
+
+  return (
+    <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-heading text-base text-gray-900">Wedding Planner access</h3>
+          <p className="mt-0.5 text-sm text-gray-500">
+            Invite up to {max} people to help plan. They get view or edit access to everything except your budget.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          disabled={remaining <= 0}
+          className="inline-flex items-center gap-1.5 rounded-2xl bg-[#1b1b1b] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-40"
+        >
+          <Plus className="h-4 w-4" /> Invite
+        </button>
+      </div>
+
+      {flash && (
+        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{flash}</div>
+      )}
+
+      {open && (
+        <form onSubmit={invite} className="mt-4 grid gap-3 rounded-xl border border-gray-200 bg-gray-50/60 p-4 sm:grid-cols-2">
+          <input
+            className={INPUT}
+            placeholder="Full name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <input
+            className={INPUT}
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            className={INPUT}
+            type="tel"
+            placeholder="Phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+          <div className="flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white p-1">
+            {(['view', 'edit'] as const).map((lv) => (
+              <button
+                key={lv}
+                type="button"
+                onClick={() => setLevel(lv)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
+                  level === lv ? 'bg-[#1b1b1b] text-white' : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                {lv === 'view' ? <Eye className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                {lv === 'view' ? 'View only' : 'Can edit'}
+              </button>
+            ))}
+          </div>
+          {err && <p className="text-sm text-red-600 sm:col-span-2">{err}</p>}
+          <div className="sm:col-span-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-2xl bg-[#1b1b1b] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} Send invite
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        </div>
+      ) : coupleInvited.length === 0 && !coordinator ? (
+        <p className="mt-4 text-sm text-gray-400">No one invited yet. Add family, your wedding party, or a planner to help.</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100">
+          {coupleInvited.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-gray-900">{c.name || c.email || 'Invitee'}</p>
+                <p className="truncate text-xs text-gray-500">
+                  {[c.email, c.phone].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                    c.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                  }`}
+                >
+                  {c.status === 'active' ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                  {c.status === 'active' ? 'Active' : 'Invited'}
+                </span>
+                <div className="flex items-center gap-0.5 rounded-full border border-gray-200 p-0.5">
+                  {(['view', 'edit'] as const).map((lv) => (
+                    <button
+                      key={lv}
+                      type="button"
+                      onClick={() => void changeLevel(c.id, lv)}
+                      title={lv === 'view' ? 'View only' : 'Can edit'}
+                      className={`rounded-full px-2 py-1 text-[11px] font-medium transition-colors ${
+                        c.access_level === lv ? 'bg-[#1b1b1b] text-white' : 'text-gray-500 hover:bg-gray-100'
+                      }`}
+                    >
+                      {lv === 'view' ? 'View' : 'Edit'}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void remove(c.id)}
+                  title="Remove"
+                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </li>
+          ))}
+          {coordinator && (
+            <li className="flex flex-wrap items-center justify-between gap-3 bg-gray-50/60 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-gray-900">
+                  {coordinator.name || coordinator.email || 'Coordinator'}
+                  <span className="ml-1.5 rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+                    Coordinator
+                  </span>
+                </p>
+                <p className="truncate text-xs text-gray-500">Assigned by your venue · edit access</p>
+              </div>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                  coordinator.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                }`}
+              >
+                {coordinator.status === 'active' ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                {coordinator.status === 'active' ? 'Active' : 'Invited'}
+              </span>
+            </li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }

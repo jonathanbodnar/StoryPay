@@ -394,6 +394,26 @@ Click below to accept the invite. You'll confirm your details before anything is
     },
   },
   {
+    key: 'wedding_planner_collaborator_invite',
+    label: 'Wedding Planner: Collaborator Invite',
+    description:
+      "Sent when a couple invites a helper (family, wedding party, or planner) into their Wedding Planner, or when a venue assigns the couple's wedding coordinator. The invitee creates their own account and gets view or edit access to every planning tool except the private budget.",
+    trigger:
+      'Fires when a couple adds a collaborator (couple/access) or a venue assigns a coordinator (Wedding Planner → coordinator card).',
+    category: 'wedding_planner',
+    editable: true,
+    defaults: {
+      subject: '{{inviter_name}} invited you to help plan a wedding on StoryVenue',
+      heading: 'You have been invited to help plan a wedding',
+      body: `Hi {{invitee_first_name}},
+
+{{inviter_name}} invited you to collaborate on their Wedding Planner for {{venue_name}} — you'll be able to help with {{access_summary}}.
+
+Click below to create your free account and get access. You'll confirm your name, email, and phone before anything is shared.`,
+      button_text: 'Accept invite',
+    },
+  },
+  {
     key: 'wedding_planner_connected',
     label: 'Wedding Planner: Couple Connected',
     description:
@@ -672,6 +692,13 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
     bride_name: 'Emily Carter',
     venue_name: 'Meadowbrook Estate',
     action_url: `${APP_URL}/dashboard/wedding-planner`,
+  },
+  wedding_planner_collaborator_invite: {
+    invitee_first_name: 'Jordan',
+    inviter_name: 'Emily Carter',
+    venue_name: 'Meadowbrook Estate',
+    access_summary: 'guests, seating, the timeline, and more',
+    action_url: `${APP_URL}/couple/accept-invite?token=example-token`,
   },
   venue_concierge_message: {
     owner_first_name: 'Sarah',

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getCoupleAuthUser } from '@/lib/couple-server';
-import { getActiveCoupleWedding } from '@/lib/couple-weddings';
+import { resolveCoupleWeddingContext } from '@/lib/couple-server';
 import { sendRsvpInvite } from '@/lib/rsvp-invite';
 
 export const dynamic = 'force-dynamic';
@@ -23,13 +22,9 @@ interface GuestLite {
  * who already responded. Bride-only.
  */
 export async function POST(request: NextRequest) {
-  const user = await getCoupleAuthUser(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const link = await getActiveCoupleWedding(user.id);
-  if (!link || link.status !== 'linked') {
-    return NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 });
-  }
+  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  if (!gate.ok) return gate.res;
+  const { user, wedding: link } = gate.ctx;
 
   let includeResponded = false;
   try {
@@ -47,7 +42,7 @@ export async function POST(request: NextRequest) {
     supabaseAdmin
       .from('couple_profiles')
       .select('display_name, first_name, last_name, wedding_date')
-      .eq('id', user.id)
+      .eq('id', link.couple_id)
       .maybeSingle(),
     supabaseAdmin.from('venues').select('name').eq('id', link.venue_id).maybeSingle(),
   ]);
