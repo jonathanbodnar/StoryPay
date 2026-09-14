@@ -45,6 +45,10 @@ function SuccessInner() {
   const router      = useRouter();
   const searchParams = useSearchParams();
   const plan        = searchParams.get('plan') ?? 'free';
+  // Opened from the native app's system-browser hand-off: don't auto-navigate
+  // deeper into the browser session — tell the user to tap Done and return to
+  // the app to sign in with their new account.
+  const returnToApp = searchParams.get('ret') === 'app';
   const fired       = useRef(false);
 
   useEffect(() => {
@@ -98,16 +102,20 @@ function SuccessInner() {
       }
     }, 100);
 
-    // Redirect to dashboard onboarding after a brief success moment
-    const t = setTimeout(() => {
-      router.replace('/dashboard?welcome=1');
-    }, REDIRECT_DELAY_MS);
+    // Redirect to dashboard onboarding after a brief success moment — unless
+    // this was opened from the native app, where we keep the user on this
+    // screen so they can tap Done and return to the app.
+    const t = returnToApp
+      ? undefined
+      : setTimeout(() => {
+          router.replace('/dashboard?welcome=1');
+        }, REDIRECT_DELAY_MS);
 
     return () => {
       clearInterval(poll);
-      clearTimeout(t);
+      if (t) clearTimeout(t);
     };
-  }, [plan, router]);
+  }, [plan, router, returnToApp]);
 
   // ── Tracking scripts (loaded only when IDs are configured) ───────────────
   const hasGtag = Boolean(GOOGLE_ADS_ID || GA4_ID);
@@ -144,33 +152,44 @@ function SuccessInner() {
         <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8 shadow-sm text-center">
           <CheckCircle2 size={44} className="mx-auto mb-4 text-emerald-500" />
           <h2 className="text-xl font-semibold text-gray-900">Welcome to StoryVenue!</h2>
-          <p className="mt-2 text-sm text-gray-500">
-            Your account is ready. Taking you to your dashboard…
-          </p>
+          {returnToApp ? (
+            <p className="mt-2 text-sm text-gray-500">
+              Your account is ready. Tap <span className="font-medium text-gray-700">Done</span> at
+              the top to return to the StoryVenue app, then sign in with your new account.
+            </p>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-gray-500">
+                Your account is ready. Taking you to your dashboard…
+              </p>
 
-          <div className="mt-6 flex justify-center">
-            <span className="inline-block h-1.5 w-24 overflow-hidden rounded-full bg-gray-100">
-              <span
-                className="block h-full rounded-full bg-emerald-500"
-                style={{
-                  width: '100%',
-                  animation: `progress ${REDIRECT_DELAY_MS}ms linear forwards`,
-                }}
-              />
-            </span>
-          </div>
+              <div className="mt-6 flex justify-center">
+                <span className="inline-block h-1.5 w-24 overflow-hidden rounded-full bg-gray-100">
+                  <span
+                    className="block h-full rounded-full bg-emerald-500"
+                    style={{
+                      width: '100%',
+                      animation: `progress ${REDIRECT_DELAY_MS}ms linear forwards`,
+                    }}
+                  />
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
-        <p className="mt-6 text-xs text-gray-400">
-          Not redirecting?{' '}
-          <button
-            type="button"
-            onClick={() => router.replace('/dashboard?welcome=1')}
-            className="underline hover:text-gray-600"
-          >
-            Click here
-          </button>
-        </p>
+        {!returnToApp && (
+          <p className="mt-6 text-xs text-gray-400">
+            Not redirecting?{' '}
+            <button
+              type="button"
+              onClick={() => router.replace('/dashboard?welcome=1')}
+              className="underline hover:text-gray-600"
+            >
+              Click here
+            </button>
+          </p>
+        )}
       </div>
 
       <style>{`

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Eye, EyeOff, Building2, Heart } from 'lucide-react';
 import { getCoupleSupabase } from '@/lib/couple-browser';
-import { isNativeApp, postAuthNavigate } from '@/lib/platform';
+import { isNativeApp, postAuthNavigate, openExternalBrowser } from '@/lib/platform';
 
 /**
  * Unified login page.
@@ -30,11 +30,11 @@ export function LoginClient() {
 
   const [mode, setMode] = useState<AuthMode>(initialMode);
 
-  // The native app is venue-owner only — there is no wedding-couple flow there,
-  // so the role toggle is hidden and the mode is forced to 'venue'. Web keeps
-  // the toggle so couples can still sign in from the directory.
-  const native = isNativeApp();
-  const effectiveMode: AuthMode = native ? 'venue' : mode;
+  // The venue/couple toggle is shown on both web and native. Either role can
+  // sign in from here. Couple sign-in is a free flow (no billing), so it works
+  // fully in-app; venue account CREATION is the only thing routed to the system
+  // browser (see the signup CTA below).
+  const effectiveMode: AuthMode = mode;
 
   const signupHref = useMemo(() => {
     const params = new URLSearchParams();
@@ -53,33 +53,46 @@ export function LoginClient() {
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-7">
-          {!native && <ModeToggle mode={mode} onChange={setMode} />}
+          <ModeToggle mode={mode} onChange={setMode} />
 
           {effectiveMode === 'venue' ? <VenueLoginForm /> : <CoupleLoginForm router={router} nextPath={nextParam} />}
         </div>
 
-        {/* Native app is login-only — existing venue owners sign in. Account
-            creation lives on the web at app.storyvenue.com/signup and is never
-            linked or handed off from inside the binary. */}
-        {!native && (
-          <p className="text-center text-sm text-gray-500 mt-5">
-            {effectiveMode === 'venue' ? (
-              <>
-                New to StoryVenue?{' '}
-                <Link href={signupHref} className="font-semibold text-gray-900 hover:underline">
-                  Create a venue account
-                </Link>
-              </>
-            ) : (
-              <>
-                No account yet?{' '}
-                <Link href={signupHref} className="font-semibold text-gray-900 hover:underline">
-                  Sign up as a couple
-                </Link>
-              </>
-            )}
-          </p>
-        )}
+        {/* Account creation. Couple signup is free (no billing) so it opens
+            in-app like any other link. Venue signup can lead into a paid plan,
+            so on native it is handed off to the system browser (Apple 3.1.1);
+            the ?ret=app flag lets the success page tell the user to tap Done to
+            return to the app. On the web both are plain in-app links. */}
+        <p className="text-center text-sm text-gray-500 mt-5">
+          {effectiveMode === 'venue' ? (
+            <>
+              New to StoryVenue?{' '}
+              <Link
+                href={signupHref}
+                onClick={(e) => {
+                  if (isNativeApp()) {
+                    e.preventDefault();
+                    const params = new URLSearchParams();
+                    params.set('as', 'venue');
+                    params.set('ret', 'app');
+                    if (nextParam) params.set('next', nextParam);
+                    void openExternalBrowser(`/signup?${params.toString()}`);
+                  }
+                }}
+                className="font-semibold text-gray-900 hover:underline"
+              >
+                Create a venue account
+              </Link>
+            </>
+          ) : (
+            <>
+              No account yet?{' '}
+              <Link href={signupHref} className="font-semibold text-gray-900 hover:underline">
+                Sign up as a couple
+              </Link>
+            </>
+          )}
+        </p>
 
         <p className="text-center text-xs text-gray-400 mt-5">
           <Link href="/privacy" className="hover:text-gray-600 transition-colors">Privacy Policy</Link>
@@ -450,7 +463,10 @@ function CoupleLoginForm({
         setError(signErr.message);
         return;
       }
-      const target = nextPath && nextPath.startsWith('/') ? nextPath : '/couple/favorites';
+      // Native brides land in the "My wedding" hub; the web keeps the
+      // Favorites list as the default landing area.
+      const fallback = isNativeApp() ? '/couple/wedding' : '/couple/favorites';
+      const target = nextPath && nextPath.startsWith('/') ? nextPath : fallback;
       router.push(target);
       router.refresh();
     } finally {
