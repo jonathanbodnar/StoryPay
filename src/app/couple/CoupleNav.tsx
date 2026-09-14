@@ -9,7 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   User,
-  Gift,
+  Heart,
   LogOut,
   X,
   Home,
@@ -163,8 +163,8 @@ export function CoupleNav() {
               <MenuLink href="/couple/profile" icon={<User className="h-4 w-4" />} onClick={() => setMenuOpen(false)}>
                 Profile
               </MenuLink>
-              <MenuLink href="/couple/dashboard" icon={<Gift className="h-4 w-4" />} onClick={() => setMenuOpen(false)}>
-                Wish list
+              <MenuLink href="/couple/favorites" icon={<Heart className="h-4 w-4" />} onClick={() => setMenuOpen(false)}>
+                Favorites
               </MenuLink>
               <div className="my-1 border-t border-gray-100" />
               <button

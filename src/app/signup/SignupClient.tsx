@@ -380,7 +380,7 @@ function CoupleSignupForm() {
         return;
       }
 
-      router.replace('/couple/dashboard');
+      router.replace('/couple/favorites');
     } finally {
       setLoading(false);
     }
@@ -390,7 +390,7 @@ function CoupleSignupForm() {
     <>
       <h1 className="text-xl font-bold text-gray-900 mb-1 text-center">Create a couple account</h1>
       <p className="text-sm text-gray-500 mb-6 text-center">
-        Save venues to your wish list and keep your wedding profile in one place.
+        Save venues to your favorites and keep your wedding profile in one place.
       </p>
 
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">

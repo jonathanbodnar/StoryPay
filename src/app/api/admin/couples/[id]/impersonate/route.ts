@@ -34,7 +34,7 @@ export async function POST(
   const email = userResp.user.email;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.storyvenue.com';
-  const redirectTo = `${appUrl}/couple/dashboard`;
+  const redirectTo = `${appUrl}/couple/favorites`;
 
   const { data, error } = await supabaseAdmin.auth.admin.generateLink({
     type: 'magiclink',

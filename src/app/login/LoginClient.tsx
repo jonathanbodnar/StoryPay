@@ -450,7 +450,7 @@ function CoupleLoginForm({
         setError(signErr.message);
         return;
       }
-      const target = nextPath && nextPath.startsWith('/') ? nextPath : '/couple/dashboard';
+      const target = nextPath && nextPath.startsWith('/') ? nextPath : '/couple/favorites';
       router.push(target);
       router.refresh();
     } finally {

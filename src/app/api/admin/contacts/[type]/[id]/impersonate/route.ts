@@ -103,7 +103,7 @@ export async function POST(
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email,
-      options: { redirectTo: `${appUrl}/couple/dashboard` },
+      options: { redirectTo: `${appUrl}/couple/favorites` },
     });
     if (error || !data?.properties?.action_link) {
       return NextResponse.json({ error: error?.message ?? 'Could not generate link' }, { status: 500 });

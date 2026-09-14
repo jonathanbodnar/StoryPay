@@ -122,7 +122,7 @@ export function SaveVenueClient({ slug }: { slug: string }) {
         <>
           <Loader2 className="mx-auto h-6 w-6 animate-spin text-gray-500" />
           <p className="mt-4 text-sm text-gray-600">
-            {status === 'checking' ? 'Checking your login…' : 'Saving venue to your wish list…'}
+            {status === 'checking' ? 'Checking your login…' : 'Saving venue to your favorites…'}
           </p>
         </>
       ) : null}
@@ -133,19 +133,19 @@ export function SaveVenueClient({ slug }: { slug: string }) {
             <Heart className="h-6 w-6 fill-red-500 text-red-500" strokeWidth={0} />
           </div>
           <h1 className="mt-4 font-heading text-xl text-gray-900">
-            {status === 'saved' ? 'Saved to your wish list' : 'Already on your wish list'}
+            {status === 'saved' ? 'Saved to your favorites' : 'Already in your favorites'}
           </h1>
           <p className="mt-2 text-sm text-gray-500">
             {safeRedirect
               ? 'Taking you back to the venue…'
-              : 'Open your wish list to keep planning.'}
+              : 'Open your favorites to keep planning.'}
           </p>
           {!safeRedirect && (
             <Link
-              href="/couple/dashboard"
+              href="/couple/favorites"
               className="mt-6 inline-block rounded-2xl bg-[#1b1b1b] px-5 py-2.5 text-sm font-medium text-white"
             >
-              Go to dashboard
+              Go to favorites
             </Link>
           )}
         </>
@@ -160,10 +160,10 @@ export function SaveVenueClient({ slug }: { slug: string }) {
           <p className="mt-2 text-sm text-gray-600">{errorMsg || 'Please try again.'}</p>
           <div className="mt-6 flex items-center justify-center gap-3">
             <Link
-              href="/couple/dashboard"
+              href="/couple/favorites"
               className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-900"
             >
-              Go to dashboard
+              Go to favorites
             </Link>
             {safeRedirect && (
               <a

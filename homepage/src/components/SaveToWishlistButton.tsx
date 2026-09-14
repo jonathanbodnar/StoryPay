@@ -118,10 +118,10 @@ export function SaveToWishlistButton({ venueSlug }: { venueSlug: string }) {
   }
 
   // Visual: filled red heart when saved, outline + dark text when not
-  const label = saved ? 'Saved' : 'Save to wish list';
+  const label = saved ? 'Saved' : 'Save';
   const flashLabel =
-    flash === 'saved' ? 'Saved to your wish list'
-    : flash === 'removed' ? 'Removed from wish list'
+    flash === 'saved' ? 'Saved to your favorites'
+    : flash === 'removed' ? 'Removed from favorites'
     : flash === 'error' ? (errorMsg || 'Could not save')
     : null;
 
