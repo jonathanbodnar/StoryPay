@@ -444,7 +444,7 @@ export default function InviteGuestsPage() {
                   }
                 }}
                 placeholder="Name (optional — used when you add a single email)"
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
               />
             </div>
 
