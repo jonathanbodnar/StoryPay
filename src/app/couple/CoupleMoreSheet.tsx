@@ -5,16 +5,18 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Heart, User, LogOut, X } from 'lucide-react';
 import { getCoupleSupabase } from '@/lib/couple-browser';
+import { topBarSafeAreaPadding } from '@/lib/platform';
 import { HUB_TOOLS } from './CoupleNav';
 
 // Destinations already promoted to primary bottom tabs — excluded from the sheet.
 const PRIMARY_HREFS = new Set(['/couple/wedding', '/couple/guests', '/couple/messages', '/couple/checklist']);
 
 /**
- * Bottom sheet opened by the "More" tab on the couple app. Lists every wedding
- * tool not already on the primary tab bar, plus Favorites, Profile, and Log
- * out. Owner-only tools (Budget, Invite to website) are hidden from
- * collaborators, matching the desktop Wedding Planner modal.
+ * Full-screen sheet opened by the "More" tab on the couple app. Lists every
+ * wedding tool not already on the primary tab bar, plus Favorites, Profile, and
+ * Log out. Fills the screen so the list scrolls vertically and closes via the X.
+ * Owner-only tools (Budget, Invite to website) are hidden from collaborators,
+ * matching the desktop Wedding Planner modal.
  */
 export default function CoupleMoreSheet({
   isCollaborator,
@@ -55,26 +57,27 @@ export default function CoupleMoreSheet({
       role="dialog"
       aria-modal="true"
       aria-label="More"
-      className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end bg-black/40"
-      onClick={onClose}
+      className="lg:hidden fixed inset-0 z-50 flex flex-col bg-white"
     >
       <div
-        className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}
-        onClick={(e) => e.stopPropagation()}
+        className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-5 pb-4"
+        style={{ paddingTop: `calc(1rem + ${topBarSafeAreaPadding()})` }}
       >
-        <div className="sticky top-0 flex items-center justify-between border-b border-gray-100 bg-white px-5 py-4">
-          <h2 className="font-heading text-lg text-gray-900">More</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+        <h2 className="font-heading text-lg text-gray-900">More</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
 
+      <div
+        className="flex-1 overflow-y-auto"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}
+      >
         <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
           {tools.map((t) => (
             <Link
