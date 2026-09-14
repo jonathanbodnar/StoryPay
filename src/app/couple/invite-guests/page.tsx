@@ -244,10 +244,10 @@ export default function InviteGuestsPage() {
         <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
       )}
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
+      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,400px)]">
         {/* ── Compose ─────────────────────────────────────────── */}
         <div className="space-y-6">
-          <section className="rounded-2xl border border-gray-200 bg-white p-5">
+          <section className="rounded-2xl border border-gray-200 bg-white p-6">
             <h2 className="text-sm font-semibold text-gray-900">Your message</h2>
             <label className="mt-4 block text-xs font-medium text-gray-500">Subject</label>
             <input
@@ -288,7 +288,7 @@ export default function InviteGuestsPage() {
             )}
           </section>
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-5">
+          <section className="rounded-2xl border border-gray-200 bg-white p-6">
             <div className="flex items-center justify-between">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                 <Users className="h-4 w-4 text-gray-500" /> Recipients
@@ -365,7 +365,7 @@ export default function InviteGuestsPage() {
 
         {/* ── Preview + Send ──────────────────────────────────── */}
         <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="rounded-2xl border border-gray-200 bg-white p-6">
             <h2 className="text-sm font-semibold text-gray-900">Preview</h2>
             <div className="mt-3 overflow-hidden rounded-xl border border-gray-100">
               <div className="bg-[#1b1b1b] px-5 py-6 text-center">
