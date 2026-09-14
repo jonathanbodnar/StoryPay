@@ -8,7 +8,7 @@ import {
   QrCode, Eye, EyeOff, Globe, Lock, Video, Bold, AlignLeft, AlignCenter, AlignRight,
   GripVertical, ChevronDown, Clock, Type, Images, Link2, MapPin,
   Settings, Instagram, Facebook, Music2, CalendarHeart, Navigation, Radio, CalendarPlus,
-  AlertTriangle, RotateCcw, Gift,
+  AlertTriangle, RotateCcw, Gift, MessageSquare, Heart,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 import { LEAD_LINK_ICON_KEYS } from '@/lib/lead-link-icons';
@@ -1094,6 +1094,7 @@ export default function CoupleSitePage() {
               hasVenue={hasVenue}
               coupleName={coupleName}
               storyHtml={site.story_html || storySeed}
+              guestbook={gb}
             />
           </div>
         </aside>
@@ -1126,6 +1127,7 @@ export default function CoupleSitePage() {
                 hasVenue={hasVenue}
                 coupleName={coupleName}
                 storyHtml={site.story_html || storySeed}
+                guestbook={gb}
               />
             </div>
           </div>
@@ -1238,13 +1240,14 @@ function PreviewGallery({ images }: { images: string[] }) {
   );
 }
 
-function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }: {
+function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml, guestbook }: {
   site: Site;
   profile: { wedding_date?: string | null; instagram_url?: string | null; facebook_url?: string | null; tiktok_url?: string | null; pinterest_url?: string | null } | null;
   order: SectionKey[];
   hasVenue: boolean;
   coupleName: string;
   storyHtml: string;
+  guestbook: GuestbookEntry[];
 }) {
   // Single source of truth: these mirror the live minisite's brand palette
   // (weddingdirectory globals.css) so the preview is pixel-faithful.
@@ -1270,6 +1273,10 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
     profile?.tiktok_url && { Icon: Music2 },
     profile?.pinterest_url && { Icon: Link2 },
   ].filter(Boolean) as { Icon: typeof Instagram }[];
+  // Guestbook is a fixed-position section (not part of the reorderable `order`);
+  // on the live minisite it sits at the bottom of the page. Hidden/moderated
+  // entries never render publicly, so mirror that here.
+  const guestbookEntries = guestbook.filter((e) => !e.is_hidden);
 
   const blocks: Record<SectionKey, React.ReactNode> = {
     countdown: cd ? (
@@ -1397,6 +1404,32 @@ function PhonePreview({ site, profile, order, hasVenue, coupleName, storyHtml }:
             </div>
 
             {order.map((key) => blocks[key] ?? null)}
+
+            {site.show_guestbook && (
+              <div className="mt-5">
+                <p className="flex items-center justify-center gap-1.5 text-[12px] font-semibold" style={{ color: INK }}>
+                  <MessageSquare size={12} /> Guestbook
+                </p>
+                <p className="mt-1 text-center text-[10px]" style={{ color: MUTED }}>Leave the couple a note</p>
+                <div className="mt-2 space-y-1.5 rounded-[10px] border bg-white p-3" style={{ borderColor: LINE }}>
+                  <div className="rounded-lg border px-2.5 py-1.5 text-[10px]" style={{ borderColor: LINE, color: MUTED }}>Your name</div>
+                  <div className="rounded-lg border px-2.5 py-3 text-[10px]" style={{ borderColor: LINE, color: MUTED }}>Write a message…</div>
+                  <div className="flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-[10px] font-semibold text-white" style={{ background: INK }}>
+                    <Heart size={10} /> Sign the guestbook
+                  </div>
+                </div>
+                {guestbookEntries.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {guestbookEntries.slice(0, 5).map((e) => (
+                      <div key={e.id} className="rounded-[10px] border bg-white px-3 py-2 text-left" style={{ borderColor: LINE }}>
+                        <p className="text-[11px] font-semibold" style={{ color: INK }}>{e.guest_name}</p>
+                        <p className="mt-0.5 text-[11px] leading-snug [overflow-wrap:anywhere]" style={{ color: MUTED }}>{e.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
               </div>
             </div>
 
