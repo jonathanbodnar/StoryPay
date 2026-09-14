@@ -344,7 +344,7 @@ const InspirationBoard = forwardRef<InspirationBoardHandle, InspirationBoardProp
               </a>
 
               {/* Hover controls */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-1.5 opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100">
                 <div className="pointer-events-auto flex gap-1">
                   <button
                     type="button"

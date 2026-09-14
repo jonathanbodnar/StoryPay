@@ -665,12 +665,12 @@ function WeddingCountdown({ date }: { date: string }) {
   ];
 
   return (
-    <div className="shrink-0">
+    <div className="w-full shrink-0 sm:w-auto">
       <div className="flex items-stretch gap-2">
         {cells.map(([value, label]) => (
           <div
             key={label}
-            className="flex w-[62px] flex-col items-center rounded-2xl border border-gray-200 bg-white px-2 py-2.5 shadow-sm"
+            className="flex min-w-0 flex-1 flex-col items-center rounded-2xl border border-gray-200 bg-white px-2 py-2.5 shadow-sm sm:w-[62px] sm:flex-none"
           >
             <span className="text-2xl font-semibold tabular-nums text-[#1b1b1b]">{String(value).padStart(2, '0')}</span>
             <span className="mt-0.5 text-[10px] uppercase tracking-wide text-gray-400">{label}</span>
@@ -882,7 +882,7 @@ function CollaboratorsCard() {
                       type="button"
                       onClick={() => void changeLevel(c.id, lv)}
                       title={lv === 'view' ? 'View only' : 'Can edit'}
-                      className={`rounded-full px-2 py-1 text-[11px] font-medium transition-colors ${
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
                         c.access_level === lv ? 'bg-[#1b1b1b] text-white' : 'text-gray-500 hover:bg-gray-100'
                       }`}
                     >
@@ -894,7 +894,7 @@ function CollaboratorsCard() {
                   type="button"
                   onClick={() => void remove(c.id)}
                   title="Remove"
-                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                  className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

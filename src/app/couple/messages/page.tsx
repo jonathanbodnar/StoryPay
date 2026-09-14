@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Send, ArrowLeft, MessageSquare, Mail, Check, Lock } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
+import { topBarSafeAreaPadding } from '@/lib/platform';
 
 type Channel = 'sms' | 'email';
 
@@ -41,6 +42,19 @@ export default function CoupleMessagesPage() {
   const [error, setError] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const scrollOnNext = useRef(true);
+  // Below `lg` the chat becomes a fixed panel wedged between the app shell's
+  // top bar and bottom tab bar (matching the venue concierge chat), so the
+  // composer always sits above the tabs and the list scrolls in between.
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px)').matches : false,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px)');
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   const load = useCallback(
     async (opts: { silent?: boolean } = {}) => {
@@ -147,8 +161,19 @@ export default function CoupleMessagesPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-140px)] min-h-[420px] flex-col">
-      <div className="flex items-center gap-3 border-b border-gray-200 pb-3">
+    <div
+      className="flex flex-col bg-[#fafaf9] fixed inset-x-0 z-30 px-4 lg:static lg:z-auto lg:h-[calc(100vh-140px)] lg:min-h-[420px] lg:px-0"
+      style={
+        isMobile
+          ? {
+              top: `calc(3.5rem + ${topBarSafeAreaPadding()})`,
+              // Clear the bottom tab bar (~72px of content + its safe-area inset).
+              bottom: 'calc(max(env(safe-area-inset-bottom, 0px), 10px) + 72px)',
+            }
+          : undefined
+      }
+    >
+      <div className="flex items-center gap-3 border-b border-gray-200 pb-3 pt-4 lg:pt-0">
         <Link href="/couple/wedding" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
           <ArrowLeft className="h-4 w-4" />
         </Link>
@@ -209,7 +234,7 @@ export default function CoupleMessagesPage() {
 
       {error && <div className="mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
 
-      <div className="border-t border-gray-200 pt-3">
+      <div className="border-t border-gray-200 pb-3 pt-3">
         <div className="mb-2 flex rounded-2xl bg-gray-100 p-1">
           <button
             type="button"

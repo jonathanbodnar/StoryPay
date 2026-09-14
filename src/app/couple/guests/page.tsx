@@ -583,7 +583,7 @@ export default function CoupleGuestsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="flex flex-wrap items-center gap-1.5 font-medium text-gray-900">
                         {g.full_name}
@@ -604,11 +604,11 @@ export default function CoupleGuestsPage() {
                       )}
                       {g.dietary_notes && <p className="mt-0.5 text-xs text-amber-600">Dietary: {g.dietary_notes}</p>}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() => void copyLink(g)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
                         title="Copy RSVP link"
                       >
                         {copiedId === g.id ? <Check className="h-4 w-4 text-emerald-600" /> : <Link2 className="h-4 w-4" />}
@@ -633,7 +633,7 @@ export default function CoupleGuestsPage() {
                         value={g.rsvp_status}
                         disabled={busyId === g.id}
                         onChange={(e) => void patchGuest(g.id, { rsvp_status: e.target.value as Rsvp })}
-                        className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs focus:border-gray-400 focus:outline-none"
+                        className="min-w-[7rem] flex-1 rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs focus:border-gray-400 focus:outline-none sm:flex-none"
                       >
                         {RSVP_OPTIONS.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
@@ -643,21 +643,21 @@ export default function CoupleGuestsPage() {
                         value={g.meal_choice ?? ''}
                         disabled={busyId === g.id || mealOptions.length === 0}
                         onChange={(e) => void patchGuest(g.id, { meal_choice: e.target.value || null })}
-                        className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs focus:border-gray-400 focus:outline-none disabled:opacity-50"
+                        className="min-w-[7rem] flex-1 rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs focus:border-gray-400 focus:outline-none disabled:opacity-50 sm:flex-none"
                       >
                         <option value="">Meal…</option>
                         {mealOptions.map((m) => (
                           <option key={m} value={m}>{m}</option>
                         ))}
                       </select>
-                      <button type="button" onClick={() => startEdit(g)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="Edit">
+                      <button type="button" onClick={() => startEdit(g)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="Edit">
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         type="button"
                         disabled={busyId === g.id}
                         onClick={() => void removeGuest(g.id)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-60"
+                        className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-60"
                         title="Remove"
                       >
                         <Trash2 className="h-4 w-4" />
