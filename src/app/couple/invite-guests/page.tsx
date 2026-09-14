@@ -412,32 +412,40 @@ export default function InviteGuestsPage() {
               {data && data.guestsWithoutEmail > 0 ? ` · ${data.guestsWithoutEmail} guest(s) have no email` : ''}
             </p>
 
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <div className="mt-3 space-y-2">
+              <div className="flex gap-2">
+                <input
+                  value={addInput}
+                  onChange={(e) => setAddInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addEmails();
+                    }
+                  }}
+                  placeholder="Add email(s) — paste a whole list too"
+                  className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={addEmails}
+                  className="inline-flex shrink-0 items-center justify-center gap-1 rounded-xl bg-[#1b1b1b] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85"
+                >
+                  <Plus className="h-4 w-4" /> Add
+                </button>
+              </div>
               <input
                 value={addName}
                 onChange={(e) => setAddName(e.target.value)}
-                placeholder="Name (optional)"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none sm:w-40"
-              />
-              <input
-                value={addInput}
-                onChange={(e) => setAddInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     addEmails();
                   }
                 }}
-                placeholder="Add email(s) — paste a list too"
-                className="w-full flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                placeholder="Name (optional — used when you add a single email)"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 placeholder:text-gray-400 focus:border-gray-400 focus:bg-white focus:outline-none"
               />
-              <button
-                type="button"
-                onClick={addEmails}
-                className="inline-flex items-center justify-center gap-1 rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
-              >
-                <Plus className="h-4 w-4" /> Add
-              </button>
             </div>
 
             <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
