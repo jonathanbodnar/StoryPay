@@ -146,9 +146,81 @@ export default function BudgetTracker({ initial, onSave }: BudgetTrackerProps) {
         </button>
       </div>
 
-      {/* Lines */}
+      {/* Lines — mobile card layout (below sm) */}
       {doc.lines.length > 0 && (
-        <div className="overflow-x-auto border-t border-gray-100">
+        <div className="space-y-3 border-t border-gray-100 px-4 py-3 sm:hidden">
+          {doc.lines.map((l) => (
+            <div key={l.id} className="rounded-xl border border-gray-200 p-3">
+              <div className="flex items-start gap-2">
+                <select
+                  value={l.category}
+                  onChange={(e) => patch(l.id, { category: e.target.value as BudgetCategory }, true)}
+                  className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                >
+                  {BUDGET_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => remove(l.id)}
+                  className="shrink-0 rounded-lg p-2 text-gray-300 hover:bg-gray-50 hover:text-red-500"
+                  aria-label="Remove line"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              <input
+                value={l.label}
+                onChange={(e) => patch(l.id, { label: e.target.value })}
+                placeholder="Optional note"
+                className="mt-2 w-full min-w-0 rounded-lg border border-gray-200 px-2.5 py-2 text-sm text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              />
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Estimated</span>
+                  <input
+                    value={l.estimated ? String(l.estimated) : ''}
+                    onChange={(e) => patch(l.id, { estimated: parseMoney(e.target.value) })}
+                    placeholder="$0"
+                    inputMode="decimal"
+                    className={MONEY_FIELD}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">Actual</span>
+                  <input
+                    value={l.actual ? String(l.actual) : ''}
+                    onChange={(e) => patch(l.id, { actual: parseMoney(e.target.value) })}
+                    placeholder="$0"
+                    inputMode="decimal"
+                    className={MONEY_FIELD}
+                  />
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={() => patch(l.id, { paid: !l.paid }, true)}
+                aria-label={l.paid ? 'Mark unpaid' : 'Mark paid'}
+                className={`mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  l.paid ? 'border-[#1b1b1b] bg-[#1b1b1b] text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                <span className={`inline-flex h-4 w-4 items-center justify-center rounded-md border ${l.paid ? 'border-white' : 'border-gray-300'}`}>
+                  {l.paid && <Check className="h-3 w-3" />}
+                </span>
+                Paid
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Lines — desktop table (sm and up) */}
+      {doc.lines.length > 0 && (
+        <div className="hidden overflow-x-auto border-t border-gray-100 sm:block">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
