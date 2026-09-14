@@ -306,9 +306,9 @@ export default function LeadLinkPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,360px)]">
           {/* ── Left column: link + what's on it ─────────────────────── */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             {/* Shareable link */}
             <div className={CARD}>
               <div className="flex items-start gap-3">
@@ -574,8 +574,8 @@ export default function LeadLinkPage() {
           </div>
 
           {/* ── Right column: live preview (iPhone mockup) ───────────── */}
-          <div className="lg:sticky lg:top-6 lg:self-start">
-            <div className="mx-auto w-fit">
+          <div className="min-w-0 lg:sticky lg:top-6 lg:self-start">
+            <div className="mx-auto w-fit max-w-full">
               {/* Titanium frame */}
               <div className="relative rounded-[3.2rem] bg-[#1b1b1b] p-[3px] shadow-2xl ring-1 ring-black/10">
                 <div className="rounded-[3rem] bg-[#1b1b1b] p-2.5">
