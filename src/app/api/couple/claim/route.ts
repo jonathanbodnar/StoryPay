@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getCoupleAuthUser } from '@/lib/couple-server';
-import { type CoupleWeddingRow, reconcileWeddingFieldsOnLink } from '@/lib/couple-weddings';
+import {
+  type CoupleWeddingRow,
+  reconcileWeddingFieldsOnLink,
+  importCoupleContactToVenue,
+} from '@/lib/couple-weddings';
 import { sendWeddingPlannerConnectedEmail } from '@/lib/wedding-planner-emails';
 
 export const dynamic = 'force-dynamic';
@@ -119,6 +123,9 @@ export async function POST(request: NextRequest) {
   // moment they connect (fills only whichever side is genuinely empty).
   if (invite.venue_customer_id) {
     void reconcileWeddingFieldsOnLink(user.id, invite.venue_customer_id);
+    // Backfill any contact detail the venue's invite record was missing
+    // (e.g. phone) from the bride's own profile — additive, never overwriting.
+    void importCoupleContactToVenue(user.id, invite.venue_customer_id, user.email);
   }
 
   return NextResponse.json({ ok: true });

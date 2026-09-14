@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
-import { type CoupleWeddingRow, reconcileWeddingFieldsOnLink } from '@/lib/couple-weddings';
+import {
+  type CoupleWeddingRow,
+  reconcileWeddingFieldsOnLink,
+  importCoupleContactToVenue,
+} from '@/lib/couple-weddings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -116,6 +120,9 @@ export async function POST(request: NextRequest) {
   // moment they connect (fills only whichever side is genuinely empty).
   if (row.couple_id) {
     void reconcileWeddingFieldsOnLink(row.couple_id, venueCustomerId);
+    // Import her name / email / phone onto the venue contact so nothing is lost
+    // when a self-signed-up bride links up — enables SMS + email immediately.
+    void importCoupleContactToVenue(row.couple_id, venueCustomerId, row.invited_email);
   }
 
   return NextResponse.json({ ok: true });

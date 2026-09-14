@@ -300,6 +300,60 @@ export async function reconcileWeddingFieldsOnLink(
   }
 }
 
+/**
+ * Import the couple's own contact details (first/last name, email, phone) onto
+ * the linked venue_customers record the moment they connect — so a bride who
+ * signed up on her own first never loses information when she later links to a
+ * venue. The venue can then reach her by SMS, email, or in-app chat with no
+ * extra steps, and everything still lives in the one shared thread.
+ *
+ * Purely additive and non-destructive: only fills a field the venue side is
+ * genuinely missing (blank/null, or — for email — the auto-generated
+ * bride-portal placeholder address). It never overwrites a value the venue
+ * already has on file. Best-effort; a failure is logged, never thrown.
+ */
+export async function importCoupleContactToVenue(
+  coupleId: string,
+  venueCustomerId: string,
+  coupleEmail?: string | null,
+): Promise<void> {
+  const [{ data: cp }, { data: vc }] = await Promise.all([
+    supabaseAdmin
+      .from('couple_profiles')
+      .select('first_name, last_name, phone')
+      .eq('id', coupleId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('venue_customers')
+      .select('first_name, last_name, customer_phone, customer_email')
+      .eq('id', venueCustomerId)
+      .maybeSingle(),
+  ]);
+  const couple = cp as { first_name: string | null; last_name: string | null; phone: string | null } | null;
+  const venue = vc as {
+    first_name: string | null;
+    last_name: string | null;
+    customer_phone: string | null;
+    customer_email: string | null;
+  } | null;
+  if (!couple || !venue) return;
+
+  const blank = (v: string | null | undefined): boolean => !v || !v.trim();
+  const email = (coupleEmail ?? '').trim().toLowerCase();
+  const placeholderEmail = /@bride-portal\.storyvenue\.placeholder$/i.test(venue.customer_email ?? '');
+
+  const patch: Record<string, unknown> = {};
+  if (blank(venue.first_name) && !blank(couple.first_name)) patch.first_name = couple.first_name!.trim();
+  if (blank(venue.last_name) && !blank(couple.last_name)) patch.last_name = couple.last_name!.trim();
+  if (blank(venue.customer_phone) && !blank(couple.phone)) patch.customer_phone = couple.phone!.trim();
+  if ((blank(venue.customer_email) || placeholderEmail) && email) patch.customer_email = email;
+
+  if (Object.keys(patch).length === 0) return;
+  patch.updated_at = new Date().toISOString();
+  const { error } = await supabaseAdmin.from('venue_customers').update(patch).eq('id', venueCustomerId);
+  if (error) console.error('[couple-weddings] importCoupleContactToVenue', error);
+}
+
 // ── Wedding Planner status surfaced on the venue's contact profile ──────────────
 // Single source of truth: always read live from couple_weddings rather than
 // caching a "connected" flag on venue_customers, so it can never go stale if
