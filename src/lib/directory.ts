@@ -45,6 +45,8 @@ export const LISTING_WRITABLE_FIELDS = [
   'show_map',
   /** [{ label, url, icon }, ...] max 3 — extra custom buttons on the Lead Link page */
   'lead_link_links',
+  /** Short, brandable bio handle → storyvenue.com/<lead_link_slug> (link shortener) */
+  'lead_link_slug',
 ] as const;
 
 export type ListingWritableField = (typeof LISTING_WRITABLE_FIELDS)[number];

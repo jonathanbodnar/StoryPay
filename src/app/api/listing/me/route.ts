@@ -40,11 +40,24 @@ const SELECT_COLUMNS = [
   'faq',
   'show_map',
   'lead_link_links',
+  'lead_link_slug',
   'is_demo',
   'demo_preview_token',
   'created_at',
   'updated_at',
 ].join(',');
+
+/**
+ * Handles that can't be used as a Lead Link short slug because they'd shadow a
+ * real top-level route on the directory site (storyvenue.com/<handle>). Static
+ * routes win over the /[code] catch, so those short links would silently break.
+ */
+const LEAD_LINK_RESERVED = new Set([
+  'venue', 'venues', 'confirmation', 'privacy', 'terms', 'api', 'links',
+  'blog', 'guide', 'couple', 'dashboard', 'admin', 'login', 'signup', 'setup',
+  'robots.txt', 'sitemap.xml', 'llms.txt', 'indexnow.txt', 'favicon.ico',
+  '_next', 'static', 'g', 't', 'u', 'r', 's',
+]);
 
 async function getVenueId(): Promise<string | null> {
   const c = await cookies();
@@ -111,6 +124,30 @@ export async function PATCH(request: NextRequest) {
     updates.slug = s.length > 0 ? slugify(s) : null;
   }
 
+  // Explicit Lead Link short-handle change from the UI: slugify with the same
+  // rules as the directory slug, reject reserved words that would shadow a real
+  // directory route, and enforce case-insensitive uniqueness across venues.
+  if ('lead_link_slug' in updates) {
+    const raw = typeof updates.lead_link_slug === 'string' ? updates.lead_link_slug : '';
+    const normalized = raw.trim() ? slugify(raw) : '';
+    if (!normalized) {
+      return NextResponse.json({ error: 'Enter a link name.' }, { status: 400 });
+    }
+    if (LEAD_LINK_RESERVED.has(normalized)) {
+      return NextResponse.json({ error: 'That link name is reserved — please pick another.' }, { status: 409 });
+    }
+    const { data: clash } = await supabaseAdmin
+      .from('venues')
+      .select('id')
+      .neq('id', venueId)
+      .ilike('lead_link_slug', normalized) // exact, case-insensitive (slugify strips % and _)
+      .limit(1);
+    if (clash && clash.length > 0) {
+      return NextResponse.json({ error: 'That link is already taken — please pick another.' }, { status: 409 });
+    }
+    updates.lead_link_slug = normalized;
+  }
+
   const sanitized = sanitizeListingUpdates(updates) as Partial<Record<ListingWritableField, unknown>>;
   Object.assign(updates, sanitized);
 
@@ -145,6 +182,33 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  // Auto-provision a short Lead Link handle so a venue's short URL works out of
+  // the box. Only defaults when the owner isn't explicitly setting a handle and
+  // the venue has none yet — changing the directory slug never clobbers a custom
+  // handle. Defaults to the (final) slug, falling back to a suffixed variant on
+  // the rare chance another venue already claimed that handle.
+  if (!('lead_link_slug' in updates) && typeof updates.slug === 'string' && updates.slug) {
+    const { data: cur } = await supabaseAdmin
+      .from('venues')
+      .select('lead_link_slug')
+      .eq('id', venueId)
+      .maybeSingle();
+    const curHandle = (cur as { lead_link_slug?: string | null } | null)?.lead_link_slug ?? null;
+    if (!curHandle) {
+      let candidate = updates.slug as string;
+      if (!LEAD_LINK_RESERVED.has(candidate)) {
+        const { data: clash } = await supabaseAdmin
+          .from('venues')
+          .select('id')
+          .neq('id', venueId)
+          .ilike('lead_link_slug', candidate)
+          .limit(1);
+        if (clash && clash.length > 0) candidate = `${candidate}-${venueId.slice(0, 6)}`;
+        updates.lead_link_slug = candidate;
+      }
+    }
+  }
+
   let { data: updated, error } = await supabaseAdmin
     .from('venues')
     .update(updates)
@@ -168,6 +232,12 @@ export async function PATCH(request: NextRequest) {
 
   if (error) {
     const msg = error.message || 'Unknown error';
+    if (/duplicate|unique/i.test(msg) && /lead_link_slug/i.test(msg)) {
+      return NextResponse.json(
+        { error: 'That link is already taken — please pick another.' },
+        { status: 409 },
+      );
+    }
     if (/duplicate|unique/i.test(msg) && /slug/i.test(msg)) {
       return NextResponse.json(
         { error: 'That URL slug is already taken. Please choose another.' },

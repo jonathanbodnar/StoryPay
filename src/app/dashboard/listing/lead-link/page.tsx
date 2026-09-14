@@ -25,6 +25,7 @@ type Listing = {
   is_published: boolean | null;
   social_links: Record<string, string> | null;
   lead_link_links: LeadLinkCustomLink[] | null;
+  lead_link_slug?: string | null;
   is_demo?: boolean | null;
   demo_preview_token?: string | null;
 };
@@ -100,6 +101,12 @@ export default function LeadLinkPage() {
   const [iconPickerOpen, setIconPickerOpen] = useState<number | null>(null);
   const [previewNonce, setPreviewNonce] = useState(0);
 
+  // Short-link handle editor (storyvenue.com/<handle>)
+  const [handle, setHandle] = useState('');
+  const [savingHandle, setSavingHandle] = useState(false);
+  const [handleSaved, setHandleSaved] = useState(false);
+  const [handleErr, setHandleErr] = useState('');
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -110,6 +117,7 @@ export default function LeadLinkPage() {
         if (!cancelled) {
           setListing(json.listing);
           setLinks(coerceLinks(json.listing?.lead_link_links));
+          setHandle((json.listing?.lead_link_slug || json.listing?.slug || '').toString());
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Load failed');
@@ -123,17 +131,17 @@ export default function LeadLinkPage() {
   const slug = listing?.slug ?? '';
 
   // Demo venues stay hidden from the public directory + search. Their listing
-  // resolves only with the stable ?preview=<token> credential, so every link we
-  // hand the owner (bio link, Open, Copy, and the live preview iframe) must
-  // carry that token or it will 404 exactly like a public visitor.
+  // resolves only with the stable ?preview=<token> credential, so the live
+  // preview iframe must carry that token or it will 404 exactly like a public
+  // visitor. (The short bio link handles the demo token server-side.)
   const previewToken = listing?.is_demo ? (listing?.demo_preview_token ?? '') : '';
 
-  const publicUrl = useMemo(() => {
-    if (!slug) return '';
-    const u = new URL(`${DIRECTORY_SITE}/venue/${slug}/links`);
-    if (previewToken) u.searchParams.set('preview', previewToken);
-    return u.toString();
-  }, [slug, previewToken]);
+  // The bio link is the short, brandable URL: storyvenue.com/<handle>. It
+  // resolves server-side to this venue's Lead Link page (crediting stays
+  // intact) and, for demo venues, injects the preview token automatically.
+  const leadSlug = (listing?.lead_link_slug || slug || '').toString();
+  const shortUrl = leadSlug ? `${DIRECTORY_SITE}/${leadSlug}` : '';
+  const shortDisplay = shortUrl.replace(/^https?:\/\//, '');
 
   const iframeSrc = useMemo(() => {
     if (!slug) return '';
@@ -142,8 +150,6 @@ export default function LeadLinkPage() {
     if (previewNonce) u.searchParams.set('v', String(previewNonce));
     return u.toString();
   }, [slug, previewToken, previewNonce]);
-
-  const displayUrl = publicUrl.replace(/^https?:\/\//, '');
 
   function addLink() {
     if (links.length >= LEAD_LINK_MAX_LINKS) return;
@@ -197,15 +203,57 @@ export default function LeadLinkPage() {
   );
 
   async function copyLink() {
-    if (!publicUrl) return;
+    if (!shortUrl) return;
     try {
-      await navigator.clipboard.writeText(publicUrl);
+      await navigator.clipboard.writeText(shortUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     } catch {
       setError('Could not copy to clipboard');
     }
   }
+
+  function normalizeHandle(raw: string): string {
+    return raw
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40);
+  }
+
+  async function saveHandle() {
+    const normalized = normalizeHandle(handle);
+    if (!normalized) {
+      setHandleErr('Enter a link name.');
+      return;
+    }
+    setSavingHandle(true);
+    setHandleErr('');
+    try {
+      const res = await fetch('/api/listing/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_link_slug: normalized }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { listing?: Listing; error?: string };
+      if (!res.ok) throw new Error(j.error || 'Could not save your link');
+      if (j.listing) {
+        setListing(j.listing);
+        setHandle((j.listing.lead_link_slug || '').toString());
+      }
+      setHandleSaved(true);
+      setTimeout(() => setHandleSaved(false), 2200);
+      setPreviewNonce((n) => n + 1);
+    } catch (e) {
+      setHandleErr(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSavingHandle(false);
+    }
+  }
+
+  const handleChanged = normalizeHandle(handle) !== (leadSlug || '');
 
   if (loading) {
     return (
@@ -276,7 +324,7 @@ export default function LeadLinkPage() {
                   <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                     <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5">
                       <Link2 size={15} className="shrink-0 text-gray-400" />
-                      <span className="truncate text-sm font-medium text-gray-800">{displayUrl}</span>
+                      <span className="truncate text-sm font-medium text-gray-800">{shortDisplay}</span>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -288,7 +336,7 @@ export default function LeadLinkPage() {
                         {copied ? 'Copied!' : 'Copy'}
                       </button>
                       <a
-                        href={publicUrl}
+                        href={shortUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
@@ -296,6 +344,45 @@ export default function LeadLinkPage() {
                         <ExternalLink size={15} /> Open
                       </a>
                     </div>
+                  </div>
+
+                  {/* Customize the short handle → storyvenue.com/<handle> */}
+                  <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/60 p-3.5">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Customize your link
+                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <div className="flex min-w-0 flex-1 items-center rounded-xl border border-gray-200 bg-white pl-3.5 focus-within:border-gray-400">
+                        <span className="shrink-0 select-none text-sm text-gray-400">storyvenue.com/</span>
+                        <input
+                          value={handle}
+                          onChange={(e) => { setHandle(e.target.value); setHandleErr(''); }}
+                          onBlur={() => setHandle((h) => normalizeHandle(h))}
+                          maxLength={40}
+                          spellCheck={false}
+                          autoCapitalize="none"
+                          placeholder="your-venue"
+                          className="min-w-0 flex-1 rounded-r-xl bg-transparent py-2.5 pr-3.5 text-sm font-medium text-gray-900 focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={saveHandle}
+                        disabled={savingHandle || !handleChanged}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {savingHandle ? <Loader2 size={15} className="animate-spin" /> : handleSaved ? <Check size={15} /> : null}
+                        {savingHandle ? 'Saving…' : handleSaved ? 'Saved!' : 'Save'}
+                      </button>
+                    </div>
+                    {handleErr ? (
+                      <p className="mt-2 text-xs text-red-600">{handleErr}</p>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-500">
+                        Keep it short and memorable — letters, numbers, and dashes only. Your old
+                        link keeps working too.
+                      </p>
+                    )}
                   </div>
 
                   {previewToken && (
