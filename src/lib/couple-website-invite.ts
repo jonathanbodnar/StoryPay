@@ -54,6 +54,42 @@ export function resolveCoupleInviteFrom(coupleName: string): { name: string; ema
   return { name: `${safeName} via StoryVenue`, email };
 }
 
+/**
+ * Neutralize any URL-like tokens a couple pastes into their invite subject or
+ * message. The ONLY legitimate link in a website invite is the auto-added
+ * "Visit our wedding website" button, so we strip everything else to a neutral
+ * `[link removed]` placeholder BEFORE the text is escaped + rendered. Combined
+ * with escapeHtml (which already prevents raw `<a>` injection), this guarantees
+ * a phisher can never turn the note into a clickable link they control.
+ *
+ * We remove, in order:
+ *   1. Full URLs with a scheme (http/https).
+ *   2. `www.`-prefixed hosts.
+ *   3. Bare `host.tld/path` tokens (a path makes intent unambiguous), e.g.
+ *      `bit.ly/abc` or `evil.com/login`.
+ *   4. Bare hosts with no path but a link-y TLD (curated list of the TLDs most
+ *      used for links/shorteners) so ordinary prose with periods (e.g.
+ *      "Mr.Smith", "8 a.m.") isn't mangled.
+ *
+ * A `(?<![@\w.])` lookbehind keeps us from eating the domain half of an email
+ * address (e.g. `rsvp@gmail.com` stays intact) or the middle of a longer token.
+ */
+const LINK_PLACEHOLDER = '[link removed]';
+const LINKY_TLDS =
+  'com|net|org|io|co|xyz|link|info|app|site|online|click|live|me|ly|gg|to|biz|us|uk|ca|shop|store|page|dev';
+
+export function neutralizeLinks(input: string): string {
+  if (!input) return input;
+  return input
+    .replace(/\bhttps?:\/\/[^\s<>]+/gi, LINK_PLACEHOLDER)
+    .replace(/\bwww\.[^\s<>]+/gi, LINK_PLACEHOLDER)
+    .replace(/(?<![@\w.])(?:[a-z0-9-]+\.)+[a-z]{2,}\/[^\s<>]*/gi, LINK_PLACEHOLDER)
+    .replace(
+      new RegExp(`(?<![@\\w.])(?:[a-z0-9-]+\\.)+(?:${LINKY_TLDS})\\b`, 'gi'),
+      LINK_PLACEHOLDER,
+    );
+}
+
 export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')

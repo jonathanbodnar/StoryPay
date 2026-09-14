@@ -83,6 +83,42 @@ export async function notifyPrivateClientReply(opts: {
   );
 }
 
+/**
+ * Abuse / safety alerts for the couple "Invite guests to your website" feature.
+ * Fires on: an auto-pause (complaint spike), an unusually large single send, or
+ * repeated spam complaints. Deliberately concise — couple/wedding/venue ids +
+ * a short reason — so support can triage and flip the kill-switch fast.
+ */
+export async function notifyCoupleInviteAlert(opts: {
+  kind: 'auto_pause' | 'large_send' | 'repeated_complaints';
+  coupleWeddingId: string;
+  coupleName?: string | null;
+  venueId?: string | null;
+  detail: string;
+}): Promise<void> {
+  const title =
+    opts.kind === 'auto_pause'
+      ? '🚨 Couple invite sending AUTO-PAUSED'
+      : opts.kind === 'large_send'
+        ? '📣 Large couple invite send'
+        : '⚠️ Repeated spam complaints on couple invites';
+  const nameLine = opts.coupleName ? ` — *${opts.coupleName}*` : '';
+  const venueLine = opts.venueId ? `\nVenue: \`${opts.venueId}\`` : '';
+  const text = `${title}${opts.coupleName ? ` — ${opts.coupleName}` : ''}`;
+  await postToSlack(
+    [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${title}${nameLine}\nWedding: \`${opts.coupleWeddingId}\`${venueLine}\n${truncate(opts.detail, 240)}`,
+        },
+      },
+    ],
+    text,
+  );
+}
+
 export async function notifyBrideReply(opts: {
   venueName: string;
   contactName: string;

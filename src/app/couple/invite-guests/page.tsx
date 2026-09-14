@@ -359,7 +359,8 @@ export default function InviteGuestsPage() {
               className="mt-1 w-full resize-y rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
             />
             <p className="mt-1.5 text-xs text-gray-400">
-              Your website link is added automatically as a button at the bottom of the email.
+              Your website link is added automatically as a button at the bottom of the email. For your guests’ safety,
+              any other links you type in the note are removed.
             </p>
 
             {data?.site.hasPassword && (

@@ -8,16 +8,28 @@ import {
   appOrigin,
   buildWebsiteInviteHtml,
   loadCoupleSuppressions,
+  neutralizeLinks,
   normalizeEmail,
   publicSiteUrlForSlug,
   resolveCoupleInviteFrom,
 } from '@/lib/couple-website-invite';
+import { notifyCoupleInviteAlert } from '@/lib/slack-notify';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /** Hard cap per send to prevent abuse (matches the UI's stated limit). */
 const MAX_RECIPIENTS = 300;
+
+// ── Rolling-24h abuse guardrails (tunable) ─────────────────────────────────
+/** Max distinct sends a couple can trigger per rolling 24h. */
+const MAX_SENDS_PER_DAY = 3;
+/** Max total recipients a couple can email per rolling 24h (sum of sends). */
+const MAX_RECIPIENTS_PER_DAY = 500;
+/** Minimum gap between two sends, based on the most recent send's created_at. */
+const SEND_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+/** A single send above this many recipients fires a Slack heads-up. */
+const LARGE_SEND_ALERT_THRESHOLD = 200;
 
 /** Small delay between sends so we don't hammer Resend (mirrors the venue worker). */
 const SEND_THROTTLE_MS = 120;
@@ -116,6 +128,18 @@ export async function POST(request: NextRequest) {
   const { user, wedding: link } = gate.ctx;
   const coupleId = link.couple_id as string;
 
+  // Admin / auto kill-switch. Tolerant reader: default false when the column is
+  // absent on an older deploy.
+  if (link.invite_sending_paused === true) {
+    return NextResponse.json(
+      {
+        error:
+          'Guest invites are temporarily paused on your account. Please contact support and we’ll get you sending again.',
+      },
+      { status: 403 },
+    );
+  }
+
   let body: { subject?: unknown; message?: unknown; recipients?: unknown; sitePassword?: unknown };
   try {
     body = (await request.json()) as typeof body;
@@ -123,8 +147,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const subject = String(body.subject ?? '').trim().slice(0, 150);
-  const message = String(body.message ?? '').trim().slice(0, 5000);
+  // Neutralize any pasted URLs in the subject/message so the only clickable link
+  // is the auto-added website button (see neutralizeLinks). Slice again after in
+  // case a placeholder swap nudged the length.
+  const subject = neutralizeLinks(String(body.subject ?? '').trim().slice(0, 150)).slice(0, 150);
+  const message = neutralizeLinks(String(body.message ?? '').trim().slice(0, 5000)).slice(0, 5000);
   if (!subject) return NextResponse.json({ error: 'Add a subject line.' }, { status: 400 });
   if (message.length < 2) return NextResponse.json({ error: 'Write a short message to send.' }, { status: 400 });
 
@@ -197,6 +224,64 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // ── Rolling-24h rate limiting ────────────────────────────────────────────
+  // Query this wedding's recent send log and enforce the cooldown + daily caps.
+  // We return 429 (and DO NOT log a send row) on any breach.
+  {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: recentSends } = await supabaseAdmin
+      .from('couple_website_invite_sends')
+      .select('recipient_count, created_at')
+      .eq('couple_wedding_id', link.id)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+    const rows = (recentSends ?? []) as { recipient_count: number | null; created_at: string }[];
+    const sendsToday = rows.length;
+    const recipientsToday = rows.reduce((sum, r) => sum + (r.recipient_count ?? 0), 0);
+    const lastAt = rows[0]?.created_at ? new Date(rows[0].created_at).getTime() : 0;
+
+    if (lastAt) {
+      const elapsed = Date.now() - lastAt;
+      if (elapsed < SEND_COOLDOWN_MS) {
+        const waitMin = Math.max(1, Math.ceil((SEND_COOLDOWN_MS - elapsed) / 60000));
+        return NextResponse.json(
+          { error: `You just sent invites — please wait about ${waitMin} more minute${waitMin === 1 ? '' : 's'} before sending again.` },
+          { status: 429 },
+        );
+      }
+    }
+    if (sendsToday >= MAX_SENDS_PER_DAY) {
+      return NextResponse.json(
+        { error: `You’ve reached the limit of ${MAX_SENDS_PER_DAY} sends in 24 hours. Please try again tomorrow.` },
+        { status: 429 },
+      );
+    }
+    if (recipientsToday + recipients.length > MAX_RECIPIENTS_PER_DAY) {
+      const remaining = Math.max(0, MAX_RECIPIENTS_PER_DAY - recipientsToday);
+      return NextResponse.json(
+        {
+          error:
+            remaining > 0
+              ? `You can email up to ${MAX_RECIPIENTS_PER_DAY} guests per 24 hours. You have ${remaining} left today — remove ${recipients.length - remaining} recipient${recipients.length - remaining === 1 ? '' : 's'} and try again.`
+              : `You’ve reached the limit of ${MAX_RECIPIENTS_PER_DAY} guests emailed in 24 hours. Please try again tomorrow.`,
+        },
+        { status: 429 },
+      );
+    }
+  }
+
+  // Heads-up to support on an unusually large single send (fire before sending
+  // so we still learn about it even if the loop errors mid-way).
+  if (recipients.length > LARGE_SEND_ALERT_THRESHOLD) {
+    await notifyCoupleInviteAlert({
+      kind: 'large_send',
+      coupleWeddingId: link.id,
+      coupleName,
+      venueId: link.venue_id,
+      detail: `${recipients.length} recipients in a single send (subject: "${subject.slice(0, 80)}").`,
+    });
+  }
+
   const from = resolveCoupleInviteFrom(coupleName);
   const replyTo = user.email ?? undefined;
   const origin = appOrigin();
@@ -222,6 +307,10 @@ export async function POST(request: NextRequest) {
     // Couple-scoped List-Id + one-click unsubscribe headers (RFC 2369/8058).
     const headers = buildBulkEmailHeaders(unsubscribeUrl, { mailtoUnsub: replyTo });
     headers['List-Id'] = `<couple-${link.id.replace(/[^a-z0-9-]/gi, '').toLowerCase()}.mail.storyvenue.com>`;
+    // Correlation headers so the Resend webhook can map bounce/complaint events
+    // back to this wedding (couple side, distinct from venue X-Venue-Id/X-Lead-Id).
+    headers['X-Couple-Wedding-Id'] = link.id;
+    headers['X-Couple-Invite'] = '1';
 
     try {
       const result = await sendEmail({

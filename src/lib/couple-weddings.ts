@@ -31,6 +31,13 @@ export interface CoupleWeddingRow {
   updated_at: string;
   linked_at: string | null;
   decided_at: string | null;
+  /**
+   * Abuse kill-switch for the "Invite guests to your website" feature. When
+   * true, the couple website-invite send route rejects with 403. Set
+   * automatically on complaint spikes (Resend webhook) or manually by support.
+   * Tolerant reader: treat missing/undefined as false. Added in migration 245.
+   */
+  invite_sending_paused?: boolean | null;
 }
 
 /** The reader_ref used for the bride side of a conversation thread. */

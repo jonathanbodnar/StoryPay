@@ -43,10 +43,26 @@ export async function GET(
     }
   }
 
+  // Surface the couple website-invite kill-switch so support can see + flip it.
+  // Tolerant: if the column/table read errors on an older deploy, default false.
+  let invitePaused = false;
+  try {
+    const { data: weddings } = await supabaseAdmin
+      .from('couple_weddings')
+      .select('invite_sending_paused')
+      .eq('couple_id', id);
+    invitePaused = ((weddings ?? []) as { invite_sending_paused?: boolean | null }[]).some(
+      (w) => w.invite_sending_paused === true,
+    );
+  } catch (e) {
+    console.warn('[admin/couples GET] invite_sending_paused read failed (non-fatal):', e);
+  }
+
   return NextResponse.json({
     couple: {
       id,
       email: userResp.user.email ?? null,
+      invite_sending_paused: invitePaused,
       email_confirmed_at: userResp.user.email_confirmed_at ?? null,
       last_sign_in_at: userResp.user.last_sign_in_at ?? null,
       created_at: profile?.created_at ?? userResp.user.created_at ?? null,
@@ -91,6 +107,22 @@ export async function PATCH(
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  // ── Couple website-invite kill-switch (support toggle) ───────────────────
+  // Scoped to the wedding; we set it on every couple_weddings row for this
+  // couple (there is normally one active link). Send `{ invite_sending_paused:
+  // true|false }` from an admin session to pause / resume guest invites.
+  if ('invite_sending_paused' in body) {
+    const paused = body.invite_sending_paused === true || body.invite_sending_paused === 'true';
+    const { error: pauseErr } = await supabaseAdmin
+      .from('couple_weddings')
+      .update({ invite_sending_paused: paused })
+      .eq('couple_id', id);
+    if (pauseErr) {
+      console.error('[admin/couples PATCH] invite pause toggle error:', pauseErr);
+      return NextResponse.json({ error: pauseErr.message }, { status: 500 });
+    }
   }
 
   // ── Update auth.users (email/password) ───────────────────────────────────

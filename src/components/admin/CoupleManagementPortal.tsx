@@ -99,6 +99,9 @@ export function CoupleManagementPortal() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [editSavedFlash, setEditSavedFlash] = useState('');
+  // Couple website-invite kill-switch (safety toggle, saved independently).
+  const [editInvitePaused, setEditInvitePaused] = useState(false);
+  const [invitePauseSaving, setInvitePauseSaving] = useState(false);
 
   // Delete confirmation
   const [deleting, setDeleting] = useState<AdminCoupleRow | null>(null);
@@ -170,6 +173,7 @@ export function CoupleManagementPortal() {
     setEditConfirmPass('');
     setEditError('');
     setEditSavedFlash('');
+    setEditInvitePaused(false);
 
     // Load the rest of the profile (address, social) lazily
     void (async () => {
@@ -203,6 +207,7 @@ export function CoupleManagementPortal() {
         setEditFacebook((full.facebook_url as string | null) ?? '');
         setEditTiktok((full.tiktok_url as string | null) ?? '');
         setEditPinterest((full.pinterest_url as string | null) ?? '');
+        setEditInvitePaused((full.invite_sending_paused as boolean | null) === true);
       } finally {
         setEditLoadingFull(false);
       }
@@ -274,6 +279,31 @@ export function CoupleManagementPortal() {
       setEditError(e instanceof Error ? e.message : 'Save failed');
     } finally {
       setEditSaving(false);
+    }
+  }
+
+  async function toggleInvitePaused(next: boolean) {
+    if (!editing) return;
+    setInvitePauseSaving(true);
+    setEditError('');
+    setEditSavedFlash('');
+    try {
+      const res = await fetch(`/api/admin/couples/${editing.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invite_sending_paused: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setEditError(typeof data.error === 'string' ? data.error : 'Could not update guest invites');
+        return;
+      }
+      setEditInvitePaused(next);
+      setEditSavedFlash(next ? 'Guest invites paused' : 'Guest invites resumed');
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : 'Could not update guest invites');
+    } finally {
+      setInvitePauseSaving(false);
     }
   }
 
@@ -574,6 +604,41 @@ export function CoupleManagementPortal() {
                       <label className={EDIT_LABEL}>Pinterest</label>
                       <input type="url" value={editPinterest} onChange={(e) => setEditPinterest(e.target.value)} className={INPUT} placeholder="https://" />
                     </div>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-400 mb-2">Safety</p>
+                  <div
+                    className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${
+                      editInvitePaused ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">
+                        {editInvitePaused ? 'Guest invites paused' : 'Guest website invites'}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-gray-500">
+                        Kill-switch for the couple’s “Invite guests to your website” emails. Auto-pauses on spam-complaint
+                        spikes; flip it off here to let them send again.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void toggleInvitePaused(!editInvitePaused)}
+                      disabled={invitePauseSaving}
+                      className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-opacity hover:opacity-85 disabled:opacity-50 ${
+                        editInvitePaused ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                      }`}
+                    >
+                      {invitePauseSaving ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : editInvitePaused ? (
+                        'Resume'
+                      ) : (
+                        'Pause'
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>
