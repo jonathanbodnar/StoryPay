@@ -120,11 +120,11 @@ export default function VendorDirectory({ initial, onSave, audience = 'couple' }
           <li key={v.id} className="px-4 py-3">
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                   <select
                     value={v.category}
                     onChange={(e) => patch(v.id, { category: e.target.value as VendorCategory }, true)}
-                    className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                    className="self-start rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
                   >
                     {VENDOR_CATEGORIES.map((c) => (
                       <option key={c} value={c}>
@@ -136,7 +136,7 @@ export default function VendorDirectory({ initial, onSave, audience = 'couple' }
                     value={v.businessName}
                     onChange={(e) => patch(v.id, { businessName: e.target.value })}
                     placeholder="Business name"
-                    className="min-w-0 flex-1 border-none bg-transparent p-0 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-0"
+                    className="w-full min-w-0 border-none bg-transparent p-0 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-0 sm:w-auto sm:flex-1"
                   />
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3">
