@@ -182,6 +182,9 @@ export default function CoupleSitePage() {
   // guestbook + gallery upload
   const [gb, setGb] = useState<GuestbookEntry[]>([]);
   const [galleryBusy, setGalleryBusy] = useState(false);
+  // The live phone preview is a side column on lg+; on mobile it opens as a
+  // full-screen sheet from a "Preview my page" button.
+  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const galleryRef = useRef<HTMLInputElement>(null);
 
   const publicUrl = site.slug ? `${baseUrl}/${site.slug}` : '';
@@ -533,7 +536,7 @@ export default function CoupleSitePage() {
                   <button
                     type="button"
                     onClick={() => removeGalleryImage(i)}
-                    className="absolute right-1.5 top-1.5 rounded-lg bg-black/55 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/75 group-hover:opacity-100"
+                    className="absolute right-1.5 top-1.5 rounded-lg bg-black/55 p-1.5 text-white opacity-100 transition-opacity hover:bg-black/75 lg:opacity-0 lg:group-hover:opacity-100"
                     title="Remove"
                   >
                     <Trash2 size={14} />
@@ -1070,7 +1073,15 @@ export default function CoupleSitePage() {
         )}
       </section>
 
-          <p className="pb-6 text-center text-xs text-gray-400 lg:hidden">Previewing as {coupleName}</p>
+          <div className="pb-6 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobilePreviewOpen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1b1b1b] px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-85"
+            >
+              <Eye size={16} /> Preview my page
+            </button>
+          </div>
         </div>
 
         {/* Live phone preview — iPad + desktop only, follows scroll */}
@@ -1087,6 +1098,39 @@ export default function CoupleSitePage() {
           </div>
         </aside>
       </div>
+
+      {/* Mobile full-screen preview sheet */}
+      {mobilePreviewOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/50 lg:hidden" onClick={() => setMobilePreviewOpen(false)}>
+          <div
+            className="mt-auto flex max-h-[92vh] flex-col overflow-hidden rounded-t-2xl bg-white"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+              <p className="text-sm font-semibold text-gray-900">Preview</p>
+              <button
+                type="button"
+                onClick={() => setMobilePreviewOpen(false)}
+                aria-label="Close preview"
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                <EyeOff size={18} />
+              </button>
+            </div>
+            <div className="flex justify-center overflow-y-auto px-4 py-5">
+              <PhonePreview
+                site={site}
+                profile={profile}
+                order={order}
+                hasVenue={hasVenue}
+                coupleName={coupleName}
+                storyHtml={site.story_html || storySeed}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
