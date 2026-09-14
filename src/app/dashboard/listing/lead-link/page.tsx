@@ -25,6 +25,8 @@ type Listing = {
   is_published: boolean | null;
   social_links: Record<string, string> | null;
   lead_link_links: LeadLinkCustomLink[] | null;
+  is_demo?: boolean | null;
+  demo_preview_token?: string | null;
 };
 
 function normalizeUrl(raw: string): string {
@@ -119,7 +121,28 @@ export default function LeadLinkPage() {
   }, []);
 
   const slug = listing?.slug ?? '';
-  const publicUrl = slug ? `${DIRECTORY_SITE}/venue/${slug}/links` : '';
+
+  // Demo venues stay hidden from the public directory + search. Their listing
+  // resolves only with the stable ?preview=<token> credential, so every link we
+  // hand the owner (bio link, Open, Copy, and the live preview iframe) must
+  // carry that token or it will 404 exactly like a public visitor.
+  const previewToken = listing?.is_demo ? (listing?.demo_preview_token ?? '') : '';
+
+  const publicUrl = useMemo(() => {
+    if (!slug) return '';
+    const u = new URL(`${DIRECTORY_SITE}/venue/${slug}/links`);
+    if (previewToken) u.searchParams.set('preview', previewToken);
+    return u.toString();
+  }, [slug, previewToken]);
+
+  const iframeSrc = useMemo(() => {
+    if (!slug) return '';
+    const u = new URL(`${DIRECTORY_SITE}/venue/${slug}/links`);
+    if (previewToken) u.searchParams.set('preview', previewToken);
+    if (previewNonce) u.searchParams.set('v', String(previewNonce));
+    return u.toString();
+  }, [slug, previewToken, previewNonce]);
+
   const displayUrl = publicUrl.replace(/^https?:\/\//, '');
 
   function addLink() {
@@ -274,6 +297,14 @@ export default function LeadLinkPage() {
                       </a>
                     </div>
                   </div>
+
+                  {previewToken && (
+                    <p className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs text-gray-500">
+                      This is a private demo link. Your venue stays hidden from the public
+                      StoryVenue directory and search — only people you share this exact link
+                      with can view it.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -475,8 +506,8 @@ export default function LeadLinkPage() {
                     {/* Dynamic Island */}
                     <div className="pointer-events-none absolute left-1/2 top-2 z-10 h-[22px] w-[84px] -translate-x-1/2 rounded-full bg-black" />
                     <iframe
-                      key={`${publicUrl}#${previewNonce}`}
-                      src={previewNonce ? `${publicUrl}?v=${previewNonce}` : publicUrl}
+                      key={iframeSrc}
+                      src={iframeSrc}
                       title="Lead Link preview"
                       loading="lazy"
                       className="origin-top-left border-0"

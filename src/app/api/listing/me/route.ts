@@ -40,6 +40,8 @@ const SELECT_COLUMNS = [
   'faq',
   'show_map',
   'lead_link_links',
+  'is_demo',
+  'demo_preview_token',
   'created_at',
   'updated_at',
 ].join(',');

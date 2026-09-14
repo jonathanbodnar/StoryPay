@@ -29,10 +29,12 @@ type LinksVenuePayload = {
   };
 };
 
-const fetchVenue = cache(async (slug: string): Promise<LinksVenuePayload | null> => {
-  const url = `${API_BASE}/api/public/venues/${encodeURIComponent(slug)}`;
-  const res = await fetch(url, {
-    next: { revalidate: 120 },
+const fetchVenue = cache(async (slug: string, previewToken?: string | null): Promise<LinksVenuePayload | null> => {
+  const url = new URL(`${API_BASE}/api/public/venues/${encodeURIComponent(slug)}`);
+  if (previewToken) url.searchParams.set('preview', previewToken);
+  const res = await fetch(url.toString(), {
+    // Demo venues must not be CDN-cached — the token is the auth mechanism.
+    next: previewToken ? { revalidate: 0 } : { revalidate: 120 },
     headers: { Accept: 'application/json' },
   });
   if (!res.ok) return null;
@@ -41,11 +43,15 @@ const fetchVenue = cache(async (slug: string): Promise<LinksVenuePayload | null>
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const data = await fetchVenue(slug);
+  const sp = await searchParams;
+  const previewToken = typeof sp.preview === 'string' ? sp.preview : null;
+  const data = await fetchVenue(slug, previewToken);
   if (!data) return { title: 'Links', robots: { index: false } };
   const { venue } = data;
   const loc = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
@@ -56,6 +62,8 @@ export async function generateMetadata({
     metadataBase: new URL(DIRECTORY_SITE),
     title,
     description: desc,
+    // Demo venues must never be indexed — the preview token is auth, not content.
+    ...(previewToken ? { robots: { index: false, follow: false } } : {}),
     alternates: { canonical },
     openGraph: {
       title,
@@ -93,11 +101,15 @@ const SOCIAL_META: Record<string, { label: string; icon: (c: string) => ReactNod
 
 export default async function VenueLinksPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
-  const data = await fetchVenue(slug);
+  const sp = await searchParams;
+  const previewToken = typeof sp.preview === 'string' ? sp.preview : null;
+  const data = await fetchVenue(slug, previewToken);
   if (!data) notFound();
 
   const { venue } = data;
@@ -106,7 +118,10 @@ export default async function VenueLinksPage({
     ([key, u]) => key in SOCIAL_META && typeof u === 'string' && /^https?:\/\//i.test(u),
   );
 
-  const listingHref = `/venue/${venue.slug}?utm_source=lead_link&utm_medium=bio&utm_campaign=venue_listing`;
+  // Carry the demo preview token onto the internal listing link so the whole
+  // demo flow stays viewable while the venue remains hidden from the public.
+  const previewQS = previewToken ? `&preview=${encodeURIComponent(previewToken)}` : '';
+  const listingHref = `/venue/${venue.slug}?utm_source=lead_link&utm_medium=bio&utm_campaign=venue_listing${previewQS}`;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#f5f2ed] via-[#fafaf9] to-[#f0ece5]">
