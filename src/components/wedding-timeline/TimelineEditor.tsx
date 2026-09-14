@@ -324,18 +324,18 @@ export default function TimelineEditor({ initial, onSave, heading, dateLabel }: 
           <Clock className="mx-auto h-8 w-8 text-gray-300" />
           <p className="mt-3 text-sm text-gray-600">Build your wedding-day schedule.</p>
           <p className="mt-1 text-xs text-gray-400">Add events one at a time, or start from a template.</p>
-          <div className="mt-4 flex justify-center gap-2">
+          <div className="mt-4 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center">
             <button
               type="button"
               onClick={applyStarter}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
+              className="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85 sm:w-auto"
             >
               <Sparkles className="h-4 w-4" /> Use starter template
             </button>
             <button
               type="button"
               onClick={addRow}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              className="inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 sm:w-auto"
             >
               <Plus className="h-4 w-4" /> Add first event
             </button>
