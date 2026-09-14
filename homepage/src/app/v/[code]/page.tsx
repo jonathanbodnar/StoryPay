@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { after } from 'next/server';
+import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { siteUrl } from '@/lib/site-url';
 
@@ -9,7 +11,44 @@ export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 const API_BASE = siteUrl(process.env.NEXT_PUBLIC_DASHBOARD_URL, 'https://app.storyvenue.com');
 
-type Resolved = { slug: string; is_demo: boolean; demo_preview_token: string | null };
+type Resolved = { venue_id: string | null; slug: string; is_demo: boolean; demo_preview_token: string | null };
+
+/**
+ * Record one short-link click (lead_link_scan) for the venue. Runs via after()
+ * so it never adds latency to the redirect. This counts EVERY tap on the bio
+ * short link — including bots or visitors who bounce before the destination
+ * page's JS fires its lead_link_view — isolated from directly-shared long URLs.
+ * We forward the visitor's IP + UA so the tracker attributes geo/device to the
+ * visitor rather than to this (server-to-server) request.
+ */
+async function recordScan(venueId: string, code: string) {
+  const h = await headers();
+  const xff = h.get('x-forwarded-for');
+  const ua = h.get('user-agent');
+  after(async () => {
+    try {
+      await fetch(`${API_BASE}/api/listing-track`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(xff ? { 'x-forwarded-for': xff } : {}),
+          ...(ua ? { 'user-agent': ua } : {}),
+        },
+        body: JSON.stringify({
+          venue_id: venueId,
+          session_id: `scan-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          event_type: 'lead_link_scan',
+          event_data: { code },
+          utm_source: 'lead_link',
+          utm_medium: 'bio',
+          utm_campaign: 'lead_link',
+        }),
+      });
+    } catch {
+      /* best-effort analytics — never block the redirect */
+    }
+  });
+}
 
 /**
  * Link-shortener: storyvenue.com/v/<code> → the venue's Lead Link page.
@@ -49,6 +88,10 @@ export default async function ShortLinkPage({
   }
 
   if (!data?.slug) notFound();
+
+  if (data.venue_id) {
+    await recordScan(data.venue_id, handle);
+  }
 
   const qs = new URLSearchParams({
     utm_source: 'lead_link',

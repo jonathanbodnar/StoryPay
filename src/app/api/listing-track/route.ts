@@ -152,6 +152,9 @@ const VALID_EVENTS = new Set([
   'lead_link_view',
   'lead_link_click',
   'lead_link_social_click',
+  // A tap on the short bio link (storyvenue.com/v/<code>) recorded server-side
+  // by the redirector — counts every click, even ones that bounce pre-JS.
+  'lead_link_scan',
 ]);
 
 function detectDevice(ua: string): 'mobile' | 'tablet' | 'desktop' {
@@ -297,7 +300,9 @@ export async function POST(req: NextRequest) {
   // — no waiting for the dashboard's next 30s poll. Only fires when we
   // actually resolved coordinates (geo lookups above already completed by
   // this point, so this is never a "second phase" delayed update).
-  if (typeof latitude === 'number' && typeof longitude === 'number') {
+  // Short-link scans are immediately followed by a lead_link_view on the
+  // destination page (which plots its own dot), so don't double-plot the map.
+  if (event_type !== 'lead_link_scan' && typeof latitude === 'number' && typeof longitude === 'number') {
     void broadcastVisitorPing({
       venueId:   venue_id,
       sessionId: session_id,

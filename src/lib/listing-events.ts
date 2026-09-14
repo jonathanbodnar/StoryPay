@@ -21,6 +21,7 @@ export const EVENT_LABELS: Record<string, string> = {
   lead_link_view:       'Opened Lead Link',
   lead_link_click:      'Clicked a Lead Link button',
   lead_link_social_click: 'Clicked a Lead Link social',
+  lead_link_scan:       'Clicked Lead Link (short link)',
 };
 
 /** Country code (e.g. "US") → flag emoji. */

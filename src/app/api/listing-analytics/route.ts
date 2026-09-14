@@ -386,11 +386,15 @@ function buildLeadLinkMetrics(rows: EventRow[], until: string, days: number) {
   const viewRows   = rows.filter(r => r.event_type === 'lead_link_view');
   const cardRows   = rows.filter(r => r.event_type === 'lead_link_click');
   const socialRows = rows.filter(r => r.event_type === 'lead_link_social_click');
+  const scanRows   = rows.filter(r => r.event_type === 'lead_link_scan');
   const clickRows  = [...cardRows, ...socialRows];
 
   const views    = viewRows.length;
   const visitors = new Set(viewRows.map(r => r.session_id)).size;
   const totalClicks = clickRows.length;
+  // Raw taps on the short bio link (storyvenue.com/v/<code>), counted
+  // server-side — isolates bio-link clicks from directly-shared long URLs.
+  const scans = scanRows.length;
 
   // Per-button click counts keyed by event_data.platform.
   const rawCounts: Record<string, number> = {};
@@ -425,7 +429,7 @@ function buildLeadLinkMetrics(rows: EventRow[], until: string, days: number) {
 
   const ctr = views ? Math.round((totalClicks / views) * 1000) / 10 : 0;
 
-  return { views, visitors, total_clicks: totalClicks, ctr, buttons, daily };
+  return { views, visitors, total_clicks: totalClicks, ctr, scans, buttons, daily };
 }
 
 function buildPriorMetrics(rows: EventRow[], leads: { id: string }[]) {
@@ -468,7 +472,7 @@ function emptyPayload(days: number) {
     scroll_depth: { pct_25: 0, pct_50: 0, pct_75: 0, pct_100: 0 },
     devices: {}, referrers: [], top_countries: [], top_states: [], top_cities: [],
     inquiry_dow: [0,0,0,0,0,0,0], photo_views: [], social_clicks: {},
-    lead_link: { views: 0, visitors: 0, total_clicks: 0, ctr: 0, buttons: [], daily: [] },
+    lead_link: { views: 0, visitors: 0, total_clicks: 0, ctr: 0, scans: 0, buttons: [], daily: [] },
     funnel: [],
     prior: { total_views: 0, unique_sessions: 0, contact_form_submits: 0, leads_created: 0, conversion_rate: 0 },
     _migration_pending: true,

@@ -44,11 +44,12 @@ export async function GET(
 
   const { data, error } = await supabaseAdmin
     .from('venues')
-    .select('slug, is_published, is_demo, demo_preview_token')
+    .select('id, slug, is_published, is_demo, demo_preview_token')
     .ilike('lead_link_slug', handle) // exact, case-insensitive (handle has no wildcards)
     .maybeSingle();
 
   const row = data as {
+    id: string | null;
     slug: string | null;
     is_published: boolean | null;
     is_demo: boolean | null;
@@ -63,6 +64,10 @@ export async function GET(
 
   return NextResponse.json(
     {
+      // venue_id lets the redirector attribute a short-link click (lead_link_scan)
+      // to this venue. Not sensitive — it's already used publicly by the Lead Link
+      // page's lead-capture form.
+      venue_id: row.id,
       slug: row.slug,
       is_demo: row.is_demo === true,
       demo_preview_token: row.is_demo === true ? (row.demo_preview_token ?? null) : null,

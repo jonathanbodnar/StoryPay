@@ -42,6 +42,7 @@ type LeadLinkMetrics = {
   visitors: number;
   total_clicks: number;
   ctr: number;
+  scans?: number;
   buttons: { key: string; label: string; count: number }[];
   daily: { date: string; views: number; clicks: number }[];
 };
@@ -1683,8 +1684,9 @@ export default function ListingAnalyticsPage() {
           )}
           {/* ── Lead Links (link-in-bio performance) ─────────────────────── */}
           {(() => {
-            const ll = d.lead_link ?? { views: 0, visitors: 0, total_clicks: 0, ctr: 0, buttons: [], daily: [] };
-            const hasLeadLinkData = ll.views > 0 || ll.total_clicks > 0;
+            const ll = d.lead_link ?? { views: 0, visitors: 0, total_clicks: 0, ctr: 0, scans: 0, buttons: [], daily: [] };
+            const llScans = ll.scans ?? 0;
+            const hasLeadLinkData = ll.views > 0 || ll.total_clicks > 0 || llScans > 0;
             const activeButtons = (ll.buttons ?? []).filter(b => b.count > 0);
             const maxButton = Math.max(...(ll.buttons ?? []).map(b => b.count), 1);
             const chartData = (ll.daily ?? []).map(row => ({ ...row, date: formatDate(row.date) }));
@@ -1766,7 +1768,8 @@ export default function ListingAnalyticsPage() {
                 )}
 
                 {/* KPI tiles */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                  <KpiCard icon={Link2} label="Short-link clicks" value={llScans.toLocaleString()} sub="Taps on your /v/ link" color="rose" />
                   <KpiCard icon={Eye} label="Page visits" value={ll.views.toLocaleString()} sub="From social bios" color="blue" />
                   <KpiCard icon={Users} label="Unique visitors" value={ll.visitors.toLocaleString()} sub="Distinct sessions" color="purple" />
                   <KpiCard icon={MousePointerClick} label="Total clicks" value={ll.total_clicks.toLocaleString()} sub="All buttons" color="green" />
