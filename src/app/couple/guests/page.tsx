@@ -36,6 +36,7 @@ type Guest = {
   notes: string | null;
   rsvp_token: string;
   invited_at: string | null;
+  invite_source: string | null;
   responded_at: string | null;
   invite_sent_count: number | null;
 };
@@ -320,6 +321,10 @@ export default function CoupleGuestsPage() {
   }
 
   const invitableCount = guests.filter((g) => g.email && !g.responded_at).length;
+  // Tolerant reader: a missing `invited_at` means "not invited yet".
+  const invitedCount = guests.filter((g) => g.invited_at).length;
+  // Invited but still on the fence — the "who hasn't responded" list.
+  const awaitingResponseCount = guests.filter((g) => g.invited_at && g.rsvp_status === 'pending').length;
 
   if (loading) {
     return (
@@ -363,7 +368,13 @@ export default function CoupleGuestsPage() {
 
       {/* Summary */}
       {summary && (
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <SummaryCard
+            label="Invited"
+            value={invitedCount}
+            tone="blue"
+            sub={awaitingResponseCount > 0 ? `${awaitingResponseCount} awaiting response` : undefined}
+          />
           <SummaryCard label="Attending" value={summary.attending} tone="emerald" />
           <SummaryCard label="Awaiting" value={summary.pending} tone="amber" />
           <SummaryCard label="Declined" value={summary.declined} tone="gray" />
@@ -692,8 +703,19 @@ function InviteChip({ guest }: { guest: Guest }) {
   );
 }
 
-function SummaryCard({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'gray' | 'rose' }) {
+function SummaryCard({
+  label,
+  value,
+  tone,
+  sub,
+}: {
+  label: string;
+  value: number;
+  tone: 'blue' | 'emerald' | 'amber' | 'gray' | 'rose';
+  sub?: string;
+}) {
   const tones: Record<string, string> = {
+    blue: 'border-blue-200 bg-blue-50 text-blue-700',
     emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     amber: 'border-amber-200 bg-amber-50 text-amber-700',
     gray: 'border-gray-200 bg-white text-gray-600',
@@ -703,6 +725,7 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
     <div className={`rounded-2xl border px-4 py-3 ${tones[tone]}`}>
       <p className="text-2xl font-semibold leading-none">{value}</p>
       <p className="mt-1 text-[11px] font-medium uppercase tracking-wide opacity-80">{label}</p>
+      {sub && <p className="mt-1 text-[11px] font-medium leading-tight opacity-70">{sub}</p>}
     </div>
   );
 }

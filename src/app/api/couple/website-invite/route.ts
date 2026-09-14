@@ -341,5 +341,113 @@ export async function POST(request: NextRequest) {
     failed_count: failed,
   });
 
+  // Auto-add every recipient to the couple's Guest list so she can track who's
+  // been invited and who hasn't responded. Existing guests (matched by
+  // case-insensitive email) get their first `invited_at` stamped; brand-new
+  // addresses (pasted/CSV) are inserted as "Invited · Awaiting response"
+  // (rsvp_status 'pending') and flip to Attending/Declined when they RSVP on
+  // the website. This is pure bookkeeping — it runs after the send and never
+  // fails the request, so a hiccup here can't block a successful send.
+  try {
+    await syncInvitedGuests(link, recipients);
+  } catch (err) {
+    console.error('[website-invite] guest auto-add failed', err);
+  }
+
   return NextResponse.json({ ok: true, sent, failed, skippedSuppressed });
+}
+
+interface WeddingLinkLite {
+  id: string;
+  couple_id: string | null;
+  venue_id: string;
+  venue_customer_id?: string | null;
+}
+
+/**
+ * Upsert website-invite recipients into `wedding_guests` for this wedding.
+ * - Existing guest (case-insensitive email): stamp `invited_at = now()` only if
+ *   it's still null (preserve the first-invited time). Nothing else is touched.
+ * - New email: insert a guest with the recipient's name (or a clean fallback),
+ *   `rsvp_status = 'pending'`, `party_size = 1`, `invited_at = now()`, and
+ *   `invite_source = 'website_invite'`.
+ * Fetches existing emails once, then batches the update + insert. Duplicates are
+ * impossible because we match on the normalized (lowercased) email.
+ */
+async function syncInvitedGuests(
+  link: WeddingLinkLite,
+  recipients: { name: string; email: string }[],
+): Promise<void> {
+  if (recipients.length === 0) return;
+
+  const { data: existing } = await supabaseAdmin
+    .from('wedding_guests')
+    .select('id, email, invited_at')
+    .eq('couple_wedding_id', link.id);
+
+  // Map normalized email → { id, alreadyInvited } for O(1) matching.
+  const byEmail = new Map<string, { id: string; alreadyInvited: boolean }>();
+  for (const row of (existing ?? []) as { id: string; email: string | null; invited_at: string | null }[]) {
+    const key = normalizeEmail(row.email);
+    if (key && !byEmail.has(key)) {
+      byEmail.set(key, { id: row.id, alreadyInvited: Boolean(row.invited_at) });
+    }
+  }
+
+  const now = new Date().toISOString();
+  const idsToStamp: string[] = [];
+  const toInsert: Record<string, unknown>[] = [];
+
+  for (const r of recipients) {
+    // recipients are already normalized+deduped upstream, but normalize again to
+    // match how existing guest emails are keyed.
+    const email = normalizeEmail(r.email);
+    if (!email) continue;
+    const match = byEmail.get(email);
+    if (match) {
+      if (!match.alreadyInvited) idsToStamp.push(match.id);
+    } else {
+      toInsert.push({
+        couple_wedding_id: link.id,
+        couple_id: link.couple_id,
+        venue_id: link.venue_id,
+        venue_customer_id: link.venue_customer_id ?? null,
+        full_name: guestNameFromRecipient(r.name, email),
+        email,
+        party_size: 1,
+        rsvp_status: 'pending',
+        invited_at: now,
+        invite_source: 'website_invite',
+      });
+      // Guard against duplicate inserts if the same new email appears twice.
+      byEmail.set(email, { id: '', alreadyInvited: true });
+    }
+  }
+
+  if (idsToStamp.length > 0) {
+    await supabaseAdmin.from('wedding_guests').update({ invited_at: now }).in('id', idsToStamp);
+  }
+  if (toInsert.length > 0) {
+    await supabaseAdmin.from('wedding_guests').insert(toInsert);
+  }
+}
+
+/**
+ * `full_name` is NOT NULL, so a pasted/CSV recipient with no name still needs a
+ * sensible display name. Use the provided name when present; otherwise derive a
+ * clean "First Last" from the email local-part only when it reads cleanly
+ * (letters + separators, no digits), else fall back to the email address itself.
+ * We never fabricate an ugly name like "jsmith123".
+ */
+function guestNameFromRecipient(name: string, email: string): string {
+  const trimmed = name.trim();
+  if (trimmed) return trimmed.slice(0, 120);
+
+  const local = email.split('@')[0] ?? '';
+  const parts = local.split(/[._-]+/).filter(Boolean);
+  const readsCleanly = parts.length > 0 && parts.every((p) => /^[a-z]+$/i.test(p));
+  if (readsCleanly) {
+    return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ').slice(0, 120);
+  }
+  return email.slice(0, 120);
 }
