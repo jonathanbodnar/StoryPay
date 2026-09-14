@@ -463,9 +463,9 @@ function CoupleLoginForm({
         setError(signErr.message);
         return;
       }
-      // Native brides land in the "My wedding" hub; the web keeps the
-      // Favorites list as the default landing area.
-      const fallback = isNativeApp() ? '/couple/wedding' : '/couple/favorites';
+      // Brides always land in the "My wedding" (Wedding Planner) hub on both
+      // web and native, unless a specific post-login path was requested.
+      const fallback = '/couple/wedding';
       const target = nextPath && nextPath.startsWith('/') ? nextPath : fallback;
       router.push(target);
       router.refresh();

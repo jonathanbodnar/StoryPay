@@ -393,9 +393,8 @@ function CoupleSignupForm() {
         return;
       }
 
-      // Native brides land in the "My wedding" hub; the web keeps the
-      // Favorites list as the default landing area.
-      router.replace(isNativeApp() ? '/couple/wedding' : '/couple/favorites');
+      // Brides always land in the "My wedding" (Wedding Planner) hub.
+      router.replace('/couple/wedding');
     } finally {
       setLoading(false);
     }
