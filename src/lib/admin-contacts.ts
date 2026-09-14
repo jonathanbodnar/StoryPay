@@ -17,6 +17,8 @@ export type ContactType =
   | 'venue_team'       // public.venue_team_members
   | 'admin_team'       // public.support_team_members
   | 'lead'             // public.leads (directory inquiry forms)
+  | 'venue_customer'   // public.venue_customers (venue CRM / booking pipeline)
+  | 'guest'            // public.wedding_guests (bride-side guest lists + website invites)
   | 'waitlist';        // public.waitlist (pre-launch signups)
 
 export const CONTACT_TYPES: ContactType[] = [
@@ -25,26 +27,32 @@ export const CONTACT_TYPES: ContactType[] = [
   'venue_team',
   'admin_team',
   'lead',
+  'venue_customer',
+  'guest',
   'waitlist',
 ];
 
 export const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
-  venue_owner: 'Venue owner',
-  couple:      'Couple',
-  venue_team:  'Venue team',
-  admin_team:  'Admin team',
-  lead:        'Lead',
-  waitlist:    'Waitlist',
+  venue_owner:    'Venue owner',
+  couple:         'Couple',
+  venue_team:     'Venue team',
+  admin_team:     'Admin team',
+  lead:           'Lead',
+  venue_customer: 'Venue client',
+  guest:          'Guest',
+  waitlist:       'Waitlist',
 };
 
 /** Pill colors keyed by contact type — Tailwind utility strings. */
 export const CONTACT_TYPE_PILL: Record<ContactType, string> = {
-  venue_owner: 'bg-violet-100 text-violet-700 border-violet-200',
-  couple:      'bg-rose-100 text-rose-700 border-rose-200',
-  venue_team:  'bg-amber-100 text-amber-700 border-amber-200',
-  admin_team:  'bg-gray-200 text-gray-800 border-gray-300',
-  lead:        'bg-sky-100 text-sky-700 border-sky-200',
-  waitlist:    'bg-emerald-100 text-emerald-700 border-emerald-200',
+  venue_owner:    'bg-violet-100 text-violet-700 border-violet-200',
+  couple:         'bg-rose-100 text-rose-700 border-rose-200',
+  venue_team:     'bg-amber-100 text-amber-700 border-amber-200',
+  admin_team:     'bg-gray-200 text-gray-800 border-gray-300',
+  lead:           'bg-sky-100 text-sky-700 border-sky-200',
+  venue_customer: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  guest:          'bg-teal-100 text-teal-700 border-teal-200',
+  waitlist:       'bg-emerald-100 text-emerald-700 border-emerald-200',
 };
 
 /** Single flattened contact row returned to the admin Contacts UI. */
@@ -428,6 +436,131 @@ async function loadWaitlist(): Promise<AdminContact[]> {
   });
 }
 
+// ── venue CRM customers (SaaS-side booking pipeline) ────────────────────────
+
+/** Resolve venue id → name for a set of ids (best-effort). */
+async function venueNamesFor(ids: string[]): Promise<Map<string, string>> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (unique.length === 0) return new Map();
+  const { data } = await supabaseAdmin.from('venues').select('id, name').in('id', unique);
+  return new Map((data ?? []).map((v) => [v.id as string, (v.name as string) ?? '']));
+}
+
+async function loadVenueCustomers(): Promise<AdminContact[]> {
+  type Row = Record<string, unknown> & { id: string; venue_id?: string | null };
+  const { data, error } = await supabaseAdmin
+    .from('venue_customers')
+    .select('id, venue_id, first_name, last_name, customer_email, phone, created_at')
+    .order('created_at', { ascending: false })
+    .limit(20000);
+  if (error) {
+    if (/relation .* does not exist/i.test(error.message)) return [];
+    throw error;
+  }
+  const rows = (data ?? []) as Row[];
+  if (rows.length === 0) return [];
+
+  const venueNameById = await venueNamesFor(rows.map((r) => r.venue_id as string));
+
+  return rows.map((r) => {
+    const first = asStr(r.first_name);
+    const last = asStr(r.last_name);
+    return {
+      type: 'venue_customer',
+      id: r.id,
+      first_name: first,
+      last_name: last,
+      display_name: [first, last].filter(Boolean).join(' ') || null,
+      email: asStr(r.customer_email),
+      phone: asStr(r.phone),
+      city: null,
+      state: null,
+      role: 'Venue client',
+      status: 'client',
+      blocked: false,
+      blocked_until: null,
+      created_at: asStr(r.created_at),
+      last_active_at: null,
+      venue_id: (r.venue_id as string | null) ?? null,
+      venue_name: venueNameById.get(r.venue_id as string) ?? null,
+      can_impersonate: false,
+      can_reset_password: false,
+    } satisfies AdminContact;
+  });
+}
+
+// ── wedding guests (bride-side guest lists + website invites) ───────────────
+
+/** Human-readable label for how a guest entered the system. */
+function guestRole(inviteSource: string | null): string {
+  const s = (inviteSource ?? '').trim().toLowerCase();
+  if (s === 'website_invite') return 'Wedding invite';
+  if (!s) return 'Guest';
+  return s
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(' ');
+}
+
+async function loadGuests(): Promise<AdminContact[]> {
+  type Row = Record<string, unknown> & { id: string; venue_id?: string | null };
+  let rows: Row[] = [];
+  {
+    const sel = 'id, venue_id, full_name, email, phone, rsvp_status, invite_source, created_at';
+    const initial = await supabaseAdmin
+      .from('wedding_guests')
+      .select(sel)
+      .order('created_at', { ascending: false })
+      .limit(20000);
+    if (initial.error && /invite_source/i.test(initial.error.message)) {
+      const retry = await supabaseAdmin
+        .from('wedding_guests')
+        .select('id, venue_id, full_name, email, phone, rsvp_status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(20000);
+      if (retry.error) throw retry.error;
+      rows = (retry.data ?? []) as Row[];
+    } else if (initial.error) {
+      if (/relation .* does not exist/i.test(initial.error.message)) return [];
+      throw initial.error;
+    } else {
+      rows = (initial.data ?? []) as Row[];
+    }
+  }
+  // A directory contact needs at least one way to reach them.
+  rows = rows.filter((r) => asStr(r.email) || asStr(r.phone));
+  if (rows.length === 0) return [];
+
+  const venueNameById = await venueNamesFor(rows.map((r) => r.venue_id as string));
+
+  return rows.map((r) => {
+    const fullName = asStr(r.full_name);
+    const [first = null, ...rest] = (fullName ?? '').trim().split(/\s+/);
+    return {
+      type: 'guest',
+      id: r.id,
+      first_name: first || null,
+      last_name: rest.length ? rest.join(' ') : null,
+      display_name: fullName,
+      email: asStr(r.email),
+      phone: asStr(r.phone),
+      city: null,
+      state: null,
+      role: guestRole(asStr(r.invite_source)),
+      status: asStr(r.rsvp_status) ?? 'guest',
+      blocked: false,
+      blocked_until: null,
+      created_at: asStr(r.created_at),
+      last_active_at: null,
+      venue_id: (r.venue_id as string | null) ?? null,
+      venue_name: venueNameById.get(r.venue_id as string) ?? null,
+      can_impersonate: false,
+      can_reset_password: false,
+    } satisfies AdminContact;
+  });
+}
+
 /**
  * Load every contact across every source. Each loader is best-effort: an
  * outage on one (missing table, RLS rule etc.) won't take down the whole
@@ -462,6 +595,8 @@ export async function loadAllContacts(opts: { types?: ContactType[] } = {}): Pro
     run('venue_team', loadVenueTeam),
     run('admin_team', loadAdminTeam),
     run('lead', loadLeads),
+    run('venue_customer', loadVenueCustomers),
+    run('guest', loadGuests),
     run('waitlist', loadWaitlist),
   ]);
 

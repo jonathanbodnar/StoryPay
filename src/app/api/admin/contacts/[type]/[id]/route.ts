@@ -138,6 +138,36 @@ export async function GET(
     return NextResponse.json({ contact: data });
   }
 
+  if (type === 'venue_customer') {
+    const { data, error } = await supabaseAdmin
+      .from('venue_customers')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const row = data as Record<string, unknown>;
+    // Surface customer_email under the generic `email` key the drawer reads.
+    return NextResponse.json({ contact: { ...row, email: row.customer_email ?? row.email ?? null } });
+  }
+
+  if (type === 'guest') {
+    const { data, error } = await supabaseAdmin
+      .from('wedding_guests')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const row = data as Record<string, unknown>;
+    // Split full_name so the drawer's first/last fields prefill.
+    const full = String(row.full_name ?? '').trim();
+    const [first = '', ...rest] = full.split(/\s+/);
+    return NextResponse.json({
+      contact: { ...row, first_name: first || null, last_name: rest.join(' ') || null },
+    });
+  }
+
   return NextResponse.json({ error: 'Unsupported' }, { status: 400 });
 }
 
@@ -405,6 +435,52 @@ export async function PATCH(
     return NextResponse.json({ ok: true });
   }
 
+  // ── venue CRM customer ──────────────────────────────────────────────────
+  if (type === 'venue_customer') {
+    const updates: Record<string, unknown> = compact({
+      first_name:     safeText(body.first_name) ?? undefined,
+      last_name:      safeText(body.last_name)  ?? undefined,
+      phone:          safeText(body.phone)      ?? undefined,
+      customer_email: typeof body.email === 'string' ? body.email.trim().toLowerCase() : undefined,
+    });
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No editable fields' }, { status: 400 });
+    }
+    let { error } = await supabaseAdmin.from('venue_customers').update(updates).eq('id', id);
+    while (error) {
+      const m = error.message.match(/column "?([a-zA-Z_]+)"? .*does not exist/i)
+        || error.message.match(/Could not find the '([a-zA-Z_]+)' column/i);
+      const col = m?.[1];
+      if (col && col in updates) {
+        delete updates[col];
+        if (Object.keys(updates).length === 0) break;
+        const retry = await supabaseAdmin.from('venue_customers').update(updates).eq('id', id);
+        error = retry.error ?? null;
+      } else {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── wedding guest ───────────────────────────────────────────────────────
+  if (type === 'guest') {
+    const first = safeText(body.first_name) ?? '';
+    const last = safeText(body.last_name) ?? '';
+    const combined = `${first} ${last}`.trim();
+    const updates: Record<string, unknown> = compact({
+      full_name: safeText(body.name) ?? (combined || undefined),
+      email:     typeof body.email === 'string' ? body.email.trim().toLowerCase() : undefined,
+      phone:     safeText(body.phone) ?? undefined,
+    });
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No editable fields' }, { status: 400 });
+    }
+    const { error } = await supabaseAdmin.from('wedding_guests').update(updates).eq('id', id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
   return NextResponse.json({ error: 'Unsupported' }, { status: 400 });
 }
 
@@ -481,6 +557,31 @@ export async function DELETE(
 
   if (type === 'waitlist') {
     const { error } = await supabaseAdmin.from('waitlist').delete().eq('id', id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ deleted: true });
+  }
+
+  if (type === 'venue_customer') {
+    // Belongs to a venue — respect the venue's protection flag before removing.
+    const { data: vc } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id, is_protected')
+      .eq('id', id)
+      .maybeSingle();
+    if (!vc) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if ((vc as { is_protected?: boolean | null }).is_protected === true) {
+      return NextResponse.json(
+        { error: 'This client record is protected by the venue and cannot be deleted here.' },
+        { status: 403 },
+      );
+    }
+    const { error } = await supabaseAdmin.from('venue_customers').delete().eq('id', id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ deleted: true });
+  }
+
+  if (type === 'guest') {
+    const { error } = await supabaseAdmin.from('wedding_guests').delete().eq('id', id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ deleted: true });
   }

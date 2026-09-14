@@ -33,37 +33,45 @@ type ContactType =
   | 'venue_team'
   | 'admin_team'
   | 'lead'
+  | 'venue_customer'
+  | 'guest'
   | 'waitlist';
 
 const CONTACT_TYPES: ContactType[] = [
-  'venue_owner', 'couple', 'venue_team', 'admin_team', 'lead', 'waitlist',
+  'venue_owner', 'couple', 'venue_team', 'admin_team', 'lead', 'venue_customer', 'guest', 'waitlist',
 ];
 
 const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
-  venue_owner: 'Venue owner',
-  couple:      'Couple',
-  venue_team:  'Venue team',
-  admin_team:  'Admin team',
-  lead:        'Lead',
-  waitlist:    'Waitlist',
+  venue_owner:    'Venue owner',
+  couple:         'Couple',
+  venue_team:     'Venue team',
+  admin_team:     'Admin team',
+  lead:           'Lead',
+  venue_customer: 'Venue client',
+  guest:          'Guest',
+  waitlist:       'Waitlist',
 };
 
 const CONTACT_TYPE_SHORT: Record<ContactType, string> = {
-  venue_owner: 'Owner',
-  couple:      'Couple',
-  venue_team:  'Team',
-  admin_team:  'Admin',
-  lead:        'Lead',
-  waitlist:    'Waitlist',
+  venue_owner:    'Owner',
+  couple:         'Couple',
+  venue_team:     'Team',
+  admin_team:     'Admin',
+  lead:           'Lead',
+  venue_customer: 'Client',
+  guest:          'Guest',
+  waitlist:       'Waitlist',
 };
 
 const CONTACT_TYPE_PILL: Record<ContactType, string> = {
-  venue_owner: 'bg-violet-100 text-violet-700 border border-violet-200',
-  couple:      'bg-rose-100 text-rose-700 border border-rose-200',
-  venue_team:  'bg-amber-100 text-amber-700 border border-amber-200',
-  admin_team:  'bg-gray-200 text-gray-800 border border-gray-300',
-  lead:        'bg-sky-100 text-sky-700 border border-sky-200',
-  waitlist:    'bg-emerald-100 text-emerald-700 border border-emerald-200',
+  venue_owner:    'bg-violet-100 text-violet-700 border border-violet-200',
+  couple:         'bg-rose-100 text-rose-700 border border-rose-200',
+  venue_team:     'bg-amber-100 text-amber-700 border border-amber-200',
+  admin_team:     'bg-gray-200 text-gray-800 border border-gray-300',
+  lead:           'bg-sky-100 text-sky-700 border border-sky-200',
+  venue_customer: 'bg-indigo-100 text-indigo-700 border border-indigo-200',
+  guest:          'bg-teal-100 text-teal-700 border border-teal-200',
+  waitlist:       'bg-emerald-100 text-emerald-700 border border-emerald-200',
 };
 
 interface AdminContact {
@@ -240,7 +248,7 @@ export function ContactsPortal() {
             </h2>
             <p className="text-sm text-gray-500 mt-0.5">
               Every person on the platform — venue owners, couples, team members, admin staff,
-              leads, and waitlist signups. {contacts.length} total
+              leads, venue clients, wedding guests, and waitlist signups. {contacts.length} total
               {blockedCount > 0 && (
                 <> · <span className="text-red-600 font-medium">{blockedCount} blocked</span></>
               )}.
