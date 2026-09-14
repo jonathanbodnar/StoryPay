@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Loader2, Plus, Trash2, RotateCw, Download, Printer, Square, Circle, RectangleHorizontal,
 } from 'lucide-react';
@@ -41,16 +41,8 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
     | { id: string; mode: 'move' | 'resize'; sx: number; sy: number; ox: number; oy: number; ow: number; oh: number }
   >(null);
 
-  // Editing is desktop-only (drag-and-drop is fiddly on phones).
-  const [isDesktop, setIsDesktop] = useState(true);
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px)');
-    const on = () => setIsDesktop(mq.matches);
-    on();
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  const editable = !readOnly && isDesktop && Boolean(onSave);
+  // Editing works on both desktop and touch devices via Pointer Events.
+  const editable = !readOnly && Boolean(onSave);
 
   const tableById = useMemo(() => {
     const m: Record<string, TableLite> = {};
@@ -416,8 +408,8 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
         )}
       </div>
 
-      {!isDesktop && !readOnly && (
-        <p className="mt-2 text-center text-xs text-gray-400">Editing the room layout is available on a larger screen. You can still view, download, and print here.</p>
+      {editable && (
+        <p className="mt-2 text-center text-xs text-gray-400">Tip: tap an item to select it, then drag to move. Drag the corner handle to resize.</p>
       )}
     </div>
   );
