@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
         .maybeSingle(),
       supabaseAdmin
         .from('wedding_guests')
-        .select('full_name, email')
+        .select('full_name, email, phone')
         .eq('couple_wedding_id', link.id),
       supabaseAdmin
         .from('couple_website_invite_sends')
@@ -96,12 +96,12 @@ export async function GET(request: NextRequest) {
 
   // Prefill guest emails (deduped, valid, not suppressed).
   const seen = new Set<string>();
-  const guestRecipients: { name: string; email: string }[] = [];
-  for (const g of (guests ?? []) as { full_name: string | null; email: string | null }[]) {
+  const guestRecipients: { name: string; email: string; phone: string }[] = [];
+  for (const g of (guests ?? []) as { full_name: string | null; email: string | null; phone: string | null }[]) {
     const email = normalizeEmail(g.email);
     if (!email || seen.has(email) || suppressed.has(email)) continue;
     seen.add(email);
-    guestRecipients.push({ name: (g.full_name ?? '').trim(), email });
+    guestRecipients.push({ name: (g.full_name ?? '').trim(), email, phone: (g.phone ?? '').trim() });
   }
 
   return NextResponse.json({
@@ -200,22 +200,39 @@ export async function POST(request: NextRequest) {
   // dedupe, drop suppressed, and cap server-side regardless of the UI.
   const rawRecipients = Array.isArray(body.recipients) ? body.recipients : [];
   const seen = new Set<string>();
-  const recipients: { name: string; email: string }[] = [];
+  const recipients: { name: string; email: string; phone: string }[] = [];
   let skippedSuppressed = 0;
+  let skippedNoName = 0;
   for (const r of rawRecipients) {
-    const obj = (r ?? {}) as { email?: unknown; name?: unknown };
+    const obj = (r ?? {}) as { email?: unknown; name?: unknown; phone?: unknown };
     const email = normalizeEmail(obj.email);
     if (!email || seen.has(email)) continue;
+    // Name is required — we collect complete records only. Anything nameless is
+    // dropped defensively (the UI already enforces this).
+    const name = typeof obj.name === 'string' ? obj.name.trim().slice(0, 120) : '';
+    if (!name) {
+      skippedNoName += 1;
+      continue;
+    }
     seen.add(email);
     if (suppressed.has(email)) {
       skippedSuppressed += 1;
       continue;
     }
-    recipients.push({ name: typeof obj.name === 'string' ? obj.name.trim().slice(0, 120) : '', email });
+    const phone = typeof obj.phone === 'string' ? obj.phone.trim().slice(0, 40) : '';
+    recipients.push({ name, email, phone });
   }
 
   if (recipients.length === 0) {
-    return NextResponse.json({ error: 'Add at least one valid email address.' }, { status: 400 });
+    return NextResponse.json(
+      {
+        error:
+          skippedNoName > 0
+            ? 'Every recipient needs a name and an email. Add a name for each guest and try again.'
+            : 'Add at least one recipient with a name and email.',
+      },
+      { status: 400 },
+    );
   }
   if (recipients.length > MAX_RECIPIENTS) {
     return NextResponse.json(
@@ -376,26 +393,38 @@ interface WeddingLinkLite {
  */
 async function syncInvitedGuests(
   link: WeddingLinkLite,
-  recipients: { name: string; email: string }[],
+  recipients: { name: string; email: string; phone: string }[],
 ): Promise<void> {
   if (recipients.length === 0) return;
 
   const { data: existing } = await supabaseAdmin
     .from('wedding_guests')
-    .select('id, email, invited_at')
+    .select('id, email, invited_at, phone')
     .eq('couple_wedding_id', link.id);
 
-  // Map normalized email → { id, alreadyInvited } for O(1) matching.
-  const byEmail = new Map<string, { id: string; alreadyInvited: boolean }>();
-  for (const row of (existing ?? []) as { id: string; email: string | null; invited_at: string | null }[]) {
+  // Map normalized email → { id, alreadyInvited, hasPhone } for O(1) matching.
+  const byEmail = new Map<string, { id: string; alreadyInvited: boolean; hasPhone: boolean }>();
+  for (const row of (existing ?? []) as {
+    id: string;
+    email: string | null;
+    invited_at: string | null;
+    phone: string | null;
+  }[]) {
     const key = normalizeEmail(row.email);
     if (key && !byEmail.has(key)) {
-      byEmail.set(key, { id: row.id, alreadyInvited: Boolean(row.invited_at) });
+      byEmail.set(key, {
+        id: row.id,
+        alreadyInvited: Boolean(row.invited_at),
+        hasPhone: Boolean((row.phone ?? '').trim()),
+      });
     }
   }
 
   const now = new Date().toISOString();
   const idsToStamp: string[] = [];
+  // Existing guests missing a phone we can now backfill (per-guest, so batched
+  // individually — usually a small handful).
+  const phoneBackfills: { id: string; phone: string }[] = [];
   const toInsert: Record<string, unknown>[] = [];
 
   for (const r of recipients) {
@@ -403,9 +432,16 @@ async function syncInvitedGuests(
     // match how existing guest emails are keyed.
     const email = normalizeEmail(r.email);
     if (!email) continue;
+    const phone = (r.phone ?? '').trim().slice(0, 40);
     const match = byEmail.get(email);
     if (match) {
       if (!match.alreadyInvited) idsToStamp.push(match.id);
+      // Own the data: backfill a phone number when we have one and the guest
+      // record doesn't (never overwrite an existing phone).
+      if (phone && !match.hasPhone && match.id) {
+        phoneBackfills.push({ id: match.id, phone });
+        match.hasPhone = true;
+      }
     } else {
       toInsert.push({
         couple_wedding_id: link.id,
@@ -414,18 +450,22 @@ async function syncInvitedGuests(
         venue_customer_id: link.venue_customer_id ?? null,
         full_name: guestNameFromRecipient(r.name, email),
         email,
+        phone: phone || null,
         party_size: 1,
         rsvp_status: 'pending',
         invited_at: now,
         invite_source: 'website_invite',
       });
       // Guard against duplicate inserts if the same new email appears twice.
-      byEmail.set(email, { id: '', alreadyInvited: true });
+      byEmail.set(email, { id: '', alreadyInvited: true, hasPhone: Boolean(phone) });
     }
   }
 
   if (idsToStamp.length > 0) {
     await supabaseAdmin.from('wedding_guests').update({ invited_at: now }).in('id', idsToStamp);
+  }
+  for (const b of phoneBackfills) {
+    await supabaseAdmin.from('wedding_guests').update({ phone: b.phone }).eq('id', b.id);
   }
   if (toInsert.length > 0) {
     await supabaseAdmin.from('wedding_guests').insert(toInsert);

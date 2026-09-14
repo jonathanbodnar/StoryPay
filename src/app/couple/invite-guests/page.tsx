@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
-type Recipient = { name: string; email: string; source: 'guest' | 'added' };
+type Recipient = { name: string; email: string; phone: string; source: 'guest' | 'added' };
 
 interface LoadData {
   coupleName: string;
@@ -25,7 +25,7 @@ interface LoadData {
   site: { published: boolean; url: string | null; hasPassword: boolean };
   replyTo: string | null;
   maxRecipients: number;
-  guestRecipients: { name: string; email: string }[];
+  guestRecipients: { name: string; email: string; phone: string }[];
   guestsWithoutEmail: number;
   lastSend: {
     subject: string | null;
@@ -37,6 +37,11 @@ interface LoadData {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Phone-ish cell: mostly phone chars with at least 7 digits (US-friendly, permissive). */
+const PHONE_RE = /^[+()\-.\s\d]{7,}$/;
+function looksLikePhone(v: string): boolean {
+  return PHONE_RE.test(v) && (v.match(/\d/g)?.length ?? 0) >= 7;
+}
 
 const DEFAULT_SUBJECT = 'You’re invited to our wedding website';
 const DEFAULT_MESSAGE =
@@ -86,8 +91,10 @@ export default function InviteGuestsPage() {
   const [message, setMessage] = useState(DEFAULT_MESSAGE);
   const [sitePassword, setSitePassword] = useState('');
   const [recipients, setRecipients] = useState<Recipient[]>([]);
-  const [addInput, setAddInput] = useState('');
   const [addName, setAddName] = useState('');
+  const [addInput, setAddInput] = useState('');
+  const [addPhone, setAddPhone] = useState('');
+  const [addError, setAddError] = useState('');
   const [csvNote, setCsvNote] = useState('');
   const [dragOver, setDragOver] = useState(false);
 
@@ -126,7 +133,12 @@ export default function InviteGuestsPage() {
     const d = (await res.json().catch(() => ({}))) as LoadData;
     setData(d);
     setRecipients(
-      (d.guestRecipients ?? []).map((g) => ({ name: g.name, email: g.email, source: 'guest' as const })),
+      (d.guestRecipients ?? []).map((g) => ({
+        name: g.name,
+        email: g.email,
+        phone: g.phone ?? '',
+        source: 'guest' as const,
+      })),
     );
     setLoading(false);
   }, [router]);
@@ -137,39 +149,50 @@ export default function InviteGuestsPage() {
 
   const max = data?.maxRecipients ?? 300;
 
+  // Merge incoming contacts. A name AND a valid email are BOTH required — we
+  // want to own complete records, so anything missing either is skipped and
+  // counted so the UI can explain why.
   const mergeRecipients = useCallback(
-    (incoming: { name?: string; email: string }[]): { added: number; dupes: number; invalid: number } => {
+    (
+      incoming: { name?: string; email: string; phone?: string }[],
+    ): { added: number; dupes: number; invalid: number; missing: number } => {
       const prev = recipientsRef.current;
       const seen = new Set(prev.map((r) => r.email.toLowerCase()));
       const toAdd: Recipient[] = [];
       let dupes = 0;
       let invalid = 0;
+      let missing = 0;
       for (const item of incoming) {
         const email = item.email.trim().toLowerCase();
+        const name = (item.name ?? '').trim();
         if (!EMAIL_RE.test(email)) { invalid++; continue; }
+        if (!name) { missing++; continue; }
         if (seen.has(email)) { dupes++; continue; }
         seen.add(email);
-        toAdd.push({ name: (item.name ?? '').trim(), email, source: 'added' });
+        toAdd.push({ name, email, phone: (item.phone ?? '').trim(), source: 'added' });
       }
       if (toAdd.length) setRecipients((prev2) => [...prev2, ...toAdd]);
-      return { added: toAdd.length, dupes, invalid };
+      return { added: toAdd.length, dupes, invalid, missing };
     },
     [],
   );
 
-  const addEmails = useCallback(() => {
-    const raw = addInput.trim();
-    if (!raw) return;
-    // Accept comma / semicolon / whitespace / newline separated lists.
-    const pieces = raw.split(/[\s,;]+/).map((p) => p.trim()).filter(Boolean);
-    if (pieces.length === 0) return;
-    const single = pieces.length === 1;
-    const { added } = mergeRecipients(pieces.map((email) => ({ email, name: single ? addName : '' })));
+  // Manual add is a single, complete contact: name + email required, phone optional.
+  const addContact = useCallback(() => {
+    const name = addName.trim();
+    const email = addInput.trim().toLowerCase();
+    if (!name) { setAddError('Add a name.'); return; }
+    if (!EMAIL_RE.test(email)) { setAddError('Enter a valid email address.'); return; }
+    const { added, dupes } = mergeRecipients([{ name, email, phone: addPhone }]);
     if (added) {
-      setAddInput('');
       setAddName('');
+      setAddInput('');
+      setAddPhone('');
+      setAddError('');
+    } else if (dupes) {
+      setAddError('That email is already on the list.');
     }
-  }, [addInput, addName, mergeRecipients]);
+  }, [addName, addInput, addPhone, mergeRecipients]);
 
   const importCsv = useCallback(
     async (file: File) => {
@@ -190,31 +213,35 @@ export default function InviteGuestsPage() {
         return;
       }
       const rows = parseCsv(text);
-      const incoming: { name: string; email: string }[] = [];
+      const incoming: { name: string; email: string; phone: string }[] = [];
       let truncated = false;
       for (const row of rows) {
         if (incoming.length >= max) { truncated = true; break; }
-        // Pull the first email-looking cell as the address, the first
-        // non-email cell as an optional name. Header rows fall out naturally
-        // (no email → skipped).
+        // Classify each cell: email, phone, or (first leftover) name. Header
+        // rows fall out naturally (no email → skipped). Both name and email are
+        // required to be included; rows missing either are dropped below.
         let email = '';
+        let phone = '';
         let name = '';
         for (const cell of row) {
           const v = cell.trim();
           if (!v) continue;
           if (!email && EMAIL_RE.test(v.toLowerCase())) email = v;
+          else if (!phone && looksLikePhone(v)) phone = v;
           else if (!name && !v.includes('@')) name = v;
         }
-        if (email) incoming.push({ email, name });
+        incoming.push({ email, name, phone });
       }
-      if (incoming.length === 0) {
-        setCsvNote('No email addresses found in that file.');
+      const withEmail = incoming.filter((r) => EMAIL_RE.test(r.email.toLowerCase()));
+      if (withEmail.length === 0) {
+        setCsvNote('No email addresses found in that file. Include a name and email column.');
         return;
       }
-      const { added, dupes, invalid } = mergeRecipients(incoming);
+      const { added, dupes, invalid, missing } = mergeRecipients(incoming);
       const parts = [`${added} added`];
+      if (missing) parts.push(`${missing} skipped (missing name)`);
       if (dupes) parts.push(`${dupes} duplicate${dupes === 1 ? '' : 's'} skipped`);
-      if (invalid) parts.push(`${invalid} invalid skipped`);
+      if (invalid) parts.push(`${invalid} without an email skipped`);
       if (truncated) parts.push(`stopped at the ${max}-guest limit`);
       setCsvNote(parts.join(' · '));
     },
@@ -241,7 +268,11 @@ export default function InviteGuestsPage() {
           subject: subject.trim(),
           message: message.trim(),
           sitePassword: sitePassword.trim() || undefined,
-          recipients: recipients.map((r) => ({ email: r.email, name: r.name || undefined })),
+          recipients: recipients.map((r) => ({
+            email: r.email,
+            name: r.name || undefined,
+            phone: r.phone || undefined,
+          })),
         }),
       });
       const d = (await res.json().catch(() => ({}))) as {
@@ -413,39 +444,37 @@ export default function InviteGuestsPage() {
             </p>
 
             <div className="mt-3 space-y-2">
+              <input
+                value={addName}
+                onChange={(e) => { setAddName(e.target.value); setAddError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addContact(); } }}
+                placeholder="Full name (required)"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+              />
+              <input
+                value={addInput}
+                onChange={(e) => { setAddInput(e.target.value); setAddError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addContact(); } }}
+                placeholder="Email address (required)"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+              />
               <div className="flex gap-2">
                 <input
-                  value={addInput}
-                  onChange={(e) => setAddInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addEmails();
-                    }
-                  }}
-                  placeholder="Add email(s) — paste a whole list too"
-                  className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"
+                  value={addPhone}
+                  onChange={(e) => setAddPhone(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addContact(); } }}
+                  placeholder="Phone (optional)"
+                  className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
                 />
                 <button
                   type="button"
-                  onClick={addEmails}
+                  onClick={addContact}
                   className="inline-flex shrink-0 items-center justify-center gap-1 rounded-xl bg-[#1b1b1b] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-85"
                 >
                   <Plus className="h-4 w-4" /> Add
                 </button>
               </div>
-              <input
-                value={addName}
-                onChange={(e) => setAddName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addEmails();
-                  }
-                }}
-                placeholder="Name (optional — used when you add a single email)"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
-              />
+              {addError && <p className="text-xs text-red-600">{addError}</p>}
             </div>
 
             <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
@@ -462,7 +491,7 @@ export default function InviteGuestsPage() {
                   }}
                 />
               </label>
-              <span>Or drag a .csv here — we grab the email column automatically.</span>
+              <span>Or drag a .csv here — needs a name + email column (phone optional).</span>
             </div>
             {csvNote && <p className="mt-1.5 text-xs text-gray-500">{csvNote}</p>}
 
@@ -474,7 +503,7 @@ export default function InviteGuestsPage() {
 
             <div className="mt-4 max-h-72 space-y-1.5 overflow-y-auto">
               {recipients.length === 0 && (
-                <p className="py-6 text-center text-sm text-gray-400">No recipients yet. Add emails above.</p>
+                <p className="py-6 text-center text-sm text-gray-400">No recipients yet. Add a guest above.</p>
               )}
               {recipients.map((r) => (
                 <div
@@ -483,7 +512,10 @@ export default function InviteGuestsPage() {
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm text-gray-800">{r.name || r.email}</p>
-                    {r.name && <p className="truncate text-xs text-gray-400">{r.email}</p>}
+                    <p className="truncate text-xs text-gray-400">
+                      {r.email}
+                      {r.phone ? ` · ${r.phone}` : ''}
+                    </p>
                   </div>
                   <button
                     type="button"
