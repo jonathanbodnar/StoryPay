@@ -118,10 +118,18 @@ export async function resolveBookingSystemEntitlement(v: VenueBillingState): Pro
   try {
     const { data: planRow } = await supabaseAdmin
       .from('directory_plans')
-      .select('is_legacy')
+      .select('is_legacy, name, slug')
       .eq('id', planId)
       .maybeSingle();
-    return Boolean((planRow as { is_legacy?: boolean } | null)?.is_legacy);
+    const p = (planRow as { is_legacy?: boolean; name?: string | null; slug?: string | null } | null) ?? null;
+    // Labeled legacy by the is_legacy flag OR by a name/slug containing
+    // "legacy" (e.g. "Legacy", "Legacy Free"). Matches the detection used in
+    // plan-features.ts and directory-plans-venue.ts so all gates agree.
+    return (
+      p?.is_legacy === true ||
+      String(p?.name ?? '').toLowerCase().includes('legacy') ||
+      String(p?.slug ?? '').toLowerCase().includes('legacy')
+    );
   } catch {
     return false;
   }

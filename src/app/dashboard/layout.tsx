@@ -112,6 +112,11 @@ export default async function DashboardLayout({
  // Use the resolved status (may have been updated to 'past_due' by the LP check above).
  const subStatus = resolvedStatus;
  const hasExternalSub = Boolean(vr.directory_subscription_external_id);
+ // Legacy / legacy-free plans (and grandfathered no-plan rows) are billed
+ // manually and must NEVER be gated: no trial, no trial-expired wall, no
+ // past-due wall, no countdown. `mode === 'full'` = no plan; `isLegacyPlan`
+ // catches both the is_legacy flag and any plan named/slugged "legacy".
+ const ungated = navAccess.mode === 'full' || navAccess.isLegacyPlan;
  const trialState: VenueTrialState = {
    directory_trial_started_at: (vr.directory_trial_started_at as string | null) ?? null,
    directory_trial_ends_at: (vr.directory_trial_ends_at as string | null) ?? null,
@@ -120,7 +125,7 @@ export default async function DashboardLayout({
    directory_trial_consumed: Boolean(vr.directory_trial_consumed),
  };
  const trialStatus = deriveTrialStatus(trialState);
- const inTrial = subStatus === 'trialing' && !trialState.directory_trial_is_forever;
+ const inTrial = !ungated && subStatus === 'trialing' && !trialState.directory_trial_is_forever;
  // A venue that downgraded to Free *during* its 14-day trial window keeps an
  // informational countdown until the original trial-end date passes, then it
  // disappears. They have no subscription on file so they won't be charged — the
@@ -160,8 +165,8 @@ export default async function DashboardLayout({
  }
 
  // Past-due wall: subscription charge failed. Block the dashboard until they
- // retry or update their card.
- if (subStatus === 'past_due') {
+ // retry or update their card. Legacy / manually-billed venues are exempt.
+ if (!ungated && subStatus === 'past_due') {
    return (
      <>
        {isImpersonating && <ImpersonationBanner venueName={user.venueName} />}
