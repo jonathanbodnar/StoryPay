@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
-const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode; ownerOnly?: boolean }[] = [
+export const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode; ownerOnly?: boolean }[] = [
   { href: '/couple/wedding', label: 'Wedding Planner home', desc: 'Your wedding overview', icon: <Home className="h-5 w-5" /> },
   { href: '/couple/guests', label: 'Guests & RSVPs', desc: 'Track invites, meals & replies', icon: <Users className="h-5 w-5" /> },
   { href: '/couple/seating', label: 'Seating', desc: 'Arrange tables & assign guests', icon: <Armchair className="h-5 w-5" /> },
