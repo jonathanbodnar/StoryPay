@@ -25,7 +25,7 @@ interface LoadData {
   site: { published: boolean; url: string | null; hasPassword: boolean };
   replyTo: string | null;
   maxRecipients: number;
-  guestRecipients: { name: string; email: string; phone: string }[];
+  guestRecipients: { name: string; email: string; phone: string; invitedAt: string | null }[];
   guestsWithoutEmail: number;
   lastSend: {
     subject: string | null;
@@ -132,13 +132,19 @@ export default function InviteGuestsPage() {
     }
     const d = (await res.json().catch(() => ({}))) as LoadData;
     setData(d);
+    // Prefill only guests who haven't been invited yet. Already-invited guests
+    // (stamped with invited_at on a prior send) are kept off the list so the
+    // "Send to N guests" count reflects who still needs an invite — and so the
+    // button resets cleanly after a successful send instead of re-listing them.
     setRecipients(
-      (d.guestRecipients ?? []).map((g) => ({
-        name: g.name,
-        email: g.email,
-        phone: g.phone ?? '',
-        source: 'guest' as const,
-      })),
+      (d.guestRecipients ?? [])
+        .filter((g) => !g.invitedAt)
+        .map((g) => ({
+          name: g.name,
+          email: g.email,
+          phone: g.phone ?? '',
+          source: 'guest' as const,
+        })),
     );
     setLoading(false);
   }, [router]);
@@ -295,6 +301,10 @@ export default function InviteGuestsPage() {
 
   const guestCount = useMemo(() => recipients.filter((r) => r.source === 'guest').length, [recipients]);
   const addedCount = recipients.length - guestCount;
+  const alreadyInvitedCount = useMemo(
+    () => (data?.guestRecipients ?? []).filter((g) => g.invitedAt).length,
+    [data],
+  );
 
   if (loading) {
     return (
@@ -440,6 +450,7 @@ export default function InviteGuestsPage() {
             </div>
             <p className="mt-1 text-xs text-gray-400">
               {guestCount} from your guest list{addedCount ? ` · ${addedCount} added` : ''}
+              {alreadyInvitedCount ? ` · ${alreadyInvitedCount} already invited` : ''}
               {data && data.guestsWithoutEmail > 0 ? ` · ${data.guestsWithoutEmail} guest(s) have no email` : ''}
             </p>
 

@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
         .maybeSingle(),
       supabaseAdmin
         .from('wedding_guests')
-        .select('full_name, email, phone')
+        .select('full_name, email, phone, invited_at')
         .eq('couple_wedding_id', link.id),
       supabaseAdmin
         .from('couple_website_invite_sends')
@@ -96,12 +96,22 @@ export async function GET(request: NextRequest) {
 
   // Prefill guest emails (deduped, valid, not suppressed).
   const seen = new Set<string>();
-  const guestRecipients: { name: string; email: string; phone: string }[] = [];
-  for (const g of (guests ?? []) as { full_name: string | null; email: string | null; phone: string | null }[]) {
+  const guestRecipients: { name: string; email: string; phone: string; invitedAt: string | null }[] = [];
+  for (const g of (guests ?? []) as {
+    full_name: string | null;
+    email: string | null;
+    phone: string | null;
+    invited_at: string | null;
+  }[]) {
     const email = normalizeEmail(g.email);
     if (!email || seen.has(email) || suppressed.has(email)) continue;
     seen.add(email);
-    guestRecipients.push({ name: (g.full_name ?? '').trim(), email, phone: (g.phone ?? '').trim() });
+    guestRecipients.push({
+      name: (g.full_name ?? '').trim(),
+      email,
+      phone: (g.phone ?? '').trim(),
+      invitedAt: g.invited_at ?? null,
+    });
   }
 
   return NextResponse.json({
