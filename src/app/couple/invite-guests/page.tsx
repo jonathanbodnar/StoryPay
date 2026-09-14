@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2,
   Send,
@@ -13,6 +13,7 @@ import {
   Lock,
   Users,
   ShieldCheck,
+  Upload,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
@@ -47,6 +48,33 @@ function fmtWhen(iso: string): string {
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+/** Minimal RFC-4180-ish CSV parser (handles quoted fields, escaped quotes, CRLF). */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field); field = '';
+    } else if (c === '\n') {
+      row.push(field); rows.push(row); row = []; field = '';
+    } else if (c !== '\r') {
+      field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+}
+
 export default function InviteGuestsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -60,6 +88,14 @@ export default function InviteGuestsPage() {
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [addInput, setAddInput] = useState('');
   const [addName, setAddName] = useState('');
+  const [csvNote, setCsvNote] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+
+  // Keep a live snapshot for merges triggered from async handlers (CSV read).
+  const recipientsRef = useRef<Recipient[]>([]);
+  useEffect(() => {
+    recipientsRef.current = recipients;
+  }, [recipients]);
 
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
@@ -101,31 +137,89 @@ export default function InviteGuestsPage() {
 
   const max = data?.maxRecipients ?? 300;
 
+  const mergeRecipients = useCallback(
+    (incoming: { name?: string; email: string }[]): { added: number; dupes: number; invalid: number } => {
+      const prev = recipientsRef.current;
+      const seen = new Set(prev.map((r) => r.email.toLowerCase()));
+      const toAdd: Recipient[] = [];
+      let dupes = 0;
+      let invalid = 0;
+      for (const item of incoming) {
+        const email = item.email.trim().toLowerCase();
+        if (!EMAIL_RE.test(email)) { invalid++; continue; }
+        if (seen.has(email)) { dupes++; continue; }
+        seen.add(email);
+        toAdd.push({ name: (item.name ?? '').trim(), email, source: 'added' });
+      }
+      if (toAdd.length) setRecipients((prev2) => [...prev2, ...toAdd]);
+      return { added: toAdd.length, dupes, invalid };
+    },
+    [],
+  );
+
   const addEmails = useCallback(() => {
     const raw = addInput.trim();
     if (!raw) return;
     // Accept comma / semicolon / whitespace / newline separated lists.
     const pieces = raw.split(/[\s,;]+/).map((p) => p.trim()).filter(Boolean);
     if (pieces.length === 0) return;
-    setRecipients((prev) => {
-      const seen = new Set(prev.map((r) => r.email.toLowerCase()));
-      const next = [...prev];
-      let addedOne = false;
-      for (const piece of pieces) {
-        const email = piece.toLowerCase();
-        if (!EMAIL_RE.test(email) || seen.has(email)) continue;
-        seen.add(email);
-        // Apply the optional name only when a single address was entered.
-        next.push({ name: pieces.length === 1 ? addName.trim() : '', email, source: 'added' });
-        addedOne = true;
+    const single = pieces.length === 1;
+    const { added } = mergeRecipients(pieces.map((email) => ({ email, name: single ? addName : '' })));
+    if (added) {
+      setAddInput('');
+      setAddName('');
+    }
+  }, [addInput, addName, mergeRecipients]);
+
+  const importCsv = useCallback(
+    async (file: File) => {
+      setCsvNote('');
+      if (!/\.csv$/i.test(file.name) && file.type !== 'text/csv') {
+        setCsvNote('Please choose a .csv file.');
+        return;
       }
-      if (addedOne) {
-        setAddInput('');
-        setAddName('');
+      if (file.size > 2_000_000) {
+        setCsvNote('That file is too large (max 2 MB).');
+        return;
       }
-      return next;
-    });
-  }, [addInput, addName]);
+      let text = '';
+      try {
+        text = await file.text();
+      } catch {
+        setCsvNote('Could not read that file.');
+        return;
+      }
+      const rows = parseCsv(text);
+      const incoming: { name: string; email: string }[] = [];
+      let truncated = false;
+      for (const row of rows) {
+        if (incoming.length >= max) { truncated = true; break; }
+        // Pull the first email-looking cell as the address, the first
+        // non-email cell as an optional name. Header rows fall out naturally
+        // (no email → skipped).
+        let email = '';
+        let name = '';
+        for (const cell of row) {
+          const v = cell.trim();
+          if (!v) continue;
+          if (!email && EMAIL_RE.test(v.toLowerCase())) email = v;
+          else if (!name && !v.includes('@')) name = v;
+        }
+        if (email) incoming.push({ email, name });
+      }
+      if (incoming.length === 0) {
+        setCsvNote('No email addresses found in that file.');
+        return;
+      }
+      const { added, dupes, invalid } = mergeRecipients(incoming);
+      const parts = [`${added} added`];
+      if (dupes) parts.push(`${dupes} duplicate${dupes === 1 ? '' : 's'} skipped`);
+      if (invalid) parts.push(`${invalid} invalid skipped`);
+      if (truncated) parts.push(`stopped at the ${max}-guest limit`);
+      setCsvNote(parts.join(' · '));
+    },
+    [max, mergeRecipients],
+  );
 
   function removeRecipient(email: string) {
     setRecipients((prev) => prev.filter((r) => r.email !== email));
@@ -288,7 +382,22 @@ export default function InviteGuestsPage() {
             )}
           </section>
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-6">
+          <section
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f) void importCsv(f);
+            }}
+            className={`rounded-2xl border bg-white p-6 transition-colors ${
+              dragOver ? 'border-[#1b1b1b] ring-2 ring-gray-200' : 'border-gray-200'
+            }`}
+          >
             <div className="flex items-center justify-between">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                 <Users className="h-4 w-4 text-gray-500" /> Recipients
@@ -329,6 +438,24 @@ export default function InviteGuestsPage() {
                 <Plus className="h-4 w-4" /> Add
               </button>
             </div>
+
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 font-medium text-gray-600 transition-colors hover:bg-gray-50">
+                <Upload className="h-3.5 w-3.5" /> Import CSV
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void importCsv(f);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <span>Or drag a .csv here — we grab the email column automatically.</span>
+            </div>
+            {csvNote && <p className="mt-1.5 text-xs text-gray-500">{csvNote}</p>}
 
             {overCap && (
               <p className="mt-2 text-xs text-red-600">
