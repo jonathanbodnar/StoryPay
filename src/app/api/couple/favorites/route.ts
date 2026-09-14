@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false });
 
   if (wErr) {
-    console.error('[couple/wishlist GET]', wErr);
+    console.error('[couple/favorites GET]', wErr);
     return NextResponse.json({ error: wErr.message }, { status: 500 });
   }
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     .in('id', ids);
 
   if (vErr) {
-    console.error('[couple/wishlist venues]', vErr);
+    console.error('[couple/favorites venues]', vErr);
     return NextResponse.json({ error: vErr.message }, { status: 500 });
   }
 
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/couple/wishlist
+ * POST /api/couple/favorites
  *
  * Body:
  *   { slug: string, action?: 'add' | 'remove' | 'toggle' }
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       .eq('couple_id', user.id)
       .eq('venue_id', venueId);
     if (delErr) {
-      console.error('[couple/wishlist POST remove]', delErr);
+      console.error('[couple/favorites POST remove]', delErr);
       return NextResponse.json({ error: delErr.message }, { status: 500 });
     }
     return NextResponse.json({ ok: true, venue_id: venueId, saved: false });
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (insErr && !/duplicate key|unique constraint/i.test(insErr.message)) {
-    console.error('[couple/wishlist POST]', insErr);
+    console.error('[couple/favorites POST]', insErr);
     return NextResponse.json({ error: insErr.message }, { status: 500 });
   }
 

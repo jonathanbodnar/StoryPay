@@ -67,7 +67,7 @@ export function SaveVenueClient({ slug }: { slug: string }) {
 
       let res: Response;
       try {
-        res = await fetch('/api/couple/wishlist', {
+        res = await fetch('/api/couple/favorites', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

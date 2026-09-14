@@ -22,7 +22,7 @@ export async function DELETE(
     .eq('venue_id', venueId);
 
   if (error) {
-    console.error('[couple/wishlist DELETE]', error);
+    console.error('[couple/favorites DELETE]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

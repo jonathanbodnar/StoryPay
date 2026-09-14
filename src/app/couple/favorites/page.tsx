@@ -36,7 +36,7 @@ export default function CoupleFavoritesPage() {
       router.replace('/couple/login');
       return;
     }
-    const res = await coupleAuthedFetch('/api/couple/wishlist');
+    const res = await coupleAuthedFetch('/api/couple/favorites');
     if (res.status === 401) {
       router.replace('/couple/login');
       return;
@@ -56,7 +56,7 @@ export default function CoupleFavoritesPage() {
   }, [load]);
 
   async function removeVenue(venueId: string) {
-    const res = await coupleAuthedFetch(`/api/couple/wishlist/${venueId}`, { method: 'DELETE' });
+    const res = await coupleAuthedFetch(`/api/couple/favorites/${venueId}`, { method: 'DELETE' });
     if (res.ok) {
       setItems((prev) => prev.filter((x) => x.venue.id !== venueId));
     }

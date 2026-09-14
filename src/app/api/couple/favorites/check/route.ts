@@ -6,11 +6,11 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * GET /api/couple/wishlist/check?slug=...
+ * GET /api/couple/favorites/check?slug=...
  *
- * Returns `{ saved: boolean, signed_in: boolean }` so the wishlist
+ * Returns `{ saved: boolean, signed_in: boolean }` so the save/heart
  * button can render the correct initial state without round-tripping
- * through the user's full wishlist.
+ * through the user's full favorites list.
  *
  * Returns `signed_in: false` (not 401) when no auth header so the
  * button can render the "Save" state without surfacing an error.

@@ -42,7 +42,7 @@ export function SaveToWishlistButton({ venueSlug }: { venueSlug: string }) {
           return;
         }
         const res = await fetch(
-          `${APP}/api/couple/wishlist/check?slug=${encodeURIComponent(venueSlug)}`,
+          `${APP}/api/couple/favorites/check?slug=${encodeURIComponent(venueSlug)}`,
           { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' },
         );
         if (!res.ok) {
@@ -93,7 +93,7 @@ export function SaveToWishlistButton({ venueSlug }: { venueSlug: string }) {
       const prev = saved;
       setSaved(!prev);
 
-      const res = await fetch(`${APP}/api/couple/wishlist`, {
+      const res = await fetch(`${APP}/api/couple/favorites`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
