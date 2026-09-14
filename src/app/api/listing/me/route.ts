@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { LISTING_WRITABLE_FIELDS, slugify, type ListingWritableField } from '@/lib/directory';
 import { sanitizeListingUpdates } from '@/lib/listing-sanitize';
 import { revalidateDirectory } from '@/lib/directory-revalidate';
+import { LEAD_LINK_RESERVED, generateUniqueLeadLinkCode } from '@/lib/lead-link-code';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -46,18 +47,6 @@ const SELECT_COLUMNS = [
   'created_at',
   'updated_at',
 ].join(',');
-
-/**
- * Handles that can't be used as a Lead Link short slug because they'd shadow a
- * real top-level route on the directory site (storyvenue.com/<handle>). Static
- * routes win over the /[code] catch, so those short links would silently break.
- */
-const LEAD_LINK_RESERVED = new Set([
-  'venue', 'venues', 'confirmation', 'privacy', 'terms', 'api', 'links',
-  'blog', 'guide', 'couple', 'dashboard', 'admin', 'login', 'signup', 'setup',
-  'robots.txt', 'sitemap.xml', 'llms.txt', 'indexnow.txt', 'favicon.ico',
-  '_next', 'static', 'g', 't', 'u', 'r', 's',
-]);
 
 async function getVenueId(): Promise<string | null> {
   const c = await cookies();
@@ -124,15 +113,16 @@ export async function PATCH(request: NextRequest) {
     updates.slug = s.length > 0 ? slugify(s) : null;
   }
 
-  // Explicit Lead Link short-handle change from the UI: slugify with the same
-  // rules as the directory slug, reject reserved words that would shadow a real
-  // directory route, and enforce case-insensitive uniqueness across venues.
+  // Explicit Lead Link handle change from the UI. Lives under /v/<handle>, so:
+  // clearing it regenerates a fresh random code ("reset to random"); otherwise
+  // slugify a chosen vanity, block the small reserved set, and enforce
+  // case-insensitive uniqueness across venues.
   if ('lead_link_slug' in updates) {
     const raw = typeof updates.lead_link_slug === 'string' ? updates.lead_link_slug : '';
     const normalized = raw.trim() ? slugify(raw) : '';
     if (!normalized) {
-      return NextResponse.json({ error: 'Enter a link name.' }, { status: 400 });
-    }
+      updates.lead_link_slug = await generateUniqueLeadLinkCode();
+    } else {
     if (LEAD_LINK_RESERVED.has(normalized)) {
       return NextResponse.json({ error: 'That link name is reserved — please pick another.' }, { status: 409 });
     }
@@ -146,6 +136,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'That link is already taken — please pick another.' }, { status: 409 });
     }
     updates.lead_link_slug = normalized;
+    }
   }
 
   const sanitized = sanitizeListingUpdates(updates) as Partial<Record<ListingWritableField, unknown>>;
@@ -182,11 +173,11 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  // Auto-provision a short Lead Link handle so a venue's short URL works out of
-  // the box. Only defaults when the owner isn't explicitly setting a handle and
-  // the venue has none yet — changing the directory slug never clobbers a custom
-  // handle. Defaults to the (final) slug, falling back to a suffixed variant on
-  // the rare chance another venue already claimed that handle.
+  // Auto-provision a short Lead Link code so a venue's short URL works out of
+  // the box: storyvenue.com/v/<random code>. Only defaults when the owner isn't
+  // explicitly setting a handle and the venue has none yet — changing the
+  // directory slug never clobbers an existing code/vanity. Random (not the slug)
+  // so codes are non-enumerable and the root namespace stays StoryVenue's.
   if (!('lead_link_slug' in updates) && typeof updates.slug === 'string' && updates.slug) {
     const { data: cur } = await supabaseAdmin
       .from('venues')
@@ -195,17 +186,7 @@ export async function PATCH(request: NextRequest) {
       .maybeSingle();
     const curHandle = (cur as { lead_link_slug?: string | null } | null)?.lead_link_slug ?? null;
     if (!curHandle) {
-      let candidate = updates.slug as string;
-      if (!LEAD_LINK_RESERVED.has(candidate)) {
-        const { data: clash } = await supabaseAdmin
-          .from('venues')
-          .select('id')
-          .neq('id', venueId)
-          .ilike('lead_link_slug', candidate)
-          .limit(1);
-        if (clash && clash.length > 0) candidate = `${candidate}-${venueId.slice(0, 6)}`;
-        updates.lead_link_slug = candidate;
-      }
+      updates.lead_link_slug = await generateUniqueLeadLinkCode();
     }
   }
 

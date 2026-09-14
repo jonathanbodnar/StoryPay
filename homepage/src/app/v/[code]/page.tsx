@@ -9,22 +9,15 @@ export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 const API_BASE = siteUrl(process.env.NEXT_PUBLIC_DASHBOARD_URL, 'https://app.storyvenue.com');
 
-/**
- * Single-segment handles that must never be treated as a short link because
- * they map to real routes/assets. Next.js already resolves static routes before
- * this dynamic catch, so these are a belt-and-suspenders guard (and cover asset
- * requests like favicon.ico that would otherwise 404 through the resolver).
- */
-const RESERVED = new Set([
-  'venue', 'venues', 'confirmation', 'privacy', 'terms', 'api',
-  'robots.txt', 'sitemap.xml', 'llms.txt', 'indexnow.txt', 'favicon.ico',
-  '_next', 'static',
-]);
-
 type Resolved = { slug: string; is_demo: boolean; demo_preview_token: string | null };
 
 /**
- * Link-shortener: storyvenue.com/<handle> → the venue's Lead Link page.
+ * Link-shortener: storyvenue.com/v/<code> → the venue's Lead Link page.
+ *
+ * Everything lives under the dedicated /v/ namespace so the root
+ * (storyvenue.com/links, /pricing, …) stays reserved for StoryVenue and no
+ * venue can ever squat a prime path. <code> is a random 6-char code by default,
+ * or a venue's chosen vanity — both resolve the same way.
  *
  * Redirecting to /venue/<slug>/links keeps lead attribution intact — that page
  * stamps every inquiry with source=lead_link, so a pricing-guide download made
@@ -40,7 +33,7 @@ export default async function ShortLinkPage({
   const { code } = await params;
   const handle = decodeURIComponent(code || '').trim().toLowerCase();
 
-  if (!handle || RESERVED.has(handle) || !/^[a-z0-9-]{1,80}$/.test(handle)) {
+  if (!handle || !/^[a-z0-9-]{1,80}$/.test(handle)) {
     notFound();
   }
 

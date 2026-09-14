@@ -25,7 +25,7 @@ export async function OPTIONS() {
 /**
  * Resolve a venue's short Lead Link handle → the venue slug (+ demo token).
  *
- * Powers the link-shortener redirect on storyvenue.com/<handle>. Returns 404
+ * Powers the link-shortener redirect on storyvenue.com/v/<code>. Returns 404
  * for unknown/unpublished venues. Demo venues are intentionally unlisted but
  * still resolve here (their short link is the sanctioned way to show them off) —
  * and only for demo venues do we return the preview token, which is the

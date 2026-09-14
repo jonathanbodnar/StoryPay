@@ -101,11 +101,12 @@ export default function LeadLinkPage() {
   const [iconPickerOpen, setIconPickerOpen] = useState<number | null>(null);
   const [previewNonce, setPreviewNonce] = useState(0);
 
-  // Short-link handle editor (storyvenue.com/<handle>)
+  // Short-link handle editor (storyvenue.com/v/<handle>)
   const [handle, setHandle] = useState('');
   const [savingHandle, setSavingHandle] = useState(false);
   const [handleSaved, setHandleSaved] = useState(false);
   const [handleErr, setHandleErr] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,7 +118,7 @@ export default function LeadLinkPage() {
         if (!cancelled) {
           setListing(json.listing);
           setLinks(coerceLinks(json.listing?.lead_link_links));
-          setHandle((json.listing?.lead_link_slug || json.listing?.slug || '').toString());
+          setHandle((json.listing?.lead_link_slug || '').toString());
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Load failed');
@@ -136,11 +137,13 @@ export default function LeadLinkPage() {
   // visitor. (The short bio link handles the demo token server-side.)
   const previewToken = listing?.is_demo ? (listing?.demo_preview_token ?? '') : '';
 
-  // The bio link is the short, brandable URL: storyvenue.com/<handle>. It
-  // resolves server-side to this venue's Lead Link page (crediting stays
-  // intact) and, for demo venues, injects the preview token automatically.
-  const leadSlug = (listing?.lead_link_slug || slug || '').toString();
-  const shortUrl = leadSlug ? `${DIRECTORY_SITE}/${leadSlug}` : '';
+  // The bio link is the short URL: storyvenue.com/v/<code>. The /v/ namespace
+  // keeps venues out of StoryVenue's root paths. <code> is a random code by
+  // default (or the venue's chosen vanity). It resolves server-side to this
+  // venue's Lead Link page (crediting stays intact) and, for demo venues,
+  // injects the preview token automatically.
+  const leadSlug = (listing?.lead_link_slug || '').toString();
+  const shortUrl = leadSlug ? `${DIRECTORY_SITE}/v/${leadSlug}` : '';
   const shortDisplay = shortUrl.replace(/^https?:\/\//, '');
 
   const iframeSrc = useMemo(() => {
@@ -253,6 +256,33 @@ export default function LeadLinkPage() {
     }
   }
 
+  // Reset to a fresh random code — sending an empty handle tells the API to
+  // regenerate one under /v/.
+  async function resetHandle() {
+    setResetting(true);
+    setHandleErr('');
+    try {
+      const res = await fetch('/api/listing/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_link_slug: null }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { listing?: Listing; error?: string };
+      if (!res.ok) throw new Error(j.error || 'Could not reset your link');
+      if (j.listing) {
+        setListing(j.listing);
+        setHandle((j.listing.lead_link_slug || '').toString());
+      }
+      setHandleSaved(true);
+      setTimeout(() => setHandleSaved(false), 2200);
+      setPreviewNonce((n) => n + 1);
+    } catch (e) {
+      setHandleErr(e instanceof Error ? e.message : 'Reset failed');
+    } finally {
+      setResetting(false);
+    }
+  }
+
   const handleChanged = normalizeHandle(handle) !== (leadSlug || '');
 
   if (loading) {
@@ -346,14 +376,14 @@ export default function LeadLinkPage() {
                     </div>
                   </div>
 
-                  {/* Customize the short handle → storyvenue.com/<handle> */}
+                  {/* Customize the short handle → storyvenue.com/v/<handle> */}
                   <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/60 p-3.5">
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
                       Customize your link
                     </p>
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <div className="flex min-w-0 flex-1 items-center rounded-xl border border-gray-200 bg-white pl-3.5 focus-within:border-gray-400">
-                        <span className="shrink-0 select-none text-sm text-gray-400">storyvenue.com/</span>
+                        <span className="shrink-0 select-none text-sm text-gray-400">storyvenue.com/v/</span>
                         <input
                           value={handle}
                           onChange={(e) => { setHandle(e.target.value); setHandleErr(''); }}
@@ -368,7 +398,7 @@ export default function LeadLinkPage() {
                       <button
                         type="button"
                         onClick={saveHandle}
-                        disabled={savingHandle || !handleChanged}
+                        disabled={savingHandle || resetting || !handleChanged}
                         className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {savingHandle ? <Loader2 size={15} className="animate-spin" /> : handleSaved ? <Check size={15} /> : null}
@@ -378,9 +408,17 @@ export default function LeadLinkPage() {
                     {handleErr ? (
                       <p className="mt-2 text-xs text-red-600">{handleErr}</p>
                     ) : (
-                      <p className="mt-2 text-xs text-gray-500">
-                        Keep it short and memorable — letters, numbers, and dashes only. Your old
-                        link keeps working too.
+                      <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500">
+                        <span>Letters, numbers, and dashes only — keep it short and memorable.</span>
+                        <button
+                          type="button"
+                          onClick={resetHandle}
+                          disabled={resetting || savingHandle}
+                          className="inline-flex items-center gap-1 font-medium text-gray-700 underline decoration-gray-300 underline-offset-2 hover:text-gray-900 disabled:opacity-50"
+                        >
+                          {resetting ? <Loader2 size={12} className="animate-spin" /> : null}
+                          Reset to a random link
+                        </button>
                       </p>
                     )}
                   </div>
