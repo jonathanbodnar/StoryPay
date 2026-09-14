@@ -22,7 +22,6 @@ import {
   UserPlus,
   User,
 } from 'lucide-react';
-import WeddingPlannerGate from '@/components/WeddingPlannerGate';
 import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
 import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
 import TimelineEditor from '@/components/wedding-timeline/TimelineEditor';
@@ -123,13 +122,10 @@ function fmtDate(d: string | null): string {
 }
 
 export default function WeddingPlannerPage() {
-  // Temporary private-beta password gate (code 7111). Children — and their data
-  // fetches — only mount after the gate is unlocked. Remove once fully released.
-  return (
-    <WeddingPlannerGate>
-      <WeddingPlannerContent />
-    </WeddingPlannerGate>
-  );
+  // The Wedding Planner is now generally available to entitled venues. Access is
+  // enforced by plan/flag gating (hasBridePortal) via the dashboard route guard
+  // and sidebar — no beta password gate.
+  return <WeddingPlannerContent />;
 }
 
 function WeddingPlannerContent() {
