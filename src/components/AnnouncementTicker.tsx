@@ -75,7 +75,7 @@ export default function AnnouncementTicker() {
           100% { transform: translateX(-50%); }
         }
         .animate-ticker {
-          animation: ticker 30s linear infinite;
+          animation: ticker 37.5s linear infinite;
         }
         .animate-ticker:hover {
           animation-play-state: paused;
