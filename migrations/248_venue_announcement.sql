@@ -10,4 +10,12 @@
 ALTER TABLE public.venues
   ADD COLUMN IF NOT EXISTS announcement jsonb;
 
+-- The public directory (storyvenue.com / weddingdirectory repo) reads venues
+-- with the ANON key under COLUMN-LEVEL grants, selecting only an allow-list of
+-- columns. A new column is NOT auto-granted, so anon must be granted SELECT on
+-- it explicitly or the directory's column-list SELECT fails with "permission
+-- denied for table venues" and every venue page 404s. Mirror the other public
+-- columns by granting SELECT to anon + authenticated.
+GRANT SELECT (announcement) ON public.venues TO anon, authenticated;
+
 NOTIFY pgrst, 'reload schema';
