@@ -79,6 +79,13 @@ export type PublicVenuePayload = {
     gallery_images: string[];
     availability_notes: string | null;
     show_map: boolean;
+    /**
+     * Owner announcement strip. Present ONLY when enabled, non-empty, and not
+     * past its expiry — so a disabled or expired message never leaves the
+     * server (and time-boxed promos auto-hide within the API's CDN TTL).
+     * Message-only by design (no link) to protect the pricing-guide opt-in.
+     */
+    announcement: { message: string } | null;
     social_links: PublicVenueSocialLinks;
     faq: PublicVenueFaqItem[];
     /** GA4 web Measurement ID; loaded on public pages when valid. */
@@ -177,6 +184,7 @@ export async function getPublicVenueBySlug(
         'is_demo',
         'demo_preview_token',
         'show_map',
+        'announcement',
         'social_links',
         'faq',
         'ga4_measurement_id',
@@ -406,6 +414,15 @@ export async function getPublicVenueBySlug(
       gallery_images: Array.isArray(v.gallery_images) ? (v.gallery_images as string[]) : [],
       availability_notes: v.availability_notes != null ? String(v.availability_notes) : null,
       show_map: v.show_map === false ? false : true,
+      announcement: (() => {
+        const a = (v.announcement && typeof v.announcement === 'object' && !Array.isArray(v.announcement))
+          ? (v.announcement as { enabled?: boolean; message?: string; expires_at?: string | null })
+          : null;
+        const message = a?.message?.trim();
+        if (!a?.enabled || !message) return null;
+        if (a.expires_at && new Date(a.expires_at).getTime() <= Date.now()) return null;
+        return { message };
+      })(),
       social_links,
       faq,
       ga4_measurement_id,

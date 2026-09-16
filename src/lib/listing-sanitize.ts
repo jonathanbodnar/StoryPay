@@ -22,6 +22,10 @@ export function sanitizeListingUpdates(
     out.show_map = Boolean(out.show_map);
   }
 
+  if ('announcement' in out) {
+    out.announcement = sanitizeAnnouncement(out.announcement);
+  }
+
   if ('social_links' in out) {
     out.social_links = sanitizeSocialLinks(out.social_links);
   }
@@ -60,6 +64,31 @@ function sanitizeLeadLinkLinks(raw: unknown): { label: string; url: string; icon
     out.push({ label, url, icon });
   }
   return out;
+}
+
+/**
+ * Owner announcement strip for the public listing: { enabled, message,
+ * expires_at }. Message-only by design — no link/button — so the strip never
+ * competes with the pricing-guide opt-in. Like the other sanitizers we keep
+ * partial/in-progress values (autosave fires mid-typing), just trimmed and
+ * length-capped, and default a missing/expires_at to null. The public reader
+ * decides whether to actually show it (enabled + non-empty + not expired).
+ */
+export const ANNOUNCEMENT_MESSAGE_MAX = 180;
+
+function sanitizeAnnouncement(raw: unknown): { enabled: boolean; message: string; expires_at: string | null } {
+  const r = (raw && typeof raw === 'object' && !Array.isArray(raw))
+    ? (raw as { enabled?: unknown; message?: string; expires_at?: unknown })
+    : {};
+  const message = String(r.message ?? '').replace(/\s+/g, ' ').trim().slice(0, ANNOUNCEMENT_MESSAGE_MAX);
+
+  let expires_at: string | null = null;
+  if (r.expires_at != null && r.expires_at !== '') {
+    const t = new Date(String(r.expires_at));
+    if (!Number.isNaN(t.getTime())) expires_at = t.toISOString();
+  }
+
+  return { enabled: Boolean(r.enabled), message, expires_at };
 }
 
 function parseCoord(v: unknown, kind: 'lat' | 'lng'): number | null {

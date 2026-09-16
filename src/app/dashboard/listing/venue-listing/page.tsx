@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, Save, CheckCircle2, Store, Globe, MapPin, Users,
   Image as ImageIcon, ExternalLink, Eye, EyeOff, AlertCircle, RotateCcw,
-  Link2, HelpCircle, Plus, Trash2, ChevronDown,
+  Link2, HelpCircle, Plus, Trash2, ChevronDown, Megaphone,
 } from 'lucide-react';
 import { slugify } from '@/lib/directory';
 import { FormattedNumberInput } from '@/components/FormattedNumberInput';
@@ -19,6 +19,42 @@ type SocialLinks = {
   pinterest?: string;
   website?: string;
 };
+
+interface Announcement {
+  enabled: boolean;
+  message: string;
+  /** ISO datetime; null = no auto-expiry. Message auto-hides once past this. */
+  expires_at: string | null;
+}
+
+const ANNOUNCEMENT_MESSAGE_MAX = 180;
+
+function normalizeAnnouncement(raw: unknown): Announcement {
+  const r = (raw && typeof raw === 'object' && !Array.isArray(raw))
+    ? (raw as { enabled?: unknown; message?: unknown; expires_at?: unknown })
+    : {};
+  return {
+    enabled: Boolean(r.enabled),
+    message: typeof r.message === 'string' ? r.message : '',
+    expires_at: typeof r.expires_at === 'string' && r.expires_at ? r.expires_at : null,
+  };
+}
+
+/** ISO datetime → local YYYY-MM-DD for a <input type="date"> value. */
+function isoToDateInput(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const off = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 10);
+}
+
+/** Local YYYY-MM-DD → ISO datetime at end of that local day (inclusive). */
+function dateInputToIso(date: string): string | null {
+  if (!date) return null;
+  const d = new Date(`${date}T23:59:59`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 interface Listing {
   id: string | null;
@@ -45,6 +81,7 @@ interface Listing {
   social_links: SocialLinks;
   faq: FaqRow[];
   show_map: boolean;
+  announcement: Announcement;
   notification_email: string | null;
   notification_phone: string | null;
   email_notifications: boolean;
@@ -81,6 +118,7 @@ function emptyListing(): Listing {
     indoor_outdoor: null, features: [], cover_image_url: null, gallery_images: [],
     availability_notes: null, is_published: false, onboarding_completed: false,
     social_links: {}, faq: [], show_map: true,
+    announcement: { enabled: false, message: '', expires_at: null },
     notification_email: null, notification_phone: null, email_notifications: true,
     brand_email: null, brand_phone: null,
   };
@@ -168,6 +206,7 @@ export default function ListingPage() {
                   : {},
               faq: Array.isArray(data.listing.faq) ? (data.listing.faq as FaqRow[]) : [],
               show_map: data.listing.show_map !== false,
+              announcement: normalizeAnnouncement(data.listing.announcement),
               lat: data.listing.lat != null ? Number(data.listing.lat) : null,
               lng: data.listing.lng != null ? Number(data.listing.lng) : null,
               // Older listings may have a null capacity_min in the DB. The
@@ -244,6 +283,7 @@ export default function ListingPage() {
             : {},
         faq: Array.isArray(data.listing.faq) ? (data.listing.faq as FaqRow[]) : [],
         show_map: data.listing.show_map !== false,
+        announcement: normalizeAnnouncement(data.listing.announcement),
         lat: data.listing.lat != null ? Number(data.listing.lat) : null,
         lng: data.listing.lng != null ? Number(data.listing.lng) : null,
         capacity_min: data.listing.capacity_min != null ? Number(data.listing.capacity_min) : 0,
@@ -801,6 +841,74 @@ export default function ListingPage() {
             <p className="mt-2 text-xs text-gray-400">Requires both coordinates. Map uses OpenStreetMap.</p>
           </div>
         </div>
+      </section>
+
+      <section className={CARD}>
+        <h2 className={SECTION_TITLE}><Megaphone className="inline w-4 h-4 -mt-0.5" /> Announcement bar</h2>
+        <p className={SECTION_HINT}>
+          Show a strip at the very top of your public listing to promote an event or update
+          (e.g. &ldquo;Open house this Saturday 11-2&rdquo;). It&apos;s text only by design, so it never
+          pulls couples away from your pricing guide.
+        </p>
+
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={listing.announcement.enabled}
+            onChange={(e) => update('announcement', { ...listing.announcement, enabled: e.target.checked })}
+          />
+          <span className="text-sm text-gray-700">Show the announcement bar on my public listing</span>
+        </label>
+
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">
+          <div>
+            <label className={LABEL}>Message</label>
+            <textarea
+              rows={2}
+              className={`${INPUT} resize-none`}
+              value={listing.announcement.message}
+              maxLength={ANNOUNCEMENT_MESSAGE_MAX}
+              onChange={(e) => update('announcement', { ...listing.announcement, message: e.target.value })}
+              placeholder="e.g. Open house this Saturday 11-2 — walk-ins welcome!"
+            />
+            <p className="mt-1.5 text-xs text-gray-400">
+              {listing.announcement.message.length}/{ANNOUNCEMENT_MESSAGE_MAX} characters
+            </p>
+          </div>
+          <div>
+            <label className={LABEL}>Auto-hide after</label>
+            <input
+              type="date"
+              className={INPUT}
+              value={isoToDateInput(listing.announcement.expires_at)}
+              onChange={(e) => update('announcement', { ...listing.announcement, expires_at: dateInputToIso(e.target.value) })}
+            />
+            <p className="mt-1.5 text-xs text-gray-400">
+              Optional. The bar disappears on its own after this day.
+            </p>
+          </div>
+        </div>
+
+        {/* Live preview of the strip */}
+        {listing.announcement.message.trim() && (
+          <div className="mt-5">
+            <label className={LABEL}>Preview</label>
+            <div className="flex items-center overflow-hidden rounded-2xl text-white" style={{ backgroundColor: '#1b1b1b', minHeight: 40 }}>
+              <div className="flex flex-shrink-0 items-center self-stretch border-r border-white/20 px-3">
+                <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-widest text-white/60">Announcement</span>
+              </div>
+              <span className="truncate px-4 py-2 text-xs font-medium text-white/90 sm:text-sm">
+                {listing.announcement.message.trim()}
+              </span>
+            </div>
+            {!listing.announcement.enabled && (
+              <p className="mt-1.5 text-xs text-amber-600">
+                Turn on the toggle above to make this visible on your listing.
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       <section className={CARD}>

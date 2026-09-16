@@ -11,6 +11,7 @@ import { VenueFaqSection, VenueMapEmbed, VenueSocialRow } from '@/components/Ven
 import { DirectoryListingBadges } from '@/components/DirectoryListingBadges';
 import { ListingTracker } from '@/components/ListingTracker';
 import { ListingLeadModal } from '@/components/ListingLeadModal';
+import { VenueAnnouncementStrip } from '@/components/VenueAnnouncementStrip';
 import { VenueSeoFooter } from '@/components/VenueSeoFooter';
 import { siteUrl } from '@/lib/site-url';
 
@@ -77,6 +78,8 @@ type PublicVenuePayload = {
     gallery_images: string[];
     availability_notes: string | null;
     show_map: boolean;
+    /** Owner announcement strip — present only when enabled + in-window (server-gated). */
+    announcement?: { message: string } | null;
     social_links: Record<string, string>;
     faq: { question: string; answer: string }[];
     ga4_measurement_id?: string | null;
@@ -328,6 +331,9 @@ export default async function PublicVenuePage({
       )}
 
       <div className="min-h-screen bg-[#fafaf9]">
+        {venue.announcement?.message && (
+          <VenueAnnouncementStrip message={venue.announcement.message} />
+        )}
         {!venue.hide_header && (
           <header className="border-b border-gray-200/80 bg-white/90 backdrop-blur-sm">
             <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">

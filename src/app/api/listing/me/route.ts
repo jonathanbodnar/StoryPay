@@ -40,6 +40,7 @@ const SELECT_COLUMNS = [
   'social_links',
   'faq',
   'show_map',
+  'announcement',
   'lead_link_links',
   'lead_link_slug',
   'is_demo',

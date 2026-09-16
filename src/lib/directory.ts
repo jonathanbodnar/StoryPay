@@ -43,6 +43,8 @@ export const LISTING_WRITABLE_FIELDS = [
   'faq',
   /** When true and lat/lng set, public listing shows embedded map */
   'show_map',
+  /** { enabled, message, expires_at } — owner announcement strip on the public listing */
+  'announcement',
   /** [{ label, url, icon }, ...] max 3 — extra custom buttons on the Lead Link page */
   'lead_link_links',
   /** Short, brandable bio handle → storyvenue.com/<lead_link_slug> (link shortener) */
