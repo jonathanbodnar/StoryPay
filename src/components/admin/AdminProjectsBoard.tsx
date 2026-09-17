@@ -127,6 +127,12 @@ export function AdminProjectsBoard() {
   // inserted before (null = end of column). Drives the drop indicator line.
   const [dropTarget, setDropTarget] = useState<{ stageId: string; beforeId: string | null } | null>(null);
 
+  // Size the columns to fill the viewport down to (near) the browser bottom so
+  // as many cards as possible show before the per-column scroll kicks in — the
+  // page itself no longer needs a horizontal scrollbar.
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const [boardH, setBoardH] = useState<number | null>(null);
+
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [adVenue, setAdVenue] = useState<Card | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -148,6 +154,19 @@ export function AdminProjectsBoard() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    function recalc() {
+      const el = boardRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      const h = window.innerHeight - top - 24; // small breathing room at the bottom
+      setBoardH(h > 240 ? h : 240);
+    }
+    recalc();
+    window.addEventListener('resize', recalc);
+    return () => window.removeEventListener('resize', recalc);
+  }, [view, loading, stages.length]);
 
   const firstStageId = stages[0]?.id ?? null;
   const openCard = useMemo(() => cards.find((c) => c.id === openCardId) ?? null, [cards, openCardId]);
@@ -282,6 +301,10 @@ export function AdminProjectsBoard() {
 
   return (
     <div className="space-y-4">
+      <style>{`
+        .sv-hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+        .sv-hide-scrollbar::-webkit-scrollbar { display: none; height: 0; width: 0; }
+      `}</style>
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -312,7 +335,11 @@ export function AdminProjectsBoard() {
       </div>
 
       {view === 'board' ? (
-        <div className="flex items-start gap-4 overflow-x-auto pb-4">
+        <div
+          ref={boardRef}
+          className="sv-hide-scrollbar flex items-stretch gap-4 overflow-x-auto"
+          style={boardH ? { height: boardH } : undefined}
+        >
           {stages.map((stage) => {
             const list = cardsByStage.get(stage.id) ?? [];
             const isOver = dragOverStage === stage.id;
@@ -334,7 +361,7 @@ export function AdminProjectsBoard() {
                   setDragId(null); setDragOverStage(null); setDropTarget(null);
                   if (id) moveCard(id, stage.id, before);
                 }}
-                className={`flex max-h-[calc(100vh-15rem)] w-[300px] flex-shrink-0 flex-col rounded-xl border ${isOver ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-gray-50/60'}`}
+                className={`flex h-full min-h-0 w-[300px] flex-shrink-0 flex-col rounded-xl border ${isOver ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-gray-50/60'}`}
               >
                 <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 px-3 py-2.5">
                   <div className="flex items-center gap-2">
@@ -343,7 +370,7 @@ export function AdminProjectsBoard() {
                   </div>
                   <span className="text-xs font-medium text-gray-400">{list.length}</span>
                 </div>
-                <div className="min-h-[120px] flex-1 overflow-y-auto p-2">
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
                   {list.map((c, i) => {
                     const nextId = list[i + 1]?.id ?? null;
                     return (
