@@ -123,6 +123,9 @@ export function AdminProjectsBoard() {
 
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  // Where the dragged card will land: the target stage + the card it will be
+  // inserted before (null = end of column). Drives the drop indicator line.
+  const [dropTarget, setDropTarget] = useState<{ stageId: string; beforeId: string | null } | null>(null);
 
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [adVenue, setAdVenue] = useState<Card | null>(null);
@@ -222,12 +225,13 @@ export function AdminProjectsBoard() {
 
   // ── Add / remove from board ──────────────────────────────────────────────────
 
-  const addVenue = useCallback(async (venueId: string) => {
-    if (!firstStageId) return;
+  const addVenue = useCallback(async (venueId: string, stageId?: string) => {
+    const target = stageId || firstStageId;
+    if (!target) return;
     await fetch('/api/admin/projects', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ venueId, stageId: firstStageId, orderedIds: [venueId] }),
+      body: JSON.stringify({ venueId, stageId: target, orderedIds: [venueId] }),
     }).catch(() => {});
     await load();
   }, [firstStageId, load]);
@@ -308,36 +312,72 @@ export function AdminProjectsBoard() {
       </div>
 
       {view === 'board' ? (
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex items-start gap-4 overflow-x-auto pb-4">
           {stages.map((stage) => {
             const list = cardsByStage.get(stage.id) ?? [];
             const isOver = dragOverStage === stage.id;
+            const showBefore = (beforeId: string | null) =>
+              dragId !== null && dropTarget?.stageId === stage.id && dropTarget.beforeId === beforeId;
             return (
               <div
                 key={stage.id}
-                onDragOver={(e) => { e.preventDefault(); if (dragOverStage !== stage.id) setDragOverStage(stage.id); }}
-                onDrop={(e) => onCardDrop(e, stage.id, null)}
-                className={`flex-shrink-0 w-[300px] rounded-xl border ${isOver ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-gray-50/60'} flex flex-col`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (dragOverStage !== stage.id) setDragOverStage(stage.id);
+                  // Over the column but not a specific card → land at the end.
+                  setDropTarget({ stageId: stage.id, beforeId: null });
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = e.dataTransfer.getData('text/venue-id') || dragId;
+                  const before = dropTarget?.stageId === stage.id ? dropTarget.beforeId : null;
+                  setDragId(null); setDragOverStage(null); setDropTarget(null);
+                  if (id) moveCard(id, stage.id, before);
+                }}
+                className={`flex max-h-[calc(100vh-15rem)] w-[300px] flex-shrink-0 flex-col rounded-xl border ${isOver ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-gray-50/60'}`}
               >
-                <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200">
+                <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 px-3 py-2.5">
                   <div className="flex items-center gap-2">
                     <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
                     <span className="text-sm font-semibold text-gray-800">{stage.label}</span>
                   </div>
                   <span className="text-xs font-medium text-gray-400">{list.length}</span>
                 </div>
-                <div className="flex-1 p-2 space-y-2 min-h-[120px]">
-                  {list.map((c) => (
-                    <ProjectCard
-                      key={c.id}
-                      card={c}
-                      drag={dragProps(c, stage.id)}
-                      dragging={dragId === c.id}
-                      onOpen={() => setOpenCardId(c.id)}
-                      onAds={() => setAdVenue(c)}
-                    />
-                  ))}
-                  {list.length === 0 && <div className="text-center text-[11px] text-gray-400 py-8">Drop clients here</div>}
+                <div className="min-h-[120px] flex-1 overflow-y-auto p-2">
+                  {list.map((c, i) => {
+                    const nextId = list[i + 1]?.id ?? null;
+                    return (
+                      <div
+                        key={c.id}
+                        className="mb-2"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const isTop = e.clientY < rect.top + rect.height / 2;
+                          if (dragOverStage !== stage.id) setDragOverStage(stage.id);
+                          setDropTarget({ stageId: stage.id, beforeId: isTop ? c.id : nextId });
+                        }}
+                      >
+                        {showBefore(c.id) && <DropIndicator />}
+                        <ProjectCard
+                          card={c}
+                          drag={{
+                            draggable: true,
+                            onDragStart: (e) => { setDragId(c.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/venue-id', c.id); },
+                            onDragEnd: () => { setDragId(null); setDragOverStage(null); setDropTarget(null); },
+                          }}
+                          dragging={dragId === c.id}
+                          onOpen={() => setOpenCardId(c.id)}
+                          onAds={() => setAdVenue(c)}
+                        />
+                      </div>
+                    );
+                  })}
+                  {showBefore(null) && <DropIndicator />}
+                  {list.length === 0 && !(dragId && dropTarget?.stageId === stage.id) && (
+                    <div className="py-8 text-center text-[11px] text-gray-400">Drop clients here</div>
+                  )}
                 </div>
               </div>
             );
@@ -382,11 +422,20 @@ export function AdminProjectsBoard() {
 
       {showAdd && (
         <AddVenueModal
+          stages={stages}
           onClose={() => setShowAdd(false)}
-          onAdd={async (id) => { await addVenue(id); }}
+          onAdd={async (id, stageId) => { await addVenue(id, stageId); }}
         />
       )}
     </div>
+  );
+}
+
+// ── Drop indicator ───────────────────────────────────────────────────────────
+// A blue insertion line rendered at the exact spot a dragged card will land.
+function DropIndicator() {
+  return (
+    <div className="mx-1 mb-2 h-1.5 rounded-full bg-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.18)]" />
   );
 }
 
@@ -795,11 +844,12 @@ interface SearchResult {
   on_board: boolean;
 }
 
-function AddVenueModal({ onClose, onAdd }: { onClose: () => void; onAdd: (id: string) => Promise<void> }) {
+function AddVenueModal({ stages, onClose, onAdd }: { stages: Stage[]; onClose: () => void; onAdd: (id: string, stageId: string) => Promise<void> }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [stageId, setStageId] = useState(stages[0]?.id ?? '');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -821,7 +871,7 @@ function AddVenueModal({ onClose, onAdd }: { onClose: () => void; onAdd: (id: st
 
   const handleAdd = async (r: SearchResult) => {
     setAddingId(r.id);
-    await onAdd(r.id);
+    await onAdd(r.id, stageId);
     setResults((prev) => prev.map((x) => (x.id === r.id ? { ...x, on_board: true } : x)));
     setAddingId(null);
   };
@@ -833,7 +883,7 @@ function AddVenueModal({ onClose, onAdd }: { onClose: () => void; onAdd: (id: st
           <h3 className="text-sm font-semibold text-gray-900">Add a venue to the board</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
         </div>
-        <div className="p-4">
+        <div className="space-y-3 p-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
@@ -843,6 +893,16 @@ function AddVenueModal({ onClose, onAdd }: { onClose: () => void; onAdd: (id: st
               placeholder="Search venues by name…"
               className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
             />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-gray-500">Add to stage</label>
+            <select
+              value={stageId}
+              onChange={(e) => setStageId(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 focus:border-gray-900 focus:outline-none"
+            >
+              {stages.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-4 pb-4">
