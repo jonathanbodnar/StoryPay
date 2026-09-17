@@ -70,10 +70,13 @@ export async function PATCH(request: NextRequest) {
   try {
     const sql = await getDbAsync();
     // Merge the single key into the existing map (defaulting null → {}).
+    // Cast the key to ::text — jsonb_build_object is variadic "any", so without
+    // an explicit type Postgres can't infer the parameter's type and errors with
+    // "could not determine data type of parameter $1".
     const rows = (await sql`
       UPDATE venues
       SET project_checklist =
-        COALESCE(project_checklist, '{}'::jsonb) || jsonb_build_object(${key}, ${done}::boolean)
+        COALESCE(project_checklist, '{}'::jsonb) || jsonb_build_object(${key}::text, ${done}::boolean)
       WHERE id = ${venueId}
       RETURNING project_checklist
     `) as unknown as VenueChecklistRow[];
