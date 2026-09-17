@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { AdStudioModal } from '@/components/admin/AdStudioModal';
 import { VenueAdminControls } from '@/components/admin/VenueAdminControls';
-import { PROJECT_CHECKLIST_ITEMS } from '@/lib/project-checklist';
+import { PROJECT_CHECKLIST_ITEMS, checklistProgress } from '@/lib/project-checklist';
 
 interface Stage {
   id: string;
@@ -41,6 +41,8 @@ interface Card {
   pricing_guide_ready: boolean;
   ad_creatives_count: number;
   notes_count: number;
+  checklist_done: number;
+  checklist_total: number;
 }
 
 interface Note {
@@ -95,6 +97,51 @@ function StatusChips({ card }: { card: Card }) {
       <Chip tone={a2p.tone} icon={ShieldCheck}>{a2p.label}</Chip>
       {(card.venue_concierge || card.ai_concierge_enabled) && <Chip tone="ok" icon={MessageSquare}>Concierge</Chip>}
     </>
+  );
+}
+
+// ── Checklist progress ───────────────────────────────────────────────────────
+// Completion comes from the stored checkbox map (see checklistProgress), never
+// from the project stage — so the percentage is correct wherever the card sits.
+function ChecklistProgressBar({
+  done, total, compact = false, className = '',
+}: {
+  done?: number;
+  total?: number;
+  compact?: boolean;
+  className?: string;
+}) {
+  // Tolerant of older payloads / optimistic rows that don't carry counts yet.
+  const t = Number.isFinite(total) && (total as number) > 0 ? (total as number) : PROJECT_CHECKLIST_ITEMS.length;
+  const d = Math.max(0, Math.min(Number.isFinite(done) ? (done as number) : 0, t));
+  const pct = t ? Math.round((d / t) * 100) : 0;
+  const complete = t > 0 && d >= t;
+
+  if (compact) {
+    return (
+      <div className={`flex items-center gap-2 ${className}`} title={`Onboarding checklist ${d}/${t} (${pct}%)`}>
+        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-gray-100">
+          <div className={`h-full rounded-full transition-all ${complete ? 'bg-emerald-500' : 'bg-gray-900'}`} style={{ width: `${pct}%` }} />
+        </div>
+        <span className={`text-[10px] font-medium tabular-nums ${complete ? 'text-emerald-600' : 'text-gray-400'}`}>{d}/{t}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      <div className="flex items-center justify-between text-[10px] font-medium">
+        <span className="inline-flex items-center gap-1 text-gray-500">
+          <ListChecks className="h-3 w-3" /> Onboarding
+        </span>
+        <span className={`tabular-nums ${complete ? 'text-emerald-600' : 'text-gray-400'}`}>
+          {complete ? 'Complete' : `${d}/${t} · ${pct}%`}
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+        <div className={`h-full rounded-full transition-all ${complete ? 'bg-emerald-500' : 'bg-gray-900'}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
   );
 }
 
@@ -273,6 +320,21 @@ export function AdminProjectsBoard() {
     setCards((prev) => prev.map((c) => (c.id === venueId ? { ...c, notes_count: c.notes_count + 1 } : c)));
   }, []);
 
+  // Keep the card-front progress bar in step with the modal's checkboxes — the
+  // count is derived from the checklist only, so moving the card never affects it.
+  // Bails out (same array reference) when nothing changed to avoid render churn.
+  const bumpChecklist = useCallback((venueId: string, done: number, total: number) => {
+    setCards((prev) => {
+      let changed = false;
+      const next = prev.map((c) => {
+        if (c.id !== venueId || (c.checklist_done === done && c.checklist_total === total)) return c;
+        changed = true;
+        return { ...c, checklist_done: done, checklist_total: total };
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -425,6 +487,7 @@ export function AdminProjectsBoard() {
 
       {openCard && (
         <CardModal
+          key={openCard.id}
           card={openCard}
           stages={stages}
           onClose={() => setOpenCardId(null)}
@@ -433,6 +496,7 @@ export function AdminProjectsBoard() {
           onAds={() => { setAdVenue(openCard); }}
           onRemove={() => removeVenue(openCard.id)}
           onNoteAdded={() => bumpNotesCount(openCard.id)}
+          onChecklistProgress={(done, total) => bumpChecklist(openCard.id, done, total)}
           onVenueChanged={() => load()}
           onVenueDeleted={() => { setOpenCardId(null); load(); }}
         />
@@ -500,6 +564,8 @@ function ProjectCard({
       </div>
 
       <div className="mt-2.5 flex flex-wrap gap-1"><StatusChips card={card} /></div>
+
+      <ChecklistProgressBar done={card.checklist_done} total={card.checklist_total} className="mt-2.5" />
 
       <div className="mt-2.5 flex items-center justify-between border-t border-gray-100 pt-2">
         <div className="flex items-center gap-3">
@@ -574,6 +640,7 @@ function ListView({
                       {loc && <div className="text-[11px] text-gray-400 truncate">{loc}</div>}
                     </div>
                     <div className="hidden md:flex items-center gap-1.5"><StatusChips card={c} /></div>
+                    <ChecklistProgressBar done={c.checklist_done} total={c.checklist_total} compact className="hidden sm:flex" />
                     {c.notes_count > 0 && (
                       <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600">
                         <StickyNote className="h-3.5 w-3.5" /> {c.notes_count}
@@ -597,7 +664,7 @@ function ListView({
 // ── Card modal (near full-screen) ────────────────────────────────────────────
 
 function CardModal({
-  card, stages, onClose, onChangeStage, onViewAs, onAds, onRemove, onNoteAdded, onVenueChanged, onVenueDeleted,
+  card, stages, onClose, onChangeStage, onViewAs, onAds, onRemove, onNoteAdded, onChecklistProgress, onVenueChanged, onVenueDeleted,
 }: {
   card: Card;
   stages: Stage[];
@@ -607,6 +674,7 @@ function CardModal({
   onAds: () => void;
   onRemove: () => void;
   onNoteAdded: () => void;
+  onChecklistProgress: (done: number, total: number) => void;
   onVenueChanged: () => void;
   onVenueDeleted: () => void;
 }) {
@@ -724,7 +792,7 @@ function CardModal({
 
           {/* Checklist (left) + Notes (right) — their own section cards */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <ChecklistCard venueId={card.id} />
+            <ChecklistCard venueId={card.id} onProgress={onChecklistProgress} />
 
             <div className="rounded-xl border border-gray-200 bg-white p-4">
               <div className="mb-3 flex items-center gap-2">
@@ -777,19 +845,24 @@ function CardModal({
 
 // ── Onboarding checklist (persisted on the venue) ────────────────────────────
 
-function ChecklistCard({ venueId }: { venueId: string }) {
+function ChecklistCard({ venueId, onProgress }: { venueId: string; onProgress?: (done: number, total: number) => void }) {
   const [state, setState] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       setLoading(true);
+      setLoaded(false);
       try {
         const res = await fetch(`/api/admin/projects/checklist?venueId=${encodeURIComponent(venueId)}`, { cache: 'no-store' });
         const json = await res.json();
-        if (alive && res.ok) setState(json.checklist || {});
+        if (alive && res.ok) {
+          setState(json.checklist || {});
+          setLoaded(true);
+        }
       } catch { /* ignore */ } finally {
         if (alive) setLoading(false);
       }
@@ -816,9 +889,19 @@ function ChecklistCard({ venueId }: { venueId: string }) {
     }
   }, [venueId]);
 
-  const doneCount = PROJECT_CHECKLIST_ITEMS.reduce((n, i) => (state[i.key] ? n + 1 : n), 0);
-  const total = PROJECT_CHECKLIST_ITEMS.length;
-  const pct = total ? Math.round((doneCount / total) * 100) : 0;
+  const { done: doneCount, total, pct } = checklistProgress(state);
+
+  // Mirror completion up to the board card so its progress bar tracks checkbox
+  // edits live. Only report once a real load succeeded so a failed fetch can't
+  // wipe a known-good percentage.
+  const reportedRef = useRef('');
+  useEffect(() => {
+    if (!loaded) return;
+    const sig = `${doneCount}/${total}`;
+    if (reportedRef.current === sig) return;
+    reportedRef.current = sig;
+    onProgress?.(doneCount, total);
+  }, [loaded, doneCount, total, onProgress]);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">

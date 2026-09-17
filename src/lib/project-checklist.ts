@@ -46,3 +46,21 @@ export function normalizeChecklist(raw: unknown): ProjectChecklistState {
   }
   return out;
 }
+
+export interface ChecklistProgress {
+  done: number;
+  total: number;
+  pct: number;
+}
+
+/**
+ * Completion of the onboarding checklist, derived only from the stored checkbox
+ * map — never from the project stage — so the percentage stays correct wherever
+ * the card sits on the board. Accepts the raw stored JSON (normalizes first).
+ */
+export function checklistProgress(raw: unknown): ChecklistProgress {
+  const state = normalizeChecklist(raw);
+  const total = PROJECT_CHECKLIST_ITEMS.length;
+  const done = PROJECT_CHECKLIST_ITEMS.reduce((n, item) => (state[item.key] ? n + 1 : n), 0);
+  return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
+}

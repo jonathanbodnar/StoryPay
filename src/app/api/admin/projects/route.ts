@@ -4,6 +4,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbAsync } from '@/lib/db';
 import { hasAdminTabAccess } from '@/lib/admin-identity';
+import { checklistProgress } from '@/lib/project-checklist';
 
 /**
  * Super-admin Projects board data.
@@ -90,6 +91,7 @@ export async function GET(request: NextRequest) {
         v.project_stage_id,
         v.project_position,
         v.created_at,
+        v.project_checklist,
         (pg.id IS NOT NULL AND (pg.enabled IS TRUE OR pg.use_custom_pricing_guide IS TRUE)) AS pricing_guide_ready,
         COALESCE(ac.cnt, 0)::int                               AS ad_creatives_count,
         COALESCE(nc.cnt, 0)::int                               AS notes_count
@@ -109,7 +111,16 @@ export async function GET(request: NextRequest) {
       ORDER BY v.project_position ASC, v.created_at ASC
     `;
 
-    return NextResponse.json({ stages, cards });
+    // Fold the stored checkbox map into a done/total pair so the board card can
+    // render a progress bar without a per-card follow-up request. Derived purely
+    // from the checklist, so it is correct regardless of the card's stage.
+    const withProgress = (cards as unknown as Array<Record<string, unknown> & { project_checklist: unknown }>).map((c) => {
+      const { project_checklist, ...rest } = c;
+      const { done, total } = checklistProgress(project_checklist);
+      return { ...rest, checklist_done: done, checklist_total: total };
+    });
+
+    return NextResponse.json({ stages, cards: withProgress });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[admin/projects][GET]', msg);
