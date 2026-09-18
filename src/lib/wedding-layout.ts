@@ -12,10 +12,18 @@ export const TABLE_SHAPES = ['round', 'square', 'rect'] as const;
 export type TableShape = (typeof TABLE_SHAPES)[number];
 
 /** Decor / structural elements that are pure geometry (no data binding). */
-export const DECOR_KINDS = ['dance_floor', 'head_table', 'bar', 'dj', 'gift', 'cake', 'stage', 'label'] as const;
+export const DECOR_KINDS = ['dance_floor', 'head_table', 'chairs', 'bar', 'dj', 'gift', 'cake', 'stage', 'label'] as const;
 export type DecorKind = (typeof DECOR_KINDS)[number];
 
 export type ElementKind = 'table' | DecorKind;
+
+/** Chair-row bounds. A row is decorative geometry — no guests are assigned to it. */
+export const CHAIR_MIN = 1;
+export const CHAIR_MAX = 10;
+export const CHAIR_DEFAULT = 5;
+/** Design-unit width reserved per chair, used to size a row from its count. */
+export const CHAIR_PITCH = 40;
+export const CHAIR_ROW_H = 52;
 
 export interface LayoutElement {
   id: string;
@@ -31,6 +39,14 @@ export interface LayoutElement {
   tableId?: string | null;
   /** For kind === 'label' (and optionally others): free text. */
   text?: string | null;
+  /** Only meaningful for kind === 'chairs': how many chairs are in the row. */
+  count?: number | null;
+}
+
+/** Clamped chair count for a row element — single source of truth for render + export. */
+export function chairCountOf(el: Pick<LayoutElement, 'count'>): number {
+  const n = typeof el.count === 'number' && Number.isFinite(el.count) ? Math.round(el.count) : CHAIR_DEFAULT;
+  return Math.min(CHAIR_MAX, Math.max(CHAIR_MIN, n));
 }
 
 export interface WeddingLayout {
@@ -80,15 +96,26 @@ export function sanitizeLayout(raw: unknown): WeddingLayout {
     const r = row as Record<string, unknown>;
     const kindRaw = String(r.kind ?? '');
     const isTable = kindRaw === 'table';
+    const isChairs = kindRaw === 'chairs';
     if (!isTable && !DECOR_SET.has(kindRaw)) continue;
+
+    // Absent/null/empty count means "not set" → default. (num() would coerce
+    // null to 0, which would clamp to CHAIR_MIN instead of defaulting.)
+    const rawCount = r.count;
+    const chairCount = isChairs
+      ? Math.round(num(
+          rawCount === null || rawCount === undefined || rawCount === '' ? undefined : rawCount,
+          CHAIR_DEFAULT, CHAIR_MIN, CHAIR_MAX,
+        ))
+      : 0;
 
     const el: LayoutElement = {
       id: id(r.id),
       kind: (isTable ? 'table' : kindRaw) as ElementKind,
       x: num(r.x, 40, -200, ROOM_WIDTH + 200),
       y: num(r.y, 40, -200, ROOM_HEIGHT + 200),
-      w: num(r.w, isTable ? 90 : 120, 16, ROOM_WIDTH),
-      h: num(r.h, isTable ? 90 : 60, 16, ROOM_HEIGHT),
+      w: num(r.w, isTable ? 90 : isChairs ? chairCount * CHAIR_PITCH : 120, 16, ROOM_WIDTH),
+      h: num(r.h, isTable ? 90 : isChairs ? CHAIR_ROW_H : 60, 16, ROOM_HEIGHT),
       rotation: num(r.rotation, 0, -360, 360),
     };
 
@@ -97,6 +124,8 @@ export function sanitizeLayout(raw: unknown): WeddingLayout {
       el.shape = (SHAPE_SET.has(shapeRaw) ? shapeRaw : 'round') as TableShape;
       const tid = r.tableId;
       el.tableId = typeof tid === 'string' && UUID_RE.test(tid) ? tid : null;
+    } else if (isChairs) {
+      el.count = chairCount;
     } else {
       const t = r.text;
       el.text = typeof t === 'string' ? t.trim().slice(0, 60) : null;
@@ -111,6 +140,7 @@ export function sanitizeLayout(raw: unknown): WeddingLayout {
 export const DECOR_META: Record<DecorKind, { label: string; w: number; h: number }> = {
   dance_floor: { label: 'Dance floor', w: 200, h: 160 },
   head_table: { label: 'Head table', w: 220, h: 70 },
+  chairs: { label: 'Chairs', w: CHAIR_DEFAULT * CHAIR_PITCH, h: CHAIR_ROW_H },
   bar: { label: 'Bar', w: 160, h: 60 },
   dj: { label: 'DJ', w: 90, h: 70 },
   gift: { label: 'Gift table', w: 110, h: 60 },

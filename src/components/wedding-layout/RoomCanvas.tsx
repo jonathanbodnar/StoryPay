@@ -2,11 +2,12 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  Loader2, Plus, Trash2, RotateCw, Download, Printer, Square, Circle, RectangleHorizontal,
+  Loader2, Plus, Trash2, RotateCw, Download, Printer, Square, Circle, RectangleHorizontal, Armchair,
 } from 'lucide-react';
 import {
   ROOM_WIDTH, ROOM_HEIGHT, DECOR_KINDS, DECOR_META, sanitizeLayout,
-  type WeddingLayout, type LayoutElement, type DecorKind, type TableShape,
+  CHAIR_MIN, CHAIR_MAX, CHAIR_DEFAULT, CHAIR_PITCH, chairCountOf,
+  type WeddingLayout, type LayoutElement, type DecorKind,
 } from '@/lib/wedding-layout';
 
 export type TableLite = { id: string; name: string; capacity: number };
@@ -78,6 +79,7 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
     const el: LayoutElement = {
       id: uid(), kind, x: snap(80), y: snap(80), w: meta.w, h: meta.h, rotation: 0,
       text: kind === 'label' ? 'Label' : null,
+      count: kind === 'chairs' ? CHAIR_DEFAULT : null,
     };
     mutate((els) => [...els, el]);
     setSelectedId(el.id);
@@ -89,6 +91,11 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
   function remove(id: string) {
     mutate((els) => els.filter((e) => e.id !== id));
     setSelectedId(null);
+  }
+  /** Grow/shrink a chair row while keeping every chair the same size. */
+  function setChairCount(el: LayoutElement, next: number) {
+    const n = Math.min(CHAIR_MAX, Math.max(CHAIR_MIN, Math.round(next)));
+    update(el.id, { count: n, w: n * CHAIR_PITCH });
   }
 
   // ── pointer drag / resize ────────────────────────────────────────────────
@@ -209,6 +216,29 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
         ctx.fillStyle = '#374151';
         ctx.font = '600 14px sans-serif';
         ctx.fillText(el.text || 'Label', 0, 0);
+      } else if (el.kind === 'chairs') {
+        // Row of chair glyphs — drawn to match the on-screen ChairRow.
+        const n = chairCountOf(el);
+        const cellW = el.w / n;
+        const glyphH = Math.min(el.h, cellW * 1.15);
+        const top = -glyphH / 2;
+        const seatW = Math.min(cellW * 0.68, glyphH * 0.85);
+        const left0 = -el.w / 2;
+        ctx.fillStyle = '#6b7280';
+        for (let i = 0; i < n; i++) {
+          const cx0 = left0 + cellW * i + (cellW - seatW) / 2;
+          const legW = Math.max(1.5, seatW * 0.14);
+          const legY = top + glyphH * 0.7;
+          const legH = glyphH * 0.3;
+          roundRect(ctx, cx0, top, seatW, glyphH * 0.42, 3); // backrest
+          ctx.fill();
+          roundRect(ctx, cx0 - 1, top + glyphH * 0.5, seatW + 2, glyphH * 0.18, 2); // seat
+          ctx.fill();
+          roundRect(ctx, cx0 + 1, legY, legW, legH, 1); // left leg
+          ctx.fill();
+          roundRect(ctx, cx0 + seatW - 1 - legW, legY, legW, legH, 1); // right leg
+          ctx.fill();
+        }
       } else {
         ctx.fillStyle = '#f3f4f6';
         ctx.strokeStyle = '#9ca3af';
@@ -273,8 +303,12 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
           </button>
           <span className="mx-1 h-4 w-px bg-gray-200" />
           {DECOR_KINDS.map((k) => (
-            <button key={k} onClick={() => addDecor(k)} className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600 hover:border-gray-400">
-              + {DECOR_META[k].label}
+            <button
+              key={k}
+              onClick={() => addDecor(k)}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600 hover:border-gray-400"
+            >
+              {k === 'chairs' ? <Armchair className="h-3.5 w-3.5" /> : '+'} {DECOR_META[k].label}
             </button>
           ))}
         </div>
@@ -310,6 +344,34 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
               placeholder="Text"
               className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
             />
+          )}
+          {selected.kind === 'chairs' && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-gray-500">Chairs</span>
+              <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() => setChairCount(selected, chairCountOf(selected) - 1)}
+                  disabled={chairCountOf(selected) <= CHAIR_MIN}
+                  title="Remove a chair"
+                  className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  −
+                </button>
+                <span className="min-w-[1.75rem] text-center text-xs font-semibold tabular-nums text-gray-800">
+                  {chairCountOf(selected)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setChairCount(selected, chairCountOf(selected) + 1)}
+                  disabled={chairCountOf(selected) >= CHAIR_MAX}
+                  title="Add a chair"
+                  className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  +
+                </button>
+              </div>
+            </div>
           )}
           <button onClick={() => update(selected.id, { rotation: (selected.rotation + 15) % 360 })} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:border-gray-400">
             <RotateCw className="h-3.5 w-3.5" /> Rotate
@@ -353,7 +415,7 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
                 className={`flex h-full w-full flex-col items-center justify-center overflow-hidden border text-center ${
                   el.kind === 'table'
                     ? `${el.shape === 'round' ? 'rounded-full' : 'rounded-lg'} ${over ? 'border-red-400 bg-red-50' : 'border-gray-800 bg-gray-50'}`
-                    : el.kind === 'label'
+                    : el.kind === 'label' || el.kind === 'chairs'
                       ? 'border-transparent bg-transparent'
                       : 'rounded-lg border-gray-300 bg-gray-100/80'
                 } ${isSel ? 'ring-2 ring-[#1b1b1b] ring-offset-1' : ''}`}
@@ -365,6 +427,8 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
                   </>
                 ) : el.kind === 'label' ? (
                   <span className="px-1 text-[11px] font-semibold text-gray-700">{el.text || 'Label'}</span>
+                ) : el.kind === 'chairs' ? (
+                  <ChairRow count={chairCountOf(el)} />
                 ) : (
                   <span className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">{DECOR_META[el.kind as DecorKind].label}</span>
                 )}
@@ -382,7 +446,7 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
 
         {elements.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-gray-400">
-            {editable ? 'Place your tables and add a dance floor to start.' : 'No room layout yet.'}
+            {editable ? 'Place your tables, add a row of chairs, and drop in a dance floor to start.' : 'No room layout yet.'}
           </div>
         )}
       </div>
@@ -411,6 +475,31 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
       {editable && (
         <p className="mt-2 text-center text-xs text-gray-400">Tip: tap an item to select it, then drag to move. Drag the corner handle to resize.</p>
       )}
+    </div>
+  );
+}
+
+/** A single chair glyph (front view), used to draw a chair row on the canvas. */
+function ChairGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 18 20" className={className} aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+      <g fill="currentColor">
+        <rect x="4" y="1" width="10" height="8" rx="2" />
+        <rect x="1.5" y="10" width="15" height="4" rx="2" />
+        <rect x="3" y="14" width="2.5" height="5" rx="1" />
+        <rect x="12.5" y="14" width="2.5" height="5" rx="1" />
+      </g>
+    </svg>
+  );
+}
+
+/** Evenly spaced row of chair glyphs, filling the element's box. */
+function ChairRow({ count }: { count: number }) {
+  return (
+    <div className="flex h-full w-full items-center justify-center px-[4%]">
+      {Array.from({ length: count }).map((_, i) => (
+        <ChairGlyph key={i} className="h-[74%] min-w-0 flex-1 text-gray-500" />
+      ))}
     </div>
   );
 }
