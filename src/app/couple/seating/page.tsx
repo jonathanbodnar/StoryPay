@@ -256,7 +256,13 @@ export default function CoupleSeatingPage() {
 
       {view === 'layout' && (
         <div className="mt-6">
-          <RoomCanvas initialLayout={layout} tables={tables} seatedByTable={seatedByTable} onSave={saveLayout} />
+          <RoomCanvas
+            initialLayout={layout}
+            tables={tables}
+            seatedByTable={seatedByTable}
+            onSave={saveLayout}
+            onManageTables={() => setView('seating')}
+          />
         </div>
       )}
 

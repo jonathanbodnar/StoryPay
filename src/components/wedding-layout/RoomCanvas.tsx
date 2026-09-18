@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  Loader2, Plus, Trash2, RotateCw, Download, Printer, Square, Circle, RectangleHorizontal, Armchair,
+  Loader2, Plus, Trash2, RotateCw, Download, Printer, Square, Circle, RectangleHorizontal, Armchair, Info,
 } from 'lucide-react';
 import {
   ROOM_WIDTH, ROOM_HEIGHT, DECOR_KINDS, DECOR_META, sanitizeLayout, TABLE_SHAPES,
@@ -20,6 +20,14 @@ export interface RoomCanvasProps {
   readOnly?: boolean;
   /** Persist. On a rev conflict, return { conflict:true, layout } with the latest. */
   onSave?: (layout: WeddingLayout) => Promise<{ ok: boolean; conflict?: boolean; layout?: WeddingLayout }>;
+  /**
+   * Where to send someone who needs to create tables. Tables are the source of
+   * truth for seating and are created in the seating list, not here, so when
+   * that list is empty we point the user there instead of offering a blank
+   * table that could never hold guests. Omitted on surfaces with no seating tab
+   * (venue planner, admin contact panel) — the hint still shows, without a CTA.
+   */
+  onManageTables?: () => void;
 }
 
 const GRID = 10;
@@ -45,7 +53,7 @@ function ShapeIcon({ shape, className }: { shape: TableShape; className?: string
   return <RectangleHorizontal className={className} />;
 }
 
-export default function RoomCanvas({ initialLayout, tables, seatedByTable, readOnly, onSave }: RoomCanvasProps) {
+export default function RoomCanvas({ initialLayout, tables, seatedByTable, readOnly, onSave, onManageTables }: RoomCanvasProps) {
   const [rev, setRev] = useState(initialLayout.rev);
   const [elements, setElements] = useState<LayoutElement[]>(initialLayout.elements);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -75,6 +83,8 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
     [elements],
   );
   const unplacedTables = tables.filter((t) => !placedTableIds.has(t.id));
+  /** Tables live in the seating list; with none, the blank-table button is a trap. */
+  const hasTables = tables.length > 0;
 
   const selected = elements.find((e) => e.id === selectedId) ?? null;
 
@@ -298,8 +308,35 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
         <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{flash}</div>
       )}
 
+      {/* Tables are created in the seating list (that's the source of truth for
+          who sits where). With none yet, offer the way there rather than a
+          blank table that could never hold guests. */}
+      {editable && !hasTables && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+          <Info className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <span className="text-xs text-gray-600">
+            No tables yet. Tables are created in the seating list — add them there, then place them
+            here so each one shows its name and headcount.
+          </span>
+          {onManageTables && (
+            <button
+              type="button"
+              onClick={() => {
+                // Switching tabs unmounts the canvas, so don't silently drop edits.
+                if (dirty && !window.confirm('You have unsaved layout changes. Leave without saving?')) return;
+                onManageTables();
+              }}
+              className="rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-800 hover:border-gray-400"
+            >
+              Go to seating list
+            </button>
+          )}
+        </div>
+      )}
+
       {editable && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
+          {hasTables && (<>
           {/* Shape applied to the next table placed — so you can vary round /
               square / long tables without placing one and re-shaping it. */}
           <div className="flex items-center gap-1.5">
@@ -340,6 +377,7 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
             <Plus className="h-3.5 w-3.5" /> Blank table
           </button>
           <span className="mx-1 h-4 w-px bg-gray-200" />
+          </>)}
           {DECOR_KINDS.map((k) => (
             <button
               key={k}
