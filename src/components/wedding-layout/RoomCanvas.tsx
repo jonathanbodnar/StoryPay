@@ -5,9 +5,9 @@ import {
   Loader2, Plus, Trash2, RotateCw, Download, Printer, Square, Circle, RectangleHorizontal, Armchair,
 } from 'lucide-react';
 import {
-  ROOM_WIDTH, ROOM_HEIGHT, DECOR_KINDS, DECOR_META, sanitizeLayout,
+  ROOM_WIDTH, ROOM_HEIGHT, DECOR_KINDS, DECOR_META, sanitizeLayout, TABLE_SHAPES,
   CHAIR_MIN, CHAIR_MAX, CHAIR_DEFAULT, CHAIR_PITCH, CHAIR_CELL, CHAIR_GLYPH, CHAIR_FILL, CHAIR_STROKE, chairCountOf,
-  type WeddingLayout, type LayoutElement, type DecorKind,
+  type WeddingLayout, type LayoutElement, type DecorKind, type TableShape,
 } from '@/lib/wedding-layout';
 
 export type TableLite = { id: string; name: string; capacity: number };
@@ -28,6 +28,23 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `el_${Math.random().toString(36).slice(2, 10)}`;
 
+const SHAPE_LABEL: Record<TableShape, string> = {
+  round: 'Round',
+  square: 'Square',
+  rect: 'Long / farm table',
+};
+
+/** Default size for a newly placed table, by shape. */
+function tableDims(shape: TableShape): { w: number; h: number } {
+  return shape === 'rect' ? { w: 170, h: 70 } : { w: 90, h: 90 };
+}
+
+function ShapeIcon({ shape, className }: { shape: TableShape; className?: string }) {
+  if (shape === 'round') return <Circle className={className} />;
+  if (shape === 'square') return <Square className={className} />;
+  return <RectangleHorizontal className={className} />;
+}
+
 export default function RoomCanvas({ initialLayout, tables, seatedByTable, readOnly, onSave }: RoomCanvasProps) {
   const [rev, setRev] = useState(initialLayout.rev);
   const [elements, setElements] = useState<LayoutElement[]>(initialLayout.elements);
@@ -35,6 +52,8 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState('');
+  /** Shape used for the next table placed from the palette. */
+  const [newShape, setNewShape] = useState<TableShape>('round');
 
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<
@@ -65,10 +84,11 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
   }, []);
 
   function addTable(table?: TableLite) {
+    const dims = tableDims(newShape);
     const el: LayoutElement = {
-      id: uid(), kind: 'table', shape: 'round',
+      id: uid(), kind: 'table', shape: newShape,
       x: snap(60 + (elements.length % 6) * 30), y: snap(60 + (elements.length % 4) * 30),
-      w: 90, h: 90, rotation: 0, tableId: table?.id ?? null,
+      ...dims, rotation: 0, tableId: table?.id ?? null,
     };
     mutate((els) => [...els, el]);
     setSelectedId(el.id);
@@ -192,7 +212,7 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
         const seated = el.tableId ? seatedByTable[el.tableId] ?? 0 : 0;
         const over = t ? seated > t.capacity : false;
         ctx.fillStyle = '#f9fafb';
-        ctx.strokeStyle = over ? '#dc2626' : '#111827';
+        ctx.strokeStyle = over ? '#dc2626' : '#9ca3af';
         ctx.lineWidth = 2;
         if (el.shape === 'round') {
           ctx.beginPath();
@@ -280,6 +300,28 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
 
       {editable && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
+          {/* Shape applied to the next table placed — so you can vary round /
+              square / long tables without placing one and re-shaping it. */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-gray-500">New table:</span>
+            <div className="inline-flex items-center gap-0.5 rounded-lg border border-gray-200 bg-white p-0.5">
+              {TABLE_SHAPES.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setNewShape(s)}
+                  title={`Place ${SHAPE_LABEL[s].toLowerCase()} tables`}
+                  aria-pressed={newShape === s}
+                  className={`rounded-md p-1.5 transition-colors ${
+                    newShape === s ? 'bg-[#1b1b1b] text-white' : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <ShapeIcon shape={s} className="h-3.5 w-3.5" />
+                </button>
+              ))}
+            </div>
+          </div>
+          <span className="mx-1 h-4 w-px bg-gray-200" />
           {unplacedTables.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs font-medium text-gray-500">Place table:</span>
@@ -315,9 +357,9 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
           {selected.kind === 'table' && (
             <div className="flex items-center gap-1">
-              <ShapeBtn active={selected.shape === 'round'} onClick={() => update(selected.id, { shape: 'round' })} title="Round"><Circle className="h-4 w-4" /></ShapeBtn>
-              <ShapeBtn active={selected.shape === 'square'} onClick={() => update(selected.id, { shape: 'square', w: Math.max(selected.w, selected.h), h: Math.max(selected.w, selected.h) })} title="Square"><Square className="h-4 w-4" /></ShapeBtn>
-              <ShapeBtn active={selected.shape === 'rect'} onClick={() => update(selected.id, { shape: 'rect', w: Math.max(selected.w, 160) })} title="Long / farm table"><RectangleHorizontal className="h-4 w-4" /></ShapeBtn>
+              <ShapeBtn active={selected.shape === 'round'} onClick={() => update(selected.id, { shape: 'round' })} title="Round"><ShapeIcon shape="round" className="h-4 w-4" /></ShapeBtn>
+              <ShapeBtn active={selected.shape === 'square'} onClick={() => update(selected.id, { shape: 'square', w: Math.max(selected.w, selected.h), h: Math.max(selected.w, selected.h) })} title="Square"><ShapeIcon shape="square" className="h-4 w-4" /></ShapeBtn>
+              <ShapeBtn active={selected.shape === 'rect'} onClick={() => update(selected.id, { shape: 'rect', w: Math.max(selected.w, 160) })} title="Long / farm table"><ShapeIcon shape="rect" className="h-4 w-4" /></ShapeBtn>
               <span className="mx-1 h-4 w-px bg-gray-200" />
               <select
                 value={selected.tableId ?? ''}
@@ -410,7 +452,7 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
               <div
                 className={`flex h-full w-full flex-col items-center justify-center overflow-hidden border text-center ${
                   el.kind === 'table'
-                    ? `${el.shape === 'round' ? 'rounded-full' : 'rounded-lg'} ${over ? 'border-red-400 bg-red-50' : 'border-gray-800 bg-gray-50'}`
+                    ? `${el.shape === 'round' ? 'rounded-full' : 'rounded-lg'} ${over ? 'border-red-400 bg-red-50' : 'border-gray-400 bg-gray-50'}`
                     : el.kind === 'label' || el.kind === 'chairs'
                       ? 'border-transparent bg-transparent'
                       : 'rounded-lg border-gray-300 bg-gray-100/80'
