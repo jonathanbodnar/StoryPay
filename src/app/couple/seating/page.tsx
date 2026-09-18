@@ -52,6 +52,8 @@ export default function CoupleSeatingPage() {
   const [tables, setTables] = useState<Table[]>([]);
   const [view, setView] = useState<'seating' | 'layout'>('seating');
   const [layout, setLayout] = useState<WeddingLayout>(EMPTY_LAYOUT);
+  /** True while the room canvas holds edits that haven't been saved. */
+  const [canvasDirty, setCanvasDirty] = useState(false);
 
   const [newName, setNewName] = useState('');
   const [newCap, setNewCap] = useState(8);
@@ -111,6 +113,18 @@ export default function CoupleSeatingPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Switching tabs unmounts RoomCanvas, so guard unsaved floor-plan edits
+   * rather than silently discarding them.
+   */
+  function switchView(next: 'seating' | 'layout') {
+    if (next === view) return;
+    if (view === 'layout' && canvasDirty) {
+      if (!window.confirm('You have unsaved room layout changes. Leave without saving?')) return;
+    }
+    setView(next);
+  }
 
   const seatedByTable = useMemo(() => {
     const map: Record<string, number> = {};
@@ -236,14 +250,14 @@ export default function CoupleSeatingPage() {
       <div className="mt-4 inline-flex rounded-xl border border-gray-200 bg-white p-1 text-sm">
         <button
           type="button"
-          onClick={() => setView('seating')}
+          onClick={() => switchView('seating')}
           className={`rounded-lg px-3 py-1.5 font-medium ${view === 'seating' ? 'bg-[#1b1b1b] text-white' : 'text-gray-600 hover:text-gray-900'}`}
         >
           Seating
         </button>
         <button
           type="button"
-          onClick={() => setView('layout')}
+          onClick={() => switchView('layout')}
           className={`rounded-lg px-3 py-1.5 font-medium ${view === 'layout' ? 'bg-[#1b1b1b] text-white' : 'text-gray-600 hover:text-gray-900'}`}
         >
           Room layout
@@ -261,7 +275,8 @@ export default function CoupleSeatingPage() {
             tables={tables}
             seatedByTable={seatedByTable}
             onSave={saveLayout}
-            onManageTables={() => setView('seating')}
+            onManageTables={() => switchView('seating')}
+            onDirtyChange={setCanvasDirty}
           />
         </div>
       )}

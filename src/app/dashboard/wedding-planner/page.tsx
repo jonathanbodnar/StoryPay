@@ -166,6 +166,8 @@ function WeddingPlannerContent() {
   const [checklistDetail, setChecklistDetail] = useState<Record<string, WeddingChecklist>>({});
   const [vendorsDetail, setVendorsDetail] = useState<Record<string, WeddingVendors>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
+  /** True while the open couple's room canvas has unsaved floor-plan edits. */
+  const [layoutDirty, setLayoutDirty] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/venue/wedding-planner');
@@ -204,6 +206,9 @@ function WeddingPlannerContent() {
   }
 
   async function toggleGuests(id: string) {
+    // Collapsing (or switching to another couple) unmounts the room canvas, so
+    // don't silently discard unsaved floor-plan edits.
+    if (layoutDirty && !window.confirm('You have unsaved room layout changes. Leave without saving?')) return;
     if (expandedId === id) {
       setExpandedId(null);
       return;
@@ -913,6 +918,7 @@ function WeddingPlannerContent() {
                             tables={(tableDetail[l.id] ?? []).map((t) => ({ id: t.id, name: t.name, capacity: t.capacity }))}
                             seatedByTable={Object.fromEntries((tableDetail[l.id] ?? []).map((t) => [t.id, t.seated]))}
                             onSave={(next) => saveVenueLayout(l.id, next)}
+                            onDirtyChange={setLayoutDirty}
                           />
                           <p className="mt-2 text-[11px] text-gray-400">
                             You and the couple share this floor plan. Table counts update live from their guest list.

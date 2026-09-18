@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2, Plus, Trash2, RotateCw, Download, Printer, Square, Circle, RectangleHorizontal, Armchair, Info,
 } from 'lucide-react';
@@ -28,6 +28,12 @@ export interface RoomCanvasProps {
    * (venue planner, admin contact panel) — the hint still shows, without a CTA.
    */
   onManageTables?: () => void;
+  /**
+   * Reports unsaved-edit state so the host can guard navigation that would
+   * unmount this canvas (switching tabs, collapsing a card) and silently
+   * discard the user's floor plan.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 const GRID = 10;
@@ -53,7 +59,7 @@ function ShapeIcon({ shape, className }: { shape: TableShape; className?: string
   return <RectangleHorizontal className={className} />;
 }
 
-export default function RoomCanvas({ initialLayout, tables, seatedByTable, readOnly, onSave, onManageTables }: RoomCanvasProps) {
+export default function RoomCanvas({ initialLayout, tables, seatedByTable, readOnly, onSave, onManageTables, onDirtyChange }: RoomCanvasProps) {
   const [rev, setRev] = useState(initialLayout.rev);
   const [elements, setElements] = useState<LayoutElement[]>(initialLayout.elements);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -62,6 +68,15 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
   const [flash, setFlash] = useState('');
   /** Shape used for the next table placed from the palette. */
   const [newShape, setNewShape] = useState<TableShape>('round');
+
+  // Report unsaved-edit state upward through a ref so a changing callback
+  // identity can't re-trigger the effect.
+  const dirtyCbRef = useRef(onDirtyChange);
+  useEffect(() => { dirtyCbRef.current = onDirtyChange; }, [onDirtyChange]);
+  useEffect(() => { dirtyCbRef.current?.(dirty); }, [dirty]);
+  // Clear the host's flag on unmount, so a discarded layout can't leave a stale
+  // "unsaved" state that prompts the next time a canvas opens.
+  useEffect(() => () => { dirtyCbRef.current?.(false); }, []);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<
@@ -321,11 +336,9 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
           {onManageTables && (
             <button
               type="button"
-              onClick={() => {
-                // Switching tabs unmounts the canvas, so don't silently drop edits.
-                if (dirty && !window.confirm('You have unsaved layout changes. Leave without saving?')) return;
-                onManageTables();
-              }}
+              // The host owns this navigation and guards unsaved edits (a second
+              // confirm here would double-prompt).
+              onClick={onManageTables}
               className="rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-800 hover:border-gray-400"
             >
               Go to seating list
