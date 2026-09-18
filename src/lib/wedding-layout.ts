@@ -21,9 +21,25 @@ export type ElementKind = 'table' | DecorKind;
 export const CHAIR_MIN = 1;
 export const CHAIR_MAX = 10;
 export const CHAIR_DEFAULT = 5;
-/** Design-unit width reserved per chair, used to size a row from its count. */
-export const CHAIR_PITCH = 40;
-export const CHAIR_ROW_H = 52;
+/** Design-unit width per chair, used to size a row from its count. Kept equal to
+ *  CHAIR_ROW_H so the element box matches the row's aspect ratio exactly. */
+export const CHAIR_PITCH = 28;
+export const CHAIR_ROW_H = 28;
+/**
+ * One chair, drawn inside a CHAIR_CELL × CHAIR_CELL box. Shared by the on-screen
+ * SVG and the canvas PNG/print renderer so the two can never drift apart.
+ */
+export const CHAIR_CELL = 20;
+export const CHAIR_GLYPH: ReadonlyArray<{ x: number; y: number; w: number; h: number; r: number }> = [
+  { x: 5,    y: 1.5,  w: 10,  h: 8,   r: 2.5 },  // backrest
+  { x: 2.5,  y: 10.5, w: 15,  h: 3.5, r: 1.75 }, // seat
+  { x: 4,    y: 14,   w: 2.4, h: 5,   r: 1.2 },  // left leg
+  { x: 13.6, y: 14,   w: 2.4, h: 5,   r: 1.2 },  // right leg
+];
+/** Matches the decor tiles (gray-100 fill, gray-300 border) so chairs sit
+ *  visually with the rest of the palette rather than standing out. */
+export const CHAIR_FILL = '#f3f4f6';
+export const CHAIR_STROKE = '#d1d5db';
 
 export interface LayoutElement {
   id: string;
@@ -114,8 +130,8 @@ export function sanitizeLayout(raw: unknown): WeddingLayout {
       kind: (isTable ? 'table' : kindRaw) as ElementKind,
       x: num(r.x, 40, -200, ROOM_WIDTH + 200),
       y: num(r.y, 40, -200, ROOM_HEIGHT + 200),
-      w: num(r.w, isTable ? 90 : isChairs ? chairCount * CHAIR_PITCH : 120, 16, ROOM_WIDTH),
-      h: num(r.h, isTable ? 90 : isChairs ? CHAIR_ROW_H : 60, 16, ROOM_HEIGHT),
+      w: num(r.w, isTable ? 90 : 120, 16, ROOM_WIDTH),
+      h: num(r.h, isTable ? 90 : 60, 16, ROOM_HEIGHT),
       rotation: num(r.rotation, 0, -360, 360),
     };
 
@@ -126,6 +142,10 @@ export function sanitizeLayout(raw: unknown): WeddingLayout {
       el.tableId = typeof tid === 'string' && UUID_RE.test(tid) ? tid : null;
     } else if (isChairs) {
       el.count = chairCount;
+      // A chair row's size is derived from its count, not from stored geometry,
+      // so a row saved under older sizing constants self-corrects on read.
+      el.w = chairCount * CHAIR_PITCH;
+      el.h = CHAIR_ROW_H;
     } else {
       const t = r.text;
       el.text = typeof t === 'string' ? t.trim().slice(0, 60) : null;

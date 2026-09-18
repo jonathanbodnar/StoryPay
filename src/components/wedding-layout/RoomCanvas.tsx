@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import {
   ROOM_WIDTH, ROOM_HEIGHT, DECOR_KINDS, DECOR_META, sanitizeLayout,
-  CHAIR_MIN, CHAIR_MAX, CHAIR_DEFAULT, CHAIR_PITCH, chairCountOf,
+  CHAIR_MIN, CHAIR_MAX, CHAIR_DEFAULT, CHAIR_PITCH, CHAIR_CELL, CHAIR_GLYPH, CHAIR_FILL, CHAIR_STROKE, chairCountOf,
   type WeddingLayout, type LayoutElement, type DecorKind,
 } from '@/lib/wedding-layout';
 
@@ -217,27 +217,23 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
         ctx.font = '600 14px sans-serif';
         ctx.fillText(el.text || 'Label', 0, 0);
       } else if (el.kind === 'chairs') {
-        // Row of chair glyphs — drawn to match the on-screen ChairRow.
+        // Mirrors <ChairRow>: scale the row as one unit, then draw each chair
+        // from the shared CHAIR_GLYPH parts.
         const n = chairCountOf(el);
-        const cellW = el.w / n;
-        const glyphH = Math.min(el.h, cellW * 1.15);
-        const top = -glyphH / 2;
-        const seatW = Math.min(cellW * 0.68, glyphH * 0.85);
-        const left0 = -el.w / 2;
-        ctx.fillStyle = '#6b7280';
+        const vbW = n * CHAIR_CELL;
+        const s = Math.min(el.w / vbW, el.h / CHAIR_CELL);
+        const originX = -(vbW * s) / 2;
+        const originY = -(CHAIR_CELL * s) / 2;
+        ctx.fillStyle = CHAIR_FILL;
+        ctx.strokeStyle = CHAIR_STROKE;
+        ctx.lineWidth = Math.max(0.5, s);
         for (let i = 0; i < n; i++) {
-          const cx0 = left0 + cellW * i + (cellW - seatW) / 2;
-          const legW = Math.max(1.5, seatW * 0.14);
-          const legY = top + glyphH * 0.7;
-          const legH = glyphH * 0.3;
-          roundRect(ctx, cx0, top, seatW, glyphH * 0.42, 3); // backrest
-          ctx.fill();
-          roundRect(ctx, cx0 - 1, top + glyphH * 0.5, seatW + 2, glyphH * 0.18, 2); // seat
-          ctx.fill();
-          roundRect(ctx, cx0 + 1, legY, legW, legH, 1); // left leg
-          ctx.fill();
-          roundRect(ctx, cx0 + seatW - 1 - legW, legY, legW, legH, 1); // right leg
-          ctx.fill();
+          const cellX = originX + i * CHAIR_CELL * s;
+          for (const p of CHAIR_GLYPH) {
+            roundRect(ctx, cellX + p.x * s, originY + p.y * s, p.w * s, p.h * s, p.r * s);
+            ctx.fill();
+            ctx.stroke();
+          }
         }
       } else {
         ctx.fillStyle = '#f3f4f6';
@@ -434,7 +430,8 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
                 )}
               </div>
 
-              {editable && isSel && (
+              {/* Chair rows are sized by their count, so no resize handle. */}
+              {editable && isSel && el.kind !== 'chairs' && (
                 <span
                   onPointerDown={(e) => beginDrag(e, el, 'resize')}
                   className="absolute -bottom-1 -right-1 h-3 w-3 cursor-se-resize rounded-sm border border-white bg-[#1b1b1b]"
@@ -479,28 +476,32 @@ export default function RoomCanvas({ initialLayout, tables, seatedByTable, readO
   );
 }
 
-/** A single chair glyph (front view), used to draw a chair row on the canvas. */
-function ChairGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 18 20" className={className} aria-hidden="true" preserveAspectRatio="xMidYMid meet">
-      <g fill="currentColor">
-        <rect x="4" y="1" width="10" height="8" rx="2" />
-        <rect x="1.5" y="10" width="15" height="4" rx="2" />
-        <rect x="3" y="14" width="2.5" height="5" rx="1" />
-        <rect x="12.5" y="14" width="2.5" height="5" rx="1" />
-      </g>
-    </svg>
-  );
-}
-
-/** Evenly spaced row of chair glyphs, filling the element's box. */
+/**
+ * A row of chairs drawn as ONE svg so the whole row scales as a unit: the chair
+ * size and the gap between them are baked into the viewBox, so adding chairs
+ * extends the row evenly instead of stretching the spacing.
+ */
 function ChairRow({ count }: { count: number }) {
+  const vbW = count * CHAIR_CELL;
   return (
-    <div className="flex h-full w-full items-center justify-center px-[4%]">
+    <svg
+      viewBox={`0 0 ${vbW} ${CHAIR_CELL}`}
+      preserveAspectRatio="xMidYMid meet"
+      className="h-full w-full"
+      aria-hidden="true"
+    >
       {Array.from({ length: count }).map((_, i) => (
-        <ChairGlyph key={i} className="h-[74%] min-w-0 flex-1 text-gray-500" />
+        <g key={i} transform={`translate(${i * CHAIR_CELL} 0)`}>
+          {CHAIR_GLYPH.map((p, j) => (
+            <rect
+              key={j}
+              x={p.x} y={p.y} width={p.w} height={p.h} rx={p.r}
+              fill={CHAIR_FILL} stroke={CHAIR_STROKE} strokeWidth={1}
+            />
+          ))}
+        </g>
       ))}
-    </div>
+    </svg>
   );
 }
 
