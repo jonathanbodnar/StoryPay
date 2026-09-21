@@ -15,7 +15,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
-import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
+import RoomCanvas, { type GuestLite } from '@/components/wedding-layout/RoomCanvas';
 import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
 
 type Rsvp = 'pending' | 'attending' | 'declined';
@@ -25,6 +25,7 @@ type Guest = {
   full_name: string;
   party_size: number;
   rsvp_status: Rsvp;
+  meal_choice: string | null;
   guest_group: string | null;
   table_id: string | null;
 };
@@ -130,6 +131,23 @@ export default function CoupleSeatingPage() {
     const map: Record<string, number> = {};
     for (const g of guests) {
       if (g.table_id) map[g.table_id] = (map[g.table_id] ?? 0) + Math.max(1, g.party_size || 1);
+    }
+    return map;
+  }, [guests]);
+
+  /** Who is at each table — powers the room layout's "who's here" view. */
+  const guestsByTable = useMemo(() => {
+    const map: Record<string, GuestLite[]> = {};
+    for (const g of guests) {
+      if (!g.table_id) continue;
+      (map[g.table_id] ??= []).push({
+        id: g.id,
+        name: g.full_name,
+        partySize: Math.max(1, g.party_size || 1),
+        rsvpStatus: g.rsvp_status,
+        mealChoice: g.meal_choice,
+        group: g.guest_group,
+      });
     }
     return map;
   }, [guests]);
@@ -274,6 +292,7 @@ export default function CoupleSeatingPage() {
             initialLayout={layout}
             tables={tables}
             seatedByTable={seatedByTable}
+            guestsByTable={guestsByTable}
             onSave={saveLayout}
             onManageTables={() => switchView('seating')}
             onDirtyChange={setCanvasDirty}

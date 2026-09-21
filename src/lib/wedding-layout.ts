@@ -65,6 +65,19 @@ export function chairCountOf(el: Pick<LayoutElement, 'count'>): number {
   return Math.min(CHAIR_MAX, Math.max(CHAIR_MIN, n));
 }
 
+/**
+ * Choose which guest lines fit on a printed table, collapsing whatever doesn't
+ * fit into a "+N more" line so nothing is silently dropped from the plan.
+ */
+export function fitPartyLines(names: string[], maxLines: number): string[] {
+  if (maxLines <= 0 || names.length === 0) return [];
+  const shown = names.slice(0, maxLines);
+  if (names.length <= shown.length) return shown;
+  const out = shown.slice(0, Math.max(0, maxLines - 1));
+  out.push(`+${names.length - out.length} more`);
+  return out;
+}
+
 export interface WeddingLayout {
   rev: number;
   elements: LayoutElement[];

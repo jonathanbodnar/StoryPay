@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Loader2,
@@ -22,7 +22,7 @@ import {
   UserPlus,
   User,
 } from 'lucide-react';
-import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
+import RoomCanvas, { type GuestLite } from '@/components/wedding-layout/RoomCanvas';
 import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
 import TimelineEditor from '@/components/wedding-timeline/TimelineEditor';
 import { EMPTY_TIMELINE, type WeddingTimeline } from '@/lib/wedding-timeline';
@@ -82,6 +82,7 @@ type GuestDetailRow = {
   meal_choice: string | null;
   dietary_notes: string | null;
   guest_group: string | null;
+  table_id: string | null;
 };
 
 type TableRow = {
@@ -168,6 +169,27 @@ function WeddingPlannerContent() {
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   /** True while the open couple's room canvas has unsaved floor-plan edits. */
   const [layoutDirty, setLayoutDirty] = useState(false);
+
+  /** Who is at each table, per wedding — powers the room layout's "who's here". */
+  const guestsByTableByWedding = useMemo(() => {
+    const out: Record<string, Record<string, GuestLite[]>> = {};
+    for (const [wid, rows] of Object.entries(guestDetail)) {
+      const map: Record<string, GuestLite[]> = {};
+      for (const g of rows) {
+        if (!g.table_id) continue;
+        (map[g.table_id] ??= []).push({
+          id: g.id,
+          name: g.full_name,
+          partySize: Math.max(1, g.party_size || 1),
+          rsvpStatus: g.rsvp_status,
+          mealChoice: g.meal_choice,
+          group: g.guest_group,
+        });
+      }
+      out[wid] = map;
+    }
+    return out;
+  }, [guestDetail]);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/venue/wedding-planner');
@@ -917,6 +939,7 @@ function WeddingPlannerContent() {
                             initialLayout={layoutDetail[l.id]}
                             tables={(tableDetail[l.id] ?? []).map((t) => ({ id: t.id, name: t.name, capacity: t.capacity }))}
                             seatedByTable={Object.fromEntries((tableDetail[l.id] ?? []).map((t) => [t.id, t.seated]))}
+                            guestsByTable={guestsByTableByWedding[l.id]}
                             onSave={(next) => saveVenueLayout(l.id, next)}
                             onDirtyChange={setLayoutDirty}
                           />

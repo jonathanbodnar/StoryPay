@@ -16,7 +16,7 @@ import RefundModal from '@/components/RefundModal';
 import ContactAiControls from '@/components/ai-concierge/ContactAiControls';
 import VenueDirectPanel from '@/components/dashboard/VenueDirectPanel';
 import ContactConversationsTab from '@/components/contacts/ContactConversationsTab';
-import RoomCanvas from '@/components/wedding-layout/RoomCanvas';
+import RoomCanvas, { type GuestLite } from '@/components/wedding-layout/RoomCanvas';
 import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
 import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
@@ -2341,6 +2341,7 @@ interface WhGuestRow {
   meal_choice: string | null;
   dietary_notes: string | null;
   guest_group: string | null;
+  table_id: string | null;
 }
 interface WhTableRow {
   id: string;
@@ -2389,6 +2390,23 @@ function WeddingPlannerDetailCard({ coupleWeddingId }: { coupleWeddingId: string
     })();
     return () => { cancelled = true; };
   }, [coupleWeddingId]);
+
+  /** Who is at each table — powers the room layout's "who's here" view. */
+  const guestsByTable = useMemo(() => {
+    const map: Record<string, GuestLite[]> = {};
+    for (const g of guests) {
+      if (!g.table_id) continue;
+      (map[g.table_id] ??= []).push({
+        id: g.id,
+        name: g.full_name,
+        partySize: Math.max(1, g.party_size || 1),
+        rsvpStatus: g.rsvp_status,
+        mealChoice: g.meal_choice,
+        group: g.guest_group,
+      });
+    }
+    return map;
+  }, [guests]);
 
   async function saveLayout(next: WeddingLayout) {
     const res = await fetch(`/api/venue/wedding-planner/${coupleWeddingId}/layout`, {
@@ -2499,6 +2517,7 @@ function WeddingPlannerDetailCard({ coupleWeddingId }: { coupleWeddingId: string
             initialLayout={layout}
             tables={tables.map((t) => ({ id: t.id, name: t.name, capacity: t.capacity }))}
             seatedByTable={Object.fromEntries(tables.map((t) => [t.id, t.seated]))}
+            guestsByTable={guestsByTable}
             onSave={saveLayout}
           />
           <p className="mt-2 text-[11px] text-gray-400">
