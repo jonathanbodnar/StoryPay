@@ -192,12 +192,14 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
       if (!res.ok) return;
       const data = await res.json() as LunarPayStatus;
       setLpStatus(data);
-      // An already-active merchant is never gated — the pause only holds back
-      // the signup/onboarding path. Everyone else stays on the welcome screen.
+      // Paused wins over everything except exempt venues, including over an
+      // already-approved merchant account: everyone else sees the notice.
       const isPaused = data.paused === true;
       setPaused(isPaused);
 
-      if (data.isActive) {
+      if (isPaused) {
+        setStep(0);
+      } else if (data.isActive) {
         setStep(5);
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
         onActivatedRef.current?.();
@@ -206,12 +208,12 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
         setStep(0);
       } else if (data.status === 'registered') {
         // Merchant created, but Step 2 (banking/MPA) hasn't been submitted.
-        setStep(isPaused ? 0 : 2);
-        if (!isPaused && data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
+        setStep(2);
+        if (data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
       } else if (['bank_information_sent','under_review','pending_review','pending'].includes(data.status ?? '')) {
         // Application is in flight — Fortis has the paperwork.
-        setStep(isPaused ? 0 : 4);
-        if (!isPaused && data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
+        setStep(4);
+        if (data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
       } else if (data.status === 'denied') {
         // Keep them on the welcome screen; the support team handles denials
         // manually. (We don't expose a denial UI in the wizard.)

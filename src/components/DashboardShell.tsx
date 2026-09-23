@@ -310,9 +310,11 @@ export default function DashboardShell({
 
           {/* StoryPay banner — shown only on the main /dashboard/settings page.
               While signup is paused it explains the pause rather than pushing
-              a venue into an application flow that is switched off.
+              a venue into an application flow that is switched off. Shown for
+              paused venues even if they are already an approved merchant, so
+              the only way to avoid it is exemption.
               Hidden in the native shell (Apple-risk financial CTA). */}
-          {!isNativeApp() && pathname === '/dashboard/settings' && paymentsActive === false ? (
+          {!isNativeApp() && pathname === '/dashboard/settings' && (paymentsActive === false || paymentsPaused) ? (
             paymentsPaused ? (
               <div className="mb-5 flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3.5 text-sm text-indigo-900">
                 <span className="mt-0.5 shrink-0 text-indigo-500">

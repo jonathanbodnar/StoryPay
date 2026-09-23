@@ -2,8 +2,9 @@
 
 import { Link2, Plus } from 'lucide-react';
 import Link from 'next/link';
+import PaymentGate from '@/components/PaymentGate';
 
-export default function PaymentLinksPage() {
+function PaymentLinksInner() {
  return (
  <div>
  <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
@@ -35,4 +36,10 @@ export default function PaymentLinksPage() {
  </div>
  </div>
  );
+}
+
+// Payment links take one-time payments, so this page follows the same pause gate
+// as the rest of the payment surfaces.
+export default function PaymentLinksPage() {
+  return <PaymentGate><PaymentLinksInner /></PaymentGate>;
 }

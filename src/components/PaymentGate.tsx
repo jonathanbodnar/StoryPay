@@ -32,10 +32,8 @@ export default function PaymentGate({ children }: { children: React.ReactNode })
   // Still loading — render children transparently; the page is interactive once we know
   if (active === null) return <>{children}</>;
 
-  // Approved — full access
-  if (active) return <>{children}</>;
-
-  // Signup is paused — explain it rather than sending them to a dead flow.
+  // Paused wins over everything except exempt venues: even an approved merchant
+  // sees the notice while the pause is on. Checked before `active` on purpose.
   if (paused) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
@@ -62,6 +60,9 @@ export default function PaymentGate({ children }: { children: React.ReactNode })
       </div>
     );
   }
+
+  // Approved — full access
+  if (active) return <>{children}</>;
 
   // Not approved — show locked state
   return (

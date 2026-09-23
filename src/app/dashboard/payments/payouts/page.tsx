@@ -1,8 +1,9 @@
 'use client';
 
 import { DollarSign } from 'lucide-react';
+import PaymentGate from '@/components/PaymentGate';
 
-export default function PayoutsPage() {
+function PayoutsInner() {
  return (
  <div>
  <div className="mb-8">
@@ -30,4 +31,10 @@ export default function PayoutsPage() {
  </div>
  </div>
  );
+}
+
+// Payouts are a StoryPay feature, so the page follows the same pause gate as
+// the other payment surfaces.
+export default function PayoutsPage() {
+  return <PaymentGate><PayoutsInner /></PaymentGate>;
 }
