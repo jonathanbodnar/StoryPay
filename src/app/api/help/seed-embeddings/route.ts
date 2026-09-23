@@ -2,24 +2,42 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { supabaseAdmin } from '@/lib/supabase';
 import { HELP_CATEGORIES } from '@/lib/help-articles';
+import { COUPLE_HELP_CATEGORIES } from '@/lib/couple-help-articles';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { isAdminSecretBearer } from '@/lib/admin-token';
 
-// One-time route to generate and store OpenAI embeddings for every help article.
-// Admin-only: requires either:
-//   - admin session cookie (role=admin in the super-admin panel), OR
-//   - Authorization: Bearer <ADMIN_SECRET> header (for CI / server-side seeding)
-// NOT available to venue users — each call burns hundreds of OpenAI tokens.
+/**
+ * Admin-only seeder for Help Center embeddings.
+ *
+ * POST body: { corpus?: 'venue' | 'couple' | 'both' }  (default 'venue')
+ *
+ * A note on why two corpora exist in one table: venue-owner articles and couple
+ * articles are stored side by side with a `corpus` discriminator so they can
+ * never surface in each other's search results. Seeding is per-corpus, and the
+ * same call also prunes rows whose article no longer exists (renamed or removed
+ * articles leave orphaned ids behind, which render as dead search hits).
+ *
+ * Auth: admin session cookie OR `Authorization: Bearer <ADMIN_SECRET>` for CI.
+ * NOT available to venue or couple users — each call burns OpenAI tokens.
+ */
+
+type Corpus = 'venue' | 'couple';
+
+const CORPUS_ARTICLES: Record<Corpus, { id: string; text: string }[]> = {
+  venue: HELP_CATEGORIES.flatMap((c) =>
+    c.articles.map((a) => ({ id: a.id, text: `${a.title}. ${a.tags.join(', ')}. ${a.body.slice(0, 500)}` })),
+  ),
+  couple: COUPLE_HELP_CATEGORIES.flatMap((c) =>
+    c.articles.map((a) => ({ id: a.id, text: `${a.title}. ${a.tags.join(', ')}. ${a.body.slice(0, 500)}` })),
+  ),
+};
 
 export async function POST(request: NextRequest) {
-  const authHeader  = request.headers.get('authorization') ?? '';
+  const authHeader = request.headers.get('authorization') ?? '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-  // Accept the admin bearer token (CI / server-side seeding) OR a real admin
-  // session cookie (master JWT or support team member).
-  const isBearerAdmin  = isAdminSecretBearer(bearerToken);
+  const isBearerAdmin = isAdminSecretBearer(bearerToken);
   const isSessionAdmin = await verifyAdminCookie();
-
   if (!isBearerAdmin && !isSessionAdmin) {
     return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
   }
@@ -28,46 +46,78 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'AI not configured' }, { status: 503 });
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-  // Build the text we embed per article: title + tags + body (trimmed to ~500 chars)
-  const articles = HELP_CATEGORIES.flatMap(c =>
-    c.articles.map(a => ({
-      id: a.id,
-      text: `${a.title}. ${a.tags.join(', ')}. ${a.body.slice(0, 500)}`,
-    }))
-  );
-
-  const results: { id: string; status: 'ok' | 'error'; error?: string }[] = [];
-
-  // Embed in batches of 8 to avoid rate limit bursts
-  const BATCH = 8;
-  for (let i = 0; i < articles.length; i += BATCH) {
-    const batch = articles.slice(i, i + BATCH);
-
-    const embeddingRes = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: batch.map(a => a.text),
-    });
-
-    // Use SECURITY DEFINER RPC to bypass PostgREST schema cache
-    for (let j = 0; j < batch.length; j++) {
-      const { error } = await supabaseAdmin.rpc('upsert_help_embedding', {
-        p_article_id: batch[j].id,
-        p_embedding:  embeddingRes.data[j].embedding,
-        p_updated_at: new Date().toISOString(),
-      });
-      results.push({ id: batch[j].id, status: error ? 'error' : 'ok', error: error?.message });
-    }
-
-    // Small pause between batches
-    if (i + BATCH < articles.length) {
-      await new Promise(r => setTimeout(r, 200));
-    }
+  let body: { corpus?: string } = {};
+  try {
+    body = (await request.json()) as { corpus?: string };
+  } catch {
+    // No body is fine — defaults to 'venue' for backwards compatibility.
   }
 
-  const ok  = results.filter(r => r.status === 'ok').length;
-  const err = results.filter(r => r.status === 'error').length;
+  const requested = (body.corpus ?? 'venue').toLowerCase();
+  if (!['venue', 'couple', 'both'].includes(requested)) {
+    return NextResponse.json({ error: "corpus must be 'venue', 'couple', or 'both'" }, { status: 400 });
+  }
+  const corpora: Corpus[] = requested === 'both' ? ['venue', 'couple'] : [requested as Corpus];
 
-  return NextResponse.json({ seeded: ok, errors: err, results });
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const BATCH = 8;
+
+  const summary: Record<string, { seeded: number; errors: number; pruned: string[] }> = {};
+
+  for (const corpus of corpora) {
+    const articles = CORPUS_ARTICLES[corpus];
+    let seeded = 0;
+    let errors = 0;
+
+    for (let i = 0; i < articles.length; i += BATCH) {
+      const batch = articles.slice(i, i + BATCH);
+      const embeddingRes = await openai.embeddings.create({
+        model: 'text-embedding-3-small',
+        input: batch.map((a) => a.text),
+      });
+
+      // SECURITY DEFINER RPC bypasses PostgREST's schema cache.
+      for (let j = 0; j < batch.length; j++) {
+        const { error } = await supabaseAdmin.rpc('upsert_help_embedding_v2', {
+          p_article_id: batch[j].id,
+          p_embedding: embeddingRes.data[j].embedding,
+          p_corpus: corpus,
+          p_updated_at: new Date().toISOString(),
+        });
+        if (error) errors += 1;
+        else seeded += 1;
+      }
+
+      if (i + BATCH < articles.length) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+
+    // Prune rows whose article no longer exists, so renamed or deleted articles
+    // do not linger as dead semantic hits. Embeddings are derived data, so this
+    // is safe: anything pruned here is regenerated by the next seed.
+    const currentIds = new Set(articles.map((a) => a.id));
+    const { data: existing } = await supabaseAdmin
+      .from('help_article_embeddings')
+      .select('article_id')
+      .eq('corpus', corpus);
+
+    const stale = (existing ?? [])
+      .map((r) => (r as { article_id: string }).article_id)
+      .filter((id) => !currentIds.has(id));
+
+    let pruned: string[] = [];
+    if (stale.length > 0) {
+      const { error } = await supabaseAdmin
+        .from('help_article_embeddings')
+        .delete()
+        .eq('corpus', corpus)
+        .in('article_id', stale);
+      if (!error) pruned = stale;
+    }
+
+    summary[corpus] = { seeded, errors, pruned };
+  }
+
+  return NextResponse.json({ ok: true, summary });
 }

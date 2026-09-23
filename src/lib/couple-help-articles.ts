@@ -510,3 +510,12 @@ On a computer, your Wedding Planner is the same information at a larger size, so
 export const COUPLE_HELP_ARTICLE_IDS: string[] = COUPLE_HELP_CATEGORIES.flatMap((c) =>
   c.articles.map((a) => a.id),
 );
+
+/** Every couple article, flattened with its parent category's display metadata. */
+export const ALL_COUPLE_ARTICLES = COUPLE_HELP_CATEGORIES.flatMap((c) =>
+  c.articles.map((a) => ({ ...a, catId: c.id, catLabel: c.label, catColor: c.color })),
+);
+
+export function getCoupleArticleById(id: string) {
+  return ALL_COUPLE_ARTICLES.find((a) => a.id === id);
+}

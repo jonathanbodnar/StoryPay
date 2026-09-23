@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import { getArticleById } from '@/lib/help-articles';
+import { getCoupleArticleById } from '@/lib/couple-help-articles';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -44,7 +45,8 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (!existing) {
-        const article = getArticleById(article_id);
+        // Couple articles live in their own set, so check both before giving up.
+        const article = getArticleById(article_id) ?? getCoupleArticleById(article_id);
         if (article) {
           // Fire-and-forget rewrite
           rewriteArticle(article_id, article.title, article.body).catch(console.error);
@@ -64,12 +66,13 @@ async function rewriteArticle(articleId: string, title: string, body: string) {
     messages: [
       {
         role: 'system',
-        content: `You are a technical writer for StoryVenue, a wedding venue management platform.
+        content: `You are a help-content writer for StoryVenue, a wedding platform used by wedding venues and by couples planning their weddings.
 Rewrite the following help article to be clearer and more helpful.
 Rules:
 - Keep the same topic but improve clarity, structure, and completeness
+- Match the audience the article is already written for (a venue owner, or a couple using the Wedding Planner). Never introduce venue-only details such as plans, billing, or internal tooling into a couple-facing article.
 - Plain text only, no markdown. Use "- " for bullets and "1. " for numbered steps
-- 150–350 words
+- 150-350 words
 - Friendly, action-oriented tone
 Respond with valid JSON only: {"title": "...", "body": "..."}`,
       },
