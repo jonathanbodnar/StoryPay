@@ -91,6 +91,29 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
 
 const NAV_IDS = DIRECTORY_NAV_REGISTRY.map((e) => e.id);
 
+/**
+ * Every nav id that sits under the Payments & proposals menu — i.e. everything
+ * gated by the StoryPay pause. Derived from the registry group plus the
+ * proposals/invoices entries that live in that group, so adding a new payments
+ * page to the menu automatically brings it under the pause.
+ */
+export function paymentsNavIds(): string[] {
+  return DIRECTORY_NAV_REGISTRY.filter((e) => e.group === 'payments').map((e) => e.id);
+}
+
+/** True when a dashboard pathname belongs to the Payments & proposals menu. */
+export function isPaymentsNavPath(pathname: string): boolean {
+  const p = (pathname || '').replace(/\/$/, '') || '/dashboard';
+
+  // Anything under /dashboard/payments/ counts, including routes that are not
+  // listed in the menu above (packages, products, payment links) so there is no
+  // gap for an unlisted-but-reachable page.
+  if (p === '/dashboard/payments' || p.startsWith('/dashboard/payments/')) return true;
+
+  const id = resolveNavIdForPath(pathname);
+  return id !== null && paymentsNavIds().includes(id);
+}
+
 export function allDirectoryNavIds(): string[] {
   return [...NAV_IDS];
 }

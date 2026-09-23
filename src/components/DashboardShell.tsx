@@ -14,6 +14,8 @@ import NativeBadgeSync from '@/components/NativeBadgeSync';
 import NativeTabPrefetch from '@/components/NativeTabPrefetch';
 // ImpersonationBanner rendered server-side in layout.tsx (black bar)
 import { DirectoryRouteGuard } from '@/components/DirectoryRouteGuard';
+import StoryPayPausedNotice from '@/components/StoryPayPausedNotice';
+import { isPaymentsNavPath } from '@/lib/directory-nav-registry';
 import UsageTracker from '@/components/analytics/UsageTracker';
 import OnboardingLauncher from '@/components/onboarding/OnboardingLauncher';
 import { trackClient } from '@/lib/analytics-client';
@@ -357,7 +359,16 @@ export default function DashboardShell({
             )
           ) : null}
 
-          <DirectoryRouteGuard allowedNavIds={allowedNavIds} hasConciergeAddon={hasConciergeAddon} hasBridePortal={hasBridePortal}>{children}</DirectoryRouteGuard>
+          <DirectoryRouteGuard allowedNavIds={allowedNavIds} hasConciergeAddon={hasConciergeAddon} hasBridePortal={hasBridePortal}>
+            {/*
+              StoryPay pause, applied centrally: every page under the Payments &
+              proposals menu is replaced by the notice while the pause is on.
+              Doing it here by path prefix (rather than wrapping each page)
+              means no payments route can be missed — including new ones, and
+              including nested routes like /dashboard/proposals/<id>/edit.
+            */}
+            {paymentsPaused && isPaymentsNavPath(pathname) ? <StoryPayPausedNotice /> : children}
+          </DirectoryRouteGuard>
         </main>
       </div>
 
