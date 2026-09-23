@@ -1118,7 +1118,7 @@ If Google Business search isn't working, contact StoryVenue support.`,
         body: `The Venue listing → Analytics page includes an interactive world map that shows visitors currently on your storyvenue.com listing in real time.
 
 How to access:
-1. Go to Venue listing → Analytics (path: /dashboard/listing/analytics).
+1. Go to Venue listing → Analytics (path: /dashboard/listing).
 2. Scroll down to the "Live visitor map" section.
 
 What you see on the map:
@@ -3196,8 +3196,11 @@ Either way, you approve the link from your Wedding Planner. One couple links to 
 
 What you get once connected
 - A live guest-list rollup: total invited, attending / declined / awaiting, headcount, and meal tallies for your BEO.
-- The reception seating layout with seated / capacity counts for day-of room setup.
+- The shared room layout — see exactly who is seated at each table, add tables and decor, and print a named floor plan for day-of room setup.
 - A shared message thread with the couple, so wedding-day details don't get lost across email and texts.
+
+Your couples get their own guidance
+Each couple has a Help & how-to section inside their own login (account menu on desktop, the More tab on a phone). If a couple asks how to add guests, send RSVP links, or build their seating plan, point them there rather than walking them through it.
 
 You decide what's shared
 On the Wedding Planner page you can toggle which wedding details the couple sees — wedding date, guest count, space / room, and coordinator.
@@ -3208,7 +3211,7 @@ Wedding Planner is included on private-client (Legacy / All-Inclusive) plans. On
       {
         id: 'wedding-planner-guests-seating',
         title: 'Wedding Planner — guest lists, RSVPs, and seating',
-        tags: ['wedding planner', 'wedding hub', 'guest list', 'rsvp', 'meal', 'dietary', 'headcount', 'seating', 'tables', 'seating chart', 'invitations', 'beo'],
+        tags: ['wedding planner', 'wedding hub', 'guest list', 'rsvp', 'meal', 'dietary', 'headcount', 'seating', 'tables', 'seating chart', 'room layout', 'floor plan', 'chairs', 'table shapes', 'who is seated', 'invitations', 'beo'],
         body: `Inside a connected Wedding Planner, the couple manages the wedding-day details and you get exactly the planning information you need — without handling their guests' personal contact info.
 
 Guest list & RSVPs (couple-owned)
@@ -3218,7 +3221,17 @@ What you see (no contact PII)
 On your Wedding Planner, expand a connected couple to see a live rollup: attending / declined / awaiting counts, total headcount, and a meal-by-meal tally for your catering and BEO. You do not see guest emails, phone numbers, or addresses — those stay with the couple.
 
 Seating chart
-The couple creates reception tables (name + number of seats) and seats each guest party. Seats fill by party size, with an over-capacity warning if a table is oversubscribed. On your side, you see the table layout with seated / capacity counts — handy for planning the room on the day.
+The couple creates reception tables (name + number of seats) and seats each guest party from their seating list. Seats fill by party size, with an over-capacity warning if a table is oversubscribed. On your side, you see the table layout with seated / capacity counts — handy for planning the room on the day.
+
+Room layout (shared floor plan)
+Tables are created in the seating list, then placed on a shared drag-and-drop floor plan that you and the couple both edit. The canvas opens in View mode: tap or click any table and a panel shows exactly who is seated there, grouped by party, with party size, RSVP status, meal choice, and group. On a computer, hovering a table shows a quick preview of the names. Edit mode is where items are moved, resized, rotated, or deleted, and where tables and decor are added.
+
+Decor includes the dance floor, head table, bar, DJ, gift table, cake, stage, and a text label, plus rows of chairs you can size from 1 to 10 — handy for ceremony seating. Tables come in three shapes: round, square, and long.
+
+Named floor plan for day-of setup
+Print or download the floor plan as a PNG. With "Include guest names" switched on, every table is labelled with its name, its seated count, and the parties seated there, so your team gets a named seating chart for setting the room rather than just a shape on a page.
+
+Unsaved changes are protected: leaving the canvas or collapsing the couple prompts before discarding edits, so a floor plan is never lost silently.
 
 Sharing controls
 You choose which wedding details the couple sees (wedding date, guest count, space / room, coordinator) from the toggles on the Wedding Planner page.`,
@@ -4154,7 +4167,6 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/media': ['listing-media-library', 'listing-photos', 'listing-overview', 'brand-setup'],
   '/dashboard/listing/images': ['listing-photos', 'listing-media-library', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/reviews': ['listing-reviews', 'listing-google-reviews', 'listing-overview', 'listing-publish'],
-  '/dashboard/listing/analytics': ['listing-analytics-realtime', 'listing-analytics-retention', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/booking-system': ['listing-booking-system', 'billing-verified-sponsored', 'mkt-system-vars', 'billing-pricing-guide', 'mkt-ai-concierge'],
   // /dashboard/listing IS the Bride Booking System™ analytics page (not the listing editor)
   '/dashboard/listing':        ['listing-analytics-realtime', 'listing-analytics-retention', 'billing-plans-overview', 'billing-trial', 'listing-overview'],

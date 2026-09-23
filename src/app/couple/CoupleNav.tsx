@@ -22,6 +22,7 @@ import {
   Images,
   Globe,
   Send,
+  HelpCircle,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 
@@ -165,6 +166,9 @@ export function CoupleNav() {
               </MenuLink>
               <MenuLink href="/couple/favorites" icon={<Heart className="h-4 w-4" />} onClick={() => setMenuOpen(false)}>
                 Favorites
+              </MenuLink>
+              <MenuLink href="/couple/help" icon={<HelpCircle className="h-4 w-4" />} onClick={() => setMenuOpen(false)}>
+                Help &amp; how-to
               </MenuLink>
               <div className="my-1 border-t border-gray-100" />
               <button

@@ -29,6 +29,7 @@ const MORE_MATCHES = [
   '/couple/invite-guests',
   '/couple/favorites',
   '/couple/profile',
+  '/couple/help',
 ];
 
 export default function CoupleMobileTabBar({

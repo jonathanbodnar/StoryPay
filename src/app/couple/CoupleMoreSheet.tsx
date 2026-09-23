@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Heart, User, LogOut, X } from 'lucide-react';
+import { Heart, User, LogOut, X, HelpCircle } from 'lucide-react';
 import { getCoupleSupabase } from '@/lib/couple-browser';
 import { topBarSafeAreaPadding } from '@/lib/platform';
 import { HUB_TOOLS } from './CoupleNav';
@@ -121,6 +121,20 @@ export default function CoupleMoreSheet({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-gray-900">Profile</p>
               <p className="truncate text-xs text-gray-500">Your account &amp; wedding details</p>
+            </div>
+          </Link>
+
+          <Link
+            href="/couple/help"
+            onClick={onClose}
+            className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 transition-colors active:bg-gray-50"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1b1b1b] text-white">
+              <HelpCircle className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-900">Help &amp; how-to</p>
+              <p className="truncate text-xs text-gray-500">Step-by-step guides</p>
             </div>
           </Link>
         </div>
