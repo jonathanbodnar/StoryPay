@@ -264,6 +264,7 @@ export default function Sidebar({
   const [conciergeUnread, setConciergeUnread] = useState(0);
   const [vcUnread, setVcUnread] = useState(0);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null); // null = loading
+  const [paymentsPaused, setPaymentsPaused] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   /** Locked-feature upgrade modal (opened when a locked menu item is clicked). */
   const [lockedItem, setLockedItem] = useState<NavItem | null>(null);
@@ -445,8 +446,9 @@ export default function Sidebar({
   const refreshPaymentsActive = useCallback(() => {
     fetch('/api/lunarpay/active', { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
-      .then((d: { active?: boolean } | null) => {
+      .then((d: { active?: boolean; paused?: boolean } | null) => {
         setPaymentsActive(d?.active ?? false);
+        setPaymentsPaused(d?.paused === true);
       })
       .catch(() => setPaymentsActive(false));
   }, []);
@@ -947,7 +949,9 @@ export default function Sidebar({
               </button>
               {paymentsOpen && (
                 <div className="mt-0.5 ml-2 pl-2 space-y-0.5 py-0.5">
-                  {/* Signup for StoryPay™ — first item, shown when not yet active.
+                  {/* StoryPay — first item, shown when not yet active.
+                      While signup is paused this opens the "big update" notice
+                      instead of the application wizard.
                       Hidden in the native shell (Apple-risk financial onboarding). */}
                   {!isNativeApp() && paymentsActive === false && (
                     <button
@@ -955,8 +959,12 @@ export default function Sidebar({
                       onClick={() => setShowOnboardingModal(true)}
                       className="flex w-full items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors whitespace-nowrap"
                     >
-                      <Zap size={13} className="shrink-0 text-indigo-500" />
-                      <span className="truncate">Signup for StoryPay™</span>
+                      {paymentsPaused
+                        ? <Sparkles size={13} className="shrink-0 text-indigo-500" />
+                        : <Zap size={13} className="shrink-0 text-indigo-500" />}
+                      <span className="truncate">
+                        {paymentsPaused ? 'StoryPay™ — coming soon' : 'Signup for StoryPay™'}
+                      </span>
                     </button>
                   )}
                   {(isMobile ? mobilePayments : paymentsFiltered).map((sub) => (
@@ -1264,7 +1272,8 @@ export default function Sidebar({
             style={{ top: flyoutPos.top, left: flyoutPos.left }}
             role="menu"
           >
-            {/* Signup for StoryPay™ — shown only when not yet active.
+            {/* StoryPay — shown only when not yet active. While paused this opens
+                the "big update" notice instead of the application wizard.
                 Hidden in the native shell (Apple-risk financial onboarding). */}
             {!isNativeApp() && paymentsActive === false && (
               <button
@@ -1272,8 +1281,12 @@ export default function Sidebar({
                 onClick={() => { setShowOnboardingModal(true); setFlyout(null); setFlyoutPos(null); }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 border-b border-gray-100 whitespace-nowrap"
               >
-                <Zap size={13} className="shrink-0 text-indigo-500" />
-                <span className="truncate">Signup for StoryPay™</span>
+                {paymentsPaused
+                  ? <Sparkles size={13} className="shrink-0 text-indigo-500" />
+                  : <Zap size={13} className="shrink-0 text-indigo-500" />}
+                <span className="truncate">
+                  {paymentsPaused ? 'StoryPay™ — coming soon' : 'Signup for StoryPay™'}
+                </span>
               </button>
             )}
             {paymentsFiltered.map((sub) => (
@@ -1317,8 +1330,12 @@ export default function Sidebar({
           >
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
               <div className="flex items-center gap-2.5">
-                <Zap size={18} className="text-indigo-600" />
-                <h2 className="font-semibold text-gray-900">Signup for StoryPay™</h2>
+                {paymentsPaused
+                  ? <Sparkles size={18} className="text-indigo-600" />
+                  : <Zap size={18} className="text-indigo-600" />}
+                <h2 className="font-semibold text-gray-900">
+                  {paymentsPaused ? 'StoryPay™ — coming soon' : 'Signup for StoryPay™'}
+                </h2>
               </div>
               <button
                 type="button"

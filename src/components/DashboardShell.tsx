@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
@@ -76,6 +77,7 @@ export default function DashboardShell({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null);
+  const [paymentsPaused, setPaymentsPaused] = useState(false);
   const [startEarlyBusy, setStartEarlyBusy] = useState(false);
   const [startEarlyError, setStartEarlyError] = useState('');
 
@@ -130,7 +132,10 @@ export default function DashboardShell({
   useEffect(() => {
     fetch('/api/lunarpay/active', { cache: 'no-store' })
       .then((r) => r.ok ? r.json() : null)
-      .then((d: { active?: boolean } | null) => setPaymentsActive(d?.active ?? false))
+      .then((d: { active?: boolean; paused?: boolean } | null) => {
+        setPaymentsActive(d?.active ?? false);
+        setPaymentsPaused(d?.paused === true);
+      })
       .catch(() => setPaymentsActive(false));
   }, []);
 
@@ -303,28 +308,51 @@ export default function DashboardShell({
             </div>
           ) : null}
 
-          {/* StoryPay not active banner — shown only on the main /dashboard/settings page.
-              Hidden in the native shell (Apple-risk financial onboarding CTA). */}
+          {/* StoryPay banner — shown only on the main /dashboard/settings page.
+              While signup is paused it explains the pause rather than pushing
+              a venue into an application flow that is switched off.
+              Hidden in the native shell (Apple-risk financial CTA). */}
           {!isNativeApp() && pathname === '/dashboard/settings' && paymentsActive === false ? (
-            <div className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-900">
-              <span className="mt-0.5 shrink-0 text-red-500">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-              </span>
-              <span>
-                <span className="font-semibold">Payment processing is not active.</span>{' '}
-                You cannot send proposals or process payments until your StoryPay™ merchant account is approved.{' '}
-                <button
-                  type="button"
-                  onClick={() => window.dispatchEvent(new CustomEvent('storypay:open-onboarding'))}
-                  className="underline font-semibold hover:text-red-700"
-                >
-                  Signup for StoryPay™
-                </button>
-                .
-              </span>
-            </div>
+            paymentsPaused ? (
+              <div className="mb-5 flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3.5 text-sm text-indigo-900">
+                <span className="mt-0.5 shrink-0 text-indigo-500">
+                  <Sparkles size={16} />
+                </span>
+                <span>
+                  <span className="font-semibold">StoryPay is getting a big update — stay tuned!</span>{' '}
+                  We&apos;ve paused new payment signups while we finish a newer, better payments experience.
+                  Everything else keeps working.{' '}
+                  <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent('storypay:open-onboarding'))}
+                    className="underline font-semibold hover:text-indigo-700"
+                  >
+                    See what&apos;s coming
+                  </button>
+                  .
+                </span>
+              </div>
+            ) : (
+              <div className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-900">
+                <span className="mt-0.5 shrink-0 text-red-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                </span>
+                <span>
+                  <span className="font-semibold">Payment processing is not active.</span>{' '}
+                  You cannot send proposals or process payments until your StoryPay™ merchant account is approved.{' '}
+                  <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent('storypay:open-onboarding'))}
+                    className="underline font-semibold hover:text-red-700"
+                  >
+                    Signup for StoryPay™
+                  </button>
+                  .
+                </span>
+              </div>
+            )
           ) : null}
 
           <DirectoryRouteGuard allowedNavIds={allowedNavIds} hasConciergeAddon={hasConciergeAddon} hasBridePortal={hasBridePortal}>{children}</DirectoryRouteGuard>

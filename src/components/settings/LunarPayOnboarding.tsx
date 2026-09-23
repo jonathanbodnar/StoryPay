@@ -31,7 +31,10 @@ import {
   ShieldCheck,
   BadgeCheck,
   ExternalLink,
+  CalendarClock,
+  Sparkles,
 } from 'lucide-react';
+import DashboardBookingModal from '@/components/DashboardBookingModal';
 
 /**
  * Hand-off to the LunarPay-hosted signing page. Fortis whitelists ONLY
@@ -88,6 +91,8 @@ interface LunarPayStatus {
   merchantId?: number;
   orgToken?: string;
   mpaEmbedUrl?: string;
+  /** True when StoryPay signup is paused for this venue. */
+  paused?: boolean;
 }
 
 interface Props {
@@ -149,6 +154,8 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
   const [lpStatus, setLpStatus] = useState<LunarPayStatus | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [step, setStep] = useState(0); // 0=welcome,1=biz,2=banking,3=mpa,4=pending,5=active
+  const [paused, setPaused] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -185,6 +192,10 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
       if (!res.ok) return;
       const data = await res.json() as LunarPayStatus;
       setLpStatus(data);
+      // An already-active merchant is never gated — the pause only holds back
+      // the signup/onboarding path. Everyone else stays on the welcome screen.
+      const isPaused = data.paused === true;
+      setPaused(isPaused);
 
       if (data.isActive) {
         setStep(5);
@@ -195,12 +206,12 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
         setStep(0);
       } else if (data.status === 'registered') {
         // Merchant created, but Step 2 (banking/MPA) hasn't been submitted.
-        setStep(2);
-        if (data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
+        setStep(isPaused ? 0 : 2);
+        if (!isPaused && data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
       } else if (['bank_information_sent','under_review','pending_review','pending'].includes(data.status ?? '')) {
         // Application is in flight — Fortis has the paperwork.
-        setStep(4);
-        if (data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
+        setStep(isPaused ? 0 : 4);
+        if (!isPaused && data.mpaEmbedUrl) setMpaEmbedUrl(data.mpaEmbedUrl);
       } else if (data.status === 'denied') {
         // Keep them on the welcome screen; the support team handles denials
         // manually. (We don't expose a denial UI in the wizard.)
@@ -343,7 +354,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
             <p className="font-semibold text-amber-800">Application under review</p>
             <p className="mt-1 text-sm text-amber-700">
               Fortis is reviewing your application. This typically takes <strong>24–48 hours</strong>.
-              You'll be notified by email when your account is approved — or you can check back here.
+              You&apos;ll be notified by email when your account is approved — or you can check back here.
             </p>
           </div>
         </div>
@@ -393,7 +404,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
             onClick={handleMpaComplete}
             className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
           >
-            I've signed the agreement <ChevronRight size={15} />
+            I&apos;ve signed the agreement <ChevronRight size={15} />
           </button>
         </div>
       </div>
@@ -413,7 +424,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
             <h3 className="font-semibold text-sm text-gray-900">Banking & Processing Details</h3>
           </div>
           <p className="text-xs text-gray-500 mb-5">
-            Funds from your clients' payments will be deposited into the bank account below.
+            Funds from your clients&apos; payments will be deposited into the bank account below.
             Your card and ACH volume estimates help Fortis configure your limits.
           </p>
 
@@ -597,13 +608,33 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
       <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600">
-            <CreditCard size={20} className="text-white" />
+            {paused ? <Sparkles size={20} className="text-white" /> : <CreditCard size={20} className="text-white" />}
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Signup for StoryPay™ Payments</h3>
-            <p className="text-xs text-gray-500">Powered by StoryPay&apos;s merchant platform · PCI-compliant</p>
+            <h3 className="font-semibold text-gray-900">
+              {paused ? 'StoryPay™ is getting a big update' : 'Signup for StoryPay™ Payments'}
+            </h3>
+            <p className="text-xs text-gray-500">
+              {paused
+                ? 'Stay tuned — signups are paused while we roll out a new payments experience.'
+                : 'Powered by StoryPay&apos;s merchant platform · PCI-compliant'}
+            </p>
           </div>
         </div>
+
+        {paused && (
+          <div className="mb-5 flex items-start gap-3 rounded-xl border border-indigo-200 bg-white px-4 py-3.5">
+            <Sparkles size={18} className="mt-0.5 shrink-0 text-indigo-500" />
+            <div>
+              <p className="text-sm font-semibold text-indigo-900">StoryPay is getting a big update — stay tuned!</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-indigo-800">
+                We&apos;ve paused new signups while we finish a newer, better payments experience.
+                Everything below is what&apos;s coming. If you&apos;d like a walkthrough in the meantime,
+                schedule a demo and we&apos;ll show you.
+              </p>
+            </div>
+          </div>
+        )}
 
         <p className="text-sm text-gray-600 mb-5">
           Accept credit cards and bank transfers directly through StoryPay™. Send proposals, collect
@@ -655,13 +686,24 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
           </ol>
         </div>
 
-        <button
-          onClick={() => setStep(1)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-        >
-          Get Started <ChevronRight size={16} />
-        </button>
+        {paused ? (
+          <button
+            onClick={() => setDemoOpen(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+          >
+            <CalendarClock size={16} /> Schedule a demo
+          </button>
+        ) : (
+          <button
+            onClick={() => setStep(1)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+          >
+            Get Started <ChevronRight size={16} />
+          </button>
+        )}
       </div>
+
+      <DashboardBookingModal open={demoOpen} onClose={() => setDemoOpen(false)} />
     </div>
   );
 }

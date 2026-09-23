@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { normalizeLunarPayStatus } from '@/lib/lunarpay-status';
+import { isStoryPayPaused } from '@/lib/storypay-pause';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -27,7 +28,7 @@ export async function GET() {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_merchant_id, lunarpay_org_token, onboarding_status, lunarpay_secret_key, lunarpay_publishable_key')
+    .select('lunarpay_merchant_id, lunarpay_org_token, onboarding_status, lunarpay_secret_key, lunarpay_publishable_key, slug')
     .eq('id', venueId)
     .maybeSingle();
 
@@ -37,11 +38,16 @@ export async function GET() {
     onboarding_status?: string | null;
     lunarpay_secret_key?: string | null;
     lunarpay_publishable_key?: string | null;
+    slug?: string | null;
   };
   const v = venue as VenueRow | null;
 
+  // Signup is paused for this venue; exempt venues keep full access. Reported on
+  // every branch so the onboarding UI can gate before it renders the wizard.
+  const paused = isStoryPayPaused(v?.slug);
+
   if (!v?.lunarpay_merchant_id) {
-    return NextResponse.json({ status: 'not_started', isActive: false });
+    return NextResponse.json({ status: 'not_started', isActive: false, paused });
   }
 
   // If already active we can skip the live poll
@@ -49,6 +55,7 @@ export async function GET() {
     return NextResponse.json({
       status: 'active',
       isActive: true,
+      paused,
       merchantId: v.lunarpay_merchant_id,
       orgToken: v.lunarpay_org_token,
       mpaEmbedUrl: v.lunarpay_org_token
@@ -61,6 +68,7 @@ export async function GET() {
     return NextResponse.json({
       status: normalizeLunarPayStatus(v.onboarding_status, 'registered'),
       isActive: false,
+      paused,
       merchantId: v.lunarpay_merchant_id,
     });
   }
@@ -113,6 +121,7 @@ export async function GET() {
     return NextResponse.json({
       status: (updates.onboarding_status as string) ?? normalized,
       isActive,
+      paused,
       merchantId: v.lunarpay_merchant_id,
       orgToken: data?.orgToken ?? v.lunarpay_org_token,
       mpaEmbedUrl: data?.mpaEmbedUrl ??
@@ -124,6 +133,7 @@ export async function GET() {
     return NextResponse.json({
       status: normalizeLunarPayStatus(v.onboarding_status, 'registered'),
       isActive: false,
+      paused,
       merchantId: v.lunarpay_merchant_id,
       orgToken: v.lunarpay_org_token,
       mpaEmbedUrl: v.lunarpay_org_token
