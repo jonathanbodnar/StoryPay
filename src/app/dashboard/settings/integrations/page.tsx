@@ -706,7 +706,7 @@ function EventTempleCard() {
 
 // ── HoneyBook (via Zapier) Helper Card ────────────────────────────────────────
 
-function HoneyBookCard() {
+function HoneyBookCard({ onGenerateKey }: { onGenerateKey?: () => void }) {
   return (
     <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">
       <div className="px-6 py-5 flex items-start gap-4">
@@ -722,15 +722,16 @@ function HoneyBookCard() {
             <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-orange-700">Via Zapier</span>
           </div>
           <p className="mt-1 text-sm text-gray-500 leading-relaxed">
-            HoneyBook doesn&apos;t offer a direct connection, but you can still send new StoryVenue leads
-            straight into HoneyBook using Zapier — no coding required.
+            Connect HoneyBook using Zapier, our official integration. New StoryVenue leads arrive in
+            HoneyBook as clients or projects automatically — no coding, and no approval process to
+            wait on.
           </p>
 
           <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3.5 text-sm text-gray-600 leading-relaxed">
             <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">How to connect</span>
             <ol className="list-decimal list-inside space-y-1">
-              <li>Generate a StoryVenue API key below (in the Zapier section) and copy it.</li>
-              <li>In Zapier, create a Zap with the <strong>StoryVenue → New Lead</strong> trigger.</li>
+              <li>Generate a StoryVenue API key and copy it.</li>
+              <li>In Zapier, create a Zap using the <strong>StoryVenue</strong> app (our official integration) and the <strong>New Lead</strong> trigger.</li>
               <li>Add a <strong>HoneyBook → Create Client</strong> (or Create Project) action.</li>
               <li>Map the lead&apos;s name, email, and phone across, then turn the Zap on.</li>
             </ol>
@@ -743,8 +744,16 @@ function HoneyBookCard() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 transition-all"
             >
-              Open Zapier <ExternalLink size={14} />
+              Set up in Zapier <ExternalLink size={14} />
             </a>
+            {onGenerateKey && (
+              <button
+                onClick={onGenerateKey}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-all"
+              >
+                <KeyRound size={14} /> Generate API key
+              </button>
+            )}
             <a
               href="https://help.honeybook.com/en/articles/2209205-automate-tasks-with-zapier"
               target="_blank"
@@ -762,6 +771,7 @@ function HoneyBookCard() {
         <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-1.5">Good to know</span>
         <ul className="space-y-1">
           <li className="flex items-start gap-2"><CheckCircle2 size={13} className="text-emerald-500 mt-0.5 shrink-0" /><span>New leads flow from StoryVenue into HoneyBook as new clients or projects.</span></li>
+          <li className="flex items-start gap-2"><AlertCircle size={13} className="text-gray-400 mt-0.5 shrink-0" /><span className="text-gray-400">HoneyBook only gives direct API access to approved partners, so Zapier is the quickest way in — nothing to apply for.</span></li>
           <li className="flex items-start gap-2"><AlertCircle size={13} className="text-gray-400 mt-0.5 shrink-0" /><span className="text-gray-400">HoneyBook&apos;s Zapier connection requires their Essential or Premium plan.</span></li>
           <li className="flex items-start gap-2"><AlertCircle size={13} className="text-gray-400 mt-0.5 shrink-0" /><span className="text-gray-400">HoneyBook custom fields aren&apos;t supported over Zapier, so extra details map into the project notes/details field.</span></li>
         </ul>
@@ -1103,7 +1113,15 @@ export default function IntegrationsPage() {
       <EventTempleCard />
 
       {/* ── HoneyBook (via Zapier) card ──────────────────────────────── */}
-      <HoneyBookCard />
+      <HoneyBookCard
+        onGenerateKey={() => {
+          setShowCreate(true);
+          setNewKeyName('HoneyBook');
+          setTimeout(() => {
+            document.getElementById('keys-section')?.scrollIntoView({ behavior: 'smooth' });
+          }, 30);
+        }}
+      />
 
       {/* ── Calendly card ────────────────────────────────────────────── */}
       <CalendlyCard />
@@ -1121,7 +1139,7 @@ export default function IntegrationsPage() {
             </div>
             <p className="mt-1 text-sm text-gray-500 leading-relaxed">
               Trigger Zaps when leads arrive, proposals are signed, payments are received, or appointments are booked.
-              Send data into StoryVenue from any of Zapier's 6,000+ apps.
+              Send data into StoryVenue from any of Zapier&apos;s 6,000+ apps.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <a
@@ -1183,8 +1201,8 @@ export default function IntegrationsPage() {
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-semibold text-emerald-900">Your new API key</h3>
               <p className="mt-1 text-xs text-emerald-800">
-                Copy it now — for security, this is the <strong>only time</strong> we'll show the full key.
-                Paste it into Zapier's connection screen when prompted.
+                Copy it now — for security, this is the <strong>only time</strong> we&apos;ll show the full key.
+                Paste it into Zapier&apos;s connection screen when prompted.
               </p>
               <div className="mt-3 flex items-stretch gap-2">
                 <code className="flex-1 min-w-0 break-all rounded-lg bg-white px-3 py-2.5 text-[13px] font-mono text-gray-900 border border-emerald-200">
@@ -1202,7 +1220,7 @@ export default function IntegrationsPage() {
                 onClick={() => setNewPlaintext(null)}
                 className="mt-3 text-xs font-semibold text-emerald-900 hover:underline"
               >
-                I've copied it — dismiss this
+                I&apos;ve copied it — dismiss this
               </button>
             </div>
           </div>

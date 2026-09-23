@@ -224,8 +224,8 @@ Five tabs covering every aspect of how your calendar works:
 - Use "Send test lead" to confirm it's working. One-way (StoryVenue → Event Temple). Disconnect anytime.
 
 ### HoneyBook (via Zapier)
-- HoneyBook has no direct connection, but you can still send new leads into it using Zapier.
-- Setup: generate a StoryVenue API key (Settings → Integrations → Zapier), then in Zapier build a Zap with the StoryVenue "New Lead" trigger and a HoneyBook "Create Client" (or "Create Project") action; map name, email, and phone across.
+- HoneyBook only gives direct API access to approved partners rather than self-serve access, so Zapier (StoryVenue's official integration) is the practical way to connect. Nothing for the venue to apply for.
+- Setup: generate a StoryVenue API key (Settings → Integrations → Zapier), then in Zapier build a Zap using the StoryVenue app with the "New Lead" trigger and a HoneyBook "Create Client" (or "Create Project") action; map name, email, and phone across.
 - Requires HoneyBook's Essential or Premium plan. HoneyBook custom fields aren't supported over Zapier, so extra details go into the project details/notes field.
 
 ## Proposals & Invoices

@@ -3154,12 +3154,15 @@ Test and manage
       {
         id: 'int-honeybook',
         title: 'Connecting HoneyBook (via Zapier)',
-        tags: ['honeybook', 'zapier', 'crm', 'lead', 'integration', 'connect', 'automation', 'no direct'],
-        body: `HoneyBook doesn't offer a direct connection, but you can still send new StoryVenue leads straight into HoneyBook using Zapier — no coding required.
+        tags: ['honeybook', 'zapier', 'crm', 'lead', 'integration', 'connect', 'automation'],
+        body: `Send new StoryVenue leads straight into HoneyBook using Zapier — StoryVenue's official integration. No coding required.
+
+Why Zapier rather than a direct connection
+HoneyBook only gives direct API access to partners it has approved, rather than offering self-serve access. So the quickest way to connect the two is Zapier, and there is nothing for you to apply for or wait on.
 
 How to connect
 1. In StoryVenue, go to Settings → Integrations → Zapier section and generate an API key (copy it — it's shown only once).
-2. In Zapier, create a new Zap with the StoryVenue "New Lead" trigger and connect it using your API key.
+2. In Zapier, create a new Zap using the StoryVenue app (our official integration) and choose the "New Lead" trigger.
 3. Add a HoneyBook action — "Create Client" or "Create Project".
 4. Map the lead's name, email, and phone into the HoneyBook fields, then turn the Zap on.
 

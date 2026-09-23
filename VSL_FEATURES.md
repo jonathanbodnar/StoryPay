@@ -209,7 +209,7 @@ Each report is date-range filterable (defaulting to year-to-date), previewed in-
 - **Event Temple** — automatically creates a lead booking in Event Temple on form submission (contact details, wedding date, message, UTM attribution), with configurable pipeline/stage and referral-source mapping.
 - **Calendly** — syncs upcoming scheduled events into the venue's calendar.
 - **Zapier (native)** — a private API-key-based integration connecting StoryVenue to 6,000+ other apps without custom code.
-- **HoneyBook (via Zapier)** — since HoneyBook has no direct API, a guided Zapier recipe (StoryVenue "New Lead" trigger → HoneyBook "Create Client/Project" action) sends new leads over automatically.
+- **HoneyBook (via Zapier)** — HoneyBook only grants direct API access to approved partners, so a guided Zapier recipe (StoryVenue "New Lead" trigger → HoneyBook "Create Client/Project" action) sends new leads over automatically, with nothing for the venue to apply for.
 
 **Outcome:** A venue's existing CRM, ad platform, calendar, and review presence all stay in sync with StoryVenue automatically — no manual re-entry, no data stuck in one tool.
 
