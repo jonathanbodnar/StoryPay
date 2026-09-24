@@ -18,6 +18,7 @@ import {
   Unlink,
   Send,
   CalendarClock,
+  Inbox,
 } from 'lucide-react';
 
 interface ApiKey {
@@ -704,6 +705,223 @@ function EventTempleCard() {
   );
 }
 
+// ── LeadFinder™ ──────────────────────────────────────────────────────────────
+
+interface LeadFinderData {
+  enabled: boolean;
+  configured: boolean;
+  address: string | null;
+  forwardedCopyTo: string | null;
+  stats: {
+    emailsSeen: number;
+    leadsCreated: number;
+    skipped: number;
+    lastEmailAt: string | null;
+    lastLeadAt: string | null;
+  };
+  recent: Array<{
+    subject: string | null;
+    senderDomain: string | null;
+    detectedSource: string | null;
+    status: string;
+    reason: string | null;
+    receivedAt: string | null;
+  }>;
+}
+
+/**
+ * StoryVenue LeadFinder™ — the venue's inbound lead address, with the two ways
+ * to point mail at it and a short record of what has actually arrived.
+ *
+ * The address is fetched rather than computed here: its signature is an HMAC
+ * over the venue id with a server-only secret.
+ */
+function LeadFinderCard() {
+  const [data, setData] = useState<LeadFinderData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/venue/leadfinder', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setData(d as LeadFinderData | null))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function copyAddress() {
+    if (!data?.address) return;
+    try {
+      await navigator.clipboard.writeText(data.address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked — the address is selectable text either way */
+    }
+  }
+
+  const when = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
+
+  const status = !data || loading
+    ? null
+    : !data.configured
+      ? { label: 'Unavailable', cls: 'bg-gray-100 text-gray-500 border-gray-200' }
+      : !data.enabled
+        ? { label: 'Not enabled yet', cls: 'bg-amber-100 text-amber-700 border-amber-200' }
+        : { label: 'Live', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+
+  return (
+    <div className="mb-6 rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div className="px-6 py-5 flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50">
+          <Inbox size={22} className="text-indigo-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">LeadFinder™</h2>
+            {status && (
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${status.cls}`}>
+                {status.label}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">
+            Turn wedding inquiries that arrive in your own inbox into StoryVenue leads. Give this
+            address to your directories, and any inquiry emailed to it lands in your Leads
+            automatically.
+          </p>
+
+          {loading && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+              <Loader2 size={13} className="animate-spin" /> Loading your address…
+            </div>
+          )}
+
+          {!loading && data && !data.configured && (
+            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3.5 text-sm text-gray-600">
+              Inbound email is not configured for this account yet, so LeadFinder has no address to
+              give you. Contact StoryVenue support to have it switched on.
+            </div>
+          )}
+
+          {!loading && data?.address && (
+            <>
+              <div className="mt-3">
+                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  Your LeadFinder address
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="min-w-0 flex-1 break-all rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] font-medium text-gray-800">
+                    {data.address}
+                  </code>
+                  <button
+                    onClick={copyAddress}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-3.5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3.5 text-sm leading-relaxed text-gray-600">
+                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  How to connect it
+                </span>
+                <p className="mb-2">
+                  <strong>Easiest:</strong> paste the address above wherever a directory asks for the
+                  email that should receive leads — The Knot, WeddingWire, Zola and so on. That is a
+                  one-time paste per site, and nothing else to set up.
+                </p>
+                <p>
+                  <strong>If a site will not let you change that email:</strong> add one forwarding
+                  rule in Gmail (Settings → Forwarding and POP/IMAP → add the address, confirm, then
+                  Filters → forward matching mail to it). One rule can cover several directories at
+                  once.
+                </p>
+              </div>
+
+              {!data.enabled && (
+                <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
+                  <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                  <span>
+                    LeadFinder is built but not switched on for your account yet, so mail sent here is
+                    not being turned into leads. Contact StoryVenue support to enable it.
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Activity — only once the address exists and there is something to report. */}
+      {!loading && data?.address && (
+        <div className="border-t border-gray-100 px-6 py-4 text-sm text-gray-500">
+          <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+            Activity
+          </span>
+          {data.stats.emailsSeen === 0 ? (
+            <p className="text-xs text-gray-400">
+              Nothing received yet. Once mail starts arriving, you will see each message here.
+            </p>
+          ) : (
+            <>
+              <ul className="space-y-1">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-emerald-500" />
+                  <span>
+                    {data.stats.leadsCreated} lead{data.stats.leadsCreated === 1 ? '' : 's'} created from{' '}
+                    {data.stats.emailsSeen} email{data.stats.emailsSeen === 1 ? '' : 's'}
+                    {data.stats.skipped > 0 ? ` · ${data.stats.skipped} skipped` : ''}
+                  </span>
+                </li>
+                {when(data.stats.lastEmailAt) && (
+                  <li className="flex items-start gap-2">
+                    <Activity size={13} className="mt-0.5 shrink-0 text-gray-400" />
+                    <span>Last email {when(data.stats.lastEmailAt)}</span>
+                  </li>
+                )}
+                {when(data.stats.lastLeadAt) && (
+                  <li className="flex items-start gap-2">
+                    <Activity size={13} className="mt-0.5 shrink-0 text-gray-400" />
+                    <span>Last lead {when(data.stats.lastLeadAt)}</span>
+                  </li>
+                )}
+              </ul>
+              {data.recent.length > 0 && (
+                <div className="mt-2.5 space-y-1.5">
+                  {data.recent.map((r, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                      <span
+                        className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
+                          r.status === 'processed'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : r.status === 'skipped'
+                              ? 'bg-gray-100 text-gray-500 border-gray-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-gray-600">
+                        {r.detectedSource || r.senderDomain || 'Unknown sender'}
+                        {r.subject ? ` — ${r.subject}` : ''}
+                      </span>
+                      {r.reason && <span className="text-gray-400">{r.reason.replace(/_/g, ' ')}</span>}
+                      <span className="text-gray-400">{when(r.receivedAt) ?? ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── HoneyBook (via Zapier) Helper Card ────────────────────────────────────────
 
 function HoneyBookCard({ onGenerateKey }: { onGenerateKey?: () => void }) {
@@ -1105,6 +1323,9 @@ export default function IntegrationsPage() {
           </p>
         </div>
       </div>
+
+      {/* ── LeadFinder™ card ─────────────────────────────────────────── */}
+      <LeadFinderCard />
 
       {/* ── Tripleseat card ──────────────────────────────────────────── */}
       <TripleseatCard />
