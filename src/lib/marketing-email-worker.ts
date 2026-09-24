@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail, buildBulkEmailHeaders, htmlToPlainText, injectPreheaderHtml } from '@/lib/email';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
+import { leadSmsAllowed } from '@/lib/sms-consent';
 import {
   parseEmailDefinition,
   parseSegment,
@@ -1171,7 +1172,14 @@ export async function sendBookingSystemGuide(
             `📱 Guide sent via SMS:\n${(smsResult as { mergedBody: string }).mergedBody}`,
           );
         } else if (!smsResult.ok) {
-          failures.push(`sms_failed: ${(smsResult as { error?: string }).error ?? 'unknown'}`);
+          const smsErr = (smsResult as { error?: string }).error ?? 'unknown';
+          // A consent skip is a deliberate non-send, not a delivery failure —
+          // don't raise a guide issue for it.
+          if (smsErr === 'no_sms_consent') {
+            console.log(`[guide] SMS guide skipped for ${leadId}: no sms_consent`);
+          } else {
+            failures.push(`sms_failed: ${smsErr}`);
+          }
         }
       } catch (e) {
         failures.push(`sms_threw: ${e instanceof Error ? e.message : String(e)}`);
@@ -1898,6 +1906,13 @@ async function sendAutomationSmsToLead(
   if (!vars) return { ok: false, error: 'suppressed' };
   const phone = await resolvePhoneForLead(venueId, leadId);
   if (!phone) return { ok: false, error: 'no_phone' };
+  // Consent gate: a lead captured from a forwarded email can carry a number
+  // without permission to text it. Skip the SMS step (the sequence continues)
+  // rather than sending something we have no consent for.
+  if (!(await leadSmsAllowed(leadId))) {
+    console.log(`[worker] SMS skipped for lead ${leadId}: no sms_consent (not opted in yet)`);
+    return { ok: false, error: 'no_sms_consent' };
+  }
   const { data: venue } = await supabaseAdmin
     .from('venues')
     .select('ghl_access_token, ghl_location_id, ghl_connected')
@@ -2797,6 +2812,20 @@ async function processOneEnrollment(en: {
   // We also stamp ai_booking_system_activated = true so the activation cron
   // won't try to independently re-activate this lead via the 14-day timer.
   if (step.step_type === 'start_ai_concierge') {
+    // Consent gate: the AI Concierge engages the couple by TEXT, so a lead we are
+    // not permitted to text must not be activated. Defer instead of activating —
+    // consent arriving later (their reply, or a form submission) re-runs
+    // activation through recordSmsConsentByEmail.
+    if (!(await leadSmsAllowed(en.lead_id))) {
+      console.log('[worker] start_ai_concierge deferred: no sms_consent for', en.lead_id);
+      const deferredAt = new Date().toISOString();
+      await supabaseAdmin
+        .from('marketing_automation_enrollments')
+        .update({ status: 'completed', current_step_index: idx + 1, completed_at: deferredAt, next_run_at: deferredAt })
+        .eq('id', en.id);
+      void logStepExecution({ automation_id: en.automation_id, enrollment_id: en.id, venue_id: en.venue_id, lead_id: en.lead_id, step_order: idx, step_type: 'start_ai_concierge', status: 'skipped', error_text: 'no_sms_consent' });
+      return 'completed';
+    }
     try {
       // Route through setLeadAiState so we get the audit row in
       // ai_state_transitions, the syncAiStateTag side-effect, and the

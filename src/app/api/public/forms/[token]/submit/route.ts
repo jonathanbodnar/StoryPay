@@ -16,6 +16,7 @@ import {
 } from '@/lib/marketing-form-schema';
 import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { recordSmsConsentByEmail } from '@/lib/sms-consent';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -447,6 +448,14 @@ export async function POST(
   if (createdLeadId) {
     await logNewLeadOpportunity(formRow.venue_id, createdLeadId)
       .catch((e) => console.warn('[form submit] opportunity log failed:', e));
+  }
+
+  // A submitted form that collected a phone number is an explicit opt-in. This
+  // lifts the sms_consent gate for a contact who first reached the venue through
+  // a captured forward (LeadFinder). Recorded BEFORE the guide and workflow steps
+  // below so anything that wants to text them already sees the consent.
+  if (phoneVal && emailVal) {
+    void recordSmsConsentByEmail({ venueId: formRow.venue_id, email: emailVal, source: 'form_submit' });
   }
 
   // Phase 1 — Booking System guide delivery (email + SMS, fires immediately)

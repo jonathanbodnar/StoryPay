@@ -56,6 +56,7 @@ import { enforceQuietHours, isInsideQuietHours } from './quiet-hours';
 import { buildAiConciergeSystemPrompt } from './prompt-builder';
 import { generateSmsWithDeepSeek, clampSmsLength } from './llm';
 import { logAiOutboundMessage } from './conversation-helpers';
+import { leadSmsAllowed } from '@/lib/sms-consent';
 import { sendAiSms } from './sms-provider';
 import { getAiRuntimeSettings, stampCronHeartbeat } from './runtime-settings';
 import { evaluateSpendCap, maybeSendCapWarningEmail } from './spend-caps';
@@ -224,6 +225,9 @@ async function reserveDueLeads(
        WHERE l.id = ${leadIdFilter}
          AND l.ai_state = 'ai_active'
          AND COALESCE(l.sms_dnd, false) = false
+         -- Never text a lead we have no consent for (e.g. captured from a
+         -- forwarded email). Consent is granted by their reply or a form.
+         AND COALESCE(l.sms_consent, true) = true
          AND v.id = l.venue_id
       RETURNING
         l.id,
@@ -253,6 +257,8 @@ async function reserveDueLeads(
            AND l2.ai_next_send_at IS NOT NULL
            AND l2.ai_next_send_at <= NOW()
            AND COALESCE(l2.sms_dnd, false) = false
+           -- Consent gate: only text leads whose number we are allowed to use.
+           AND COALESCE(l2.sms_consent, true) = true
            AND COALESCE(v2.ai_concierge_enabled, false) = true
            -- Super admin force-off beats plan inclusion, addon, everything.
            AND COALESCE(v2.ai_concierge_admin_disabled, false) = false
@@ -298,6 +304,8 @@ async function reserveDueLeads(
        )
        AND v.id = l.venue_id
        AND l.ai_state = 'ai_active'
+       -- Re-checked at reservation time: consent can be revoked in between.
+       AND COALESCE(l.sms_consent, true) = true
        AND l.ai_next_send_at <= NOW() + (${reservMin} || ' minutes')::interval
     RETURNING
       l.id,
@@ -416,6 +424,20 @@ async function processOneLead(
       detail:  `ai_state is now "${(fresh as { ai_state?: string } | null)?.ai_state ?? 'missing'}" — reply/pause landed after reservation; not sending`,
     });
     return { kind: 'skipped', reason: 'state_changed' };
+  }
+
+  // Same reasoning, one more field: consent can be revoked (or never granted)
+  // after the reservation. Checked through the tolerant reader so a database
+  // that hasn't had migration 255 applied yet still behaves exactly as before.
+  if (!(await leadSmsAllowed(row.id))) {
+    await logAiRun({
+      leadId:  row.id,
+      venueId: row.venue_id,
+      attempt: row.ai_attempt_count + 1,
+      outcome: 'skipped_state_changed',
+      detail:  'sms_consent is false — the lead has not opted in to texts; not sending',
+    });
+    return { kind: 'skipped', reason: 'no_sms_consent' };
   }
 
   // 4. Build prompt

@@ -17,10 +17,11 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { findMatchingLeadIds } from '@/lib/find-matching-leads';
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
-import { logNewLeadOpportunity, sendBookingSystemGuide } from '@/lib/marketing-email-worker';
+import { logNewLeadOpportunity, sendBookingSystemGuide, onMarketingFormSubmitted } from '@/lib/marketing-email-worker';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { maybePushLeadToTripleseat } from '@/lib/tripleseat';
+import { ensureListingForm } from '@/lib/listing-lead-form';
 import { leadFinderEnabledForSlug } from '@/lib/leadfinder/address';
 import {
   classifyInbound,
@@ -394,6 +395,12 @@ export async function ingestLeadFinderEmail(
       // listing, and these leads never touched it.
       source: 'leadfinder',
       status: 'new',
+      // The couple gave this number to a directory, not to us, so it is not
+      // consent for an automated text. Every automated SMS path checks this
+      // before sending; a reply or a form submission flips it to true.
+      sms_consent:        false,
+      sms_consent_at:     new Date().toISOString(),
+      sms_consent_source: 'leadfinder_forwarded_email',
       updated_at: new Date().toISOString(),
     })
     .select('id, created_at')
@@ -465,6 +472,22 @@ export async function ingestLeadFinderEmail(
   void sendBookingSystemGuide(venueId, leadId, { channels: 'email' }).catch((e) =>
     console.error('[leadfinder] guide send failed:', e),
   );
+
+  // ── 9. Booking System workflow ───────────────────────────────────────────
+  // Same enrollment a form submission gets, so the lead moves through the
+  // venue's stages and nurture sequence exactly like any other. The steps that
+  // would text the couple are refused downstream by the sms_consent gate above,
+  // so enrolling here cannot produce an unconsented message.
+  try {
+    const formId = await ensureListingForm(venueId);
+    if (formId) {
+      await onMarketingFormSubmitted(venueId, leadId, formId);
+    } else {
+      console.warn('[leadfinder] no listing form for venue — workflow not triggered', { venueId });
+    }
+  } catch (e) {
+    console.error('[leadfinder] workflow trigger failed:', e);
+  }
 
   return { outcome: 'created', leadId, detectedSource, confidence: verdict.confidence };
 }

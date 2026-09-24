@@ -24,6 +24,7 @@ import {
   verifyLeadFinderSignature,
 } from '@/lib/leadfinder/address';
 import { ingestLeadFinderEmail } from '@/lib/leadfinder/ingest';
+import { recordSmsConsentByEmail } from '@/lib/sms-consent';
 import {
   SUPPORT_TICKET_INBOUND_LOCAL_PART,
   ingestNewInboundSupportEmail,
@@ -491,6 +492,13 @@ async function ingestFromParsedFields(params: {
       subject,
       text,
     );
+
+    // Opt-in signal. A lead captured from a forwarded email (LeadFinder) starts
+    // out with sms_consent = false because the number came from a directory, not
+    // from the couple. Replying to us directly is exactly the engagement that
+    // makes automated texting appropriate, so grant it here. No-op for every
+    // lead that already carries consent.
+    void recordSmsConsentByEmail({ venueId, email: fromEmail, source: 'inbound_reply' });
   }
 
   return NextResponse.json({ ok: true, inserted: r.inserted ?? false });

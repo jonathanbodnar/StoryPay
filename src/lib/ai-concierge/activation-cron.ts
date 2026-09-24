@@ -229,6 +229,11 @@ async function fetchEligibleLeads(
       -- generate a message, fail to send, and flip the lead to opted_out — so a
       -- phone-less lead never enters the SMS pipeline in the first place.
       AND btrim(COALESCE(l.phone, '')) <> ''
+      -- This pipeline talks to the couple by text, so a number we are not
+      -- permitted to text is no more useful than no number at all. Leads
+      -- captured from a forwarded email (LeadFinder) start out without consent
+      -- and are picked up here only once they opt in.
+      AND COALESCE(l.sms_consent, true) = true
       AND ${venueGuard}
       -- Re-enable path only: 24h cooldown has elapsed after a human pressed
       -- "Re-enable AI". ai_re_enabled_at is set by the re-enable API endpoint.
@@ -288,9 +293,11 @@ async function activateLead(
      WHERE id = ${row.id}
        AND ai_state = 'dormant'
        AND COALESCE(sms_dnd, false) = false
-       -- Re-checked here for the same reason as fetchEligibleLeads: a lead whose
-       -- phone was cleared between the two statements must not activate.
-       AND btrim(COALESCE(phone, '')) <> ''
+      -- Re-checked here for the same reason as fetchEligibleLeads: a lead whose
+      -- phone was cleared between the two statements must not activate.
+      AND btrim(COALESCE(phone, '')) <> ''
+      -- Same consent re-check: consent can be revoked between the two statements.
+      AND COALESCE(sms_consent, true) = true
        AND ${venueGuardSubquery}
        -- Re-enable path only: cooldown must still be elapsed at update time
        AND ai_re_enabled_at IS NOT NULL

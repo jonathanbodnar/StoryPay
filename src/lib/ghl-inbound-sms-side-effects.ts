@@ -25,6 +25,7 @@ import { moveLeadToAiStage, applyAiTags, removeAiTag } from '@/lib/ai-concierge/
 import { insertLeadActivity } from '@/lib/lead-activity';
 import { supabaseAdmin } from '@/lib/supabase';
 import { normalizePhone } from '@/lib/ghl';
+import { recordSmsConsentByEmail } from '@/lib/sms-consent';
 
 const PLACEHOLDER_SMS_EMAIL = '@ghl-sms.storypay.placeholder';
 
@@ -187,6 +188,25 @@ export async function runInboundGhlSmsSideEffects(params: {
   }
 
   if (!inserted) return;
+
+  // An inbound text from the couple is engagement, and replying is one of the two
+  // signals that grants permission to text them (see lib/sms-consent). Leads
+  // captured from a forwarded email start without consent, so this is where a
+  // reply lifts that and lets the venue's follow-up reach them. Fire-and-forget.
+  void (async () => {
+    try {
+      const { data: vc } = await supabaseAdmin
+        .from('venue_customers')
+        .select('customer_email')
+        .eq('id', venueCustomerId)
+        .eq('venue_id', venueId)
+        .maybeSingle();
+      const email = String((vc as { customer_email?: string | null } | null)?.customer_email || '').trim();
+      if (email) await recordSmsConsentByEmail({ venueId, email, source: 'inbound_sms' });
+    } catch (err) {
+      console.error(`${logPrefix} sms consent grant failed:`, err);
+    }
+  })();
 
   // SMS reply attribution — no-ops when there was no prior automated send.
   void recordSmsReplyAttribution({ venueId, venueCustomerId }).catch((err) => {

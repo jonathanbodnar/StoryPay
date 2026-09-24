@@ -11,6 +11,8 @@ import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 import { maybePushLeadToTripleseat } from '@/lib/tripleseat';
+import { ensureListingForm } from '@/lib/listing-lead-form';
+import { recordSmsConsentByEmail } from '@/lib/sms-consent';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -61,57 +63,6 @@ interface LeadPayload {
 
 function isEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-}
-
-/**
- * Ensure the venue has a "Listing Lead Form" in marketing_forms.
- * Returns the form id (creates one if absent).
- * Falls back to a name-based lookup when migration 068 (is_listing_form) is missing.
- */
-async function ensureListingForm(venueId: string): Promise<string | null> {
-  try {
-    // Try the is_listing_form flag first (migration 068).
-    const byFlag = await supabaseAdmin
-      .from('marketing_forms')
-      .select('id')
-      .eq('venue_id', venueId)
-      .eq('is_listing_form', true)
-      .maybeSingle();
-
-    if (!byFlag.error && byFlag.data) return byFlag.data.id as string;
-
-    // If the column doesn't exist yet, fall back to matching by name.
-    const colMissing = byFlag.error && /column.*is_listing_form/i.test(byFlag.error.message);
-    if (colMissing || byFlag.error) {
-      // Fallback: find or create by name only.
-      const byName = await supabaseAdmin
-        .from('marketing_forms')
-        .select('id')
-        .eq('venue_id', venueId)
-        .ilike('name', 'Listing Lead Form')
-        .maybeSingle();
-      if (byName.data) return byName.data.id as string;
-      // Create without is_listing_form (column absent).
-      const created = await supabaseAdmin
-        .from('marketing_forms')
-        .insert({ venue_id: venueId, name: 'Listing Lead Form', published: true })
-        .select('id')
-        .single();
-      return created.data ? (created.data.id as string) : null;
-    }
-
-    // No existing row — create it with the flag.
-    const { data: created } = await supabaseAdmin
-      .from('marketing_forms')
-      .insert({ venue_id: venueId, name: 'Listing Lead Form', is_listing_form: true, published: true })
-      .select('id')
-      .single();
-
-    return created ? (created.id as string) : null;
-  } catch (e) {
-    console.error('[public/leads] ensureListingForm failed:', e);
-    return null;
-  }
 }
 
 /**
@@ -477,6 +428,14 @@ export async function POST(request: NextRequest) {
   // with a record of when they came in. Awaited so it lands BEFORE the
   // guide-delivery messages and shows up as the first item in the thread.
   await logNewLeadOpportunity(venue.id, lr.id, lr.created_at);
+
+  // A form that collected a phone number is an explicit opt-in — they typed their
+  // number into our own form asking to be contacted. This is what lifts the
+  // sms_consent gate for a contact who first arrived through LeadFinder (whose
+  // captured lead was created with sms_consent = false). No-op otherwise.
+  if (phone) {
+    void recordSmsConsentByEmail({ venueId: venue.id, email: lr.email, source: 'form_submit' });
+  }
 
   // Phase 1 — Booking System guide delivery (email + SMS), fire-and-forget.
   // This sends the pricing guide PDF link immediately after form submission,

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { normalizePhone, updateGhlContactDnd, type GhlDndSettings, type GhlInboundDndSettings } from '@/lib/ghl';
+import { grantSmsConsentForLeadIds } from '@/lib/sms-consent';
 
 /** US carrier standard opt-out keywords (case-insensitive, single-word or phrase). */
 const SMS_OPT_OUT_KEYWORDS = new Set([
@@ -281,6 +282,14 @@ export async function applySmsOptInForVenueCustomer(params: {
         .catch(() => {}),
     );
   }
+
+  // 7. Grant lead-level consent to text. An explicit opt-in is exactly what the
+  // sms_consent gate is waiting for, so anything skipped earlier (the AI
+  // Concierge activation on a captured lead, for instance) can now proceed.
+  // Deliberately its own statement rather than folded into clearPatch above: on a
+  // database where migration 255 has not been applied yet, an unknown column can
+  // only fail this one write and can never stop the DND clearing.
+  await grantSmsConsentForLeadIds({ venueId, leadIds, source });
 }
 
 const CLEAR_SMS_DND = {
