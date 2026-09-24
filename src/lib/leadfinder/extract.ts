@@ -102,6 +102,24 @@ function cleanValue(v: string): string {
 }
 
 /**
+ * Lines that end the body. Without this, the "absorb wrapped continuation
+ * lines" behaviour swallows whatever follows the last labelled field — which is
+ * almost always an email signature. A venue forwarded one of their own emails
+ * and the signature's name, phone and marketing links landed in the lead's
+ * message, which is exactly the kind of junk that makes the record untrustworthy.
+ */
+function isBodyBoundary(line: string): boolean {
+  const t = line.trim();
+  if (/^--\s*$/.test(t)) return true;                        // RFC 3676 signature delimiter
+  if (/^_{5,}$/.test(t)) return true;
+  if (/^-{5,}$/.test(t)) return true;
+  if (/^on .{3,80} wrote:$/i.test(t)) return true;            // quoted reply
+  if (/^(from|sent|to|cc|subject):\s\S/i.test(t)) return true; // forwarded header block
+  if (/\bunsubscribe\b/i.test(t)) return true;
+  return false;
+}
+
+/**
  * Read labelled lines into a plain string map. Values may wrap onto the
  * following line(s) until the next label, which matters because marketplace
  * HTML often reflows into one line per field and long answers span several.
@@ -120,8 +138,10 @@ function readLabelledFields(text: string): Record<string, string> {
     if (!entry) continue;
 
     let value = cleanValue(m[2]);
-    // Absorb wrapped continuation lines until the next labelled line.
+    // Absorb wrapped continuation lines until the next label, or until the body
+    // ends (signature, quoted reply, footer) — whichever comes first.
     for (let j = i + 1; j < lines.length && value.length < 1200; j++) {
+      if (isBodyBoundary(lines[j])) break;
       if (/^[A-Za-z][A-Za-z0-9 /'’\-]{1,40}?\s*[:\-]/.test(lines[j])) break;
       if (LABELS.some((L) => L.keys.includes(lines[j].toLowerCase().trim()))) break;
       value = `${value} ${lines[j]}`.replace(/\s+/g, ' ').trim();
