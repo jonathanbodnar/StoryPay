@@ -67,7 +67,7 @@ export async function ingestLeadFinderEmail(
 ): Promise<LeadFinderIngestResult> {
   const { venueId } = input;
 
-  // ── 1. Is this venue switched on? ─────────────────────────────────────────
+  // ── 1. Resolve the venue ─────────────────────────────────────────────────
   // Checked before anything is stored: when the feature is off we should not be
   // accumulating inbound email for a hundred venues that are not using it.
   const { data: venueRow } = await supabaseAdmin
@@ -78,9 +78,6 @@ export async function ingestLeadFinderEmail(
 
   if (!venueRow) return { outcome: 'skipped', reason: 'venue_not_found' };
   const venue = venueRow as { slug: string | null; name: string | null };
-  if (!leadFinderEnabledForSlug(venue.slug)) {
-    return { outcome: 'disabled', reason: 'leadfinder_disabled_for_venue' };
-  }
 
   // ── 2. Idempotency ───────────────────────────────────────────────────────
   const messageId = input.messageId?.replace(/^<|>$/g, '').trim() || input.dedupeFallbackId;
@@ -146,7 +143,17 @@ export async function ingestLeadFinderEmail(
     return { outcome: 'skipped', reason };
   };
 
-  // ── 4. Extract and classify ──────────────────────────────────────────────
+  // ── 4. Is this venue switched on? ────────────────────────────────────────
+  // Checked AFTER recording the arrival, deliberately. Returning early instead
+  // would mean a message sent while the feature is off leaves no trace at all,
+  // which makes "I sent one and nothing happened" impossible to diagnose. The
+  // address can only be minted by us, so the volume this can accumulate is
+  // inherently bounded to venues that actually have it.
+  if (!leadFinderEnabledForSlug(venue.slug)) {
+    return skip('leadfinder_disabled_for_venue');
+  }
+
+  // ── 5. Extract and classify ──────────────────────────────────────────────
   let extracted: ExtractedLead;
   let verdict;
   try {
@@ -166,7 +173,7 @@ export async function ingestLeadFinderEmail(
   const detectedSource = verdict.detectedSource ?? sourceForDomain(senderDomain);
   const email = extracted.email as string;   // classifier guarantees non-null
 
-  // ── 5. Dedupe against existing leads ─────────────────────────────────────
+  // ── 6. Dedupe against existing leads ─────────────────────────────────────
   const matches = await findMatchingLeadIds({
     venueId,
     email,
@@ -219,7 +226,7 @@ export async function ingestLeadFinderEmail(
     }
   }
 
-  // ── 6. Create the lead ───────────────────────────────────────────────────
+  // ── 7. Create the lead ───────────────────────────────────────────────────
   // `name` is NOT NULL with no default, so fall back to a readable derivation of
   // the email rather than storing an empty string.
   const displayName = extracted.name || nameFromEmail(email);
