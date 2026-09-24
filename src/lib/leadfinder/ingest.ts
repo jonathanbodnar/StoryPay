@@ -18,6 +18,9 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { findMatchingLeadIds } from '@/lib/find-matching-leads';
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { logNewLeadOpportunity, sendBookingSystemGuide } from '@/lib/marketing-email-worker';
+import { notifyOwnerNewLead } from '@/lib/owner-notifications';
+import { dispatchIntegrationEvent } from '@/lib/integration-events';
+import { maybePushLeadToTripleseat } from '@/lib/tripleseat';
 import { leadFinderEnabledForSlug } from '@/lib/leadfinder/address';
 import {
   classifyInbound,
@@ -124,6 +127,80 @@ async function mirrorToVenueCustomer(
       console.warn('[leadfinder] venue_customers inquiry update threw:', err);
     }
   }
+}
+
+/**
+ * The new-lead fan-out that every other entry point fires (public web form,
+ * StoryVenue directory, manual entry). Kept in one function so the LeadFinder
+ * entry point can never quietly drift from the others.
+ *
+ * Covers:
+ *   1. Owner + team email/SMS/push, per-recipient toggles   (notifyOwnerNewLead)
+ *   2. The in-app badge on the Lead Inbox (sidebar + tab bar) (broadcastNewLead)
+ *   3. External integrations subscribed to `lead.created`    (dispatchIntegrationEvent)
+ *   4. The connected CRM connectors (Tripleseat, Event Temple)
+ *
+ * NOTE ON THE ONE DELIBERATE DIFFERENCE: LeadFinder leads are never auto-texted
+ * because a phone number read out of a forwarded email is not TCPA consent. That
+ * restriction is about outbound SMS to the COUPLE. It does not affect anything in
+ * here — the venue owner is notified on every channel they have enabled, exactly
+ * as they are for a form or directory inquiry.
+ */
+function notifyNewLeadLikeEveryOtherEntryPoint(input: {
+  venueId: string;
+  leadId: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  createdAt: string;
+  crmLead: {
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone: string | null;
+    wedding_date?: string | null;
+    guest_count?: number | null;
+    message?: string | null;
+    booking_timeline?: string | null;
+    venue_matters?: string | null;
+  };
+}): void {
+  const { venueId, leadId, fullName, email, phone, createdAt, crmLead } = input;
+
+  notifyOwnerNewLead({
+    venueId,
+    leadId,
+    fullName,
+    email,
+    phone,
+    source: 'leadfinder',
+    createdAt,
+  });
+
+  void import('@/lib/realtime/broadcast')
+    .then(({ broadcastNewLead }) =>
+      broadcastNewLead({ venueId, leadId, source: 'leadfinder', createdAt }),
+    )
+    .catch(() => {});
+
+  void dispatchIntegrationEvent(venueId, 'lead.created', {
+    lead: {
+      id: leadId,
+      first_name: crmLead.first_name || '',
+      last_name: crmLead.last_name || '',
+      full_name: fullName,
+      email,
+      phone: phone || '',
+      source: 'leadfinder',
+      created_at: createdAt,
+    },
+  });
+
+  void maybePushLeadToTripleseat(venueId, crmLead).catch(() => {});
+
+  void import('@/lib/eventtemple')
+    .then(({ maybePushLeadToEventTemple }) => maybePushLeadToEventTemple(venueId, crmLead))
+    .catch(() => {});
 }
 
 export async function ingestLeadFinderEmail(
@@ -319,7 +396,7 @@ export async function ingestLeadFinderEmail(
       status: 'new',
       updated_at: new Date().toISOString(),
     })
-    .select('id')
+    .select('id, created_at')
     .maybeSingle();
 
   if (createErr || !created) {
@@ -327,6 +404,31 @@ export async function ingestLeadFinderEmail(
     return fail('lead_insert_failed', createErr?.message);
   }
   const leadId = (created as { id: string }).id;
+  const createdAt = (created as { created_at?: string }).created_at ?? input.receivedAt.toISOString();
+
+  // Notify the venue owner exactly like every other entry point does. Fired
+  // right after the row exists so the push/SMS lands as fast as it does for a
+  // form or directory inquiry — the profile sync and bookkeeping below can take
+  // their time without delaying the alert.
+  notifyNewLeadLikeEveryOtherEntryPoint({
+    venueId,
+    leadId,
+    fullName: displayName,
+    email,
+    phone: extracted.phone,
+    createdAt,
+    crmLead: {
+      first_name: extracted.firstName,
+      last_name: extracted.lastName,
+      email,
+      phone: extracted.phone,
+      wedding_date: extracted.weddingDate,
+      guest_count: extracted.guestCount,
+      message: extracted.message,
+      booking_timeline: extracted.timeline,
+      venue_matters: extracted.venueMatters,
+    },
+  });
 
   // Put the answers where the profile UI reads them.
   await mirrorToVenueCustomer(venueId, email, extracted);
