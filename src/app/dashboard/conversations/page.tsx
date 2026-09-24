@@ -2782,7 +2782,10 @@ export default function ConversationsPage() {
                         const timeline  = txt(contactLead?.booking_timeline);
                         const heardAbout = txt(contactLead?.referral_source);
 
-                        const details: Array<{ label: string; value: string }> = [];
+                        // `wide` fields (sentences, free text) get the full card
+                        // width; short fields share a two-column grid. Nothing
+                        // is truncated — long values wrap onto more lines.
+                        const details: Array<{ label: string; value: string; wide?: boolean }> = [];
                         if (leadName) details.push({ label: 'Name', value: leadName });
                         if (contactLead?.phone) details.push({ label: 'Phone', value: contactLead.phone });
                         if (contactLead?.email) details.push({ label: 'Email', value: contactLead.email });
@@ -2800,9 +2803,16 @@ export default function ConversationsPage() {
                               : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
                           });
                         }
-                        if (wantsMost) details.push({ label: 'Wants most', value: wantsMost });
-                        if (timeline)  details.push({ label: 'Timeline', value: bookingTimelineLabel(timeline) });
-                        if (heardAbout) details.push({ label: 'Heard about us', value: heardAbout });
+                        if (wantsMost)  details.push({ label: 'Wants most', value: wantsMost, wide: true });
+                        if (timeline)   details.push({ label: 'Timeline', value: bookingTimelineLabel(timeline), wide: true });
+                        if (heardAbout) details.push({ label: 'Heard about us', value: heardAbout, wide: true });
+                        // Anything long enough to look cramped in a half-width
+                        // column takes the full width instead. Covers wordy
+                        // answers and the occasional junk value (a spam message
+                        // that landed in the name field, for instance).
+                        for (const d of details) {
+                          if (d.value.length > 60) d.wide = true;
+                        }
                         const leadMessage = txt(contactLead?.message);
 
                         return (
@@ -2812,16 +2822,19 @@ export default function ConversationsPage() {
                               {stamp && <span className="text-[11px] text-gray-400">{stamp}</span>}
                             </div>
                             {(details.length > 0 || leadMessage) && (
-                              <div className="mx-auto mt-2.5 w-full max-w-md rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-left">
+                              <div className="mx-auto mt-2.5 w-full max-w-lg rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left">
                                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                                   What they submitted
                                 </p>
                                 {details.length > 0 && (
-                                  <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+                                  <dl className="grid grid-cols-1 gap-x-5 gap-y-1.5 sm:grid-cols-2">
                                     {details.map((d) => (
-                                      <div key={d.label} className="flex min-w-0 gap-1.5 text-[12px]">
-                                        <dt className="shrink-0 text-gray-400">{d.label}</dt>
-                                        <dd className="min-w-0 truncate font-medium text-gray-700" title={d.value}>
+                                      <div
+                                        key={d.label}
+                                        className={`flex gap-1.5 text-[12px] ${d.wide ? 'sm:col-span-2' : ''}`}
+                                      >
+                                        <dt className="w-[74px] shrink-0 text-gray-400">{d.label}</dt>
+                                        <dd className="min-w-0 flex-1 break-words font-medium text-gray-700">
                                           {d.value}
                                         </dd>
                                       </div>
@@ -2829,9 +2842,14 @@ export default function ConversationsPage() {
                                   </dl>
                                 )}
                                 {leadMessage && (
-                                  <p className="mt-2.5 whitespace-pre-wrap break-words border-t border-gray-200 pt-2.5 text-[12px] text-gray-600">
-                                    {leadMessage}
-                                  </p>
+                                  <div className="mt-2.5 border-t border-gray-200 pt-2.5">
+                                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                                      Their message
+                                    </p>
+                                    <p className="whitespace-pre-wrap break-words text-[12px] text-gray-600">
+                                      {leadMessage}
+                                    </p>
+                                  </div>
                                 )}
                               </div>
                             )}
