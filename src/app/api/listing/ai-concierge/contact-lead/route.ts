@@ -24,6 +24,17 @@ import { setLeadAiState } from '@/lib/ai-concierge/state-control';
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
 
+/**
+ * Lead fields the Conversations thread needs. Kept in one place because the
+ * snapshot is re-read after several actions, and the "New Lead Opportunity!"
+ * card renders the enquiry details from it — a narrower re-read would silently
+ * blank the card.
+ */
+const LEAD_SNAP_FIELDS =
+  'id, ai_state, ai_next_send_at, ai_expires_at, ai_attempt_count, ai_first_activated_at, ' +
+  'email, phone, created_at, name, first_name, last_name, guest_count, wedding_date, ' +
+  'venue_matters, booking_timeline, message, venue_name, referral_source';
+
 interface LeadSnap {
   id: string;
   ai_state: string | null;
@@ -31,6 +42,53 @@ interface LeadSnap {
   ai_expires_at: string | null;
   ai_attempt_count: number;
   ai_first_activated_at: string | null;
+  // Enquiry details captured from the form / listing / embed, shown on the
+  // "New Lead Opportunity!" card at the top of the thread.
+  email: string | null;
+  phone: string | null;
+  created_at: string | null;
+  name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  guest_count: number | null;
+  wedding_date: string | null;
+  venue_matters: string | null;
+  booking_timeline: string | null;
+  message: string | null;
+  venue_name: string | null;
+  referral_source: string | null;
+}
+
+/**
+ * Shape a raw leads row into the snapshot the client consumes. Kept as one
+ * mapper so every read path returns the same fields — the "New Lead
+ * Opportunity!" card renders the enquiry details from here, and a hand-copied
+ * subset would silently blank it.
+ */
+function toLeadSnap(row: Record<string, unknown>): LeadSnap {
+  const s = (k: string) => (row[k] as string | null) ?? null;
+  return {
+    id: row.id as string,
+    ai_state: s('ai_state'),
+    ai_next_send_at: s('ai_next_send_at'),
+    ai_expires_at: s('ai_expires_at'),
+    ai_attempt_count: (row.ai_attempt_count as number) ?? 0,
+    ai_first_activated_at: s('ai_first_activated_at'),
+    // Enquiry details captured from the form / listing / embed.
+    email: s('email'),
+    phone: s('phone'),
+    created_at: s('created_at'),
+    name: s('name'),
+    first_name: s('first_name'),
+    last_name: s('last_name'),
+    guest_count: (row.guest_count as number | null) ?? null,
+    wedding_date: s('wedding_date'),
+    venue_matters: s('venue_matters'),
+    booking_timeline: s('booking_timeline'),
+    message: s('message'),
+    venue_name: s('venue_name'),
+    referral_source: s('referral_source'),
+  };
 }
 
 interface VenuePlanRow {
@@ -108,42 +166,28 @@ async function findLeadForContact(args: {
   const { venueId, email, phone } = args;
   let query = supabaseAdmin
     .from('leads')
-    .select('id, ai_state, ai_next_send_at, ai_expires_at, ai_attempt_count, ai_first_activated_at, email, phone, created_at')
+    .select(LEAD_SNAP_FIELDS)
     .eq('venue_id', venueId)
     .order('created_at', { ascending: false })
     .limit(1);
   if (email) query = query.ilike('email', email);
   const { data: byEmail } = await query.maybeSingle();
   if (byEmail) {
-    return {
-      id: byEmail.id as string,
-      ai_state: byEmail.ai_state as string | null,
-      ai_next_send_at: byEmail.ai_next_send_at as string | null,
-      ai_expires_at: byEmail.ai_expires_at as string | null,
-      ai_attempt_count: (byEmail.ai_attempt_count as number) ?? 0,
-      ai_first_activated_at: byEmail.ai_first_activated_at as string | null,
-    };
+    return toLeadSnap(byEmail as unknown as Record<string, unknown>);
   }
   if (phone) {
     const cleaned = phone.replace(/[^\d]/g, '').slice(-10);
     if (cleaned.length >= 7) {
       const { data: byPhone } = await supabaseAdmin
         .from('leads')
-        .select('id, ai_state, ai_next_send_at, ai_expires_at, ai_attempt_count, ai_first_activated_at')
+        .select(LEAD_SNAP_FIELDS)
         .eq('venue_id', venueId)
         .ilike('phone', `%${cleaned}%`)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       if (byPhone) {
-        return {
-          id: byPhone.id as string,
-          ai_state: byPhone.ai_state as string | null,
-          ai_next_send_at: byPhone.ai_next_send_at as string | null,
-          ai_expires_at: byPhone.ai_expires_at as string | null,
-          ai_attempt_count: (byPhone.ai_attempt_count as number) ?? 0,
-          ai_first_activated_at: byPhone.ai_first_activated_at as string | null,
-        };
+        return toLeadSnap(byPhone as unknown as Record<string, unknown>);
       }
     }
   }
@@ -227,20 +271,13 @@ export async function POST(req: NextRequest) {
         position:    0,
         updated_at:  now,
       })
-      .select('id, ai_state, ai_next_send_at, ai_expires_at, ai_attempt_count, ai_first_activated_at')
+      .select(LEAD_SNAP_FIELDS)
       .single();
 
     if (insertErr || !inserted) {
       return NextResponse.json({ error: insertErr?.message ?? 'Failed to create lead' }, { status: 500 });
     }
-    lead = {
-      id: inserted.id as string,
-      ai_state: inserted.ai_state as string | null,
-      ai_next_send_at: inserted.ai_next_send_at as string | null,
-      ai_expires_at: inserted.ai_expires_at as string | null,
-      ai_attempt_count: 0,
-      ai_first_activated_at: inserted.ai_first_activated_at as string | null,
-    };
+    lead = toLeadSnap(inserted as unknown as Record<string, unknown>);
   }
 
   // 2. Activate AI on the lead

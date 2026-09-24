@@ -56,6 +56,7 @@ import { supportChannels, type AiStateChangedEvent, type BrideMessageEvent, type
 import { CannedReplyPicker } from '@/components/support/CannedReplyPicker';
 import { trackClient } from '@/lib/analytics-client';
 import { useFeatureAccess } from '@/lib/use-feature-access';
+import { bookingTimelineLabel } from '@/lib/booking-timeline';
 import FeatureLockModal, { type LockFeature } from '@/components/FeatureLockModal';
 
 interface ThreadRow {
@@ -334,7 +335,26 @@ export default function ConversationsPage() {
 
   // ── AI Concierge quick-control (venue side) ────────────────────────────────
   const [aiAddonEnabled, setAiAddonEnabled]     = useState(false);
-  interface ContactLead { id: string; ai_state: string | null; ai_next_send_at: string | null }
+  interface ContactLead {
+    id: string;
+    ai_state: string | null;
+    ai_next_send_at: string | null;
+    // Enquiry details, rendered on the "New Lead Opportunity!" card so the
+    // thread shows what the contact actually submitted.
+    email?: string | null;
+    phone?: string | null;
+    created_at?: string | null;
+    name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    guest_count?: number | null;
+    wedding_date?: string | null;
+    venue_matters?: string | null;
+    booking_timeline?: string | null;
+    message?: string | null;
+    venue_name?: string | null;
+    referral_source?: string | null;
+  }
   const [contactLead, setContactLead]           = useState<ContactLead | null>(null);
   const [aiMenuOpen, setAiMenuOpen]             = useState(false);
   const [aiActing, setAiActing]                 = useState(false);
@@ -2746,10 +2766,75 @@ export default function ConversationsPage() {
                       if (m.sender_kind === 'system' && /^New Lead Opportunity/i.test(m.body.trim())) {
                         const lines = m.body.split('\n').map((s) => s.trim()).filter(Boolean);
                         const stamp = lines.slice(1).join(' ').trim();
+
+                        // Everything the contact actually filled in, read from
+                        // their lead record. Only populated fields are shown, so
+                        // a thin enquiry does not render a wall of blanks.
+                        const leadName = contactLead
+                          ? (contactLead.name?.trim()
+                              || [contactLead.first_name, contactLead.last_name].filter(Boolean).join(' ').trim())
+                          : '';
+                        // Trim before testing: these columns can hold a
+                        // whitespace-only string, which is truthy and would
+                        // otherwise render an empty-looking row.
+                        const txt = (v: string | null | undefined) => (v ?? '').trim();
+                        const wantsMost = txt(contactLead?.venue_matters);
+                        const timeline  = txt(contactLead?.booking_timeline);
+                        const heardAbout = txt(contactLead?.referral_source);
+
+                        const details: Array<{ label: string; value: string }> = [];
+                        if (leadName) details.push({ label: 'Name', value: leadName });
+                        if (contactLead?.phone) details.push({ label: 'Phone', value: contactLead.phone });
+                        if (contactLead?.email) details.push({ label: 'Email', value: contactLead.email });
+                        if (contactLead?.guest_count != null) {
+                          details.push({ label: 'Guests', value: String(contactLead.guest_count) });
+                        }
+                        if (contactLead?.wedding_date) {
+                          // Date-only column: pin to midday so a negative UTC
+                          // offset cannot shift it to the previous day.
+                          const d = new Date(`${contactLead.wedding_date}T12:00:00`);
+                          details.push({
+                            label: 'Wedding date',
+                            value: Number.isNaN(d.getTime())
+                              ? contactLead.wedding_date
+                              : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+                          });
+                        }
+                        if (wantsMost) details.push({ label: 'Wants most', value: wantsMost });
+                        if (timeline)  details.push({ label: 'Timeline', value: bookingTimelineLabel(timeline) });
+                        if (heardAbout) details.push({ label: 'Heard about us', value: heardAbout });
+                        const leadMessage = txt(contactLead?.message);
+
                         return (
-                          <div key={m.id} className="flex flex-col items-center gap-0.5 py-3 text-center">
-                            <span className="text-[13px] font-semibold text-gray-700">New Lead Opportunity!</span>
-                            {stamp && <span className="text-[11px] text-gray-400">{stamp}</span>}
+                          <div key={m.id} className="py-3">
+                            <div className="flex flex-col items-center gap-0.5 text-center">
+                              <span className="text-[13px] font-semibold text-gray-700">New Lead Opportunity!</span>
+                              {stamp && <span className="text-[11px] text-gray-400">{stamp}</span>}
+                            </div>
+                            {(details.length > 0 || leadMessage) && (
+                              <div className="mx-auto mt-2.5 w-full max-w-md rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-left">
+                                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                                  What they submitted
+                                </p>
+                                {details.length > 0 && (
+                                  <dl className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+                                    {details.map((d) => (
+                                      <div key={d.label} className="flex min-w-0 gap-1.5 text-[12px]">
+                                        <dt className="shrink-0 text-gray-400">{d.label}</dt>
+                                        <dd className="min-w-0 truncate font-medium text-gray-700" title={d.value}>
+                                          {d.value}
+                                        </dd>
+                                      </div>
+                                    ))}
+                                  </dl>
+                                )}
+                                {leadMessage && (
+                                  <p className="mt-2.5 whitespace-pre-wrap break-words border-t border-gray-200 pt-2.5 text-[12px] text-gray-600">
+                                    {leadMessage}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       }
