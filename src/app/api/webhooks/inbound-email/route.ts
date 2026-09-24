@@ -20,6 +20,11 @@ import {
 } from '@/lib/conversations-inbound-email';
 import { haltAutomationEnrollmentsForReply } from '@/lib/marketing-email-worker';
 import {
+  parseLeadFinderLocalPart,
+  verifyLeadFinderSignature,
+} from '@/lib/leadfinder/address';
+import { ingestLeadFinderEmail } from '@/lib/leadfinder/ingest';
+import {
   SUPPORT_TICKET_INBOUND_LOCAL_PART,
   ingestNewInboundSupportEmail,
   ingestTicketReplyEmail,
@@ -81,6 +86,21 @@ function verifySvixSignature(
     if (timingSafeEqual(candBuf, expectedBuf)) return { ok: true };
   }
   return { ok: false, reason: 'signature_mismatch' };
+}
+
+/**
+ * Case-insensitive read of a header out of Resend's receiving payload, which
+ * hands headers over as a plain object keyed however the sender wrote them.
+ */
+function headerValue(headers: Record<string, unknown> | undefined, names: string[]): string | undefined {
+  if (!headers) return undefined;
+  const wanted = new Set(names.map((n) => n.toLowerCase()));
+  for (const [k, v] of Object.entries(headers)) {
+    if (!wanted.has(k.toLowerCase())) continue;
+    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (Array.isArray(v) && typeof v[0] === 'string' && v[0].trim()) return v[0].trim();
+  }
+  return undefined;
 }
 
 function escapeHtml(s: string): string {
@@ -194,8 +214,11 @@ async function ingestFromParsedFields(params: {
   html: string;
   messageId: string | null;
   resendEmailId?: string;
+  /** Raw headers from the receiving provider — used by LeadFinder to store the
+   *  threading headers (Reply-To / In-Reply-To / References) for a later phase. */
+  headers?: Record<string, unknown>;
 }): Promise<NextResponse> {
-  const { fromRaw, toRaw, subject, text: textIn, html, messageId, resendEmailId } = params;
+  const { fromRaw, toRaw, subject, text: textIn, html, messageId, resendEmailId, headers } = params;
 
   let text = textIn.trim();
   if (!text && html.trim()) {
@@ -314,6 +337,33 @@ async function ingestFromParsedFields(params: {
       return NextResponse.json({ error: r.error ?? 'insert_failed' }, { status: 500 });
     }
     return NextResponse.json({ ok: true, inserted: r.inserted ?? false, audience: 'support_ticket' });
+  }
+
+  // ── LeadFinder: mail sent to a venue's leadfinder+ address ────────────────
+  // Handled before the not_reply_address branch below, because this address is
+  // not a conversation thread. Tenancy comes from the SIGNED address only —
+  // never from the From header, which any sender can forge.
+  const parsedLf = parseLeadFinderLocalPart(local);
+  if (parsedLf) {
+    if (!verifyLeadFinderSignature(parsedLf.venueId, parsedLf.sig)) {
+      console.warn('[inbound-email] leadfinder bad signature', { venueId: parsedLf.venueId });
+      return NextResponse.json({ ok: true, skipped: 'bad_token' });
+    }
+    const result = await ingestLeadFinderEmail({
+      venueId: parsedLf.venueId,
+      fromRaw,
+      replyTo: headerValue(headers, ['reply-to', 'reply_to']) ?? null,
+      subject,
+      text,
+      inReplyTo: headerValue(headers, ['in-reply-to', 'in_reply_to']) ?? null,
+      references: headerValue(headers, ['references']) ?? null,
+      messageId,
+      // Same fallback the conversation path uses when a sender omits Message-ID.
+      dedupeFallbackId: text ? hashInboundDedupeFallback(fromEmail, subject ?? '', text, toRaw) : null,
+      receivedAt: new Date(),
+    });
+    console.warn('[inbound-email] leadfinder', { venueId: parsedLf.venueId, ...result });
+    return NextResponse.json({ ok: true, audience: 'leadfinder', ...result });
   }
 
   if (!parsed) {
@@ -576,5 +626,6 @@ export async function POST(request: NextRequest) {
     html: String(email.html ?? ''),
     messageId,
     resendEmailId: emailId,
+    headers: email.headers,
   });
 }
