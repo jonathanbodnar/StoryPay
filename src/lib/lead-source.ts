@@ -46,6 +46,35 @@ export const LEAD_SOURCE_LABELS: Record<LeadSourceBucket, string> = {
 };
 
 /**
+ * The ingest `source` value LeadFinder™ writes for every lead it captures from
+ * an inbound email. Deliberately distinct from `directory` (the StoryVenue
+ * listing) and from the web-form / manual-entry values.
+ */
+export const LEADFINDER_SOURCE = 'leadfinder';
+
+/**
+ * Human label for a RAW `leads.source` value — for breakdowns that tally that
+ * column directly rather than the coarse funnel buckets above. Mirrors the
+ * labelling the leads list already applies (Directory / Manual Entry / Contact
+ * Form / Test) and names LeadFinder™ properly; everything else is humanized
+ * from its actual value, so a new entry point is labelled correctly the moment
+ * it writes its first lead without us maintaining a list.
+ *
+ * Empty / whitespace-only values land in a single "Other" bucket so a row is
+ * never dropped from a breakdown.
+ */
+export function leadSourceLabel(source: string | null | undefined): string {
+  const src = typeof source === 'string' ? source.trim().toLowerCase() : '';
+  if (!src) return 'Other';
+  if (src === LEADFINDER_SOURCE) return 'LeadFinder™';
+  if (src === 'directory') return 'Directory';
+  if (src === 'manual') return 'Manual Entry';
+  if (src === 'form') return 'Contact Form';
+  if (src === 'test_inquiry') return 'Test';
+  return src.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
  * Ingest `source` values written by the venue's own embedded web form (see
  * src/app/api/embed/[venueSlug]/route.ts and /api/public/embed-leads, which
  * force source='embed' specifically "so it surfaces as its own slice in the

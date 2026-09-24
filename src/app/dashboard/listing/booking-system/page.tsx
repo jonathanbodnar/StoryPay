@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Zap, Mail, MessageSquare, Bot, ChevronDown, ChevronUp,
   Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, GripVertical,
   Clock, Send, Users, ExternalLink, SkipForward, X as XIcon,
   RefreshCw, Image as ImageIcon, Link as LinkIcon, Lock, CalendarClock,
-  Star, Heart,
+  Star, Heart, Inbox, ArrowRight,
 } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
 import { useFeatureAccess } from '@/lib/use-feature-access';
@@ -44,6 +45,7 @@ function LockedPhaseControl({ tooltip, onClick }: { tooltip: string; onClick?: (
 }
 import type { BookingSystemConfig, StepConfig, StageKey } from '@/app/api/listing/booking-system/route';
 import type { StepLeadsPayload, StepLeadInfo } from '@/app/api/listing/booking-system/step-leads/route';
+import type { LeadSourcesPayload, LeadFinderSummary } from '@/app/api/listing/booking-system/lead-sources/route';
 import RichTextEditor from '@/components/RichTextEditor';
 import AiConciergeSettingsPage from '@/app/dashboard/marketing/ai-concierge/page';
 
@@ -1144,6 +1146,129 @@ function StageDefaultActions({
   );
 }
 
+// ─── LeadFinder™ + lead-source breakdown ─────────────────────────────────
+
+/**
+ * Informational card for the LeadFinder™ email-capture surface. Deliberately
+ * calm rather than a sales pitch: it states what the feature is, what it has
+ * captured for this venue, and links to Settings → Integrations for the
+ * address + forwarding/review surfaces (which live there, not here).
+ *
+ * "Set up" is read from whether it has captured anything yet: with zero
+ * captures the card's next step is to point directories/forwarding at the
+ * venue's address; once it has captured, it reports the count and last capture.
+ */
+function LeadFinderCard({ summary }: { summary: LeadFinderSummary | null }) {
+  const captured = summary?.captured ?? 0;
+  const last     = summary?.lastCapturedAt ?? null;
+  const when     = last
+    ? new Date(last).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : null;
+  const hasCaptured = captured > 0;
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="flex items-start gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50">
+          <Inbox size={18} className="text-indigo-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-[15px] font-semibold text-gray-900">LeadFinder™</h3>
+            {summary === null ? null : hasCaptured ? (
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Live</span>
+            ) : (
+              <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Not capturing yet</span>
+            )}
+          </div>
+          <p className="mt-1 text-[12px] leading-relaxed text-gray-500">
+            LeadFinder turns wedding inquiries that arrive in your own inbox — marketplace notification
+            emails, or mail you forward with a filter rule — into StoryVenue leads, so nothing waits unseen
+            in email.
+          </p>
+          <p className="mt-3 text-[13px] text-gray-700">
+            {summary === null ? (
+              <span className="text-gray-400">LeadFinder activity is unavailable right now.</span>
+            ) : hasCaptured ? (
+              <>
+                <span className="font-semibold">{captured}</span> lead{captured === 1 ? '' : 's'} captured
+                {when ? <> · last one {when}</> : null}
+              </>
+            ) : (
+              <>No leads captured yet. Point your directory notification emails — or one forwarding rule — at
+                your personal LeadFinder address to start capturing.</>
+            )}
+          </p>
+          <div className="mt-3">
+            <Link
+              href="/dashboard/settings/integrations"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[11px] font-medium text-violet-700 transition-colors hover:bg-violet-100"
+            >
+              {hasCaptured ? 'Manage LeadFinder' : 'Set up LeadFinder'} in Settings → Integrations
+              <ArrowRight size={11} />
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Where the venue's leads come from, tallied off `leads.source` so every entry
+ * point — LeadFinder™ included — shows as its own slice. Labels are derived
+ * from the values actually present; unknown/empty sources appear as "Other".
+ */
+function LeadSourceBreakdown({ data }: { data: LeadSourcesPayload | null }) {
+  const total = data?.total ?? 0;
+  const sources = data?.sources ?? [];
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="mb-3">
+        <h3 className="text-[15px] font-semibold text-gray-900">Where your leads come from</h3>
+        <p className="mt-0.5 text-[12px] text-gray-500">Every inquiry captured for this venue, grouped by its source.</p>
+      </div>
+
+      {data === null ? (
+        <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-[12px] text-gray-400">
+          Source breakdown is unavailable right now.
+        </p>
+      ) : sources.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-[12px] text-gray-400">
+          No leads yet. Once inquiries start arriving, they will be broken down by source here.
+        </p>
+      ) : (
+        <div className="space-y-2.5">
+          {sources.map((s) => {
+            const isLeadFinder = s.key === 'leadfinder';
+            return (
+              <div key={s.key || 'unknown'}>
+                <div className="flex items-baseline justify-between gap-2 text-[12px]">
+                  <span className={`font-medium ${isLeadFinder ? 'text-indigo-700' : 'text-gray-700'}`}>{s.label}</span>
+                  <span className="text-gray-400">{s.count} · {s.share}%</span>
+                </div>
+                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className={`h-full rounded-full ${isLeadFinder ? 'bg-indigo-500' : 'bg-violet-300'}`}
+                    style={{ width: `${Math.max(s.share, 1)}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {data !== null && total > 0 && (
+        <p className="mt-3 text-[11px] text-gray-400">
+          {total} lead{total === 1 ? '' : 's'} total.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────
 
 export default function BookingSystemPage() {
@@ -1153,6 +1278,7 @@ export default function BookingSystemPage() {
   const [saved, setSaved]         = useState(false);
   const [error, setError]         = useState('');
   const [leadsData, setLeadsData] = useState<StepLeadsPayload | null>(null);
+  const [leadSources, setLeadSources] = useState<LeadSourcesPayload | null>(null);
   const featureAccess = useFeatureAccess();
   const smsLocked = featureAccess ? !featureAccess.hasSms : false;
   const [lockModal, setLockModal] = useState<LockFeature | null>(null);
@@ -1162,13 +1288,15 @@ export default function BookingSystemPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cfgRes, leadsRes] = await Promise.all([
+      const [cfgRes, leadsRes, sourcesRes] = await Promise.all([
         fetch('/api/listing/booking-system', { cache: 'no-store' }),
         fetch('/api/listing/booking-system/step-leads', { cache: 'no-store' }),
+        fetch('/api/listing/booking-system/lead-sources', { cache: 'no-store' }),
       ]);
       if (!cfgRes.ok) throw new Error('Failed to load');
       setCfg(await cfgRes.json() as BookingSystemConfig);
       if (leadsRes.ok) setLeadsData(await leadsRes.json() as StepLeadsPayload);
+      if (sourcesRes.ok) setLeadSources(await sourcesRes.json() as LeadSourcesPayload);
     } catch { setError('Unable to load Booking System settings.'); }
     finally { setLoading(false); }
   }, []);
@@ -1253,6 +1381,12 @@ export default function BookingSystemPage() {
       )}
 
       <div className="space-y-4">
+
+        {/* LeadFinder™ — leads captured from the venue's own inbox */}
+        <LeadFinderCard summary={leadSources?.leadfinder ?? null} />
+
+        {/* Where every lead came from, including LeadFinder™ */}
+        <LeadSourceBreakdown data={leadSources} />
 
         {/* Phase 1 — Guide Delivery */}
         <PhaseCard
