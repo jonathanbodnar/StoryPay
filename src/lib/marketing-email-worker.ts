@@ -1049,7 +1049,16 @@ async function logGuideIssue(
 export async function sendBookingSystemGuide(
   venueId: string,
   leadId: string,
-  opts?: { bypassEntitlement?: boolean },
+  opts?: {
+    bypassEntitlement?: boolean;
+    /**
+     * Restrict delivery to one channel, on top of the venue's own toggles.
+     * `'email'` is used for email-sourced leads (LeadFinder): a phone number
+     * read out of a forwarded directory email is not consent for an automated
+     * text, so those leads get the guide by email only.
+     */
+    channels?: 'both' | 'email';
+  },
 ): Promise<void> {
   try {
     const { data: vr } = await supabaseAdmin
@@ -1080,8 +1089,10 @@ export async function sendBookingSystemGuide(
     const systemOn = (v.booking_system_enabled as boolean | null) ?? true;
     if (!systemOn) return; // intentionally disabled — not an error
 
+    // The venue's own toggles still apply; `channels: 'email'` only removes the
+    // SMS side. If a venue has the email guide switched off, nothing sends.
     const emailOn = (v.booking_guide_email_enabled as boolean | null) ?? true;
-    const smsOn   = (v.booking_guide_sms_enabled   as boolean | null) ?? true;
+    const smsOn   = ((v.booking_guide_sms_enabled as boolean | null) ?? true) && opts?.channels !== 'email';
     if (!emailOn && !smsOn) return; // both channels intentionally off — not an error
 
     const appOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';

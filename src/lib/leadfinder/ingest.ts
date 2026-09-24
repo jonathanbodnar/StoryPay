@@ -16,6 +16,8 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { findMatchingLeadIds } from '@/lib/find-matching-leads';
+import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
+import { logNewLeadOpportunity, sendBookingSystemGuide } from '@/lib/marketing-email-worker';
 import { leadFinderEnabledForSlug } from '@/lib/leadfinder/address';
 import {
   classifyInbound,
@@ -271,6 +273,27 @@ export async function ingestLeadFinderEmail(
       classification_confidence: verdict.confidence,
     })
     .eq('id', importId);
+
+  // ── 8. Follow-up ─────────────────────────────────────────────────────────
+  // Mirrors what any other new lead gets, with ONE deliberate difference: the
+  // guide goes out by EMAIL ONLY.
+  //
+  // A phone number read out of a forwarded directory email is not consent for an
+  // automated text, so LeadFinder leads are never auto-enrolled into SMS. A
+  // phone-less lead would skip the SMS step anyway; this stops the ones that DO
+  // carry a number from being texted without the couple asking for it. Her
+  // replying to the guide is the consent signal that can change that later.
+  void ensureSystemTagsForVenue(venueId)
+    .then(() => applySystemTags(venueId, leadId, ['new_lead', 'inquiry_received', 'email_lead']))
+    .catch((e) => console.error('[leadfinder] system tags failed:', e));
+
+  // The "New Lead Opportunity!" marker, so the lead's thread opens with what
+  // they submitted (same as a form or directory lead).
+  await logNewLeadOpportunity(venueId, leadId, input.receivedAt.toISOString());
+
+  void sendBookingSystemGuide(venueId, leadId, { channels: 'email' }).catch((e) =>
+    console.error('[leadfinder] guide send failed:', e),
+  );
 
   return { outcome: 'created', leadId, detectedSource, confidence: verdict.confidence };
 }
