@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
 import crypto from 'crypto';
+import { isVenueOwnerId } from '@/lib/team-owner';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -64,9 +65,22 @@ export async function POST(
     .eq('id', id)
     .eq('venue_id', venueId)
     .select('id, email, first_name, name, role, status')
-    .single();
+    .maybeSingle();
 
-  if (error || !member) {
+  if (error) {
+    // Never leak a raw PostgREST message to the UI.
+    console.error('[team/reset-password] update:', error.message);
+    return NextResponse.json({ error: 'Could not send that reset link' }, { status: 500 });
+  }
+  if (!member) {
+    // The owner has no venue_team_members row — their password lives on `venues`
+    // and is changed from their own account settings.
+    if (await isVenueOwnerId(venueId, id)) {
+      return NextResponse.json(
+        { error: 'The venue owner manages their own password in Settings → General.' },
+        { status: 400 },
+      );
+    }
     return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
   }
 

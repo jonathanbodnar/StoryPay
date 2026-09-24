@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
 import crypto from 'node:crypto';
+import { isVenueOwnerId } from '@/lib/team-owner';
 
 async function getVenueId() {
   const c = await cookies();
@@ -49,10 +50,24 @@ export async function POST(
     .eq('id', id)
     .eq('venue_id', venueId)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!member) return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
+  if (error) {
+    // Never leak a raw PostgREST message to the UI.
+    console.error('[team/resend-invite] update:', error.message);
+    return NextResponse.json({ error: 'Could not resend that invitation' }, { status: 500 });
+  }
+  if (!member) {
+    // No team row for this id: either it genuinely does not exist, or it is the
+    // owner's synthesised row (the owner exists and needs no invitation).
+    if (await isVenueOwnerId(venueId, id)) {
+      return NextResponse.json(
+        { error: 'This person is the venue owner and is already active — there is no invitation to resend.' },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
+  }
 
   const { data: venue } = await supabaseAdmin
     .from('venues')

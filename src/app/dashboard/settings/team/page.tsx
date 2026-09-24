@@ -268,8 +268,12 @@ export default function TeamPage() {
  finally { setEditSaving(false); }
  }
 
- return (
- <div>
+  // The owner is synthesised from the venues row and cannot be demoted from
+  // this modal, so the role control is disabled while editing them.
+  const editingIsOwner = !!editingId && members.some(m => m.id === editingId && m.role === 'owner');
+
+  return (
+    <div>
  {/* Header */}
  <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
  <div>
@@ -466,12 +470,16 @@ export default function TeamPage() {
  <select
  value={editForm.role}
  onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))}
- className={`${INPUT} appearance-none pr-8`}
+ disabled={editingIsOwner}
+ className={`${INPUT} appearance-none pr-8 ${editingIsOwner ? 'opacity-60 cursor-not-allowed' : ''}`}
  >
  {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
  </select>
  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
  </div>
+ {editingIsOwner && (
+  <p className="text-[11px] text-gray-400 mt-1">The venue owner&apos;s role can&apos;t be changed here.</p>
+ )}
  </div>
     <div>
     <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Set New Password</label>
