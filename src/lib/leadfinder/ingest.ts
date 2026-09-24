@@ -30,6 +30,12 @@ import {
   sourceForDomain,
   type ExtractedLead,
 } from '@/lib/leadfinder/extract';
+import {
+  extractWithAi,
+  needsAiFallback,
+  scoreExtractedFields,
+  type AiExtractedFields,
+} from '@/lib/leadfinder/ai-extract';
 
 export interface LeadFinderIngestInput {
   venueId: string;
@@ -42,6 +48,8 @@ export interface LeadFinderIngestInput {
   messageId: string | null;
   /** Fallback dedupe key when the sender gave no Message-ID. */
   dedupeFallbackId: string | null;
+  /** Display name from the From header, when the sender provided one. */
+  senderName?: string | null;
   receivedAt: Date;
 }
 
@@ -55,6 +63,16 @@ export interface LeadFinderIngestResult {
 
 const PARSER_VERSION = 'deterministic-v1';
 
+/**
+ * The line between "send the guide now" and "ask a human first".
+ *
+ * At or above this, the extracted fields are complete enough to trust the way
+ * we always have. Below it we still create the lead and still alert the owner —
+ * a venue must never miss an arrival — but we hold the couple-facing follow-up
+ * until a person confirms the record is right.
+ */
+const CONFIDENCE_THRESHOLD = 0.75;
+
 /** Turn "sarah.johnson@example.com" into "Sarah Johnson" as a display fallback. */
 function nameFromEmail(email: string): string {
   const local = email.split('@')[0] ?? '';
@@ -66,6 +84,43 @@ function nameFromEmail(email: string): string {
 /** An empty string and NULL both mean "not set" in these columns. */
 function isBlank(v: unknown): boolean {
   return v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+}
+
+/**
+ * Fill ONLY the gaps the deterministic pass left. Deterministic precedence is
+ * absolute: a field the parser read is never overwritten by the model, so a
+ * later AI guess can never degrade something we already know. Returns true when
+ * the AI contributed at least one field — which is what `extraction_source`
+ * records.
+ */
+function applyAiGapFill(target: ExtractedLead, ai: AiExtractedFields): boolean {
+  let contributed = false;
+  const take = (current: string | null, candidate: string | null): string | null => {
+    if (isBlank(current) && !isBlank(candidate)) {
+      contributed = true;
+      return candidate;
+    }
+    return current;
+  };
+
+  target.name = take(target.name, ai.name);
+  target.firstName = take(target.firstName, ai.firstName);
+  target.lastName = take(target.lastName, ai.lastName);
+  target.phone = take(target.phone, ai.phone);
+  target.weddingDate = take(target.weddingDate, ai.weddingDate);
+  target.venueMatters = take(target.venueMatters, ai.venueMatters);
+  target.timeline = take(target.timeline, ai.timeline);
+  target.message = take(target.message, ai.message);
+  if (target.guestCount === null && ai.guestCount !== null) {
+    target.guestCount = ai.guestCount;
+    contributed = true;
+  }
+
+  if (contributed) {
+    target.found = (['name', 'email', 'phone', 'weddingDate', 'guestCount', 'venueMatters', 'timeline', 'message'] as const)
+      .filter((k) => target[k] !== null && target[k] !== undefined);
+  }
+  return contributed;
 }
 
 /**
@@ -302,7 +357,7 @@ export async function ingestLeadFinderEmail(
     extracted = extractLeadFromEmail({
       subject: input.subject,
       text: input.text,
-      senderName: null,
+      senderName: input.senderName ?? null,
     });
     verdict = classifyInbound({ subject: input.subject, senderDomain, extracted });
   } catch (e) {
@@ -314,6 +369,46 @@ export async function ingestLeadFinderEmail(
 
   const detectedSource = verdict.detectedSource ?? sourceForDomain(senderDomain);
   const email = extracted.email as string;   // classifier guarantees non-null
+
+  // ── 5b. AI fallback — only for a thin result that is still a real inquiry ──
+  // The deterministic parser stays primary: it reads the known marketplace
+  // shapes exactly. We reach for the model ONLY when that came back thin AND
+  // the message is one we are actually going to keep (an email address is
+  // present — the classifier already rejected anything without one, so this
+  // never runs for a message that is about to be skipped).
+  let aiContributed = false;
+  if (needsAiFallback(extracted)) {
+    const ai = await extractWithAi({
+      subject: input.subject,
+      text: input.text,
+      senderEmail: email,
+      senderDisplayName: input.senderName ?? null,
+    });
+    if (ai) aiContributed = applyAiGapFill(extracted, ai.fields);
+  }
+
+  const { overallConfidence: extractionConfidence, fieldConfidence } = scoreExtractedFields(extracted);
+  const extractionSource = aiContributed ? 'ai' : 'deterministic';
+
+  // ── 5c. Confidence routing ───────────────────────────────────────────────
+  // THE BEHAVIOURAL CHANGE. Until now every accepted message fired the whole
+  // follow-up, guide included, no matter how little we had actually read. Now
+  // the extraction confidence decides how far the pipeline may go on its own:
+  //
+  //   ≥ 0.75 → exactly today's behaviour: create/update the lead, fire the full
+  //            owner notification fan-out, and send the pricing guide.
+  //   <  0.75 → STILL create the lead and STILL fire the full owner fan-out
+  //            (the venue owner must always learn about an arrival), but mark
+  //            the arrival `needs_review` and DO NOT send the guide and DO NOT
+  //            enroll the automated workflow. A human confirms before the
+  //            couple is contacted on a guess.
+  //
+  // A message with no email address is untouched by all of this: it is still
+  // rejected and recorded exactly as before, above.
+  const needsReview = extractionConfidence < CONFIDENCE_THRESHOLD;
+  const reviewReason = needsReview
+    ? aiContributed ? 'ai_fallback_uncertain' : 'low_confidence'
+    : null;
 
   // ── 6. Dedupe against existing leads ─────────────────────────────────────
   const matches = await findMatchingLeadIds({
@@ -353,6 +448,9 @@ export async function ingestLeadFinderEmail(
         patch.updated_at = new Date().toISOString();
         await supabaseAdmin.from('leads').update(patch).eq('id', existingId);
       }
+      // An arrival that matched an existing lead is an update to a record a
+      // human is already working, and it fires no couple-facing follow-up — so
+      // it is never queued for review. We still record how well it extracted.
       await supabaseAdmin
         .from('leadfinder_imports')
         .update({
@@ -360,8 +458,10 @@ export async function ingestLeadFinderEmail(
           lead_id: existingId,
           detected_source: detectedSource,
           parser_version: PARSER_VERSION,
-          extraction_source: 'deterministic',
+          extraction_source: extractionSource,
+          extraction_confidence: extractionConfidence,
           classification_confidence: verdict.confidence,
+          field_confidence: fieldConfidence,
         })
         .eq('id', importId);
 
@@ -447,8 +547,15 @@ export async function ingestLeadFinderEmail(
       lead_id: leadId,
       detected_source: detectedSource,
       parser_version: PARSER_VERSION,
-      extraction_source: 'deterministic',
+      extraction_source: extractionSource,
+      extraction_confidence: extractionConfidence,
       classification_confidence: verdict.confidence,
+      field_confidence: fieldConfidence,
+      // The review queue is what makes a low-confidence arrival safe: the lead
+      // and the owner alert exist, but a human decides before the couple is
+      // contacted. `none` keeps every high-confidence arrival untouched.
+      review_state: needsReview ? 'needs_review' : 'none',
+      review_reason: reviewReason,
     })
     .eq('id', importId);
 
@@ -469,24 +576,40 @@ export async function ingestLeadFinderEmail(
   // they submitted (same as a form or directory lead).
   await logNewLeadOpportunity(venueId, leadId, input.receivedAt.toISOString());
 
-  void sendBookingSystemGuide(venueId, leadId, { channels: 'email' }).catch((e) =>
-    console.error('[leadfinder] guide send failed:', e),
-  );
+  // EVERYTHING BELOW THIS LINE CONTACTS THE COUPLE. Below the confidence
+  // threshold we hold all of it — the guide AND the automated workflow (which
+  // sends emails of its own) — until a human confirms. The internal steps above
+  // (system tags, the in-app "New Lead Opportunity" marker) have already run
+  // regardless, so the owner still sees the arrival and the lead still moves
+  // through the inbox exactly like any other.
+  if (needsReview) {
+    console.warn('[leadfinder] holding couple follow-up pending review', {
+      venueId,
+      importId,
+      leadId,
+      confidence: extractionConfidence,
+      reason: reviewReason,
+    });
+  } else {
+    void sendBookingSystemGuide(venueId, leadId, { channels: 'email' }).catch((e) =>
+      console.error('[leadfinder] guide send failed:', e),
+    );
 
-  // ── 9. Booking System workflow ───────────────────────────────────────────
-  // Same enrollment a form submission gets, so the lead moves through the
-  // venue's stages and nurture sequence exactly like any other. The steps that
-  // would text the couple are refused downstream by the sms_consent gate above,
-  // so enrolling here cannot produce an unconsented message.
-  try {
-    const formId = await ensureListingForm(venueId);
-    if (formId) {
-      await onMarketingFormSubmitted(venueId, leadId, formId);
-    } else {
-      console.warn('[leadfinder] no listing form for venue — workflow not triggered', { venueId });
+    // ── 9. Booking System workflow ─────────────────────────────────────────
+    // Same enrollment a form submission gets, so the lead moves through the
+    // venue's stages and nurture sequence exactly like any other. The steps that
+    // would text the couple are refused downstream by the sms_consent gate above,
+    // so enrolling here cannot produce an unconsented message.
+    try {
+      const formId = await ensureListingForm(venueId);
+      if (formId) {
+        await onMarketingFormSubmitted(venueId, leadId, formId);
+      } else {
+        console.warn('[leadfinder] no listing form for venue — workflow not triggered', { venueId });
+      }
+    } catch (e) {
+      console.error('[leadfinder] workflow trigger failed:', e);
     }
-  } catch (e) {
-    console.error('[leadfinder] workflow trigger failed:', e);
   }
 
   return { outcome: 'created', leadId, detectedSource, confidence: verdict.confidence };

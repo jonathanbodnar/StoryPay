@@ -34,7 +34,7 @@ export async function GET() {
 
   // Recent activity. Small, bounded queries: a venue's LeadFinder traffic is
   // low-volume by nature, and the card only needs the latest few facts.
-  const [importsRes, leadsRes, recentRes, skippedRes] = await Promise.all([
+  const [importsRes, leadsRes, recentRes, skippedRes, reviewRes] = await Promise.all([
     supabaseAdmin
       .from('leadfinder_imports')
       .select('id', { count: 'exact', head: true })
@@ -55,6 +55,11 @@ export async function GET() {
       .select('id', { count: 'exact', head: true })
       .eq('venue_id', venueId)
       .eq('processing_status', 'skipped'),
+    supabaseAdmin
+      .from('leadfinder_imports')
+      .select('id', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+      .eq('review_state', 'needs_review'),
   ]);
 
   const recent = (recentRes.data ?? []) as Array<{
@@ -79,6 +84,7 @@ export async function GET() {
       emailsSeen: importsRes.count ?? 0,
       leadsCreated: leadsRes.count ?? 0,
       skipped: skippedRes.count ?? 0,
+      needsReview: reviewRes.count ?? 0,
       lastEmailAt: recent[0]?.received_at ?? null,
       lastLeadAt: recent.find((r) => r.lead_id)?.received_at ?? null,
     },

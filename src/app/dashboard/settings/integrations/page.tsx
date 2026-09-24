@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   Zap,
   Plus,
@@ -716,6 +717,8 @@ interface LeadFinderData {
     emailsSeen: number;
     leadsCreated: number;
     skipped: number;
+    /** Arrivals created but held back from the couple pending a human check. */
+    needsReview: number;
     lastEmailAt: string | null;
     lastLeadAt: string | null;
   };
@@ -848,6 +851,24 @@ function LeadFinderCard() {
                     LeadFinder is built but not switched on for your account yet, so mail sent here is
                     not being turned into leads. Contact StoryVenue support to enable it.
                   </span>
+                </div>
+              )}
+
+              {data.stats.needsReview > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5">
+                  <AlertCircle size={14} className="shrink-0 text-amber-600" />
+                  <span className="min-w-0 flex-1 text-xs text-amber-800">
+                    <strong>{data.stats.needsReview}</strong>{' '}
+                    {data.stats.needsReview === 1
+                      ? 'arrival needs your review before we email the couple.'
+                      : 'arrivals need your review before we email the couple.'}
+                  </span>
+                  <Link
+                    href="/dashboard/settings/integrations/leadfinder-review"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-3.5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    Review
+                  </Link>
                 </div>
               )}
             </>

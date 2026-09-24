@@ -353,6 +353,7 @@ async function ingestFromParsedFields(params: {
     const result = await ingestLeadFinderEmail({
       venueId: parsedLf.venueId,
       fromRaw,
+      senderName: fromName,
       replyTo: headerValue(headers, ['reply-to', 'reply_to']) ?? null,
       subject,
       text,
