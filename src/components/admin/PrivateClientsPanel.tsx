@@ -60,6 +60,8 @@ interface PrivateClientVenue {
    *  unanswered inbound SMS reply (see src/lib/concierge-sms-sync.ts) —
    *  clears itself as soon as an agent sends another outbound message. */
   needsReply: boolean;
+  /** Leads received in the last 72 hours. */
+  leadsLast72h: number;
   owner: OwnerInfo;
   teamMembers: TeamMemberInfo[];
 }
@@ -220,6 +222,19 @@ export function PrivateClientsPanel({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{v.name}</p>
+                      {/* Leads in the last 72 hours. Sits right next to the name
+                          so a client that has gone quiet is obvious at a glance
+                          without opening anything. */}
+                      <span
+                        title={`${v.leadsLast72h} lead${v.leadsLast72h === 1 ? '' : 's'} in the last 72 hours`}
+                        className={`shrink-0 rounded-full border px-1.5 py-0 text-[9px] font-semibold leading-tight whitespace-nowrap tabular-nums ${
+                          v.leadsLast72h > 0
+                            ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
+                            : 'bg-gray-100 border-gray-200 text-gray-400'
+                        }`}
+                      >
+                        {v.leadsLast72h} · 72h
+                      </span>
                       {v.needsReply && (
                         <span className="shrink-0 rounded-full bg-red-100 border border-red-200 px-1.5 py-0 text-[9px] font-semibold text-red-700 leading-tight whitespace-nowrap flex items-center gap-0.5">
                           <Reply size={9} /> Replied
@@ -314,6 +329,16 @@ function VenueDetail({ venue, supportUserId }: { venue: PrivateClientVenue; supp
         <div className="flex items-center gap-2 flex-wrap">
           <Building2 size={16} className="text-gray-400" />
           <h3 className="font-heading text-base text-gray-900">{venue.name}</h3>
+          <span
+            title={`${venue.leadsLast72h} lead${venue.leadsLast72h === 1 ? '' : 's'} in the last 72 hours`}
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums ${
+              venue.leadsLast72h > 0
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : 'bg-gray-50 border-gray-200 text-gray-400'
+            }`}
+          >
+            {venue.leadsLast72h} lead{venue.leadsLast72h === 1 ? '' : 's'} · last 72h
+          </span>
           {venue.planName && (
             <span className="rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-[10px] font-semibold">{venue.planName}</span>
           )}

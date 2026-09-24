@@ -68,7 +68,13 @@ export async function GET() {
   const ownerIds = Array.from(new Set(venues.map((v) => v.owner_id).filter((x): x is string => Boolean(x))));
   const planIds = Array.from(new Set(venues.map((v) => v.directory_plan_id).filter((x): x is string => Boolean(x))));
 
-  const [{ data: teamRows }, { data: planRows }, { data: profileRows }, { data: recentMsgRows }] = await Promise.all([
+  // Leads received in the last 72 hours, per venue — the concierge team's
+  // early warning that a client's campaign may have gone quiet. Fetched as
+  // bare rows and counted in JS, matching the needsReply pattern below;
+  // a 72-hour window over a hand-picked client list is a small result set.
+  const since72h = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+
+  const [{ data: teamRows }, { data: planRows }, { data: profileRows }, { data: recentMsgRows }, { data: leadRows }] = await Promise.all([
     supabaseAdmin
       .from('venue_team_members')
       .select('id, venue_id, name, first_name, last_name, email, phone, role, status')
@@ -91,7 +97,17 @@ export async function GET() {
       .in('venue_id', venueIds)
       .order('created_at', { ascending: false })
       .limit(Math.min(1000, venueIds.length * 20)),
+    supabaseAdmin
+      .from('leads')
+      .select('venue_id')
+      .in('venue_id', venueIds)
+      .gte('created_at', since72h),
   ]);
+
+  const leadsLast72hByVenue = new Map<string, number>();
+  for (const l of (leadRows ?? []) as Array<{ venue_id: string }>) {
+    leadsLast72hByVenue.set(l.venue_id, (leadsLast72hByVenue.get(l.venue_id) ?? 0) + 1);
+  }
 
   const needsReplyByVenue = new Map<string, boolean>();
   for (const m of (recentMsgRows ?? []) as Array<{ venue_id: string; direction: string | null }>) {
@@ -152,6 +168,9 @@ export async function GET() {
       ghlConnected: Boolean(v.ghl_connected),
       venueConcierge: Boolean(v.venue_concierge),
       needsReply: needsReplyByVenue.get(v.id) === true,
+      /** Leads received in the last 72 hours — an early signal that a client's
+       *  campaign may have stopped producing. */
+      leadsLast72h: leadsLast72hByVenue.get(v.id) ?? 0,
       owner: {
         name: ownerName,
         email: ownerEmail,
