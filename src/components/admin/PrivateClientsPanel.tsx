@@ -224,13 +224,13 @@ export function PrivateClientsPanel({
                       <p className="text-sm font-semibold text-gray-900 truncate">{v.name}</p>
                       {/* Leads in the last 72 hours. Sits right next to the name
                           so a client that has gone quiet is obvious at a glance
-                          without opening anything. */}
+                          without opening anything. Red means nothing arrived. */}
                       <span
                         title={`${v.leadsLast72h} lead${v.leadsLast72h === 1 ? '' : 's'} in the last 72 hours`}
                         className={`shrink-0 rounded-full border px-1.5 py-0 text-[9px] font-semibold leading-tight whitespace-nowrap tabular-nums ${
                           v.leadsLast72h > 0
                             ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
-                            : 'bg-gray-100 border-gray-200 text-gray-400'
+                            : 'bg-red-100 border-red-200 text-red-700'
                         }`}
                       >
                         {v.leadsLast72h} · 72h
@@ -334,7 +334,7 @@ function VenueDetail({ venue, supportUserId }: { venue: PrivateClientVenue; supp
             className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold tabular-nums ${
               venue.leadsLast72h > 0
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                : 'bg-gray-50 border-gray-200 text-gray-400'
+                : 'bg-red-50 border-red-200 text-red-700'
             }`}
           >
             {venue.leadsLast72h} lead{venue.leadsLast72h === 1 ? '' : 's'} · last 72h
