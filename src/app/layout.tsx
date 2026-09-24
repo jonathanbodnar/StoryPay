@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Open_Sans, Playfair_Display } from 'next/font/google';
+import localFont from 'next/font/local';
 import Script from 'next/script';
 import './globals.css';
 import { getPageSeo } from '@/lib/page-seo';
@@ -11,17 +11,23 @@ import NativeExternalLinkGuard from '@/components/NativeExternalLinkGuard';
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? '';
 
-// Self-hosted via next/font — eliminates the render-blocking Google Fonts request.
-const openSans = Open_Sans({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
+// Vendored latin-subset variable woff2 files instead of next/font/google:
+// the Google loader downloads fonts.googleapis.com/gstatic.com at build time,
+// and that fetch from the Railway build container failed the production build
+// (Turbopack: 16 "Can't resolve .../font/google/font" errors for Playfair
+// Display). Committing the same latin files keeps the build offline-safe.
+const openSans = localFont({
+  src: './fonts/open-sans-latin-variable.woff2',
+  weight: '300 700',
+  style: 'normal',
   variable: '--font-open-sans',
   display: 'swap',
 });
 
-const playfairDisplay = Playfair_Display({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const playfairDisplay = localFont({
+  src: './fonts/playfair-display-latin-variable.woff2',
+  weight: '400 700',
+  style: 'normal',
   variable: '--font-playfair',
   display: 'swap',
 });
