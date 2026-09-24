@@ -26,6 +26,8 @@ export type SmsConsentSource =
   | 'form_submit'
   | 'inbound_reply'
   | 'inbound_sms'
+  | 'inbound_start_keyword'
+  | 'inbound_stop_keyword'
   | 'leadfinder_forwarded_email'
   | 'manual';
 

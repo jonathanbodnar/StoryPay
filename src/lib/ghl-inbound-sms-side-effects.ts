@@ -25,8 +25,7 @@ import { moveLeadToAiStage, applyAiTags, removeAiTag } from '@/lib/ai-concierge/
 import { insertLeadActivity } from '@/lib/lead-activity';
 import { supabaseAdmin } from '@/lib/supabase';
 import { normalizePhone } from '@/lib/ghl';
-import { recordSmsConsentByEmail } from '@/lib/sms-consent';
-
+import { recordSmsConsentByEmail, recordLeadSmsConsent } from '@/lib/sms-consent';
 const PLACEHOLDER_SMS_EMAIL = '@ghl-sms.storypay.placeholder';
 
 /**
@@ -110,6 +109,13 @@ export async function handleStopKeyword(params: {
     }
 
     if (leadIds.size === 0) return true;
+
+    // A STOP reply is the strongest possible "do not text me", so revoke the
+    // consent the send gate reads rather than only setting DND — leaving it true
+    // would mean the lead's own record still claims we are allowed to text them.
+    await Promise.all([...leadIds].map((leadId) =>
+      recordLeadSmsConsent({ leadId, allowed: false, source: 'inbound_stop_keyword' }),
+    ));
 
     const note = 'Lead replied STOP — SMS DND enabled, moved to Not Interested, AI halted.';
 
