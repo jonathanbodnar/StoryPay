@@ -81,7 +81,10 @@ export async function createLeadFromVenueCustomerIfMissing(
       first_name: fn || null,
       last_name: ln || null,
       email,
-      phone,
+      // Write NULL, not '', when there is no number: the column is now nullable
+      // and NULL is the single canonical "no phone" state. Writing '' here was
+      // what split the state in the first place.
+      phone: phone.trim() || null,
       source: 'contact',
       status,
       pipeline_id: vc.pipeline_id,

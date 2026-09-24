@@ -114,7 +114,10 @@ export async function runAiActivationCron(
 
   const eligible = await fetchEligibleLeads(sql, maxLeads, !!opts.bypassEligibility);
 
-  let activated = 0;
+  // Vestigial: this cron now only handles the re-enable path (see the file
+  // header), so nothing is ever "activated" here — `reEnabled` is the counter
+  // that moves. Kept in the response shape for existing consumers.
+  const activated = 0;
   let reEnabled = 0;
   let skipped   = 0;
   const errors: Array<{ leadId: string; error: string }> = [];
@@ -222,6 +225,10 @@ async function fetchEligibleLeads(
     LEFT JOIN public.directory_plans dp ON dp.id = v.directory_plan_id
     WHERE l.ai_state = 'dormant'
       AND COALESCE(l.sms_dnd, false) = false
+      -- A telephone is useless without a dialable number. Activating here would
+      -- generate a message, fail to send, and flip the lead to opted_out — so a
+      -- phone-less lead never enters the SMS pipeline in the first place.
+      AND btrim(COALESCE(l.phone, '')) <> ''
       AND ${venueGuard}
       -- Re-enable path only: 24h cooldown has elapsed after a human pressed
       -- "Re-enable AI". ai_re_enabled_at is set by the re-enable API endpoint.
@@ -281,6 +288,9 @@ async function activateLead(
      WHERE id = ${row.id}
        AND ai_state = 'dormant'
        AND COALESCE(sms_dnd, false) = false
+       -- Re-checked here for the same reason as fetchEligibleLeads: a lead whose
+       -- phone was cleared between the two statements must not activate.
+       AND btrim(COALESCE(phone, '')) <> ''
        AND ${venueGuardSubquery}
        -- Re-enable path only: cooldown must still be elapsed at update time
        AND ai_re_enabled_at IS NOT NULL

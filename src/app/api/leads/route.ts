@@ -569,7 +569,9 @@ export async function POST(request: NextRequest) {
     first_name:         firstName || null,
     last_name:          lastName  || null,
     email,
-    phone:              body.phone || '',
+    // NULL, not '', when absent — see migration 253. '' and NULL used to be two
+    // different spellings of "no phone"; NULL is now the canonical one.
+    phone:              body.phone?.trim() || null,
     venue_name:         body.venueName || null,
     venue_website_url:  body.venueWebsiteUrl || null,
     opportunity_value:  opportunityValue,

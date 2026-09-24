@@ -51,6 +51,7 @@ interface LeadRow {
   id:                       string;
   venue_id:                 string;
   email:                    string | null;
+  phone:                    string | null;
   ai_state:                 AiState;
   ai_first_activated_at:    string | null;
   ai_expires_at:            string | null;
@@ -108,7 +109,7 @@ async function loadLead(leadId: string, venueId: string): Promise<LeadRow | null
   const { data } = await supabaseAdmin
     .from('leads')
     .select(
-      'id, venue_id, email, ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at, ai_attempt_count, ai_re_enabled_at, ai_re_enable_count, ai_angles_used, last_inbound_at, last_outbound_at, sms_dnd, sms_dnd_source, sms_dnd_at',
+      'id, venue_id, email, phone, ai_state, ai_first_activated_at, ai_expires_at, ai_next_send_at, ai_attempt_count, ai_re_enabled_at, ai_re_enable_count, ai_angles_used, last_inbound_at, last_outbound_at, sms_dnd, sms_dnd_source, sms_dnd_at',
     )
     .eq('id', leadId)
     .eq('venue_id', venueId)
@@ -237,6 +238,20 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ leadId
     loadVenueAi(user.venueId),
   ]);
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+
+  // re_enable and clear_tcpa_lock both start the SMS pipeline. Without a
+  // dialable number the first send would fail and flip the lead to opted_out,
+  // so refuse up front with something the user can act on.
+  if ((action === 're_enable' || action === 'clear_tcpa_lock') && !lead.phone?.trim()) {
+    return NextResponse.json(
+      {
+        error:
+          'This lead has no phone number, so AI Concierge cannot text them. Add a phone number to the lead first.',
+        code: 'no_phone',
+      },
+      { status: 400 },
+    );
+  }
 
   const snap = buildSnapshot(lead, venue);
 
