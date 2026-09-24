@@ -186,6 +186,24 @@ Reach out while they are hot — open their contact to start the conversation.`,
       button_text: 'View Lead',
     },
   },
+  {
+    key: 'leadfinder_mirror',
+    label: 'LeadFinder™: Arrival Copy',
+    description:
+      "A faithful copy of every message LeadFinder™ processes, sent to the venue's OWN inbox (venue.notification_email || venue.email) with a short banner on top saying what LeadFinder did with it — that a lead was created and its name, that it was created but is waiting on a human check, or that it was skipped and why. The original subject is kept unchanged and the sender, received time and full body are preserved unedited. Not editable: the copy must stay a verbatim record, so copy lives in src/lib/leadfinder/mirror.ts.",
+    trigger:
+      'Fires once per processed LeadFinder™ arrival — captured, skipped or failed — from the inbound-email webhook. A venue switches it off in Settings → Integrations → LeadFinder.',
+    category: 'leads',
+    editable: false,
+    defaults: {
+      subject: '<the original message subject, unchanged>',
+      heading: 'LeadFinder™',
+      body: `LeadFinder created a lead for {{lead_name}}.
+
+The original message is included below, exactly as it arrived.`,
+      button_text: 'View the lead',
+    },
+  },
   // Entry removed 2026-08-22: `ai_handoff` (generic, non-editable) duplicated
   // the two scenarios directly below on every single handoff — the owner and
   // team were getting emailed + texted twice for the same event. Its trigger
@@ -671,6 +689,11 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
     lead_created_at: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       + ' at ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
     action_url: `${APP_URL}/dashboard/leads`,
+  },
+  leadfinder_mirror: {
+    venue_name: 'Meadowbrook Estate',
+    lead_name: 'Emily Richardson',
+    action_url: `${APP_URL}/dashboard/contacts/example-lead-id`,
   },
   booking_report: {
     owner_first_name: 'Sarah',

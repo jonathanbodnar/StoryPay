@@ -20,6 +20,8 @@ import {
   Send,
   CalendarClock,
   Inbox,
+  MailCheck,
+  TrendingDown,
 } from 'lucide-react';
 
 interface ApiKey {
@@ -708,20 +710,47 @@ function EventTempleCard() {
 
 // ── LeadFinder™ ──────────────────────────────────────────────────────────────
 
+interface LeadFinderSourceDrift {
+  source: string;
+  label: string;
+  arrivals: number;
+  leadsCreated: number;
+  skipped: number;
+  needsReview: number;
+  skipRate: number;
+  needsReviewRate: number;
+  avgExtractionConfidence: number | null;
+  avgClassificationConfidence: number | null;
+  drifted: boolean;
+  reasons: string[];
+  judged: boolean;
+  note: string | null;
+}
+
 interface LeadFinderData {
   enabled: boolean;
   configured: boolean;
   address: string | null;
   forwardedCopyTo: string | null;
+  /** Whether copies of every arrival are emailed to the venue's own inbox. */
+  mirrorEnabled: boolean;
   stats: {
     emailsSeen: number;
     leadsCreated: number;
     skipped: number;
     /** Arrivals created but held back from the couple pending a human check. */
     needsReview: number;
+    /** Copies we could not send. Best-effort — never affects the lead itself. */
+    mirrorFailures: number;
     lastEmailAt: string | null;
     lastLeadAt: string | null;
   };
+  drift: {
+    windowDays: number;
+    baselineDays: number;
+    minSample: number;
+  };
+  sources: LeadFinderSourceDrift[];
   recent: Array<{
     subject: string | null;
     senderDomain: string | null;
@@ -731,6 +760,14 @@ interface LeadFinderData {
     receivedAt: string | null;
   }>;
 }
+
+/** Plain-language explanation of each drift reason key from the API. */
+const DRIFT_REASON_LABELS: Record<string, string> = {
+  skipped_up: 'more messages are being skipped than before',
+  needs_review_up: 'more messages need a human check than before',
+  extraction_confidence_down: 'we are reading fewer details than before',
+  classification_confidence_down: 'we are less sure these are inquiries than before',
+};
 
 /**
  * StoryVenue LeadFinder™ — the venue's inbound lead address, with the two ways
@@ -743,14 +780,39 @@ function LeadFinderCard() {
   const [data, setData] = useState<LeadFinderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [mirrorEnabled, setMirrorEnabled] = useState(true);
+  const [savingMirror, setSavingMirror] = useState(false);
 
   useEffect(() => {
     fetch('/api/venue/leadfinder', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setData(d as LeadFinderData | null))
+      .then((d) => {
+        const parsed = d as LeadFinderData | null;
+        setData(parsed);
+        // Tolerant: a missing flag means on, matching the database default.
+        if (parsed) setMirrorEnabled(parsed.mirrorEnabled !== false);
+      })
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, []);
+
+  async function toggleMirror(next: boolean) {
+    const prev = mirrorEnabled;
+    setMirrorEnabled(next); // optimistic — the switch should feel instant
+    setSavingMirror(true);
+    try {
+      const r = await fetch('/api/venue/leadfinder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mirrorEnabled: next }),
+      });
+      if (!r.ok) throw new Error('save failed');
+    } catch {
+      setMirrorEnabled(prev); // revert on failure so the switch never lies
+    } finally {
+      setSavingMirror(false);
+    }
+  }
 
   async function copyAddress() {
     if (!data?.address) return;
@@ -844,6 +906,40 @@ function LeadFinderCard() {
                 </p>
               </div>
 
+              <div className="mt-3 flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3.5">
+                <MailCheck size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                <div className="min-w-0 flex-1">
+                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    Keep a copy in your inbox
+                  </span>
+                  <p className="text-sm leading-relaxed text-gray-600">
+                    We&apos;ll email you a copy of every message LeadFinder sees — whether it becomes
+                    a lead or not — with a short note on what we did with it, so nothing is captured
+                    silently.{' '}
+                    {data.forwardedCopyTo
+                      ? <>Copies go to <strong>{data.forwardedCopyTo}</strong>.</>
+                      : 'Add a notification email to your account to receive them.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={mirrorEnabled}
+                  aria-label="Email me a copy of every LeadFinder message"
+                  disabled={savingMirror}
+                  onClick={() => toggleMirror(!mirrorEnabled)}
+                  className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${
+                    mirrorEnabled ? 'bg-[#1b1b1b]' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow transition-transform ${
+                      mirrorEnabled ? 'translate-x-[22px]' : 'translate-x-[3px]'
+                    }`}
+                  />
+                </button>
+              </div>
+
               {!data.enabled && (
                 <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
                   <AlertCircle size={13} className="mt-0.5 shrink-0" />
@@ -909,6 +1005,16 @@ function LeadFinderCard() {
                     <span>Last lead {when(data.stats.lastLeadAt)}</span>
                   </li>
                 )}
+                {data.stats.mirrorFailures > 0 && (
+                  <li className="flex items-start gap-2">
+                    <AlertCircle size={13} className="mt-0.5 shrink-0 text-amber-500" />
+                    <span>
+                      {data.stats.mirrorFailures} inbox cop
+                      {data.stats.mirrorFailures === 1 ? 'y' : 'ies'} could not be sent. The leads
+                      themselves were unaffected.
+                    </span>
+                  </li>
+                )}
               </ul>
               {data.recent.length > 0 && (
                 <div className="mt-2.5 space-y-1.5">
@@ -937,6 +1043,66 @@ function LeadFinderCard() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* Per-source quality — makes a marketplace template change visible instead
+          of silently producing thinner leads. */}
+      {!loading && data?.address && data.sources.length > 0 && (
+        <div className="border-t border-gray-100 px-6 py-4 text-sm text-gray-500">
+          <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+            Sources — last {data.drift.windowDays} days
+          </span>
+          <p className="text-xs text-gray-400">
+            Each source is compared against its own earlier {data.drift.baselineDays} days, so a
+            source that is always brief is never treated as a problem. A source needs at least{' '}
+            {data.drift.minSample} messages in both periods before we judge it.
+          </p>
+          <div className="mt-2.5 space-y-2">
+            {data.sources.map((s) => (
+              <div
+                key={s.source}
+                className={`rounded-xl border p-3 ${
+                  s.drifted ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-gray-50'
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-sm font-medium text-gray-800">{s.label}</span>
+                  {s.drifted && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                      <TrendingDown size={11} /> Drift detected
+                    </span>
+                  )}
+                  {!s.judged && (
+                    <span className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">
+                      Not enough history
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {s.arrivals} message{s.arrivals === 1 ? '' : 's'} · {s.leadsCreated} lead
+                  {s.leadsCreated === 1 ? '' : 's'} · {s.skipped} skipped · {s.needsReview} needed a
+                  check
+                  {s.avgExtractionConfidence !== null
+                    ? ` · avg detail read ${Math.round(s.avgExtractionConfidence * 100)}%`
+                    : ''}
+                </div>
+                {s.drifted && s.reasons.length > 0 && (
+                  <div className="mt-1 text-xs font-medium text-amber-800">
+                    Quality has dropped for this source:{' '}
+                    {s.reasons.map((r) => DRIFT_REASON_LABELS[r] ?? r.replace(/_/g, ' ')).join('; ')}.
+                    Check whether the directory changed its email template.
+                  </div>
+                )}
+                {!s.judged && s.note && <div className="mt-1 text-xs text-gray-400">{s.note}</div>}
+                {s.judged && !s.drifted && (
+                  <div className="mt-1 text-xs text-gray-400">
+                    Stable — no meaningful change against the previous {data.drift.baselineDays} days.
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

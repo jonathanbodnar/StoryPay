@@ -36,6 +36,7 @@ import {
   scoreExtractedFields,
   type AiExtractedFields,
 } from '@/lib/leadfinder/ai-extract';
+import { mirrorArrivalToVenue, type MirrorOutcome } from '@/lib/leadfinder/mirror';
 
 export interface LeadFinderIngestInput {
   venueId: string;
@@ -269,12 +270,18 @@ export async function ingestLeadFinderEmail(
   // accumulating inbound email for a hundred venues that are not using it.
   const { data: venueRow } = await supabaseAdmin
     .from('venues')
-    .select('id, slug, name, notification_email, email')
+    .select('id, slug, name, notification_email, email, leadfinder_mirror_enabled')
     .eq('id', venueId)
     .maybeSingle();
 
   if (!venueRow) return { outcome: 'skipped', reason: 'venue_not_found' };
-  const venue = venueRow as { slug: string | null; name: string | null };
+  const venue = venueRow as {
+    slug: string | null;
+    name: string | null;
+    notification_email: string | null;
+    email: string | null;
+    leadfinder_mirror_enabled: boolean | null;
+  };
 
   // ── 2. Idempotency ───────────────────────────────────────────────────────
   const messageId = input.messageId?.replace(/^<|>$/g, '').trim() || input.dedupeFallbackId;
@@ -325,11 +332,36 @@ export async function ingestLeadFinderEmail(
   }
   const importId = (insertedImport as { id: string }).id;
 
+  // Everything the mirror needs, captured once. The mirror is deliberately built
+  // from the SAME stored arrival (subject/sender/receivedAt/rawText) so its copy
+  // is faithful, and it is fired on EVERY terminal outcome — created, updated,
+  // skipped and failed — because the point is that the owner can see what
+  // LeadFinder did or did not take. Idempotency lives in the mirror itself
+  // (an atomic claim on `mirrored_at`), so calling it from each path is safe.
+  const mirror = (outcome: MirrorOutcome): Promise<void> =>
+    mirrorArrivalToVenue(
+      {
+        venueId,
+        importId,
+        recipient: venue.notification_email || venue.email || null,
+        // Tolerant reader: a deploy without the column (null) keeps mirroring ON,
+        // matching the database DEFAULT.
+        enabled: venue.leadfinder_mirror_enabled !== false,
+        subject: input.subject,
+        sender: input.fromRaw,
+        originalReplyTo: input.replyTo,
+        receivedAt: input.receivedAt,
+        rawText: input.text.slice(0, 200_000),
+      },
+      outcome,
+    );
+
   const fail = async (reason: string, message?: string): Promise<LeadFinderIngestResult> => {
     await supabaseAdmin
       .from('leadfinder_imports')
       .update({ processing_status: 'failed', failure_reason: message ?? reason })
       .eq('id', importId);
+    await mirror({ kind: 'failed', reason });
     return { outcome: 'failed', reason };
   };
   const skip = async (reason: string): Promise<LeadFinderIngestResult> => {
@@ -337,6 +369,7 @@ export async function ingestLeadFinderEmail(
       .from('leadfinder_imports')
       .update({ processing_status: 'skipped', failure_reason: reason })
       .eq('id', importId);
+    await mirror({ kind: 'skipped', reason });
     return { outcome: 'skipped', reason };
   };
 
@@ -434,7 +467,7 @@ export async function ingestLeadFinderEmail(
     const existingId = [...matches][0];
     const { data: existing } = await supabaseAdmin
       .from('leads')
-      .select('id, first_name, last_name, guest_count, wedding_date, venue_matters, booking_timeline, message, phone')
+      .select('id, name, first_name, last_name, guest_count, wedding_date, venue_matters, booking_timeline, message, phone')
       .eq('id', existingId)
       .maybeSingle();
 
@@ -467,6 +500,10 @@ export async function ingestLeadFinderEmail(
 
       // A returning contact's profile should pick up anything new too.
       await mirrorToVenueCustomer(venueId, email, extracted);
+
+      const existingName =
+        ((existing as { name?: string | null }).name ?? '').trim() || extracted.name || email;
+      await mirror({ kind: 'lead', created: false, leadId: existingId, leadName: existingName, needsReview: false });
 
       return { outcome: 'updated', leadId: existingId, detectedSource, confidence: verdict.confidence };
     }
@@ -611,6 +648,10 @@ export async function ingestLeadFinderEmail(
       console.error('[leadfinder] workflow trigger failed:', e);
     }
   }
+
+  // The owner's own copy, fired last so the banner reflects the final state of
+  // the arrival (including whether it is waiting on a human check).
+  await mirror({ kind: 'lead', created: true, leadId, leadName: displayName, needsReview });
 
   return { outcome: 'created', leadId, detectedSource, confidence: verdict.confidence };
 }
