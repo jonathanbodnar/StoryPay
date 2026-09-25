@@ -142,7 +142,7 @@ function buildBanner(outcome: MirrorOutcome): Banner {
   }
 
   if (outcome.kind === 'lead') {
-    const leadUrl = `${APP_URL}/dashboard/contacts/${outcome.leadId}`;
+    const leadUrl = `${APP_URL}/dashboard/contacts/lead/${outcome.leadId}`;
     if (outcome.created && outcome.needsReview && outcome.reviewReason === 'relay_address') {
       return {
         tone: 'review',

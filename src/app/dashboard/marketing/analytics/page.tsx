@@ -264,7 +264,7 @@ function DetailModal({
                     )}
                     <td className="px-5 py-3 text-right">
                       <Link
-                        href={`/dashboard/contacts/${r.leadId}`}
+                        href={`/dashboard/contacts/lead/${r.leadId}`}
                         className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 transition hover:border-gray-400 hover:text-gray-900"
                         target="_blank"
                       >

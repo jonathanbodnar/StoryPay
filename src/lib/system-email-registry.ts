@@ -693,7 +693,7 @@ export const SYSTEM_EMAIL_SAMPLE_VARS: Record<string, Record<string, string>> = 
   leadfinder_mirror: {
     venue_name: 'Meadowbrook Estate',
     lead_name: 'Emily Richardson',
-    action_url: `${APP_URL}/dashboard/contacts/example-lead-id`,
+    action_url: `${APP_URL}/dashboard/contacts/lead/example-lead-id`,
   },
   booking_report: {
     owner_first_name: 'Sarah',

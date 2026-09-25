@@ -657,7 +657,8 @@ export function notifyOwnerNewLead(input: {
       email:         input.email || '',
       source:        input.source || 'directory',
     },
-    actionUrl: `/dashboard/contacts/${input.leadId}`,
+    // A lead id → the resolver route (the contact page is keyed by contact id).
+    actionUrl: `/dashboard/contacts/lead/${input.leadId}`,
   });
 }
 
@@ -729,7 +730,8 @@ export function notifyOwnerAiHandoff(input: {
       customer_name: input.brideName || 'Your contact',
       reason:        input.reason || 'needs human follow-up',
     },
-    actionUrl: `/dashboard/contacts/${input.leadId}`,
+    // A lead id → the resolver route (the contact page is keyed by contact id).
+    actionUrl: `/dashboard/contacts/lead/${input.leadId}`,
   });
 }
 
