@@ -66,7 +66,7 @@ export default async function GetGuidePage({ params }: Props) {
       .maybeSingle(),
     supabaseAdmin
       .from('venues')
-      .select('name, logo_url, brand_logo_url, location_city, location_state')
+      .select('name, location_city, location_state')
       .eq('id', venueId)
       .maybeSingle(),
     supabaseAdmin.from('guide_invites').select('tapped_at').eq('lead_id', leadId).maybeSingle(),
@@ -76,13 +76,10 @@ export default async function GetGuidePage({ params }: Props) {
   const lead = leadRow as { first_name: string | null; name: string | null; email: string | null; phone: string | null; wedding_date: string | null };
   const venue = venueRow as {
     name: string | null;
-    logo_url: string | null;
-    brand_logo_url: string | null;
     location_city: string | null;
     location_state: string | null;
   };
   const venueName = venue.name?.trim() || 'Our venue';
-  const logo = venue.brand_logo_url || venue.logo_url;
   const location = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
   const firstName = (lead.first_name || lead.name?.split(/\s+/)[0] || '').trim() || null;
   // One brand color across the product, same as the emails.
@@ -91,10 +88,7 @@ export default async function GetGuidePage({ params }: Props) {
   return (
     <div className="min-h-screen bg-stone-100">
       <header className="flex items-center gap-3 bg-[#1b1b1b] px-5 py-3.5 text-white">
-        {logo && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={logo} alt={`${venueName} logo`} className="h-9 w-auto rounded object-contain" />
-        )}
+        {/* Venue name only: to the couple this page comes from the venue. */}
         <div>
           <div className="text-[15px] font-bold tracking-tight">{venueName}</div>
           {location && <div className="text-[11px] text-gray-400">{location}</div>}

@@ -102,12 +102,8 @@ async function sendInviteEmail(venueId: string, leadId: string, kind: 'invite' |
   const vars = await buildMergeVars(venueId, leadId, APP_URL, { forSms: false });
   if (!vars?.email) return false;
 
-  const [{ data: leadRow }, { data: venueRow }] = await Promise.all([
-    supabaseAdmin.from('leads').select('referral_source').eq('id', leadId).maybeSingle(),
-    supabaseAdmin.from('venues').select('brand_logo_url').eq('id', venueId).maybeSingle(),
-  ]);
+  const { data: leadRow } = await supabaseAdmin.from('leads').select('referral_source').eq('id', leadId).maybeSingle();
   const via = ((leadRow as { referral_source?: string | null } | null)?.referral_source ?? '').trim();
-  const logo = (venueRow as { brand_logo_url?: string | null } | null)?.brand_logo_url || null;
 
   const venueName = vars.venue_name || 'our venue';
   const first = (vars.first_name || '').trim();
@@ -121,13 +117,13 @@ async function sendInviteEmail(venueId: string, leadId: string, kind: 'invite' |
     : "Just making sure you saw this — tap below and we'll send your pricing & planning guide right over.";
 
   // The same shared shell as every other email the product sends: the venue's
-  // brand logo at the top (StoryVenue's when it has none), #1b1b1b button,
+  // StoryVenue dark logo centered at the top (always), #1b1b1b button,
   // "Sent via StoryVenue on behalf of …" footer.
   const heading = kind === 'invite' ? 'Your pricing guide is ready' : 'Your pricing guide is still waiting';
   const p = (text: string) => `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 12px;">${escapeHtml(text)}</p>`;
   const html = buildSystemEmail({
-    logoUrl: logo || undefined,
-    logoAlt: venueName,
+    // No logoUrl: the shell renders the StoryVenue dark logo — always.
+    logoAlt: 'StoryVenue',
     accentColor: '#1b1b1b',
     preheader: escapeHtml(lead),
     title: escapeHtml(heading),

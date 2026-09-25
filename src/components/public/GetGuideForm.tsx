@@ -63,8 +63,7 @@ export default function GetGuideForm(props: Props) {
         <p className="text-3xl" aria-hidden>📱</p>
         <h1 className="mt-2 text-xl font-semibold text-gray-900">Your guide is on its way!</h1>
         <p className="mt-2 text-sm leading-relaxed text-gray-600">
-          We just sent your {props.venueName} pricing guide to your phone and your email. Check your texts
-          and your inbox — that&apos;s where we&apos;ll follow up with you too.
+          {`We just sent your ${props.venueName} pricing guide to your phone and your email. Check your texts and your inbox — that's where we'll follow up with you too.`}
         </p>
       </div>
     );
@@ -76,7 +75,7 @@ export default function GetGuideForm(props: Props) {
   return (
     <form onSubmit={submit} className="mx-auto max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       <h1 className="text-xl font-semibold text-gray-900">
-        {props.firstName ? `${props.firstName}, your` : 'Your'} {props.venueName} pricing guide is ready
+        {`${props.firstName ? `${props.firstName}, your` : 'Your'} ${props.venueName} pricing guide is ready`}
       </h1>
       <p className="mt-1 text-sm text-gray-500">Confirm where to send it.</p>
 

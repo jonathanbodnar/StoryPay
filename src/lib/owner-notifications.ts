@@ -272,6 +272,12 @@ interface NotifyArgs {
    *  email gets a Reply-To that routes a reply straight to the contact in the
    *  thread (see buildOwnerReplyToEmail / the inbound-email webhook). */
   threadId?: string;
+  /**
+   * Addresses that must NOT get this email because they already receive a
+   * richer one for the same event (LeadFinder's "New lead" email to the owner).
+   * SMS and push are unaffected.
+   */
+  excludeEmailRecipients?: string[];
 }
 
 /**
@@ -320,7 +326,9 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
     //         template, getVenueEmailTemplate returns null and we skip the email send
     //         entirely (template content/on-off is venue-wide, only the recipient
     //         list + per-recipient channel choice is per-person).
-    const emailRecipients = recipients.filter(r => r.email && r.settings[emailKey] === true);
+    const excluded = new Set((args.excludeEmailRecipients ?? []).map(e => e.trim().toLowerCase()).filter(Boolean));
+    const emailRecipients = recipients.filter(r =>
+      r.email && r.settings[emailKey] === true && !excluded.has(r.email.trim().toLowerCase()));
     if (emailRecipients.length === 0) {
       console.log('[notifyOwner]', args.scenario, 'no recipients with', emailKey, 'enabled');
     } else {
@@ -681,6 +689,8 @@ export function notifyOwnerNewLead(input: {
   phone?: string | null;
   source?: string | null;
   createdAt?: string | null;
+  /** See NotifyArgs.excludeEmailRecipients. */
+  excludeEmailRecipients?: string[];
 }): void {
   const display = (input.fullName || '').trim() || input.email || 'New lead';
   const rawSource = input.source || 'directory';
@@ -702,6 +712,7 @@ export function notifyOwnerNewLead(input: {
       },
       // A lead id → the resolver route (the contact page is keyed by contact id).
       actionUrl: `/dashboard/contacts/lead/${input.leadId}`,
+      excludeEmailRecipients: input.excludeEmailRecipients,
     });
   })().catch((err) => console.error('[notifyOwnerNewLead]', err instanceof Error ? err.message : err));
 }

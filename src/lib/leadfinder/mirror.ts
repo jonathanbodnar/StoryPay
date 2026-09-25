@@ -73,6 +73,15 @@ export type MirrorOutcome =
       needsReview: boolean;
       /** Why it was held, when it was: `relay_address`, `low_confidence`, … */
       reviewReason?: string | null;
+      /** What we read, shown like the standard new-lead email. */
+      details?: {
+        email: string | null;
+        phone: string | null;
+        weddingDate: string | null;
+        guestCount: number | null;
+        /** e.g. "The Knot (via LeadFinder™)". */
+        source: string | null;
+      };
     }
   | { kind: 'skipped'; reason: string }
   | { kind: 'failed'; reason: string }
@@ -214,19 +223,19 @@ function buildBanner(outcome: MirrorOutcome): Banner {
     if (outcome.created) {
       return {
         tone: 'ok',
-        headline: `Lead created — ${outcome.leadName}`,
-        detail: 'We saved this as a new lead and started your normal follow-up.',
+        headline: `New lead: ${outcome.leadName}`,
+        detail: 'A new inquiry came in through LeadFinder™. We saved it as a lead and started your normal follow-up.',
         ctaUrl: leadUrl,
-        ctaLabel: 'View the lead',
+        ctaLabel: 'View Lead',
       };
     }
     return {
       tone: 'ok',
-      headline: `Existing lead updated — ${outcome.leadName}`,
+      headline: `Lead updated: ${outcome.leadName}`,
       detail:
         'This message matched a lead you already have, so we added anything new we found instead of creating a duplicate. No follow-up was sent again.',
       ctaUrl: leadUrl,
-      ctaLabel: 'View the lead',
+      ctaLabel: 'View Lead',
     };
   }
 
@@ -277,9 +286,29 @@ function buildMirrorHtml(ctx: MirrorContext, outcome: MirrorOutcome): string {
     `<tr><td style="padding:3px 12px 3px 0;color:#9ca3af;font-size:13px;white-space:nowrap;vertical-align:top;">${label}</td>` +
     `<td style="padding:3px 0;color:#374151;font-size:13px;word-break:break-word;">${escapeHtml(value)}</td></tr>`;
 
+  // For a lead, the same facts the standard new-lead email lists, in the same
+  // style — this email replaces that one for the owner (one email per lead).
+  let leadHtml = '';
+  if (outcome.kind === 'lead') {
+    const d = outcome.details;
+    const line = (label: string, value: string | null | undefined) =>
+      `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 4px;">${label}: ${escapeHtml(value && String(value).trim() ? String(value) : '—')}</p>`;
+    leadHtml = [
+      line('Name', outcome.leadName),
+      line('Phone', d?.phone),
+      line('Email', d?.email),
+      d?.weddingDate ? line('Wedding date', d.weddingDate) : '',
+      d?.guestCount != null ? line('Guests', String(d.guestCount)) : '',
+      line('Source', d?.source ?? 'LeadFinder™'),
+      line('Created', received),
+      '<div style="height:18px"></div>',
+    ].join('');
+  }
+
   const bodyHtml = `
-    <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${tone.color};text-align:center;">${escapeHtml(tone.text)}</p>
-    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 22px;">${escapeHtml(banner.detail)}</p>
+    ${banner.tone === 'review' ? `<p style="margin:0 0 10px;font-size:13px;font-weight:600;color:${tone.color};">Needs a quick check before the couple is contacted.</p>` : ''}
+    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 16px;">${escapeHtml(banner.detail)}</p>
+    ${leadHtml}
     <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;">The original message</p>
     <table role="presentation" style="width:100%;border-collapse:collapse;margin:0 0 10px;">
       ${row('From', ctx.sender || '(unknown sender)')}
@@ -290,8 +319,8 @@ function buildMirrorHtml(ctx: MirrorContext, outcome: MirrorOutcome): string {
 
   const headline = escapeHtml(banner.headline);
   return buildSystemEmail({
-    logoUrl: ctx.logoUrl || undefined,
-    logoAlt: venueName,
+    // No logoUrl: always the StoryVenue dark logo, centered, like every email.
+    logoAlt: 'StoryVenue',
     // One brand color across every email in the product.
     accentColor: '#1b1b1b',
     preheader: headline,
@@ -305,6 +334,25 @@ function buildMirrorHtml(ctx: MirrorContext, outcome: MirrorOutcome): string {
       `<p style="margin:0 0 8px;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">${LEADFINDER_MIRROR_FOOTER_MARKER}. Turn this copy off in Settings → Integrations.</p>` +
       `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">Sent via StoryVenue on behalf of ${escapeHtml(venueName)}</p>`,
   });
+}
+
+/** A StoryVenue-style subject, like the other owner notifications. */
+function mirrorSubject(ctx: MirrorContext, outcome: MirrorOutcome): string {
+  const venue = ctx.venueName?.trim() || 'your venue';
+  const original = ctx.subject?.trim() || '(no subject)';
+  switch (outcome.kind) {
+    case 'lead':
+      if (!outcome.created) return `Lead updated: ${outcome.leadName} — ${venue}`;
+      return outcome.needsReview
+        ? `New lead (needs a quick check): ${outcome.leadName} — ${venue}`
+        : `New lead: ${outcome.leadName} — ${venue}`;
+    case 'gmail_confirmation':
+      return outcome.code ? `Your Gmail forwarding code: ${outcome.code}` : 'Confirm Gmail forwarding for LeadFinder';
+    case 'test':
+      return `LeadFinder test received — ${venue}`;
+    default:
+      return `LeadFinder: ${original}`;
+  }
 }
 
 function buildMirrorText(ctx: MirrorContext, outcome: MirrorOutcome): string {
@@ -374,8 +422,7 @@ export async function mirrorArrivalToVenue(
 
     const result = await sendEmail({
       to,
-      // Keep the original subject so it threads where the original would have.
-      subject: ctx.subject?.trim() || '(no subject)',
+      subject: mirrorSubject(ctx, outcome),
       html: buildMirrorHtml(ctx, outcome),
       text: buildMirrorText(ctx, outcome),
       replyTo,

@@ -1067,7 +1067,7 @@ export async function sendBookingSystemGuide(
   try {
     const { data: vr } = await supabaseAdmin
       .from('venues')
-      .select(`booking_system_enabled, booking_guide_email_enabled, booking_guide_sms_enabled, booking_guide_email_body, booking_guide_sms_body, name, notification_email, email, brand_logo_url, ${VENUE_ENTITLEMENT_COLUMNS}`)
+      .select(`booking_system_enabled, booking_guide_email_enabled, booking_guide_sms_enabled, booking_guide_email_body, booking_guide_sms_body, name, notification_email, email, ${VENUE_ENTITLEMENT_COLUMNS}`)
       .eq('id', venueId)
       .maybeSingle();
 
@@ -1129,7 +1129,7 @@ export async function sendBookingSystemGuide(
 
           const body     = mergeMarketingFields(rawBody, vars);
           // The same shared shell as every other email the product sends: the
-          // venue's brand logo at the top (StoryVenue's when it has none), a
+          // StoryVenue dark logo centered at the top (always), a
           // #1b1b1b "View your pricing guide" button, and the "Sent via
           // StoryVenue on behalf of …" footer. A line that is nothing but the
           // guide link is dropped from the HTML body — the button carries it —
@@ -1152,8 +1152,8 @@ export async function sendBookingSystemGuide(
             replyTo: replyTo,
             subject,
             html: buildSystemEmail({
-              logoUrl:     (v.brand_logo_url as string | null) || undefined,
-              logoAlt:     venueLabel,
+              // No logoUrl: always the StoryVenue dark logo, centered.
+              logoAlt:     'StoryVenue',
               accentColor: '#1b1b1b',
               title:       escapeText(subject),
               heading:     escapeText(`Your ${venueLabel} pricing guide`),

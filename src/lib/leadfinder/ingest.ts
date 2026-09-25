@@ -385,6 +385,8 @@ function notifyNewLeadLikeEveryOtherEntryPoint(input: {
   createdAt: string;
   /** Human label for the owner alert, e.g. "The Knot via LeadFinder™". */
   sourceLabel: string;
+  /** Owner address that gets LeadFinder's own "New lead" email instead. */
+  excludeEmailRecipients?: string[];
   crmLead: {
     first_name: string | null;
     last_name: string | null;
@@ -407,6 +409,7 @@ function notifyNewLeadLikeEveryOtherEntryPoint(input: {
     phone,
     source: input.sourceLabel,
     createdAt,
+    excludeEmailRecipients: input.excludeEmailRecipients,
   });
 
   void import('@/lib/realtime/broadcast')
@@ -615,6 +618,10 @@ async function processArrival(p: {
   // Identity (so the venue is never read as the couple) and local time zone
   // (so the inbox copy reads in the venue's own time).
   const { identity, timeZone, logoUrl } = await loadVenueProfile(venue);
+
+  // Where the inbox copy goes (and whether it goes at all).
+  const mirrorRecipient =
+    venue.leadfinder_mirror_enabled !== false ? (venue.notification_email || venue.email || '').trim() || null : null;
 
   // Everything the mirror needs, captured once. The mirror is built from the
   // SAME stored arrival so its copy is faithful, and it is fired on terminal
@@ -917,6 +924,11 @@ async function processArrival(p: {
     phone: extracted.phone,
     createdAt,
     sourceLabel: detectedSource ? `${detectedSource} (via LeadFinder™)` : 'LeadFinder™',
+    // One email per new lead: when the inbox copy is on, the owner gets that
+    // (it has everything the standard alert has, plus the original message),
+    // so the standard alert email skips their address. Team members, SMS and
+    // push are unchanged.
+    excludeEmailRecipients: mirrorRecipient ? [mirrorRecipient] : [],
     crmLead: {
       first_name: extracted.firstName,
       last_name: extracted.lastName,
@@ -1001,7 +1013,21 @@ async function processArrival(p: {
 
   // The owner's own copy, fired last so the banner reflects the final state of
   // the arrival (including whether it is waiting on a human check).
-  await mirror({ kind: 'lead', created: true, leadId, leadName: displayName, needsReview, reviewReason });
+  await mirror({
+    kind: 'lead',
+    created: true,
+    leadId,
+    leadName: displayName,
+    needsReview,
+    reviewReason,
+    details: {
+      email,
+      phone: extracted.phone,
+      weddingDate: extracted.weddingDate,
+      guestCount: extracted.guestCount,
+      source: detectedSource ? `${detectedSource} (via LeadFinder™)` : 'LeadFinder™',
+    },
+  });
 
   return { outcome: 'created', leadId, detectedSource, confidence: verdict.confidence };
 }
