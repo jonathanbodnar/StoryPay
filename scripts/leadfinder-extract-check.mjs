@@ -21,6 +21,8 @@ const { extractLeadFromEmail, classifyInbound, detectSource, normalizeDate, isLi
   await import(join(root, 'src/lib/leadfinder/extract.ts'));
 const { htmlToStructuredText, chooseLeadFinderBody } = await import(join(root, 'src/lib/leadfinder/html-to-text.ts'));
 const { parseGmailForwardingConfirmation } = await import(join(root, 'src/lib/leadfinder/gmail-confirmation.ts'));
+const { findLeadFinderAddressInPayload } = await import(join(root, 'src/lib/leadfinder/address.ts'));
+const { plausibleCoupleName } = await import(join(root, 'src/lib/leadfinder/extract.ts'));
 
 const NOW = new Date('2026-09-24T12:00:00Z');
 const venue = {
@@ -225,6 +227,22 @@ expect('gmail confirmation → code', conf?.code, '871234567');
 expect('gmail confirmation → requested by', conf?.requestedBy, 'info@redbarnacres.com');
 expect('gmail confirmation → link', conf?.confirmUrl, 'https://mail-settings.google.com/mail/vf-%5BANGjdJ_abc%5D-xyz');
 expect('gmail confirmation → ordinary mail', parseGmailForwardingConfirmation({ senderEmail: 'a@b.com', subject: 'Hello', text: 'x' }), null);
+
+// Routing: a Gmail forwarding rule keeps the ORIGINAL To, so the LeadFinder
+// address can live only in the forwarding / Received headers.
+const lf = 'leadfinder+0f8fad5b-d9cb-469f-a165-70867728950e+0123456789abcdef@in.storyvenue.com';
+expect('routing: in To', findLeadFinderAddressInPayload({ to: [`LeadFinder <${lf}>`] }), lf);
+expect('routing: only in X-Forwarded-To', findLeadFinderAddressInPayload({ to: ['info@redbarnacres.com'], headers: { 'X-Forwarded-To': lf } }), lf);
+expect('routing: only in Received', findLeadFinderAddressInPayload({
+  to: ['info@redbarnacres.com'],
+  headers: { received: [`from mail-x.google.com by inbound.example with SMTP id abc for <${lf}>; Wed, 24 Sep 2026`] },
+}), lf);
+expect('routing: not a LeadFinder address', findLeadFinderAddressInPayload({ to: ['info@redbarnacres.com'] }), null);
+
+// Names from the AI fallback are held to the same rules.
+expect('ai name: brand', plausibleCoupleName('The Knot', venue), null);
+expect('ai name: venue', plausibleCoupleName('Red Barn Acres Events', venue), null);
+expect('ai name: person', plausibleCoupleName('Sarah Johnson', venue), 'Sarah Johnson');
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures ? 1 : 0);

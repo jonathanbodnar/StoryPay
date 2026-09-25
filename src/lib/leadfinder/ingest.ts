@@ -32,7 +32,9 @@ import {
   classifyInbound,
   domainOf,
   extractLeadFromEmail,
+  isVenueOwnPhone,
   parseAddressHeader,
+  plausibleCoupleName,
   type ExtractedLead,
   type VenueIdentity,
 } from '@/lib/leadfinder/extract';
@@ -274,7 +276,17 @@ async function loadVenueIdentity(venue: VenueCore): Promise<VenueIdentity> {
  * the AI contributed at least one field — which is what `extraction_source`
  * records.
  */
-function applyAiGapFill(target: ExtractedLead, ai: AiExtractedFields): boolean {
+function applyAiGapFill(target: ExtractedLead, aiRaw: AiExtractedFields, venue: VenueIdentity): boolean {
+  // The model is held to the same rules as the parser: a brand, a role or the
+  // venue's own name is not the couple, and the venue's own number is not theirs.
+  const aiName = plausibleCoupleName(aiRaw.name, venue);
+  const ai: AiExtractedFields = {
+    ...aiRaw,
+    name: aiName,
+    firstName: aiName ? aiRaw.firstName : null,
+    lastName: aiName ? aiRaw.lastName : null,
+    phone: isVenueOwnPhone(aiRaw.phone, venue) ? null : aiRaw.phone,
+  };
   let contributed = false;
   const take = (current: string | null, candidate: string | null): string | null => {
     if (isBlank(current) && !isBlank(candidate)) {
@@ -727,16 +739,21 @@ async function processArrival(p: {
 
   const email = extracted.email as string;   // classifier guarantees non-null
 
-  // ── 5b. AI fallback — only for a thin result that is still a real inquiry ──
+  // ── 5b. AI fallback — for a result too thin to act on by itself ─────────
+  // Runs when the deterministic read is thin OR would otherwise go to review:
+  // a name and an email with the date and guest count written in a sentence is
+  // exactly what the model can finish. It only ever fills gaps (see
+  // applyAiGapFill), so it cannot degrade anything the parser read.
   let aiContributed = false;
-  if (needsAiFallback(extracted)) {
+  const beforeAi = scoreExtractedFields(extracted, { emailConfidence: emailConfidence(extracted) }).overallConfidence;
+  if (needsAiFallback(extracted) || beforeAi < CONFIDENCE_THRESHOLD) {
     const ai = await extractWithAi({
       subject: extracted.forwarded?.subject ?? arrival.subject,
       text: extracted.inquiryText || arrival.text,
       senderEmail: email,
       senderDisplayName: extracted.name,
     });
-    if (ai) aiContributed = applyAiGapFill(extracted, ai.fields);
+    if (ai) aiContributed = applyAiGapFill(extracted, ai.fields, identity);
   }
 
   const { overallConfidence: extractionConfidence, fieldConfidence } = scoreExtractedFields(extracted, {

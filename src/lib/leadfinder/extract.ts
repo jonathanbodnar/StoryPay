@@ -653,6 +653,20 @@ function plausiblePersonName(raw: string | null | undefined, id: Identity): stri
   return v;
 }
 
+/**
+ * The same person-name check the deterministic pass applies, for callers that
+ * get a name from elsewhere (the AI fallback): no brands, roles, sentences, or
+ * the venue's own name.
+ */
+export function plausibleCoupleName(raw: string | null | undefined, venue?: VenueIdentity): string | null {
+  return plausiblePersonName(raw, buildIdentity(venue));
+}
+
+/** Whether a number belongs to the venue itself (its own line, a signature). */
+export function isVenueOwnPhone(phone: string | null | undefined, venue?: VenueIdentity): boolean {
+  return !!phone && isVenuePhone(phone, buildIdentity(venue));
+}
+
 /** The couple's name as the subject line gives it, when it does. */
 function nameFromSubject(subject: string | null, id: Identity): string | null {
   if (!subject) return null;
