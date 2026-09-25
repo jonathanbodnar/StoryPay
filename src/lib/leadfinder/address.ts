@@ -81,6 +81,39 @@ export function parseLeadFinderLocalPart(
   return { venueId, sig: sig.toLowerCase() };
 }
 
+const LEADFINDER_ADDRESS_RE = /leadfinder\+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\+[0-9a-f]{16}@[a-z0-9.-]+\.[a-z]{2,}/i;
+
+/**
+ * Find a LeadFinder address anywhere in an inbound payload — To, Cc, or any
+ * header value (Delivered-To, X-Forwarded-To, X-Original-To, Received "for <…>").
+ *
+ * This matters for forwarded mail: a Gmail forwarding rule keeps the ORIGINAL
+ * To header (the venue's own address), so the LeadFinder address only appears
+ * in the envelope/forwarding headers. Looking at To alone silently dropped it.
+ * Safe to search broadly because the signature is still verified afterwards.
+ */
+export function findLeadFinderAddressInPayload(payload: {
+  to?: unknown;
+  cc?: unknown;
+  headers?: unknown;
+}): string | null {
+  const strings: string[] = [];
+  const visit = (v: unknown, depth: number) => {
+    if (depth > 3 || v == null) return;
+    if (typeof v === 'string') strings.push(v);
+    else if (Array.isArray(v)) for (const x of v) visit(x, depth + 1);
+    else if (typeof v === 'object') for (const x of Object.values(v as Record<string, unknown>)) visit(x, depth + 1);
+  };
+  visit(payload.to, 0);
+  visit(payload.cc, 0);
+  visit(payload.headers, 0);
+  for (const s of strings) {
+    const m = LEADFINDER_ADDRESS_RE.exec(s);
+    if (m && parseLeadFinderLocalPart(m[0].split('@')[0])) return m[0].toLowerCase();
+  }
+  return null;
+}
+
 /** Constant-time verify. False when the secret is missing, never throws. */
 export function verifyLeadFinderSignature(venueId: string, sig: string): boolean {
   const secret = inboundSecret();

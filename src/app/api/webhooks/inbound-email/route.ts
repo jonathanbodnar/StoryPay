@@ -20,9 +20,11 @@ import {
 } from '@/lib/conversations-inbound-email';
 import { haltAutomationEnrollmentsForReply } from '@/lib/marketing-email-worker';
 import {
+  findLeadFinderAddressInPayload,
   parseLeadFinderLocalPart,
   verifyLeadFinderSignature,
 } from '@/lib/leadfinder/address';
+import { chooseLeadFinderBody } from '@/lib/leadfinder/html-to-text';
 import { ingestLeadFinderEmail } from '@/lib/leadfinder/ingest';
 import { recordSmsConsentByEmail } from '@/lib/sms-consent';
 import {
@@ -216,10 +218,14 @@ async function ingestFromParsedFields(params: {
   messageId: string | null;
   resendEmailId?: string;
   /** Raw headers from the receiving provider — used by LeadFinder to store the
-   *  threading headers (Reply-To / In-Reply-To / References) for a later phase. */
+   *  threading headers (Reply-To / In-Reply-To / References) and to recognise
+   *  its own copies coming back. */
   headers?: Record<string, unknown>;
+  /** The provider's parsed Reply-To, when it gives one outside the headers. */
+  replyTo?: string | null;
 }): Promise<NextResponse> {
   const { fromRaw, toRaw, subject, text: textIn, html, messageId, resendEmailId, headers } = params;
+  const replyToHeader = params.replyTo?.trim() || null;
 
   let text = textIn.trim();
   if (!text && html.trim()) {
@@ -350,21 +356,31 @@ async function ingestFromParsedFields(params: {
       console.warn('[inbound-email] leadfinder bad signature', { venueId: parsedLf.venueId });
       return NextResponse.json({ ok: true, skipped: 'bad_token' });
     }
+    // LeadFinder reads labelled fields line by line, so it needs the body WITH
+    // its line structure — not the whitespace-collapsed text used above.
+    const lfText = chooseLeadFinderBody(textIn, html);
     const result = await ingestLeadFinderEmail({
       venueId: parsedLf.venueId,
       fromRaw,
       senderName: fromName,
-      replyTo: headerValue(headers, ['reply-to', 'reply_to']) ?? null,
+      replyTo: replyToHeader ?? headerValue(headers, ['reply-to', 'reply_to']) ?? null,
       subject,
-      text,
+      text: lfText,
       inReplyTo: headerValue(headers, ['in-reply-to', 'in_reply_to']) ?? null,
       references: headerValue(headers, ['references']) ?? null,
       messageId,
       // Same fallback the conversation path uses when a sender omits Message-ID.
-      dedupeFallbackId: text ? hashInboundDedupeFallback(fromEmail, subject ?? '', text, toRaw) : null,
+      dedupeFallbackId: lfText ? hashInboundDedupeFallback(fromEmail, subject ?? '', lfText, toRaw) : null,
       receivedAt: new Date(),
+      headers,
     });
     console.warn('[inbound-email] leadfinder', { venueId: parsedLf.venueId, ...result });
+    // Another delivery of this message is still being processed (or a crashed
+    // attempt is not yet old enough to take over): ask the provider to retry
+    // later rather than acknowledging something that has not finished.
+    if (result.outcome === 'in_progress') {
+      return NextResponse.json({ ok: false, audience: 'leadfinder', ...result }, { status: 503 });
+    }
     return NextResponse.json({ ok: true, audience: 'leadfinder', ...result });
   }
 
@@ -581,6 +597,7 @@ export async function POST(request: NextRequest) {
     from?: string;
     to?: string[];
     cc?: string[];
+    reply_to?: string[] | string | null;
     subject?: string;
     text?: string | null;
     html?: string | null;
@@ -591,10 +608,17 @@ export async function POST(request: NextRequest) {
   const fromRaw = email.from ?? '';
   const replyRoute = pickReplyRoutingAddressFromInboundEmail(
     email,
-    (local) => !!parseTicketReplyLocalPart(local) || local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART,
+    (local) =>
+      !!parseTicketReplyLocalPart(local) ||
+      local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART ||
+      !!parseLeadFinderLocalPart(local),
   );
+  // A Gmail forwarding rule keeps the original To (the venue's own address), so
+  // a LeadFinder address can be present only in the envelope / Received headers.
+  const leadFinderRoute = replyRoute ? '' : findLeadFinderAddressInPayload(email) ?? '';
   const toRaw =
     replyRoute ||
+    leadFinderRoute ||
     (Array.isArray(email.to) && email.to.length ? String(email.to[0]) : '');
   console.warn('[inbound-email] webhook received', {
     emailId,
@@ -616,6 +640,7 @@ export async function POST(request: NextRequest) {
       parseVenueDirectLocalPart(local) ||
       parseVenueConciergeLocalPart(local) ||
       parseTicketReplyLocalPart(local) ||
+      parseLeadFinderLocalPart(local) ||
       local.toLowerCase() === SUPPORT_TICKET_INBOUND_LOCAL_PART;
     if (!recognized) {
       console.warn('[inbound-email] no reply+thread+sig in to/cc/headers', {
@@ -636,5 +661,6 @@ export async function POST(request: NextRequest) {
     messageId,
     resendEmailId: emailId,
     headers: email.headers,
+    replyTo: Array.isArray(email.reply_to) ? (email.reply_to[0] ?? null) : (email.reply_to ?? null),
   });
 }

@@ -129,8 +129,15 @@ const FIELD_WEIGHT: Record<string, number> = {
  * Score a set of extracted fields. Returns an overall 0–1 confidence and a
  * per-field map. `venueMatters` and `timeline` share one weight bucket so a
  * couple who answered both is not double-counted.
+ *
+ * `emailConfidence` (default 1) scales the email's contribution: an address
+ * read from a labelled field or the original sender is certain, one spotted in
+ * free text is probable, and a marketplace relay only reaches them indirectly.
  */
-export function scoreExtractedFields(fields: ScorableFields): {
+export function scoreExtractedFields(
+  fields: ScorableFields,
+  opts?: { emailConfidence?: number },
+): {
   overallConfidence: number;
   fieldConfidence: Record<string, number>;
 } {
@@ -138,8 +145,9 @@ export function scoreExtractedFields(fields: ScorableFields): {
   let total = 0;
 
   if (isFilled(fields.email)) {
-    total += FIELD_WEIGHT.email;
-    fieldConfidence.email = 1;
+    const c = Math.max(0, Math.min(1, opts?.emailConfidence ?? 1));
+    total += FIELD_WEIGHT.email * c;
+    fieldConfidence.email = c;
   }
   if (isFilled(fields.name)) {
     total += FIELD_WEIGHT.name;
@@ -344,6 +352,9 @@ function parseJsonObject(raw: string): Record<string, unknown> | null {
 
 // ── Public entry ─────────────────────────────────────────────────────────────
 
+/** Upper bound on the model call, which sits inside the webhook request. */
+const AI_TIMEOUT_MS = 12_000;
+
 /**
  * Best-effort AI fallback extraction. Returns `null` — never throws — when the
  * API key is missing, the call fails, or the output cannot be parsed, so the
@@ -355,15 +366,23 @@ export async function extractWithAi(input: AiExtractInput): Promise<AiExtractRes
   let raw = '';
   try {
     const client = getDeepSeekClient();
-    const completion = await client.chat.completions.create({
-      model: DEEPSEEK_MODEL,
-      temperature: 0,
-      max_tokens: 600,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildUserPrompt(input) },
-      ],
-    });
+    const completion = await client.chat.completions.create(
+      {
+        model: DEEPSEEK_MODEL,
+        temperature: 0,
+        max_tokens: 600,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: buildUserPrompt(input) },
+        ],
+      },
+      // This runs inside the inbound-email webhook. The client default (30s,
+      // with automatic retries) could hold the request past the provider's
+      // timeout; a slow model is simply skipped — the deterministic result
+      // stands and the arrival goes to review if it is thin.
+      { timeout: AI_TIMEOUT_MS, maxRetries: 0 },
+    );
     raw = completion.choices?.[0]?.message?.content ?? '';
   } catch (e) {
     console.error('[leadfinder] extractWithAi DeepSeek error:', e);

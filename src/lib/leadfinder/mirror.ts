@@ -24,6 +24,18 @@
 
 import { sendEmail } from '@/lib/email';
 import { supabaseAdmin } from '@/lib/supabase';
+import { leadFinderReasonLabel } from '@/lib/leadfinder/reasons';
+
+/**
+ * Loop protection. Every copy carries this header AND this footer sentence, and
+ * ingest refuses any arrival that has either — so a venue that forwards all its
+ * mail to LeadFinder cannot bounce a copy back in and start an endless loop.
+ * The header survives Gmail forwarding; the sentence survives anything that
+ * forwards the body. Change neither without updating `isOwnMessage` in ingest.
+ */
+export const LEADFINDER_MIRROR_HEADER = 'X-StoryVenue-LeadFinder';
+export const LEADFINDER_MIRROR_FOOTER_MARKER =
+  'Sent by LeadFinder because a message arrived at your LeadFinder address';
 
 export interface MirrorContext {
   venueId: string;
@@ -50,9 +62,17 @@ export type MirrorOutcome =
       created: boolean;
       /** Created but held back from the couple pending a human check. */
       needsReview: boolean;
+      /** Why it was held, when it was: `relay_address`, `low_confidence`, … */
+      reviewReason?: string | null;
     }
   | { kind: 'skipped'; reason: string }
-  | { kind: 'failed'; reason: string };
+  | { kind: 'failed'; reason: string }
+  | {
+      kind: 'gmail_confirmation';
+      code: string | null;
+      confirmUrl: string | null;
+      requestedBy: string | null;
+    };
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
 
@@ -73,24 +93,8 @@ function senderEmail(raw: string | null): string | null {
   return /@/.test(candidate) ? candidate : null;
 }
 
-/**
- * Turn an internal machine reason into a sentence a venue owner understands.
- * Unknown reasons degrade to the raw token with underscores removed rather than
- * being hidden, so a new skip reason is still legible.
- */
-const REASON_LABELS: Record<string, string> = {
-  not_an_inquiry_subject: 'it looked like an account notification, not an inquiry',
-  no_email_address: 'we could not find an email address to reply to',
-  leadfinder_disabled_for_venue: 'LeadFinder is not switched on for your account',
-  extract_threw: 'we could not read the message',
-  lead_insert_failed: 'we could not save the lead',
-  import_row_failed: 'we could not record the message',
-  rejected: 'it did not look like a wedding inquiry',
-};
-
 function humanizeReason(reason: string | null | undefined): string {
-  if (!reason) return 'no reason recorded';
-  return REASON_LABELS[reason] ?? reason.replace(/_/g, ' ');
+  return leadFinderReasonLabel(reason) ?? 'no reason recorded';
 }
 
 function formatReceived(at: Date, timeZone?: string): string {
@@ -119,8 +123,38 @@ interface Banner {
 }
 
 function buildBanner(outcome: MirrorOutcome): Banner {
+  if (outcome.kind === 'gmail_confirmation') {
+    const who = outcome.requestedBy ? ` for ${outcome.requestedBy}` : '';
+    return {
+      tone: 'review',
+      headline: outcome.code
+        ? `Your Gmail forwarding code is ${outcome.code}`
+        : 'Gmail is asking you to confirm forwarding',
+      detail:
+        `Gmail sent this to your LeadFinder address to confirm forwarding${who}. ` +
+        (outcome.code
+          ? `In Gmail, open Settings → Forwarding and POP/IMAP, click "Verify" next to your LeadFinder address and enter ${outcome.code} — or use Gmail's own confirmation link below. `
+          : 'Use Gmail\'s own confirmation link below. ') +
+        'Then add the filter that forwards your directory emails. This message is not a lead.',
+      ctaUrl: outcome.confirmUrl,
+      ctaLabel: outcome.confirmUrl ? 'Confirm in Gmail' : null,
+    };
+  }
+
   if (outcome.kind === 'lead') {
     const leadUrl = `${APP_URL}/dashboard/contacts/${outcome.leadId}`;
+    if (outcome.created && outcome.needsReview && outcome.reviewReason === 'relay_address') {
+      return {
+        tone: 'review',
+        headline: `Lead created — ${outcome.leadName} — reply through the marketplace`,
+        detail:
+          'We saved this as a lead and alerted you, but the only address in this message is the marketplace\'s ' +
+          'relay (replies go through their inbox, not straight to the couple), so we did NOT send your guide automatically. ' +
+          'Reply on the marketplace, or confirm the lead to send the guide through the relay.',
+        ctaUrl: `${APP_URL}/dashboard/settings/integrations/leadfinder-review`,
+        ctaLabel: 'Review this arrival',
+      };
+    }
     if (outcome.created && outcome.needsReview) {
       return {
         tone: 'review',
@@ -209,7 +243,7 @@ function buildMirrorHtml(ctx: MirrorContext, outcome: MirrorOutcome): string {
       </div>
     </div>
     <div style="text-align:center;font-size:11px;color:#9ca3af;margin-top:14px;">
-      Sent by LeadFinder because a message arrived at your LeadFinder address. Turn this copy off in Settings → Integrations.
+      ${LEADFINDER_MIRROR_FOOTER_MARKER}. Turn this copy off in Settings → Integrations.
     </div>
   </div>
 </body></html>`;
@@ -229,6 +263,8 @@ function buildMirrorText(ctx: MirrorContext, outcome: MirrorOutcome): string {
     `Received: ${formatReceived(ctx.receivedAt)}`,
     '',
     ctx.rawText,
+    '',
+    `${LEADFINDER_MIRROR_FOOTER_MARKER}. Turn this copy off in Settings → Integrations.`,
   ]
     .filter((line) => line !== '')
     .join('\n');
@@ -286,6 +322,11 @@ export async function mirrorArrivalToVenue(
       text: buildMirrorText(ctx, outcome),
       replyTo,
       from: { email: notifFromEmail, name: 'StoryVenue LeadFinder' },
+      headers: {
+        [LEADFINDER_MIRROR_HEADER]: `mirror; import=${ctx.importId}`,
+        // RFC 3834: tells auto-responders not to answer a machine-sent copy.
+        'Auto-Submitted': 'auto-generated',
+      },
     });
 
     if (!result.success) {
