@@ -56,9 +56,8 @@ export interface MirrorContext {
    * in it, so the venue reads its own local time — never the server's UTC.
    */
   timeZone?: string | null;
-  /** Venue branding for the shared owner-email shell (logo, accent color, name). */
+  /** Venue branding for the shared email shell: name and brand logo. */
   venueName?: string | null;
-  brandColor?: string | null;
   logoUrl?: string | null;
   rawText: string;
 }
@@ -293,7 +292,8 @@ function buildMirrorHtml(ctx: MirrorContext, outcome: MirrorOutcome): string {
   return buildSystemEmail({
     logoUrl: ctx.logoUrl || undefined,
     logoAlt: venueName,
-    accentColor: /^#[0-9a-f]{3,8}$/i.test(ctx.brandColor ?? '') ? (ctx.brandColor as string) : '#1b1b1b',
+    // One brand color across every email in the product.
+    accentColor: '#1b1b1b',
     preheader: headline,
     title: headline,
     heading: headline,

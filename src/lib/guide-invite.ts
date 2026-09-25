@@ -18,6 +18,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 import { getGhlToken } from '@/lib/ghl';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
 import {
@@ -103,12 +104,10 @@ async function sendInviteEmail(venueId: string, leadId: string, kind: 'invite' |
 
   const [{ data: leadRow }, { data: venueRow }] = await Promise.all([
     supabaseAdmin.from('leads').select('referral_source').eq('id', leadId).maybeSingle(),
-    supabaseAdmin.from('venues').select('brand_logo_url, logo_url, brand_color').eq('id', venueId).maybeSingle(),
+    supabaseAdmin.from('venues').select('brand_logo_url').eq('id', venueId).maybeSingle(),
   ]);
   const via = ((leadRow as { referral_source?: string | null } | null)?.referral_source ?? '').trim();
-  const venue = (venueRow ?? {}) as { brand_logo_url?: string | null; logo_url?: string | null; brand_color?: string | null };
-  const logo = venue.brand_logo_url || venue.logo_url || null;
-  const color = /^#[0-9a-f]{3,8}$/i.test(venue.brand_color ?? '') ? (venue.brand_color as string) : '#1b1b1b';
+  const logo = (venueRow as { brand_logo_url?: string | null } | null)?.brand_logo_url || null;
 
   const venueName = vars.venue_name || 'our venue';
   const first = (vars.first_name || '').trim();
@@ -121,18 +120,23 @@ async function sendInviteEmail(venueId: string, leadId: string, kind: 'invite' |
     ? `Thanks for reaching out to ${venueName}${via ? ` through ${via}` : ''}! Your pricing & planning guide is ready.`
     : "Just making sure you saw this — tap below and we'll send your pricing & planning guide right over.";
 
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f5f5f4">
-<div style="max-width:520px;margin:0 auto;padding:28px 18px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1b1b1b;line-height:1.6">
-  ${logo ? `<div style="text-align:center;margin-bottom:18px"><img src="${escapeHtml(logo)}" alt="${escapeHtml(venueName)}" style="max-height:56px;max-width:200px"></div>` : ''}
-  <div style="background:#ffffff;border:1px solid #e7e5e4;border-radius:14px;padding:26px 24px">
-    <p style="margin:0 0 12px;font-size:16px">Hi${first ? ` ${escapeHtml(first)}` : ''},</p>
-    <p style="margin:0 0 22px;font-size:15px;color:#44403c">${escapeHtml(lead)}</p>
-    <div style="text-align:center;margin:0 0 6px">
-      <a href="${escapeHtml(link)}" style="display:inline-block;background:${color};color:#ffffff;text-decoration:none;font-weight:700;font-size:16px;padding:14px 30px;border-radius:12px">Send me my guide</a>
-    </div>
-    <p style="margin:22px 0 0;font-size:14px;color:#57534e">– ${escapeHtml(venueName)}</p>
-  </div>
-</div></body></html>`;
+  // The same shared shell as every other email the product sends: the venue's
+  // brand logo at the top (StoryVenue's when it has none), #1b1b1b button,
+  // "Sent via StoryVenue on behalf of …" footer.
+  const heading = kind === 'invite' ? 'Your pricing guide is ready' : 'Your pricing guide is still waiting';
+  const p = (text: string) => `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 12px;">${escapeHtml(text)}</p>`;
+  const html = buildSystemEmail({
+    logoUrl: logo || undefined,
+    logoAlt: venueName,
+    accentColor: '#1b1b1b',
+    preheader: escapeHtml(lead),
+    title: escapeHtml(heading),
+    heading: escapeHtml(heading),
+    bodyHtml: [p(`Hi${first ? ` ${first}` : ''},`), p(lead), p(`– ${venueName}`)].join('\n'),
+    cta: { label: 'Send me my guide', url: link },
+    showLinkFallback: true,
+    footerHtml: `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">Sent via StoryVenue on behalf of ${escapeHtml(venueName)}</p>`,
+  });
   const text = [`Hi${first ? ` ${first}` : ''},`, '', lead, '', `Send me my guide: ${link}`, '', `– ${venueName}`].join('\n');
 
   // Same sender and reply routing as the guide email: from the venue, and a

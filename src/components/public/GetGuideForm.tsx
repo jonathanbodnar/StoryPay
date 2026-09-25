@@ -7,16 +7,16 @@
  * that sends the guide by text and email. The consent line sits directly under
  * the button — tapping it is the opt-in, so the wording must keep naming the
  * button ("By tapping Send my guide…").
+ *
+ * After the tap the page does NOT show the guide: it says the guide is on its
+ * way to their phone and inbox, so couples learn to look there — which is
+ * where the venue's follow-up will reach them.
  */
 
 import { useState } from 'react';
-import InlinePdfGuide from '@/components/public/InlinePdfGuide';
-import { GuideViewTracker } from '@/components/public/GuideViewTracker';
 
 interface Props {
   token: string;
-  venueId: string;
-  leadId: string;
   venueName: string;
   firstName: string | null;
   initialPhone: string;
@@ -27,9 +27,7 @@ interface Props {
   privacyUrl: string;
   termsUrl: string;
   buttonColor: string;
-  pdfUrl: string;
-  downloadUrl: string;
-  /** They already tapped before — go straight to the guide. */
+  /** They already tapped before — just confirm it went out. */
   alreadySent: boolean;
 }
 
@@ -61,13 +59,13 @@ export default function GetGuideForm(props: Props) {
 
   if (status === 'sent') {
     return (
-      <div>
-        <GuideViewTracker venueId={props.venueId} leadId={props.leadId} />
-        <div className="mx-auto mb-5 max-w-xl rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-center">
-          <p className="text-base font-semibold text-emerald-900">On its way! Check your phone and inbox.</p>
-          <p className="mt-1 text-sm text-emerald-800">Here&apos;s your guide in the meantime.</p>
-        </div>
-        <InlinePdfGuide pdfUrl={props.pdfUrl} downloadUrl={props.downloadUrl} venueName={props.venueName} />
+      <div className="mx-auto max-w-md rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
+        <p className="text-3xl" aria-hidden>📱</p>
+        <h1 className="mt-2 text-xl font-semibold text-gray-900">Your guide is on its way!</h1>
+        <p className="mt-2 text-sm leading-relaxed text-gray-600">
+          We just sent your {props.venueName} pricing guide to your phone and your email. Check your texts
+          and your inbox — that&apos;s where we&apos;ll follow up with you too.
+        </p>
       </div>
     );
   }

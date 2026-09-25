@@ -66,7 +66,7 @@ export default async function GetGuidePage({ params }: Props) {
       .maybeSingle(),
     supabaseAdmin
       .from('venues')
-      .select('name, logo_url, brand_logo_url, brand_color, location_city, location_state')
+      .select('name, logo_url, brand_logo_url, location_city, location_state')
       .eq('id', venueId)
       .maybeSingle(),
     supabaseAdmin.from('guide_invites').select('tapped_at').eq('lead_id', leadId).maybeSingle(),
@@ -78,7 +78,6 @@ export default async function GetGuidePage({ params }: Props) {
     name: string | null;
     logo_url: string | null;
     brand_logo_url: string | null;
-    brand_color: string | null;
     location_city: string | null;
     location_state: string | null;
   };
@@ -86,8 +85,8 @@ export default async function GetGuidePage({ params }: Props) {
   const logo = venue.brand_logo_url || venue.logo_url;
   const location = [venue.location_city, venue.location_state].filter(Boolean).join(', ');
   const firstName = (lead.first_name || lead.name?.split(/\s+/)[0] || '').trim() || null;
-  const buttonColor = /^#[0-9a-f]{3,8}$/i.test(venue.brand_color ?? '') ? (venue.brand_color as string) : '#1b1b1b';
-  const pdfUrl = `/api/public/venue/${venueId}/pricing-guide`;
+  // One brand color across the product, same as the emails.
+  const buttonColor = '#1b1b1b';
 
   return (
     <div className="min-h-screen bg-stone-100">
@@ -104,8 +103,6 @@ export default async function GetGuidePage({ params }: Props) {
       <main className="px-4 py-8">
         <GetGuideForm
           token={raw}
-          venueId={venueId}
-          leadId={leadId}
           venueName={venueName}
           firstName={firstName}
           initialPhone={displayPhone(lead.phone)}
@@ -115,8 +112,6 @@ export default async function GetGuidePage({ params }: Props) {
           privacyUrl={SMS_CONSENT_PRIVACY_PATH}
           termsUrl={SMS_CONSENT_TERMS_PATH}
           buttonColor={buttonColor}
-          pdfUrl={pdfUrl}
-          downloadUrl={`${pdfUrl}?dl=1`}
           alreadySent={!!(inviteRow as { tapped_at: string | null } | null)?.tapped_at}
         />
       </main>

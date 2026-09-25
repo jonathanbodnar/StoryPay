@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail, buildBulkEmailHeaders, htmlToPlainText, injectPreheaderHtml } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
 import { leadSmsAllowed } from '@/lib/sms-consent';
 import {
@@ -1066,7 +1067,7 @@ export async function sendBookingSystemGuide(
   try {
     const { data: vr } = await supabaseAdmin
       .from('venues')
-      .select(`booking_system_enabled, booking_guide_email_enabled, booking_guide_sms_enabled, booking_guide_email_body, booking_guide_sms_body, name, notification_email, email, ${VENUE_ENTITLEMENT_COLUMNS}`)
+      .select(`booking_system_enabled, booking_guide_email_enabled, booking_guide_sms_enabled, booking_guide_email_body, booking_guide_sms_body, name, notification_email, email, brand_logo_url, ${VENUE_ENTITLEMENT_COLUMNS}`)
       .eq('id', venueId)
       .maybeSingle();
 
@@ -1127,14 +1128,41 @@ export async function sendBookingSystemGuide(
             ?? venueReplyTo;
 
           const body     = mergeMarketingFields(rawBody, vars);
-          const htmlBody = body.replace(/\n/g, '<br>');
+          // The same shared shell as every other email the product sends: the
+          // venue's brand logo at the top (StoryVenue's when it has none), a
+          // #1b1b1b "View your pricing guide" button, and the "Sent via
+          // StoryVenue on behalf of …" footer. A line that is nothing but the
+          // guide link is dropped from the HTML body — the button carries it —
+          // and kept in the plain-text version.
+          const guideUrl = (vars.pricing_guide_url || '').trim();
+          const bodyHtml = body
+            .split('\n')
+            .filter((line) => !guideUrl || line.trim() !== guideUrl)
+            .map((line) => (line.trim() === ''
+              ? '<div style="height:10px"></div>'
+              : `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 4px;">${line}</p>`))
+            .join('\n');
+          const venueLabel = String(vars.venue_name || v.name || 'the venue');
+          const escapeText = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const subject = `Your pricing guide from ${vars.venue_name}`;
           const { sendEmail } = await import('@/lib/email');
           const sent = await sendEmail({
             to:      vars.email,
             from:    { name: fromName, email: fromEmail },
             replyTo: replyTo,
-            subject: `Your pricing guide from ${vars.venue_name}`,
-            html:    `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;color:#1b1b1b;line-height:1.6">${htmlBody}</div>`,
+            subject,
+            html: buildSystemEmail({
+              logoUrl:     (v.brand_logo_url as string | null) || undefined,
+              logoAlt:     venueLabel,
+              accentColor: '#1b1b1b',
+              title:       escapeText(subject),
+              heading:     escapeText(`Your ${venueLabel} pricing guide`),
+              bodyHtml,
+              cta:         guideUrl ? { label: 'View your pricing guide', url: guideUrl } : undefined,
+              showLinkFallback: !!guideUrl,
+              footerHtml:  `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">Sent via StoryVenue on behalf of ${escapeText(venueLabel)}</p>`,
+            }),
+            text: body,
           });
 
           if (sent?.success) {
