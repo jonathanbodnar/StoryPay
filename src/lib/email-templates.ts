@@ -122,7 +122,9 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
     heading:     'New Lead',
     // Everything the couple submitted (source first) is added below this line
     // as a table by notifyOwnerNewLead — the same for every entry point.
-    body:        'You have a new lead for {{organization}}.',
+    // {{lead_intro}} credits StoryVenue with the lead, by source ("StoryVenue's
+    // LeadFinder™ found this lead on The Knot…").
+    body:        '{{lead_intro}}',
     button_text: 'View Lead',
     footer:      null,
   },

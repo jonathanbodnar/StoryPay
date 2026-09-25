@@ -711,7 +711,7 @@ const SOURCE_LABELS: Record<string, string> = {
   web_form:     'Website form',
   lead_link:    'Lead Link',
   form:         'Web form',
-  leadfinder:   'LeadFinder™',
+  leadfinder:   'StoryVenue LeadFinder™',
   manual:       'Added manually',
   test_inquiry: 'Test inquiry',
 };
@@ -768,6 +768,26 @@ function describeLeadSource(callerSource: string | null | undefined, lead: LeadR
   return label;
 }
 
+/**
+ * The opening line of the new-lead email. It credits StoryVenue with the lead
+ * (the owner should see where the value came from), except for a lead they
+ * added themselves.
+ */
+function defaultLeadIntro(rawSource: string): string {
+  switch (rawSource) {
+    case 'leadfinder':   return 'StoryVenue\u2019s LeadFinder\u2122 found this lead and added it to your Lead Inbox.';
+    case 'directory':    return 'StoryVenue sent you this lead from your StoryVenue listing.';
+    case 'lead_link':    return 'StoryVenue captured this lead from your Lead Link.';
+    case 'embed':
+    case 'webform':
+    case 'web_form':     return 'StoryVenue captured this lead from the form on your website.';
+    case 'form':         return 'StoryVenue captured this lead from your form.';
+    case 'manual':       return 'A new lead was added to your Lead Inbox.';
+    case 'test_inquiry': return 'This is a test lead.';
+    default:             return 'StoryVenue captured a new lead for you.';
+  }
+}
+
 /** The details table under the new-lead email's intro. Values are escaped here. */
 function buildLeadDetailsHtml(rows: Array<{ label: string; value: string }>, message: string | null, note: string | null, original: OriginalEmail | null): string {
   const esc = escapeHtmlBasic;
@@ -818,6 +838,8 @@ export function notifyOwnerNewLead(input: {
   details?: NewLeadDetail[];
   /** Their message, when it isn't on the lead row. */
   message?: string | null;
+  /** The opening sentence; defaults to one that credits StoryVenue, by source. */
+  intro?: string | null;
   /** A line above the table, e.g. that LeadFinder is holding the lead for a check. */
   note?: string | null;
   /** LeadFinder: the email the lead was read from, so the owner still has it. */
@@ -877,6 +899,8 @@ export function notifyOwnerNewLead(input: {
         phone,
         source,
         created_at:    createdAt,
+        lead_intro:    escapeHtmlBasic(input.intro?.trim()
+          || defaultLeadIntro((/^[a-z0-9_]+$/.test((input.source ?? '').trim()) ? input.source! : lead?.source ?? '').trim().toLowerCase())),
       },
       extraHtml: buildLeadDetailsHtml(rows, message, input.note?.trim() || null, input.originalEmail ?? null),
       // "Reply" in the owner's inbox writes straight to the couple.

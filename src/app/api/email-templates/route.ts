@@ -133,11 +133,11 @@ export const DEFAULT_TEMPLATES: Record<string, {
     label: 'New Lead',
     description: 'The one email you get for every new lead, from any source. The lead\u2019s details and where they came from are listed under this text automatically.',
     icon: 'UserPlus',
-    variables: ['{{customer_name}}', '{{contact.full_name}}', '{{phone}}', '{{email}}', '{{source}}', '{{created_at}}', '{{venue.name}}'],
+    variables: ['{{lead_intro}}', '{{customer_name}}', '{{contact.full_name}}', '{{phone}}', '{{email}}', '{{source}}', '{{created_at}}', '{{venue.name}}'],
     defaults: {
       subject: 'New lead: {{customer_name}} — {{organization}}',
       heading: 'New Lead',
-      body: 'You have a new lead for {{organization}}.',
+      body: '{{lead_intro}}',
       button_text: 'View Lead',
     },
   },

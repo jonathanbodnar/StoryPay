@@ -174,7 +174,7 @@ You have been invited to join {{venue_name}} on StoryVenue. Click below to accep
     defaults: {
       subject: 'New lead: {{lead_first_name}} {{lead_last_name}} — {{venue_name}}',
       heading: 'New Lead',
-      body: `You have a new lead for {{venue_name}}.
+      body: `{{lead_intro}}  (e.g. "StoryVenue's LeadFinder™ found this lead on The Knot and added it to your Lead Inbox.")
 
 (Below this: a table of where the lead came from and everything they submitted — name, email, phone, wedding date, guests, every form answer and their message.)`,
       button_text: 'View Lead',

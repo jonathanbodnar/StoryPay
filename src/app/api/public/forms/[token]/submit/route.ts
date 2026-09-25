@@ -550,6 +550,7 @@ export async function POST(
       email: emailVal,
       phone: phoneVal || null,
       source: sourceLabel,
+      intro: `StoryVenue captured this lead from your ${via === 'meta' ? 'Meta ad ' : ''}form \u201c${formName}\u201d.`,
       details,
       extraEmailRecipients,
     });

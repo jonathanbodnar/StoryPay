@@ -383,8 +383,10 @@ function notifyNewLeadLikeEveryOtherEntryPoint(input: {
   email: string;
   phone: string | null;
   createdAt: string;
-  /** Human label for the owner alert, e.g. "The Knot via LeadFinder™". */
+  /** Human label for the owner alert, e.g. "StoryVenue LeadFinder™ — found on The Knot". */
   sourceLabel: string;
+  /** The alert's opening sentence (credits StoryVenue). */
+  intro: string;
   /** A line above the details, e.g. that the lead is held for a check. */
   note?: string | null;
   /** The email the lead was read from (when the venue keeps its inbox copy on). */
@@ -411,6 +413,7 @@ function notifyNewLeadLikeEveryOtherEntryPoint(input: {
     phone,
     source: input.sourceLabel,
     createdAt,
+    intro: input.intro,
     note: input.note,
     originalEmail: input.originalEmail,
   });
@@ -924,7 +927,11 @@ async function processArrival(p: {
     email,
     phone: extracted.phone,
     createdAt,
-    sourceLabel: detectedSource ? `${detectedSource} (via LeadFinder™)` : 'LeadFinder™',
+    // StoryVenue gets the credit: the directory is where LeadFinder found it.
+    sourceLabel: detectedSource ? `StoryVenue LeadFinder™ — found on ${detectedSource}` : 'StoryVenue LeadFinder™',
+    intro: detectedSource
+      ? `StoryVenue\u2019s LeadFinder\u2122 found this lead on ${detectedSource} and added it to your Lead Inbox.`
+      : 'StoryVenue\u2019s LeadFinder\u2122 found this lead in your email and added it to your Lead Inbox.',
     // The standard new-lead email is the owner's ONE email for this lead (the
     // inbox copy is not sent for a created lead). With the inbox copy on, it
     // carries the original email too, so the owner still has it.
