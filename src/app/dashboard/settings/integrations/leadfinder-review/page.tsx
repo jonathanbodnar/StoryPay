@@ -4,16 +4,17 @@
  * LeadFinder™ review queue.
  *
  * The arrivals the pipeline created but did NOT contact the couple about,
- * because it was not confident enough in what it extracted. A human reads the
- * original email next to our extraction and either confirms (release the guide)
- * or dismisses (leave the lead alone; nothing is deleted).
+ * because it was not confident enough in what it extracted (or the only address
+ * was a marketplace relay). A human reads the original email next to our
+ * extraction, corrects the core fields if needed, and either confirms (release
+ * the guide) or dismisses (leave the lead alone; nothing is deleted).
  *
  * Styling deliberately mirrors the Integrations page's LeadFinder card.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, AlertCircle, Check, X, Loader2, Mail, Inbox } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Check, X, Loader2, Mail, Inbox, ExternalLink } from 'lucide-react';
 
 interface Extracted {
   name: string | null;
@@ -47,7 +48,36 @@ interface ReviewImport {
 const REASON_LABEL: Record<string, string> = {
   low_confidence: 'Low confidence',
   ai_fallback_uncertain: 'AI fallback uncertain',
+  relay_address: 'Marketplace relay address',
 };
+
+/** The core fields a reviewer can correct before confirming, as form strings. */
+interface Draft {
+  name: string;
+  email: string;
+  phone: string;
+  weddingDate: string;
+  guestCount: string;
+}
+
+function draftFrom(e: Extracted | null): Draft {
+  return {
+    name: e?.name ?? '',
+    email: e?.email ?? '',
+    phone: e?.phone ?? '',
+    weddingDate: e?.weddingDate ?? '',
+    guestCount: e?.guestCount != null ? String(e.guestCount) : '',
+  };
+}
+
+/** Only the fields the reviewer actually changed, so untouched values are never rewritten. */
+function changedFields(original: Draft, draft: Draft): Partial<Draft> {
+  const out: Partial<Draft> = {};
+  for (const k of Object.keys(draft) as Array<keyof Draft>) {
+    if (draft[k].trim() !== original[k].trim()) out[k] = draft[k].trim();
+  }
+  return out;
+}
 
 function pct(v: number | null | undefined): string {
   if (typeof v !== 'number' || Number.isNaN(v)) return '—';
@@ -65,22 +95,22 @@ function when(iso: string | null): string | null {
     : null;
 }
 
-/** The extracted fields, in the order a human reads them, with their confidence. */
-function fieldRows(
-  e: Extracted,
-  conf: Record<string, number>,
-): Array<{ label: string; value: string; conf: number | undefined }> {
-  const rows = [
-    { label: 'Name', value: e.name ?? '', key: 'name' },
-    { label: 'Email', value: e.email ?? '', key: 'email' },
-    { label: 'Phone', value: e.phone ?? '', key: 'phone' },
-    { label: 'Wedding date', value: e.weddingDate ?? '', key: 'weddingDate' },
-    { label: 'Guest count', value: e.guestCount !== null ? String(e.guestCount) : '', key: 'guestCount' },
-    { label: 'What matters most', value: e.venueMatters ?? '', key: 'venueMatters' },
-    { label: 'Timeline', value: e.timeline ?? '', key: 'timeline' },
-    { label: 'Message', value: e.message ?? '', key: 'message' },
+/** Editable core fields, in the order a human reads them. */
+const EDITABLE: Array<{ key: keyof Draft; label: string; type: string; placeholder: string }> = [
+  { key: 'name', label: 'Name', type: 'text', placeholder: 'Couple name' },
+  { key: 'email', label: 'Email', type: 'email', placeholder: 'couple@example.com' },
+  { key: 'phone', label: 'Phone', type: 'tel', placeholder: 'Not provided' },
+  { key: 'weddingDate', label: 'Wedding date', type: 'date', placeholder: '' },
+  { key: 'guestCount', label: 'Guest count', type: 'number', placeholder: 'Not provided' },
+];
+
+/** The read-only answers, shown for context. */
+function answerRows(e: Extracted | null): Array<{ label: string; value: string; key: string }> {
+  return [
+    { label: 'What matters most', value: e?.venueMatters ?? '', key: 'venueMatters' },
+    { label: 'Timeline', value: e?.timeline ?? '', key: 'timeline' },
+    { label: 'Message', value: e?.message ?? '', key: 'message' },
   ];
-  return rows.map((r) => ({ label: r.label, value: r.value, conf: conf?.[r.key] }));
 }
 
 export default function LeadFinderReviewPage() {
@@ -88,13 +118,17 @@ export default function LeadFinderReviewPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The reviewer's corrections, per arrival, alongside what we extracted.
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/venue/leadfinder/review', { cache: 'no-store' });
       if (!res.ok) throw new Error('Could not load the review queue');
       const data = (await res.json()) as { imports?: ReviewImport[] };
-      setItems(data.imports ?? []);
+      const list = data.imports ?? [];
+      setItems(list);
+      setDrafts(Object.fromEntries(list.map((i) => [i.id, draftFrom(i.extracted)])));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the review queue');
     } finally {
@@ -110,10 +144,13 @@ export default function LeadFinderReviewPage() {
     setBusyId(id);
     setError(null);
     try {
+      const item = items.find((i) => i.id === id);
+      const fields =
+        action === 'confirm' && item && drafts[id] ? changedFields(draftFrom(item.extracted), drafts[id]) : {};
       const res = await fetch(`/api/venue/leadfinder/review/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(Object.keys(fields).length > 0 ? { action, fields } : { action }),
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
@@ -139,8 +176,9 @@ export default function LeadFinderReviewPage() {
           </Link>
           <h1 className="font-heading text-2xl text-gray-900">LeadFinder review</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Inquiries we captured but were not confident enough to email the couple about. Confirm to
-            send them the guide, or dismiss to leave the lead untouched.
+            Inquiries we captured but did not email the couple about yet. Check the details against
+            the original — fix anything we misread — then confirm to send them the guide, or dismiss
+            to leave the lead as it is.
           </p>
         </div>
       </div>
@@ -224,33 +262,61 @@ export default function LeadFinderReviewPage() {
               </div>
 
               <div>
-                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                  Extracted fields
-                </span>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    What we read — correct anything wrong
+                  </span>
+                  {item.leadId && (
+                    <Link
+                      href={`/dashboard/contacts/lead/${item.leadId}`}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 transition-colors hover:text-gray-900"
+                    >
+                      Open lead <ExternalLink size={11} />
+                    </Link>
+                  )}
+                </div>
+                {item.reviewReason === 'relay_address' && (
+                  <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-800">
+                    The only email in this message is the marketplace&apos;s relay — replies go through
+                    their inbox, not straight to the couple. Replace it with the couple&apos;s own address
+                    if you have it, or confirm to send the guide through the relay.
+                  </p>
+                )}
                 <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
-                  <dl className="space-y-1.5">
-                    {fieldRows(
-                      item.extracted ?? {
-                        name: null,
-                        firstName: null,
-                        lastName: null,
-                        email: null,
-                        phone: null,
-                        guestCount: null,
-                        weddingDate: null,
-                        venueMatters: null,
-                        timeline: null,
-                        message: null,
-                      },
-                      item.fieldConfidence ?? {},
-                    ).map((row) => (
-                      <div key={row.label} className="flex items-start gap-2 text-[12px]">
-                        <dt className="w-32 shrink-0 text-gray-400">{row.label}</dt>
+                  <div className="space-y-1.5">
+                    {EDITABLE.map((f) => {
+                      const conf = item.fieldConfidence?.[f.key];
+                      return (
+                        <label key={f.key} className="flex items-center gap-2 text-[12px]">
+                          <span className="w-28 shrink-0 text-gray-400">{f.label}</span>
+                          <input
+                            type={f.type}
+                            value={drafts[item.id]?.[f.key] ?? ''}
+                            placeholder={f.placeholder}
+                            disabled={busyId !== null}
+                            min={f.type === 'number' ? 1 : undefined}
+                            onChange={(ev) => {
+                              const value = ev.target.value;
+                              setDrafts((prev) => ({
+                                ...prev,
+                                [item.id]: { ...(prev[item.id] ?? draftFrom(item.extracted)), [f.key]: value },
+                              }));
+                            }}
+                            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[12px] text-gray-800 outline-none focus:border-gray-400 disabled:opacity-60"
+                          />
+                          <span className="w-9 shrink-0 text-right text-[10px] text-gray-400">
+                            {typeof conf === 'number' ? pct(conf) : ''}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <dl className="mt-2.5 space-y-1.5 border-t border-gray-200 pt-2.5">
+                    {answerRows(item.extracted).map((row) => (
+                      <div key={row.key} className="flex items-start gap-2 text-[12px]">
+                        <dt className="w-28 shrink-0 text-gray-400">{row.label}</dt>
                         <dd className={`min-w-0 flex-1 break-words ${row.value ? 'text-gray-800' : 'text-gray-300'}`}>
                           {row.value || '—'}
-                          {row.value && typeof row.conf === 'number' && (
-                            <span className="ml-1.5 text-[10px] text-gray-400">{pct(row.conf)}</span>
-                          )}
                         </dd>
                       </div>
                     ))}

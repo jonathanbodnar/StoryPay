@@ -19,6 +19,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { LEADFINDER_SOURCE, leadSourceLabel } from '@/lib/lead-source';
+import { leadFinderEnabledForSlug } from '@/lib/leadfinder/address';
 
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
@@ -37,6 +38,8 @@ export interface LeadFinderSummary {
   captured:       number;
   /** When it last captured one, or null when it never has. */
   lastCapturedAt: string | null;
+  /** Whether LeadFinder is switched on for this venue at all. */
+  enabled:        boolean;
 }
 
 export interface LeadSourcesPayload {
@@ -82,6 +85,12 @@ export async function GET() {
     }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
+  const { data: venueRow } = await supabaseAdmin
+    .from('venues')
+    .select('slug')
+    .eq('id', venueId)
+    .maybeSingle();
+
   const { data: lastLead } = await supabaseAdmin
     .from('leads')
     .select('created_at')
@@ -98,6 +107,7 @@ export async function GET() {
       // never disagree.
       captured: counts.get(LEADFINDER_SOURCE) ?? 0,
       lastCapturedAt: (lastLead?.[0]?.created_at as string | null) ?? null,
+      enabled: leadFinderEnabledForSlug((venueRow as { slug?: string | null } | null)?.slug ?? null),
     },
   } satisfies LeadSourcesPayload);
 }

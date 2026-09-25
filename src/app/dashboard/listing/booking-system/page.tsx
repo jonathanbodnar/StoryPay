@@ -1165,6 +1165,9 @@ function LeadFinderCard({ summary }: { summary: LeadFinderSummary | null }) {
     ? new Date(last).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     : null;
   const hasCaptured = captured > 0;
+  // Switched off for this venue: say so plainly instead of inviting a setup
+  // that would not capture anything yet.
+  const disabled = summary !== null && summary.enabled === false && !hasCaptured;
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5">
@@ -1175,7 +1178,9 @@ function LeadFinderCard({ summary }: { summary: LeadFinderSummary | null }) {
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-[15px] font-semibold text-gray-900">LeadFinder™</h3>
-            {summary === null ? null : hasCaptured ? (
+            {summary === null ? null : disabled ? (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">Not enabled yet</span>
+            ) : hasCaptured ? (
               <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Live</span>
             ) : (
               <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Not capturing yet</span>
@@ -1189,6 +1194,8 @@ function LeadFinderCard({ summary }: { summary: LeadFinderSummary | null }) {
           <p className="mt-3 text-[13px] text-gray-700">
             {summary === null ? (
               <span className="text-gray-400">LeadFinder activity is unavailable right now.</span>
+            ) : disabled ? (
+              <>LeadFinder isn&apos;t switched on for your account yet. Contact StoryVenue support to enable it.</>
             ) : hasCaptured ? (
               <>
                 <span className="font-semibold">{captured}</span> lead{captured === 1 ? '' : 's'} captured

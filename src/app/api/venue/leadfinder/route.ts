@@ -21,6 +21,9 @@ import {
   DRIFT_BASELINE_DAYS,
   DRIFT_MIN_SAMPLE,
 } from '@/lib/leadfinder/drift';
+import { parseAddressHeader } from '@/lib/leadfinder/extract';
+import { parseGmailForwardingConfirmation } from '@/lib/leadfinder/gmail-confirmation';
+import { LEADFINDER_REASON_LABELS, leadFinderReasonLabel } from '@/lib/leadfinder/reasons';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -91,6 +94,35 @@ export async function GET() {
     lead_id: string | null;
   }>;
 
+  // Gmail's forwarding confirmation code, while it is still the thing the venue
+  // is waiting on: shown only while the newest arrival IS that confirmation.
+  // As soon as any real mail comes through, forwarding is working and it goes.
+  let gmailConfirmation: {
+    code: string | null;
+    confirmUrl: string | null;
+    requestedBy: string | null;
+    receivedAt: string | null;
+  } | null = null;
+  if (recent[0]?.failure_reason === 'gmail_forwarding_confirmation') {
+    const { data: confRow } = await supabaseAdmin
+      .from('leadfinder_imports')
+      .select('sender, subject, raw_text, received_at')
+      .eq('venue_id', venueId)
+      .eq('failure_reason', 'gmail_forwarding_confirmation')
+      .order('received_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const row = confRow as { sender: string | null; subject: string | null; raw_text: string | null; received_at: string | null } | null;
+    const parsed = row
+      ? parseGmailForwardingConfirmation({
+          senderEmail: parseAddressHeader(row.sender).email,
+          subject: row.subject,
+          text: row.raw_text,
+        })
+      : null;
+    if (parsed) gmailConfirmation = { ...parsed, receivedAt: row?.received_at ?? null };
+  }
+
   return NextResponse.json({
     // Off for this venue means the address will accept mail but do nothing with
     // it, so the card has to say so rather than pretending it is live.
@@ -119,12 +151,15 @@ export async function GET() {
       minSample: DRIFT_MIN_SAMPLE,
     },
     sources,
+    gmailConfirmation,
     recent: recent.map((r) => ({
       subject: r.subject,
       senderDomain: r.sender_domain,
       detectedSource: r.detected_source,
       status: r.processing_status,
-      reason: r.failure_reason,
+      // Known reason tokens only — a raw database error stays in the server log.
+      reason: r.failure_reason && LEADFINDER_REASON_LABELS[r.failure_reason] ? r.failure_reason : r.failure_reason ? 'other' : null,
+      reasonLabel: leadFinderReasonLabel(r.failure_reason),
       receivedAt: r.received_at,
     })),
   });
@@ -155,7 +190,10 @@ export async function PATCH(request: NextRequest) {
     .update({ leadfinder_mirror_enabled: body.mirrorEnabled })
     .eq('id', venueId);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[leadfinder PATCH] mirror toggle failed:', error.message);
+    return NextResponse.json({ error: 'Could not save this setting. Please try again.' }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true, mirrorEnabled: body.mirrorEnabled });
 }

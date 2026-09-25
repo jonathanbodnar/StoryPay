@@ -3,7 +3,8 @@
  *
  * A human's verdict on a low-confidence LeadFinder™ arrival.
  *
- *   confirm → the record is right, so release the follow-up that was held at
+ *   confirm → the record is right (optionally after correcting the core
+ *             fields in `fields`), so release the follow-up that was held at
  *             ingest: send the pricing guide (EMAIL ONLY — a phone number read
  *             out of a forwarded email is not TCPA consent) and enroll the lead
  *             in the same booking workflow every other lead gets.
@@ -20,8 +21,76 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { getSessionUser } from '@/lib/session';
-import { sendBookingSystemGuide, onMarketingFormSubmitted } from '@/lib/marketing-email-worker';
+import { sendBookingSystemGuide, onMarketingFormSubmitted, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
 import { ensureListingForm } from '@/lib/listing-lead-form';
+import { normalizePhone } from '@/lib/leadfinder/extract';
+import { syncLeadFinderAnswersToContact } from '@/lib/leadfinder/ingest';
+
+/** The core fields a reviewer may correct before confirming. */
+interface LeadEdits {
+  name?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string;
+  phone?: string | null;
+  weddingDate?: string | null;
+  guestCount?: number | null;
+}
+
+/**
+ * Validate the reviewer's corrections. Only keys that are present are changed;
+ * an empty string clears an optional field. Returns a message a person can act
+ * on for anything that would not make a valid lead.
+ */
+function parseEdits(raw: Record<string, unknown>): { edits: LeadEdits } | { error: string } {
+  const edits: LeadEdits = {};
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : typeof v === 'number' ? String(v) : null);
+
+  if ('name' in raw) {
+    const name = str(raw.name);
+    if (!name) return { error: 'The lead needs a name.' };
+    if (name.length > 120) return { error: 'That name is too long.' };
+    const firstPerson = name.split(/\s+(?:&|and|\+)\s+/i)[0] ?? name;
+    const parts = firstPerson.split(/\s+/).filter(Boolean);
+    edits.name = name;
+    edits.firstName = parts[0] ?? null;
+    edits.lastName = parts.length > 1 ? parts.slice(1).join(' ') : null;
+  }
+  if ('email' in raw) {
+    const email = (str(raw.email) ?? '').toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'That email address does not look right.' };
+    edits.email = email;
+  }
+  if ('phone' in raw) {
+    const phone = str(raw.phone);
+    if (!phone) edits.phone = null;
+    else {
+      const normalized = normalizePhone(phone);
+      if (!normalized) return { error: 'That phone number does not look right.' };
+      edits.phone = normalized;
+    }
+  }
+  if ('weddingDate' in raw) {
+    const d = str(raw.weddingDate);
+    if (!d) edits.weddingDate = null;
+    else {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+      const valid = m && new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).toISOString().slice(0, 10) === d;
+      if (!valid) return { error: 'The wedding date should be a real date.' };
+      edits.weddingDate = d;
+    }
+  }
+  if ('guestCount' in raw) {
+    const g = str(raw.guestCount);
+    if (!g) edits.guestCount = null;
+    else {
+      const n = Number(g);
+      if (!Number.isInteger(n) || n < 1 || n > 5000) return { error: 'The guest count should be a whole number between 1 and 5000.' };
+      edits.guestCount = n;
+    }
+  }
+  return { edits };
+}
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -36,7 +105,7 @@ export async function POST(
   const { importId } = await context.params;
   if (!importId) return NextResponse.json({ error: 'Missing importId' }, { status: 400 });
 
-  let body: { action?: string };
+  let body: { action?: string; fields?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -46,6 +115,15 @@ export async function POST(
   const action = body.action;
   if (action !== 'confirm' && action !== 'dismiss') {
     return NextResponse.json({ error: "action must be 'confirm' or 'dismiss'" }, { status: 400 });
+  }
+
+  // Validate corrections BEFORE claiming the row, so a bad value can never leave
+  // an arrival marked confirmed with nothing sent.
+  let edits: LeadEdits = {};
+  if (action === 'confirm' && body.fields && typeof body.fields === 'object' && !Array.isArray(body.fields)) {
+    const parsed = parseEdits(body.fields as Record<string, unknown>);
+    if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    edits = parsed.edits;
   }
 
   const user = await getSessionUser();
@@ -69,7 +147,7 @@ export async function POST(
 
   if (upErr) {
     console.error('[leadfinder review POST] update failed:', upErr.message);
-    return NextResponse.json({ error: upErr.message }, { status: 500 });
+    return NextResponse.json({ error: 'Could not save your decision. Please try again.' }, { status: 500 });
   }
 
   if (!updatedRow) {
@@ -92,6 +170,51 @@ export async function POST(
   }
 
   const leadId = (updatedRow as { lead_id: string | null }).lead_id;
+  if (leadId && Object.keys(edits).length > 0) {
+    // Apply the reviewer's corrections before anything is sent, so the guide
+    // goes to the corrected address with the corrected name.
+    const { data: before } = await supabaseAdmin
+      .from('leads')
+      .select('email, created_at')
+      .eq('id', leadId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (edits.name !== undefined) {
+      patch.name = edits.name;
+      patch.first_name = edits.firstName ?? null;
+      patch.last_name = edits.lastName ?? null;
+    }
+    if (edits.email !== undefined) patch.email = edits.email;
+    if (edits.phone !== undefined) patch.phone = edits.phone;
+    if (edits.weddingDate !== undefined) patch.wedding_date = edits.weddingDate;
+    if (edits.guestCount !== undefined) patch.guest_count = edits.guestCount;
+
+    const { error: editErr } = await supabaseAdmin.from('leads').update(patch).eq('id', leadId).eq('venue_id', venueId);
+    if (editErr) {
+      console.error('[leadfinder review POST] applying corrections failed:', editErr.message);
+    } else {
+      const email = edits.email ?? ((before as { email?: string | null } | null)?.email ?? null);
+      if (email) {
+        await syncLeadFinderAnswersToContact(venueId, email, {
+          firstName: edits.firstName ?? null,
+          lastName: edits.lastName ?? null,
+          phone: edits.phone ?? null,
+          guestCount: edits.guestCount ?? null,
+          weddingDate: edits.weddingDate ?? null,
+          timeline: null,
+          venueMatters: null,
+        });
+      }
+      // Conversations are keyed by the contact's email: a corrected address is a
+      // different contact, so give its thread the same opening marker.
+      const previousEmail = ((before as { email?: string | null } | null)?.email ?? '').toLowerCase();
+      if (edits.email && edits.email !== previousEmail) {
+        await logNewLeadOpportunity(venueId, leadId, (before as { created_at?: string | null } | null)?.created_at ?? null);
+      }
+    }
+  }
+
   if (leadId) {
     // Email-only, exactly like the automatic path: never the SMS leg.
     try {

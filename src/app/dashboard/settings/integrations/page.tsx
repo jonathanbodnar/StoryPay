@@ -751,12 +751,21 @@ interface LeadFinderData {
     minSample: number;
   };
   sources: LeadFinderSourceDrift[];
+  /** Gmail's forwarding confirmation, while the venue still has to enter it. */
+  gmailConfirmation: {
+    code: string | null;
+    confirmUrl: string | null;
+    requestedBy: string | null;
+    receivedAt: string | null;
+  } | null;
   recent: Array<{
     subject: string | null;
     senderDomain: string | null;
     detectedSource: string | null;
     status: string;
     reason: string | null;
+    /** Plain-language version of `reason`. */
+    reasonLabel: string | null;
     receivedAt: string | null;
   }>;
 }
@@ -900,11 +909,43 @@ function LeadFinderCard() {
                 </p>
                 <p>
                   <strong>If a site will not let you change that email:</strong> add one forwarding
-                  rule in Gmail (Settings → Forwarding and POP/IMAP → add the address, confirm, then
-                  Filters → forward matching mail to it). One rule can cover several directories at
-                  once.
+                  rule in Gmail. In Settings → Forwarding and POP/IMAP, add the address above — Gmail
+                  sends a confirmation code to it, which will appear right here — then create a
+                  filter (for example <em>from:theknot.com OR from:weddingwire.com</em>) that forwards
+                  matching mail to it. One rule can cover several directories at once.
                 </p>
               </div>
+
+              {data.gmailConfirmation && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-900">
+                  <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                    Gmail is waiting for you to confirm forwarding
+                  </span>
+                  {data.gmailConfirmation.code ? (
+                    <p className="leading-relaxed">
+                      Your confirmation code is{' '}
+                      <code className="rounded-md border border-amber-300 bg-white px-1.5 py-0.5 font-semibold tracking-wider">
+                        {data.gmailConfirmation.code}
+                      </code>
+                      {data.gmailConfirmation.requestedBy ? <> for <strong>{data.gmailConfirmation.requestedBy}</strong></> : null}.
+                      In Gmail, open Settings → Forwarding and POP/IMAP, click <em>Verify</em> next to
+                      your LeadFinder address and enter it.
+                    </p>
+                  ) : (
+                    <p className="leading-relaxed">Gmail sent a confirmation for your forwarding request.</p>
+                  )}
+                  {data.gmailConfirmation.confirmUrl && (
+                    <a
+                      href={data.gmailConfirmation.confirmUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-3.5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                    >
+                      Or confirm with Gmail&apos;s link
+                    </a>
+                  )}
+                </div>
+              )}
 
               <div className="mt-3 flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3.5">
                 <MailCheck size={15} className="mt-0.5 shrink-0 text-gray-400" />
@@ -1035,7 +1076,9 @@ function LeadFinderCard() {
                         {r.detectedSource || r.senderDomain || 'Unknown sender'}
                         {r.subject ? ` — ${r.subject}` : ''}
                       </span>
-                      {r.reason && <span className="text-gray-400">{r.reason.replace(/_/g, ' ')}</span>}
+                      {(r.reasonLabel || r.reason) && (
+                        <span className="text-gray-400">{r.reasonLabel ?? r.reason?.replace(/_/g, ' ')}</span>
+                      )}
                       <span className="text-gray-400">{when(r.receivedAt) ?? ''}</span>
                     </div>
                   ))}
