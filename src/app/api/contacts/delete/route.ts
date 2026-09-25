@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { deleteGhlContact, getGhlToken, refreshAccessToken } from '@/lib/ghl';
+import { forgetExternalContacts } from '@/lib/merge-venue-contacts';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -15,6 +16,12 @@ interface DeletePayload {
   email?: string;
   /** Source hint from the contacts list: 'ghl' | 'lunarpay' | 'storypay'. */
   source?: 'ghl' | 'lunarpay' | 'storypay';
+  /**
+   * The GHL contact id of the row that was clicked, when it came from GHL. Sent
+   * alongside the venue_customers `id`: a StoryVenue contact whose GHL link was
+   * never stored would otherwise keep its GHL copy, which then reappears.
+   */
+  ghlId?: string;
 }
 
 /**
@@ -87,8 +94,10 @@ export async function POST(request: NextRequest) {
   // ── 3. Determine which GHL contact id (if any) to delete remotely ──────────
   // Prefer the id stored on venue_customers.ghl_contact_id; fall back to the
   // raw request id when the contact was from the GHL source.
+  const requestGhlId = (body.ghlId ?? '').trim();
   const ghlContactId =
     vcRow?.ghl_contact_id ||
+    (requestGhlId && !UUID_RE.test(requestGhlId) ? requestGhlId : null) ||
     (source === 'ghl' && id && !UUID_RE.test(id) ? id : null);
 
   // ── 4. Delete from venue_customers (cascade) and leads ─────────────────────
@@ -166,6 +175,10 @@ export async function POST(request: NextRequest) {
       console.warn('[contacts/delete] blocklist upsert failed:', err instanceof Error ? err.message : err);
     }
   }
+
+  // The Contacts list caches GHL / LunarPay results for a couple of minutes;
+  // drop them so the deleted contact doesn't reappear on the next load.
+  forgetExternalContacts(venueId);
 
   return NextResponse.json({
     ok: true,

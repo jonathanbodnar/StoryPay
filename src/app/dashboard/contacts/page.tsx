@@ -389,11 +389,19 @@ export default function ContactsPage() {
         id:     c.venueCustomerId || idStr,
         email:  c.email || undefined,
         source,
+        // And the GHL id of a GHL row, so its GHL copy is removed/blocklisted
+        // even when the StoryVenue contact never stored the link.
+        ghlId:  source === 'ghl' ? idStr : undefined,
       }),
     });
 
     if (res.ok) {
-      setContacts((prev) => prev.filter((x) => String(x.id) !== String(c.id)));
+      const notDeleted = (x: ContactRow) => String(x.id) !== String(c.id);
+      setContacts((prev) => prev.filter(notDeleted));
+      // Keep the instant-render cache in step, or the deleted row flashes back
+      // the next time Contacts opens.
+      const cached = getClientCache<ContactRow[]>('contacts:list');
+      if (cached) setClientCache('contacts:list', cached.filter(notDeleted));
       setImportMessage('Contact deleted.');
       setTimeout(() => setImportMessage(''), 3000);
     } else {

@@ -12,6 +12,7 @@ import { fetchOpenDuplicateMatchesForLeads, refreshDuplicateCandidatesForLead } 
 import { broadcastStageChanged, broadcastTagsChanged } from '@/lib/realtime/broadcast';
 import { findMatchingLeadIds, findMatchingVenueCustomerIds } from '@/lib/find-matching-leads';
 import { applyAiStateFromTagAdds } from '@/lib/ai-concierge/state-control';
+import { forgetExternalContacts } from '@/lib/merge-venue-contacts';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -515,12 +516,27 @@ export async function DELETE(
   // Also remove the matching venue_customer row (same venue + same email).
   const email = (lead as { email?: string | null }).email;
   if (email) {
-    await supabaseAdmin
+    const { data: removed } = await supabaseAdmin
       .from('venue_customers')
       .delete()
       .eq('venue_id', venueId)
-      .eq('customer_email', email);
+      .eq('customer_email', email)
+      .select('ghl_contact_id');
+
+    // The contact's GHL copy (created when we texted them) would otherwise
+    // reappear in Contacts from the live GHL list and the background sync:
+    // blocklist it, exactly as deleting from the Contacts page does.
+    const ghlIds = ((removed ?? []) as Array<{ ghl_contact_id: string | null }>)
+      .map((r) => r.ghl_contact_id)
+      .filter((v): v is string => !!v);
+    if (ghlIds.length > 0) {
+      const { error: blockErr } = await supabaseAdmin
+        .from('ghl_deleted_contacts')
+        .upsert(ghlIds.map((ghl_contact_id) => ({ venue_id: venueId, ghl_contact_id })), { onConflict: 'venue_id,ghl_contact_id' });
+      if (blockErr) console.warn('[DELETE /api/leads/[id]] GHL blocklist failed:', blockErr.message);
+    }
   }
+  forgetExternalContacts(venueId);
 
   return NextResponse.json({ ok: true });
 }

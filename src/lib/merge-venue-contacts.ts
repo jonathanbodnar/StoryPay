@@ -156,6 +156,31 @@ const EXTERNAL_TTL_MS = 120_000;
 const externalContactsCache = new Map<string, { at: number; data: ExternalContactData }>();
 
 /**
+ * Drop a venue's cached third-party contacts, so the next Contacts load
+ * re-reads GHL / LunarPay. Called after a delete: otherwise the contact that
+ * was just removed comes straight back from the cache for up to
+ * EXTERNAL_TTL_MS, which reads as "it won't let me delete".
+ */
+export function forgetExternalContacts(venueId: string): void {
+  externalContactsCache.delete(venueId);
+}
+
+/** GHL contact ids this venue deleted in StoryVenue (see /api/contacts/delete). */
+async function loadDeletedGhlContactIds(venueId: string): Promise<Set<string>> {
+  const out = new Set<string>();
+  try {
+    const { data } = await supabaseAdmin
+      .from('ghl_deleted_contacts')
+      .select('ghl_contact_id')
+      .eq('venue_id', venueId);
+    for (const row of (data ?? []) as Array<{ ghl_contact_id: string }>) out.add(row.ghl_contact_id);
+  } catch {
+    /* table missing on an older env — no filtering */
+  }
+  return out;
+}
+
+/**
  * Merged list for the dashboard: GHL + LunarPay + StoryVenue `venue_customers`,
  * deduplicated by email (GHL wins, then LP, then native rows without dup email).
  * Returns paginated `data` plus the un-sliced `total` for page count display.
@@ -324,6 +349,14 @@ export async function mergeVenueContacts(
     if (!search) {
       externalContactsCache.set(venueId, { at: Date.now(), data: { ghl: ghlContacts, lp: lpList } });
     }
+  }
+
+  // A contact deleted in StoryVenue stays deleted even while GHL still returns
+  // it (a failed or slow GHL-side delete): the live list honours the same
+  // blocklist the background sync already does.
+  const deletedGhlIds = await loadDeletedGhlContactIds(venueId);
+  if (deletedGhlIds.size > 0) {
+    ghlContacts = ghlContacts.filter((c) => !deletedGhlIds.has(String(c.id)));
   }
 
   const merged: MergedContact[] = [];
