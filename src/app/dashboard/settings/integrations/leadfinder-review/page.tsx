@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, AlertCircle, Check, X, Loader2, Mail, Inbox, ExternalLink } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Check, X, Loader2, Mail, Inbox, ExternalLink, Trash2 } from 'lucide-react';
 
 interface Extracted {
   name: string | null;
@@ -140,7 +140,13 @@ export default function LeadFinderReviewPage() {
     void load();
   }, [load]);
 
-  async function resolve(id: string, action: 'confirm' | 'dismiss') {
+  async function resolve(id: string, action: 'confirm' | 'dismiss' | 'dismiss_delete') {
+    if (
+      action === 'dismiss_delete' &&
+      !window.confirm('Delete this lead? It will be removed from your leads, along with the contact LeadFinder created for it. This cannot be undone.')
+    ) {
+      return;
+    }
     setBusyId(id);
     setError(null);
     try {
@@ -152,11 +158,17 @@ export default function LeadFinderReviewPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(Object.keys(fields).length > 0 ? { action, fields } : { action }),
       });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error || 'Could not save your decision');
-      }
+      const j = (await res.json().catch(() => ({}))) as { error?: string; leadDeleted?: boolean; note?: string };
+      if (!res.ok) throw new Error(j.error || 'Could not save your decision');
       setItems((prev) => prev.filter((i) => i.id !== id));
+      // Dismissed either way; say so when the lead itself could not be removed.
+      if (action === 'dismiss_delete' && j.leadDeleted === false && j.note !== 'already_gone') {
+        setError(
+          j.note === 'protected'
+            ? 'Dismissed. That lead is a protected demo contact, so it was not deleted.'
+            : 'Dismissed, but the lead could not be deleted. You can delete it from your Leads.',
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save your decision');
     } finally {
@@ -177,8 +189,8 @@ export default function LeadFinderReviewPage() {
           <h1 className="font-heading text-2xl text-gray-900">LeadFinder review</h1>
           <p className="mt-1 text-sm text-gray-500">
             Inquiries we captured but did not email the couple about yet. Check the details against
-            the original — fix anything we misread — then confirm to send them the guide, or dismiss
-            to leave the lead as it is.
+            the original — fix anything we misread — then confirm to send them the guide. If it
+            isn&apos;t a real inquiry, dismiss it (keeping the lead) or dismiss and delete the lead.
           </p>
         </div>
       </div>
@@ -235,11 +247,23 @@ export default function LeadFinderReviewPage() {
                 <button
                   onClick={() => void resolve(item.id, 'dismiss')}
                   disabled={busyId !== null}
+                  title="Take it off this list and keep the lead"
                   className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
                 >
                   {busyId === item.id ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
                   Dismiss
                 </button>
+                {item.leadId && (
+                  <button
+                    onClick={() => void resolve(item.id, 'dismiss_delete')}
+                    disabled={busyId !== null}
+                    title="Not a real inquiry — take it off this list and delete the lead"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3.5 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {busyId === item.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    Dismiss &amp; delete lead
+                  </button>
+                )}
                 <button
                   onClick={() => void resolve(item.id, 'confirm')}
                   disabled={busyId !== null}

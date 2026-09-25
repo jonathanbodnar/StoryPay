@@ -8,9 +8,12 @@
  *             ingest: send the pricing guide (EMAIL ONLY — a phone number read
  *             out of a forwarded email is not TCPA consent) and enroll the lead
  *             in the same booking workflow every other lead gets.
- *   dismiss → a human says this is not a real inquiry. The lead is NOT deleted:
- *             this codebase protects user data. Only the arrival's review state
- *             changes, which removes it from the queue.
+ *   dismiss → a human says this is not a real inquiry. The lead is kept; only
+ *             the arrival's review state changes, which removes it from the queue.
+ *   dismiss_delete → the same, and the junk lead LeadFinder created is deleted
+ *             too — with the contact it created for it, when nothing else uses
+ *             that contact. Never a protected demo lead, never a lead that did
+ *             not come from LeadFinder, never a contact that existed before.
  *
  * Idempotent and venue-scoped: the update is claimed with
  * `review_state = 'needs_review'`, so confirming twice (or two people clicking
@@ -25,6 +28,67 @@ import { sendBookingSystemGuide, onMarketingFormSubmitted, logNewLeadOpportunity
 import { ensureListingForm } from '@/lib/listing-lead-form';
 import { normalizePhone } from '@/lib/leadfinder/extract';
 import { syncLeadFinderAnswersToContact } from '@/lib/leadfinder/ingest';
+
+/** Postgres LIKE wildcards in user data must match literally. */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * Delete a junk lead LeadFinder created, and the contact it created for it.
+ *
+ * Guarded on every side: the lead must belong to this venue, have come from
+ * LeadFinder and not be a protected demo lead. The contact goes only when no
+ * other lead at the venue uses that email AND it was created alongside this
+ * lead — a contact that already existed (a real person the venue knows) is
+ * never removed. Deleting the contact cascades its conversation thread.
+ */
+async function deleteCapturedLead(
+  venueId: string,
+  leadId: string,
+): Promise<{ leadDeleted: boolean; contactDeleted: boolean; note?: string }> {
+  const { data: lead } = await supabaseAdmin
+    .from('leads')
+    .select('id, email, is_protected, source, created_at')
+    .eq('id', leadId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (!lead) return { leadDeleted: false, contactDeleted: false, note: 'already_gone' };
+
+  const row = lead as { email: string | null; is_protected: boolean | null; source: string | null; created_at: string };
+  if (row.is_protected) return { leadDeleted: false, contactDeleted: false, note: 'protected' };
+  if (row.source !== 'leadfinder') return { leadDeleted: false, contactDeleted: false, note: 'not_a_leadfinder_lead' };
+
+  const { error: delErr } = await supabaseAdmin.from('leads').delete().eq('id', leadId).eq('venue_id', venueId);
+  if (delErr) {
+    console.error('[leadfinder review POST] lead delete failed:', delErr.message);
+    return { leadDeleted: false, contactDeleted: false, note: 'delete_failed' };
+  }
+
+  let contactDeleted = false;
+  const email = (row.email ?? '').trim().toLowerCase();
+  if (email) {
+    const { count: others } = await supabaseAdmin
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('venue_id', venueId)
+      .ilike('email', escapeLike(email));
+    if ((others ?? 0) === 0) {
+      const createdFrom = new Date(new Date(row.created_at).getTime() - 60_000).toISOString();
+      const { data: removed, error: vcErr } = await supabaseAdmin
+        .from('venue_customers')
+        .delete()
+        .eq('venue_id', venueId)
+        .eq('customer_email', email)
+        .eq('is_protected', false)
+        .gte('created_at', createdFrom)
+        .select('id');
+      if (vcErr) console.warn('[leadfinder review POST] contact delete failed (lead removed):', vcErr.message);
+      contactDeleted = (removed?.length ?? 0) > 0;
+    }
+  }
+  return { leadDeleted: true, contactDeleted };
+}
 
 /** The core fields a reviewer may correct before confirming. */
 interface LeadEdits {
@@ -113,8 +177,8 @@ export async function POST(
   }
 
   const action = body.action;
-  if (action !== 'confirm' && action !== 'dismiss') {
-    return NextResponse.json({ error: "action must be 'confirm' or 'dismiss'" }, { status: 400 });
+  if (action !== 'confirm' && action !== 'dismiss' && action !== 'dismiss_delete') {
+    return NextResponse.json({ error: "action must be 'confirm', 'dismiss' or 'dismiss_delete'" }, { status: 400 });
   }
 
   // Validate corrections BEFORE claiming the row, so a bad value can never leave
@@ -167,6 +231,13 @@ export async function POST(
 
   if (action === 'dismiss') {
     return NextResponse.json({ ok: true, reviewState: 'dismissed' });
+  }
+  if (action === 'dismiss_delete') {
+    const leadIdToDelete = (updatedRow as { lead_id: string | null }).lead_id;
+    const outcome = leadIdToDelete
+      ? await deleteCapturedLead(venueId, leadIdToDelete)
+      : { leadDeleted: false, contactDeleted: false, note: 'already_gone' };
+    return NextResponse.json({ ok: true, reviewState: 'dismissed', ...outcome });
   }
 
   const leadId = (updatedRow as { lead_id: string | null }).lead_id;
