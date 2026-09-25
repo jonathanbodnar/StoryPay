@@ -204,6 +204,19 @@ run('venue identity only', {
   text: 'Please contact info@redbarnacres.com or call (352) 555-0199.',
 }, { email: null, phone: null });
 
+// The couple's email is the venue's own notification address (a test gone
+// wrong): skipped, with a reason that says so.
+{
+  const own = extractLeadFromEmail({
+    venue,
+    subject: 'New Lead!',
+    senderEmail: 'jason.owner@gmail.com',
+    text: 'Name: Sarah Mitchell\nEmail: info@redbarnacres.com\nGuests: 120',
+  });
+  expect('venue-own email: not used', own.email, null);
+  expect('venue-own email: reason', classifyInbound({ subject: 'New Lead!', senderDomain: 'gmail.com', extracted: own }).reason, 'only_venue_email');
+}
+
 // Dates.
 expect('date: spring', normalizeDate('Spring 2027', NOW), null);
 expect('date: month + year', normalizeDate('June 2027', NOW), null);

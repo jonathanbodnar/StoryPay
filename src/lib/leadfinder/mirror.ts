@@ -23,6 +23,7 @@
  */
 
 import { sendEmail } from '@/lib/email';
+import { buildSystemEmail } from '@/lib/email-templates';
 import { supabaseAdmin } from '@/lib/supabase';
 import { leadFinderReasonLabel } from '@/lib/leadfinder/reasons';
 
@@ -55,6 +56,10 @@ export interface MirrorContext {
    * in it, so the venue reads its own local time — never the server's UTC.
    */
   timeZone?: string | null;
+  /** Venue branding for the shared owner-email shell (logo, accent color, name). */
+  venueName?: string | null;
+  brandColor?: string | null;
+  logoUrl?: string | null;
   rawText: string;
 }
 
@@ -245,49 +250,61 @@ function buildBanner(outcome: MirrorOutcome): Banner {
   };
 }
 
-const TONE_STYLES: Record<Banner['tone'], { border: string; bg: string; label: string; labelColor: string }> = {
-  ok: { border: '#a7f3d0', bg: '#ecfdf5', label: 'LeadFinder', labelColor: '#047857' },
-  review: { border: '#fde68a', bg: '#fffbeb', label: 'LeadFinder — needs review', labelColor: '#b45309' },
-  warn: { border: '#e5e7eb', bg: '#f9fafb', label: 'LeadFinder', labelColor: '#4b5563' },
+/** A small status label above the explanation, in the tone of the outcome. */
+const TONE_LABEL: Record<Banner['tone'], { text: string; color: string }> = {
+  ok: { text: 'LeadFinder™', color: '#047857' },
+  review: { text: 'LeadFinder™ · needs a quick check', color: '#b45309' },
+  warn: { text: 'LeadFinder™', color: '#6b7280' },
 };
 
+/**
+ * The inbox copy, rendered in the same branded shell as every other owner
+ * email (buildSystemEmail: the venue's logo and accent color, centered heading,
+ * "Sent via StoryVenue on behalf of …" footer), so it reads as one more
+ * StoryVenue notification rather than a one-off design.
+ *
+ * Everything that comes from the email — the lead's name in the headline, the
+ * sender, subject and body — is escaped here: the shell inserts heading, title
+ * and preheader as raw HTML.
+ */
 function buildMirrorHtml(ctx: MirrorContext, outcome: MirrorOutcome): string {
   const banner = buildBanner(outcome);
-  const tone = TONE_STYLES[banner.tone];
+  const tone = TONE_LABEL[banner.tone];
   const subject = ctx.subject?.trim() || '(no subject)';
   const received = formatReceived(ctx.receivedAt, ctx.timeZone ?? undefined);
+  const venueName = ctx.venueName?.trim() || 'your venue';
 
-  const cta = banner.ctaUrl && banner.ctaLabel
-    ? `<div style="margin-top:14px"><a href="${escapeHtml(banner.ctaUrl)}" style="display:inline-block;background:#1b1b1b;color:#ffffff;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">${escapeHtml(banner.ctaLabel)}</a></div>`
-    : '';
+  const row = (label: string, value: string) =>
+    `<tr><td style="padding:3px 12px 3px 0;color:#9ca3af;font-size:13px;white-space:nowrap;vertical-align:top;">${label}</td>` +
+    `<td style="padding:3px 0;color:#374151;font-size:13px;word-break:break-word;">${escapeHtml(value)}</td></tr>`;
 
-  return `<!doctype html>
-<html><body style="margin:0;padding:0;background:#f3f4f6;">
-  <div style="max-width:640px;margin:0 auto;padding:24px 16px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1b1b1b;">
-    <div style="background:#ffffff;border:1px solid ${tone.border};border-radius:14px;overflow:hidden;">
-      <div style="background:${tone.bg};padding:16px 20px;border-bottom:1px solid ${tone.border};">
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${tone.labelColor};">${tone.label}</div>
-        <div style="font-size:16px;font-weight:600;margin-top:4px;">${escapeHtml(banner.headline)}</div>
-        <div style="font-size:14px;line-height:1.6;color:#4b5563;margin-top:6px;">${escapeHtml(banner.detail)}</div>
-        ${cta}
-      </div>
+  const bodyHtml = `
+    <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${tone.color};text-align:center;">${escapeHtml(tone.text)}</p>
+    <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 22px;">${escapeHtml(banner.detail)}</p>
+    <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;">The original message</p>
+    <table role="presentation" style="width:100%;border-collapse:collapse;margin:0 0 10px;">
+      ${row('From', ctx.sender || '(unknown sender)')}
+      ${row('Subject', subject)}
+      ${row('Received', received)}
+    </table>
+    <div style="padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;line-height:1.6;color:#374151;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(ctx.rawText)}</div>`;
 
-      <div style="padding:16px 20px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;">The original message</div>
-        <table role="presentation" style="width:100%;border-collapse:collapse;font-size:13px;color:#4b5563;margin-top:8px;">
-          <tr><td style="padding:2px 8px 2px 0;white-space:nowrap;color:#9ca3af;">From</td><td style="padding:2px 0;word-break:break-word;">${escapeHtml(ctx.sender || '(unknown sender)')}</td></tr>
-          <tr><td style="padding:2px 8px 2px 0;white-space:nowrap;color:#9ca3af;">Subject</td><td style="padding:2px 0;word-break:break-word;">${escapeHtml(subject)}</td></tr>
-          <tr><td style="padding:2px 8px 2px 0;white-space:nowrap;color:#9ca3af;">Received</td><td style="padding:2px 0;word-break:break-word;">${escapeHtml(received)}</td></tr>
-        </table>
-
-        <pre style="margin:14px 0 0;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;color:#374151;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(ctx.rawText)}</pre>
-      </div>
-    </div>
-    <div style="text-align:center;font-size:11px;color:#9ca3af;margin-top:14px;">
-      ${LEADFINDER_MIRROR_FOOTER_MARKER}. Turn this copy off in Settings → Integrations.
-    </div>
-  </div>
-</body></html>`;
+  const headline = escapeHtml(banner.headline);
+  return buildSystemEmail({
+    logoUrl: ctx.logoUrl || undefined,
+    logoAlt: venueName,
+    accentColor: /^#[0-9a-f]{3,8}$/i.test(ctx.brandColor ?? '') ? (ctx.brandColor as string) : '#1b1b1b',
+    preheader: headline,
+    title: headline,
+    heading: headline,
+    bodyHtml,
+    cta: banner.ctaUrl && banner.ctaLabel ? { label: escapeHtml(banner.ctaLabel), url: banner.ctaUrl } : undefined,
+    showLinkFallback: !!banner.ctaUrl,
+    // The first sentence is the loop-guard marker ingest looks for — keep it verbatim.
+    footerHtml:
+      `<p style="margin:0 0 8px;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">${LEADFINDER_MIRROR_FOOTER_MARKER}. Turn this copy off in Settings → Integrations.</p>` +
+      `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">Sent via StoryVenue on behalf of ${escapeHtml(venueName)}</p>`,
+  });
 }
 
 function buildMirrorText(ctx: MirrorContext, outcome: MirrorOutcome): string {
@@ -362,7 +379,8 @@ export async function mirrorArrivalToVenue(
       html: buildMirrorHtml(ctx, outcome),
       text: buildMirrorText(ctx, outcome),
       replyTo,
-      from: { email: notifFromEmail, name: 'StoryVenue LeadFinder' },
+      // Same sender name as every other owner notification.
+      from: { email: notifFromEmail, name: 'StoryVenue' },
       headers: {
         [LEADFINDER_MIRROR_HEADER]: `mirror; import=${ctx.importId}`,
         // RFC 3834: tells auto-responders not to answer a machine-sent copy.

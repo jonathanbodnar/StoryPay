@@ -11,6 +11,7 @@
 export const LEADFINDER_REASON_LABELS: Record<string, string> = {
   not_an_inquiry_subject: 'it looked like an account notice, a bounce or an auto-reply, not an inquiry',
   no_email_address: 'we could not find an email address for the couple',
+  only_venue_email: "the only email address in it is your venue's own (your account, notification or team email), so we couldn't tell it was a couple — it needs the couple's own email",
   bounce_or_system_message: 'it was an automated system message',
   auto_reply: 'it was an automatic reply',
   leadfinder_disabled_for_venue: 'LeadFinder is not switched on for your account yet',

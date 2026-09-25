@@ -242,16 +242,26 @@ async function loadVenueCore(venueId: string): Promise<VenueCore | null> {
  * so what we email the venue reads in the venue's own time. Best-effort: a
  * failed read just means a shorter list and no zone, never a failed ingest.
  */
-async function loadVenueProfile(venue: VenueCore): Promise<{ identity: VenueIdentity; timeZone: string | null }> {
+async function loadVenueProfile(venue: VenueCore): Promise<{
+  identity: VenueIdentity;
+  timeZone: string | null;
+  /** For the inbox copy's branded shell, same as other owner emails. */
+  brandColor: string | null;
+  logoUrl: string | null;
+}> {
   const emails: Array<string | null> = [venue.email, venue.notification_email];
   const phones: Array<string | null> = [];
   const domains: string[] = ownDomains();
   let timeZone: string | null = null;
+  let brandColor: string | null = null;
+  let logoUrl: string | null = null;
 
   try {
     const { data } = await supabaseAdmin.from('venues').select('*').eq('id', venue.id).maybeSingle();
     const row = (data ?? {}) as Record<string, unknown>;
     const str = (k: string) => (typeof row[k] === 'string' ? (row[k] as string) : null);
+    brandColor = str('brand_color');
+    logoUrl = str('brand_logo_url') || str('logo_url');
     timeZone = venueTimeZoneFromLocation({
       zip: str('zip'),
       brand_zip: str('brand_zip'),
@@ -286,7 +296,7 @@ async function loadVenueProfile(venue: VenueCore): Promise<{ identity: VenueIden
     /* team list is a nice-to-have */
   }
 
-  return { identity: { name: venue.name, emails, phones, domains }, timeZone };
+  return { identity: { name: venue.name, emails, phones, domains }, timeZone, brandColor, logoUrl };
 }
 
 // ── Enrichment helpers ───────────────────────────────────────────────────────
@@ -607,7 +617,7 @@ async function processArrival(p: {
   const senderDomain = domainOf(arrival.fromRaw);
   // Identity (so the venue is never read as the couple) and local time zone
   // (so the inbox copy reads in the venue's own time).
-  const { identity, timeZone } = await loadVenueProfile(venue);
+  const { identity, timeZone, brandColor, logoUrl } = await loadVenueProfile(venue);
 
   // Everything the mirror needs, captured once. The mirror is built from the
   // SAME stored arrival so its copy is faithful, and it is fired on terminal
@@ -628,6 +638,9 @@ async function processArrival(p: {
         originalReplyTo: arrival.replyTo,
         receivedAt: arrival.receivedAt,
         timeZone,
+        venueName: venue.name,
+        brandColor,
+        logoUrl,
         rawText: arrival.text,
       },
       outcome,

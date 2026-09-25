@@ -64,6 +64,12 @@ export interface ExtractedLead {
   phoneLabelled: boolean;
   /** Set when this arrival is a forward; the headers of the ORIGINAL message. */
   forwarded: ForwardedHeaders | null;
+  /**
+   * An address that WAS in the message (labelled, or in the inquiry text) but
+   * belongs to the venue itself — its account, notification or team email — so
+   * it was not used as the couple's. Lets a skip say exactly why.
+   */
+  ignoredVenueEmail: string | null;
   /** The part of the email that holds the inquiry (the original, for a forward). */
   inquiryText: string;
 }
@@ -743,6 +749,7 @@ export function extractLeadFromEmail(input: ExtractInput): ExtractedLead {
   let relayCandidate: string | null = null;
 
   const labelledEmail = emailsIn(labelled.email)[0];
+  let ignoredVenueEmail: string | null = labelledEmail && isVenueAddress(labelledEmail, id) ? labelledEmail : null;
   if (usable(labelledEmail)) {
     email = labelledEmail;
     emailSource = 'labelled';
@@ -777,6 +784,9 @@ export function extractLeadFromEmail(input: ExtractInput): ExtractedLead {
     email = relayCandidate;
     emailSource = 'reply_to';
     emailIsRelay = true;
+  }
+  if (!email && !ignoredVenueEmail) {
+    ignoredVenueEmail = emailsIn(inquiryText).find((a) => isVenueAddress(a, id)) ?? null;
   }
 
   // ── Phone: a labelled field, else one clearly in the inquiry (never a
@@ -852,6 +862,7 @@ export function extractLeadFromEmail(input: ExtractInput): ExtractedLead {
     emailIsRelay,
     phoneLabelled,
     forwarded: fwd?.headers ?? null,
+    ignoredVenueEmail: email ? null : ignoredVenueEmail,
     inquiryText,
   };
 
@@ -904,7 +915,10 @@ export function classifyInbound(args: {
   // reply to by email cannot become a lead. Rejected rows are still recorded
   // with a reason rather than dropped, so a phone-only arrival stays visible.
   if (!args.extracted.email) {
-    return { accept: false, reason: 'no_email_address', detectedSource, confidence: 0 };
+    // The one address in it is the venue's own (e.g. someone tested with the
+    // venue's notification email as the "couple"): say that, not "no email".
+    const reason = args.extracted.ignoredVenueEmail ? 'only_venue_email' : 'no_email_address';
+    return { accept: false, reason, detectedSource, confidence: 0 };
   }
 
   let score = 0.5;                                   // has a usable identity
