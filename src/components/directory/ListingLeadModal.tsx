@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { formConsentText, SMS_CONSENT_PRIVACY_PATH, SMS_CONSENT_TERMS_PATH } from '@/lib/sms-consent-disclosure';
 
 const TOURING_OPTIONS = [
   'Immediately — within the next month',
@@ -281,6 +282,12 @@ export function ListingLeadModal({ venueName, venueId, venueSlug, apiBase, confi
                   >
                     {status === 'submitting' ? 'Sending…' : 'Download Pricing & Availability Guide'}
                   </button>
+                  <p className="text-center text-xs leading-relaxed text-gray-500">
+                    {formConsentText(venueName)}{' '}
+                    <a href={`${apiBase}${SMS_CONSENT_PRIVACY_PATH}`} target="_blank" rel="noopener noreferrer" className="underline">Privacy</a>
+                    {' · '}
+                    <a href={`${apiBase}${SMS_CONSENT_TERMS_PATH}`} target="_blank" rel="noopener noreferrer" className="underline">Terms</a>
+                  </p>
                 </form>
               )}
             </div>

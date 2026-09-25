@@ -1056,9 +1056,11 @@ export async function sendBookingSystemGuide(
      * Restrict delivery to one channel, on top of the venue's own toggles.
      * `'email'` is used for email-sourced leads (LeadFinder): a phone number
      * read out of a forwarded directory email is not consent for an automated
-     * text, so those leads get the guide by email only.
+     * text, so those leads get the guide by email only. `'sms'` is for a couple
+     * who opts in to texts AFTER the guide was already emailed to them (the
+     * gated guide invite's 48h fallback), so the email is not sent twice.
      */
-    channels?: 'both' | 'email';
+    channels?: 'both' | 'email' | 'sms';
   },
 ): Promise<void> {
   try {
@@ -1092,7 +1094,7 @@ export async function sendBookingSystemGuide(
 
     // The venue's own toggles still apply; `channels: 'email'` only removes the
     // SMS side. If a venue has the email guide switched off, nothing sends.
-    const emailOn = (v.booking_guide_email_enabled as boolean | null) ?? true;
+    const emailOn = ((v.booking_guide_email_enabled as boolean | null) ?? true) && opts?.channels !== 'sms';
     const smsOn   = ((v.booking_guide_sms_enabled as boolean | null) ?? true) && opts?.channels !== 'email';
     if (!emailOn && !smsOn) return; // both channels intentionally off — not an error
 
@@ -1549,7 +1551,7 @@ async function resolvePhoneForLead(venueId: string, leadId: string): Promise<str
  * for a lead. Returns both IDs so callers can log messages and build reply-to
  * addresses. Never throws — returns null on any error.
  */
-async function findOrCreateChannelThreadForLead(
+export async function findOrCreateChannelThreadForLead(
   venueId: string,
   leadId: string,
   channel: 'email' | 'sms',
@@ -1730,7 +1732,7 @@ async function findOrCreateThreadForLead(
  * marker-write failure, while legacy fire-and-forget callers can keep ignoring
  * the return value via `void`.
  */
-async function logToConversationThread(opts: {
+export async function logToConversationThread(opts: {
   threadId: string;
   venueId: string;
   channel: 'sms' | 'email';

@@ -29,7 +29,7 @@ export default function PrivacyPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-500 mb-10">Last updated: April 12, 2026</p>
+        <p className="text-sm text-gray-500 mb-10">Last updated: September 25, 2026</p>
 
         <div className="prose prose-gray max-w-none space-y-8 text-sm leading-relaxed text-gray-700">
 
@@ -131,13 +131,18 @@ export default function PrivacyPage() {
             <p>Our Services are intended for business use by adults (18+) and are not directed to children. We do not knowingly collect personal information from anyone under 18.</p>
           </section>
 
+          <section id="text-messaging" className="scroll-mt-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-3">10. Text Messaging</h2>
+            <p>When you give a venue your mobile number through StoryVenue, we use it only to text you about your inquiry on that venue&apos;s behalf. We don&apos;t sell or share mobile numbers or text opt-in data with third parties for their marketing. Reply STOP to any message to opt out.</p>
+          </section>
+
           <section>
-            <h2 className="text-lg font-bold text-gray-900 mb-3">10. Changes to This Policy</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-3">11. Changes to This Policy</h2>
             <p>We may update this Privacy Policy from time to time. We will notify you of material changes by posting the updated policy and updating the &ldquo;Last updated&rdquo; date. Continued use of the Services after changes constitutes acceptance.</p>
           </section>
 
           <section>
-            <h2 className="text-lg font-bold text-gray-900 mb-3">11. Contact Us</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-3">12. Contact Us</h2>
             <p>If you have questions about this Privacy Policy, contact us:</p>
             <div className="mt-2 bg-gray-50 rounded-xl p-4 text-sm">
               <p className="font-semibold">StoryVenue</p>

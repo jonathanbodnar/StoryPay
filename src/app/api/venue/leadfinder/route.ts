@@ -105,6 +105,16 @@ export async function GET() {
     requestedBy: string | null;
     receivedAt: string | null;
   } | null = null;
+  // Directory couples who got the gated "Send me my guide" invite, and how many
+  // tapped it (= opted in to texts). Tolerant: no table yet → no stat.
+  const [invitesRes, tappedRes] = await Promise.all([
+    supabaseAdmin.from('guide_invites').select('id', { count: 'exact', head: true }).eq('venue_id', venueId),
+    supabaseAdmin.from('guide_invites').select('id', { count: 'exact', head: true }).eq('venue_id', venueId).not('tapped_at', 'is', null),
+  ]);
+  const textOptIns = invitesRes.error || tappedRes.error
+    ? null
+    : { invited: invitesRes.count ?? 0, optedIn: tappedRes.count ?? 0 };
+
   // Tests the venue sends themselves don't count as "real mail came through".
   const newestReal = recent.find((r) => r.failure_reason !== 'test_inquiry');
   if (newestReal?.failure_reason === 'gmail_forwarding_confirmation') {
@@ -156,6 +166,7 @@ export async function GET() {
     },
     sources,
     gmailConfirmation,
+    textOptIns,
     recent: recent.map((r) => ({
       subject: r.subject,
       senderDomain: r.sender_domain,

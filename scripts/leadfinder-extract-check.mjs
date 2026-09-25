@@ -23,6 +23,8 @@ const { htmlToStructuredText, chooseLeadFinderBody } = await import(join(root, '
 const { parseGmailForwardingConfirmation } = await import(join(root, 'src/lib/leadfinder/gmail-confirmation.ts'));
 const { findLeadFinderAddressInPayload, buildLeadFinderTestToken, findLeadFinderTestRef } = await import(join(root, 'src/lib/leadfinder/address.ts'));
 const { timeZoneForUsZip, venueTimeZoneFromLocation } = await import(join(root, 'src/lib/venue-zip-timezone.ts'));
+const { signGuideInviteToken, verifyGuideInviteToken } = await import(join(root, 'src/lib/guide-invite-token.ts'));
+const { guidePageConsentText, formConsentText } = await import(join(root, 'src/lib/sms-consent-disclosure.ts'));
 const { plausibleCoupleName } = await import(join(root, 'src/lib/leadfinder/extract.ts'));
 
 const NOW = new Date('2026-09-24T12:00:00Z');
@@ -255,6 +257,33 @@ expect('tz: Knoxville TN is Eastern', timeZoneForUsZip('37902'), 'America/New_Yo
 expect('tz: El Paso TX is Mountain', timeZoneForUsZip('79901'), 'America/Denver');
 expect('tz: ZIP beats a saved zone', venueTimeZoneFromLocation({ zip: '85001', timezone: 'America/New_York' }), 'America/Phoenix');
 expect('tz: saved zone when no ZIP', venueTimeZoneFromLocation({ zip: '', timezone: 'America/Chicago' }), 'America/Chicago');
+
+// Gated guide invite: the link token binds one lead at one venue, expires, and
+// fails closed without a secret.
+{
+  const saved = process.env.MARKETING_EMAIL_TOKEN_SECRET;
+  process.env.MARKETING_EMAIL_TOKEN_SECRET = 'fixture-token-secret';
+  const lead = '11111111-2222-4333-8444-555555555555';
+  const t = signGuideInviteToken(lead, venueA, NOW);
+  expect('invite token: round trip', verifyGuideInviteToken(t, NOW), { leadId: lead, venueId: venueA });
+  const parts = t.split('.');
+  expect('invite token: tampered payload', verifyGuideInviteToken(`${parts[0]}.${Buffer.from(`${lead}|${venueB}|9999999999`).toString('base64url')}.${parts[2]}`, NOW), null);
+  expect('invite token: expired after 90 days', verifyGuideInviteToken(t, new Date(NOW.getTime() + 91 * 86400000)), null);
+  expect('invite token: other feature prefix', verifyGuideInviteToken(t.replace(/^gi1/, 'cw1'), NOW), null);
+  process.env.MARKETING_EMAIL_TOKEN_SECRET = '';
+  const hadCron = [process.env.MARKETING_CRON_SECRET, process.env.CRON_SECRET];
+  process.env.MARKETING_CRON_SECRET = ''; process.env.CRON_SECRET = '';
+  expect('invite token: no secret → none issued', signGuideInviteToken(lead, venueA, NOW), null);
+  expect('invite token: no secret → none verifies', verifyGuideInviteToken(t, NOW), null);
+  process.env.MARKETING_EMAIL_TOKEN_SECRET = saved ?? '';
+  [process.env.MARKETING_CRON_SECRET, process.env.CRON_SECRET] = [hadCron[0] ?? '', hadCron[1] ?? ''];
+}
+
+// The consent wording is exactly what was approved (and names the button).
+expect('consent: guide page', guidePageConsentText('Red Barn Acres'),
+  'By tapping Send my guide, you agree to automated texts from Red Barn Acres at this number. Msg & data rates may apply. Reply STOP to opt out.');
+expect('consent: forms', formConsentText('Red Barn Acres'),
+  'By submitting this form, you agree to automated texts from Red Barn Acres at the number provided. Msg & data rates may apply. Reply STOP to opt out.');
 
 // Names from the AI fallback are held to the same rules.
 expect('ai name: brand', plausibleCoupleName('The Knot', venue), null);

@@ -11,9 +11,13 @@ import { supabaseAdmin } from '@/lib/supabase';
  * So permission is now an explicit fact on the lead (`leads.sms_consent`,
  * migration 255) and every automated SMS path asks here first.
  *
- * What GRANTS it: a text from the couple, a START keyword, or submitting one of
- * our forms that collects a phone. An email reply does NOT — replying by email
- * is not consent to automated texts, so it never flips this.
+ * What GRANTS it: a text from the couple, a START keyword, submitting one of
+ * our forms that collects a phone, or tapping "Send my guide" on the gated
+ * guide page (source `guide_invite`). An email reply does NOT — replying by
+ * email is not consent to automated texts, so it never flips this.
+ *
+ * The PROOF behind each grant — the exact wording shown, when, from where —
+ * is kept in `sms_consent_records` (see recordSmsConsentEvidence below).
  *
  * Three-state reasoning, because "no value" and "no" are different things:
  *
@@ -32,6 +36,7 @@ import { supabaseAdmin } from '@/lib/supabase';
  */
 export type SmsConsentSource =
   | 'form_submit'
+  | 'guide_invite'
   | 'inbound_sms'
   | 'inbound_start_keyword'
   | 'inbound_stop_keyword'
@@ -255,4 +260,48 @@ function isMissingColumnError(error: { code?: string; message?: string }): boole
   return error.code === '42703'
     || /column .* does not exist/i.test(error.message ?? '')
     || /Could not find the '.*' column/i.test(error.message ?? '');
+}
+
+/**
+ * Keep proof of a consent: the exact wording the couple was shown (and its
+ * version), the number and email they gave, and where/how they agreed. Append-
+ * only — a record is never edited, so it stays evidence of what happened.
+ *
+ * Best-effort: a failed write (or migration 259 not applied yet) is logged and
+ * never blocks the lead, the form or the guide.
+ */
+export async function recordSmsConsentEvidence(input: {
+  venueId: string;
+  leadId: string | null;
+  phone: string;
+  email?: string | null;
+  source: 'guide_invite' | 'form_submit';
+  /** Where exactly: 'guide_page', 'directory', 'embed', 'lead_link', 'marketing_form', … */
+  sourceDetail?: string | null;
+  disclosureVersion: string;
+  disclosureText: string;
+  ip?: string | null;
+  userAgent?: string | null;
+  pageUrl?: string | null;
+}): Promise<void> {
+  const phone = (input.phone || '').trim();
+  if (!phone) return;
+  try {
+    const { error } = await supabaseAdmin.from('sms_consent_records').insert({
+      venue_id: input.venueId,
+      lead_id: input.leadId,
+      phone,
+      email: input.email?.trim().toLowerCase() || null,
+      source: input.source,
+      source_detail: input.sourceDetail ?? null,
+      disclosure_version: input.disclosureVersion,
+      disclosure_text: input.disclosureText,
+      ip: input.ip && input.ip !== 'unknown' ? input.ip.slice(0, 100) : null,
+      user_agent: input.userAgent ? input.userAgent.slice(0, 500) : null,
+      page_url: input.pageUrl ? input.pageUrl.slice(0, 1000) : null,
+    });
+    if (error) console.warn('[sms-consent] evidence not recorded:', error.message, { venueId: input.venueId });
+  } catch (e) {
+    console.warn('[sms-consent] evidence write threw (non-fatal):', e, { venueId: input.venueId });
+  }
 }

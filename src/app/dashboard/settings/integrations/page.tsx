@@ -751,6 +751,8 @@ interface LeadFinderData {
     minSample: number;
   };
   sources: LeadFinderSourceDrift[];
+  /** Directory couples invited to "Send me my guide", and how many opted in to texts. */
+  textOptIns: { invited: number; optedIn: number } | null;
   /** Gmail's forwarding confirmation, while the venue still has to enter it. */
   gmailConfirmation: {
     code: string | null;
@@ -1187,6 +1189,17 @@ function LeadFinderCard() {
                     {data.stats.skipped > 0 ? ` · ${data.stats.skipped} skipped` : ''}
                   </span>
                 </li>
+                {data.textOptIns && data.textOptIns.invited > 0 && (
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-emerald-500" />
+                    <span>
+                      Text opt-ins: {data.textOptIns.optedIn} of {data.textOptIns.invited} couple
+                      {data.textOptIns.invited === 1 ? '' : 's'} (
+                      {Math.round((data.textOptIns.optedIn / data.textOptIns.invited) * 100)}%) tapped
+                      &ldquo;Send me my guide&rdquo;
+                    </span>
+                  </li>
+                )}
                 {when(data.stats.lastEmailAt) && (
                   <li className="flex items-start gap-2">
                     <Activity size={13} className="mt-0.5 shrink-0 text-gray-400" />

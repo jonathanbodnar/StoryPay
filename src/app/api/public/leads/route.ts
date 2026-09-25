@@ -12,7 +12,8 @@ import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 import { maybePushLeadToTripleseat } from '@/lib/tripleseat';
 import { ensureListingForm } from '@/lib/listing-lead-form';
-import { recordSmsConsentByEmail } from '@/lib/sms-consent';
+import { recordSmsConsentByEmail, recordSmsConsentEvidence } from '@/lib/sms-consent';
+import { formConsentText, SMS_CONSENT_VERSION, withPolicyLinks } from '@/lib/sms-consent-disclosure';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -435,6 +436,21 @@ export async function POST(request: NextRequest) {
   // captured lead was created with sms_consent = false). No-op otherwise.
   if (phone) {
     void recordSmsConsentByEmail({ venueId: venue.id, email: lr.email, source: 'form_submit' });
+    // Proof of what they agreed to: the listing / Lead Link modal and the embed
+    // form both show the form consent line under their submit button.
+    void recordSmsConsentEvidence({
+      venueId: venue.id,
+      leadId: lr.id,
+      phone,
+      email: lr.email,
+      source: 'form_submit',
+      sourceDetail: payload.source || 'directory',
+      disclosureVersion: SMS_CONSENT_VERSION,
+      disclosureText: withPolicyLinks(formConsentText(venue.name)),
+      ip,
+      userAgent: request.headers.get('user-agent'),
+      pageUrl: request.headers.get('referer'),
+    });
   }
 
   // Phase 1 — Booking System guide delivery (email + SMS), fire-and-forget.

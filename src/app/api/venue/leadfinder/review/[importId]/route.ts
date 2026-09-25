@@ -27,7 +27,8 @@ import { getSessionUser } from '@/lib/session';
 import { sendBookingSystemGuide, onMarketingFormSubmitted, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
 import { ensureListingForm } from '@/lib/listing-lead-form';
 import { normalizePhone } from '@/lib/leadfinder/extract';
-import { syncLeadFinderAnswersToContact } from '@/lib/leadfinder/ingest';
+import { syncLeadAnswersToContact } from '@/lib/leadfinder/contact-sync';
+import { startGuideInvite } from '@/lib/guide-invite';
 
 /** Postgres LIKE wildcards in user data must match literally. */
 function escapeLike(s: string): string {
@@ -267,7 +268,7 @@ export async function POST(
     } else {
       const email = edits.email ?? ((before as { email?: string | null } | null)?.email ?? null);
       if (email) {
-        await syncLeadFinderAnswersToContact(venueId, email, {
+        await syncLeadAnswersToContact(venueId, email, {
           firstName: edits.firstName ?? null,
           lastName: edits.lastName ?? null,
           phone: edits.phone ?? null,
@@ -286,8 +287,11 @@ export async function POST(
     }
   }
 
-  if (leadId) {
-    // Email-only, exactly like the automatic path: never the SMS leg.
+  // Exactly like the automatic path: the gated "Send me my guide" invite when the
+  // venue can text (their tap opts in and starts Phase 1 + 2), otherwise the
+  // guide by email and the booking workflow.
+  if (leadId && !(await startGuideInvite(venueId, leadId))) {
+    // Email-only: never the SMS leg without consent.
     try {
       await sendBookingSystemGuide(venueId, leadId, { channels: 'email' });
     } catch (e) {

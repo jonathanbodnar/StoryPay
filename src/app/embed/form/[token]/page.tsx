@@ -36,7 +36,7 @@ export default async function PublicEmbedFormPage({
 
   const { data: form } = await supabaseAdmin
     .from('marketing_forms')
-    .select('name, definition_json')
+    .select('name, definition_json, venue_id')
     .eq('embed_token', token)
     .eq('published', true)
     .maybeSingle();
@@ -44,10 +44,21 @@ export default async function PublicEmbedFormPage({
   if (!form) notFound();
 
   const definition = parseDefinition(form.definition_json);
+  // The texting-consent line under the form names the venue that will text.
+  const { data: venue } = await supabaseAdmin
+    .from('venues')
+    .select('name')
+    .eq('id', (form as { venue_id: string }).venue_id)
+    .maybeSingle();
 
   return (
     <main className="min-h-screen">
-      <MarketingFormView definition={definition} embedToken={token} formTitle={form.name} />
+      <MarketingFormView
+        definition={definition}
+        embedToken={token}
+        formTitle={form.name}
+        smsConsentVenueName={(venue as { name: string | null } | null)?.name ?? null}
+      />
     </main>
   );
 }

@@ -67,6 +67,9 @@ export async function POST(req: NextRequest) {
         'x-storypay-signature':  signature,
         // Forward the real client IP when available for rate-limiting purposes.
         'x-forwarded-for': req.headers.get('x-forwarded-for') ?? '',
+        // The couple's browser and page, for the proof-of-consent record.
+        'user-agent': req.headers.get('user-agent') ?? '',
+        referer: req.headers.get('referer') ?? '',
       },
       body: rawBody,
     });

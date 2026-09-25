@@ -16,7 +16,8 @@ import {
 } from '@/lib/marketing-form-schema';
 import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
-import { recordSmsConsentByEmail } from '@/lib/sms-consent';
+import { recordSmsConsentByEmail, recordSmsConsentEvidence } from '@/lib/sms-consent';
+import { formConsentText, SMS_CONSENT_VERSION, withPolicyLinks } from '@/lib/sms-consent-disclosure';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -456,6 +457,26 @@ export async function POST(
   // below so anything that wants to text them already sees the consent.
   if (phoneVal && emailVal) {
     void recordSmsConsentByEmail({ venueId: formRow.venue_id, email: emailVal, source: 'form_submit' });
+  }
+  // Proof of what they agreed to: public forms with a phone field show the form
+  // consent line under the submit button (MarketingFormView).
+  if (phoneVal) {
+    void (async () => {
+      const { data: v } = await supabaseAdmin.from('venues').select('name').eq('id', formRow.venue_id).maybeSingle();
+      await recordSmsConsentEvidence({
+        venueId: formRow.venue_id,
+        leadId: createdLeadId ?? null,
+        phone: phoneVal,
+        email: emailVal || null,
+        source: 'form_submit',
+        sourceDetail: 'marketing_form',
+        disclosureVersion: SMS_CONSENT_VERSION,
+        disclosureText: withPolicyLinks(formConsentText((v as { name: string | null } | null)?.name ?? null)),
+        ip,
+        userAgent: request.headers.get('user-agent'),
+        pageUrl: request.headers.get('referer'),
+      });
+    })().catch(() => {});
   }
 
   // Phase 1 — Booking System guide delivery (email + SMS, fires immediately)

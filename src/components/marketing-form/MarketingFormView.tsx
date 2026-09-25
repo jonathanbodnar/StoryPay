@@ -26,6 +26,7 @@ import {
 } from '@/lib/marketing-form-schema';
 import { collectGoogleFontFamiliesFromDefinition } from '@/lib/google-fonts';
 import { sanitizeFormHtml } from '@/lib/sanitize-form-html';
+import { formConsentText, SMS_CONSENT_PRIVACY_PATH, SMS_CONSENT_TERMS_PATH } from '@/lib/sms-consent-disclosure';
 
 function blockStyleCss(s?: FormBlockStyle): CSSProperties {
   if (!s) return {};
@@ -579,6 +580,11 @@ interface MarketingFormViewProps {
   emptyCanvasSlot?: ReactNode | null;
   /** Builder only: single flat white surface (no theme grey shell or card frame). */
   flatCanvas?: boolean;
+  /**
+   * Public form only: the venue's name for the texting-consent line shown under
+   * the form when it asks for a phone number. Omitted in the builder.
+   */
+  smsConsentVenueName?: string | null;
 }
 
 export function MarketingFormView({
@@ -592,6 +598,7 @@ export function MarketingFormView({
   wrapBlock,
   emptyCanvasSlot = null,
   flatCanvas = false,
+  smsConsentVenueName,
 }: MarketingFormViewProps) {
   const theme = useMemo(() => mergeTheme(definition.theme), [definition.theme]);
   const googleFontFamilies = useMemo(
@@ -836,6 +843,16 @@ export function MarketingFormView({
                   );
                 })}
               </div>
+            )}
+            {/* Texting consent — any public form that collects a phone number
+                shows the same line as the other lead forms. */}
+            {smsConsentVenueName !== undefined && !builder && definition.blocks.some((b) => b.type === 'phone') && (
+              <p className="mt-3 text-center text-xs leading-relaxed" style={{ color: theme.labelColor, opacity: 0.75 }}>
+                {formConsentText(smsConsentVenueName)}{' '}
+                <a href={SMS_CONSENT_PRIVACY_PATH} target="_blank" rel="noopener noreferrer" className="underline">Privacy</a>
+                {' · '}
+                <a href={SMS_CONSENT_TERMS_PATH} target="_blank" rel="noopener noreferrer" className="underline">Terms</a>
+              </p>
             )}
           </form>
         </div>

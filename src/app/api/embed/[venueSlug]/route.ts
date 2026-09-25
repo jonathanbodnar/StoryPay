@@ -18,6 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { formConsentText, SMS_CONSENT_PRIVACY_PATH, SMS_CONSENT_TERMS_PATH } from '@/lib/sms-consent-disclosure';
 
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
@@ -156,6 +157,8 @@ export async function GET(
     }
     .btn:hover { opacity: .88; }
     .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .consent { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: #6b7280; text-align: center; }
+    .consent a { color: inherit; text-decoration: underline; }
     .error { margin-top: 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #dc2626; }
     /* Success state */
     .success { display: none; text-align: center; padding: 24px 0 8px; }
@@ -211,6 +214,7 @@ export async function GET(
       </div>
       <div id="svError" class="error" style="display:none;"></div>
       <button type="submit" class="btn" id="svBtn">${esc(btnLabel)}</button>
+      <p class="consent">${esc(formConsentText(venueName))} <a href="${esc(APP_URL + SMS_CONSENT_PRIVACY_PATH)}" target="_blank" rel="noopener">Privacy</a> · <a href="${esc(APP_URL + SMS_CONSENT_TERMS_PATH)}" target="_blank" rel="noopener">Terms</a></p>
     </form>
 
     <!-- Success -->

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runMarketingEmailCron } from '@/lib/marketing-email-worker';
 import { processAppointmentRemindersCron } from '@/lib/appointment-reminders';
+import { processGuideInvites } from '@/lib/guide-invite';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -71,6 +72,16 @@ export async function GET(request: NextRequest) {
       console.error('[cron marketing-email] appointment reminders processor failed:', e);
     }
 
+    // Same safety-net pattern for LeadFinder's gated guide invites: the one
+    // reminder (~20h) and the 48h fallback (guide by email + Phase 2 without
+    // SMS). Failures don't fail the marketing cron.
+    let guideInvites: unknown = null;
+    try {
+      guideInvites = await processGuideInvites();
+    } catch (e) {
+      console.error('[cron marketing-email] guide invites processor failed:', e);
+    }
+
     // If any automation steps ran, self-ping after 60 s so delay steps advance
     // without needing an external cron service configured on Railway.
     const hadWork =
@@ -78,7 +89,7 @@ export async function GET(request: NextRequest) {
       (result.campaignRecipientsSent as number) > 0 ||
       (result.weddingFollowupEnrollments as number) > 0;
     if (hadWork) selfPingAfter(60_000);
-    return NextResponse.json({ ok: true, result, appointmentReminders });
+    return NextResponse.json({ ok: true, result, appointmentReminders, guideInvites });
   } catch (e) {
     console.error('[cron marketing-email]', e);
     return NextResponse.json({ error: 'Processor failed' }, { status: 500 });

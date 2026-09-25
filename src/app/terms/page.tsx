@@ -29,7 +29,7 @@ export default function TermsPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Terms of Use</h1>
-        <p className="text-sm text-gray-500 mb-10">Last updated: April 12, 2026</p>
+        <p className="text-sm text-gray-500 mb-10">Last updated: September 25, 2026</p>
 
         <div className="prose prose-gray max-w-none space-y-8 text-sm leading-relaxed text-gray-700">
 
@@ -105,9 +105,10 @@ export default function TermsPage() {
             <p>You retain ownership of all content you create in StoryVenue — including proposal templates, invoices, customer data, branding assets, and email templates. By uploading content, you grant us a limited license to use it solely to provide the Services. You represent that you have all rights necessary to upload and use such content.</p>
           </section>
 
-          <section>
+          <section id="text-messaging" className="scroll-mt-6">
             <h2 className="text-lg font-bold text-gray-900 mb-3">8. SMS Messaging</h2>
             <p>StoryVenue may send SMS messages to your customers using your connected StoryVenue Legacy account and A2P-registered phone number. You are responsible for ensuring you have proper consent from your customers to receive SMS communications as required by applicable law (including TCPA).</p>
+            <p className="mt-3"><strong>Text messaging for couples.</strong> If you agree to texts from a venue that uses StoryVenue, you&apos;ll get automated messages about your inquiry (your pricing guide, follow-ups and replies). Message frequency varies. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help. Carriers aren&apos;t liable for delayed or undelivered messages.</p>
           </section>
 
           <section>
