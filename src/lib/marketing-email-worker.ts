@@ -2814,7 +2814,7 @@ async function processOneEnrollment(en: {
   if (step.step_type === 'start_ai_concierge') {
     // Consent gate: the AI Concierge engages the couple by TEXT, so a lead we are
     // not permitted to text must not be activated. Defer instead of activating —
-    // consent arriving later (their reply, or a form submission) re-runs
+    // consent arriving later (a text from them, START, or a form submission) re-runs
     // activation through recordSmsConsentByEmail.
     if (!(await leadSmsAllowed(en.lead_id))) {
       console.log('[worker] start_ai_concierge deferred: no sms_consent for', en.lead_id);

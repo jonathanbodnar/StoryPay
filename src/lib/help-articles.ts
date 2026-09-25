@@ -3088,7 +3088,7 @@ What happens when an inquiry arrives
 - A lead is created with the couple's name, email, phone, wedding date, guest count and message — whatever the email includes. If the couple is already a lead, that record is updated instead: only empty fields are filled, so your own edits are never overwritten.
 - You're alerted exactly as for any new lead (email, text or push, per your notification settings). The alert shows which directory it came from.
 - The couple receives your pricing guide by email and enters your Booking System workflow.
-- No automatic texts: a phone number read from a directory email isn't permission to text, so LeadFinder leads get email follow-up only until the couple replies or fills in one of your forms.
+- No automatic texts: a phone number read from a directory email isn't permission to text, so LeadFinder leads get email follow-up only until the couple texts you or fills in one of your forms. Replying by email doesn't count as permission to text.
 - You get a copy of every message in your own inbox, with a short note on what LeadFinder did. Turn this off on the card.
 
 The review queue

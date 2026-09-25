@@ -226,7 +226,7 @@ async function reserveDueLeads(
          AND l.ai_state = 'ai_active'
          AND COALESCE(l.sms_dnd, false) = false
          -- Never text a lead we have no consent for (e.g. captured from a
-         -- forwarded email). Consent is granted by their reply or a form.
+         -- forwarded email). Consent comes from a text from them, START, or a form.
          AND COALESCE(l.sms_consent, true) = true
          AND v.id = l.venue_id
       RETURNING

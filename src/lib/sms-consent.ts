@@ -11,6 +11,10 @@ import { supabaseAdmin } from '@/lib/supabase';
  * So permission is now an explicit fact on the lead (`leads.sms_consent`,
  * migration 255) and every automated SMS path asks here first.
  *
+ * What GRANTS it: a text from the couple, a START keyword, or submitting one of
+ * our forms that collects a phone. An email reply does NOT — replying by email
+ * is not consent to automated texts, so it never flips this.
+ *
  * Three-state reasoning, because "no value" and "no" are different things:
  *
  *   true        → text them.
@@ -21,10 +25,13 @@ import { supabaseAdmin } from '@/lib/supabase';
  *                 silently mute automated texting across the whole platform.
  */
 
-/** What granted or revoked consent — stored for the audit trail. */
+/**
+ * What granted or revoked consent — stored for the audit trail. (Rows written
+ * before 2026-09-25 may also carry 'inbound_reply': an email reply used to
+ * grant consent, which it no longer does.)
+ */
 export type SmsConsentSource =
   | 'form_submit'
-  | 'inbound_reply'
   | 'inbound_sms'
   | 'inbound_start_keyword'
   | 'inbound_stop_keyword'
@@ -102,11 +109,11 @@ export async function recordLeadSmsConsent(input: {
 
 /**
  * The same, for the paths that know a contact's email but not which lead row the
- * message belongs to — an inbound reply or a form submission arrives attributed
+ * message belongs to — an inbound text or a form submission arrives attributed
  * to a person, and they may own several leads at this venue.
  *
- * Replying or submitting a form is the opt-in signal, so this only ever grants;
- * it never revokes. A blast radius of "every unconsumed lead for this one email
+ * Texting us or submitting a form is the opt-in signal, so this only ever
+ * grants; it never revokes. (Never call it for an email reply.) A blast radius of "every unconsumed lead for this one email
  * at this one venue" is intended: they are the same human.
  */
 export async function recordSmsConsentByEmail(input: {

@@ -873,7 +873,7 @@ async function processArrival(p: {
       status: 'new',
       // The couple gave this number to a directory, not to us, so it is not
       // consent for an automated text. Every automated SMS path checks this
-      // before sending; a reply or a form submission flips it to true.
+      // before sending; a text from them, START or a form submission flips it.
       sms_consent:        false,
       sms_consent_at:     new Date().toISOString(),
       sms_consent_source: 'leadfinder_forwarded_email',
