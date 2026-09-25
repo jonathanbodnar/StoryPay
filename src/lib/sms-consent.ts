@@ -154,7 +154,10 @@ export async function grantSmsConsentForLeadIds(input: {
   const ids = input.leadIds.filter(Boolean);
   if (ids.length === 0) return;
   try {
-    const { error } = await supabaseAdmin
+    // `.select('id')` returns only the rows that actually changed. Callers such
+    // as the START / opt-in path pass EVERY lead linked to a contact, most of
+    // which already had consent — those must not be treated as newly granted.
+    const { data: flipped, error } = await supabaseAdmin
       .from('leads')
       .update({
         sms_consent:        true,
@@ -162,7 +165,8 @@ export async function grantSmsConsentForLeadIds(input: {
         sms_consent_source: input.source,
       })
       .in('id', ids)
-      .eq('sms_consent', false);
+      .eq('sms_consent', false)
+      .select('id');
 
     if (error) {
       // Undefined column simply means migration 255 hasn't been applied yet.
@@ -172,11 +176,13 @@ export async function grantSmsConsentForLeadIds(input: {
       return;
     }
 
-    console.log('[sms-consent] opted in', ids.length, 'lead(s) via', input.source, { venueId: input.venueId });
-    // Now that they may be texted, let the premises that were skipped for lack of
-    // consent pick them up — a captured lead whose venue runs the AI Concierge
-    // should start being engaged from here, not stay silent forever.
-    for (const id of ids) void resumeConsentGatedFollowUp(input.venueId, id);
+    const grantedIds = ((flipped ?? []) as Array<{ id: string }>).map((r) => r.id);
+    if (grantedIds.length === 0) return;
+
+    console.log('[sms-consent] opted in', grantedIds.length, 'lead(s) via', input.source, { venueId: input.venueId });
+    // Now that they may be texted, pick up only what was deliberately deferred
+    // for lack of consent — see resumeConsentGatedFollowUp.
+    for (const id of grantedIds) void resumeConsentGatedFollowUp(input.venueId, id);
   } catch (e) {
     console.warn('[sms-consent] grant threw (non-fatal):', e, { venueId: input.venueId });
   }
@@ -184,9 +190,16 @@ export async function grantSmsConsentForLeadIds(input: {
 
 /**
  * Consent arriving late means anything we deliberately skipped earlier needs a
- * second look. Today that is the AI Concierge: the activation workflow step is
- * refused for a lead without consent, so without this the lead would sit dormant
+ * second look. Today that is the AI Concierge: the booking workflow's
+ * `start_ai_concierge` step is refused for a lead without consent (and logged
+ * as skipped with `no_sms_consent`), so without this the lead would sit dormant
  * until someone manually re-ran the workflow.
+ *
+ * It resumes ONLY that deferred activation, and only while the lead is still
+ * dormant. It must never switch the AI on for a lead whose workflow never asked
+ * for it, or override a state a person chose (paused, handed off) — which is
+ * what an unconditional activation did for every lead linked to a contact who
+ * texted START.
  *
  * Deliberately lazy-imported to keep this module dependency-light, and every
  * failure is swallowed — a missed re-activation must never break the reply or
@@ -194,6 +207,26 @@ export async function grantSmsConsentForLeadIds(input: {
  */
 async function resumeConsentGatedFollowUp(venueId: string, leadId: string): Promise<void> {
   try {
+    const { data: lead } = await supabaseAdmin
+      .from('leads')
+      .select('ai_state')
+      .eq('id', leadId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    const state = (lead as { ai_state?: string | null } | null)?.ai_state ?? null;
+    if (!lead || (state !== null && state !== 'dormant')) return;
+
+    const { data: deferred } = await supabaseAdmin
+      .from('marketing_automation_execution_logs')
+      .select('id')
+      .eq('venue_id', venueId)
+      .eq('lead_id', leadId)
+      .eq('step_type', 'start_ai_concierge')
+      .eq('status', 'skipped')
+      .eq('error_text', 'no_sms_consent')
+      .limit(1);
+    if (!deferred || deferred.length === 0) return;
+
     const { setLeadAiState } = await import('@/lib/ai-concierge/state-control');
     const result = await setLeadAiState({
       leadId,
