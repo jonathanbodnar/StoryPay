@@ -3068,6 +3068,41 @@ If replies still don't appear after the panel shows Configured
 - If replies are completely missing, contact StoryVenue support. This typically requires a configuration step that our team handles.`,
       },
       {
+        id: 'int-leadfinder',
+        title: 'LeadFinder™ — turn directory emails into leads',
+        tags: ['leadfinder', 'lead finder', 'the knot', 'weddingwire', 'zola', 'directory', 'marketplace', 'inquiry email', 'email leads', 'forward', 'forwarding', 'gmail filter', 'gmail confirmation code', 'capture leads', 'review queue', 'relay address'],
+        body: `LeadFinder gives your venue its own private email address. Any wedding inquiry emailed to it — from The Knot, WeddingWire, Zola, Here Comes The Guide, your website form, or a couple writing to you directly — becomes a lead in StoryVenue automatically, with the same alerts, pricing guide and follow-up as every other lead.
+
+Where to find your address
+Settings → Integrations → LeadFinder™ card → Copy. The address is unique to your venue, so keep it private.
+
+Two ways to connect it
+1. Easiest: paste the address into a directory's lead-notification email field (The Knot, WeddingWire, Zola and so on). One paste per site.
+2. If a site won't let you change that email, use Gmail forwarding:
+- Gmail → Settings → See all settings → Forwarding and POP/IMAP → Add a forwarding address → paste your LeadFinder address.
+- Gmail sends a confirmation code to that address. Within a minute it appears on the LeadFinder card (and in your inbox copy). Enter it in Gmail under Verify.
+- Create a filter (for example from:theknot.com OR from:weddingwire.com) and choose "Forward it to" your LeadFinder address.
+Tip: forward only directory emails with a filter rather than your whole inbox.
+
+What happens when an inquiry arrives
+- A lead is created with the couple's name, email, phone, wedding date, guest count and message — whatever the email includes. If the couple is already a lead, that record is updated instead: only empty fields are filled, so your own edits are never overwritten.
+- You're alerted exactly as for any new lead (email, text or push, per your notification settings). The alert shows which directory it came from.
+- The couple receives your pricing guide by email and enters your Booking System workflow.
+- No automatic texts: a phone number read from a directory email isn't permission to text, so LeadFinder leads get email follow-up only until the couple replies or fills in one of your forms.
+- You get a copy of every message in your own inbox, with a short note on what LeadFinder did. Turn this off on the card.
+
+The review queue
+When we can't read an inquiry confidently — or the only address is a directory's relay, which routes replies through the directory's own inbox — the lead is still created and you're still alerted, but the automatic guide is held. The card shows how many arrivals need review. Open Review, compare what we read with the original email, correct anything we got wrong, then Confirm & send guide, or Dismiss.
+
+Activity and sources
+The card lists recent messages and whether each became a lead or was skipped, and why. Sources compares each directory with its own previous 30 days, so you'll notice if a directory changes its email format.
+
+Not seeing leads?
+- Check Activity on the card. If nothing has arrived, the directory or your Gmail filter isn't sending to the address yet.
+- "Not enabled yet" means LeadFinder hasn't been switched on for your account. Contact StoryVenue support.
+- Skipped messages show the reason — for example an account notice, an automatic reply, or no email address for the couple.`,
+      },
+      {
         id: 'int-quickbooks',
         title: 'Connecting QuickBooks Online',
         tags: ['quickbooks', 'accounting', 'integration', 'sync', 'qbo'],
@@ -4170,7 +4205,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/media': ['listing-media-library', 'listing-photos', 'listing-overview', 'brand-setup'],
   '/dashboard/listing/images': ['listing-photos', 'listing-media-library', 'listing-overview', 'listing-publish'],
   '/dashboard/listing/reviews': ['listing-reviews', 'listing-google-reviews', 'listing-overview', 'listing-publish'],
-  '/dashboard/listing/booking-system': ['listing-booking-system', 'billing-verified-sponsored', 'mkt-system-vars', 'billing-pricing-guide', 'mkt-ai-concierge'],
+  '/dashboard/listing/booking-system': ['listing-booking-system', 'int-leadfinder', 'billing-verified-sponsored', 'mkt-system-vars', 'billing-pricing-guide', 'mkt-ai-concierge'],
   // /dashboard/listing IS the Bride Booking System™ analytics page (not the listing editor)
   '/dashboard/listing':        ['listing-analytics-realtime', 'listing-analytics-retention', 'billing-plans-overview', 'billing-trial', 'listing-overview'],
   '/dashboard/listing/venue-listing': ['listing-overview', 'listing-autosave', 'listing-publish', 'listing-slug'],
@@ -4225,7 +4260,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/settings/branding':        ['brand-setup', 'brand-colors-saved', 'brand-social-networks', 'listing-media-library', 'me-block-social', 'me-block-address'],
   '/dashboard/settings/email-templates': ['notif-settings', 'email-types', 'email-variables', 'me-overview'],
   '/dashboard/settings/calendar':        ['cal-settings-overview', 'cal-multi-calendar', 'cal-per-calendar-rules', 'cal-notification-overview', 'cal-notification-reminders', 'cal-settings-booking-rules', 'cal-settings-google-sync'],
-  '/dashboard/settings/integrations':    ['int-legacy', 'int-inbound-email-status', 'int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
+  '/dashboard/settings/integrations':    ['int-leadfinder', 'int-legacy', 'int-inbound-email-status', 'int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
   '/dashboard/settings/notifications':   ['notif-settings', 'email-types', 'email-variables', 'sms-notifications', 'merge-vars-overview'],
   '/dashboard/settings/push':            ['push-settings', 'push-overview', 'push-install-app'],
