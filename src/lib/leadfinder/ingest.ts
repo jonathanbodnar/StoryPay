@@ -989,7 +989,7 @@ async function processArrival(p: {
   } else if (await startGuideInvite(venueId, leadId)) {
     // The gated "Send me my guide" email went out instead. Their tap is the SMS
     // opt-in and starts Phase 1 + Phase 2 exactly like a listing-form lead; no
-    // tap by 48h → guide by email and Phase 2 without SMS (lib/guide-invite).
+    // tap within an hour → guide by email and Phase 2 without SMS (lib/guide-invite).
   } else {
     // The venue can't text (or the invite couldn't go out): today's behaviour.
     void sendBookingSystemGuide(venueId, leadId, { channels: 'email' }).catch((e) =>

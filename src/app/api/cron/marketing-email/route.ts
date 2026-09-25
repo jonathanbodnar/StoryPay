@@ -72,9 +72,9 @@ export async function GET(request: NextRequest) {
       console.error('[cron marketing-email] appointment reminders processor failed:', e);
     }
 
-    // Same safety-net pattern for LeadFinder's gated guide invites: the one
-    // reminder (~20h) and the 48h fallback (guide by email + Phase 2 without
-    // SMS). Failures don't fail the marketing cron.
+    // Same safety-net pattern for LeadFinder's gated guide invites: no tap
+    // within an hour → guide by email + Phase 2 without SMS. Failures don't
+    // fail the marketing cron.
     let guideInvites: unknown = null;
     try {
       guideInvites = await processGuideInvites();

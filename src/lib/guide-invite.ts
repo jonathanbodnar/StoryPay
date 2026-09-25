@@ -10,7 +10,7 @@
  * exactly what a listing-form lead gets: Phase 1 guide delivery, the Phase 2
  * 14-day sequence, and AI outreach after day 14 when the venue has it on.
  *
- * Couples who don't tap: one reminder at ~20h, then at 48h the guide goes by
+ * Couples who don't tap: after 1 hour the guide goes by
  * email and Phase 2 starts anyway — its SMS steps skip without consent. Nobody
  * is dropped. A venue that can't text at all never gets the gate: today's
  * email-guide behaviour applies.
@@ -45,10 +45,8 @@ import { signGuideInviteToken, verifyGuideInviteToken } from '@/lib/guide-invite
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
 
-/** The one reminder, for couples who haven't tapped yet. */
-const REMINDER_AFTER_MS = 20 * 60 * 60 * 1000;
 /** No tap by now: email the guide and start the sequence without SMS. */
-const FALLBACK_AFTER_MS = 48 * 60 * 60 * 1000;
+const FALLBACK_AFTER_MS = 60 * 60 * 1000;
 /** Cap per cron run, so a backlog can never stall the marketing cron. */
 const CRON_BATCH = 40;
 
@@ -91,9 +89,9 @@ export async function venueCanTextLeads(venueId: string): Promise<boolean> {
   }
 }
 
-// ── The invite and reminder emails ───────────────────────────────────────────
+// ── The invite email ─────────────────────────────────────────────────────────
 
-async function sendInviteEmail(venueId: string, leadId: string, kind: 'invite' | 'reminder'): Promise<boolean> {
+async function sendInviteEmail(venueId: string, leadId: string): Promise<boolean> {
   const token = signGuideInviteToken(leadId, venueId);
   if (!token) return false;
 
@@ -109,17 +107,13 @@ async function sendInviteEmail(venueId: string, leadId: string, kind: 'invite' |
   const first = (vars.first_name || '').trim();
   const link = guideInviteUrl(token);
 
-  const subject = kind === 'invite'
-    ? `${first ? `${first}, your` : 'Your'} ${venueName} pricing guide is ready`
-    : `Your ${venueName} pricing guide is still waiting`;
-  const lead = kind === 'invite'
-    ? `Thanks for reaching out to ${venueName}${via ? ` through ${via}` : ''}! Your pricing & planning guide is ready.`
-    : "Just making sure you saw this — tap below and we'll send your pricing & planning guide right over.";
+  const subject = `${first ? `${first}, your` : 'Your'} ${venueName} pricing guide is ready`;
+  const lead = `Thanks for reaching out to ${venueName}${via ? ` through ${via}` : ''}! Your pricing & planning guide is ready.`;
 
   // The same shared shell as every other email the product sends: the venue's
   // StoryVenue dark logo centered at the top (always), #1b1b1b button,
   // "Sent via StoryVenue on behalf of …" footer.
-  const heading = kind === 'invite' ? 'Your pricing guide is ready' : 'Your pricing guide is still waiting';
+  const heading = 'Your pricing guide is ready';
   const p = (text: string) => `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 12px;">${escapeHtml(text)}</p>`;
   const html = buildSystemEmail({
     // No logoUrl: the shell renders the StoryVenue dark logo — always.
@@ -144,7 +138,7 @@ async function sendInviteEmail(venueId: string, leadId: string, kind: 'invite' |
 
   const sent = await sendEmail({ to: vars.email, from: { name: fromName, email: fromEmail }, replyTo, subject, html, text });
   if (!sent.success) {
-    console.warn('[guide-invite] email failed:', sent.error, { venueId, leadId, kind });
+    console.warn('[guide-invite] email failed:', sent.error, { venueId, leadId });
     return false;
   }
   if (thread) {
@@ -152,9 +146,7 @@ async function sendInviteEmail(venueId: string, leadId: string, kind: 'invite' |
       threadId: thread.threadId,
       venueId,
       channel: 'email',
-      body: kind === 'invite'
-        ? '📧 Guide invite sent — waiting for them to tap "Send me my guide" (text + email).'
-        : '📧 Guide invite reminder sent.',
+      body: '📧 Guide invite sent — waiting for them to tap "Send me my guide" (text + email).',
     }).catch(() => {});
   }
   return true;
@@ -200,7 +192,7 @@ export async function startGuideInvite(venueId: string, leadId: string): Promise
     return false;
   }
 
-  if (await sendInviteEmail(venueId, leadId, 'invite')) return true;
+  if (await sendInviteEmail(venueId, leadId)) return true;
 
   // Couldn't send it: undo, so the caller emails the guide instead.
   await supabaseAdmin.from('guide_invites').delete().eq('lead_id', leadId);
@@ -317,7 +309,7 @@ export async function completeGuideInvite(input: {
 
   // Now exactly what a listing-form lead gets.
   if (afterFallback) {
-    // The guide was already emailed and Phase 2 already runs (48h fallback):
+    // The guide was already emailed and Phase 2 already runs (1h fallback):
     // send the text guide only; the sequence's SMS steps now send too.
     void sendBookingSystemGuide(venueId, leadId, { channels: 'sms' }).catch((e) =>
       console.error('[guide-invite] SMS guide failed:', e),
@@ -335,14 +327,14 @@ export async function completeGuideInvite(input: {
 // ── Reminder + fallback (marketing cron) ─────────────────────────────────────
 
 /**
- * One reminder at ~20h; at 48h the guide goes by email and Phase 2 starts
- * without SMS. A couple who has replied is left to the venue (no automated
- * reminder or sequence on top of a live conversation). Every step claims its
- * row with a conditional update, so overlapping cron runs never double-send.
+ * No tap within an hour: the guide goes by email and Phase 2 starts without
+ * SMS (the invite link keeps working, so tapping later still opts them in to
+ * texts). A couple who has replied is left to the venue (no automated
+ * sequence on top of a live conversation). Each row is claimed with a
+ * conditional update, so overlapping cron runs never double-send.
  * A missing table (migration 259 not applied) is a no-op.
  */
-export async function processGuideInvites(now: Date = new Date()): Promise<{ reminders: number; fallbacks: number }> {
-  let reminders = 0;
+export async function processGuideInvites(now: Date = new Date()): Promise<{ fallbacks: number }> {
   let fallbacks = 0;
   const nowIso = now.toISOString();
 
@@ -368,7 +360,7 @@ export async function processGuideInvites(now: Date = new Date()): Promise<{ rem
     return !!data;
   };
 
-  // 1. 48h with no tap: guide by email + Phase 2 (its SMS steps skip without
+  // No tap within an hour: guide by email + Phase 2 (its SMS steps skip without
   //    consent). A couple who replied instead is left to the venue.
   const { data: overdue, error: overdueErr } = await supabaseAdmin
     .from('guide_invites')
@@ -378,7 +370,7 @@ export async function processGuideInvites(now: Date = new Date()): Promise<{ rem
     .lte('invite_sent_at', new Date(now.getTime() - FALLBACK_AFTER_MS).toISOString())
     .order('invite_sent_at', { ascending: true })
     .limit(CRON_BATCH);
-  if (overdueErr) return { reminders, fallbacks }; // table missing → feature not live yet
+  if (overdueErr) return { fallbacks }; // table missing → feature not live yet
 
   for (const row of (overdue ?? []) as Row[]) {
     const replied = await repliedSinceInvite(row);
@@ -391,40 +383,9 @@ export async function processGuideInvites(now: Date = new Date()): Promise<{ rem
       console.error('[guide-invite] fallback guide failed:', e),
     );
     await startPhase2(row.venue_id, row.lead_id);
-    await markThread(row.venue_id, row.lead_id, 'No tap after 48 hours — guide emailed and follow-up started (no texts until they opt in).');
+    await markThread(row.venue_id, row.lead_id, 'No tap after an hour — guide emailed and follow-up started (no texts until they opt in).');
     fallbacks++;
   }
 
-  // 2. ~20h with no tap and no reminder yet: one reminder.
-  const { data: due } = await supabaseAdmin
-    .from('guide_invites')
-    .select('id, venue_id, lead_id, invite_sent_at')
-    .is('tapped_at', null)
-    .is('fallback_at', null)
-    .is('reminder_sent_at', null)
-    .lte('invite_sent_at', new Date(now.getTime() - REMINDER_AFTER_MS).toISOString())
-    .order('invite_sent_at', { ascending: true })
-    .limit(CRON_BATCH);
-
-  for (const row of (due ?? []) as Row[]) {
-    if (await repliedSinceInvite(row)) {
-      // In conversation already — close it out quietly rather than nudge.
-      if (await claimFallback(row)) {
-        await markThread(row.venue_id, row.lead_id, 'They replied before tapping "Send me my guide" — over to you (no automated follow-up started).');
-      }
-      continue;
-    }
-    const { data: claimed } = await supabaseAdmin
-      .from('guide_invites')
-      .update({ reminder_sent_at: nowIso })
-      .eq('id', row.id)
-      .is('reminder_sent_at', null)
-      .is('tapped_at', null)
-      .select('id')
-      .maybeSingle();
-    if (!claimed) continue;
-    if (await sendInviteEmail(row.venue_id, row.lead_id, 'reminder')) reminders++;
-  }
-
-  return { reminders, fallbacks };
+  return { fallbacks };
 }

@@ -3091,7 +3091,7 @@ What happens when an inquiry arrives
 - A lead is created with the couple's name, email, phone, wedding date, guest count and message — whatever the email includes. If the couple is already a lead, that record is updated instead: only empty fields are filled, so your own edits are never overwritten.
 - You're alerted exactly as for any new lead (email, text or push, per your notification settings). The alert shows which directory it came from.
 - The couple gets an email from you with one button: Send me my guide. Tapping it confirms their mobile number and email, sends your guide by text and email, and counts as their permission to text — so they join your full Bride Booking System (guide, 14-day follow-up, then AI outreach if you have it on), exactly like a couple who filled in your listing form.
-- A phone number read from a directory email isn't permission to text, so nothing is texted until they tap. If they haven't tapped after one reminder (about a day later), at 48 hours the guide goes by email and your follow-up starts without texts. Replying by email doesn't count as permission to text.
+- A phone number read from a directory email isn't permission to text, so nothing is texted until they tap. If they haven't tapped within an hour, the guide goes to them by email anyway and your follow-up starts without texts; tapping the button later still turns texts on. Replying by email doesn't count as permission to text.
 - Venues without texting get the guide by email straight away, as before.
 - You get a copy of every message in your own inbox, with a short note on what LeadFinder did. Times on it are in your venue's local time, based on your venue's ZIP code. Turn the copies off on the card.
 

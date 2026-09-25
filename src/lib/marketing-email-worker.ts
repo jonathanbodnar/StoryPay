@@ -1059,7 +1059,7 @@ export async function sendBookingSystemGuide(
      * read out of a forwarded directory email is not consent for an automated
      * text, so those leads get the guide by email only. `'sms'` is for a couple
      * who opts in to texts AFTER the guide was already emailed to them (the
-     * gated guide invite's 48h fallback), so the email is not sent twice.
+     * gated guide invite's 1-hour fallback), so the email is not sent twice.
      */
     channels?: 'both' | 'email' | 'sms';
   },
