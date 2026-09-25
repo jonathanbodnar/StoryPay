@@ -21,6 +21,8 @@ import { sendPushToVenue } from '@/lib/push';
 import { sendNativePush } from '@/lib/native-push';
 import { loadNotificationRecipients, emailKeyFor, smsKeyFor } from '@/lib/notification-settings';
 import { buildOwnerReplyToEmail, buildVenueConciergeReplyToEmail } from '@/lib/conversations-inbound-email';
+import { leadSourceLabel } from '@/lib/lead-source';
+import { venueTimeZoneFromLocation, type VenueTimeZoneFields } from '@/lib/venue-zip-timezone';
 
 export type OwnerScenario =
   | 'payment_received'
@@ -638,6 +640,38 @@ export async function notifyVenueOfConciergeMessage(input: {
   }
 }
 
+/** "+14075550142" → "(407) 555-0142"; anything else is shown as given. */
+function displayPhone(raw: string | null | undefined): string {
+  const v = (raw ?? '').trim();
+  const us = /^\+?1?(\d{3})(\d{3})(\d{4})$/.exec(v.replace(/[^\d+]/g, ''));
+  return us ? `(${us[1]}) ${us[2]}-${us[3]}` : v;
+}
+
+/**
+ * When the lead came in, in the VENUE's local time (from its ZIP — see
+ * lib/venue-zip-timezone), e.g. "Sep 24, 2026, 9:42 PM EDT". Falls back to UTC,
+ * labelled as such, if the venue has no location at all.
+ */
+async function formatInVenueTime(venueId: string, iso: string | null | undefined): Promise<string> {
+  const when = iso ? new Date(iso) : new Date();
+  const at = Number.isNaN(when.getTime()) ? new Date() : when;
+  let timeZone: string | undefined;
+  try {
+    const { data } = await supabaseAdmin.from('venues').select('*').eq('id', venueId).maybeSingle();
+    timeZone = venueTimeZoneFromLocation(data as VenueTimeZoneFields | null) ?? undefined;
+  } catch {
+    /* fall back to UTC below */
+  }
+  try {
+    return at.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+      timeZoneName: 'short', timeZone: timeZone ?? 'UTC',
+    });
+  } catch {
+    return at.toISOString();
+  }
+}
+
 /** Fire a "new lead" push for the freshly-inserted lead. */
 export function notifyOwnerNewLead(input: {
   venueId: string;
@@ -649,17 +683,27 @@ export function notifyOwnerNewLead(input: {
   createdAt?: string | null;
 }): void {
   const display = (input.fullName || '').trim() || input.email || 'New lead';
-  void notifyOwner({
-    venueId:   input.venueId,
-    scenario:  'new_lead',
-    vars: {
-      customer_name: display,
-      email:         input.email || '',
-      source:        input.source || 'directory',
-    },
-    // A lead id → the resolver route (the contact page is keyed by contact id).
-    actionUrl: `/dashboard/contacts/lead/${input.leadId}`,
-  });
+  const rawSource = input.source || 'directory';
+  void (async () => {
+    // The new-lead template shows "Phone:" and "Created:" lines; these were never
+    // passed, so every alert went out with both blank.
+    const createdAt = await formatInVenueTime(input.venueId, input.createdAt);
+    await notifyOwner({
+      venueId:   input.venueId,
+      scenario:  'new_lead',
+      vars: {
+        customer_name: display,
+        email:         input.email || '',
+        phone:         displayPhone(input.phone) || 'Not provided',
+        // A raw ingest token ("directory", "form") reads as its label; a label a
+        // caller already wrote ("The Knot (via LeadFinder™)") is kept as is.
+        source:        /^[a-z0-9_]+$/.test(rawSource) ? leadSourceLabel(rawSource) : rawSource,
+        created_at:    createdAt,
+      },
+      // A lead id → the resolver route (the contact page is keyed by contact id).
+      actionUrl: `/dashboard/contacts/lead/${input.leadId}`,
+    });
+  })().catch((err) => console.error('[notifyOwnerNewLead]', err instanceof Error ? err.message : err));
 }
 
 /** Fire a "new message" push for an inbound conversation message. */
