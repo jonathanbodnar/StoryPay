@@ -60,7 +60,12 @@ export async function POST(request: NextRequest) {
   const corpora: Corpus[] = requested === 'both' ? ['venue', 'couple'] : [requested as Corpus];
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const BATCH = 8;
+  // One embeddings request per 64 articles (the API takes up to 2048 inputs)
+  // and the upserts for a batch run in parallel. With 8 per request and one
+  // sequential RPC per article, a full seed outlasted the proxy in front of the
+  // app: the request 502'd part-way and the handler stopped, so the venue
+  // corpus had never been completely indexed (77 rows for 146 articles).
+  const BATCH = 64;
 
   const summary: Record<string, { seeded: number; errors: number; pruned: string[] }> = {};
 
@@ -77,13 +82,18 @@ export async function POST(request: NextRequest) {
       });
 
       // SECURITY DEFINER RPC bypasses PostgREST's schema cache.
-      for (let j = 0; j < batch.length; j++) {
-        const { error } = await supabaseAdmin.rpc('upsert_help_embedding_v2', {
-          p_article_id: batch[j].id,
-          p_embedding: embeddingRes.data[j].embedding,
-          p_corpus: corpus,
-          p_updated_at: new Date().toISOString(),
-        });
+      const updatedAt = new Date().toISOString();
+      const results = await Promise.all(
+        batch.map((article, j) =>
+          supabaseAdmin.rpc('upsert_help_embedding_v2', {
+            p_article_id: article.id,
+            p_embedding: embeddingRes.data[j].embedding,
+            p_corpus: corpus,
+            p_updated_at: updatedAt,
+          }),
+        ),
+      );
+      for (const { error } of results) {
         if (error) errors += 1;
         else seeded += 1;
       }
