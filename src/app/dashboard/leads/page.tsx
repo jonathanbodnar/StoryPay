@@ -319,6 +319,7 @@ function resolveLeadSource(lead: Lead): string {
   if (src === 'manual')        return 'Manual Entry';
   if (src === 'form')          return 'Contact Form';
   if (src === 'test_inquiry')  return 'Test';
+  if (src === 'leadfinder')    return 'LeadFinder™';
   if (src && src !== 'inquiry' && src !== 'direct') {
     return src.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }

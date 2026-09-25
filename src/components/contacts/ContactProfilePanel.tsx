@@ -124,6 +124,7 @@ const SOURCE_LABELS: Record<string, string> = {
   google: 'Google',
   webform: 'Web Form',
   lead_link: 'Lead Link',
+  leadfinder: 'LeadFinder™',
   direct: 'Direct',
   other: 'Other',
 };
@@ -133,6 +134,7 @@ const SOURCE_BADGE_STYLES: Record<string, string> = {
   google: 'border-amber-200 bg-amber-50 text-amber-700',
   webform: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   lead_link: 'border-rose-200 bg-rose-50 text-rose-700',
+  leadfinder: 'border-indigo-200 bg-indigo-50 text-indigo-700',
   direct: 'border-gray-200 bg-gray-50 text-gray-600',
   other: 'border-violet-200 bg-violet-50 text-violet-700',
 };

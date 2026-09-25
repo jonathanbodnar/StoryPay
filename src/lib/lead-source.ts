@@ -29,18 +29,20 @@
  * but for these four buckets that distinction doesn't matter.
  */
 
-export type LeadSourceBucket = 'meta' | 'google' | 'webform' | 'lead_link' | 'direct' | 'other';
+export type LeadSourceBucket = 'meta' | 'google' | 'webform' | 'lead_link' | 'leadfinder' | 'direct' | 'other';
 
-// Named acquisition channels first (Meta / Google / Web Form / Lead Link), then
+// Named acquisition channels first (Meta / Google / Web Form / Lead Link /
+// LeadFinder™), then
 // the two "unknown-origin" buckets (Direct / Other) last so Other stays the
 // catch-all.
-export const LEAD_SOURCE_ORDER: LeadSourceBucket[] = ['meta', 'google', 'webform', 'lead_link', 'direct', 'other'];
+export const LEAD_SOURCE_ORDER: LeadSourceBucket[] = ['meta', 'google', 'webform', 'lead_link', 'leadfinder', 'direct', 'other'];
 
 export const LEAD_SOURCE_LABELS: Record<LeadSourceBucket, string> = {
   meta: 'Meta',
   google: 'Google',
   webform: 'Web Form',
   lead_link: 'Lead Link',
+  leadfinder: 'LeadFinder™',
   direct: 'Direct',
   other: 'Other',
 };
@@ -223,6 +225,13 @@ export function bucketLeadSource(input: LeadSourceInput): LeadSourceBucket {
   // the Lead Link page is still credited to the ad. Keyed off the definitive
   // ingest `source`/utm_source markers the Lead Link modal sets.
   if (LEAD_LINK_TOKENS.has(srcNorm) || LEAD_LINK_TOKENS.has(utmSource)) return 'lead_link';
+
+  // ── LeadFinder™ (inquiries captured from the venue's own inbox) ────────
+  // A definitive ingest marker, like the two above. Checked BEFORE the generic
+  // tag signal below: LeadFinder records the marketplace it came through
+  // ("The Knot") in referral_source, which would otherwise read as Other —
+  // and without this check a capture with no tag at all fell into Direct.
+  if (srcNorm === LEADFINDER_SOURCE) return 'leadfinder';
 
   // ── Known tag/referral that isn't Meta or Google → Other ──────────────
   const hasTagSignal = Boolean(utmSource) || Boolean(ref);
