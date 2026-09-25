@@ -120,7 +120,9 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
   new_lead: {
     subject:     'New lead: {{customer_name}} — {{organization}}',
     heading:     'New Lead',
-    body:        'You have a new lead for {{organization}}.\n\nName: {{customer_name}}\nPhone: {{phone}}\nEmail: {{email}}\nSource: {{source}}\nCreated: {{created_at}}\n\nReach out while they\u2019re hot — open their contact to start the conversation.',
+    // Everything the couple submitted (source first) is added below this line
+    // as a table by notifyOwnerNewLead — the same for every entry point.
+    body:        'You have a new lead for {{organization}}.',
     button_text: 'View Lead',
     footer:      null,
   },
@@ -311,6 +313,7 @@ export function buildEmailHtml({
   brandColor = '#1b1b1b',
   logoUrl,
   venueName,
+  extraHtml,
 }: {
   template: EmailTemplateRow;
   vars: Record<string, string>;
@@ -318,6 +321,8 @@ export function buildEmailHtml({
   brandColor?: string;
   logoUrl?: string;
   venueName: string;
+  /** Ready-made HTML placed after the template body (e.g. the new-lead details table). */
+  extraHtml?: string;
 }): string {
   const heading = fillTemplate(template.heading, vars);
   const body    = fillTemplate(template.body, vars);
@@ -332,7 +337,7 @@ export function buildEmailHtml({
     .map(line => line.trim() === ''
       ? '<div style="height:10px"></div>'
       : `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 4px;">${line}</p>`)
-    .join('\n');
+    .join('\n') + (extraHtml ? `\n${extraHtml}` : '');
 
   const footerBits: string[] = [];
   if (footer) {

@@ -286,8 +286,8 @@ function buildMirrorHtml(ctx: MirrorContext, outcome: MirrorOutcome): string {
     `<tr><td style="padding:3px 12px 3px 0;color:#9ca3af;font-size:13px;white-space:nowrap;vertical-align:top;">${label}</td>` +
     `<td style="padding:3px 0;color:#374151;font-size:13px;word-break:break-word;">${escapeHtml(value)}</td></tr>`;
 
-  // For a lead, the same facts the standard new-lead email lists, in the same
-  // style — this email replaces that one for the owner (one email per lead).
+  // For a lead, the key facts. Ingest only sends this copy for an UPDATED lead:
+  // a created lead gets the standard new-lead email instead (one email per lead).
   let leadHtml = '';
   if (outcome.kind === 'lead') {
     const d = outcome.details;

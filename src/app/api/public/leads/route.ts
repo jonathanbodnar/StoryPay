@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
-import { sendEmail } from '@/lib/email';
 import { autoMergeExactDuplicates } from '@/lib/merge-leads';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
 import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
@@ -19,7 +18,6 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const LEAD_WEBHOOK_SECRET = process.env.LEAD_WEBHOOK_SECRET || '';
-const DIRECTORY_URL = process.env.NEXT_PUBLIC_DIRECTORY_URL || 'https://storyvenue.com';
 
 function verifySignature(rawBody: string, signature: string): boolean {
   if (!LEAD_WEBHOOK_SECRET || !signature) return false;
@@ -246,18 +244,23 @@ export async function POST(request: NextRequest) {
     ]))
     .catch(() => {});
 
-  // Push to the owner's enabled devices — no-op when push is disabled or
-  // the venue has no subscriptions yet. Phone-first venues see this on
-  // the lock screen seconds after a directory inquiry hits the webhook.
-  notifyOwnerNewLead({
-    venueId:   venue.id,
-    leadId:    lr.id,
-    fullName:  [firstName, lastName].filter(Boolean).join(' ').trim() || lr.email,
-    email:     lr.email,
-    phone:     phone || null,
-    source:    payload.source || 'directory',
-    createdAt: lr.created_at,
-  });
+  // The owner's ONE new-lead alert (email + their SMS/push toggles): where it
+  // came from and everything the couple submitted. A venue that hasn't
+  // activated its account gets the dormant "log in to see this lead" email
+  // instead (further down), never both.
+  const dormant = payload.source !== 'test_inquiry' && !venue.is_demo
+    && await import('@/lib/dormant-lead-alert').then(({ isDormantVenue }) => isDormantVenue(venue.id)).catch(() => false);
+  if (!dormant) {
+    notifyOwnerNewLead({
+      venueId:   venue.id,
+      leadId:    lr.id,
+      fullName:  [firstName, lastName].filter(Boolean).join(' ').trim() || lr.email,
+      email:     lr.email,
+      phone:     phone || null,
+      source:    payload.source || 'directory',
+      createdAt: lr.created_at,
+    });
+  }
 
   // Instant Lead Inbox badge update (sidebar + mobile tab bar).
   void import('@/lib/realtime/broadcast')
@@ -512,9 +515,9 @@ export async function POST(request: NextRequest) {
     console.error('[public/leads] workflow trigger', e);
   }
 
-  // Dormant lead alert — send to inactive venues (no CC, listing live)
-  // Skip test_inquiry source and demov accounts; non-fatal.
-  if (payload.source !== 'test_inquiry' && !venue.is_demo) {
+  // Dormant lead alert — sent INSTEAD of the new-lead alert to inactive venues
+  // (no CC, listing live). Test inquiries and demo accounts never count as dormant.
+  if (dormant) {
     void import('@/lib/dormant-lead-alert')
       .then(({ maybeSendDormantLeadAlert }) =>
         maybeSendDormantLeadAlert({
@@ -524,41 +527,6 @@ export async function POST(request: NextRequest) {
         }),
       )
       .catch((e) => console.warn('[public/leads] dormant alert', e));
-  }
-
-  // Owner notification email
-  const notifyEnabled = venue.email_notifications !== false;
-  if (notifyEnabled) {
-    const notifyTo = venue.notification_email || venue.email || undefined;
-    if (notifyTo) {
-      const venueName    = venue.name ?? 'your venue';
-      const listingLink  = venue.slug ? `${DIRECTORY_URL}/venue/${venue.slug}` : DIRECTORY_URL;
-      const html = `
-        <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1b1b1b;">
-          <h2 style="margin:0 0 16px;">New lead for ${escapeHtml(venueName)}</h2>
-          <p style="margin:0 0 16px;">You received a new inquiry from the StoryVenue directory.</p>
-          <table style="width:100%;border-collapse:collapse;">
-            ${row('Name',      `${firstName} ${lastName}`)}
-            ${row('Email',     email)}
-            ${row('Phone',     phone)}
-            ${guestCount != null ? row('Guest count', String(guestCount)) : ''}
-            ${payload.booking_timeline ? row('Touring timeline', payload.booking_timeline) : ''}
-            ${payload.venue_matters    ? row('Matters most',      payload.venue_matters)    : ''}
-            ${payload.message          ? row('Message',           payload.message)           : ''}
-          </table>
-          <p style="margin:24px 0;">
-            <a href="${escapeHtml(listingLink)}" style="color:#1b1b1b;">View listing</a> ·
-            Manage in your dashboard.
-          </p>
-        </div>
-      `;
-      await sendEmail({
-        to:      notifyTo,
-        replyTo: email,
-        subject: `New lead: ${firstName} ${lastName} — ${venueName}`,
-        html,
-      }).catch((e) => console.error('[public/leads] email error:', e));
-    }
   }
 
   return NextResponse.json(
@@ -571,17 +539,4 @@ export async function POST(request: NextRequest) {
     },
     { status: 201 },
   );
-}
-
-function row(label: string, value: string): string {
-  return `<tr><td style="padding:4px 12px 4px 0;color:#666;">${escapeHtml(label)}</td><td style="padding:4px 0;">${escapeHtml(value)}</td></tr>`;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

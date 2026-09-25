@@ -1545,19 +1545,19 @@ If AI gives a stale answer, refresh the page to reset the context.`,
         id: 'leads-notifications',
         title: 'Lead notification emails',
         tags: ['notification', 'email', 'lead email', 'alert', 'inquiry email', 'not receiving'],
-        body: `When a new lead comes in, StoryVenue emails you a formatted summary so you don't need to open the dashboard every hour.
+        body: `Every new lead sends you ONE email, whatever it came from: your StoryVenue listing, your Lead Link, your website form, a form you built (including forms behind Meta ads), LeadFinder™, the API, or a lead you add yourself.
 
-The email includes the couple's name, contact info, wedding date (if given), estimated guest count, booking timeline, and their full message. A "View in dashboard" link jumps straight to the lead.
+The email lists where the lead came from first, then everything they gave you: name, email, phone, wedding date, guest count, every form answer and their message. Hit Reply to write back to them, or View Lead to open them in StoryVenue. LeadFinder™ leads also include the original directory email (unless you've turned LeadFinder's inbox copies off).
 
-Configure the notification email:
-- Sidebar → Venue listing → Dashboard → Inquiry notifications section
-- Notification email — defaults to your account email; change it to a shared inbox (e.g. bookings@yourvenue.com) so the whole team sees new leads
-- Email notifications — toggle off if you only want leads to appear in the dashboard with no email
+Who gets it:
+- You and each team member, with your own New lead switches (email, text, push) in Settings → Notifications
+- Your copy goes to your notification email, which defaults to your account email
+- A form you built can also send the same email to extra addresses (the form's Notification recipients)
 
 Not receiving emails?
 - Check spam / promotions folder
+- Settings → Notifications: make sure New lead email is on for you
 - Confirm the notification email address is correct and receives mail
-- Make sure Email notifications is toggled on
 - Leads are still saved in the dashboard even if the email fails — open /dashboard/leads to see them
 
 SMS for high-value leads is not currently on by default; contact support if you want to enable it.`,
@@ -2545,7 +2545,7 @@ Available blocks:
 Form Settings modal (top-right gear): every form-level option lives here so the canvas stays focused on layout.
 - Public form name (the name that shows on the form itself).
 - Success behavior — thank-you screen text or redirect URL.
-- Notification recipients — email addresses that get a copy of every submission.
+- Notification recipients — extra email addresses that also get the new-lead email for every submission (you and your team already get it, per Settings → Notifications).
 - Embed CSS class.
 - Delete form — removes the form (also available next to the pencil on the Forms list page).
 
@@ -3089,11 +3089,11 @@ On the card, click Send a test inquiry. We email a sample inquiry to your LeadFi
 
 What happens when an inquiry arrives
 - A lead is created with the couple's name, email, phone, wedding date, guest count and message — whatever the email includes. If the couple is already a lead, that record is updated instead: only empty fields are filled, so your own edits are never overwritten.
-- You're alerted exactly as for any new lead (email, text or push, per your notification settings). The alert shows which directory it came from.
+- You're alerted exactly as for any new lead (email, text or push, per your notification settings). The alert shows which directory it came from and everything the couple sent.
 - The couple gets an email from you with one button: Send me my guide. Tapping it confirms their mobile number and email, sends your guide by text and email, and counts as their permission to text — so they join your full Bride Booking System (guide, 14-day follow-up, then AI outreach if you have it on), exactly like a couple who filled in your listing form.
 - A phone number read from a directory email isn't permission to text, so nothing is texted until they tap. If they haven't tapped within an hour, the guide goes to them by email anyway and your follow-up starts without texts; tapping the button later still turns texts on. Replying by email doesn't count as permission to text.
 - Venues without texting get the guide by email straight away, as before.
-- You get a copy of every message in your own inbox, with a short note on what LeadFinder did. Times on it are in your venue's local time, based on your venue's ZIP code. Turn the copies off on the card.
+- For a new lead you get one email: the standard new-lead email, with the original directory email included. For anything else LeadFinder handles (an update to a couple you already have, or a message it skipped) you get a copy in your inbox with a short note on what it did. Times are in your venue's local time, based on your venue's ZIP code. Turn the copies off on the card.
 
 The review queue
 When we can't read an inquiry confidently — or the only address is a directory's relay, which routes replies through the directory's own inbox — the lead is still created and you're still alerted, but the automatic guide is held. The card shows how many arrivals need review. Open Review, compare what we read with the original email, correct anything we got wrong, then Confirm & send guide. If it isn't a real inquiry, choose Dismiss to keep the lead, or Dismiss & delete lead to remove the junk lead (and the contact LeadFinder created for it).

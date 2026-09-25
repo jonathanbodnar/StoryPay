@@ -21,7 +21,7 @@ import { sendPushToVenue } from '@/lib/push';
 import { sendNativePush } from '@/lib/native-push';
 import { loadNotificationRecipients, emailKeyFor, smsKeyFor } from '@/lib/notification-settings';
 import { buildOwnerReplyToEmail, buildVenueConciergeReplyToEmail } from '@/lib/conversations-inbound-email';
-import { leadSourceLabel } from '@/lib/lead-source';
+import { bucketLeadSource, leadSourceLabel } from '@/lib/lead-source';
 import { venueTimeZoneFromLocation, type VenueTimeZoneFields } from '@/lib/venue-zip-timezone';
 
 export type OwnerScenario =
@@ -272,12 +272,16 @@ interface NotifyArgs {
    *  email gets a Reply-To that routes a reply straight to the contact in the
    *  thread (see buildOwnerReplyToEmail / the inbound-email webhook). */
   threadId?: string;
+  /** Ready-made HTML placed under the template body (the new-lead details table). */
+  extraHtml?: string;
+  /** Reply-To for the email, e.g. the couple's address so "Reply" writes to them. */
+  replyTo?: string;
   /**
-   * Addresses that must NOT get this email because they already receive a
-   * richer one for the same event (LeadFinder's "New lead" email to the owner).
-   * SMS and push are unaffected.
+   * More addresses that get the same email regardless of the per-person
+   * toggles — a builder form's own "notification emails" list. Addresses that
+   * are already recipients are not emailed twice.
    */
-  excludeEmailRecipients?: string[];
+  extraEmailRecipients?: string[];
 }
 
 /**
@@ -326,9 +330,18 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
     //         template, getVenueEmailTemplate returns null and we skip the email send
     //         entirely (template content/on-off is venue-wide, only the recipient
     //         list + per-recipient channel choice is per-person).
-    const excluded = new Set((args.excludeEmailRecipients ?? []).map(e => e.trim().toLowerCase()).filter(Boolean));
-    const emailRecipients = recipients.filter(r =>
-      r.email && r.settings[emailKey] === true && !excluded.has(r.email.trim().toLowerCase()));
+    const toggledOn = recipients
+      .filter(r => r.email && r.settings[emailKey] === true)
+      .map(r => (r.email as string).trim());
+    const seen = new Set(recipients.map(r => (r.email ?? '').trim().toLowerCase()).filter(Boolean));
+    const extra: string[] = [];
+    for (const raw of args.extraEmailRecipients ?? []) {
+      const e = raw.trim();
+      if (!e || seen.has(e.toLowerCase())) continue;
+      seen.add(e.toLowerCase());
+      extra.push(e);
+    }
+    const emailRecipients = [...toggledOn, ...extra];
     if (emailRecipients.length === 0) {
       console.log('[notifyOwner]', args.scenario, 'no recipients with', emailKey, 'enabled');
     } else {
@@ -349,7 +362,7 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
           // off the send-only notifications mailbox.
           const threadReplyTo = args.threadId ? buildOwnerReplyToEmail(args.threadId, args.venueId) : null;
           const fallbackReplyTo = process.env.NOTIFICATION_REPLY_TO?.trim() || venue.email || undefined;
-          const effectiveReplyTo = threadReplyTo || fallbackReplyTo || undefined;
+          const effectiveReplyTo = args.replyTo || threadReplyTo || fallbackReplyTo || undefined;
 
           // Template copy uses {{reply_hint}} to explain what a reply will do —
           // only promise the auto-send when routing is actually available.
@@ -360,13 +373,17 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
           }
 
           const subject = fillTemplate(tmpl.subject, vars);
+          // The new-lead alert is a StoryVenue notification: always the
+          // StoryVenue dark logo and #1b1b1b, whatever the venue's branding.
+          const storyVenueLook = args.scenario === 'new_lead';
           const html = buildEmailHtml({
             template:   tmpl,
             vars,
             actionUrl:  absActionUrl,
-            brandColor: venue.brand_color   || '#1b1b1b',
-            logoUrl:    venue.brand_logo_url || undefined,
+            brandColor: storyVenueLook ? '#1b1b1b' : venue.brand_color || '#1b1b1b',
+            logoUrl:    storyVenueLook ? undefined : venue.brand_logo_url || undefined,
             venueName,
+            extraHtml:  args.extraHtml,
           });
           // Send from the dedicated notifications address so venue owners
           // see "StoryVenue" (not hello@) in their inbox.
@@ -374,8 +391,8 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
           const notifFromEmail =
             process.env.NOTIFICATION_FROM_EMAIL?.trim() || 'notifications@send.storyvenue.com';
           const results = await Promise.allSettled(
-            emailRecipients.map(r => sendEmail({
-              to: r.email as string,
+            emailRecipients.map(to => sendEmail({
+              to,
               subject,
               html,
               replyTo: effectiveReplyTo,
@@ -384,7 +401,7 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
           );
           for (let i = 0; i < results.length; i++) {
             const res = results[i];
-            const to = emailRecipients[i].email;
+            const to = emailRecipients[i];
             if (res.status === 'fulfilled' && res.value.success) {
               console.log('[notifyOwner]', args.scenario, 'email sent to', to);
             } else {
@@ -680,39 +697,193 @@ async function formatInVenueTime(venueId: string, iso: string | null | undefined
   }
 }
 
-/** Fire a "new lead" push for the freshly-inserted lead. */
+/** One row of the new-lead details table. Empty values are left out. */
+export interface NewLeadDetail {
+  label: string;
+  value: string | number | null | undefined;
+}
+
+/** Where a lead came from, in words an owner reads at a glance. */
+const SOURCE_LABELS: Record<string, string> = {
+  directory:    'StoryVenue listing',
+  embed:        'Website form',
+  webform:      'Website form',
+  web_form:     'Website form',
+  lead_link:    'Lead Link',
+  form:         'Web form',
+  leadfinder:   'LeadFinder™',
+  manual:       'Added manually',
+  test_inquiry: 'Test inquiry',
+};
+
+interface LeadRowForAlert {
+  name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  wedding_date?: string | null;
+  guest_count?: number | null;
+  booking_timeline?: string | null;
+  venue_matters?: string | null;
+  message?: string | null;
+  source?: string | null;
+  referral_source?: string | null;
+  first_touch_utm?: Record<string, unknown> | null;
+  created_at?: string | null;
+}
+
+/** "2027-06-12" → "Jun 12, 2027" (a date column has no time zone to shift). */
+function displayDate(raw: string | null | undefined): string {
+  const v = (raw ?? '').trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+  if (!m) return v;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return Number.isNaN(d.getTime())
+    ? v
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+/**
+ * The source line: the caller's label when it wrote one ("The Knot (via
+ * LeadFinder™)", "Web form: Spring Open House"), else the lead's own `source`
+ * in words — plus "via Meta" / "via Google" when the first-touch data shows the
+ * click came from there.
+ */
+function describeLeadSource(callerSource: string | null | undefined, lead: LeadRowForAlert | null): string {
+  const given = (callerSource ?? '').trim();
+  const raw = (lead?.source ?? '').trim().toLowerCase();
+  let label = given && !/^[a-z0-9_]+$/.test(given)
+    ? given
+    : SOURCE_LABELS[given || raw] ?? leadSourceLabel(given || raw || null);
+  if (lead) {
+    const bucket = bucketLeadSource({
+      source: lead.source,
+      referral_source: lead.referral_source,
+      first_touch_utm: lead.first_touch_utm,
+    });
+    const via = bucket === 'meta' ? 'Meta' : bucket === 'google' ? 'Google' : null;
+    if (via && !label.toLowerCase().includes(via.toLowerCase())) label += ` (via ${via})`;
+  }
+  return label;
+}
+
+/** The details table under the new-lead email's intro. Values are escaped here. */
+function buildLeadDetailsHtml(rows: Array<{ label: string; value: string }>, message: string | null, note: string | null, original: OriginalEmail | null): string {
+  const esc = escapeHtmlBasic;
+  const tr = rows.map(r =>
+    `<tr><td style="padding:6px 14px 6px 0;color:#6b7280;font-size:14px;white-space:nowrap;vertical-align:top;">${esc(r.label)}</td>` +
+    `<td style="padding:6px 0;color:#111827;font-size:14px;word-break:break-word;">${esc(r.value)}</td></tr>`).join('');
+  const box = (text: string) =>
+    `<div style="padding:12px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;line-height:1.6;color:#374151;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;">${esc(text)}</div>`;
+  const caption = (text: string) =>
+    `<p style="margin:18px 0 6px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;">${esc(text)}</p>`;
+  return [
+    note ? `<p style="margin:8px 0 0;font-size:14px;font-weight:600;color:#b45309;">${esc(note)}</p>` : '',
+    `<table role="presentation" style="width:100%;border-collapse:collapse;margin:12px 0 0;border-top:1px solid #f3f4f6;">${tr}</table>`,
+    message ? caption('Their message') + box(message) : '',
+    original
+      ? caption('The original email') +
+        `<p style="margin:0 0 6px;font-size:12px;color:#6b7280;">${esc([original.from && `From: ${original.from}`, original.subject && `Subject: ${original.subject}`].filter(Boolean).join(' · '))}</p>` +
+        box(original.text)
+      : '',
+  ].join('');
+}
+
+interface OriginalEmail {
+  from: string | null;
+  subject: string | null;
+  text: string;
+}
+
+/**
+ * THE owner email for a new lead — one per lead, whatever the source (StoryVenue
+ * listing, Lead Link, website embed, builder forms incl. Meta campaign forms,
+ * LeadFinder™, manual add, API). It lists where the lead came from and
+ * everything they submitted: the lead row's own fields (read here, so every
+ * caller gets them) plus any extra answers the caller passes. Push and SMS go
+ * out with it per each person's toggles.
+ */
 export function notifyOwnerNewLead(input: {
   venueId: string;
-  leadId: string;
+  /** Null only when a form submission had no email to make a lead from. */
+  leadId: string | null;
   fullName: string;
   email: string;
   phone?: string | null;
+  /** A raw ingest token ("directory", "form") or a label already written for people. */
   source?: string | null;
   createdAt?: string | null;
-  /** See NotifyArgs.excludeEmailRecipients. */
-  excludeEmailRecipients?: string[];
+  /** Extra answers (form fields, directory Q&A) — shown after the standard rows. */
+  details?: NewLeadDetail[];
+  /** Their message, when it isn't on the lead row. */
+  message?: string | null;
+  /** A line above the table, e.g. that LeadFinder is holding the lead for a check. */
+  note?: string | null;
+  /** LeadFinder: the email the lead was read from, so the owner still has it. */
+  originalEmail?: OriginalEmail | null;
+  /** See NotifyArgs.extraEmailRecipients. */
+  extraEmailRecipients?: string[];
 }): void {
-  const display = (input.fullName || '').trim() || input.email || 'New lead';
-  const rawSource = input.source || 'directory';
   void (async () => {
-    // The new-lead template shows "Phone:" and "Created:" lines; these were never
-    // passed, so every alert went out with both blank.
-    const createdAt = await formatInVenueTime(input.venueId, input.createdAt);
+    let lead: LeadRowForAlert | null = null;
+    if (input.leadId) {
+      const { data } = await supabaseAdmin.from('leads').select('*').eq('id', input.leadId).maybeSingle();
+      lead = (data as LeadRowForAlert | null) ?? null;
+    }
+    const name = (input.fullName || '').trim()
+      || [lead?.first_name, lead?.last_name].filter(Boolean).join(' ').trim()
+      || (lead?.name ?? '').trim()
+      || input.email
+      || 'New lead';
+    const email = (input.email || lead?.email || '').trim();
+    const phone = displayPhone(input.phone || lead?.phone) || 'Not provided';
+    const source = describeLeadSource(input.source, lead);
+    const createdAt = await formatInVenueTime(input.venueId, input.createdAt || lead?.created_at);
+    const campaign = typeof lead?.first_touch_utm?.utm_campaign === 'string' ? lead.first_touch_utm.utm_campaign : null;
+
+    const rows: Array<{ label: string; value: string }> = [];
+    const taken = new Set<string>();
+    const add = (label: string, value: string | number | null | undefined) => {
+      const v = value == null ? '' : String(value).trim();
+      const key = label.trim().toLowerCase();
+      if (!v || taken.has(key)) return;
+      taken.add(key);
+      rows.push({ label, value: v });
+    };
+    add('Source', source);
+    add('Campaign', campaign);
+    add('Name', name);
+    add('Email', email || 'Not provided');
+    add('Phone', phone);
+    add('Wedding date', displayDate(lead?.wedding_date));
+    add('Guests', lead?.guest_count);
+    add('Touring timeline', lead?.booking_timeline);
+    add('What matters most', lead?.venue_matters);
+    // Caller answers that repeat a standard row (a form's own "Email" field) are skipped.
+    const standard = new Set(['name', 'first name', 'last name', 'full name', 'email', 'email address', 'phone', 'phone number', 'mobile', 'mobile phone', 'message']);
+    for (const d of input.details ?? []) {
+      if (!standard.has(d.label.trim().toLowerCase())) add(d.label, d.value);
+    }
+    add('Received', createdAt);
+    const message = (input.message ?? lead?.message ?? '').trim() || null;
+
     await notifyOwner({
       venueId:   input.venueId,
       scenario:  'new_lead',
       vars: {
-        customer_name: display,
-        email:         input.email || '',
-        phone:         displayPhone(input.phone) || 'Not provided',
-        // A raw ingest token ("directory", "form") reads as its label; a label a
-        // caller already wrote ("The Knot (via LeadFinder™)") is kept as is.
-        source:        /^[a-z0-9_]+$/.test(rawSource) ? leadSourceLabel(rawSource) : rawSource,
+        customer_name: name,
+        email,
+        phone,
+        source,
         created_at:    createdAt,
       },
+      extraHtml: buildLeadDetailsHtml(rows, message, input.note?.trim() || null, input.originalEmail ?? null),
+      // "Reply" in the owner's inbox writes straight to the couple.
+      replyTo: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined,
       // A lead id → the resolver route (the contact page is keyed by contact id).
-      actionUrl: `/dashboard/contacts/lead/${input.leadId}`,
-      excludeEmailRecipients: input.excludeEmailRecipients,
+      actionUrl: input.leadId ? `/dashboard/contacts/lead/${input.leadId}` : '/dashboard/leads',
+      extraEmailRecipients: input.extraEmailRecipients,
     });
   })().catch((err) => console.error('[notifyOwnerNewLead]', err instanceof Error ? err.message : err));
 }

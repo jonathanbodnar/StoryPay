@@ -385,8 +385,10 @@ function notifyNewLeadLikeEveryOtherEntryPoint(input: {
   createdAt: string;
   /** Human label for the owner alert, e.g. "The Knot via LeadFinder™". */
   sourceLabel: string;
-  /** Owner address that gets LeadFinder's own "New lead" email instead. */
-  excludeEmailRecipients?: string[];
+  /** A line above the details, e.g. that the lead is held for a check. */
+  note?: string | null;
+  /** The email the lead was read from (when the venue keeps its inbox copy on). */
+  originalEmail?: { from: string | null; subject: string | null; text: string } | null;
   crmLead: {
     first_name: string | null;
     last_name: string | null;
@@ -409,7 +411,8 @@ function notifyNewLeadLikeEveryOtherEntryPoint(input: {
     phone,
     source: input.sourceLabel,
     createdAt,
-    excludeEmailRecipients: input.excludeEmailRecipients,
+    note: input.note,
+    originalEmail: input.originalEmail,
   });
 
   void import('@/lib/realtime/broadcast')
@@ -619,14 +622,12 @@ async function processArrival(p: {
   // (so the inbox copy reads in the venue's own time).
   const { identity, timeZone, logoUrl } = await loadVenueProfile(venue);
 
-  // Where the inbox copy goes (and whether it goes at all).
-  const mirrorRecipient =
-    venue.leadfinder_mirror_enabled !== false ? (venue.notification_email || venue.email || '').trim() || null : null;
-
   // Everything the mirror needs, captured once. The mirror is built from the
   // SAME stored arrival so its copy is faithful, and it is fired on terminal
-  // outcomes — created, updated, skipped and failed — because the point is that
-  // the owner can see what LeadFinder did or did not take. Idempotency lives in
+  // outcomes — updated, skipped and failed — because the point is that the
+  // owner can see what LeadFinder did or did not take. A CREATED lead gets the
+  // standard new-lead email instead (one email per lead, with the original
+  // email in it), not this copy. Idempotency lives in
   // the mirror itself (an atomic claim on `mirrored_at`).
   const mirror = (outcome: MirrorOutcome): Promise<void> =>
     mirrorArrivalToVenue(
@@ -924,11 +925,15 @@ async function processArrival(p: {
     phone: extracted.phone,
     createdAt,
     sourceLabel: detectedSource ? `${detectedSource} (via LeadFinder™)` : 'LeadFinder™',
-    // One email per new lead: when the inbox copy is on, the owner gets that
-    // (it has everything the standard alert has, plus the original message),
-    // so the standard alert email skips their address. Team members, SMS and
-    // push are unchanged.
-    excludeEmailRecipients: mirrorRecipient ? [mirrorRecipient] : [],
+    // The standard new-lead email is the owner's ONE email for this lead (the
+    // inbox copy is not sent for a created lead). With the inbox copy on, it
+    // carries the original email too, so the owner still has it.
+    note: needsReview
+      ? 'Needs a quick check: nothing goes to the couple until you confirm this lead in LeadFinder.'
+      : null,
+    originalEmail: venue.leadfinder_mirror_enabled !== false
+      ? { from: arrival.fromRaw, subject: arrival.subject, text: arrival.text }
+      : null,
     crmLead: {
       first_name: extracted.firstName,
       last_name: extracted.lastName,
@@ -1010,24 +1015,6 @@ async function processArrival(p: {
       console.error('[leadfinder] workflow trigger failed:', e);
     }
   }
-
-  // The owner's own copy, fired last so the banner reflects the final state of
-  // the arrival (including whether it is waiting on a human check).
-  await mirror({
-    kind: 'lead',
-    created: true,
-    leadId,
-    leadName: displayName,
-    needsReview,
-    reviewReason,
-    details: {
-      email,
-      phone: extracted.phone,
-      weddingDate: extracted.weddingDate,
-      guestCount: extracted.guestCount,
-      source: detectedSource ? `${detectedSource} (via LeadFinder™)` : 'LeadFinder™',
-    },
-  });
 
   return { outcome: 'created', leadId, detectedSource, confidence: verdict.confidence };
 }

@@ -131,13 +131,13 @@ export const DEFAULT_TEMPLATES: Record<string, {
   },
   new_lead: {
     label: 'New Lead',
-    description: 'Notification sent to you when a new lead is captured (public listing form, manual add, or API)',
+    description: 'The one email you get for every new lead, from any source. The lead\u2019s details and where they came from are listed under this text automatically.',
     icon: 'UserPlus',
     variables: ['{{customer_name}}', '{{contact.full_name}}', '{{phone}}', '{{email}}', '{{source}}', '{{created_at}}', '{{venue.name}}'],
     defaults: {
       subject: 'New lead: {{customer_name}} — {{organization}}',
       heading: 'New Lead',
-      body: 'You have a new lead for {{organization}}.\n\nName: {{customer_name}}\nPhone: {{phone}}\nEmail: {{email}}\nSource: {{source}}\nCreated: {{created_at}}\n\nReach out while they\u2019re hot — open their contact to start the conversation.',
+      body: 'You have a new lead for {{organization}}.',
       button_text: 'View Lead',
     },
   },

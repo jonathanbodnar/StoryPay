@@ -1,7 +1,6 @@
 import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { sendEmail } from '@/lib/email';
 import {
   ADDRESS_FIELD_KEYS,
   ALWAYS_REQUIRED_TYPES,
@@ -15,6 +14,8 @@ import {
   type AddressFieldKey,
 } from '@/lib/marketing-form-schema';
 import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
+import { notifyOwnerNewLead } from '@/lib/owner-notifications';
+import { bucketLeadSource } from '@/lib/lead-source';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { recordSmsConsentByEmail, recordSmsConsentEvidence } from '@/lib/sms-consent';
 import { formConsentText, SMS_CONSENT_VERSION, withPolicyLinks } from '@/lib/sms-consent-disclosure';
@@ -52,15 +53,6 @@ function safeFileSegment(name: string): string {
 
 function isEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 export async function POST(
@@ -519,68 +511,50 @@ export async function POST(
     }
   }
 
-  // ── Notification emails ───────────────────────────────────────────────────
-  if (settings?.notificationEmails) {
-    const recipients = settings.notificationEmails
+  // ── The owner's new-lead email ────────────────────────────────────────────
+  // The same single alert every lead source sends (lib/owner-notifications):
+  // where it came from plus every answer on the form. The form's own
+  // "notification emails" list gets that same email.
+  try {
+    const { data: formMeta } = await supabaseAdmin
+      .from('marketing_forms')
+      .select('name')
+      .eq('id', formRow.id)
+      .maybeSingle();
+    const formName = (formMeta?.name as string | undefined)?.trim() || 'Web form';
+    const via = bucketLeadSource({ source: 'form', first_touch_utm: utm });
+    const sourceLabel = `Web form: ${formName}${via === 'meta' ? ' (via Meta)' : via === 'google' ? ' (via Google)' : ''}`;
+
+    const details = definition.blocks
+      .filter((b) => INPUT_BLOCK_TYPES.includes(b.type) && payload[b.id] !== undefined)
+      .map((b) => {
+        const v = payload[b.id];
+        let value: string;
+        if (Array.isArray(v)) value = v.join(', ');
+        else if (b.type === 'address') value = formatAddressValue(v);
+        else if (b.type === 'file') value = '[file attachment]';
+        else if (typeof v === 'object' && v !== null) value = '[attachment]';
+        else value = String(v ?? '');
+        return { label: b.label || b.type, value };
+      });
+
+    const extraEmailRecipients = (settings?.notificationEmails ?? '')
       .split(',')
-      .map((s) => s.trim())
-      .filter((s) => isEmail(s));
+      .map((e) => e.trim())
+      .filter((e) => isEmail(e));
 
-    if (recipients.length > 0) {
-      try {
-        const { data: venueRow } = await supabaseAdmin
-          .from('venues')
-          .select('name')
-          .eq('id', formRow.venue_id)
-          .maybeSingle();
-        const venueName = venueRow?.name ?? 'your venue';
-
-        const { data: formMeta } = await supabaseAdmin
-          .from('marketing_forms')
-          .select('name')
-          .eq('id', formRow.id)
-          .maybeSingle();
-        const formName = formMeta?.name ?? 'Form submission';
-
-        const fieldRows = definition.blocks
-          .filter((b) => INPUT_BLOCK_TYPES.includes(b.type) && payload[b.id] !== undefined)
-          .map((b) => {
-            const v = payload[b.id];
-            let val: string;
-            if (Array.isArray(v)) {
-              val = v.join(', ');
-            } else if (b.type === 'address') {
-              val = formatAddressValue(v);
-            } else if (b.type === 'file') {
-              val = '[file attachment]';
-            } else if (typeof v === 'object' && v !== null) {
-              val = '[attachment]';
-            } else {
-              val = String(v ?? '');
-            }
-            return `<tr><td style="padding:4px 12px 4px 0;color:#666;white-space:nowrap;">${escapeHtml(b.label || b.type)}</td><td style="padding:4px 0;">${escapeHtml(val)}</td></tr>`;
-          })
-          .join('');
-
-        const html = `
-          <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1b1b1b;">
-            <h2 style="margin:0 0 8px;">New form submission</h2>
-            <p style="margin:0 0 16px;color:#555;">${escapeHtml(formName)} · ${escapeHtml(venueName)}</p>
-            <table style="width:100%;border-collapse:collapse;">${fieldRows}</table>
-          </div>`;
-
-        for (const to of recipients) {
-          await sendEmail({
-            to,
-            subject: `New submission: ${formName} — ${venueName}`,
-            html,
-            ...(emailVal ? { replyTo: emailVal } : {}),
-          }).catch((e) => console.warn('[form submit] notification email error:', e));
-        }
-      } catch (e) {
-        console.warn('[form submit] notification email setup failed:', e);
-      }
-    }
+    notifyOwnerNewLead({
+      venueId: formRow.venue_id,
+      leadId: createdLeadId,
+      fullName: contactName,
+      email: emailVal,
+      phone: phoneVal || null,
+      source: sourceLabel,
+      details,
+      extraEmailRecipients,
+    });
+  } catch (e) {
+    console.warn('[form submit] owner alert failed:', e);
   }
 
   void customerId; // suppress unused-variable warning
