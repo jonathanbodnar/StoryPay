@@ -3084,15 +3084,18 @@ Two ways to connect it
 - Create a filter (for example from:theknot.com OR from:weddingwire.com) and choose "Forward it to" your LeadFinder address.
 Tip: forward only directory emails with a filter rather than your whole inbox.
 
+Test your address
+On the card, click Send a test inquiry. We email a sample inquiry to your LeadFinder address and, within a minute, show you what we read from it. It's a dry run: no lead is created and nobody is emailed (a copy still lands in your inbox, marked as a test).
+
 What happens when an inquiry arrives
 - A lead is created with the couple's name, email, phone, wedding date, guest count and message — whatever the email includes. If the couple is already a lead, that record is updated instead: only empty fields are filled, so your own edits are never overwritten.
 - You're alerted exactly as for any new lead (email, text or push, per your notification settings). The alert shows which directory it came from.
 - The couple receives your pricing guide by email and enters your Booking System workflow.
 - No automatic texts: a phone number read from a directory email isn't permission to text, so LeadFinder leads get email follow-up only until the couple texts you or fills in one of your forms. Replying by email doesn't count as permission to text.
-- You get a copy of every message in your own inbox, with a short note on what LeadFinder did. Turn this off on the card.
+- You get a copy of every message in your own inbox, with a short note on what LeadFinder did. Times on it are in your venue's local time, based on your venue's ZIP code. Turn the copies off on the card.
 
 The review queue
-When we can't read an inquiry confidently — or the only address is a directory's relay, which routes replies through the directory's own inbox — the lead is still created and you're still alerted, but the automatic guide is held. The card shows how many arrivals need review. Open Review, compare what we read with the original email, correct anything we got wrong, then Confirm & send guide, or Dismiss.
+When we can't read an inquiry confidently — or the only address is a directory's relay, which routes replies through the directory's own inbox — the lead is still created and you're still alerted, but the automatic guide is held. The card shows how many arrivals need review. Open Review, compare what we read with the original email, correct anything we got wrong, then Confirm & send guide. If it isn't a real inquiry, choose Dismiss to keep the lead, or Dismiss & delete lead to remove the junk lead (and the contact LeadFinder created for it).
 
 Activity and sources
 The card lists recent messages and whether each became a lead or was skipped, and why. Sources compares each directory with its own previous 30 days, so you'll notice if a directory changes its email format.

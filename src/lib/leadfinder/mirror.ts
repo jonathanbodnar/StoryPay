@@ -50,6 +50,11 @@ export interface MirrorContext {
   /** The original Reply-To, when the sender set one. */
   originalReplyTo: string | null;
   receivedAt: Date;
+  /**
+   * The venue's IANA time zone (from its ZIP). Every time in the copy is shown
+   * in it, so the venue reads its own local time — never the server's UTC.
+   */
+  timeZone?: string | null;
   rawText: string;
 }
 
@@ -72,6 +77,19 @@ export type MirrorOutcome =
       code: string | null;
       confirmUrl: string | null;
       requestedBy: string | null;
+    }
+  | {
+      /** A test the venue sent from the LeadFinder card: read, never a lead. */
+      kind: 'test';
+      wouldCreateLead: boolean;
+      reason: string | null;
+      read: {
+        name: string | null;
+        email: string | null;
+        phone: string | null;
+        weddingDate: string | null;
+        guestCount: number | null;
+      };
     };
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
@@ -123,6 +141,29 @@ interface Banner {
 }
 
 function buildBanner(outcome: MirrorOutcome): Banner {
+  if (outcome.kind === 'test') {
+    const r = outcome.read;
+    const readBits = [
+      r.name && `name ${r.name}`,
+      r.email && `email ${r.email}`,
+      r.phone && `phone ${r.phone}`,
+      r.weddingDate && `wedding date ${r.weddingDate}`,
+      r.guestCount !== null && `${r.guestCount} guests`,
+    ].filter(Boolean);
+    return {
+      tone: 'ok',
+      headline: 'Test received — your LeadFinder address is working',
+      detail:
+        'This is the test you sent from Settings → Integrations. ' +
+        (readBits.length ? `We read: ${readBits.join(', ')}. ` : '') +
+        (outcome.wouldCreateLead
+          ? 'A real inquiry like this would have become a lead. Because it was a test, nothing was added to your leads and nobody was emailed.'
+          : `A real inquiry like this would NOT have become a lead: ${humanizeReason(outcome.reason)}. Nothing was added to your leads.`),
+      ctaUrl: `${APP_URL}/dashboard/settings/integrations`,
+      ctaLabel: 'Open LeadFinder',
+    };
+  }
+
   if (outcome.kind === 'gmail_confirmation') {
     const who = outcome.requestedBy ? ` for ${outcome.requestedBy}` : '';
     return {
@@ -214,7 +255,7 @@ function buildMirrorHtml(ctx: MirrorContext, outcome: MirrorOutcome): string {
   const banner = buildBanner(outcome);
   const tone = TONE_STYLES[banner.tone];
   const subject = ctx.subject?.trim() || '(no subject)';
-  const received = formatReceived(ctx.receivedAt);
+  const received = formatReceived(ctx.receivedAt, ctx.timeZone ?? undefined);
 
   const cta = banner.ctaUrl && banner.ctaLabel
     ? `<div style="margin-top:14px"><a href="${escapeHtml(banner.ctaUrl)}" style="display:inline-block;background:#1b1b1b;color:#ffffff;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">${escapeHtml(banner.ctaLabel)}</a></div>`
@@ -260,7 +301,7 @@ function buildMirrorText(ctx: MirrorContext, outcome: MirrorOutcome): string {
     '--- The original message ---',
     `From: ${ctx.sender || '(unknown sender)'}`,
     `Subject: ${subject}`,
-    `Received: ${formatReceived(ctx.receivedAt)}`,
+    `Received: ${formatReceived(ctx.receivedAt, ctx.timeZone ?? undefined)}`,
     '',
     ctx.rawText,
     '',

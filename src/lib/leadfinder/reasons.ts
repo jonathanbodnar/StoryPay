@@ -22,6 +22,7 @@ export const LEADFINDER_REASON_LABELS: Record<string, string> = {
   rate_limited: 'too many messages arrived in the last hour, so we paused to protect your inbox',
   gmail_forwarding_confirmation: 'this is Gmail asking you to confirm forwarding',
   processing_interrupted: 'processing was interrupted; it will be retried',
+  test_inquiry: 'it was a test you sent from Settings — a test never becomes a lead',
 };
 
 export function leadFinderReasonLabel(reason: string | null | undefined): string | null {

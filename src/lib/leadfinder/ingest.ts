@@ -27,7 +27,7 @@ import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { maybePushLeadToTripleseat } from '@/lib/tripleseat';
 import { ensureListingForm } from '@/lib/listing-lead-form';
-import { leadFinderEnabledForSlug } from '@/lib/leadfinder/address';
+import { findLeadFinderTestRef, leadFinderEnabledForSlug } from '@/lib/leadfinder/address';
 import {
   classifyInbound,
   domainOf,
@@ -45,6 +45,7 @@ import {
   type AiExtractedFields,
 } from '@/lib/leadfinder/ai-extract';
 import { parseGmailForwardingConfirmation } from '@/lib/leadfinder/gmail-confirmation';
+import { venueTimeZoneFromLocation } from '@/lib/venue-zip-timezone';
 import {
   LEADFINDER_MIRROR_FOOTER_MARKER,
   LEADFINDER_MIRROR_HEADER,
@@ -180,18 +181,27 @@ function ownDomains(): string[] {
 }
 
 /**
- * Is this one of OUR messages coming back? Checked three independent ways,
+ * Is this one of our INBOX COPIES coming back? Checked two independent ways,
  * because each can be lost in a forward: our marker header (kept by Gmail
- * forwarding), our sending address (kept by an auto-forward), and the footer
- * text every inbox copy carries (kept by anything that forwards the body).
+ * forwarding) and the footer sentence every copy carries (kept by anything that
+ * forwards the body). Checked before everything else — including the test
+ * path, because a copy of a test quotes the test's token.
  */
-function isOwnMessage(arrival: Arrival, headers?: Record<string, unknown>): boolean {
+function isMirrorCopy(arrival: Arrival, headers?: Record<string, unknown>): boolean {
   if (headerValue(headers, LEADFINDER_MIRROR_HEADER)) return true;
-  const sender = arrival.senderEmail?.toLowerCase() ?? null;
-  if (sender && ownSenderAddresses().has(sender)) return true;
-  const inbound = process.env.CONVERSATIONS_INBOUND_DOMAIN?.trim().toLowerCase();
-  if (sender && inbound && domainOf(sender) === inbound) return true;
   return arrival.text.includes(LEADFINDER_MIRROR_FOOTER_MARKER);
+}
+
+/**
+ * Anything else sent by our own platform (a new-lead alert, a guide) that a
+ * forward-everything rule bounced back. Never an inquiry.
+ */
+function isFromOurPlatform(arrival: Arrival): boolean {
+  const sender = arrival.senderEmail?.toLowerCase() ?? null;
+  if (!sender) return false;
+  if (ownSenderAddresses().has(sender)) return true;
+  const inbound = process.env.CONVERSATIONS_INBOUND_DOMAIN?.trim().toLowerCase();
+  return !!inbound && domainOf(sender) === inbound;
 }
 
 /** A vacation responder or other automatic REPLY (not a notification). */
@@ -226,18 +236,28 @@ async function loadVenueCore(venueId: string): Promise<VenueCore | null> {
 /**
  * Everything that identifies the VENUE — its name, every address it or its team
  * sends from, its phone numbers and its own domains — so none of it is ever
- * read back as the couple's details. Best-effort: a failed read just means a
- * shorter list, never a failed ingest.
+ * read back as the couple's details. Also its local time zone (from its ZIP),
+ * so what we email the venue reads in the venue's own time. Best-effort: a
+ * failed read just means a shorter list and no zone, never a failed ingest.
  */
-async function loadVenueIdentity(venue: VenueCore): Promise<VenueIdentity> {
+async function loadVenueProfile(venue: VenueCore): Promise<{ identity: VenueIdentity; timeZone: string | null }> {
   const emails: Array<string | null> = [venue.email, venue.notification_email];
   const phones: Array<string | null> = [];
   const domains: string[] = ownDomains();
+  let timeZone: string | null = null;
 
   try {
     const { data } = await supabaseAdmin.from('venues').select('*').eq('id', venue.id).maybeSingle();
     const row = (data ?? {}) as Record<string, unknown>;
     const str = (k: string) => (typeof row[k] === 'string' ? (row[k] as string) : null);
+    timeZone = venueTimeZoneFromLocation({
+      zip: str('zip'),
+      brand_zip: str('brand_zip'),
+      timezone: str('timezone'),
+      state: str('state'),
+      location_state: str('location_state'),
+      brand_state: str('brand_state'),
+    });
     emails.push(str('brand_email'), str('owner_email'), str('contact_email'));
     phones.push(str('phone'), str('notification_phone'), str('brand_phone'), str('owner_phone'));
     for (const site of [str('website'), str('brand_website')]) {
@@ -264,7 +284,7 @@ async function loadVenueIdentity(venue: VenueCore): Promise<VenueIdentity> {
     /* team list is a nice-to-have */
   }
 
-  return { name: venue.name, emails, phones, domains };
+  return { identity: { name: venue.name, emails, phones, domains }, timeZone };
 }
 
 // ── Enrichment helpers ───────────────────────────────────────────────────────
@@ -646,6 +666,9 @@ async function processArrival(p: {
   const { venue, importId, arrival } = p;
   const venueId = venue.id;
   const senderDomain = domainOf(arrival.fromRaw);
+  // Identity (so the venue is never read as the couple) and local time zone
+  // (so the inbox copy reads in the venue's own time).
+  const { identity, timeZone } = await loadVenueProfile(venue);
 
   // Everything the mirror needs, captured once. The mirror is built from the
   // SAME stored arrival so its copy is faithful, and it is fired on terminal
@@ -665,6 +688,7 @@ async function processArrival(p: {
         sender: arrival.fromRaw,
         originalReplyTo: arrival.replyTo,
         receivedAt: arrival.receivedAt,
+        timeZone,
         rawText: arrival.text,
       },
       outcome,
@@ -686,9 +710,55 @@ async function processArrival(p: {
     finish('skipped', reason, { mirror: opts?.mirror ?? true, detectedSource: opts?.detectedSource });
 
   // ── 4. Guards that must run before anything else ─────────────────────────
-  // Our own mail coming back is recorded but NEVER mirrored: mirroring it is
-  // exactly the step that would keep a forwarding loop spinning.
-  if (isOwnMessage(arrival, p.headers)) return skip('own_message_loop', { mirror: false });
+  // Our own inbox copy coming back is recorded but NEVER mirrored: mirroring it
+  // is exactly the step that would keep a forwarding loop spinning.
+  if (isMirrorCopy(arrival, p.headers)) return skip('own_message_loop', { mirror: false });
+
+  // A test the venue sent from the LeadFinder card (it comes from our own
+  // address, so it must be recognised before the platform-mail guard below).
+  // A dry run: read and reported back, never a lead, nothing sent to a couple.
+  const testRef = findLeadFinderTestRef(arrival.text, venueId);
+  if (testRef) {
+    const read = extractLeadFromEmail({
+      subject: arrival.subject,
+      text: arrival.text,
+      senderName: arrival.senderName,
+      senderEmail: arrival.senderEmail,
+      replyTo: arrival.replyTo,
+      venue: identity,
+    });
+    const testVerdict = classifyInbound({ subject: arrival.subject, senderDomain, senderEmail: arrival.senderEmail, extracted: read });
+    const scored = scoreExtractedFields(read, { emailConfidence: emailConfidence(read) });
+    await supabaseAdmin
+      .from('leadfinder_imports')
+      .update({
+        processing_status: 'skipped',
+        failure_reason: 'test_inquiry',
+        parser_version: PARSER_VERSION,
+        extraction_source: 'deterministic',
+        extraction_confidence: scored.overallConfidence,
+        classification_confidence: testVerdict.confidence,
+        field_confidence: scored.fieldConfidence,
+      })
+      .eq('id', importId);
+    await mirror({
+      kind: 'test',
+      wouldCreateLead: testVerdict.accept,
+      reason: testVerdict.reason,
+      read: {
+        name: read.name,
+        email: read.email,
+        phone: read.phone,
+        weddingDate: read.weddingDate,
+        guestCount: read.guestCount,
+      },
+    });
+    return { outcome: 'skipped', reason: 'test_inquiry' };
+  }
+
+  // Anything else our platform sent (a new-lead alert, a guide) bounced back by
+  // a forward-everything rule: recorded, never mirrored, never a lead.
+  if (isFromOurPlatform(arrival)) return skip('own_message_loop', { mirror: false });
   if (p.overLimit) return skip('rate_limited', { mirror: false });
 
   // Gmail's forwarding confirmation: not an inquiry, but the venue needs the
@@ -716,7 +786,6 @@ async function processArrival(p: {
   if (isAutoReply(p.headers)) return skip('auto_reply');
 
   // ── 5. Extract and classify ──────────────────────────────────────────────
-  const identity = await loadVenueIdentity(venue);
   let extracted: ExtractedLead;
   let verdict;
   try {

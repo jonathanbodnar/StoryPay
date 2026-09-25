@@ -114,6 +114,32 @@ export function findLeadFinderAddressInPayload(payload: {
   return null;
 }
 
+// ── Test inquiries ───────────────────────────────────────────────────────────
+
+/**
+ * The reference a "Send a test inquiry" email carries in its body, signed with
+ * a purpose-separated HMAC (`lft|…`) so only we can mint one, and only for this
+ * venue. Ingest treats a message with a valid token as a dry run: it is read
+ * and reported back, but never becomes a lead.
+ */
+export function buildLeadFinderTestToken(venueId: string, ref: string): string | null {
+  const secret = inboundSecret();
+  if (!secret || !/^[A-Z2-7]{8}$/.test(ref)) return null;
+  const sig = createHmac('sha256', secret).update(`lft|${venueId}|${ref}`).digest('hex').slice(0, 16);
+  return `lftest-${ref}-${sig}`;
+}
+
+/** The test reference in an arrival's body, when it carries a valid token for this venue. */
+export function findLeadFinderTestRef(text: string, venueId: string): string | null {
+  const m = /\blftest-([A-Z2-7]{8})-([a-f0-9]{16})\b/.exec(text ?? '');
+  if (!m) return null;
+  const expected = buildLeadFinderTestToken(venueId, m[1]);
+  if (!expected) return null;
+  const a = Buffer.from(expected.slice(-16), 'hex');
+  const b = Buffer.from(m[2], 'hex');
+  return a.length === b.length && a.length > 0 && timingSafeEqual(a, b) ? m[1] : null;
+}
+
 /** Constant-time verify. False when the secret is missing, never throws. */
 export function verifyLeadFinderSignature(venueId: string, sig: string): boolean {
   const secret = inboundSecret();

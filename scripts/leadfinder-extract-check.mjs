@@ -21,7 +21,8 @@ const { extractLeadFromEmail, classifyInbound, detectSource, normalizeDate, isLi
   await import(join(root, 'src/lib/leadfinder/extract.ts'));
 const { htmlToStructuredText, chooseLeadFinderBody } = await import(join(root, 'src/lib/leadfinder/html-to-text.ts'));
 const { parseGmailForwardingConfirmation } = await import(join(root, 'src/lib/leadfinder/gmail-confirmation.ts'));
-const { findLeadFinderAddressInPayload } = await import(join(root, 'src/lib/leadfinder/address.ts'));
+const { findLeadFinderAddressInPayload, buildLeadFinderTestToken, findLeadFinderTestRef } = await import(join(root, 'src/lib/leadfinder/address.ts'));
+const { timeZoneForUsZip, venueTimeZoneFromLocation } = await import(join(root, 'src/lib/venue-zip-timezone.ts'));
 const { plausibleCoupleName } = await import(join(root, 'src/lib/leadfinder/extract.ts'));
 
 const NOW = new Date('2026-09-24T12:00:00Z');
@@ -238,6 +239,22 @@ expect('routing: only in Received', findLeadFinderAddressInPayload({
   headers: { received: [`from mail-x.google.com by inbound.example with SMTP id abc for <${lf}>; Wed, 24 Sep 2026`] },
 }), lf);
 expect('routing: not a LeadFinder address', findLeadFinderAddressInPayload({ to: ['info@redbarnacres.com'] }), null);
+
+// Test inquiries: only a token we signed for THIS venue counts as a test.
+process.env.CONVERSATIONS_INBOUND_SECRET = process.env.CONVERSATIONS_INBOUND_SECRET || 'fixture-secret';
+const venueA = '0f8fad5b-d9cb-469f-a165-70867728950e';
+const venueB = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+const token = buildLeadFinderTestToken(venueA, 'ABCDEFGH');
+expect('test token: valid for its venue', findLeadFinderTestRef(`Name: x\nTest reference: ${token}`, venueA), 'ABCDEFGH');
+expect('test token: not valid for another venue', findLeadFinderTestRef(`Test reference: ${token}`, venueB), null);
+expect('test token: tampered', findLeadFinderTestRef(`Test reference: ${token.slice(0, -1)}0`.replace(/0$/, token.endsWith('0') ? '1' : '0'), venueA), null);
+
+// The inbox copy's time zone comes from the venue's ZIP (split states included).
+expect('tz: Pensacola FL is Central', timeZoneForUsZip('32501'), 'America/Chicago');
+expect('tz: Knoxville TN is Eastern', timeZoneForUsZip('37902'), 'America/New_York');
+expect('tz: El Paso TX is Mountain', timeZoneForUsZip('79901'), 'America/Denver');
+expect('tz: ZIP beats a saved zone', venueTimeZoneFromLocation({ zip: '85001', timezone: 'America/New_York' }), 'America/Phoenix');
+expect('tz: saved zone when no ZIP', venueTimeZoneFromLocation({ zip: '', timezone: 'America/Chicago' }), 'America/Chicago');
 
 // Names from the AI fallback are held to the same rules.
 expect('ai name: brand', plausibleCoupleName('The Knot', venue), null);

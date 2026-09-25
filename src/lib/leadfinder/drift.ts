@@ -310,6 +310,8 @@ export async function loadSourceDrift(venueId: string): Promise<SourceDriftBucke
     )
     .eq('venue_id', venueId)
     .gte('received_at', since)
+    // Tests the venue sent themselves say nothing about a source's quality.
+    .or('failure_reason.is.null,failure_reason.neq.test_inquiry')
     .order('received_at', { ascending: false })
     .limit(5000);
 

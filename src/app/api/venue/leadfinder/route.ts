@@ -70,7 +70,9 @@ export async function GET() {
       .from('leadfinder_imports')
       .select('id', { count: 'exact', head: true })
       .eq('venue_id', venueId)
-      .eq('processing_status', 'skipped'),
+      .eq('processing_status', 'skipped')
+      // A test the venue sent itself is not a missed inquiry.
+      .or('failure_reason.is.null,failure_reason.neq.test_inquiry'),
     supabaseAdmin
       .from('leadfinder_imports')
       .select('id', { count: 'exact', head: true })
@@ -103,7 +105,9 @@ export async function GET() {
     requestedBy: string | null;
     receivedAt: string | null;
   } | null = null;
-  if (recent[0]?.failure_reason === 'gmail_forwarding_confirmation') {
+  // Tests the venue sends themselves don't count as "real mail came through".
+  const newestReal = recent.find((r) => r.failure_reason !== 'test_inquiry');
+  if (newestReal?.failure_reason === 'gmail_forwarding_confirmation') {
     const { data: confRow } = await supabaseAdmin
       .from('leadfinder_imports')
       .select('sender, subject, raw_text, received_at')

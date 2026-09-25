@@ -770,6 +770,31 @@ interface LeadFinderData {
   }>;
 }
 
+/** What a test inquiry came back with (GET /api/venue/leadfinder/test). */
+interface LeadFinderTestResult {
+  receivedAt: string | null;
+  recognizedAsTest: boolean;
+  read: {
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    weddingDate: string | null;
+    guestCount: number | null;
+  };
+  copySent: boolean;
+}
+
+type LeadFinderTestState =
+  | { phase: 'idle' }
+  | { phase: 'sending' }
+  | { phase: 'waiting'; ref: string; startedAt: number }
+  | { phase: 'done'; result: LeadFinderTestResult }
+  | { phase: 'timeout' }
+  | { phase: 'error'; message: string };
+
+/** How long to wait for a test to come back before saying it has not arrived. */
+const LEADFINDER_TEST_TIMEOUT_MS = 120_000;
+
 /** Plain-language explanation of each drift reason key from the API. */
 const DRIFT_REASON_LABELS: Record<string, string> = {
   skipped_up: 'more messages are being skipped than before',
@@ -791,8 +816,9 @@ function LeadFinderCard() {
   const [copied, setCopied] = useState(false);
   const [mirrorEnabled, setMirrorEnabled] = useState(true);
   const [savingMirror, setSavingMirror] = useState(false);
+  const [test, setTest] = useState<LeadFinderTestState>({ phase: 'idle' });
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch('/api/venue/leadfinder', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -804,6 +830,60 @@ function LeadFinderCard() {
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function sendTest() {
+    setTest({ phase: 'sending' });
+    try {
+      const r = await fetch('/api/venue/leadfinder/test', { method: 'POST' });
+      const j = (await r.json().catch(() => ({}))) as { ref?: string; error?: string };
+      if (!r.ok || !j.ref) throw new Error(j.error || 'We could not send the test. Please try again.');
+      setTest({ phase: 'waiting', ref: j.ref, startedAt: Date.now() });
+    } catch (e) {
+      setTest({ phase: 'error', message: e instanceof Error ? e.message : 'We could not send the test.' });
+    }
+  }
+
+  // While a test is in flight, check every few seconds whether it has arrived.
+  useEffect(() => {
+    if (test.phase !== 'waiting') return;
+    const { ref, startedAt } = test;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      if (Date.now() - startedAt > LEADFINDER_TEST_TIMEOUT_MS) {
+        setTest({ phase: 'timeout' });
+        return;
+      }
+      try {
+        const r = await fetch(`/api/venue/leadfinder/test?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' });
+        const j = (await r.json().catch(() => ({}))) as { arrived?: boolean } & Partial<LeadFinderTestResult>;
+        if (!cancelled && r.ok && j.arrived && j.read) {
+          setTest({
+            phase: 'done',
+            result: {
+              receivedAt: j.receivedAt ?? null,
+              recognizedAsTest: j.recognizedAsTest === true,
+              read: j.read,
+              copySent: j.copySent === true,
+            },
+          });
+          load(); // show it in Activity too
+        }
+      } catch {
+        /* keep polling until the timeout */
+      }
+    };
+    const timer = setInterval(() => void tick(), 3000);
+    void tick();
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [test, load]);
 
   async function toggleMirror(next: boolean) {
     const prev = mirrorEnabled;
@@ -946,6 +1026,79 @@ function LeadFinderCard() {
                   )}
                 </div>
               )}
+
+              {/* Test your address — a real email through the real inbound path, as a dry run. */}
+              <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3.5">
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      Test your address
+                    </span>
+                    <p className="text-sm leading-relaxed text-gray-600">
+                      Send a sample inquiry to your LeadFinder address and see what we read from it. It&apos;s
+                      a dry run — no lead is created and nobody is emailed.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void sendTest()}
+                    disabled={test.phase === 'sending' || test.phase === 'waiting'}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#1b1b1b] px-3.5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    {test.phase === 'sending' || test.phase === 'waiting'
+                      ? <Loader2 size={13} className="animate-spin" />
+                      : <Send size={13} />}
+                    {test.phase === 'done' || test.phase === 'timeout' ? 'Send another test' : 'Send a test inquiry'}
+                  </button>
+                </div>
+
+                {test.phase === 'waiting' && (
+                  <p className="mt-2.5 flex items-center gap-2 text-xs text-gray-500">
+                    <Loader2 size={12} className="animate-spin" />
+                    Test sent. Waiting for it to arrive — usually under a minute…
+                  </p>
+                )}
+
+                {test.phase === 'done' && test.result.recognizedAsTest && (
+                  <div className="mt-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800">
+                    <p className="flex items-center gap-1.5 font-semibold">
+                      <CheckCircle2 size={13} /> Received{when(test.result.receivedAt) ? ` ${when(test.result.receivedAt)}` : ''} — LeadFinder is working.
+                    </p>
+                    <p className="mt-1 leading-relaxed">
+                      We read:{' '}
+                      {[
+                        test.result.read.name,
+                        test.result.read.email,
+                        test.result.read.phone,
+                        test.result.read.weddingDate && `wedding ${test.result.read.weddingDate}`,
+                        test.result.read.guestCount !== null && `${test.result.read.guestCount} guests`,
+                      ].filter(Boolean).join(' · ') || 'nothing'}
+                      . Because it was a test, no lead was created.
+                      {test.result.copySent ? ' A copy is in your inbox.' : ''}
+                    </p>
+                  </div>
+                )}
+
+                {test.phase === 'done' && !test.result.recognizedAsTest && (
+                  <p className="mt-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                    The test arrived, but it wasn&apos;t recognized as a test. Check Activity below, and contact
+                    StoryVenue support if it looks wrong.
+                  </p>
+                )}
+
+                {test.phase === 'timeout' && (
+                  <p className="mt-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                    We sent the test, but it hasn&apos;t arrived after two minutes. Email can be delayed — check
+                    Activity below in a few minutes. If it never shows up, contact StoryVenue support.
+                  </p>
+                )}
+
+                {test.phase === 'error' && (
+                  <p className="mt-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700">
+                    {test.message}
+                  </p>
+                )}
+              </div>
 
               <div className="mt-3 flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3.5">
                 <MailCheck size={15} className="mt-0.5 shrink-0 text-gray-400" />
