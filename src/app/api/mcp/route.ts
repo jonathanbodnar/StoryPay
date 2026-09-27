@@ -1,773 +1,162 @@
 /**
- * StoryVenue MCP (Model Context Protocol) Server
+ * StoryVenue MCP (Model Context Protocol) server for AI agents — Jarvis and the
+ * owner's other agents, which reach it through the Claude API's MCP connector.
  *
- * Exposes admin-only read tools that Viktor AI (app.viktor.com) can call from
- * Slack. Viktor configures this URL in their "Add Custom MCP Server" dialog:
- *   https://app.storyvenue.com/api/mcp
- *
- * Auth: Bearer token in the `Authorization` header.
- * Set MCP_API_KEY in Railway environment variables. If the env var is absent
- * (e.g. local dev before the variable is configured), auth is skipped so the
- * server is testable immediately after deploy.
- *
- * Protocol: JSON-RPC 2.0 over HTTP.
- *   GET  /api/mcp  — server discovery (returns server info + capabilities)
- *   POST /api/mcp  — JSON-RPC method dispatch (initialize, tools/list, tools/call)
+ *   URL:       https://app.storyvenue.com/api/mcp
+ *   Transport: Streamable HTTP — POST a JSON-RPC message, get one JSON reply
+ *              (no server-sent stream; GET answers 405 as the spec allows).
+ *   Auth:      "Authorization: Bearer <key>", one key per agent
+ *              (scripts/mcp-keys.mjs). No key → 401. Fails closed.
+ *   Tools:     read-only, compact, paginated — see lib/mcp/tools.ts.
+ *              Every call is written to mcp_audit_log.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-import { FUNNEL_STAGES, venueStageReached, type VenueFunnelState } from '@/lib/funnel-stage';
+import { authenticateMcp, auditMcpCall, type McpCaller } from '@/lib/mcp/auth';
+import { AGENT_TOOLS, AgentSqlError, ToolInputError } from '@/lib/mcp/tools';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// ---------------------------------------------------------------------------
-// Auth
-// ---------------------------------------------------------------------------
+const SERVER_INFO = { name: 'storyvenue', title: 'StoryVenue', version: '2.0.0' };
 
-function checkAuth(req: NextRequest): boolean {
-  const apiKey = process.env.MCP_API_KEY;
-  if (!apiKey) return true; // skip auth when env var not configured
+// Newest first; the client's version is echoed when we support it.
+const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
-  const authHeader = req.headers.get('authorization') ?? '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  return token === apiKey;
-}
+const INSTRUCTIONS = `StoryVenue is a SaaS for wedding venues. You are answering the owner of StoryVenue about their business.
 
-// ---------------------------------------------------------------------------
-// JSON-RPC helpers
-// ---------------------------------------------------------------------------
+Vocabulary:
+- Account = a venue: a StoryVenue customer (table venues). Owners and team members log in to it.
+- Paying = subscription status "active". Not paying = every other status: trialing (signed up; may have no card yet), past_due (a payment failed), canceled, or none.
+- MRR = plan price + add-ons for paying accounts. Money in the database is in cents (*_cents); tools report dollars (usd).
+- Lead = a couple's wedding inquiry to a venue (table leads). Sources: directory (StoryVenue listing), lead_link, embed (venue website form), form (a form the venue built, incl. Meta ad forms), leadfinder (read from a wedding-directory email by LeadFinder), manual, api.
+- Demo venues are test accounts and are excluded unless you ask for them.
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function rpcOk(id: unknown, result: unknown): Record<string, any> {
+How to answer:
+- Big picture → business_snapshot. Money → revenue_report. Who is paying / not paying → list_accounts with billing_status. One account → get_account. People → list_people. Leads → search_leads / lead_stats.
+- Anything else → list_tables, describe_table, then run_sql (read-only; aggregate in SQL).
+- Lists are paginated: pass next_offset to get more. Timestamps are UTC.`;
+
+type Json = Record<string, unknown>;
+
+function rpcResult(id: unknown, result: unknown): Json {
   return { jsonrpc: '2.0', id, result };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function rpcErr(id: unknown, code: number, message: string): Record<string, any> {
-  return { jsonrpc: '2.0', id, error: { code, message } };
+function rpcError(id: unknown, code: number, message: string): Json {
+  return { jsonrpc: '2.0', id: id ?? null, error: { code, message } };
 }
 
-function textContent(data: unknown): { content: { type: 'text'; text: string }[] } {
-  return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+function negotiateVersion(requested: unknown): string {
+  return typeof requested === 'string' && PROTOCOL_VERSIONS.includes(requested) ? requested : PROTOCOL_VERSIONS[0];
 }
 
-// ---------------------------------------------------------------------------
-// Tool definitions
-// ---------------------------------------------------------------------------
+async function callTool(caller: McpCaller, id: unknown, params: Json): Promise<Json> {
+  const name = typeof params.name === 'string' ? params.name : '';
+  const args = (params.arguments && typeof params.arguments === 'object' ? params.arguments : {}) as Json;
+  const tool = AGENT_TOOLS.find((t) => t.name === name);
+  if (!tool) return rpcError(id, -32602, `Unknown tool: ${name}`);
 
-const TOOLS = [
-  {
-    name: 'get_venue_overview',
-    description:
-      'Get an overview of all venues on the platform including counts by plan, trial status, and funnel stage',
-    inputSchema: { type: 'object', properties: {}, required: [] },
-  },
-  {
-    name: 'list_venues',
-    description:
-      'List venues with their plan, subscription status, and funnel stage. Supports filtering.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        status: {
-          type: 'string',
-          enum: ['trialing', 'active', 'free', 'all'],
-          description: 'Filter by subscription status (default: all)',
-        },
-        limit: {
-          type: 'number',
-          description: 'Max venues to return (default 20)',
-        },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'get_funnel_stats',
-    description:
-      'Get conversion funnel statistics showing how many venues are at each stage from signup to paid',
-    inputSchema: { type: 'object', properties: {}, required: [] },
-  },
-  {
-    name: 'get_lead_stats',
-    description: 'Get lead statistics across all venues for a given time period',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        days: {
-          type: 'number',
-          description: 'Number of days to look back (default 7)',
-        },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'get_unread_conversations',
-    description: 'Get conversations with unread messages from brides across all venues',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        limit: {
-          type: 'number',
-          description: 'Max conversations to return (default 20)',
-        },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'get_venue_detail',
-    description: 'Get detailed information about a specific venue by name or ID',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Venue name search string or UUID',
-        },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'get_directory_stats',
-    description:
-      'Get statistics about the public wedding venue directory — total listed venues, recent inquiry form submissions, and which venues have the most public visibility',
-    inputSchema: { type: 'object', properties: {}, required: [] },
-  },
-  {
-    name: 'get_ab_test_results',
-    description:
-      'Get A/B test performance results for landing page headlines and CTAs on the marketing website',
-    inputSchema: { type: 'object', properties: {}, required: [] },
-  },
-  {
-    name: 'get_couple_inquiries',
-    description:
-      'Get recent inquiry form submissions from brides browsing the wedding directory',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        days: {
-          type: 'number',
-          description: 'Number of days to look back (default 7)',
-        },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'get_top_venues_by_leads',
-    description:
-      'Get the top venues ranked by number of leads/inquiries received, showing which venues are most popular in the directory',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        days: {
-          type: 'number',
-          description: 'Number of days to look back for period count (default 30)',
-        },
-        limit: {
-          type: 'number',
-          description: 'Max venues to return (default 10)',
-        },
-      },
-      required: [],
-    },
-  },
-] as const;
-
-// ---------------------------------------------------------------------------
-// Tool implementations
-// ---------------------------------------------------------------------------
-
-async function toolGetVenueOverview() {
-  const [{ data: venues }, { data: plans }] = await Promise.all([
-    supabaseAdmin
-      .from('venues')
-      .select(
-        'id, directory_plan_id, directory_subscription_status, directory_trial_ends_at, ' +
-          'directory_trial_consumed, is_published, onboarding_last_step, ' +
-          'onboarding_completed_at, onboarding_activated_at, directory_subscription_external_id',
-      ),
-    supabaseAdmin.from('directory_plans').select('id, name, slug'),
-  ]);
-
-  const planById = new Map((plans ?? []).map((p) => [p.id as string, p.name as string]));
-  const rows = (venues ?? []) as unknown as Record<string, unknown>[];
-
-  // Count by subscription status
-  const byStatus: Record<string, number> = {};
-  for (const v of rows) {
-    const s = (v.directory_subscription_status as string) || 'none';
-    byStatus[s] = (byStatus[s] || 0) + 1;
-  }
-
-  // Count by plan
-  const byPlan: Record<string, number> = {};
-  for (const v of rows) {
-    const pid = v.directory_plan_id as string | null;
-    const planName = pid ? (planById.get(pid) ?? pid) : 'no_plan';
-    byPlan[planName] = (byPlan[planName] || 0) + 1;
-  }
-
-  // Trialing now
-  const now = new Date();
-  const trialingNow = rows.filter((v) => {
-    const ends = v.directory_trial_ends_at as string | null;
-    return ends && new Date(ends) > now;
-  }).length;
-
-  // Funnel stage counts
-  const stageCounts: Record<string, number> = {};
-  for (const s of FUNNEL_STAGES) stageCounts[s.key] = 0;
-  for (const v of rows) {
-    const reached = venueStageReached(v as VenueFunnelState);
-    let highest = 'signed_up';
-    for (const s of FUNNEL_STAGES) {
-      if (reached[s.key]) highest = s.key;
-    }
-    stageCounts[highest] = (stageCounts[highest] || 0) + 1;
-  }
-
-  return {
-    total_venues: rows.length,
-    by_subscription_status: byStatus,
-    by_plan: byPlan,
-    trialing_now: trialingNow,
-    funnel_highest_stage: stageCounts,
-  };
-}
-
-async function toolListVenues(args: { status?: string; limit?: number }) {
-  const limit = Math.min(args.limit ?? 20, 100);
-  const status = args.status ?? 'all';
-
-  let q = supabaseAdmin
-    .from('venues')
-    .select(
-      'id, name, email, directory_plan_id, directory_subscription_status, ' +
-        'directory_trial_ends_at, is_published, created_at, last_login_at, ' +
-        'onboarding_last_step, onboarding_completed_at, onboarding_activated_at, ' +
-        'directory_subscription_external_id, setup_completed',
-    )
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (status === 'trialing') {
-    q = q.eq('directory_subscription_status', 'trialing');
-  } else if (status === 'active') {
-    q = q.eq('directory_subscription_status', 'active');
-  } else if (status === 'free') {
-    q = q.is('directory_plan_id', null);
-  }
-
-  const [{ data: venues }, { data: plans }] = await Promise.all([
-    q,
-    supabaseAdmin.from('directory_plans').select('id, name, slug'),
-  ]);
-
-  const planById = new Map((plans ?? []).map((p) => [p.id as string, p.name as string]));
-  const rows = ((venues ?? []) as unknown as Record<string, unknown>[]).map((v) => {
-    const pid = v.directory_plan_id as string | null;
-    const reached = venueStageReached(v as VenueFunnelState);
-    let funnelStage = 'signed_up';
-    for (const s of FUNNEL_STAGES) {
-      if (reached[s.key]) funnelStage = s.key;
-    }
-    return {
-      id: v.id,
-      name: v.name,
-      email: v.email,
-      plan: pid ? (planById.get(pid) ?? pid) : null,
-      subscription_status: v.directory_subscription_status,
-      trial_ends_at: v.directory_trial_ends_at,
-      is_published: v.is_published,
-      created_at: v.created_at,
-      last_login_at: v.last_login_at,
-      funnel_stage: funnelStage,
-    };
-  });
-
-  return { count: rows.length, venues: rows };
-}
-
-async function toolGetFunnelStats() {
-  const { data: venues } = await supabaseAdmin
-    .from('venues')
-    .select(
-      'id, is_published, onboarding_last_step, onboarding_completed_at, ' +
-        'onboarding_activated_at, directory_subscription_status, directory_subscription_external_id',
-    );
-
-  const rows = (venues ?? []) as unknown as Record<string, unknown>[];
-  const counts: Record<string, number> = {};
-  for (const s of FUNNEL_STAGES) counts[s.key] = 0;
-
-  for (const v of rows) {
-    const reached = venueStageReached(v as VenueFunnelState);
-    for (const s of FUNNEL_STAGES) {
-      if (reached[s.key]) counts[s.key] += 1;
-    }
-  }
-
-  const signedUp = counts['signed_up'] || 1;
-  const funnel = FUNNEL_STAGES.map((s, i) => {
-    const prev = i > 0 ? counts[FUNNEL_STAGES[i - 1].key] : counts[s.key];
-    return {
-      key: s.key,
-      label: s.label,
-      count: counts[s.key],
-      pct_of_signups: Math.round((counts[s.key] / signedUp) * 100),
-      step_conversion: prev > 0 ? Math.round((counts[s.key] / prev) * 100) : 0,
-    };
-  });
-
-  return { total_venues: rows.length, funnel };
-}
-
-async function toolGetLeadStats(args: { days?: number }) {
-  const days = args.days ?? 7;
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-
-  const [{ data: newLeads, count: newCount }, { data: totalLeads, count: totalCount }] =
-    await Promise.all([
-      supabaseAdmin
-        .from('leads')
-        .select('id, venue_id, created_at', { count: 'exact' })
-        .gte('created_at', since),
-      supabaseAdmin
-        .from('leads')
-        .select('id', { count: 'exact', head: true }),
-    ]);
-
-  // Group new leads by venue
-  const byVenue: Record<string, number> = {};
-  for (const lead of newLeads ?? []) {
-    const vid = (lead.venue_id as string) ?? 'unknown';
-    byVenue[vid] = (byVenue[vid] || 0) + 1;
-  }
-
-  const topVenues = Object.entries(byVenue)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([venue_id, count]) => ({ venue_id, count }));
-
-  return {
-    period_days: days,
-    new_leads_in_period: newCount ?? 0,
-    total_leads_all_time: totalCount ?? 0,
-    top_venues_by_new_leads: topVenues,
-  };
-}
-
-async function toolGetUnreadConversations(args: { limit?: number }) {
-  const limit = Math.min(args.limit ?? 20, 100);
-
-  // Fetch recent threads where last message was from a contact (bride)
-  const { data: threads } = await supabaseAdmin
-    .from('conversation_threads')
-    .select(
-      'id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview',
-    )
-    .order('last_message_at', { ascending: false })
-    .limit(limit * 3); // over-fetch to allow filtering
-
-  if (!threads?.length) return { count: 0, conversations: [] };
-
-  // Get the last message sender for each thread to find unread (bride was last)
-  const threadIds = threads.map((t) => t.id as string);
-  const { data: lastMessages } = await supabaseAdmin
-    .from('conversation_messages')
-    .select('thread_id, sender_kind, created_at')
-    .in('thread_id', threadIds)
-    .order('created_at', { ascending: false });
-
-  // Find last message per thread
-  const lastByThread = new Map<string, string>();
-  for (const msg of lastMessages ?? []) {
-    const tid = msg.thread_id as string;
-    if (!lastByThread.has(tid)) lastByThread.set(tid, msg.sender_kind as string);
-  }
-
-  // Keep only threads where bride (contact) was last to message
-  const unread = threads
-    .filter((t) => lastByThread.get(t.id as string) === 'contact')
-    .slice(0, limit);
-
-  // Enrich with venue names
-  const venueIds = [...new Set(unread.map((t) => t.venue_id as string))];
-  const { data: venues } = await supabaseAdmin
-    .from('venues')
-    .select('id, name')
-    .in('id', venueIds);
-  const venueNames = new Map((venues ?? []).map((v) => [v.id as string, v.name as string]));
-
-  const conversations = unread.map((t) => ({
-    thread_id: t.id,
-    venue_id: t.venue_id,
-    venue_name: venueNames.get(t.venue_id as string) ?? null,
-    subject: t.subject,
-    last_message_at: t.last_message_at,
-    preview: t.last_message_preview,
-  }));
-
-  return { count: conversations.length, conversations };
-}
-
-async function toolGetVenueDetail(args: { query: string }) {
-  const q = args.query.trim();
-  if (!q) throw new Error('query is required');
-
-  // Try UUID match first, then name search
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
-
-  const [{ data: venueRows }, { data: plans }] = await Promise.all([
-    isUuid
-      ? supabaseAdmin.from('venues').select('*').eq('id', q).limit(1)
-      : supabaseAdmin.from('venues').select('*').ilike('name', `%${q}%`).limit(5),
-    supabaseAdmin.from('directory_plans').select('id, name, slug'),
-  ]);
-
-  if (!venueRows?.length) return { found: false, matches: [] };
-
-  const planById = new Map((plans ?? []).map((p) => [p.id as string, p.name as string]));
-
-  // For each matched venue, fetch lead count
-  const enriched = await Promise.all(
-    venueRows.map(async (v) => {
-      const { count: leadCount } = await supabaseAdmin
-        .from('leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('venue_id', v.id as string);
-
-      const pid = v.directory_plan_id as string | null;
-      const reached = venueStageReached(v as VenueFunnelState);
-      let funnelStage = 'signed_up';
-      for (const s of FUNNEL_STAGES) {
-        if (reached[s.key]) funnelStage = s.key;
-      }
-
-      const now = new Date();
-      const trialEnds = v.directory_trial_ends_at as string | null;
-      const isTrialing = trialEnds ? new Date(trialEnds) > now : false;
-
-      return {
-        id: v.id,
-        name: v.name,
-        email: v.email,
-        plan: pid ? (planById.get(pid) ?? pid) : null,
-        subscription_status: v.directory_subscription_status,
-        trial_ends_at: trialEnds,
-        is_trialing: isTrialing,
-        is_published: v.is_published,
-        created_at: v.created_at,
-        last_login_at: v.last_login_at,
-        setup_completed: v.setup_completed,
-        funnel_stage: funnelStage,
-        lead_count: leadCount ?? 0,
-        owner_first_name: v.owner_first_name ?? null,
-        owner_last_name: v.owner_last_name ?? null,
-        phone: v.phone ?? null,
-      };
-    }),
-  );
-
-  return { found: true, matches: enriched };
-}
-
-async function toolGetDirectoryStats() {
-  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-
-  const [{ count: publishedCount }, { data: recentLeads, count: recentLeadCount }] =
-    await Promise.all([
-      supabaseAdmin
-        .from('venues')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_published', true),
-      supabaseAdmin
-        .from('leads')
-        .select('id, venue_id', { count: 'exact' })
-        .gte('created_at', since30d),
-    ]);
-
-  // Group by venue_id to find top 5
-  const byVenue: Record<string, number> = {};
-  for (const lead of recentLeads ?? []) {
-    const vid = (lead.venue_id as string) ?? 'unknown';
-    byVenue[vid] = (byVenue[vid] || 0) + 1;
-  }
-
-  const topVenueIds = Object.entries(byVenue)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([id]) => id);
-
-  let topVenues: { venue_id: string; name: string | null; lead_count: number }[] = [];
-  if (topVenueIds.length > 0) {
-    const { data: venueRows } = await supabaseAdmin
-      .from('venues')
-      .select('id, name')
-      .in('id', topVenueIds);
-    const nameById = new Map((venueRows ?? []).map((v) => [v.id as string, v.name as string]));
-    topVenues = topVenueIds.map((vid) => ({
-      venue_id: vid,
-      name: nameById.get(vid) ?? null,
-      lead_count: byVenue[vid],
-    }));
-  }
-
-  return {
-    published_venues: publishedCount ?? 0,
-    leads_last_30_days: recentLeadCount ?? 0,
-    top_5_venues_by_leads_last_30_days: topVenues,
-  };
-}
-
-async function toolGetAbTestResults() {
+  const started = Date.now();
   try {
-    const [{ data: variants, error: variantsErr }, { data: pages, error: pagesErr }] =
-      await Promise.all([
-        supabaseAdmin.from('funnel_variants').select('*').limit(100),
-        supabaseAdmin.from('funnel_pages').select('*').limit(100),
-      ]);
-
-    if (variantsErr || pagesErr) {
-      return { available: false, message: 'No A/B test data available yet' };
-    }
-
-    if (!variants?.length) {
-      return { available: false, message: 'No A/B test data available yet' };
-    }
-
-    const results = (variants as unknown as Record<string, unknown>[]).map((v) => {
-      const impressions = (v.impressions as number) ?? 0;
-      const clicks = (v.clicks as number) ?? 0;
-      const conversions = (v.conversions as number) ?? 0;
-      return {
-        id: v.id,
-        name: v.name,
-        page: v.page_id ?? null,
-        impressions,
-        clicks,
-        conversions,
-        click_rate: impressions > 0 ? Math.round((clicks / impressions) * 1000) / 10 : 0,
-        conversion_rate:
-          impressions > 0 ? Math.round((conversions / impressions) * 1000) / 10 : 0,
-      };
+    const out = await tool.run(args);
+    const text = JSON.stringify(out);
+    auditMcpCall({ keyName: caller.name, tool: name, args, ok: true, durationMs: Date.now() - started, resultBytes: text.length });
+    return rpcResult(id, { content: [{ type: 'text', text }], isError: false });
+  } catch (err) {
+    const known = err instanceof ToolInputError || err instanceof AgentSqlError;
+    const message = err instanceof Error ? err.message : String(err);
+    auditMcpCall({ keyName: caller.name, tool: name, args, ok: false, error: message, durationMs: Date.now() - started });
+    if (!known) console.error('[mcp] tool failed:', name, message);
+    // A tool error goes back as a result the model can read and recover from.
+    return rpcResult(id, {
+      content: [{ type: 'text', text: known ? message : `The ${name} tool failed: ${message}` }],
+      isError: true,
     });
-
-    return {
-      available: true,
-      total_variants: results.length,
-      total_pages: pages?.length ?? 0,
-      variants: results,
-    };
-  } catch {
-    return { available: false, message: 'No A/B test data available yet' };
   }
 }
 
-async function toolGetCoupleInquiries(args: { days?: number }) {
-  const days = args.days ?? 7;
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+/** One JSON-RPC message → its reply, or null for a notification. */
+async function handleMessage(caller: McpCaller, msg: Json): Promise<Json | null> {
+  const id = msg.id;
+  const isNotification = id === undefined || id === null;
+  const method = typeof msg.method === 'string' ? msg.method : '';
+  const params = (msg.params && typeof msg.params === 'object' ? msg.params : {}) as Json;
 
-  const { data: leads } = await supabaseAdmin
-    .from('leads')
-    .select('id, venue_id, name, email, wedding_date, created_at')
-    .gte('created_at', since)
-    .order('created_at', { ascending: false })
-    .limit(50);
-
-  if (!leads?.length) return { period_days: days, count: 0, inquiries: [] };
-
-  // Enrich with venue names
-  const venueIds = [...new Set((leads as unknown as Record<string, unknown>[]).map((l) => l.venue_id as string).filter(Boolean))];
-  const { data: venueRows } = await supabaseAdmin
-    .from('venues')
-    .select('id, name')
-    .in('id', venueIds);
-  const nameById = new Map((venueRows ?? []).map((v) => [v.id as string, v.name as string]));
-
-  const inquiries = (leads as unknown as Record<string, unknown>[]).map((l) => ({
-    id: l.id,
-    name: l.name ?? null,
-    email: l.email ?? null,
-    venue_name: nameById.get(l.venue_id as string) ?? null,
-    wedding_date: l.wedding_date ?? null,
-    created_at: l.created_at,
-  }));
-
-  return { period_days: days, count: inquiries.length, inquiries };
-}
-
-async function toolGetTopVenuesByLeads(args: { days?: number; limit?: number }) {
-  const days = args.days ?? 30;
-  const limit = Math.min(args.limit ?? 10, 50);
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-
-  const [{ data: recentLeads }, { data: allLeads }] = await Promise.all([
-    supabaseAdmin
-      .from('leads')
-      .select('venue_id')
-      .gte('created_at', since),
-    supabaseAdmin
-      .from('leads')
-      .select('venue_id'),
-  ]);
-
-  // Count leads per venue for the period
-  const periodCounts: Record<string, number> = {};
-  for (const l of (recentLeads ?? []) as unknown as Record<string, unknown>[]) {
-    const vid = l.venue_id as string;
-    if (vid) periodCounts[vid] = (periodCounts[vid] || 0) + 1;
+  if (msg.jsonrpc !== '2.0' || !method) {
+    return isNotification ? null : rpcError(id, -32600, 'Invalid request');
   }
+  if (isNotification) return null; // notifications/initialized, cancelled, …
 
-  // Count all-time leads per venue
-  const allTimeCounts: Record<string, number> = {};
-  for (const l of (allLeads ?? []) as unknown as Record<string, unknown>[]) {
-    const vid = l.venue_id as string;
-    if (vid) allTimeCounts[vid] = (allTimeCounts[vid] || 0) + 1;
-  }
-
-  const topVenueIds = Object.entries(periodCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([id]) => id);
-
-  if (!topVenueIds.length) return { period_days: days, count: 0, venues: [] };
-
-  const { data: venueRows } = await supabaseAdmin
-    .from('venues')
-    .select('id, name, directory_plan_id, directory_subscription_status, is_published')
-    .in('id', topVenueIds);
-
-  const { data: plans } = await supabaseAdmin.from('directory_plans').select('id, name');
-  const planById = new Map((plans ?? []).map((p) => [p.id as string, p.name as string]));
-  const venueMap = new Map(
-    ((venueRows ?? []) as unknown as Record<string, unknown>[]).map((v) => [v.id as string, v]),
-  );
-
-  const venues = topVenueIds.map((vid) => {
-    const v = venueMap.get(vid) as Record<string, unknown> | undefined;
-    const pid = v?.directory_plan_id as string | null;
-    return {
-      venue_id: vid,
-      name: v?.name ?? null,
-      plan: pid ? (planById.get(pid) ?? pid) : null,
-      is_published: v?.is_published ?? null,
-      subscription_status: v?.directory_subscription_status ?? null,
-      leads_in_period: periodCounts[vid] ?? 0,
-      leads_all_time: allTimeCounts[vid] ?? 0,
-    };
-  });
-
-  return { period_days: days, count: venues.length, venues };
-}
-
-// ---------------------------------------------------------------------------
-// Tool dispatcher
-// ---------------------------------------------------------------------------
-
-async function callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-  switch (name) {
-    case 'get_venue_overview':
-      return toolGetVenueOverview();
-    case 'list_venues':
-      return toolListVenues(args as { status?: string; limit?: number });
-    case 'get_funnel_stats':
-      return toolGetFunnelStats();
-    case 'get_lead_stats':
-      return toolGetLeadStats(args as { days?: number });
-    case 'get_unread_conversations':
-      return toolGetUnreadConversations(args as { limit?: number });
-    case 'get_venue_detail':
-      return toolGetVenueDetail(args as { query: string });
-    case 'get_directory_stats':
-      return toolGetDirectoryStats();
-    case 'get_ab_test_results':
-      return toolGetAbTestResults();
-    case 'get_couple_inquiries':
-      return toolGetCoupleInquiries(args as { days?: number });
-    case 'get_top_venues_by_leads':
-      return toolGetTopVenuesByLeads(args as { days?: number; limit?: number });
+  switch (method) {
+    case 'initialize':
+      return rpcResult(id, {
+        protocolVersion: negotiateVersion(params.protocolVersion),
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: SERVER_INFO,
+        instructions: INSTRUCTIONS,
+      });
+    case 'ping':
+      return rpcResult(id, {});
+    case 'tools/list':
+      return rpcResult(id, {
+        tools: AGENT_TOOLS.map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema,
+          annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+        })),
+      });
+    case 'tools/call':
+      return callTool(caller, id, params);
+    case 'resources/list':
+      return rpcResult(id, { resources: [] });
+    case 'prompts/list':
+      return rpcResult(id, { prompts: [] });
     default:
-      throw new Error(`Unknown tool: ${name}`);
+      return rpcError(id, -32601, `Method not found: ${method}`);
   }
 }
 
-// ---------------------------------------------------------------------------
-// Route handlers
-// ---------------------------------------------------------------------------
-
-const SERVER_INFO = {
-  name: 'StoryVenue Admin',
-  version: '1.0.0',
-  description: 'Admin tools for the StoryVenue wedding venue SaaS platform',
-  capabilities: { tools: {} },
-};
-
-export async function GET(req: NextRequest) {
-  if (!checkAuth(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  return NextResponse.json(SERVER_INFO);
+function unauthorized(): NextResponse {
+  return NextResponse.json(rpcError(null, -32001, 'Unauthorized'), {
+    status: 401,
+    headers: { 'WWW-Authenticate': 'Bearer realm="storyvenue-mcp"' },
+  });
 }
 
 export async function POST(req: NextRequest) {
-  if (!checkAuth(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const caller = await authenticateMcp(req.headers.get('authorization'));
+  if (!caller) return unauthorized();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any;
+  let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(rpcErr(null, -32700, 'Parse error'), { status: 400 });
+    return NextResponse.json(rpcError(null, -32700, 'Parse error'), { status: 400 });
   }
 
-  const { id, method, params } = body ?? {};
-
-  try {
-    switch (method) {
-      case 'initialize':
-        return NextResponse.json(
-          rpcOk(id, {
-            protocolVersion: '2024-11-05',
-            serverInfo: { name: SERVER_INFO.name, version: SERVER_INFO.version },
-            capabilities: SERVER_INFO.capabilities,
-          }),
-        );
-
-      case 'tools/list':
-        return NextResponse.json(rpcOk(id, { tools: TOOLS }));
-
-      case 'tools/call': {
-        const toolName = params?.name as string | undefined;
-        const toolArgs = (params?.arguments ?? {}) as Record<string, unknown>;
-        if (!toolName) {
-          return NextResponse.json(rpcErr(id, -32602, 'Missing tool name'), { status: 400 });
-        }
-        const result = await callTool(toolName, toolArgs);
-        return NextResponse.json(rpcOk(id, textContent(result)));
-      }
-
-      case 'notifications/initialized':
-        // Ack-only, no response body needed but return empty ok
-        return NextResponse.json(rpcOk(id, {}));
-
-      default:
-        return NextResponse.json(rpcErr(id, -32601, `Method not found: ${method}`), {
-          status: 404,
-        });
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[mcp] tool error:', msg);
-    return NextResponse.json(rpcErr(id, -32603, `Internal error: ${msg}`), { status: 500 });
+  // Older clients may send a batch (an array); answer it as one.
+  if (Array.isArray(body)) {
+    const replies = (await Promise.all(body.map((m) => handleMessage(caller, (m ?? {}) as Json)))).filter(Boolean);
+    return replies.length ? NextResponse.json(replies) : new NextResponse(null, { status: 202 });
   }
+  const reply = await handleMessage(caller, (body ?? {}) as Json);
+  if (!reply) return new NextResponse(null, { status: 202 });
+
+  const res = NextResponse.json(reply);
+  if ((body as Json).method === 'initialize') {
+    res.headers.set('MCP-Protocol-Version', String(((reply.result ?? {}) as Json).protocolVersion ?? ''));
+  }
+  return res;
+}
+
+/** No server-initiated stream: the spec allows 405 here. */
+export async function GET() {
+  return new NextResponse(null, { status: 405, headers: { Allow: 'POST' } });
+}
+
+/** Stateless server: there is no session to end. */
+export async function DELETE() {
+  return new NextResponse(null, { status: 405, headers: { Allow: 'POST' } });
 }
