@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/session';
 import { changeVenuePlan } from '@/lib/venue-billing';
-import { isPlatformDirectoryBillingConfigured } from '@/lib/platform-directory-billing';
+import { saasBillingConfiguredFor } from '@/lib/stripe/billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
   const planId = body.plan_id?.trim();
   if (!planId) return NextResponse.json({ error: 'plan_id is required' }, { status: 400 });
 
-  if (!isPlatformDirectoryBillingConfigured()) {
+  if (!(await saasBillingConfiguredFor(user.venueId))) {
     return NextResponse.json(
       { error: 'Directory subscription billing is not configured on the server.' },
       { status: 503 },

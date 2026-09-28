@@ -7,6 +7,8 @@ import {
 import { createIntention } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
+import { isStripeConfigured, stripePublishableKey } from '@/lib/stripe/client';
+import { createCardSetupIntent, isStripeBillingVenue } from '@/lib/stripe/billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -32,6 +34,38 @@ export async function POST() {
 
   if (!trialEndsAt || !planId) {
     return NextResponse.json({ error: 'Plan not set up yet. Please go back and pick a plan.' }, { status: 400 });
+  }
+
+  // Stripe (the owner's account): a SetupIntent for the embedded card form.
+  if (await isStripeBillingVenue(venueId)) {
+    const publishableKey = stripePublishableKey();
+    if (!isStripeConfigured() || !publishableKey) {
+      return NextResponse.json({ error: 'Payment system not configured. Please contact support.' }, { status: 503 });
+    }
+    const [allPlansS, addonPricesS] = await Promise.all([listDirectoryPlanCatalog(), loadAddonPrices()]);
+    const planS = allPlansS.find((p) => p.id === planId);
+    if (!planS) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+    const chargeS = computeMonthlyTotalCents({
+      plan:              planS,
+      allPlans:          allPlansS,
+      addonVerifiedUser:  Boolean((ctx.venue as Record<string, unknown>).directory_addon_verified),
+      addonSponsoredUser: Boolean((ctx.venue as Record<string, unknown>).directory_addon_sponsored),
+      addonConciergeUser: Boolean((ctx.venue as Record<string, unknown>).directory_addon_concierge),
+      prices:            addonPricesS,
+    });
+    try {
+      const { clientSecret } = await createCardSetupIntent(venueId);
+      return NextResponse.json({
+        provider: 'stripe',
+        clientSecret,
+        publishableKey,
+        amountCents: chargeS.total_cents,
+        trialEndsAt,
+      });
+    } catch (err) {
+      console.error('[venue-billing/payment-intent] Stripe SetupIntent failed:', err);
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to initialize payment form' }, { status: 500 });
+    }
   }
 
   const pk = getPlatformLunarPayPublishableKey();

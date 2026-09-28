@@ -23,10 +23,10 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
   loadVenueDirectoryPlanContext,
-  isPlatformDirectoryBillingConfigured,
 } from '@/lib/platform-directory-billing';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
+import { saasBillingConfiguredFor } from '@/lib/stripe/billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -86,8 +86,8 @@ export async function POST(): Promise<NextResponse> {
 
   // Billing not wired up. In local dev this is expected; in production it means
   // STORYPAY_HQ_LUNARPAY_SK is missing and every venue would sail past the card.
-  if (!isPlatformDirectoryBillingConfigured()) {
-    const held = holdGate('STORYPAY_HQ_LUNARPAY_SK is not configured');
+  if (!(await saasBillingConfiguredFor(venueId))) {
+    const held = holdGate('the billing provider for this venue is not configured (Stripe or LunarPay keys missing)');
     if (held) return held;
     return NextResponse.json({ needsCard: false, devSkip: true });
   }

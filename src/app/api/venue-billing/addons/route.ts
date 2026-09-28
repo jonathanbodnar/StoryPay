@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { createSubscriptionCheckout, isStripeBillingVenue, syncSubscriptionItems } from '@/lib/stripe/billing';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
@@ -209,6 +210,76 @@ async function handlePost(req: NextRequest) {
       total_cents: nextCharge.total_cents,
       trialing: true,
     });
+  }
+
+  // ── Stripe (the owner's account) ────────────────────────────────────────
+  // Same branches as below, but a change updates the subscription's items
+  // (no proration — the new amount starts at the next renewal).
+  if (await isStripeBillingVenue(venueId)) {
+    const flags = {
+      verified:  nextVerified,
+      sponsored: nextSponsored,
+      concierge: nextConcierge,
+      prevVerifiedStatus:  String((addonRow as Record<string, unknown>).directory_verified_status  ?? 'none'),
+      prevSponsoredStatus: String((addonRow as Record<string, unknown>).directory_sponsored_status ?? 'none'),
+    };
+    const hasStripeSub = Boolean(
+      subId && String(subId).startsWith('sub_') && (status === 'active' || status === 'past_due' || status === 'trialing'),
+    );
+
+    if (!hasStripeSub && nextCharge.total_cents > 0) {
+      await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, flags);
+      try {
+        const { url } = await createSubscriptionCheckout(venueId, {
+          purpose: 'addon_checkout',
+          nextPath: '/dashboard/directory-billing?addons=1',
+        });
+        return NextResponse.json({
+          kind: 'checkout_required',
+          url,
+          pending_addons: { verified: nextVerified, sponsored: nextSponsored, concierge: nextConcierge },
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Could not create checkout session';
+        console.error('[addons] Stripe error:', msg);
+        return NextResponse.json({ error: msg }, { status: 502 });
+      }
+    }
+
+    await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, flags);
+    if (hasStripeSub && nextCharge.total_cents !== prevCharge.total_cents) {
+      try {
+        const synced = await syncSubscriptionItems(venueId);
+        await recordBillingEvent(
+          venueId,
+          currentPlan?.id ?? null,
+          synced.totalCents,
+          synced.canceled ? 'subscription_cancel' : 'addon_change_next_renewal',
+          `addon_change:${venueId}:${Date.now()}`,
+          {
+            provider: 'stripe',
+            previous_amount_cents: prevCharge.total_cents,
+            new_amount_cents: nextCharge.total_cents,
+            verified: nextVerified,
+            sponsored: nextSponsored,
+            concierge: nextConcierge,
+          },
+        );
+      } catch (e) {
+        // Put the flags back so the venue row matches what Stripe still bills.
+        await applyAddonFlagsAndStatus(venueId, currentPlan?.id ?? null, {
+          ...flags,
+          verified: prevVerified,
+          sponsored: prevSponsored,
+          concierge: prevConcierge,
+        }).catch(() => {});
+        return NextResponse.json(
+          { error: `Stripe rejected the add-on change: ${e instanceof Error ? e.message : 'unknown error'}` },
+          { status: 502 },
+        );
+      }
+    }
+    return NextResponse.json({ kind: 'switched', total_cents: nextCharge.total_cents });
   }
 
   // ── Flow 2: NO subscription yet, but addons now create a non-zero total ─

@@ -8,6 +8,7 @@ import {
 import { createCheckoutSession } from '@/lib/lunarpay';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
+import { createSubscriptionCheckout, isStripeBillingVenue } from '@/lib/stripe/billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -71,6 +72,19 @@ export async function POST() {
       { error: 'This venue is on a perpetual free trial — no payment needed.' },
       { status: 400 },
     );
+  }
+
+  // Stripe (the owner's account): Stripe-hosted checkout starts the subscription —
+  // billing today when the trial is over, at the trial end when it's still running.
+  if (await isStripeBillingVenue(venueId)) {
+    try {
+      const { url } = await createSubscriptionCheckout(venueId, { purpose: 'start_paid', nextPath: '/dashboard' });
+      return NextResponse.json({ url });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not create checkout session';
+      console.error('[start-paid] Stripe error:', msg);
+      return NextResponse.json({ error: msg }, { status: 422 });
+    }
   }
 
   const [allPlans, addonPrices] = await Promise.all([

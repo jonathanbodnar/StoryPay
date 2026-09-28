@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import StripeTrialCardForm from '@/components/billing/StripeTrialCardForm';
 
 interface FortisElements {
   create(opts: Record<string, unknown>): void;
@@ -53,7 +54,44 @@ function extractTicketId(payload: unknown): { ticketId?: string; paymentMethod?:
   return { ticketId: candidate ? String(candidate) : undefined, paymentMethod };
 }
 
-export default function InlineTrialCardForm({
+/**
+ * Picks the card form for the venue's billing system: Stripe (the owner's
+ * account) or the legacy LunarPay/Fortis form. /api/venue-billing/payment-intent
+ * says which, and hands over the matching secret.
+ */
+export default function InlineTrialCardForm(props: {
+  provider?: 'lunarpay' | 'stripe';
+  clientToken?: string;
+  environment?: string;
+  clientSecret?: string;
+  publishableKey?: string;
+  plan?: 'free' | 'pro';
+  onSuccess: () => void;
+  onError: (msg: string) => void;
+}) {
+  if (props.provider === 'stripe' && props.clientSecret && props.publishableKey) {
+    return (
+      <StripeTrialCardForm
+        clientSecret={props.clientSecret}
+        publishableKey={props.publishableKey}
+        plan={props.plan ?? 'pro'}
+        onSuccess={props.onSuccess}
+        onError={props.onError}
+      />
+    );
+  }
+  return (
+    <FortisTrialCardForm
+      clientToken={props.clientToken ?? ''}
+      environment={props.environment ?? 'production'}
+      plan={props.plan}
+      onSuccess={props.onSuccess}
+      onError={props.onError}
+    />
+  );
+}
+
+function FortisTrialCardForm({
   clientToken,
   environment,
   plan = 'pro',

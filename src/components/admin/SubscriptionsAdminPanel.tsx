@@ -14,6 +14,8 @@ import {
   Wrench,
 } from 'lucide-react';
 
+import { LunarPayToStripePanel } from '@/components/admin/LunarPayToStripePanel';
+
 const BRAND = '#1b1b1b';
 
 type Plan = {
@@ -245,6 +247,9 @@ export function SubscriptionsAdminPanel() {
           changes are managed under <span className="font-semibold">Directory plans</span>.
         </p>
       </div>
+
+      {/* Moving LunarPay subscribers to the owner's Stripe account */}
+      <LunarPayToStripePanel />
 
       {/* LunarPay reconciliation */}
       <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">

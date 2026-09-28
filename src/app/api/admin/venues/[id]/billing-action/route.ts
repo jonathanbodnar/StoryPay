@@ -64,14 +64,71 @@ let body: { action?: string; charge_id?: string; amount_cents?: number; status?:
   const v = venue as Record<string, unknown>;
   const subId = v.directory_subscription_external_id as string | null;
 
-  let secret: string;
-  try {
-    secret = requirePlatformLunarPaySecretKey();
-  } catch {
-    return NextResponse.json(
-      { error: 'Platform LunarPay key not configured. Check STORYPAY_HQ_LUNARPAY_SK env var.' },
-      { status: 503 },
-    );
+  // ── Stripe-billed venue (the owner's Stripe account) ─────────────────────
+  if (subId && subId.startsWith('sub_')) {
+    const { getStripe } = await import('@/lib/stripe/client');
+    const stripe = getStripe();
+    if (action === 'fetch_subscription') {
+      try {
+        return NextResponse.json({ subscription: await stripe.subscriptions.retrieve(subId), provider: 'stripe' });
+      } catch (e) {
+        return NextResponse.json({ error: `Could not fetch subscription: ${e instanceof Error ? e.message : 'Stripe error'}` }, { status: 502 });
+      }
+    }
+    if (action === 'cancel_subscription') {
+      try {
+        const { cancelVenueSubscriptionStripe } = await import('@/lib/stripe/billing');
+        await cancelVenueSubscriptionStripe(venueId);
+        return NextResponse.json({ ok: true, canceled_subscription_id: subId, provider: 'stripe' });
+      } catch (e) {
+        return NextResponse.json({ error: `Stripe returned an error: ${e instanceof Error ? e.message : 'unknown'}` }, { status: 502 });
+      }
+    }
+    if (action === 'refund_charge') {
+      const ref = body.charge_id?.trim();
+      if (!ref) return NextResponse.json({ error: 'charge_id is required (a Stripe ch_, pi_ or in_ id)' }, { status: 400 });
+      try {
+        let paymentIntent: string | undefined;
+        let charge: string | undefined;
+        if (ref.startsWith('in_')) {
+          const payments = await stripe.invoicePayments.list({ invoice: ref, limit: 1 });
+          const pi = payments.data[0]?.payment?.payment_intent;
+          paymentIntent = typeof pi === 'string' ? pi : pi?.id;
+        } else if (ref.startsWith('pi_')) paymentIntent = ref;
+        else charge = ref;
+        const refund = await stripe.refunds.create({
+          ...(paymentIntent ? { payment_intent: paymentIntent } : { charge }),
+          ...(typeof body.amount_cents === 'number' && body.amount_cents > 0 ? { amount: Math.round(body.amount_cents) } : {}),
+        });
+        await supabaseAdmin.from('platform_billing_events').insert({
+          venue_id: venueId,
+          directory_plan_id: (v.directory_plan_id as string | null) ?? null,
+          amount_cents: -(refund.amount ?? 0),
+          currency: 'usd',
+          external_event_id: `stripe_refund:${refund.id}`,
+          event_type: 'refund',
+          provider: 'stripe',
+          metadata: { refund_id: refund.id, reference: ref, admin_action: true },
+        });
+        return NextResponse.json({ ok: true, refund, provider: 'stripe' });
+      } catch (e) {
+        return NextResponse.json({ error: `Stripe refund failed: ${e instanceof Error ? e.message : 'unknown'}` }, { status: 502 });
+      }
+    }
+  }
+
+  // set_status only writes the venue row, so it must not need LunarPay (Stripe
+  // venues use it too).
+  let secret = '';
+  if (action !== 'set_status') {
+    try {
+      secret = requirePlatformLunarPaySecretKey();
+    } catch {
+      return NextResponse.json(
+        { error: 'Platform LunarPay key not configured. Check STORYPAY_HQ_LUNARPAY_SK env var.' },
+        { status: 503 },
+      );
+    }
   }
 
   // ── fetch_subscription ────────────────────────────────────────────────────

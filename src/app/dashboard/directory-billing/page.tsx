@@ -213,6 +213,8 @@ type BillingSummary = {
   addon_prices: { verified_cents: number; sponsored_cents: number; concierge_cents: number };
   trial: TrialState;
   is_legacy_plan?: boolean;
+  billing_provider?: 'stripe' | 'lunarpay' | null;
+  stripe_move_available?: boolean;
 };
 
 function formatTrialDuration(p: Pick<Plan, 'trial_period_value' | 'trial_period_unit'>): string {
@@ -617,7 +619,7 @@ export default function DirectoryBillingPage() {
         </h1>
         <p className="mt-1 text-sm text-gray-500">
           Manage your StoryVenue plan, update your card on file, and review past invoices.
-          Billing is processed securely by StoryPay&apos;s merchant platform.
+          Billing is processed securely.
         </p>
       </div>
 
@@ -635,6 +637,32 @@ export default function DirectoryBillingPage() {
       {busy === 'verify_checkout' || busy === 'verify_payment_update' || busy === 'verify_addons' || busy === 'verify_start_paid' ? (
         <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" /> Confirming with our merchant processor…
+        </div>
+      ) : null}
+      {summary.stripe_move_available ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-3">
+          <span>
+            <strong>Update your billing card</strong> — StoryVenue billing is moving to a new, more secure
+            processor. Add your card once (about a minute). You won&apos;t be charged until your next
+            billing date.
+          </span>
+          <button
+            type="button"
+            onClick={async () => {
+              setError('');
+              try {
+                const res = await fetch('/api/venue-billing/stripe/move-to-stripe', { method: 'POST' });
+                const d = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+                if (!res.ok || !d.url) throw new Error(d.error || 'Could not start the card update.');
+                void redirectToCheckout(d.url);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not start the card update.');
+              }
+            }}
+            className="rounded-lg bg-[#1b1b1b] px-3 py-1.5 text-xs font-semibold text-white hover:bg-black"
+          >
+            Update billing card
+          </button>
         </div>
       ) : null}
       {!summary.billing_configured ? (

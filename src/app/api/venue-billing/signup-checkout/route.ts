@@ -3,10 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
   loadVenueDirectoryPlanContext,
-  isPlatformDirectoryBillingConfigured,
 } from '@/lib/platform-directory-billing';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
+import { saasBillingConfiguredFor } from '@/lib/stripe/billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Paid plan — billing must be configured
-  if (!isPlatformDirectoryBillingConfigured()) {
+  if (!(await saasBillingConfiguredFor(venueId))) {
     // Billing not wired up (local dev) — skip card step
     const now = new Date();
     const trialEndsAt = new Date(now);

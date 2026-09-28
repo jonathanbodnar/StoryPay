@@ -21,6 +21,19 @@ import {
   type VenuePlanRow,
 } from './platform-directory-billing';
 import { scheduleOwnerGhlSync } from './owner-ghl-sync';
+import { isStripeConfigured, stripeBillingEnabledFor } from './stripe/client';
+import {
+  isStripeBillingVenue,
+  loadBillingVenue,
+  loadStripeBillingSnapshot,
+  changeVenuePlanStripe,
+  createSubscriptionCheckout,
+  createCardUpdateCheckout,
+  cancelVenueSubscriptionStripe,
+  scheduleDowngradeToFreeStripe,
+  extendTrialStripe,
+  retryPaymentStripe,
+} from './stripe/billing';
 import {
   computeMonthlyTotalCents,
   resolveEffectiveAddons,
@@ -169,6 +182,10 @@ export type VenueBillingSummary = {
    * managed directly — no subscription required, all add-ons included.
    */
   is_legacy_plan: boolean;
+  /** Which system bills this venue's software subscription. */
+  billing_provider: 'stripe' | 'lunarpay' | null;
+  /** A LunarPay venue can move itself to Stripe by adding a card (billing page banner). */
+  stripe_move_available: boolean;
 };
 
 function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
@@ -377,11 +394,20 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     alwaysIncludeId:  ctx?.venue?.directory_plan_id ?? undefined,
   });
   const history = await loadBillingHistory(venueId);
-  const secret = getPlatformLunarPaySecretKey();
+  const billingRow = await loadBillingVenue(venueId);
+  const onStripe = await isStripeBillingVenue(venueId);
+  const secret = onStripe ? null : getPlatformLunarPaySecretKey();
 
   let subscription: VenueBillingSubscription = null;
   let paymentMethod: VenueBillingPaymentMethod = null;
-  if (secret) {
+  if (onStripe && isStripeConfigured()) {
+    const bv = await loadBillingVenue(venueId);
+    if (bv) {
+      const snap = await loadStripeBillingSnapshot(bv);
+      subscription = snap.subscription;
+      paymentMethod = snap.payment_method;
+    }
+  } else if (secret) {
     subscription = await fetchLiveSubscription(
       secret,
       ctx?.venue.directory_subscription_external_id || null,
@@ -526,7 +552,7 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     payment_method: paymentMethod,
     plans,
     history,
-    billing_configured: Boolean(secret),
+    billing_configured: onStripe ? isStripeConfigured() : Boolean(secret),
     addons,
     charge,
     plan_addon_inclusion,
@@ -541,6 +567,9 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
       plan_id: trialState.directory_trial_plan_id,
     },
     is_legacy_plan: isLegacyPlan,
+    billing_provider: onStripe ? 'stripe' : billingRow?.billing_provider === 'lunarpay' ? 'lunarpay' : null,
+    stripe_move_available:
+      !onStripe && billingRow?.billing_provider === 'lunarpay' && isStripeConfigured() && stripeBillingEnabledFor(billingRow.slug),
   };
 }
 
@@ -682,6 +711,7 @@ export async function changeVenuePlan(
   venueId: string,
   targetPlanId: string,
 ): Promise<ChangePlanResult> {
+  if (await isStripeBillingVenue(venueId)) return changeVenuePlanStripe(venueId, targetPlanId);
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) throw new Error('Venue not found');
 
@@ -993,6 +1023,7 @@ export async function changeVenuePlan(
  * caller for one — that's the plan we previously marked as pending.
  */
 export async function resumePendingCheckout(venueId: string): Promise<{ url: string }> {
+  if (await isStripeBillingVenue(venueId)) return createSubscriptionCheckout(venueId, { purpose: 'resume_pending' });
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) throw new Error('Venue not found');
   if (!ctx.plan) throw new Error('No directory plan assigned to resume.');
@@ -1077,6 +1108,7 @@ export async function extendVenueTrial(
   venueId: string,
   newTrialEndsAt: Date,
 ): Promise<{ trialEndsAt: string; newSubId: string | null }> {
+  if (await isStripeBillingVenue(venueId)) return extendTrialStripe(venueId, newTrialEndsAt);
   const secret = getPlatformLunarPaySecretKey();
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) throw new Error('Venue not found');
@@ -1209,6 +1241,7 @@ export async function extendVenueTrial(
 // ── Cancel subscription ────────────────────────────────────────────────────
 
 export async function cancelVenueSubscription(venueId: string): Promise<void> {
+  if (await isStripeBillingVenue(venueId)) return cancelVenueSubscriptionStripe(venueId);
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) throw new Error('Venue not found');
 
@@ -1268,6 +1301,7 @@ export type ScheduleDowngradeResult =
  *   • If there's no remaining period, downgrades to Free immediately.
  */
 export async function scheduleVenueDowngradeToFree(venueId: string): Promise<ScheduleDowngradeResult> {
+  if (await isStripeBillingVenue(venueId)) return scheduleDowngradeToFreeStripe(venueId);
   const { data: row } = await supabaseAdmin
     .from('venues')
     .select(
@@ -1390,6 +1424,7 @@ export async function applyFreeDowngrade(venueId: string): Promise<void> {
 export async function startUpdatePaymentMethodCheckout(
   venueId: string,
 ): Promise<{ url: string }> {
+  if (await isStripeBillingVenue(venueId)) return createCardUpdateCheckout(venueId);
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) throw new Error('Venue not found');
   if (!ctx.plan) throw new Error('No directory plan assigned');
@@ -1565,6 +1600,12 @@ export async function checkAndSyncSubscriptionStatus(
 ): Promise<'active' | 'past_due' | 'skip'> {
   const { subId, currentStatus, lastCheckedAt, trialEndsAt } = opts;
 
+  // Stripe subscriptions (sub_…) are kept current by webhooks — nothing to poll.
+  if (subId && String(subId).startsWith('sub_')) {
+    if (currentStatus === 'past_due') return 'past_due';
+    return currentStatus === 'active' ? 'active' : 'skip';
+  }
+
   // Only relevant for paying venues with a LP subscription.
   if (!subId || !['active', 'trialing', 'past_due'].includes(String(currentStatus ?? ''))) {
     return 'skip';
@@ -1668,6 +1709,7 @@ export async function checkAndSyncSubscriptionStatus(
  *   5. Record a billing event.
  */
 export async function retrySubscriptionCharge(venueId: string): Promise<void> {
+  if (await isStripeBillingVenue(venueId)) return retryPaymentStripe(venueId);
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) throw new Error('Venue not found');
   if (!ctx.plan) throw new Error('No plan assigned to this venue');

@@ -1217,7 +1217,13 @@ function ActivateStep({ onContinue, alreadyActivated = false }: { onContinue: ()
 function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void }) {
   const [phase, setPhase] = useState<'loading' | 'card' | 'finishing' | 'live' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [cardIntent, setCardIntent] = useState<{ clientToken: string; environment: string } | null>(null);
+  const [cardIntent, setCardIntent] = useState<{
+    provider: 'lunarpay' | 'stripe';
+    clientToken?: string;
+    environment?: string;
+    clientSecret?: string;
+    publishableKey?: string;
+  } | null>(null);
   const [liveUrl, setLiveUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   // Plan the venue is unlocking on. Pro is pre-selected; the card is collected
@@ -1283,12 +1289,17 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
         const piRes = await fetch('/api/venue-billing/payment-intent', { method: 'POST' });
         const pi = await piRes.json();
         if (cancelled) return;
-        if (!piRes.ok || !pi.clientToken) {
+        const isStripe = pi.provider === 'stripe';
+        if (!piRes.ok || (isStripe ? !(pi.clientSecret && pi.publishableKey) : !pi.clientToken)) {
           setError(pi.error || 'Could not load the payment form. Please try again.');
           setPhase('error');
           return;
         }
-        setCardIntent({ clientToken: pi.clientToken, environment: pi.environment || 'production' });
+        setCardIntent(
+          isStripe
+            ? { provider: 'stripe', clientSecret: pi.clientSecret, publishableKey: pi.publishableKey }
+            : { provider: 'lunarpay', clientToken: pi.clientToken, environment: pi.environment || 'production' },
+        );
         setPhase('card');
         try { trackClient('card_shown', { label: 'Card capture shown', properties: { amountCents: b.amountCents } }); } catch { /* non-fatal */ }
       } catch {
@@ -1432,8 +1443,11 @@ function CardStep({ onDone, onLive }: { onDone: () => void; onLive?: () => void 
         {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
         {cardIntent && (
           <InlineTrialCardForm
+            provider={cardIntent.provider}
             clientToken={cardIntent.clientToken}
             environment={cardIntent.environment}
+            clientSecret={cardIntent.clientSecret}
+            publishableKey={cardIntent.publishableKey}
             plan={plan}
             onSuccess={() => {
               try { trackClient('card_entered', { label: 'Card vaulted', properties: { plan } }); } catch { /* non-fatal */ }
