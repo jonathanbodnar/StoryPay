@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { loadAddonPrices } from '@/lib/venue-billing';
+import { stripeDashboardUrl } from '@/lib/stripe/client';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -36,6 +37,9 @@ type VenueRow = {
   directory_subscription_status: string | null;
   directory_subscription_external_id: string | null;
   platform_lunarpay_customer_id: string | null;
+  billing_provider: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
   directory_addon_verified: boolean | null;
   directory_addon_sponsored: boolean | null;
   directory_addon_concierge: boolean | null;
@@ -62,7 +66,7 @@ export async function GET() {
     supabaseAdmin
       .from('venues')
       .select(
-        'id, name, email, created_at, directory_plan_id, directory_subscription_status, directory_subscription_external_id, platform_lunarpay_customer_id, directory_addon_verified, directory_addon_sponsored, directory_addon_concierge',
+        'id, name, email, created_at, directory_plan_id, directory_subscription_status, directory_subscription_external_id, platform_lunarpay_customer_id, billing_provider, stripe_customer_id, stripe_subscription_id, directory_addon_verified, directory_addon_sponsored, directory_addon_concierge',
       )
       .order('created_at', { ascending: false }),
     supabaseAdmin
@@ -161,6 +165,15 @@ export async function GET() {
 
     const lastEv = venueLastPayment.get(v.id) || null;
 
+    // Which system bills the software subscription (a Stripe id starts with sub_).
+    const ext = v.directory_subscription_external_id;
+    const provider: 'stripe' | 'lunarpay' | null =
+      v.billing_provider === 'stripe' || ext?.startsWith('sub_')
+        ? 'stripe'
+        : v.billing_provider === 'lunarpay' || ext
+          ? 'lunarpay'
+          : null;
+
     return {
       id: v.id,
       name: v.name,
@@ -177,6 +190,12 @@ export async function GET() {
       status,
       external_subscription_id: v.directory_subscription_external_id,
       lunarpay_customer_id: v.platform_lunarpay_customer_id,
+      billing_provider: provider,
+      stripe_url: v.stripe_subscription_id
+        ? stripeDashboardUrl(`subscriptions/${v.stripe_subscription_id}`)
+        : v.stripe_customer_id
+          ? stripeDashboardUrl(`customers/${v.stripe_customer_id}`)
+          : null,
       addons: {
         verified:  hasVerified,
         sponsored: hasSponsored,

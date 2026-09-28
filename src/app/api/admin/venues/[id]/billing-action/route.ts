@@ -70,7 +70,24 @@ let body: { action?: string; charge_id?: string; amount_cents?: number; status?:
     const stripe = getStripe();
     if (action === 'fetch_subscription') {
       try {
-        return NextResponse.json({ subscription: await stripe.subscriptions.retrieve(subId), provider: 'stripe' });
+        // Same keys the admin modal shows for a LunarPay subscription.
+        const sub = await stripe.subscriptions.retrieve(subId);
+        const amount = sub.items.data.reduce((s, it) => s + (it.price.unit_amount ?? 0) * (it.quantity ?? 1), 0);
+        const next = sub.status === 'trialing' ? sub.trial_end : sub.items.data[0]?.current_period_end;
+        const day = (ts: number | null | undefined) => (ts ? new Date(ts * 1000).toISOString().slice(0, 10) : null);
+        return NextResponse.json({
+          provider: 'stripe',
+          subscription: {
+            id: sub.id,
+            status: sub.status,
+            amount: `$${(amount / 100).toFixed(2)}`,
+            frequency: 'monthly',
+            startOn: day(sub.start_date),
+            nextPaymentOn: sub.status === 'canceled' ? null : day(next),
+            cancelAt: day(sub.cancel_at),
+            customerId: typeof sub.customer === 'string' ? sub.customer : sub.customer.id,
+          },
+        });
       } catch (e) {
         return NextResponse.json({ error: `Could not fetch subscription: ${e instanceof Error ? e.message : 'Stripe error'}` }, { status: 502 });
       }

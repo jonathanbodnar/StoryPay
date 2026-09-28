@@ -35,8 +35,16 @@ import {
 } from '@/lib/lunarpay-venue-admin';
 import { furthestStage } from '@/lib/funnel-stage';
 import PasswordStrengthBar from '@/components/PasswordStrengthBar';
+import { StripeBillingCard } from '@/components/admin/StripeBillingCard';
 
 const BRAND = '#1b1b1b';
+
+/** Which system bills this venue's software subscription, for the Billing modal. */
+function billingProviderName(v: AdminVenueRow): 'Stripe' | 'LunarPay' {
+  const ext = String(v.directory_subscription_external_id ?? '');
+  if (ext) return ext.startsWith('sub_') ? 'Stripe' : 'LunarPay';
+  return v.billing_provider === 'stripe' ? 'Stripe' : 'LunarPay';
+}
 
 export type AdminVenueRow = Record<string, unknown> & {
   id: string;
@@ -814,7 +822,7 @@ export function VenueManagementPortal({
 
   async function billingCancelSub() {
     if (!billingTarget) return;
-    if (!confirm(`Cancel the LunarPay subscription for "${billingTarget.name}"? This stops future charges immediately.`)) return;
+    if (!confirm(`Cancel the ${billingProviderName(billingTarget)} subscription for "${billingTarget.name}"? This stops future charges immediately.`)) return;
     setBillingWorking(true);
     setBillingMsg(null);
     try {
@@ -1803,10 +1811,10 @@ export function VenueManagementPortal({
               </button>
             </div>
             {billingSubLoading ? (
-              <div className="flex items-center gap-2 text-xs text-gray-400"><Loader2 size={13} className="animate-spin" /> Loading from LunarPay…</div>
+              <div className="flex items-center gap-2 text-xs text-gray-400"><Loader2 size={13} className="animate-spin" /> Loading from {billingProviderName(billingTarget)}…</div>
             ) : billingLiveSub ? (
               <div className="space-y-1 text-xs font-mono text-gray-700">
-                {(['id', 'status', 'amount', 'frequency', 'startOn', 'nextPaymentOn', 'nextPaymentDate', 'customerId'] as string[]).map((k) =>
+                {(['id', 'status', 'amount', 'frequency', 'startOn', 'nextPaymentOn', 'nextPaymentDate', 'cancelAt', 'customerId'] as string[]).map((k) =>
                   billingLiveSub[k] != null ? (
                     <div key={k} className="flex gap-2">
                       <span className="text-gray-400 w-32 shrink-0">{k}</span>
@@ -1816,7 +1824,7 @@ export function VenueManagementPortal({
                 )}
               </div>
             ) : (
-              <p className="text-xs text-gray-500">No active subscription found on LunarPay.</p>
+              <p className="text-xs text-gray-500">No active subscription found on {billingProviderName(billingTarget)}.</p>
             )}
             <div className="mt-2 text-[11px] text-gray-400">
               DB status: <strong>{String(billingTarget.directory_subscription_status || '—')}</strong>
@@ -1826,11 +1834,14 @@ export function VenueManagementPortal({
             </div>
           </div>
 
+          {/* The venue's customer in the owner's Stripe account (software + private-client subscriptions) */}
+          <StripeBillingCard key={billingTarget.id} venueId={billingTarget.id} />
+
           {/* Cancel subscription */}
           <div className="rounded-xl border border-red-100 bg-red-50 p-4 mb-4">
             <h4 className="text-xs font-semibold text-red-800 mb-1 flex items-center gap-1.5"><Ban size={13} /> Cancel subscription</h4>
             <p className="text-xs text-red-700 mb-3">
-              Cancels on LunarPay immediately — no further charges. Updates the venue&apos;s status to &ldquo;canceled&rdquo; in the DB.
+              Cancels on {billingProviderName(billingTarget)} immediately — no further charges. Updates the venue&apos;s status to &ldquo;canceled&rdquo; in the DB.
             </p>
             <button
               type="button"
@@ -1847,14 +1858,17 @@ export function VenueManagementPortal({
           <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 mb-4">
             <h4 className="text-xs font-semibold text-amber-800 mb-1 flex items-center gap-1.5"><RotateCcw size={13} /> Refund a charge</h4>
             <p className="text-xs text-amber-700 mb-3">
-              Enter the LunarPay charge ID. Leave amount blank for a full refund.
+              {billingProviderName(billingTarget) === 'Stripe'
+                ? 'Enter the Stripe invoice (in_…), payment (pi_…) or charge (ch_…) ID.'
+                : 'Enter the LunarPay charge ID.'}{' '}
+              Leave amount blank for a full refund.
             </p>
             <div className="flex gap-2 flex-wrap">
               <input
                 type="text"
                 value={billingChargeId}
                 onChange={(e) => setBillingChargeId(e.target.value)}
-                placeholder="Charge ID (e.g. 1234)"
+                placeholder={billingProviderName(billingTarget) === 'Stripe' ? 'in_… / pi_… / ch_…' : 'Charge ID (e.g. 1234)'}
                 className="flex-1 min-w-0 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs focus:outline-none focus:border-amber-400"
               />
               <input

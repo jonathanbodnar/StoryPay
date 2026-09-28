@@ -40,6 +40,8 @@ type VenueRow = {
   status: string;
   external_subscription_id: string | null;
   lunarpay_customer_id: string | null;
+  billing_provider: 'stripe' | 'lunarpay' | null;
+  stripe_url: string | null;
   addons: { verified: boolean; sponsored: boolean; concierge: boolean };
   mrr_cents: number;
   lifetime_cents: number;
@@ -384,7 +386,7 @@ export function SubscriptionsAdminPanel() {
         <SummaryCard
           label="Past due"
           value={String(summary.past_due_count)}
-          sub="Payments LunarPay reported as failed"
+          sub="Payments that failed to charge"
           icon={<AlertTriangle size={16} />}
           tone={summary.past_due_count > 0 ? 'red' : 'gray'}
         />
@@ -548,6 +550,7 @@ export function SubscriptionsAdminPanel() {
                   <th className="px-6 py-3">Plan</th>
                   <th className="px-6 py-3">Add-ons</th>
                   <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3">Billed by</th>
                   <th className="px-6 py-3 text-right">Active amount</th>
                   <th className="px-6 py-3 text-right">Lifetime</th>
                   <th className="px-6 py-3">Last payment</th>
@@ -608,6 +611,26 @@ export function SubscriptionsAdminPanel() {
                       >
                         {v.status.replace(/_/g, ' ')}
                       </span>
+                    </td>
+                    <td className="px-6 py-3">
+                      {v.billing_provider === 'stripe' ? (
+                        <div>
+                          <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+                            Stripe
+                          </span>
+                          {v.stripe_url && (
+                            <a href={v.stripe_url} target="_blank" rel="noreferrer" className="mt-0.5 block text-[10px] font-semibold text-indigo-700 hover:underline">
+                              Open in Stripe ↗
+                            </a>
+                          )}
+                        </div>
+                      ) : v.billing_provider === 'lunarpay' ? (
+                        <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+                          LunarPay
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-3 text-right font-mono text-gray-900">
                       {v.mrr_cents > 0 ? (
