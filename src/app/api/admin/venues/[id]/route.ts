@@ -348,11 +348,20 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     );
   }
 
-  // Cancel any active LunarPay SaaS subscription before wiping the DB row,
-  // so the card is not charged again after deletion (best-effort).
+  // Cancel any active SaaS subscription (Stripe or LunarPay) before wiping the
+  // DB row, so the card is not charged again after deletion (best-effort).
   const subId = (venue as { directory_subscription_external_id?: string | null }).directory_subscription_external_id;
   const subStatus = (venue as { directory_subscription_status?: string | null }).directory_subscription_status;
-  if (subId && subStatus !== 'canceled' && subStatus !== 'none') {
+  if (subId && String(subId).startsWith('sub_') && subStatus !== 'canceled' && subStatus !== 'none') {
+    // Billed on the owner's Stripe account.
+    try {
+      const { getStripe } = await import('@/lib/stripe/client');
+      await getStripe().subscriptions.cancel(subId);
+      console.log('[admin/venues/delete] canceled Stripe subscription', subId, 'for venue', venueId);
+    } catch (e) {
+      console.warn('[admin/venues/delete] Stripe subscription cancel failed (non-fatal):', e);
+    }
+  } else if (subId && subStatus !== 'canceled' && subStatus !== 'none') {
     try {
       const hqSecret = requirePlatformLunarPaySecretKey();
       await cancelSubscription(hqSecret, subId);
