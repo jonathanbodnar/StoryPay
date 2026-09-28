@@ -214,7 +214,7 @@ async function ensurePrice(key: string, name: string, unitAmount: number): Promi
   return price.id;
 }
 
-interface DesiredItem {
+export interface DesiredItem {
   key: string;
   name: string;
   amountCents: number;

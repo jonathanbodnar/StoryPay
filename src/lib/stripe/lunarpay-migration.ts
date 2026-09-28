@@ -1,12 +1,15 @@
 /**
  * Move a venue's software subscription from LunarPay to the owner's Stripe
  * account without a double charge or a gap:
- *   1. Create the Stripe subscription (same plan + add-ons) whose first charge
- *      is the date LunarPay would next have charged — nothing is charged now.
+ *   1. Create the Stripe subscription, billing exactly what LunarPay bills,
+ *      whose first charge is the date LunarPay would next have charged —
+ *      nothing is charged now.
  *   2. Only then cancel the LunarPay subscription. If that fails, the new
  *      Stripe subscription is cancelled again so the venue is never billed twice.
  * A past-due LunarPay venue (its next charge date has passed) is charged on
- * Stripe right away instead, since that payment is owed.
+ * Stripe right away instead, since that payment is owed; LunarPay is stopped
+ * first so it can't also retry. A LunarPay subscription that's already
+ * cancelled is left alone.
  */
 
 import type Stripe from 'stripe';
@@ -14,6 +17,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getStripe } from '@/lib/stripe/client';
 import {
   SAAS_KIND,
+  type DesiredItem,
   desiredItemsFor,
   ensureStripeCustomer,
   loadBillingVenue,
@@ -112,12 +116,35 @@ export interface MigrationPreview {
   lunarpay: LunarPaySubInfo | null;
   customerId: string | null;
   card: CardSummary | null;
+  /** What the Stripe subscription will bill each month. */
   stripeAmountCents: number;
   amountMatches: boolean;
+  /** Add-ons are switched on that LunarPay never billed (e.g. part of a private
+   *  client's package). Only the plan moves, so the price stays the same. */
+  addonsNotBilled: boolean;
   firstChargeDate: string | null;
   chargesNow: boolean;
   ready: boolean;
   blocker: string | null;
+}
+
+const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
+const lunarPayStopped = (status: string) => /cancel|inactive|expired|ended|stopped/i.test(status);
+
+/**
+ * The Stripe items that bill exactly what LunarPay bills today: everything when
+ * the amounts agree, or just the plan when LunarPay only ever billed the plan.
+ * Anything else is left for a person to check (null).
+ */
+function itemsMatchingLunarPay(
+  desired: { items: DesiredItem[]; totalCents: number },
+  lpAmountCents: number,
+): { items: DesiredItem[]; totalCents: number; addonsNotBilled: boolean } | null {
+  if (lpAmountCents === desired.totalCents) return { items: desired.items, totalCents: desired.totalCents, addonsNotBilled: false };
+  const plan = desired.items.filter((i) => i.key.startsWith('plan_'));
+  const planCents = plan.reduce((sum, i) => sum + i.amountCents, 0);
+  if (plan.length && lpAmountCents === planCents) return { items: plan, totalCents: planCents, addonsNotBilled: true };
+  return null;
 }
 
 export async function previewMigration(
@@ -135,6 +162,7 @@ export async function previewMigration(
     ? await cardSummary(opts.paymentMethodId)
     : customerId ? await defaultCardFor(customerId) : null;
   const desired = await desiredItemsFor(v);
+  const billed = lunarpay ? itemsMatchingLunarPay(desired, lunarpay.amountCents) : null;
 
   const nextMs = lunarpay?.nextPaymentOn ? new Date(lunarpay.nextPaymentOn).getTime() : NaN;
   const chargesNow = !Number.isFinite(nextMs) || nextMs <= Date.now() + 3600_000;
@@ -144,6 +172,9 @@ export async function previewMigration(
   else if (!customerId) blocker = 'No Stripe customer with this venue’s email — link one, or ask the venue to add a card.';
   else if (!card) blocker = 'The Stripe customer has no saved card — ask the venue to add one.';
   else if (desired.totalCents <= 0) blocker = 'The venue’s plan is $0 — nothing to bill.';
+  else if (lunarpay && !billed) {
+    blocker = `LunarPay bills ${usd(lunarpay.amountCents)} but the plan and add-ons add up to ${usd(desired.totalCents)} — check before moving.`;
+  }
 
   return {
     venueId,
@@ -151,8 +182,9 @@ export async function previewMigration(
     lunarpay,
     customerId: customerId ?? null,
     card,
-    stripeAmountCents: desired.totalCents,
-    amountMatches: Boolean(lunarpay && lunarpay.amountCents === desired.totalCents),
+    stripeAmountCents: billed ? billed.totalCents : desired.totalCents,
+    amountMatches: Boolean(billed),
+    addonsNotBilled: Boolean(billed?.addonsNotBilled),
     firstChargeDate: chargesNow ? new Date().toISOString() : new Date(nextMs).toISOString(),
     chargesNow,
     ready: blocker === null,
@@ -180,39 +212,65 @@ export async function migrateVenueFromLunarPay(
   await ensureStripeCustomer(v);
 
   const desired = await desiredItemsFor(v);
-  const prices = await priceIdsForItems(desired.items);
+  const billed = itemsMatchingLunarPay(desired, preview.lunarpay.amountCents);
+  if (!billed) throw new Error('The LunarPay amount no longer matches the plan — check before moving.');
+  const prices = await priceIdsForItems(billed.items);
   const stripe = getStripe();
   const anchor = preview.chargesNow ? null : Math.floor(new Date(preview.firstChargeDate as string).getTime() / 1000);
 
-  const sub = await stripe.subscriptions.create(
-    {
-      customer: preview.customerId,
-      items: prices.map((price) => ({ price })),
-      default_payment_method: preview.card.id,
-      ...(anchor ? { billing_cycle_anchor: anchor, proration_behavior: 'none' as const } : {}),
-      payment_behavior: anchor ? 'allow_incomplete' : 'error_if_incomplete',
-      description: `StoryVenue — ${desired.planName ?? 'subscription'} (monthly)`,
-      metadata: {
-        storyvenue_venue_id: v.id,
-        sv_kind: SAAS_KIND,
-        plan_id: desired.planId ?? '',
-        migrated_from: 'lunarpay',
-        lp_subscription_id: lpSubId,
-      },
-    },
-    { idempotencyKey: `sv-migrate-${v.id}-${lpSubId}` },
-  );
-
-  // Stop LunarPay. If it can't be stopped, undo the Stripe side — never bill twice.
   const secret = getPlatformLunarPaySecretKey();
-  try {
-    if (!secret) throw new Error('LunarPay key missing — cannot cancel the old subscription.');
-    await cancelSubscription(secret, lpSubId);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (!/404|not found|no such|does not exist|already cancel/i.test(msg)) {
+  const stopLunarPay = async (): Promise<void> => {
+    try {
+      if (!secret) throw new Error('LunarPay key missing — cannot cancel the old subscription.');
+      await cancelSubscription(secret, lpSubId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/404|not found|no such|does not exist|already cancel/i.test(msg)) throw new Error(msg);
+    }
+  };
+  const lpRunning = !lunarPayStopped(preview.lunarpay.status);
+
+  // Overdue: stop LunarPay before Stripe charges, so it can't also retry.
+  if (lpRunning && !anchor) {
+    try {
+      await stopLunarPay();
+    } catch (e) {
+      throw new Error(`Could not cancel the LunarPay subscription, so nothing was charged: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
+  const params: Stripe.SubscriptionCreateParams = {
+    customer: preview.customerId,
+    items: prices.map((price) => ({ price })),
+    default_payment_method: preview.card.id,
+    ...(anchor ? { billing_cycle_anchor: anchor, proration_behavior: 'none' as const } : {}),
+    payment_behavior: anchor ? 'allow_incomplete' : 'error_if_incomplete',
+    description: `StoryVenue — ${desired.planName ?? 'subscription'} (monthly)`,
+    metadata: {
+      storyvenue_venue_id: v.id,
+      sv_kind: SAAS_KIND,
+      plan_id: desired.planId ?? '',
+      migrated_from: 'lunarpay',
+      lp_subscription_id: lpSubId,
+      ...(billed.addonsNotBilled ? { addons_not_billed: 'true' } : {}),
+    },
+  };
+  // Keyed on the card too, so trying again with a new card isn't an idempotent replay.
+  const key = `sv-migrate-${v.id}-${lpSubId}-${preview.card.id}`;
+  let sub = await stripe.subscriptions.create(params, { idempotencyKey: key });
+  if ((await stripe.subscriptions.retrieve(sub.id)).status === 'canceled') {
+    // A replay of an earlier attempt that was undone — start a fresh one.
+    sub = await stripe.subscriptions.create(params, { idempotencyKey: `${key}-${Date.now()}` });
+  }
+
+  // Stop LunarPay. If it can't be stopped, undo the Stripe side (nothing has
+  // been charged yet) — never bill twice.
+  if (lpRunning && anchor) {
+    try {
+      await stopLunarPay();
+    } catch (e) {
       await stripe.subscriptions.cancel(sub.id).catch(() => {});
-      throw new Error(`Could not cancel the LunarPay subscription, so the move was undone: ${msg}`);
+      throw new Error(`Could not cancel the LunarPay subscription, so the move was undone: ${e instanceof Error ? e.message : e}`);
     }
   }
 
@@ -240,7 +298,8 @@ export async function migrateVenueFromLunarPay(
       stripe_subscription_id: sub.id,
       first_charge_date: preview.firstChargeDate,
       lunarpay_amount_cents: preview.lunarpay.amountCents,
-      stripe_amount_cents: preview.stripeAmountCents,
+      stripe_amount_cents: billed.totalCents,
+      addons_not_billed: billed.addonsNotBilled,
     },
   });
   scheduleOwnerGhlSync(venueId);
@@ -262,7 +321,7 @@ export async function listLunarPaySubscribers(): Promise<MigrationPreview[]> {
     } catch (e) {
       out.push({
         venueId: id, venueName: null, lunarpay: null, customerId: null, card: null,
-        stripeAmountCents: 0, amountMatches: false, firstChargeDate: null, chargesNow: false,
+        stripeAmountCents: 0, amountMatches: false, addonsNotBilled: false, firstChargeDate: null, chargesNow: false,
         ready: false, blocker: e instanceof Error ? e.message : 'Preview failed',
       });
     }

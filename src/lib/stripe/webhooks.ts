@@ -42,7 +42,17 @@ async function finishEvent(eventId: string, error?: string): Promise<void> {
     .eq('id', eventId);
 }
 
-/** The venue a SaaS subscription belongs to, or null when it isn't one of ours. */
+/**
+ * The venue a SaaS subscription belongs to, or null when it isn't one of ours.
+ * A venue still on LunarPay is mid-move (lunarpay-migration.ts writes its row
+ * once LunarPay is stopped, and undoes the Stripe side if it can't be), so
+ * subscription events leave it alone.
+ */
+async function venueForSubscriptionChange(sub: Stripe.Subscription): Promise<BillingVenue | null> {
+  const v = await venueForSubscription(sub);
+  return v && v.billing_provider !== 'lunarpay' ? v : null;
+}
+
 async function venueForSubscription(sub: Stripe.Subscription): Promise<BillingVenue | null> {
   const metaVenue = sub.metadata?.sv_kind === SAAS_KIND ? sub.metadata?.storyvenue_venue_id : null;
   if (metaVenue) {
@@ -63,7 +73,7 @@ function subscriptionIdOfInvoice(inv: Stripe.Invoice): string | null {
 }
 
 async function onSubscriptionChanged(sub: Stripe.Subscription): Promise<void> {
-  const v = await venueForSubscription(sub);
+  const v = await venueForSubscriptionChange(sub);
   if (!v) return;
   // Only the subscription the venue is tracking may change its status (a stale
   // or replaced subscription must not flip it back).
@@ -82,7 +92,7 @@ async function onSubscriptionChanged(sub: Stripe.Subscription): Promise<void> {
 }
 
 async function onSubscriptionDeleted(sub: Stripe.Subscription): Promise<void> {
-  const v = await venueForSubscription(sub);
+  const v = await venueForSubscriptionChange(sub);
   if (!v || v.stripe_subscription_id !== sub.id) return; // already cleared by our own cancel path
   if (v.directory_downgrade_at) {
     // The owner chose "Switch to Free" during the trial; the trial just ended.
@@ -155,7 +165,7 @@ async function onInvoicePaymentFailed(inv: Stripe.Invoice): Promise<void> {
 }
 
 async function onTrialWillEnd(sub: Stripe.Subscription): Promise<void> {
-  const v = await venueForSubscription(sub);
+  const v = await venueForSubscriptionChange(sub);
   if (!v || v.stripe_subscription_id !== sub.id) return;
   if (v.directory_trial_reminder_sent_at || v.directory_downgrade_at) return; // sent already / chose Free
   const amount = sub.items.data.reduce((s, it) => s + (it.price.unit_amount ?? 0) * (it.quantity ?? 1), 0);

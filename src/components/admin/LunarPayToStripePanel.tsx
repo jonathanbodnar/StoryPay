@@ -19,6 +19,7 @@ interface Row {
   card: { id: string; brand: string | null; last4: string | null; exp: string | null } | null;
   stripeAmountCents: number;
   amountMatches: boolean;
+  addonsNotBilled: boolean;
   firstChargeDate: string | null;
   chargesNow: boolean;
   ready: boolean;
@@ -79,7 +80,7 @@ export function LunarPayToStripePanel() {
       `• Stripe starts billing ${usd(r.stripeAmountCents)}/mo on ${when}\n` +
       `• Card: ${r.card?.brand ?? 'card'} •••• ${r.card?.last4 ?? '????'}\n` +
       `• Their LunarPay subscription is cancelled right after\n\n` +
-      (r.amountMatches ? '' : `Note: LunarPay currently bills ${usd(r.lunarpay?.amountCents ?? 0)}/mo.\n\n`) +
+      (r.addonsNotBilled ? 'Their add-ons stay unbilled, same as on LunarPay.\n\n' : '') +
       'Continue?',
     )) return;
     setBusy(r.venueId);
@@ -164,7 +165,10 @@ export function LunarPayToStripePanel() {
                   </td>
                   <td className="px-3 py-3 text-gray-600">
                     {r.chargesNow ? <span className="text-amber-700">Today (overdue)</span> : day(r.firstChargeDate)}
-                    <div className="text-xs text-gray-400">{usd(r.stripeAmountCents)}/mo{!r.amountMatches && r.lunarpay ? ' · differs from LunarPay' : ''}</div>
+                    <div className="text-xs text-gray-400">
+                      {usd(r.stripeAmountCents)}/mo{!r.amountMatches && r.lunarpay ? ' · differs from LunarPay' : ''}
+                      {r.addonsNotBilled && <div>plan only — add-ons weren&apos;t billed on LunarPay</div>}
+                    </div>
                   </td>
                   <td className="px-6 py-3 text-right">
                     {done[r.venueId] ? (
