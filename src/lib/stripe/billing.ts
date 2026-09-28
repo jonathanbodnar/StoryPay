@@ -73,12 +73,14 @@ export async function loadBillingVenue(venueId: string): Promise<BillingVenue | 
  *   • No provider yet: a LunarPay subscription id on file still means LunarPay
  *     (Stripe ids start with sub_); otherwise the rollout switch decides.
  */
-export function venueBillsOnStripe(v: Pick<BillingVenue, 'billing_provider' | 'directory_subscription_external_id' | 'slug'>): boolean {
+export function venueBillsOnStripe(
+  v: Pick<BillingVenue, 'billing_provider' | 'directory_subscription_external_id' | 'id' | 'slug' | 'email' | 'notification_email'>,
+): boolean {
   if (v.billing_provider === 'stripe') return true;
   if (v.billing_provider === 'lunarpay') return false;
   const ext = v.directory_subscription_external_id;
   if (ext && !String(ext).startsWith('sub_')) return false;
-  return stripeBillingEnabledFor(v.slug);
+  return stripeBillingEnabledFor(v);
 }
 
 export async function isStripeBillingVenue(venueId: string): Promise<boolean> {

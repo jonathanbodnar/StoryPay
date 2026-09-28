@@ -3,9 +3,12 @@
  * on the owner's existing Stripe account. SERVER-ONLY.
  *
  * Rollout is controlled without code changes:
- *   STRIPE_BILLING_MODE  off | allowlist | on   (default off)
- *   STRIPE_BILLING_SLUGS comma-separated venue slugs for `allowlist`
- *                         (default: demo-venue)
+ *   STRIPE_BILLING_MODE      off | allowlist | on   (default off)
+ *   STRIPE_BILLING_ALLOWLIST comma-separated venue slugs, venue ids or owner
+ *                            emails for `allowlist` (default: demo-venue).
+ *                            A brand-new signup has no slug yet, so test
+ *                            signups are allowlisted by email.
+ *                            (STRIPE_BILLING_SLUGS is read as a fallback.)
  * A venue already billed on Stripe (`billing_provider = 'stripe'`) always stays
  * on Stripe regardless of the mode, and a venue still on LunarPay stays there
  * until it's moved.
@@ -47,19 +50,29 @@ function billingMode(): Mode {
 }
 
 function allowlist(): string[] {
-  return (process.env.STRIPE_BILLING_SLUGS ?? 'demo-venue')
+  return (process.env.STRIPE_BILLING_ALLOWLIST ?? process.env.STRIPE_BILLING_SLUGS ?? 'demo-venue')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 }
 
+export interface RolloutVenue {
+  id?: string | null;
+  slug?: string | null;
+  email?: string | null;
+  notification_email?: string | null;
+}
+
 /** Should a venue with no billing provider yet start billing on Stripe? */
-export function stripeBillingEnabledFor(slug: string | null | undefined): boolean {
-  if (!isStripeConfigured()) return false;
+export function stripeBillingEnabledFor(v: RolloutVenue | null | undefined): boolean {
+  if (!isStripeConfigured() || !v) return false;
   const mode = billingMode();
   if (mode === 'on') return true;
-  if (mode === 'allowlist') return Boolean(slug) && allowlist().includes(String(slug).toLowerCase());
-  return false;
+  if (mode !== 'allowlist') return false;
+  const list = allowlist();
+  return [v.slug, v.id, v.email, v.notification_email].some(
+    (k) => Boolean(k) && list.includes(String(k).trim().toLowerCase()),
+  );
 }
 
 /** Stripe dashboard link for an object id (customer or subscription), live or test. */

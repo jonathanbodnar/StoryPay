@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   // payment is charged right away).
   try {
     const bv = await loadBillingVenue(user.venueId);
-    if (bv?.billing_provider === 'lunarpay' && isStripeConfigured() && stripeBillingEnabledFor(bv.slug)) {
+    if (bv?.billing_provider === 'lunarpay' && isStripeConfigured() && stripeBillingEnabledFor(bv)) {
       const { url } = await createCardUpdateCheckout(user.venueId, '/dashboard/directory-billing', 'lp_move');
       return NextResponse.json({ url });
     }

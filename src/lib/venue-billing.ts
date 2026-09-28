@@ -569,7 +569,7 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     is_legacy_plan: isLegacyPlan,
     billing_provider: onStripe ? 'stripe' : billingRow?.billing_provider === 'lunarpay' ? 'lunarpay' : null,
     stripe_move_available:
-      !onStripe && billingRow?.billing_provider === 'lunarpay' && isStripeConfigured() && stripeBillingEnabledFor(billingRow.slug),
+      !onStripe && billingRow?.billing_provider === 'lunarpay' && isStripeConfigured() && stripeBillingEnabledFor(billingRow),
   };
 }
 
