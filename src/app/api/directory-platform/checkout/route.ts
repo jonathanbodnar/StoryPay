@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/session';
-import {
-  createDirectoryPlatformCheckoutSession,
-  isPlatformDirectoryBillingConfigured,
-} from '@/lib/platform-directory-billing';
+import { createSaasBillingLink } from '@/lib/stripe/billing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,15 +13,8 @@ export async function POST() {
   if (!user.isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (!isPlatformDirectoryBillingConfigured()) {
-    return NextResponse.json(
-      { error: 'Directory subscription billing is not configured on the server.' },
-      { status: 503 },
-    );
-  }
-
   try {
-    const { url } = await createDirectoryPlatformCheckoutSession(user.venueId);
+    const { url } = await createSaasBillingLink(user.venueId);
     return NextResponse.json({ url });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to start checkout';

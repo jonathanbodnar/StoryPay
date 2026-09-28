@@ -760,7 +760,7 @@ export function VenueManagementPortal({
   async function copyDirectoryBillingLink(venueId: string) {
     try {
       const res = await fetch(`/api/admin/venues/${venueId}/directory-checkout`, { method: 'POST' });
-      const d = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      const d = (await res.json().catch(() => ({}))) as { url?: string; provider?: string; error?: string };
       if (!res.ok) {
         alert(d.error || 'Could not create billing link');
         return;
@@ -768,7 +768,9 @@ export function VenueManagementPortal({
       if (d.url) {
         await navigator.clipboard.writeText(d.url);
         alert(
-          'SaaS billing link copied. The venue should log in first, then open the link (or use Venue listing → Plan & billing).',
+          d.provider === 'stripe'
+            ? 'Payment link copied. It opens a secure Stripe page and works for 24 hours (after that, copy a new one).'
+            : 'SaaS billing link copied. The venue should log in first, then open the link (or use Venue listing → Plan & billing).',
         );
       }
     } catch {

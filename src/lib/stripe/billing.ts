@@ -528,6 +528,38 @@ export async function createCardUpdateCheckout(
  * Apply a finished Checkout Session (called from the return URL and from the
  * webhook — idempotent). Returns the venue it belonged to.
  */
+/**
+ * A payment link for a venue's software subscription (admin "Copy billing
+ * link", and the venue's own checkout route): Stripe Checkout for the plan; the
+ * add-a-card page for a past-due Stripe venue; or, for a venue still billed on
+ * LunarPay, the add-a-card page that moves it to Stripe. Stripe links expire
+ * after 24 hours. LunarPay only when Stripe isn't in use for this venue.
+ */
+export async function createSaasBillingLink(
+  venueId: string,
+  nextPath = '/dashboard/directory-billing',
+): Promise<{ url: string; provider: 'stripe' | 'lunarpay' }> {
+  const v = await loadBillingVenue(venueId);
+  if (!v) throw new Error('Venue not found');
+  if (v.billing_provider === 'lunarpay') {
+    if (isStripeConfigured() && stripeBillingEnabledFor(v)) {
+      return { ...(await createCardUpdateCheckout(venueId, nextPath, 'lp_move')), provider: 'stripe' };
+    }
+  } else if (venueBillsOnStripe(v)) {
+    if (!isStripeConfigured()) throw new Error('Stripe is not configured.');
+    const status = v.directory_subscription_status;
+    if (v.stripe_subscription_id && (status === 'active' || status === 'trialing')) {
+      throw new Error('This venue already has an active subscription — there is nothing to pay.');
+    }
+    if (v.stripe_subscription_id && status === 'past_due') {
+      return { ...(await createCardUpdateCheckout(venueId, nextPath)), provider: 'stripe' };
+    }
+    return { ...(await createSubscriptionCheckout(venueId, { purpose: 'billing_link', nextPath })), provider: 'stripe' };
+  }
+  const { createDirectoryPlatformCheckoutSession } = await import('@/lib/platform-directory-billing');
+  return { ...(await createDirectoryPlatformCheckoutSession(venueId)), provider: 'lunarpay' };
+}
+
 export async function applyCheckoutSession(sessionId: string): Promise<{ venueId: string | null; purpose: string | null }> {
   const stripe = getStripe();
   const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['setup_intent'] });
