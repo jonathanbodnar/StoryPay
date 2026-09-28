@@ -27,8 +27,16 @@ export function getStripe(): Stripe {
   return client;
 }
 
+/**
+ * Handed to the browser by the server (payment-intent route), so a plain
+ * runtime variable works and a key change needs no rebuild.
+ */
 export function stripePublishableKey(): string | null {
-  return process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() || null;
+  return (
+    process.env.STRIPE_PUBLISHABLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() ||
+    null
+  );
 }
 
 type Mode = 'off' | 'allowlist' | 'on';
