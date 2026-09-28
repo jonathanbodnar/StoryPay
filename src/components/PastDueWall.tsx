@@ -9,7 +9,9 @@ import { isNativeApp, openExternalBrowser } from '@/lib/platform';
  * Full-page blocking wall shown when a venue's subscription charge has failed
  * (directory_subscription_status = 'past_due'). The venue must either:
  *   • Retry the charge on their saved card, or
- *   • Update their payment method (redirects to LunarPay hosted checkout).
+ *   • Update their payment method (card page on the billing provider).
+ * A venue still billed on LunarPay once Stripe is on (`movesToStripe`) only
+ * gets "Add your card": paying on Stripe moves its billing over.
  *
  * Rendered server-side from dashboard/layout.tsx INSTEAD of the dashboard —
  * there is nothing to dismiss it to without taking one of the two actions.
@@ -17,13 +19,22 @@ import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 export default function PastDueWall({
   venueName,
   cardLastFour,
+  movesToStripe = false,
 }: {
   venueName: string;
   cardLastFour?: string | null;
+  movesToStripe?: boolean;
 }) {
   const [busy, setBusy] = useState<'retry' | 'update' | null>(null);
   const [error, setError] = useState('');
   const [retryOk, setRetryOk] = useState(false);
+
+  // Back from the card page without a successful payment (?billing=pending).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('billing') === 'pending') {
+      setError("We couldn't complete the payment with that card. Please try again or use a different card.");
+    }
+  }, []);
 
   useEffect(() => {
     // If retry succeeded, reload the page so the layout re-checks the status.
@@ -37,8 +48,12 @@ export default function PastDueWall({
     setError('');
     try {
       const res = await fetch('/api/venue-billing/retry', { method: 'POST' });
-      const data = await res.json().catch(() => ({})) as { error?: string };
+      const data = await res.json().catch(() => ({})) as { error?: string; url?: string };
       if (!res.ok) throw new Error(data.error || 'Retry failed. Please try again.');
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
       setRetryOk(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
@@ -118,7 +133,10 @@ export default function PastDueWall({
             {cardLastFour ? (
               <> ending in <strong className="text-gray-700">••••{cardLastFour}</strong></>
             ) : null}
-            . Retry the charge or update your payment method to restore full access.
+            .{' '}
+            {movesToStripe
+              ? 'Our billing has moved to a new secure system, so please add your card to pay and restore full access.'
+              : 'Retry the charge or update your payment method to restore full access.'}
           </p>
         </div>
 
@@ -132,6 +150,18 @@ export default function PastDueWall({
           <div className="mt-6 flex flex-col items-center gap-2 text-center">
             <Loader2 size={22} className="animate-spin text-emerald-500" />
             <p className="text-sm font-semibold text-emerald-700">Payment succeeded — reloading your dashboard…</p>
+          </div>
+        ) : movesToStripe ? (
+          <div className="mt-7">
+            <button
+              type="button"
+              onClick={updateCard}
+              disabled={disabled}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
+            >
+              {busy === 'update' ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+              Add your card to pay
+            </button>
           </div>
         ) : (
           <div className="mt-7 space-y-3">

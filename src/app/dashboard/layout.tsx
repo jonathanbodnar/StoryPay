@@ -5,6 +5,7 @@ import { loadDirectoryNavAccess } from '@/lib/directory-plans-venue';
 import { supabaseAdmin } from '@/lib/supabase';
 import { deriveTrialStatus, daysRemainingInTrial, type VenueTrialState } from '@/lib/directory-trial';
 import { checkAndSyncSubscriptionStatus } from '@/lib/venue-billing';
+import { isStripeConfigured, stripeBillingEnabledFor } from '@/lib/stripe/client';
 import DashboardShell from '@/components/DashboardShell';
 import AskAIWidget from '@/components/AskAIWidget';
 import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
@@ -30,7 +31,7 @@ export default async function DashboardLayout({
  // don't hit the venues table 3 times per page render.
  const { data: venueRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge, wedding_planner')
+   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge, wedding_planner, billing_provider, slug, email, notification_email')
    .eq('id', user.venueId)
    .maybeSingle();
 
@@ -167,10 +168,21 @@ export default async function DashboardLayout({
  // Past-due wall: subscription charge failed. Block the dashboard until they
  // retry or update their card. Legacy / manually-billed venues are exempt.
  if (!ungated && subStatus === 'past_due') {
+   // Still billed on LunarPay while Stripe is on: paying means adding a card on
+   // Stripe (which moves them over), never retrying the LunarPay card.
+   const movesToStripe =
+     vr.billing_provider === 'lunarpay' &&
+     isStripeConfigured() &&
+     stripeBillingEnabledFor({
+       id: user.venueId,
+       slug: (vr.slug as string | null) ?? null,
+       email: (vr.email as string | null) ?? null,
+       notification_email: (vr.notification_email as string | null) ?? null,
+     });
    return (
      <>
        {isImpersonating && <ImpersonationBanner venueName={user.venueName} />}
-       <PastDueWall venueName={user.venueName} />
+       <PastDueWall venueName={user.venueName} movesToStripe={movesToStripe} />
      </>
    );
  }
