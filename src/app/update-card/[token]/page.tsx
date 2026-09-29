@@ -2,8 +2,10 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import StripeCardUpdateForm from '@/components/payments/StripeCardUpdateForm';
 
 interface CardUpdateData {
+  provider?: 'stripe' | 'lunarpay';
   customer_name: string;
   customer_email: string;
   reason: string;
@@ -54,7 +56,7 @@ export default function UpdateCardPage() {
   }, [token]);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || data.provider === 'stripe') return;
     let destroyed = false;
 
     async function initPayment() {
@@ -229,6 +231,10 @@ export default function UpdateCardPage() {
           </div>
 
           <div className="px-8 py-6">
+            {data.provider === 'stripe' ? (
+              <StripeCardUpdateForm token={token} onSuccess={() => setSuccess(true)} />
+            ) : (
+            <>
             {formLoading && (
               <div className="flex items-center justify-center py-10 text-gray-400">
                 <svg className="animate-spin h-6 w-6 mr-3" viewBox="0 0 24 24">
@@ -252,6 +258,8 @@ export default function UpdateCardPage() {
                 </svg>
                 Updating your card…
               </div>
+            )}
+            </>
             )}
           </div>
         </div>

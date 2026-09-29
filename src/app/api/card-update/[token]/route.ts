@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { stripeCardUpdateContext } from '@/lib/stripe/card-update';
 
 export async function GET(
   _request: Request,
@@ -22,9 +23,12 @@ export async function GET(
   }
 
   const venue = cardToken.venues as { name: string; logo_url: string | null } | null;
+  // Payment plans on the venue's Stripe account use Stripe's card form.
+  const stripe = await stripeCardUpdateContext(token).catch(() => null);
 
   return NextResponse.json({
-    customer_name: cardToken.customer_name,
+    provider: stripe ? 'stripe' : 'lunarpay',
+    customer_name: stripe?.p.customer_name ?? cardToken.customer_name,
     customer_email: cardToken.customer_email,
     reason: cardToken.reason,
     venue_name: venue?.name ?? '',
