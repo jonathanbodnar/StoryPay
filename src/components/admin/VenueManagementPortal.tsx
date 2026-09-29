@@ -36,6 +36,7 @@ import {
 import { furthestStage } from '@/lib/funnel-stage';
 import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 import { StripeBillingCard } from '@/components/admin/StripeBillingCard';
+import { VenuePaymentsAdminCard } from '@/components/admin/VenuePaymentsAdminCard';
 
 const BRAND = '#1b1b1b';
 
@@ -1838,6 +1839,9 @@ export function VenueManagementPortal({
 
           {/* The venue's customer in the owner's Stripe account (software + private-client subscriptions) */}
           <StripeBillingCard key={billingTarget.id} venueId={billingTarget.id} />
+
+          {/* The venue's own Stripe account for couple payments (Connect) + fee override */}
+          <VenuePaymentsAdminCard key={`pay-${billingTarget.id}`} venueId={billingTarget.id} />
 
           {/* Cancel subscription */}
           <div className="rounded-xl border border-red-100 bg-red-50 p-4 mb-4">

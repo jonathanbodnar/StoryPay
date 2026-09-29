@@ -26,6 +26,7 @@ import {
 import { CoupleManagementPortal } from '@/components/admin/CoupleManagementPortal';
 import { ContactsPortal } from '@/components/admin/ContactsPortal';
 import { DirectoryPlansAdminPanel } from '@/components/admin/DirectoryPlansAdminPanel';
+import { PaymentFeesAdminCard } from '@/components/admin/PaymentFeesAdminCard';
 import { DirectoryBadgesAdminPanel } from '@/components/admin/DirectoryBadgesAdminPanel';
 import { SubscriptionsAdminPanel } from '@/components/admin/SubscriptionsAdminPanel';
 import { AiConciergeAdminPanel } from '@/components/admin/AiConciergeAdminPanel';
@@ -2172,7 +2173,12 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
         {activeTab === 'canned-replies' && <CannedRepliesPanel />}
 
-        {activeTab === 'directory-plans' && <DirectoryPlansAdminPanel />}
+        {activeTab === 'directory-plans' && (
+          <>
+            <PaymentFeesAdminCard />
+            <DirectoryPlansAdminPanel />
+          </>
+        )}
 
         {activeTab === 'funnel-ab' && <FunnelAbPanel />}
 
