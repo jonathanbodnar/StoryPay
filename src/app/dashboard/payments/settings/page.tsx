@@ -9,7 +9,7 @@ import {
   Loader2,
   Info,
 } from 'lucide-react';
-import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
+import PaymentsOnboarding from '@/components/settings/PaymentsOnboarding';
 import PaymentGate from '@/components/PaymentGate';
 import { trackClient } from '@/lib/analytics-client';
 
@@ -18,6 +18,8 @@ interface VenueInfo {
   onboarding_status: string | null;
   accept_ach: boolean | null;
   service_fee_rate: number;
+  payments_provider?: string | null;
+  stripe_charges_enabled?: boolean | null;
 }
 
 function PaymentSettingsInner() {
@@ -70,7 +72,8 @@ function PaymentSettingsInner() {
     );
   }
 
-  const isActive = venue?.onboarding_status === 'active';
+  const onStripe = venue?.payments_provider === 'stripe' && venue?.stripe_charges_enabled === true;
+  const isActive = onStripe || venue?.onboarding_status === 'active';
   const achEnabled = venue?.accept_ach !== false;
 
   return (
@@ -90,11 +93,11 @@ function PaymentSettingsInner() {
             <CreditCard size={18} className="text-gray-400" />
             <div>
               <h2 className="font-heading text-base font-semibold text-gray-900">Payment Processing</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Powered by StoryPay&apos;s merchant platform</p>
+              <p className="text-xs text-gray-400 mt-0.5">Get paid online by card and bank transfer</p>
             </div>
           </div>
           <div className="px-6 py-6">
-            <LunarPayOnboarding onActivated={() => void loadVenue()} />
+            <PaymentsOnboarding onActivated={() => void loadVenue()} />
           </div>
         </section>
 
@@ -147,8 +150,9 @@ function PaymentSettingsInner() {
                     <div className="mt-2 flex items-start gap-1.5 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
                       <Info size={12} className="mt-0.5 shrink-0 text-blue-500" />
                       <p className="text-[11px] text-blue-700">
-                        ACH appears at checkout only when both this toggle <em>and</em> your StoryPay
-                        merchant account have ACH enabled. Contact StoryPay support if you need merchant-level ACH activation.
+                        {onStripe
+                          ? 'Clients connect their bank in seconds through Stripe. Bank payments take 3–5 business days to clear.'
+                          : 'ACH appears at checkout only when both this toggle and your StoryPay merchant account have ACH enabled. Contact StoryPay support if you need merchant-level ACH activation.'}
                       </p>
                     </div>
                   </div>

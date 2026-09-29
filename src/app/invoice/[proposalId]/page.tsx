@@ -114,10 +114,9 @@ export default function InvoicePage() {
       ? ((invoice.payment_config as { payments: Array<{ amount: number; date: string }> }).payments ?? [])
       : [];
   const schedulePayments = invoice.schedule?.payments ?? [];
-  const feeRate = Number(invoice.service_fee_rate ?? 0);
-  const hasFee = feeRate > 0;
-  const feeCents = hasFee ? Math.round(invoice.price * feeRate / 100) : 0;
-  const totalWithFee = invoice.price + feeCents;
+  // The venue's service fee is a line item already included in the price, so
+  // the total is the price — nothing is added on top here.
+  const totalWithFee = invoice.price;
 
   const ledger = invoice.payments ?? [];
   const totalPaid = invoice.total_paid_cents ?? 0;
@@ -359,27 +358,10 @@ export default function InvoicePage() {
 
           {/* Total */}
           <div className="px-8 py-6 bg-gray-50/50 border-b border-gray-100">
-            {hasFee ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Subtotal</span>
-                  <span className="text-gray-700">{formatCents(invoice.price)}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Processing fee ({feeRate}%)</span>
-                  <span className="text-gray-700">{formatCents(feeCents)}</span>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                  <span className="text-lg font-semibold text-gray-900">Total</span>
-                  <span className="text-2xl font-bold text-gray-900">{formatCents(totalWithFee)}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-semibold text-gray-900">Total</span>
-                <span className="text-2xl font-bold text-gray-900">{formatCents(invoice.price)}</span>
-              </div>
-            )}
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-semibold text-gray-900">Total</span>
+              <span className="text-2xl font-bold text-gray-900">{formatCents(invoice.price)}</span>
+            </div>
             {ledger.length > 0 && (
               <div className="mt-3 space-y-2 border-t border-gray-200 pt-3">
                 <div className="flex items-center justify-between text-sm">

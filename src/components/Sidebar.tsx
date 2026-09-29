@@ -35,7 +35,7 @@ import { unregisterNativePush } from '@/components/NativePushRegistrar';
 import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
-import LunarPayOnboarding from '@/components/settings/LunarPayOnboarding';
+import PaymentsOnboarding from '@/components/settings/PaymentsOnboarding';
 import { LockedFeatureModal } from '@/components/LockedFeatureView';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -1347,7 +1347,7 @@ export default function Sidebar({
               </button>
             </div>
             <div className="px-6 py-5">
-              <LunarPayOnboarding
+              <PaymentsOnboarding
                 onActivated={() => {
                   refreshPaymentsActive();
                   setShowOnboardingModal(false);
