@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2,
   Heart,
@@ -37,6 +37,7 @@ import {
   Building2,
   MailCheck,
   MessageSquareHeart,
+  Camera,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 import { PLANNER_SETUP_ITEMS, type PlannerSetupKey, type PlannerSetupState } from '@/lib/couple-planner-setup';
@@ -94,9 +95,10 @@ type Link_ = {
 
 type SearchItem = { slug: string; name: string | null; cover_image_url: string | null; location: string | null };
 
-/** /api/couple/home: names and date, the setup checklist, and the dashboard metrics. */
+/** /api/couple/home: names, date and cover photo, the setup checklist, and the dashboard metrics. */
 type HomeData = {
-  couple: { firstName: string | null; partnerFirstName: string | null; weddingDate: string | null };
+  /** coverUrl is their wedding website's cover photo: one image themes both. */
+  couple: { firstName: string | null; partnerFirstName: string | null; weddingDate: string | null; coverUrl: string | null };
   setup: { items: PlannerSetupState[]; doneCount: number; total: number } | null;
   metrics: HomeMetrics;
 };
@@ -256,6 +258,47 @@ export default function CoupleWeddingPage() {
     }
   }
 
+  // The dashboard cover is the wedding website's cover (couple_sites.cover_url),
+  // so changing it here changes the website too: one image themes both.
+  const [coverBusy, setCoverBusy] = useState(false);
+  async function saveCover(url: string | null) {
+    const res = await coupleAuthedFetch('/api/couple/site', { method: 'PUT', body: JSON.stringify({ cover_url: url }) });
+    if (!res.ok) throw new Error('Could not save your cover photo. Please try again.');
+    setHome((h) => (h ? { ...h, couple: { ...h.couple, coverUrl: url } } : h));
+  }
+  async function uploadCover(file: File) {
+    setError('');
+    if (!file.type.startsWith('image/')) return setError('Please choose a photo (JPG, PNG or WebP).');
+    if (file.size > 10 * 1024 * 1024) return setError('That photo is over 10 MB. Please choose a smaller one.');
+    setCoverBusy(true);
+    try {
+      const signRes = await coupleAuthedFetch('/api/couple/site/image', {
+        method: 'POST',
+        body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size }),
+      });
+      const sign = await signRes.json().catch(() => ({}));
+      if (!signRes.ok) throw new Error(typeof sign.error === 'string' ? sign.error : 'Upload failed');
+      const put = await fetch(sign.signedUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      if (!put.ok) throw new Error('Upload failed. Please try again.');
+      await saveCover(sign.publicUrl as string);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upload failed. Please try again.');
+    } finally {
+      setCoverBusy(false);
+    }
+  }
+  async function removeCover() {
+    setError('');
+    setCoverBusy(true);
+    try {
+      await saveCover(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove your cover photo.');
+    } finally {
+      setCoverBusy(false);
+    }
+  }
+
   async function toggleSetup(key: PlannerSetupKey, done: boolean) {
     const before = home;
     setHome((h) => {
@@ -323,6 +366,8 @@ export default function CoupleWeddingPage() {
         date={countdownDate}
         venueName={isLinked ? link?.venue?.name ?? null : null}
         canEditDate={isPlannerCouple}
+        coverUrl={home?.couple.coverUrl ?? null}
+        cover={isPlannerCouple ? { busy: coverBusy, onUpload: (f) => void uploadCover(f), onRemove: () => void removeCover() } : null}
       />
 
       {/* State: venue invited this bride (unclaimed) */}
@@ -968,9 +1013,10 @@ function CollaboratorsCard() {
 }
 
 /**
- * The top of the dashboard: a golden-hour wedding photo with the welcome, and a
- * live countdown once the wedding date is set (or a nudge to add it).
- * Photo: Unsplash (free license), public/couple/hero-golden-hour.jpg.
+ * The top of the dashboard: the welcome, and a live countdown once the wedding
+ * date is set (or a nudge to add it). The background is the couple's cover
+ * photo, the same image as their wedding website's cover, so one upload themes
+ * both. With no cover yet it's a clean card that invites them to add one.
  */
 function DashboardHero({
   greetName,
@@ -979,6 +1025,8 @@ function DashboardHero({
   date,
   venueName,
   canEditDate,
+  coverUrl,
+  cover,
 }: {
   /** Who's signed in, when it's the couple (a helper gets a neutral welcome). */
   greetName: string | null;
@@ -987,6 +1035,9 @@ function DashboardHero({
   date: string | null;
   venueName: string | null;
   canEditDate: boolean;
+  coverUrl: string | null;
+  /** Upload/remove controls, for the couple only. */
+  cover: { busy: boolean; onUpload: (file: File) => void; onRemove: () => void } | null;
 }) {
   const target = useMemo(() => (date ? new Date(`${date}T00:00:00`).getTime() : NaN), [date]);
   const hasDate = !Number.isNaN(target);
@@ -996,6 +1047,7 @@ function DashboardHero({
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [hasDate]);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const diff = hasDate ? target - now : 0;
   const isToday = hasDate && diff <= 0 && diff > -86_400_000;
@@ -1008,62 +1060,125 @@ function DashboardHero({
     [Math.floor((diff % 3_600_000) / 60_000), 'min'],
     [Math.floor((diff % 60_000) / 1000), 'sec'],
   ];
+  const onPhoto = Boolean(coverUrl);
+  const tile = onPhoto ? 'bg-white/15 ring-1 ring-white/25 backdrop-blur-md' : 'bg-white ring-1 ring-gray-200';
+  const muted = onPhoto ? 'text-white/85 drop-shadow' : 'text-gray-500';
+  const heading = `mt-1.5 font-heading text-3xl leading-tight sm:text-4xl ${onPhoto ? 'drop-shadow' : 'text-gray-900'}`;
+
+  const filePicker = cover && (
+    <input
+      ref={fileRef}
+      type="file"
+      accept="image/jpeg,image/png,image/webp,image/avif"
+      className="hidden"
+      onChange={(e) => {
+        const f = e.target.files?.[0];
+        if (f) cover.onUpload(f);
+        e.target.value = '';
+      }}
+    />
+  );
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-[#1b1b1b] text-white">
-      <Image
-        src="/couple/hero-golden-hour.jpg"
-        alt=""
-        fill
-        priority
-        sizes="(min-width: 1280px) 1152px, 100vw"
-        className="object-cover object-[68%_40%] sm:object-[50%_38%]"
-      />
-      {/* Keeps the text readable: a bottom fade on phones, a left fade on wider screens. */}
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent sm:bg-gradient-to-r sm:from-black/65 sm:via-black/20 sm:to-transparent"
-      />
-      <div className="relative flex min-h-[420px] flex-col justify-end px-6 pb-7 pt-24 sm:min-h-[340px] sm:max-w-[27rem] sm:justify-center sm:px-9 sm:py-9">
-        <p className="text-sm text-white/85 drop-shadow">
-          {greetName ? `Welcome back, ${greetName}` : 'Welcome to the Wedding Planner'}
-        </p>
-        {hasDate && !isToday && !isPast ? (
-          <>
-            <p className="mt-1.5 font-heading text-3xl leading-tight drop-shadow sm:text-4xl">{names || 'Your wedding day'}</p>
-            {dateLine && <p className="mt-1 text-sm text-white/85 drop-shadow">{dateLine}</p>}
-            <div className="mt-5 flex gap-2" aria-label="Countdown to your wedding">
-              {cells.map(([value, label]) => (
-                <div key={label} className="w-16 rounded-2xl bg-white/15 py-2.5 text-center ring-1 ring-white/25 backdrop-blur-md">
-                  <p className="text-2xl font-semibold leading-none tabular-nums">{String(Math.max(0, value)).padStart(2, '0')}</p>
-                  <p className="mt-1 text-[10px] uppercase tracking-wider text-white/75">{label}</p>
-                </div>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-white/75">until you say “I do”</p>
-          </>
-        ) : isToday ? (
-          <>
-            <p className="mt-1.5 font-heading text-3xl leading-tight drop-shadow sm:text-4xl">Today&apos;s the day! 🤍</p>
-            {dateLine && <p className="mt-1 text-sm text-white/85 drop-shadow">{dateLine}</p>}
-          </>
-        ) : isPast ? (
-          <>
-            <p className="mt-1.5 font-heading text-3xl leading-tight drop-shadow sm:text-4xl">You&apos;re married! 🤍</p>
-            {dateLine && <p className="mt-1 text-sm text-white/85 drop-shadow">{dateLine}</p>}
-          </>
-        ) : (
-          <>
-            <p className="mt-1.5 font-heading text-3xl leading-tight drop-shadow sm:text-4xl">Let&apos;s plan your wedding</p>
-            {canEditDate && (
-              <Link
-                href="/couple/profile"
-                className="mt-5 inline-flex w-fit items-center gap-1.5 rounded-2xl bg-white px-4 py-2.5 text-sm font-medium text-[#1b1b1b] transition-opacity hover:opacity-90"
+    <div
+      className={`group relative overflow-hidden rounded-3xl ${
+        onPhoto ? 'bg-[#1b1b1b] text-white' : 'border border-gray-200 bg-gradient-to-br from-[#fbf8f4] to-[#f3ede5] text-gray-900'
+      }`}
+    >
+      {filePicker}
+      {onPhoto && (
+        <>
+          <Image
+            src={coverUrl!}
+            alt=""
+            fill
+            priority
+            sizes="(min-width: 1280px) 1152px, 100vw"
+            className="object-cover object-[50%_40%]"
+          />
+          {/* Keeps the text readable: a bottom fade on phones, a left fade on wider screens. */}
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent sm:bg-gradient-to-r sm:from-black/65 sm:via-black/20 sm:to-transparent"
+          />
+          {cover && (
+            <div className="absolute right-3 top-3 flex gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+              <button
+                type="button"
+                disabled={cover.busy}
+                onClick={() => fileRef.current?.click()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-1.5 text-xs font-medium text-white ring-1 ring-white/25 backdrop-blur-md transition-colors hover:bg-black/55 disabled:opacity-60"
               >
-                <CalendarDays className="h-4 w-4" /> Add your wedding date
-              </Link>
-            )}
-          </>
+                {cover.busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />} Change photo
+              </button>
+              <button
+                type="button"
+                disabled={cover.busy}
+                onClick={cover.onRemove}
+                className="rounded-xl bg-black/40 px-3 py-1.5 text-xs font-medium text-white ring-1 ring-white/25 backdrop-blur-md transition-colors hover:bg-black/55 disabled:opacity-60"
+              >
+                Remove
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      <div
+        className={`relative flex flex-col gap-6 px-6 py-7 sm:px-9 sm:py-9 ${
+          onPhoto ? 'min-h-[420px] justify-end pt-24 sm:min-h-[340px] sm:max-w-[27rem] sm:justify-center' : 'sm:flex-row sm:items-center sm:justify-between'
+        }`}
+      >
+        <div>
+          <p className={`text-sm ${muted}`}>{greetName ? `Welcome back, ${greetName}` : 'Welcome to the Wedding Planner'}</p>
+          {hasDate && !isToday && !isPast ? (
+            <>
+              <p className={heading}>{names || 'Your wedding day'}</p>
+              {dateLine && <p className={`mt-1 text-sm ${muted}`}>{dateLine}</p>}
+              <div className="mt-5 flex gap-2" aria-label="Countdown to your wedding">
+                {cells.map(([value, label]) => (
+                  <div key={label} className={`w-16 rounded-2xl py-2.5 text-center ${tile}`}>
+                    <p className="text-2xl font-semibold leading-none tabular-nums">{String(Math.max(0, value)).padStart(2, '0')}</p>
+                    <p className={`mt-1 text-[10px] uppercase tracking-wider ${onPhoto ? 'text-white/75' : 'text-gray-400'}`}>{label}</p>
+                  </div>
+                ))}
+              </div>
+              <p className={`mt-2 text-xs ${onPhoto ? 'text-white/75' : 'text-gray-400'}`}>until you say “I do”</p>
+            </>
+          ) : isToday || isPast ? (
+            <>
+              <p className={heading}>{isToday ? 'Today’s the day! 🤍' : 'You’re married! 🤍'}</p>
+              {dateLine && <p className={`mt-1 text-sm ${muted}`}>{dateLine}</p>}
+            </>
+          ) : (
+            <>
+              <p className={heading}>Let&apos;s plan your wedding</p>
+              {canEditDate && (
+                <Link
+                  href="/couple/profile"
+                  className={`mt-5 inline-flex w-fit items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 ${
+                    onPhoto ? 'bg-white text-[#1b1b1b]' : 'bg-[#1b1b1b] text-white'
+                  }`}
+                >
+                  <CalendarDays className="h-4 w-4" /> Add your wedding date
+                </Link>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* No cover yet: invite one (it becomes the website's cover too). */}
+        {!onPhoto && cover && (
+          <button
+            type="button"
+            disabled={cover.busy}
+            onClick={() => fileRef.current?.click()}
+            className="flex w-full shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-300 bg-white/60 px-6 py-6 text-center transition-colors hover:border-gray-400 hover:bg-white disabled:opacity-60 sm:w-72"
+          >
+            {cover.busy ? <Loader2 className="h-6 w-6 animate-spin text-gray-400" /> : <Camera className="h-6 w-6 text-gray-400" />}
+            <span className="text-sm font-semibold text-gray-900">Add a cover photo</span>
+            <span className="text-xs text-gray-500">It themes your planner and becomes the cover of your wedding website.</span>
+          </button>
         )}
       </div>
     </div>

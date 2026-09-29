@@ -1,7 +1,8 @@
 /**
  * /api/couple/home — the Wedding Planner home (the couple's dashboard).
  *
- *   GET   → the couple's names and date, the setup checklist
+ *   GET   → the couple's names, date and cover photo (their wedding website's
+ *           cover, the one image that themes both), the setup checklist
  *           (lib/couple-planner-setup.ts), and the dashboard metrics: website
  *           views, RSVP replies, guests coming, guestbook notes, invites sent,
  *           to-dos, budget and vendors.
@@ -73,9 +74,9 @@ export async function GET(request: NextRequest) {
       .select('first_name, partner_first_name, wedding_date, planner_setup')
       .eq('id', coupleId)
       .maybeSingle(),
-    isCouple
-      ? supabaseAdmin.from('couple_sites').select('id, slug, is_published').eq('couple_id', user.id).maybeSingle()
-      : Promise.resolve({ data: null }),
+    // The couple's website row: its cover themes the dashboard for everyone
+    // on the planner; its stats are the couple's only.
+    supabaseAdmin.from('couple_sites').select('id, slug, is_published, cover_url').eq('couple_id', coupleId).maybeSingle(),
     wedding
       ? supabaseAdmin.from('wedding_guests').select('rsvp_status, party_size, meal_choice').eq('couple_wedding_id', wedding.id)
       : Promise.resolve({ data: [] }),
@@ -85,7 +86,8 @@ export async function GET(request: NextRequest) {
   ]);
 
   const prof = (profile ?? {}) as { first_name?: string | null; partner_first_name?: string | null; wedding_date?: string | null; planner_setup?: unknown };
-  const siteRow = site as { id: string; slug: string | null; is_published: boolean | null } | null;
+  const siteAny = site as { id: string; slug: string | null; is_published: boolean | null; cover_url: string | null } | null;
+  const siteRow = isCouple ? siteAny : null;
 
   const [views, guestbook, collaborators, pinterest] = await Promise.all([
     siteRow
@@ -142,6 +144,7 @@ export async function GET(request: NextRequest) {
       firstName: prof.first_name ?? null,
       partnerFirstName: prof.partner_first_name ?? null,
       weddingDate: prof.wedding_date ?? null,
+      coverUrl: siteAny?.cover_url ?? null,
     },
     setup,
     metrics: {
