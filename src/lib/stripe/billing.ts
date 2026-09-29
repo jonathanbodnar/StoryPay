@@ -639,6 +639,28 @@ export async function applyCheckoutSession(sessionId: string): Promise<{ venueId
 
 // ── Plan changes / cancellations ─────────────────────────────────────────────
 
+/**
+ * Private clients moved from LunarPay pay a plan-only price: their add-on
+ * flags are on but were never billed (subscription metadata addons_not_billed).
+ * Changing the plan or add-ons in the app rebuilds the subscription from those
+ * flags and would raise their price, so those changes are locked until the
+ * owner re-prices them. Switching to Free and cancelling stay open.
+ */
+export const PLAN_CHANGES_LOCKED_MESSAGE =
+  'Your plan is managed by your StoryVenue team. Contact us to change your plan or add-ons.';
+
+function subscriptionPlanChangesLocked(sub: Stripe.Subscription): boolean {
+  return sub.metadata?.addons_not_billed === 'true';
+}
+
+/** Are plan and add-on changes locked for this venue? (See PLAN_CHANGES_LOCKED_MESSAGE.) */
+export async function planChangesLocked(venueId: string): Promise<boolean> {
+  const v = await loadBillingVenue(venueId);
+  if (!v?.stripe_subscription_id) return false;
+  const sub = await retrieveSaasSub(v.stripe_subscription_id);
+  return sub ? subscriptionPlanChangesLocked(sub) : false;
+}
+
 async function retrieveSaasSub(subId: string): Promise<Stripe.Subscription | null> {
   try {
     const sub = await getStripe().subscriptions.retrieve(subId);
@@ -713,6 +735,9 @@ export async function changeVenuePlanStripe(venueId: string, targetPlanId: strin
   const allPlans = await listDirectoryPlanCatalog();
   const target = allPlans.find((p) => p.id === targetPlanId);
   if (!target) throw new Error('Plan not found');
+  if ((target.price_monthly_cents ?? 0) > 0 && (await planChangesLocked(venueId))) {
+    throw new Error(PLAN_CHANGES_LOCKED_MESSAGE);
+  }
 
   const status = String(v.directory_subscription_status ?? '');
   const hasSub = Boolean(v.stripe_subscription_id && ['active', 'trialing', 'past_due'].includes(status));
@@ -885,6 +910,8 @@ export interface StripeBillingSnapshot {
     next_payment_on: string | null;
     started_on: string | null;
   } | null;
+  /** Plan and add-on changes are locked (a plan-only price from the LunarPay move). */
+  plan_changes_locked: boolean;
   payment_method: {
     id: string;
     last4: string | null;
@@ -900,9 +927,11 @@ export async function loadStripeBillingSnapshot(v: Pick<BillingVenue, 'stripe_su
   const stripe = getStripe();
   let subscription: StripeBillingSnapshot['subscription'] = null;
   let pmId: string | null = null;
+  let plan_changes_locked = false;
   if (v.stripe_subscription_id) {
     try {
       const sub = await stripe.subscriptions.retrieve(v.stripe_subscription_id);
+      plan_changes_locked = subscriptionPlanChangesLocked(sub);
       const amount = sub.items.data.reduce((s, it) => s + (it.price.unit_amount ?? 0) * (it.quantity ?? 1), 0);
       const periodEnd = sub.items.data[0]?.current_period_end ?? null;
       const nextTs = sub.status === 'trialing' ? sub.trial_end : periodEnd;
@@ -939,5 +968,5 @@ export async function loadStripeBillingSnapshot(v: Pick<BillingVenue, 'stripe_su
       };
     } catch { /* ignore */ }
   }
-  return { subscription, payment_method };
+  return { subscription, plan_changes_locked, payment_method };
 }

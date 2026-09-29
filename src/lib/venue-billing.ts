@@ -186,6 +186,8 @@ export type VenueBillingSummary = {
   billing_provider: 'stripe' | 'lunarpay' | null;
   /** A LunarPay venue can move itself to Stripe by adding a card (billing page banner). */
   stripe_move_available: boolean;
+  /** Plan and add-on changes are locked (private client on a plan-only price). */
+  plan_changes_locked: boolean;
 };
 
 function mapPlanRow(row: Record<string, unknown>): DirectoryPlanCatalogEntry {
@@ -240,7 +242,7 @@ export async function listDirectoryPlanCatalog(opts?: {
   let rows: Record<string, unknown>[] | null = null;
 
   const buildQuery = (cols: string) => {
-    let q = supabaseAdmin
+    const q = supabaseAdmin
       .from('directory_plans')
       .select(cols)
       .order('price_monthly_cents', { ascending: true, nullsFirst: true })
@@ -400,12 +402,14 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
 
   let subscription: VenueBillingSubscription = null;
   let paymentMethod: VenueBillingPaymentMethod = null;
+  let planChangesAreLocked = false;
   if (onStripe && isStripeConfigured()) {
     const bv = await loadBillingVenue(venueId);
     if (bv) {
       const snap = await loadStripeBillingSnapshot(bv);
       subscription = snap.subscription;
       paymentMethod = snap.payment_method;
+      planChangesAreLocked = snap.plan_changes_locked;
     }
   } else if (secret) {
     subscription = await fetchLiveSubscription(
@@ -570,6 +574,7 @@ export async function loadVenueBillingSummary(venueId: string): Promise<VenueBil
     billing_provider: onStripe ? 'stripe' : billingRow?.billing_provider === 'lunarpay' ? 'lunarpay' : null,
     stripe_move_available:
       !onStripe && billingRow?.billing_provider === 'lunarpay' && isStripeConfigured() && stripeBillingEnabledFor(billingRow),
+    plan_changes_locked: planChangesAreLocked,
   };
 }
 

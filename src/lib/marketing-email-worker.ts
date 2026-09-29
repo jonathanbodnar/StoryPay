@@ -20,6 +20,7 @@ import { setLeadAiState } from '@/lib/ai-concierge/state-control';
 import type { AiState, AiVenueResources } from '@/lib/ai-concierge/types';
 import { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, QUALIFIED_STAGE_NAME, resolveDefaultStageIdByName } from '@/lib/booking-system-stages';
 import { STL_NAME } from '@/lib/booking-system-sequences';
+import { ensureSpeedToLeadAutomation } from '@/lib/booking-system-default-sequence';
 import { isSystemTagInert } from '@/lib/system-tag-visibility';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
 import { logError } from '@/lib/error-log';
@@ -968,6 +969,11 @@ export async function onMarketingFormSubmitted(
   // enroll it into automated follow-up. `bypassEntitlement` is for the owner's
   // own onboarding test inquiry, which must always run (it predates the card).
   if (!opts?.bypassEntitlement && !(await venueCanRunBookingSystem(venueId))) return;
+  // The 14-day sequence is on by default: create it if the venue never saved
+  // its Booking System page, so this lead is followed up (not silently skipped).
+  await ensureSpeedToLeadAutomation(venueId).catch((e) =>
+    console.warn('[marketing] could not create the default 14-day sequence:', venueId, e instanceof Error ? e.message : e),
+  );
   const autos = await loadVenueActiveAutomations(venueId);
   for (const row of autos) {
     const matched = flatTriggersFor(row).some((t) => {

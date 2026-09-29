@@ -1,5 +1,11 @@
 import { cookies } from 'next/headers';
-import { createSubscriptionCheckout, isStripeBillingVenue, syncSubscriptionItems } from '@/lib/stripe/billing';
+import {
+  PLAN_CHANGES_LOCKED_MESSAGE,
+  createSubscriptionCheckout,
+  isStripeBillingVenue,
+  planChangesLocked,
+  syncSubscriptionItems,
+} from '@/lib/stripe/billing';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
@@ -116,6 +122,12 @@ async function handlePost(req: NextRequest) {
 
   const ctx = await loadVenueDirectoryPlanContext(venueId);
   if (!ctx) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  // Private clients on a plan-only price: any add-on change would re-price
+  // their subscription, so it's locked (before any flag is written).
+  if (await planChangesLocked(venueId)) {
+    return NextResponse.json({ error: PLAN_CHANGES_LOCKED_MESSAGE, locked: true }, { status: 409 });
+  }
 
   // Read existing addon flags so we only flip what was sent. If migration 092
   // hasn't been applied yet, the addon columns don't exist — the SELECT will

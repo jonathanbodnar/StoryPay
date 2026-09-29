@@ -215,6 +215,8 @@ type BillingSummary = {
   is_legacy_plan?: boolean;
   billing_provider?: 'stripe' | 'lunarpay' | null;
   stripe_move_available?: boolean;
+  /** Plan and add-on changes are locked (private client on a plan-only price). */
+  plan_changes_locked?: boolean;
 };
 
 function formatTrialDuration(p: Pick<Plan, 'trial_period_value' | 'trial_period_unit'>): string {
@@ -232,6 +234,9 @@ function planHasTrial(p: Pick<Plan, 'trial_period_value' | 'trial_period_unit'>)
   if (unit === 'forever') return true;
   return (typeof p.trial_period_value === 'number' ? p.trial_period_value : 0) > 0;
 }
+
+/** Private clients on a plan-only price (matches the server's PLAN_CHANGES_LOCKED_MESSAGE). */
+const PLAN_LOCKED_NOTE = 'Your plan is managed by your StoryVenue team. Contact us to change your plan or add-ons.';
 
 function formatCents(cents: number | null | undefined): string {
   const value = (cents ?? 0) / 100;
@@ -363,6 +368,11 @@ export default function DirectoryBillingPage() {
 
   async function changePlan(planId: string) {
     setConfirmPlanId(null);
+    const target = summary?.plans.find((p) => p.id === planId);
+    if (summary?.plan_changes_locked && (target?.price_monthly_cents ?? 0) > 0) {
+      setError(PLAN_LOCKED_NOTE);
+      return;
+    }
     setBusy(`change:${planId}`);
     setError('');
     setInfo('');
@@ -454,6 +464,10 @@ export default function DirectoryBillingPage() {
 
   async function toggleAddon(kind: 'verified' | 'sponsored' | 'concierge') {
     if (!summary) return;
+    if (summary.plan_changes_locked) {
+      setError(PLAN_LOCKED_NOTE);
+      return;
+    }
     const userKey = kind === 'verified' ? 'verifiedUser' : kind === 'sponsored' ? 'sponsoredUser' : 'conciergeUser';
     const next = !summary.addons[userKey];
     setBusy(`addon:${kind}`);
@@ -735,6 +749,12 @@ export default function DirectoryBillingPage() {
             Click any plan to expand details, manage add-ons, and upgrade or switch anytime.
           </p>
         </div>
+
+        {summary.plan_changes_locked && (
+          <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            {PLAN_LOCKED_NOTE}
+          </div>
+        )}
 
         {plans.length === 0 ? (
           <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-500">
