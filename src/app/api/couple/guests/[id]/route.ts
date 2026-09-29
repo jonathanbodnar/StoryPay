@@ -28,7 +28,7 @@ async function assertGuestInWedding(guestId: string, coupleWeddingId: string): P
 
 /** PATCH — update one of the wedding's guests. */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const weddingId = gate.ctx.wedding.id;
 
@@ -78,7 +78,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 /** DELETE — remove one of the wedding's guests. */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const weddingId = gate.ctx.wedding.id;
 

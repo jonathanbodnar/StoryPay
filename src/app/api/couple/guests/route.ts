@@ -87,7 +87,7 @@ export function sanitizeGuest(
 
 /** GET — the bride's guest list, meal options, and RSVP summary. */
 export async function GET(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request);
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
 
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
 
 /** POST — add a guest to the bride's list. */
 export async function POST(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
 

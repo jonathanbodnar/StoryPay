@@ -5,6 +5,8 @@ import {
   type CoupleWeddingRow,
   reconcileWeddingFieldsOnLink,
   importCoupleContactToVenue,
+  detachVenueFromPlanner,
+  setPlannerVenueOnRows,
 } from '@/lib/couple-weddings';
 
 export const dynamic = 'force-dynamic';
@@ -46,6 +48,13 @@ export async function POST(request: NextRequest) {
   const now = new Date().toISOString();
 
   if (action === 'deny') {
+    // The request row is the couple's own planner: take the venue off and
+    // leave their planning with them (lib/couple-weddings.ts).
+    if (row.couple_id) {
+      const { error } = await detachVenueFromPlanner(id);
+      if (error) return NextResponse.json({ error }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    }
     const { error } = await supabaseAdmin
       .from('couple_weddings')
       .update({ status: 'declined', decided_at: now })
@@ -115,6 +124,8 @@ export async function POST(request: NextRequest) {
     console.error('[bride-portal/decide] approve', updErr);
     return NextResponse.json({ error: updErr.message }, { status: 500 });
   }
+  // Guests and tables the couple added before connecting now belong to this venue too.
+  await setPlannerVenueOnRows(id, venueId);
 
   // One-time sync so wedding date / guest count agree on both sides the
   // moment they connect (fills only whichever side is genuinely empty).

@@ -15,7 +15,7 @@ function clampCapacity(v: unknown): number {
 
 /** GET — the bride's reception tables for her linked wedding. */
 export async function GET(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request);
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
 
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
 /** POST — create a table. Body: { name: string, capacity?: number } */
 export async function POST(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
 

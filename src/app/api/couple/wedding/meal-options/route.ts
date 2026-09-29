@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
  * Stored on couple_weddings.meal_options — the guest meal picker reads from it.
  */
 export async function PUT(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
 

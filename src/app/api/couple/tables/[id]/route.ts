@@ -24,7 +24,7 @@ async function tableInWedding(tableId: string, coupleWeddingId: string): Promise
 
 /** PATCH — rename / recapacity / reorder a table. */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const weddingId = gate.ctx.wedding.id;
 
@@ -76,7 +76,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 /** DELETE — remove a table (its guests are auto-unassigned). */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const weddingId = gate.ctx.wedding.id;
 

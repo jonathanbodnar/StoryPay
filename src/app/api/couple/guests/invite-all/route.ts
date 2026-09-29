@@ -22,7 +22,7 @@ interface GuestLite {
  * who already responded. Bride-only.
  */
 export async function POST(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const { user, wedding: link } = gate.ctx;
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       .select('display_name, first_name, last_name, wedding_date')
       .eq('id', link.couple_id)
       .maybeSingle(),
-    supabaseAdmin.from('venues').select('name').eq('id', link.venue_id).maybeSingle(),
+    link.venue_id ? supabaseAdmin.from('venues').select('name').eq('id', link.venue_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
 
   const p = profile as

@@ -17,7 +17,7 @@ async function loadInspiration(weddingId: string): Promise<WeddingInspiration> {
 
 /** GET — the couple's inspiration board for her linked wedding. */
 export async function GET(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request);
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
   return NextResponse.json({ inspiration: await loadInspiration(link.id) });
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
 /** PUT — replace the board. Optimistic concurrency via `inspiration.rev`. */
 export async function PUT(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
 

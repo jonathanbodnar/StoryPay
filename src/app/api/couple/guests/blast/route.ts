@@ -26,7 +26,7 @@ interface GuestLite {
  * to the couple's own inbox. Bride-only; connected wedding required.
  */
 export async function POST(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const { user, wedding: link } = gate.ctx;
 

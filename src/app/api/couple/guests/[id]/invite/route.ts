@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
  * Emails one guest their personal RSVP link (send or resend). Bride-only.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const { user, wedding: link } = gate.ctx;
 
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .maybeSingle();
 
   const g = guest as
-    | { id: string; full_name: string; email: string | null; rsvp_token: string; invite_sent_count: number | null; venue_id: string }
+    | { id: string; full_name: string; email: string | null; rsvp_token: string; invite_sent_count: number | null; venue_id: string | null }
     | null;
   if (!g) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!g.email) return NextResponse.json({ error: 'Add an email for this guest first.' }, { status: 400 });
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .select('display_name, first_name, last_name, wedding_date')
       .eq('id', link.couple_id)
       .maybeSingle(),
-    supabaseAdmin.from('venues').select('name').eq('id', g.venue_id).maybeSingle(),
+    g.venue_id ? supabaseAdmin.from('venues').select('name').eq('id', g.venue_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
 
   const p = profile as

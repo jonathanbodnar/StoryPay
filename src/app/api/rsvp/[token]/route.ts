@@ -28,7 +28,7 @@ interface GuestRow {
   responded_at: string | null;
   couple_wedding_id: string;
   couple_id: string | null;
-  venue_id: string;
+  venue_id: string | null;
 }
 
 async function loadGuestByToken(token: string): Promise<GuestRow | null> {
@@ -62,11 +62,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
 
   const [{ data: weddingRow }, { data: venueRow }, { data: profile }] = await Promise.all([
     supabaseAdmin.from('couple_weddings').select('meal_options').eq('id', guest.couple_wedding_id).maybeSingle(),
-    supabaseAdmin
-      .from('venues')
-      .select('name, location_city, location_state, cover_image_url')
-      .eq('id', guest.venue_id)
-      .maybeSingle(),
+    guest.venue_id
+      ? supabaseAdmin
+          .from('venues')
+          .select('name, location_city, location_state, cover_image_url')
+          .eq('id', guest.venue_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     guest.couple_id
       ? supabaseAdmin
           .from('couple_profiles')

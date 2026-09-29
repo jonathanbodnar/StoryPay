@@ -4,8 +4,10 @@
  *
  * Each item ticks itself when the app sees it done (/api/couple/home works that
  * out); the couple can also tick or untick any item by hand, which is stored in
- * couple_profiles.planner_setup and wins over the automatic check. Items that
- * need a connected venue (the planner tools do) stay locked until it connects.
+ * couple_profiles.planner_setup and wins over the automatic check.
+ *
+ * Connecting a venue is deliberately not a step: many venues aren't on
+ * StoryVenue, so it's an optional card on the home page instead.
  */
 
 export const PLANNER_SETUP_ITEMS = [
@@ -15,15 +17,6 @@ export const PLANNER_SETUP_ITEMS = [
     desc: 'Starts your countdown and gives your to-dos their due dates.',
     href: '/couple/profile',
     cta: 'Add date',
-    needsVenue: false,
-  },
-  {
-    key: 'venue',
-    title: 'Connect with your venue',
-    desc: 'Unlocks your guest list, seating, budget, timeline and messages.',
-    href: '#venue',
-    cta: 'Connect',
-    needsVenue: false,
   },
   {
     key: 'website',
@@ -31,7 +24,6 @@ export const PLANNER_SETUP_ITEMS = [
     desc: 'Your story, details and registry in one link to share.',
     href: '/couple/site',
     cta: 'Build it',
-    needsVenue: false,
   },
   {
     key: 'guests',
@@ -39,7 +31,6 @@ export const PLANNER_SETUP_ITEMS = [
     desc: 'Track RSVPs, meal choices and your headcount.',
     href: '/couple/guests',
     cta: 'Add guests',
-    needsVenue: true,
   },
   {
     key: 'website_invite',
@@ -47,7 +38,6 @@ export const PLANNER_SETUP_ITEMS = [
     desc: 'Email everyone your site so they can RSVP online.',
     href: '/couple/invite-guests',
     cta: 'Send invites',
-    needsVenue: true,
   },
   {
     key: 'inspiration',
@@ -55,7 +45,6 @@ export const PLANNER_SETUP_ITEMS = [
     desc: 'Connect Pinterest or save the looks you love.',
     href: '/couple/inspiration',
     cta: 'Start board',
-    needsVenue: true,
   },
   {
     key: 'budget',
@@ -63,7 +52,6 @@ export const PLANNER_SETUP_ITEMS = [
     desc: 'Plan and track spending. Only you can see it.',
     href: '/couple/budget',
     cta: 'Set budget',
-    needsVenue: true,
   },
   {
     key: 'partner',
@@ -71,7 +59,6 @@ export const PLANNER_SETUP_ITEMS = [
     desc: 'Plan together, with view or edit access.',
     href: '#collaborators',
     cta: 'Invite',
-    needsVenue: true,
   },
 ] as const;
 
@@ -90,6 +77,4 @@ export interface PlannerSetupState {
   done: boolean;
   /** What the app detected on its own. */
   auto: boolean;
-  /** Needs a connected venue first (can't be ticked yet). */
-  locked: boolean;
 }

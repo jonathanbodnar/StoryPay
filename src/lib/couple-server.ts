@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import type { User } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
-  resolveCoupleWeddingAccess,
+  ensureCouplePlanner, resolveCoupleWeddingAccess,
   type CoupleWeddingRow,
   type WeddingAccessLevel,
 } from '@/lib/couple-weddings';
@@ -55,14 +55,20 @@ export async function resolveCoupleWeddingContext(
     return { ok: false, res: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
 
-  const resolved = await resolveCoupleWeddingAccess(user.id);
+  // No planner yet: every couple gets their own, with or without a venue.
+  let resolved = await resolveCoupleWeddingAccess(user.id);
   if (!resolved) {
-    return { ok: false, res: NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 }) };
+    const planner = await ensureCouplePlanner(user.id);
+    if (planner) resolved = { wedding: planner, access: 'owner', collaboratorId: null };
+  }
+  if (!resolved) {
+    return { ok: false, res: NextResponse.json({ error: 'Could not open your Wedding Planner. Please try again.' }, { status: 500 }) };
   }
 
   const { wedding, access, collaboratorId } = resolved;
 
-  if (opts.requireLinked && wedding.status !== 'linked') {
+  // Only venue features (messaging the venue) need a connected venue.
+  if (opts.requireLinked && (wedding.status !== 'linked' || !wedding.venue_id)) {
     return { ok: false, res: NextResponse.json({ error: 'Connect with your venue first.' }, { status: 409 }) };
   }
   if (opts.ownerOnly && access !== 'owner') {

@@ -34,6 +34,9 @@ import {
   Circle,
   Lock,
   ChevronDown,
+  Building2,
+  MailCheck,
+  MessageSquareHeart,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
 import { PLANNER_SETUP_ITEMS, type PlannerSetupKey, type PlannerSetupState } from '@/lib/couple-planner-setup';
@@ -91,15 +94,21 @@ type Link_ = {
 
 type SearchItem = { slug: string; name: string | null; cover_image_url: string | null; location: string | null };
 
-/** /api/couple/home: the setup checklist and the "at a glance" numbers. */
+/** /api/couple/home: names and date, the setup checklist, and the dashboard metrics. */
 type HomeData = {
-  setup: { items: PlannerSetupState[]; doneCount: number; total: number; venuePending: boolean } | null;
-  glance: {
-    guests: { total: number; attending: number; declined: number; pending: number; headcount: number } | null;
-    todos: { done: number; total: number; next: { title: string; dueDate: string | null } | null } | null;
-    budget: { target: number; estimated: number; actual: number } | null;
-    website: { status: 'published' | 'draft' | 'none'; slug: string | null } | null;
-  };
+  couple: { firstName: string | null; partnerFirstName: string | null; weddingDate: string | null };
+  setup: { items: PlannerSetupState[]; doneCount: number; total: number } | null;
+  metrics: HomeMetrics;
+};
+
+type HomeMetrics = {
+  website: { status: 'published' | 'draft' | 'none'; slug: string | null; views: number; viewsThisWeek: number; guestbook: number } | null;
+  guests: { total: number; attending: number; declined: number; awaiting: number; replied: number; headcount: number };
+  invitesSent: number | null;
+  todos: { done: number; total: number; next: { title: string; dueDate: string | null } | null };
+  budget: { target: number; estimated: number; actual: number } | null;
+  vendors: number;
+  inspiration: number;
 };
 
 const DIRECTORY =
@@ -132,6 +141,7 @@ export default function CoupleWeddingPage() {
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<SearchItem | null>(null);
   const [message, setMessage] = useState('');
+  const [showVenueSearch, setShowVenueSearch] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = getCoupleSupabase();
@@ -291,21 +301,13 @@ export default function CoupleWeddingPage() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl text-gray-900">Wedding Planner</h1>
-          <p className="mt-1 text-sm text-gray-500">Everything you need to plan your wedding in one place.</p>
-        </div>
-        {countdownDate && <WeddingCountdown date={countdownDate} />}
-      </div>
-
       {error && (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
       )}
 
       {/* Collaborator context banner: this person was invited into someone's planner. */}
       {isCollaborator && (
-        <div className="mt-6 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-600">
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-600">
           {isReadOnly ? <Eye className="h-4 w-4 shrink-0 text-gray-400" /> : <Pencil className="h-4 w-4 shrink-0 text-gray-400" />}
           <span>
             You have <strong className="text-gray-900">{isReadOnly ? 'view-only' : 'edit'}</strong>{' '}
@@ -314,9 +316,18 @@ export default function CoupleWeddingPage() {
         </div>
       )}
 
+      <DashboardHero
+        greetName={isPlannerCouple ? home?.couple.firstName ?? null : null}
+        firstName={home?.couple.firstName ?? null}
+        partnerFirstName={home?.couple.partnerFirstName ?? null}
+        date={countdownDate}
+        venueName={isLinked ? link?.venue?.name ?? null : null}
+        canEditDate={isPlannerCouple}
+      />
+
       {/* State: venue invited this bride (unclaimed) */}
       {!link && pendingInvite && (
-        <div className="mt-8 overflow-hidden rounded-2xl border border-emerald-200 bg-white">
+        <div className="mt-6 overflow-hidden rounded-2xl border border-emerald-200 bg-white">
           <div className="flex items-center gap-3 border-b border-emerald-100 bg-emerald-50 px-5 py-3">
             <Heart className="h-5 w-5 text-emerald-600" />
             <p className="text-sm font-medium text-emerald-800">
@@ -342,20 +353,21 @@ export default function CoupleWeddingPage() {
 
       {/* The best-practice first steps, ticked off as the couple goes. */}
       {isPlannerCouple && home?.setup && (
-        <SetupChecklist
-          setup={home.setup}
-          venueName={link?.venue?.name ?? null}
-          onToggle={(key, done) => void toggleSetup(key, done)}
-        />
+        <SetupChecklist setup={home.setup} onToggle={(key, done) => void toggleSetup(key, done)} />
       )}
 
-      {isLinked && home?.glance && <AtAGlance glance={home.glance} showBudget={isOwner} />}
+      {home?.metrics && <MetricsGrid metrics={home.metrics} />}
 
-      <div id="venue" className="scroll-mt-24">
+      <WeddingPlannerTools unread={link?.thread?.unread ?? 0} showBudget={isPlannerCouple} venueConnected={isLinked} />
+
+      {/* Your venue: connected, waiting on approval, or an optional card to find it. */}
+      {(link || (isPlannerCouple && !pendingInvite)) && (
+      <div id="venue" className="mt-8 scroll-mt-24">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Your venue</h3>
       {/* State: linked */}
       {link && link.status === 'linked' && (
-        <div className="mt-8 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-          <div className="relative h-40 w-full bg-gray-100">
+        <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="relative h-32 w-full bg-gray-100">
             {link.venue?.cover_image_url ? (
               <Image src={link.venue.cover_image_url} alt="" fill className="object-cover" sizes="768px" unoptimized />
             ) : null}
@@ -509,7 +521,7 @@ export default function CoupleWeddingPage() {
 
       {/* State: bride's request pending venue approval */}
       {link && link.status === 'pending' && (
-        <div className="mt-8 overflow-hidden rounded-2xl border border-amber-200 bg-white">
+        <div className="mt-4 overflow-hidden rounded-2xl border border-amber-200 bg-white">
           <div className="flex items-center gap-3 border-b border-amber-100 bg-amber-50 px-5 py-3">
             <Clock className="h-5 w-5 text-amber-600" />
             <p className="text-sm font-medium text-amber-800">Request pending</p>
@@ -531,97 +543,111 @@ export default function CoupleWeddingPage() {
         </div>
       )}
 
-      {/* State: not connected — connect UI */}
-      {!link && !pendingInvite && (
-        <div className="mt-8">
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-6">
-            <h2 className="font-heading text-lg text-gray-900">Connect with your venue</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Your venue unlocks the rest of your Wedding Planner: guest list &amp; RSVPs, seating, budget, timeline and
-              messages. Search for the venue you&apos;ve booked and we&apos;ll send them a request to connect.
-            </p>
-
-            {!selected ? (
-              <>
-                <div className="relative mt-4">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <input
-                    className={`${INPUT} pl-9`}
-                    placeholder="Search venue by name"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                  {searching && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />}
-                </div>
-
-                {results.length > 0 && (
-                  <ul className="mt-3 space-y-2">
-                    {results.map((r) => (
-                      <li key={r.slug}>
-                        <button
-                          type="button"
-                          onClick={() => setSelected(r)}
-                          className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 text-left hover:border-gray-300"
-                        >
-                          <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100">
-                            {r.cover_image_url ? (
-                              <Image src={r.cover_image_url} alt="" fill className="object-cover" sizes="64px" unoptimized />
-                            ) : null}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-gray-900">{r.name || 'Venue'}</p>
-                            {r.location && <p className="truncate text-xs text-gray-500">{r.location}</p>}
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {query.trim().length >= 2 && !searching && results.length === 0 && (
-                  <p className="mt-3 text-sm text-gray-400">No venues found. Try a different name.</p>
-                )}
-              </>
-            ) : (
-              <div className="mt-4 rounded-2xl border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100">
-                    {selected.cover_image_url ? (
-                      <Image src={selected.cover_image_url} alt="" fill className="object-cover" sizes="64px" unoptimized />
-                    ) : null}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-900">{selected.name || 'Venue'}</p>
-                    {selected.location && <p className="truncate text-xs text-gray-500">{selected.location}</p>}
-                  </div>
-                  <button type="button" onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <textarea
-                  className={`${INPUT} mt-3 min-h-[80px]`}
-                  placeholder="Add a note for the venue (optional)"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                />
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void submitRequest()}
-                  className="mt-3 w-full rounded-2xl bg-[#1b1b1b] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
-                >
-                  {busy ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null} Send connection request
-                </button>
-              </div>
+      {!link && !pendingInvite && isPlannerCouple && (
+        <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white p-5">
+          <div className="flex flex-wrap items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600">
+              <Building2 className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-900">Is your venue on StoryVenue?</p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Optional. Connect to message your venue here and share your wedding details. Your planner works either way.
+              </p>
+            </div>
+            {!showVenueSearch && (
+              <button
+                type="button"
+                onClick={() => setShowVenueSearch(true)}
+                className="shrink-0 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                Find my venue
+              </button>
             )}
           </div>
+          {showVenueSearch && (
+            <div className="mt-2">
+                {!selected ? (
+                  <>
+                    <div className="relative mt-4">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <input
+                        className={`${INPUT} pl-9`}
+                        placeholder="Search venue by name"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                      {searching && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />}
+                    </div>
+
+                    {results.length > 0 && (
+                      <ul className="mt-3 space-y-2">
+                        {results.map((r) => (
+                          <li key={r.slug}>
+                            <button
+                              type="button"
+                              onClick={() => setSelected(r)}
+                              className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 text-left hover:border-gray-300"
+                            >
+                              <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                                {r.cover_image_url ? (
+                                  <Image src={r.cover_image_url} alt="" fill className="object-cover" sizes="64px" unoptimized />
+                                ) : null}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-gray-900">{r.name || 'Venue'}</p>
+                                {r.location && <p className="truncate text-xs text-gray-500">{r.location}</p>}
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {query.trim().length >= 2 && !searching && results.length === 0 && (
+                      <p className="mt-3 text-sm text-gray-400">No venues found. Try a different name.</p>
+                    )}
+                  </>
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-gray-200 p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                        {selected.cover_image_url ? (
+                          <Image src={selected.cover_image_url} alt="" fill className="object-cover" sizes="64px" unoptimized />
+                        ) : null}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-gray-900">{selected.name || 'Venue'}</p>
+                        {selected.location && <p className="truncate text-xs text-gray-500">{selected.location}</p>}
+                      </div>
+                      <button type="button" onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <textarea
+                      className={`${INPUT} mt-3 min-h-[80px]`}
+                      placeholder="Add a note for the venue (optional)"
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void submitRequest()}
+                      className="mt-3 w-full rounded-2xl bg-[#1b1b1b] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-60"
+                    >
+                      {busy ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null} Send connection request
+                    </button>
+                  </div>
+                )}
+            </div>
+          )}
         </div>
       )}
       </div>
-
-      <WeddingPlannerTools unread={link?.thread?.unread ?? 0} showBudget={isPlannerCouple} locked={!isLinked} />
+      )}
 
       {/* Owner-only: manage the up-to-5 people invited into the planner. */}
-      {isOwner && isLinked && (
+      {isOwner && (
         <div id="collaborators" className="scroll-mt-24">
           <CollaboratorsCard />
         </div>
@@ -630,7 +656,7 @@ export default function CoupleWeddingPage() {
   );
 }
 
-const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode; ownerOnly?: boolean; worksWithoutVenue?: boolean }[] = [
+const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode; ownerOnly?: boolean }[] = [
   { href: '/couple/guests', label: 'Guests & RSVPs', desc: 'Track invites, meals & replies', icon: <Users className="h-5 w-5" /> },
   { href: '/couple/seating', label: 'Seating', desc: 'Arrange tables & assign guests', icon: <Armchair className="h-5 w-5" /> },
   { href: '/couple/timeline', label: 'Day-of timeline', desc: 'Plan your day minute by minute', icon: <Clock className="h-5 w-5" /> },
@@ -638,20 +664,17 @@ const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactN
   { href: '/couple/budget', label: 'Budget', desc: 'Track spending — private to you', icon: <Wallet className="h-5 w-5" />, ownerOnly: true },
   { href: '/couple/vendors', label: 'Vendors', desc: 'All your day-of contacts', icon: <Contact className="h-5 w-5" /> },
   { href: '/couple/inspiration', label: 'Inspiration', desc: 'Your style & mood board', icon: <Images className="h-5 w-5" /> },
-  { href: '/couple/site', label: 'Wedding website', desc: 'Your public wedding page', icon: <Globe className="h-5 w-5" />, worksWithoutVenue: true },
+  { href: '/couple/site', label: 'Wedding website', desc: 'Your public wedding page', icon: <Globe className="h-5 w-5" /> },
   { href: '/couple/invite-guests', label: 'Invite to website', desc: 'Email guests your wedding site', icon: <Send className="h-5 w-5" />, ownerOnly: true },
 ];
 
-function WeddingPlannerTools({ unread, showBudget, locked }: { unread: number; showBudget: boolean; locked: boolean }) {
+function WeddingPlannerTools({ unread, showBudget, venueConnected }: { unread: number; showBudget: boolean; venueConnected: boolean }) {
   // Budget + website invites are private to the owning couple — hide owner-only
   // tools entirely for collaborators.
   const tools = showBudget ? HUB_TOOLS : HUB_TOOLS.filter((t) => !t.ownerOnly);
   return (
     <div className="mt-8">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Plan your wedding</h3>
-      {locked && (
-        <p className="mt-1 text-xs text-gray-500">Connect your venue to unlock the tools marked with a lock.</p>
-      )}
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {tools.map((t) => (
           <Link
@@ -666,11 +689,7 @@ function WeddingPlannerTools({ unread, showBudget, locked }: { unread: number; s
               <p className="text-sm font-semibold text-gray-900">{t.label}</p>
               <p className="truncate text-xs text-gray-500">{t.desc}</p>
             </div>
-            {locked && !t.worksWithoutVenue ? (
-              <Lock className="h-4 w-4 shrink-0 text-gray-300" aria-label="Unlocks when your venue connects" />
-            ) : (
-              <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
-            )}
+            <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
           </Link>
         ))}
         <Link
@@ -687,66 +706,17 @@ function WeddingPlannerTools({ unread, showBudget, locked }: { unread: number; s
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-gray-900">Messages</p>
-            <p className="truncate text-xs text-gray-500">Chat directly with your venue</p>
+            <p className="truncate text-xs text-gray-500">
+              {venueConnected ? 'Chat directly with your venue' : 'Connect your venue to message them'}
+            </p>
           </div>
-          {locked ? (
-            <Lock className="h-4 w-4 shrink-0 text-gray-300" aria-label="Unlocks when your venue connects" />
+          {!venueConnected ? (
+            <Lock className="h-4 w-4 shrink-0 text-gray-300" aria-label="Needs a connected venue" />
           ) : (
             <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
           )}
         </Link>
       </div>
-    </div>
-  );
-}
-
-/**
- * Live wedding countdown — days / hrs / min / sec cells, ticking every second.
- * Mirrors the couple's public wedding-website countdown (weddingdirectory
- * minisite/Countdown.tsx) so the look is consistent across both surfaces.
- */
-function WeddingCountdown({ date }: { date: string }) {
-  const target = useMemo(() => new Date(`${date}T00:00:00`).getTime(), [date]);
-  const [now, setNow] = useState<number>(() => Date.now());
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  if (Number.isNaN(target)) return null;
-
-  const diff = target - now;
-  if (diff <= 0) {
-    return (
-      <div className="shrink-0 rounded-2xl border border-gray-200 bg-white px-5 py-3 text-center shadow-sm">
-        <p className="font-heading text-base text-[#1b1b1b]">You&apos;re married! 🤍</p>
-        <p className="mt-0.5 text-[11px] text-gray-400">{fmtDate(date)}</p>
-      </div>
-    );
-  }
-
-  const cells: [number, string][] = [
-    [Math.floor(diff / 86400000), 'days'],
-    [Math.floor((diff % 86400000) / 3600000), 'hrs'],
-    [Math.floor((diff % 3600000) / 60000), 'min'],
-    [Math.floor((diff % 60000) / 1000), 'sec'],
-  ];
-
-  return (
-    <div className="w-full shrink-0 sm:w-auto">
-      <div className="flex items-stretch gap-2">
-        {cells.map(([value, label]) => (
-          <div
-            key={label}
-            className="flex min-w-0 flex-1 flex-col items-center rounded-2xl border border-gray-200 bg-white px-2 py-2.5 shadow-sm sm:w-[62px] sm:flex-none"
-          >
-            <span className="text-2xl font-semibold tabular-nums text-[#1b1b1b]">{String(value).padStart(2, '0')}</span>
-            <span className="mt-0.5 text-[10px] uppercase tracking-wide text-gray-400">{label}</span>
-          </div>
-        ))}
-      </div>
-      <p className="mt-1.5 text-right text-[11px] text-gray-400">until your wedding · {fmtDate(date)}</p>
     </div>
   );
 }
@@ -998,17 +968,81 @@ function CollaboratorsCard() {
 }
 
 /**
+ * The top of the dashboard: a welcome and how long until the big day, or a
+ * nudge to add the date.
+ */
+function DashboardHero({
+  greetName,
+  firstName,
+  partnerFirstName,
+  date,
+  venueName,
+  canEditDate,
+}: {
+  /** Who's signed in, when it's the couple (a helper gets a neutral welcome). */
+  greetName: string | null;
+  firstName: string | null;
+  partnerFirstName: string | null;
+  date: string | null;
+  venueName: string | null;
+  canEditDate: boolean;
+}) {
+  const target = useMemo(() => (date ? new Date(`${date}T00:00:00`).getTime() : NaN), [date]);
+  const [now, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const days = Number.isNaN(target) ? null : Math.ceil((target - now) / 86_400_000);
+  const names = [firstName, partnerFirstName].filter(Boolean).join(' & ');
+  const details = [names, fmtDate(date), venueName].filter(Boolean).join(' · ');
+
+  return (
+    <div className="relative overflow-hidden rounded-3xl bg-[#1b1b1b] px-6 py-7 text-white sm:px-8 sm:py-8">
+      <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-white/[0.06]" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-24 right-24 h-48 w-48 rounded-full bg-white/[0.04]" />
+      <p className="relative text-sm text-white/60">{greetName ? `Welcome back, ${greetName}` : 'Welcome to the Wedding Planner'}</p>
+      {days != null && days > 0 ? (
+        <>
+          <p className="relative mt-2 font-heading text-4xl sm:text-5xl">
+            {days.toLocaleString('en-US')} {days === 1 ? 'day' : 'days'} to go
+          </p>
+          {details && <p className="relative mt-2 text-sm text-white/70">{details}</p>}
+        </>
+      ) : days === 0 ? (
+        <p className="relative mt-2 font-heading text-4xl sm:text-5xl">Today&apos;s the day! 🤍</p>
+      ) : days != null ? (
+        <>
+          <p className="relative mt-2 font-heading text-4xl sm:text-5xl">You&apos;re married! 🤍</p>
+          {details && <p className="relative mt-2 text-sm text-white/70">{details}</p>}
+        </>
+      ) : (
+        <>
+          <p className="relative mt-2 font-heading text-3xl sm:text-4xl">Let&apos;s plan your wedding</p>
+          {canEditDate && (
+            <Link
+              href="/couple/profile"
+              className="relative mt-4 inline-flex items-center gap-1.5 rounded-2xl bg-white px-4 py-2 text-sm font-medium text-[#1b1b1b] transition-opacity hover:opacity-90"
+            >
+              <CalendarDays className="h-4 w-4" /> Add your wedding date
+            </Link>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * The best-practice first steps (lib/couple-planner-setup.ts). Items tick
  * themselves when the app sees them done, and the couple can tick or untick any
- * of them. Items that need the venue stay locked until it connects.
+ * of them. It shrinks to one line once everything's done.
  */
 function SetupChecklist({
   setup,
-  venueName,
   onToggle,
 }: {
   setup: NonNullable<HomeData['setup']>;
-  venueName: string | null;
   onToggle: (key: PlannerSetupKey, done: boolean) => void;
 }) {
   const allDone = setup.doneCount >= setup.total;
@@ -1017,66 +1051,52 @@ function SetupChecklist({
   const byKey = new Map(setup.items.map((i) => [i.key, i]));
 
   return (
-    <div className="mt-8 rounded-2xl border border-gray-200 bg-white">
+    <div className="mt-6 rounded-2xl border border-gray-200 bg-white">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-4 px-5 pt-4 pb-3 text-left"
+        className="flex w-full items-center gap-4 px-5 pt-4 pb-3 text-left"
         aria-expanded={open}
       >
-        <div className="min-w-0">
+        <ProgressRing pct={pct} />
+        <div className="min-w-0 flex-1">
           <h2 className="font-heading text-lg text-gray-900">
-            {allDone ? 'Your planner is all set up' : 'Set up your Wedding Planner'}
+            {allDone ? 'Your planner is all set up' : 'Your next steps'}
           </h2>
           <p className="mt-0.5 text-sm text-gray-500">
             {allDone
               ? 'Every first step is done. Nice work!'
-              : `${setup.doneCount} of ${setup.total} done · the first steps to get the most out of your planner`}
+              : `${setup.doneCount} of ${setup.total} done · the essentials for a stress-free plan`}
           </p>
         </div>
         <ChevronDown className={`h-5 w-5 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
-      <div className="px-5 pb-4">
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-          <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
       {open && (
         <ul className="divide-y divide-gray-100 border-t border-gray-100">
           {PLANNER_SETUP_ITEMS.map((item) => {
             const state = byKey.get(item.key);
             if (!state) return null;
-            const venuePending = item.key === 'venue' && setup.venuePending && !state.done;
-            const desc = state.locked
-              ? 'Unlocks when your venue connects.'
-              : venuePending
-                ? `Request sent${venueName ? ` to ${venueName}` : ''}. You'll be connected once they approve.`
-                : item.desc;
-            const cta = 'shrink-0 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50';
+            const cta =
+              'shrink-0 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50';
             return (
               <li key={item.key} className="flex items-center gap-3 px-5 py-3.5">
                 <button
                   type="button"
-                  disabled={state.locked}
                   onClick={() => onToggle(item.key, !state.done)}
                   aria-label={state.done ? `Mark "${item.title}" as not done` : `Mark "${item.title}" as done`}
-                  className="shrink-0 disabled:cursor-not-allowed"
+                  className="shrink-0"
                 >
-                  {state.locked ? (
-                    <Lock className="h-5 w-5 text-gray-300" />
-                  ) : state.done ? (
+                  {state.done ? (
                     <CheckCircle2 className="h-6 w-6 text-emerald-500" />
                   ) : (
                     <Circle className="h-6 w-6 text-gray-300 transition-colors hover:text-gray-400" />
                   )}
                 </button>
                 <div className="min-w-0 flex-1">
-                  <p className={`text-sm font-medium ${state.done ? 'text-gray-400 line-through' : state.locked ? 'text-gray-400' : 'text-gray-900'}`}>
-                    {item.title}
-                  </p>
-                  <p className="text-xs text-gray-500">{desc}</p>
+                  <p className={`text-sm font-medium ${state.done ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{item.title}</p>
+                  <p className="text-xs text-gray-500">{item.desc}</p>
                 </div>
-                {!state.done && !state.locked && !venuePending &&
+                {!state.done &&
                   (item.href.startsWith('#') ? (
                     <a href={item.href} className={cta}>{item.cta}</a>
                   ) : (
@@ -1091,79 +1111,137 @@ function SetupChecklist({
   );
 }
 
-/** The key numbers for the big day, each linking to where they're managed. */
-function AtAGlance({ glance, showBudget }: { glance: HomeData['glance']; showBudget: boolean }) {
+function ProgressRing({ pct }: { pct: number }) {
+  const r = 18;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="relative h-12 w-12 shrink-0">
+      <svg viewBox="0 0 44 44" className="h-12 w-12 -rotate-90">
+        <circle cx="22" cy="22" r={r} fill="none" stroke="#f3f4f6" strokeWidth="5" />
+        <circle
+          cx="22"
+          cy="22"
+          r={r}
+          fill="none"
+          stroke="#10b981"
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c - (c * pct) / 100}
+          className="transition-all duration-500"
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-gray-700">{pct}%</span>
+    </div>
+  );
+}
+
+/** The dashboard numbers, each linking to where it's managed. */
+function MetricsGrid({ metrics }: { metrics: HomeMetrics }) {
   const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+  const count = (n: number) => n.toLocaleString('en-US');
   const shortDate = (d: string) => {
     const parsed = new Date(`${d}T00:00:00`);
     return Number.isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
-  const g = glance.guests;
-  const t = glance.todos;
-  const b = showBudget ? glance.budget : null;
-  const w = glance.website;
-  const tiles: { href: string; label: string; value: string; sub: string; icon: React.ReactNode }[] = [];
-  if (g) {
-    tiles.push({
-      href: '/couple/guests',
-      label: 'Guests',
-      value: g.total ? `${g.headcount} attending` : 'No guests yet',
-      sub: g.total ? `${g.total} on your list · ${g.pending} awaiting reply` : 'Add your guest list',
-      icon: <Users className="h-4 w-4" />,
-    });
-  }
-  if (t) {
-    tiles.push({
-      href: '/couple/checklist',
-      label: 'To-dos',
-      value: t.total ? `${t.done} of ${t.total} done` : 'No to-dos yet',
-      sub: t.next
-        ? `Next: ${t.next.title}${t.next.dueDate ? ` · ${shortDate(t.next.dueDate)}` : ''}`
-        : t.total
-          ? 'All caught up'
-          : 'Start your checklist',
-      icon: <ListChecks className="h-4 w-4" />,
-    });
-  }
-  if (b) {
-    tiles.push({
-      href: '/couple/budget',
-      label: 'Budget',
-      value: `${money(b.actual)} spent`,
-      sub: b.target > 0 ? `of ${money(b.target)} budget` : b.estimated > 0 ? `of ${money(b.estimated)} planned` : 'Set your budget',
-      icon: <Wallet className="h-4 w-4" />,
-    });
-  }
+  const { website: w, guests: g, todos: t, budget: b } = metrics;
+  const tiles: { href: string; label: string; value: string; sub: string; icon: React.ReactNode; tone: string }[] = [];
+
   if (w) {
     tiles.push({
       href: '/couple/site',
-      label: 'Website',
-      value: w.status === 'published' ? 'Live' : w.status === 'draft' ? 'Draft' : 'Not started',
+      label: 'Website views',
+      value: count(w.views),
       sub:
-        w.status === 'published' && w.slug
-          ? `${DIRECTORY.replace(/^https?:\/\//, '').replace(/\/$/, '')}/${w.slug}`
+        w.status === 'published'
+          ? `+${count(w.viewsThisWeek)} this week`
           : w.status === 'draft'
-            ? 'Publish it to share'
+            ? 'Publish your site to start'
             : 'Build your wedding website',
-      icon: <Globe className="h-4 w-4" />,
+      icon: <Eye className="h-4 w-4" />,
+      tone: 'bg-violet-50 text-violet-600',
     });
   }
-  if (!tiles.length) return null;
+  tiles.push({
+    href: '/couple/guests',
+    label: 'RSVP replies',
+    value: count(g.replied),
+    sub: g.total ? `${count(g.attending)} yes · ${count(g.declined)} no · ${count(g.awaiting)} waiting` : 'Add guests to collect RSVPs',
+    icon: <MailCheck className="h-4 w-4" />,
+    tone: 'bg-emerald-50 text-emerald-600',
+  });
+  tiles.push({
+    href: '/couple/guests',
+    label: 'Guests coming',
+    value: count(g.headcount),
+    sub: `${count(g.total)} on your guest list`,
+    icon: <Users className="h-4 w-4" />,
+    tone: 'bg-sky-50 text-sky-600',
+  });
+  if (w) {
+    tiles.push({
+      href: '/couple/site',
+      label: 'Guestbook notes',
+      value: count(w.guestbook),
+      sub: 'Left on your website',
+      icon: <MessageSquareHeart className="h-4 w-4" />,
+      tone: 'bg-rose-50 text-rose-600',
+    });
+  }
+  tiles.push({
+    href: '/couple/checklist',
+    label: 'To-dos done',
+    value: t.total ? `${count(t.done)}/${count(t.total)}` : '0',
+    sub: t.next ? `Next: ${t.next.title}${t.next.dueDate ? ` · ${shortDate(t.next.dueDate)}` : ''}` : t.total ? 'All caught up' : 'Start your checklist',
+    icon: <ListChecks className="h-4 w-4" />,
+    tone: 'bg-amber-50 text-amber-600',
+  });
+  if (b) {
+    tiles.push({
+      href: '/couple/budget',
+      label: 'Budget spent',
+      value: money(b.actual),
+      sub: b.target > 0 ? `of ${money(b.target)} budget` : b.estimated > 0 ? `of ${money(b.estimated)} planned` : 'Set your budget',
+      icon: <Wallet className="h-4 w-4" />,
+      tone: 'bg-teal-50 text-teal-600',
+    });
+  }
+  if (metrics.invitesSent != null) {
+    tiles.push({
+      href: '/couple/invite-guests',
+      label: 'Invites sent',
+      value: count(metrics.invitesSent),
+      sub: 'Website invites emailed',
+      icon: <Send className="h-4 w-4" />,
+      tone: 'bg-indigo-50 text-indigo-600',
+    });
+  }
+  tiles.push({
+    href: '/couple/vendors',
+    label: 'Vendors',
+    value: count(metrics.vendors),
+    sub: 'In your vendor list',
+    icon: <Contact className="h-4 w-4" />,
+    tone: 'bg-gray-100 text-gray-600',
+  });
+
   return (
-    <div className="mt-6">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">At a glance</h3>
+    <div className="mt-8">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Your wedding at a glance</h3>
       <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {tiles.map((tile) => (
           <Link
             key={tile.label}
             href={tile.href}
-            className="rounded-2xl border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300 hover:bg-gray-50"
+            className="group rounded-2xl border border-gray-200 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-sm"
           >
-            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-              {tile.icon} {tile.label}
-            </p>
-            <p className="mt-2 text-base font-semibold text-gray-900">{tile.value}</p>
-            <p className="mt-0.5 truncate text-xs text-gray-500">{tile.sub}</p>
+            <div className="flex items-center justify-between">
+              <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${tile.tone}`}>{tile.icon}</span>
+              <ChevronRight className="h-4 w-4 text-gray-300 transition-transform group-hover:translate-x-0.5" />
+            </div>
+            <p className="mt-3 text-2xl font-semibold tabular-nums text-gray-900">{tile.value}</p>
+            <p className="text-xs font-medium text-gray-700">{tile.label}</p>
+            <p className="mt-0.5 truncate text-[11px] text-gray-500">{tile.sub}</p>
           </Link>
         ))}
       </div>

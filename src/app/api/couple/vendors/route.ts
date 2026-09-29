@@ -17,7 +17,7 @@ async function loadVendors(weddingId: string): Promise<WeddingVendors> {
 
 /** GET — the couple's vendor directory for her linked wedding. */
 export async function GET(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request);
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
   return NextResponse.json({ vendors: await loadVendors(link.id) });
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
 /** PUT — replace the vendor directory. Optimistic concurrency via `vendors.rev`. */
 export async function PUT(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
 

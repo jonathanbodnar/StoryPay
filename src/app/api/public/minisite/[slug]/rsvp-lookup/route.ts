@@ -43,8 +43,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     .from('couple_weddings')
     .select('id')
     .eq('couple_id', coupleId)
-    .eq('status', 'linked')
-    .order('linked_at', { ascending: false })
+    .in('status', ['linked', 'pending', 'self'])
+    .order('status', { ascending: true })
     .limit(1)
     .maybeSingle();
   const weddingId = (wedding as { id?: string } | null)?.id;

@@ -1,22 +1,31 @@
 /**
- * /api/couple/home — the Wedding Planner home (overview) page.
+ * /api/couple/home — the Wedding Planner home (the couple's dashboard).
  *
- *   GET   → the setup checklist (lib/couple-planner-setup.ts) for the couple
- *           who owns the planner, and the "at a glance" numbers (guests,
- *           to-dos, budget, website).
+ *   GET   → the couple's names and date, the setup checklist
+ *           (lib/couple-planner-setup.ts), and the dashboard metrics: website
+ *           views, RSVP replies, guests coming, guestbook notes, invites sent,
+ *           to-dos, budget and vendors.
  *   PATCH → { key, done } ticks or unticks a checklist item by hand
  *           (done: null goes back to the automatic check).
  *
- * The checklist belongs to the couple, so invited helpers (collaborators) get
- * the numbers but not the checklist.
+ * Every couple has a planner, with or without a venue (lib/couple-weddings.ts),
+ * so this creates it on first visit. Invited helpers (collaborators) get the
+ * metrics for the planner they help with, but not the couple's checklist,
+ * budget or website stats.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getCoupleAuthUser } from '@/lib/couple-server';
-import { resolveCoupleWeddingAccess, summarizeWeddingGuests } from '@/lib/couple-weddings';
+import {
+  ensureCouplePlanner,
+  resolveCoupleWeddingAccess,
+  summarizeWeddingGuests,
+  type ResolvedCoupleWedding,
+} from '@/lib/couple-weddings';
 import { sanitizeChecklist } from '@/lib/wedding-checklist';
 import { sanitizeBudget } from '@/lib/wedding-budget';
 import { sanitizeInspiration } from '@/lib/wedding-inspiration';
+import { sanitizeVendors } from '@/lib/wedding-vendors';
 import { getPinterestConnection } from '@/lib/pinterest';
 import {
   PLANNER_SETUP_ITEMS,
@@ -40,95 +49,125 @@ function readOverrides(raw: unknown): Overrides {
   return out;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export async function GET(request: NextRequest) {
   const user = await getCoupleAuthUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const resolved = await resolveCoupleWeddingAccess(user.id);
+  let resolved: ResolvedCoupleWedding | null = await resolveCoupleWeddingAccess(user.id);
+  if (!resolved) {
+    const planner = await ensureCouplePlanner(user.id);
+    if (planner) resolved = { wedding: planner, access: 'owner', collaboratorId: null };
+  }
   const access = resolved?.access ?? null;
-  const wedding = (resolved?.wedding ?? null) as (Record<string, unknown> & { id: string; status: string }) | null;
-  const linked = wedding?.status === 'linked';
-  // The couple whose planner this is: the owner, or a couple with no venue yet.
-  const isPlannerCouple = access === 'owner' || access === null;
+  const wedding = (resolved?.wedding ?? null) as (Record<string, unknown> & { id: string; status: string; couple_id: string | null }) | null;
+  const isCouple = access === 'owner';
+  // Names, date and website belong to the couple who owns the planner.
+  const coupleId = wedding?.couple_id ?? user.id;
 
-  const [{ data: profile }, { data: site }, guestRows] = await Promise.all([
-    supabaseAdmin.from('couple_profiles').select('wedding_date, planner_setup').eq('id', user.id).maybeSingle(),
-    isPlannerCouple
-      ? supabaseAdmin.from('couple_sites').select('slug, is_published').eq('couple_id', user.id).maybeSingle()
+  const since7 = new Date(Date.now() - 7 * DAY_MS).toISOString().slice(0, 10);
+  const [{ data: profile }, { data: site }, { data: guestRows }, { data: sends }] = await Promise.all([
+    supabaseAdmin
+      .from('couple_profiles')
+      .select('first_name, partner_first_name, wedding_date, planner_setup')
+      .eq('id', coupleId)
+      .maybeSingle(),
+    isCouple
+      ? supabaseAdmin.from('couple_sites').select('id, slug, is_published').eq('couple_id', user.id).maybeSingle()
       : Promise.resolve({ data: null }),
-    linked && wedding
+    wedding
       ? supabaseAdmin.from('wedding_guests').select('rsvp_status, party_size, meal_choice').eq('couple_wedding_id', wedding.id)
+      : Promise.resolve({ data: [] }),
+    wedding && isCouple
+      ? supabaseAdmin.from('couple_website_invite_sends').select('sent_count').eq('couple_wedding_id', wedding.id)
       : Promise.resolve({ data: [] }),
   ]);
 
-  const guests = linked
-    ? summarizeWeddingGuests(((guestRows.data ?? []) as { rsvp_status: string | null; party_size: number | null; meal_choice: string | null }[]))
-    : null;
-  const checklist = linked ? sanitizeChecklist(wedding?.checklist) : null;
-  const budget = linked && access === 'owner' ? sanitizeBudget(wedding?.budget) : null;
-  const siteRow = site as { slug: string | null; is_published: boolean | null } | null;
+  const prof = (profile ?? {}) as { first_name?: string | null; partner_first_name?: string | null; wedding_date?: string | null; planner_setup?: unknown };
+  const siteRow = site as { id: string; slug: string | null; is_published: boolean | null } | null;
 
-  // ── Setup checklist (the planner's couple only) ────────────────────────
-  let setup: { items: PlannerSetupState[]; doneCount: number; total: number; venuePending: boolean } | null = null;
-  if (isPlannerCouple) {
-    const [inviteSends, collaborators, pinterest] = await Promise.all([
-      linked && wedding
-        ? supabaseAdmin.from('couple_website_invite_sends').select('id', { count: 'exact', head: true }).eq('couple_wedding_id', wedding.id).gt('sent_count', 0)
-        : Promise.resolve({ count: 0 }),
-      linked && wedding
-        ? supabaseAdmin.from('wedding_planner_collaborators').select('id', { count: 'exact', head: true }).eq('couple_wedding_id', wedding.id).neq('status', 'revoked')
-        : Promise.resolve({ count: 0 }),
-      getPinterestConnection(user.id).catch(() => ({ connected: false })),
-    ]);
-    const inspirationItems = linked ? sanitizeInspiration(wedding?.inspiration).items.length : 0;
+  const [views, guestbook, collaborators, pinterest] = await Promise.all([
+    siteRow
+      ? supabaseAdmin.from('couple_site_views').select('day, views').eq('site_id', siteRow.id)
+      : Promise.resolve({ data: [] }),
+    siteRow
+      ? supabaseAdmin.from('couple_guestbook_entries').select('id', { count: 'exact', head: true }).eq('couple_site_id', siteRow.id).eq('is_hidden', false)
+      : Promise.resolve({ count: 0 }),
+    wedding && isCouple
+      ? supabaseAdmin.from('wedding_planner_collaborators').select('id', { count: 'exact', head: true }).eq('couple_wedding_id', wedding.id).neq('status', 'revoked')
+      : Promise.resolve({ count: 0 }),
+    isCouple ? getPinterestConnection(user.id).catch(() => ({ connected: false })) : Promise.resolve({ connected: false }),
+  ]);
 
+  const guests = summarizeWeddingGuests(
+    (guestRows ?? []) as { rsvp_status: string | null; party_size: number | null; meal_choice: string | null }[],
+  );
+  const checklist = sanitizeChecklist(wedding?.checklist);
+  const budget = isCouple ? sanitizeBudget(wedding?.budget) : null;
+  const inspirationCount = sanitizeInspiration(wedding?.inspiration).items.length;
+  const vendorCount = sanitizeVendors(wedding?.vendors).items.length;
+  const viewRows = (views.data ?? []) as { day: string; views: number }[];
+  const invitesSent = ((sends ?? []) as { sent_count: number | null }[]).reduce((s, r) => s + (r.sent_count ?? 0), 0);
+
+  // ── Setup checklist (the couple only) ──────────────────────────────────
+  let setup: { items: PlannerSetupState[]; doneCount: number; total: number } | null = null;
+  if (isCouple) {
     const auto: Record<PlannerSetupKey, boolean> = {
-      wedding_date: Boolean((profile as { wedding_date?: string | null } | null)?.wedding_date),
-      venue: linked,
+      wedding_date: Boolean(prof.wedding_date),
       website: siteRow?.is_published === true,
-      guests: (guests?.total ?? 0) > 0,
-      website_invite: (inviteSends.count ?? 0) > 0,
-      inspiration: inspirationItems > 0 || pinterest.connected,
+      guests: guests.total > 0,
+      website_invite: invitesSent > 0,
+      inspiration: inspirationCount > 0 || pinterest.connected,
       budget: Boolean(budget && (budget.target > 0 || budget.lines.length > 0)),
       partner: (collaborators.count ?? 0) > 0,
     };
-    const overrides = readOverrides((profile as { planner_setup?: unknown } | null)?.planner_setup);
-    const items = PLANNER_SETUP_ITEMS.map((item): PlannerSetupState => {
-      const locked = item.needsVenue && !linked;
-      return {
-        key: item.key,
-        auto: auto[item.key],
-        locked,
-        done: locked ? false : overrides[item.key] ?? auto[item.key],
-      };
-    });
-    setup = {
-      items,
-      doneCount: items.filter((i) => i.done).length,
-      total: items.length,
-      venuePending: wedding?.status === 'pending',
-    };
+    const overrides = readOverrides(prof.planner_setup);
+    const items = PLANNER_SETUP_ITEMS.map((item): PlannerSetupState => ({
+      key: item.key,
+      auto: auto[item.key],
+      done: overrides[item.key] ?? auto[item.key],
+    }));
+    setup = { items, doneCount: items.filter((i) => i.done).length, total: items.length };
   }
 
-  // ── At a glance ─────────────────────────────────────────────────────────
-  const todoItems = checklist?.items ?? [];
-  const nextTodo = todoItems
-    .filter((i) => !i.done)
-    .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))[0] ?? null;
+  const todoItems = checklist.items;
+  const nextTodo =
+    todoItems.filter((i) => !i.done).sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))[0] ?? null;
 
   return NextResponse.json({
     access,
-    linked,
+    venueConnected: wedding?.status === 'linked',
+    couple: {
+      firstName: prof.first_name ?? null,
+      partnerFirstName: prof.partner_first_name ?? null,
+      weddingDate: prof.wedding_date ?? null,
+    },
     setup,
-    glance: {
-      guests,
-      todos: checklist
+    metrics: {
+      website: isCouple
         ? {
-            done: todoItems.filter((i) => i.done).length,
-            total: todoItems.length,
-            next: nextTodo ? { title: nextTodo.title, dueDate: nextTodo.dueDate || null } : null,
+            status: siteRow?.is_published ? 'published' : siteRow ? 'draft' : 'none',
+            slug: siteRow?.slug ?? null,
+            views: viewRows.reduce((s, r) => s + (r.views ?? 0), 0),
+            viewsThisWeek: viewRows.filter((r) => r.day >= since7).reduce((s, r) => s + (r.views ?? 0), 0),
+            guestbook: guestbook.count ?? 0,
           }
         : null,
+      guests: {
+        total: guests.total,
+        attending: guests.attending,
+        declined: guests.declined,
+        awaiting: guests.pending,
+        replied: guests.attending + guests.declined,
+        headcount: guests.headcount,
+      },
+      invitesSent: isCouple ? invitesSent : null,
+      todos: {
+        done: todoItems.filter((i) => i.done).length,
+        total: todoItems.length,
+        next: nextTodo ? { title: nextTodo.title, dueDate: nextTodo.dueDate || null } : null,
+      },
       budget: budget
         ? {
             target: budget.target,
@@ -136,12 +175,8 @@ export async function GET(request: NextRequest) {
             actual: budget.lines.reduce((s, l) => s + (l.actual || 0), 0),
           }
         : null,
-      website: isPlannerCouple
-        ? {
-            status: siteRow?.is_published ? 'published' : siteRow ? 'draft' : 'none',
-            slug: siteRow?.slug ?? null,
-          }
-        : null,
+      vendors: vendorCount,
+      inspiration: inspirationCount,
     },
   });
 }

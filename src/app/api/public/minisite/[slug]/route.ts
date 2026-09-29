@@ -88,18 +88,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     }
   }
 
-  // Is the couple linked to a venue? Drives both the "Our Venue" card and
-  // whether public "find your RSVP" is offered.
-  const { data: link } = await supabaseAdmin
+  // Count the visit (shown on the couple's planner home). Best-effort.
+  void supabaseAdmin.rpc('increment_couple_site_view', { p_site_id: site.id }).then(({ error }) => {
+    if (error) console.warn('[minisite] view count failed:', error.message);
+  });
+
+  // The couple's Wedding Planner: "find your RSVP" works whenever they have a
+  // guest list (with or without a venue); the "Our Venue" card needs a
+  // connected venue.
+  const { data: planner } = await supabaseAdmin
     .from('couple_weddings')
-    .select('venue_id')
+    .select('venue_id, status')
     .eq('couple_id', site.couple_id)
-    .eq('status', 'linked')
-    .order('linked_at', { ascending: false })
+    .in('status', ['linked', 'pending', 'self'])
+    .order('status', { ascending: true }) // linked first
     .limit(1)
     .maybeSingle();
-  const venueId = (link as { venue_id?: string } | null)?.venue_id ?? null;
-  const rsvpEnabled = Boolean(venueId);
+  const plannerRow = planner as { venue_id?: string | null; status?: string } | null;
+  const venueId = plannerRow?.status === 'linked' ? plannerRow.venue_id ?? null : null;
+  const rsvpEnabled = Boolean(plannerRow);
 
   // Optional "Our Venue" card — uses public listing fields only.
   let venue: {

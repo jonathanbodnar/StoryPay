@@ -29,7 +29,7 @@ interface SerializedMessage {
  * fallback for the sender name.
  */
 async function resolveContext(link: CoupleWeddingRow, coupleEmail: string | undefined) {
-  if (link.status !== 'linked' || !link.venue_customer_id) {
+  if (link.status !== 'linked' || !link.venue_customer_id || !link.venue_id) {
     return { error: 'not_linked' as const };
   }
   const threadId = await ensureThreadForCustomer(link.venue_id, link.venue_customer_id);
@@ -68,7 +68,7 @@ async function resolveContext(link: CoupleWeddingRow, coupleEmail: string | unde
 // owner-only (see POST) so the venue never sees a message from anyone but the
 // couple.
 export async function GET(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
   if (!gate.ok) return gate.res;
   const { user, wedding } = gate.ctx;
 
@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
 // post, so the venue's conversation stays unambiguously with the couple and we
 // avoid identity confusion in the shared thread.
 export async function POST(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
   if (!gate.ok) return gate.res;
   const { user, wedding } = gate.ctx;
 

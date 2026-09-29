@@ -24,7 +24,7 @@ async function loadBudget(weddingId: string): Promise<WeddingBudget> {
 
 /** GET — the couple's private budget for her linked wedding. Owner only. */
 export async function GET(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
   return NextResponse.json({ budget: await loadBudget(link.id) });
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
 /** PUT — replace the budget. Owner only. Optimistic concurrency via `budget.rev`. */
 export async function PUT(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
 

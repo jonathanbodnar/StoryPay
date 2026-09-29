@@ -17,7 +17,7 @@ async function loadLayout(weddingId: string): Promise<WeddingLayout> {
 
 /** GET — the bride's room layout for her linked wedding. */
 export async function GET(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request);
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
   return NextResponse.json({ layout: await loadLayout(link.id) });
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
 /** PUT — replace the layout. Optimistic concurrency via `layout.rev`. */
 export async function PUT(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { write: true });
   if (!gate.ok) return gate.res;
   const link = gate.ctx.wedding;
 

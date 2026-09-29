@@ -28,7 +28,7 @@ const COLLAB_COLUMNS =
 
 /** GET — list this wedding's collaborators (owner only). */
 export async function GET(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
   if (!gate.ok) return gate.res;
   const wedding = gate.ctx.wedding;
 
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
 /** POST — invite a new collaborator (owner only). Body: { name, email, phone, access_level }. */
 export async function POST(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
   if (!gate.ok) return gate.res;
   const wedding = gate.ctx.wedding;
 
@@ -122,7 +122,9 @@ export async function POST(request: NextRequest) {
       .select('display_name, first_name, last_name, partner_first_name')
       .eq('id', wedding.couple_id)
       .maybeSingle(),
-    supabaseAdmin.from('venues').select('name, brand_email').eq('id', wedding.venue_id).maybeSingle(),
+    wedding.venue_id
+      ? supabaseAdmin.from('venues').select('name, brand_email').eq('id', wedding.venue_id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   const p = profile as
     | { display_name?: string | null; first_name?: string | null; last_name?: string | null; partner_first_name?: string | null }
@@ -158,7 +160,7 @@ export async function POST(request: NextRequest) {
 
 /** PATCH — change a collaborator's access level (owner only). Body: { id, access_level }. */
 export async function PATCH(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
   if (!gate.ok) return gate.res;
   const wedding = gate.ctx.wedding;
 
@@ -191,7 +193,7 @@ export async function PATCH(request: NextRequest) {
 
 /** DELETE — revoke a collaborator (owner only, soft-delete). Body/query: { id }. */
 export async function DELETE(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
   if (!gate.ok) return gate.res;
   const wedding = gate.ctx.wedding;
 

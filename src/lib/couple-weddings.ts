@@ -11,14 +11,21 @@ import { loadVenueFeatureAccess } from '@/lib/plan-features';
  *
  * All access goes through the service role; callers are responsible for
  * verifying the couple/venue identity before invoking these helpers.
+ *
+ * The same row is the couple's Wedding Planner (guests, budget, timeline…).
+ * The venue is optional (migration 267): a couple plans on their own in a
+ * 'self' row with no venue; connecting a venue attaches it to that row
+ * (pending → linked), and a decline or disconnect detaches it again, so the
+ * couple never loses their planning.
  */
 
-export type CoupleWeddingStatus = 'pending' | 'linked' | 'declined' | 'revoked';
+export type CoupleWeddingStatus = 'self' | 'pending' | 'linked' | 'declined' | 'revoked';
 
 export interface CoupleWeddingRow {
   id: string;
   couple_id: string | null;
-  venue_id: string;
+  /** Null only for a 'self' planner (no venue connected). */
+  venue_id: string | null;
   venue_customer_id: string | null;
   status: CoupleWeddingStatus;
   initiated_by: 'venue' | 'bride';
@@ -72,12 +79,115 @@ export async function getActiveCoupleWedding(
     .from('couple_weddings')
     .select('*')
     .eq('couple_id', coupleId)
-    .in('status', ['pending', 'linked'])
-    .order('status', { ascending: true }) // 'linked' < 'pending' alphabetically
+    .in('status', ['self', 'pending', 'linked'])
+    .order('status', { ascending: true }) // 'linked' < 'pending' < 'self' alphabetically
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   return (data as CoupleWeddingRow | null) ?? null;
+}
+
+/**
+ * The couple's own Wedding Planner, created (with no venue) the first time
+ * they need it. Returns null only if it can't be created.
+ */
+export async function ensureCouplePlanner(coupleId: string): Promise<CoupleWeddingRow | null> {
+  const existing = await getActiveCoupleWedding(coupleId);
+  if (existing) return existing;
+  const { data, error } = await supabaseAdmin
+    .from('couple_weddings')
+    .insert({ couple_id: coupleId, venue_id: null, status: 'self', initiated_by: 'bride' })
+    .select('*')
+    .single();
+  // Two requests at once: the second insert hits the one-self-planner index.
+  if (error || !data) return getActiveCoupleWedding(coupleId);
+  return data as CoupleWeddingRow;
+}
+
+/** Point the planner's guests and tables at its venue (null = no venue). */
+export async function setPlannerVenueOnRows(weddingId: string, venueId: string | null): Promise<void> {
+  await Promise.all([
+    supabaseAdmin.from('wedding_guests').update({ venue_id: venueId }).eq('couple_wedding_id', weddingId),
+    supabaseAdmin.from('wedding_tables').update({ venue_id: venueId }).eq('couple_wedding_id', weddingId),
+  ]);
+}
+
+/**
+ * The venue declined, or the couple disconnected: the planner goes back to
+ * being theirs alone ('self'), keeping everything they've planned. The venue's
+ * coordinator loses access.
+ */
+export async function detachVenueFromPlanner(weddingId: string): Promise<{ error: string | null }> {
+  const { error } = await supabaseAdmin
+    .from('couple_weddings')
+    .update({
+      status: 'self',
+      venue_id: null,
+      venue_customer_id: null,
+      initiated_by: 'bride',
+      request_message: null,
+      claim_token: null,
+      claim_token_expires_at: null,
+      linked_at: null,
+      decided_at: new Date().toISOString(),
+    })
+    .eq('id', weddingId);
+  if (error) return { error: error.message };
+  await setPlannerVenueOnRows(weddingId, null);
+  await supabaseAdmin
+    .from('wedding_planner_collaborators')
+    .update({ status: 'revoked', revoked_at: new Date().toISOString() })
+    .eq('couple_wedding_id', weddingId)
+    .eq('invited_by', 'venue')
+    .neq('status', 'revoked');
+  return { error: null };
+}
+
+const PLANNER_JSON_COLUMNS = ['timeline', 'inspiration', 'checklist', 'vendors', 'budget', 'layout', 'meal_options'] as const;
+const PLANNER_CHILD_TABLES = [
+  'wedding_guests',
+  'wedding_tables',
+  'wedding_planner_collaborators',
+  'couple_website_invite_sends',
+  'couple_email_suppressions',
+] as const;
+
+function hasPlannerData(v: unknown): boolean {
+  if (v == null) return false;
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    for (const key of ['items', 'lines', 'events', 'tables', 'options']) {
+      if (Array.isArray(o[key]) && (o[key] as unknown[]).length > 0) return true;
+    }
+    return Object.keys(o).some((k) => k !== 'rev' && o[k] != null && !(Array.isArray(o[k]) && (o[k] as unknown[]).length === 0) && o[k] !== 0 && o[k] !== '');
+  }
+  return false;
+}
+
+/**
+ * A couple claims a venue's invite after planning on their own: move their
+ * planner (guests, tables, collaborators, sends, and any tool data the invite
+ * row doesn't have yet) onto the venue's row, then remove their old row.
+ */
+export async function mergePlannerInto(fromId: string, intoId: string): Promise<void> {
+  if (fromId === intoId) return;
+  const [{ data: from }, { data: into }] = await Promise.all([
+    supabaseAdmin.from('couple_weddings').select(PLANNER_JSON_COLUMNS.join(', ')).eq('id', fromId).maybeSingle(),
+    supabaseAdmin.from('couple_weddings').select(PLANNER_JSON_COLUMNS.join(', ')).eq('id', intoId).maybeSingle(),
+  ]);
+  const f = (from ?? {}) as Record<string, unknown>;
+  const t = (into ?? {}) as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+  for (const col of PLANNER_JSON_COLUMNS) {
+    if (hasPlannerData(f[col]) && !hasPlannerData(t[col])) patch[col] = f[col];
+  }
+  if (Object.keys(patch).length) await supabaseAdmin.from('couple_weddings').update(patch).eq('id', intoId);
+  for (const table of PLANNER_CHILD_TABLES) {
+    const { error } = await supabaseAdmin.from(table).update({ couple_wedding_id: intoId }).eq('couple_wedding_id', fromId);
+    if (error) console.warn(`[planner merge] ${table}:`, error.message);
+  }
+  await supabaseAdmin.from('couple_weddings').delete().eq('id', fromId);
 }
 
 // ── Wedding Planner collaborator access ─────────────────────────────────────

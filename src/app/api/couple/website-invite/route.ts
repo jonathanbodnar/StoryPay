@@ -58,7 +58,7 @@ function coupleDisplayName(p: CoupleProfileLite | null): string {
  * prefill (excluding suppressed), the reply-to email, the cap, and last-send info.
  */
 export async function GET(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
   if (!gate.ok) return gate.res;
   const { user, wedding: link } = gate.ctx;
   const coupleId = link.couple_id as string;
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
  * provided + verified, the site password are appended automatically.
  */
 export async function POST(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true, requireLinked: true });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
   if (!gate.ok) return gate.res;
   const { user, wedding: link } = gate.ctx;
   const coupleId = link.couple_id as string;
@@ -387,7 +387,7 @@ export async function POST(request: NextRequest) {
 interface WeddingLinkLite {
   id: string;
   couple_id: string | null;
-  venue_id: string;
+  venue_id: string | null;
   venue_customer_id?: string | null;
 }
 

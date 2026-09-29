@@ -5,6 +5,8 @@ import {
   type CoupleWeddingRow,
   reconcileWeddingFieldsOnLink,
   importCoupleContactToVenue,
+  mergePlannerInto,
+  setPlannerVenueOnRows,
 } from '@/lib/couple-weddings';
 import { sendWeddingPlannerConnectedEmail } from '@/lib/wedding-planner-emails';
 
@@ -87,12 +89,17 @@ export async function POST(request: NextRequest) {
 
   // Clear any of the bride's other pending/linked rows so this becomes the one
   // active wedding (e.g. a pending self-request she made earlier).
-  await supabaseAdmin
+  // The couple's own planner (planning alone, or waiting on another venue's
+  // approval) moves onto the venue's invite, so nothing they've planned is lost.
+  const { data: ownPlanners } = await supabaseAdmin
     .from('couple_weddings')
-    .update({ status: 'revoked', decided_at: new Date().toISOString() })
+    .select('id')
     .eq('couple_id', user.id)
-    .in('status', ['pending', 'linked'])
+    .in('status', ['self', 'pending'])
     .neq('id', invite.id);
+  for (const own of (ownPlanners ?? []) as { id: string }[]) {
+    await mergePlannerInto(own.id, invite.id);
+  }
 
   const now = new Date().toISOString();
   const { data: updated, error: updErr } = await supabaseAdmin
@@ -117,6 +124,7 @@ export async function POST(request: NextRequest) {
 
   // Best-effort: let the venue know their invite was accepted. Never blocks
   // the claim itself — a bounced/misconfigured notification shouldn't undo it.
+  await setPlannerVenueOnRows(invite.id, (updated as { venue_id: string }).venue_id);
   void notifyVenueOfConnection((updated as { venue_id: string }).venue_id, invite);
 
   // One-time sync so wedding date / guest count agree on both sides the

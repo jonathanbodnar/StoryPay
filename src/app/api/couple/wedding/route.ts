@@ -9,6 +9,7 @@ import {
   getVenueBridePortalConfig,
   summarizeWeddingGuests,
   coupleReaderRef,
+  detachVenueFromPlanner,
   type BridePortalVisibility,
   type CoupleWeddingRow,
   type WeddingGuestSummary,
@@ -126,7 +127,8 @@ function applyVisibility(
   };
 }
 
-async function serializeLink(link: CoupleWeddingRow, coupleId: string) {
+/** A planner connected (or asking to connect) to a venue: link.venue_id is set. */
+async function serializeLink(link: CoupleWeddingRow & { venue_id: string }, coupleId: string) {
   const venue = await getVenueSummary(link.venue_id);
   const isLinked = link.status === 'linked';
 
@@ -173,17 +175,21 @@ export async function GET(request: NextRequest) {
   // wedding; an active collaborator sees the wedding she was invited into (with
   // 'edit' or 'view'). Anyone else has no active wedding.
   const resolved = await resolveCoupleWeddingAccess(user.id);
-  const link = resolved?.wedding ?? null;
+  const planner = resolved?.wedding ?? null;
   const access = resolved?.access ?? null;
+  // The venue connection, if any. A 'self' planner has no venue yet.
+  const link =
+    planner && planner.status !== 'self' && planner.venue_id ? (planner as CoupleWeddingRow & { venue_id: string }) : null;
 
   // Collaborators never see the "connect with a venue" self-serve invite flow.
+  // A couple planning on their own (no venue yet) does.
   const pendingInviteRow =
-    access === null && user.email ? await getPendingInviteForEmail(user.email) : null;
+    (access === null || (access === 'owner' && !link)) && user.email ? await getPendingInviteForEmail(user.email) : null;
 
   // The wedding countdown reads the OWNING couple's saved date (source of truth
   // on couple_profiles) so collaborators see the same countdown the owner does,
   // independent of the venue's per-field visibility toggles.
-  const countdownCoupleId = link?.couple_id ?? user.id;
+  const countdownCoupleId = planner?.couple_id ?? user.id;
   const { data: coupleProfile } = await supabaseAdmin
     .from('couple_profiles')
     .select('wedding_date')
@@ -194,7 +200,7 @@ export async function GET(request: NextRequest) {
   let pendingInvite: { id: string; venue: Awaited<ReturnType<typeof getVenueSummary>> } | null = null;
   // Only surface an unclaimed invite when the bride isn't already actively linked
   // to that venue (avoids showing a stale invite for a venue she already joined).
-  if (pendingInviteRow && (!link || link.venue_id !== pendingInviteRow.venue_id)) {
+  if (pendingInviteRow?.venue_id && (!link || link.venue_id !== pendingInviteRow.venue_id)) {
     pendingInvite = {
       id: pendingInviteRow.id,
       venue: await getVenueSummary(pendingInviteRow.venue_id),
@@ -240,8 +246,10 @@ export async function POST(request: NextRequest) {
   }
   const venueId = (venue as { id: string }).id;
 
-  // Already actively connected (pending or linked) to a venue?
-  const existing = await getActiveCoupleWedding(user.id);
+  // Already actively connected (pending or linked) to a venue? A 'self'
+  // planner has no venue yet: the venue gets attached to it below.
+  const existingPlanner = await getActiveCoupleWedding(user.id);
+  const existing = existingPlanner && existingPlanner.status !== 'self' ? existingPlanner : null;
   if (existing) {
     if (existing.venue_id === venueId) {
       return NextResponse.json(
@@ -277,20 +285,27 @@ export async function POST(request: NextRequest) {
   const invitedName =
     [p?.first_name, p?.last_name].filter(Boolean).join(' ').trim() || p?.display_name?.trim() || null;
 
-  const { data: inserted, error: insErr } = await supabaseAdmin
-    .from('couple_weddings')
-    .insert({
-      couple_id: user.id,
-      venue_id: venueId,
-      venue_customer_id: venueCustomerId,
-      status: 'pending',
-      initiated_by: 'bride',
-      invited_email: email || null,
-      invited_name: invitedName,
-      request_message: message,
-    })
-    .select('*')
-    .single();
+  const connectRequest = {
+    couple_id: user.id,
+    venue_id: venueId,
+    venue_customer_id: venueCustomerId,
+    status: 'pending',
+    initiated_by: 'bride',
+    invited_email: email || null,
+    invited_name: invitedName,
+    request_message: message,
+  };
+  // Attach the venue to the couple's own planner so everything they've
+  // planned comes along; a couple without one yet gets a fresh row.
+  const { data: inserted, error: insErr } = existingPlanner
+    ? await supabaseAdmin
+        .from('couple_weddings')
+        .update({ ...connectRequest, decided_at: null })
+        .eq('id', existingPlanner.id)
+        .eq('status', 'self')
+        .select('*')
+        .single()
+    : await supabaseAdmin.from('couple_weddings').insert(connectRequest).select('*').single();
 
   if (insErr || !inserted) {
     console.error('[couple/wedding POST]', insErr);
@@ -320,7 +335,7 @@ export async function POST(request: NextRequest) {
     }
   })();
 
-  return NextResponse.json({ ok: true, link: await serializeLink(inserted as CoupleWeddingRow, user.id) });
+  return NextResponse.json({ ok: true, link: await serializeLink(inserted as CoupleWeddingRow & { venue_id: string }, user.id) });
 }
 
 /**
@@ -332,14 +347,11 @@ export async function DELETE(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const link = await getActiveCoupleWedding(user.id);
-  if (!link) return NextResponse.json({ ok: true });
+  if (!link || link.status === 'self' || link.couple_id !== user.id) return NextResponse.json({ ok: true });
 
-  const { error } = await supabaseAdmin
-    .from('couple_weddings')
-    .update({ status: 'revoked', decided_at: new Date().toISOString() })
-    .eq('id', link.id)
-    .eq('couple_id', user.id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // The venue comes off; the couple keeps their planner.
+  const { error } = await detachVenueFromPlanner(link.id);
+  if (error) return NextResponse.json({ error }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }
