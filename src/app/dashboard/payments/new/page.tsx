@@ -1275,7 +1275,7 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
  <div className="px-5 py-4 space-y-3">
  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
  {([
- {key:'online', title:'Online', desc:'Client pays by card or bank online via StoryPay.'},
+ {key:'online', title:'Online', desc:'Client pays by card or bank online via StoryPay™.'},
  {key:'manual', title:'Manually (cash / check)', desc:'You collect in person and record it here.'},
  ] as {key:'online'|'manual';title:string;desc:string}[]).map(opt=>(
  <button key={opt.key} type="button" onClick={()=>setCollectMethod(opt.key)}

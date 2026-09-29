@@ -619,7 +619,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
             <p className="text-xs text-gray-500">
               {paused
                 ? 'Stay tuned — signups are paused while we roll out a new payments experience.'
-                : 'Powered by StoryPay&apos;s merchant platform · PCI-compliant'}
+                : 'Powered by the StoryPay™ merchant platform · PCI-compliant'}
             </p>
           </div>
         </div>
@@ -628,7 +628,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
           <div className="mb-5 flex items-start gap-3 rounded-xl border border-indigo-200 bg-white px-4 py-3.5">
             <Sparkles size={18} className="mt-0.5 shrink-0 text-indigo-500" />
             <div>
-              <p className="text-sm font-semibold text-indigo-900">StoryPay is getting a big update — stay tuned!</p>
+              <p className="text-sm font-semibold text-indigo-900">StoryPay™ is getting a big update — stay tuned!</p>
               <p className="mt-0.5 text-xs leading-relaxed text-indigo-800">
                 We&apos;ve paused new signups while we finish a newer, better payments experience.
                 Everything below is what&apos;s coming. If you&apos;d like a walkthrough in the meantime,

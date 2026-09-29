@@ -22,9 +22,9 @@ type Params = { params: Promise<{ venueId: string; customerId: string }> };
 
 async function authorName(): Promise<string> {
   const auth = await verifySupportAccess();
-  if (auth.agent?.name) return `${auth.agent.name} (StoryPay support)`;
-  if (auth.isSuperAdmin) return 'StoryPay support';
-  return 'StoryPay support';
+  if (auth.agent?.name) return `${auth.agent.name} (StoryVenue support)`;
+  if (auth.isSuperAdmin) return 'StoryVenue support';
+  return 'StoryVenue support';
 }
 
 async function ensureAuthorized(): Promise<{ ok: true } | { ok: false; res: NextResponse }> {
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     venue_id: venueId,
     customer_id: customerId,
     activity_type: 'note_added',
-    title: 'Note added (StoryPay support)',
+    title: 'Note added (StoryVenue support)',
     description: content.slice(0, 120),
   }).then(() => {}, () => {});
 

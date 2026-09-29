@@ -261,7 +261,7 @@ export function SubscriptionsAdminPanel() {
               <Wrench size={16} className="text-gray-700" /> LunarPay reconciliation
             </h3>
             <p className="mt-1 text-xs text-gray-500 max-w-2xl">
-              Checks StoryPay HQ&apos;s live LunarPay subscriptions against this table. If a venue is
+              Checks StoryPay™ HQ&apos;s live LunarPay subscriptions against this table. If a venue is
               actually being charged in LunarPay but never flipped to &quot;Active&quot; here (e.g. the
               checkout success step was interrupted), it shows up below with a one-click fix.
             </p>

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   const detectedCountry = cfCountry || vercelCountry;
   if (detectedCountry && detectedCountry !== 'US' && detectedCountry !== 'XX' && detectedCountry !== 'T1') {
     return NextResponse.json(
-      { error: 'StoryPay is currently only available in the United States. Stay tuned — we\'re expanding soon!' },
+      { error: 'StoryVenue is currently only available in the United States. Stay tuned — we\'re expanding soon!' },
       { status: 403 }
     );
   }

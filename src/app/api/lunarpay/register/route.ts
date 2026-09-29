@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ merchantId: existing.merchantId, orgToken: existing.orgToken, adopted: true });
       }
       return NextResponse.json(
-        { error: `${venue.email} already has a LunarPay account outside StoryPay. Contact support to link it.` },
+        { error: `${venue.email} already has a LunarPay account outside StoryPay™. Contact support to link it.` },
         { status: 409 },
       );
     }

@@ -39,7 +39,28 @@ export async function GET(
   let scheduleData = null;
   let subscriptionData = null;
 
-  if (proposal.payment_schedule_id || proposal.subscription_id) {
+  // Installment plan on the venue's Stripe account: the schedule comes from
+  // StoryVenue's own records (first payment + automatically charged ones).
+  if (proposal.payment_provider === 'stripe' && proposal.payment_type === 'installment') {
+    const cfg = ((proposal.payment_config as { installments?: Array<{ amount: number; date: string }> } | null)?.installments ?? []);
+    if (cfg.length) {
+      const { data: rows } = await supabaseAdmin
+        .from('proposal_installments')
+        .select('installment_number, amount_cents, due_date, status')
+        .eq('proposal_id', proposal.id)
+        .order('installment_number', { ascending: true });
+      const label: Record<string, string> = { scheduled: 'scheduled', processing: 'pending', paid: 'paid', failed: 'failed', canceled: 'canceled' };
+      const first = {
+        amount: cfg[0].amount,
+        scheduledDate: (proposal.paid_at as string | null) ?? cfg[0].date,
+        status: proposal.status === 'paid' ? 'paid' : proposal.payment_processing_at ? 'pending' : 'scheduled',
+      };
+      const later = (rows ?? []).length
+        ? (rows as Array<{ amount_cents: number; due_date: string; status: string }>).map((r) => ({ amount: r.amount_cents, scheduledDate: r.due_date, status: label[r.status] ?? r.status }))
+        : cfg.slice(1).map((c) => ({ amount: c.amount, scheduledDate: c.date, status: 'scheduled' }));
+      scheduleData = { payments: [first, ...later] };
+    }
+  } else if (proposal.payment_schedule_id || proposal.subscription_id) {
     const { data: venueKeys } = await supabaseAdmin
       .from('venues')
       .select('lunarpay_secret_key')

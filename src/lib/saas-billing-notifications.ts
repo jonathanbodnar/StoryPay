@@ -100,7 +100,7 @@ export async function notifyVenueTrialEndingSoon(
   await sendEmail({ to: owner.email, subject, html }).catch(() => {});
   await sendOwnerSms(
     owner,
-    `${owner.venueName}: your StoryPay free trial ends ${when}. We'll charge ${amt}/mo to keep your Bride Booking System™ on. Manage or switch to Free: ${BILLING_URL}`,
+    `${owner.venueName}: your StoryVenue free trial ends ${when}. We'll charge ${amt}/mo to keep your Bride Booking System™ on. Manage or switch to Free: ${BILLING_URL}`,
   );
 }
 

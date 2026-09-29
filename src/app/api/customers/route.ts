@@ -56,14 +56,14 @@ export async function POST(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key')
+    .select('lunarpay_secret_key, payments_provider')
     .eq('id', venueId)
     .single();
 
   // Best-effort LunarPay sync (only when the venue has connected it).
   let lunarpayCustomerId: string | null = null;
   let lunarpayError: string | null = null;
-  if (venue?.lunarpay_secret_key) {
+  if (venue?.lunarpay_secret_key && venue.payments_provider !== 'stripe') {
     try {
       const lp = await createCustomer(venue.lunarpay_secret_key, {
         // LP validates firstName & lastName separately and rejects `name`.

@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { feeTierFor, loadConnectVenue, loadFeeTiers } from '@/lib/stripe/connect';
 
 // Report types:
 // revenue         - all paid proposals with breakdown
@@ -206,15 +207,16 @@ export async function GET(request: NextRequest) {
     }
 
     case 'bank-reconciliation': {
-      // Fetch all paid proposals in range
-      let qPaid = supabaseAdmin
-        .from('proposals')
-        .select('id, customer_name, customer_email, price, payment_type, paid_at, created_at, payment_config')
+      // Every online (card / bank) payment in range, from the payment ledger, so
+      // installment plans show each payment as it actually happened.
+      let qPay = supabaseAdmin
+        .from('proposal_payments')
+        .select('id, proposal_id, amount_cents, method, paid_at')
         .eq('venue_id', venueId)
-        .eq('status', 'paid')
+        .eq('source', 'online')
         .order('paid_at', { ascending: false });
-      if (from)  qPaid = qPaid.gte('paid_at', from);
-      if (toEnd) qPaid = qPaid.lte('paid_at', toEnd);
+      if (from)  qPay = qPay.gte('paid_at', from);
+      if (toEnd) qPay = qPay.lte('paid_at', toEnd);
 
       // Fetch refunds in same range (full + partial)
       let qRef = supabaseAdmin
@@ -226,30 +228,42 @@ export async function GET(request: NextRequest) {
       if (from)  qRef = qRef.gte('paid_at', from);
       if (toEnd) qRef = qRef.lte('paid_at', toEnd);
 
-      // Get venue fee rate
-      const { data: venue } = await supabaseAdmin
-        .from('venues')
-        .select('service_fee_rate')
-        .eq('id', venueId)
-        .single();
+      const [{ data: pays }, { data: refunded }] = await Promise.all([qPay, qRef]);
+      const payments = (pays ?? []) as Array<{ id: string; proposal_id: string; amount_cents: number; method: string; paid_at: string | null }>;
 
-      const feeRate = (venue?.service_fee_rate ?? 2.75) / 100;
+      const proposalIds = Array.from(new Set(payments.map((p) => p.proposal_id)));
+      const { data: props } = proposalIds.length
+        ? await supabaseAdmin.from('proposals').select('id, customer_name, payment_type, payment_provider').in('id', proposalIds)
+        : { data: [] };
+      const byId = new Map(((props ?? []) as Array<{ id: string; customer_name: string | null; payment_type: string | null; payment_provider: string | null }>).map((p) => [p.id, p]));
 
-      const [{ data: paid }, { data: refunded }] = await Promise.all([qPaid, qRef]);
+      // What the venue pays to process each payment. Stripe: Stripe's 2.9% + 30¢
+      // plus StoryVenue's card %, or the all-in bank %. LunarPay: the old 2.75% estimate.
+      const connectVenue = await loadConnectVenue(venueId);
+      const rates = connectVenue ? (await loadFeeTiers())[await feeTierFor(connectVenue)] : null;
+      const cardPct = connectVenue?.payment_fee_card_percent != null ? Number(connectVenue.payment_fee_card_percent) : rates?.card_fee_percent ?? 0.5;
+      const bankPct = connectVenue?.payment_fee_bank_percent != null ? Number(connectVenue.payment_fee_bank_percent) : rates?.bank_total_percent ?? 1;
+      const feeCents = (amount: number, method: string, provider: string | null | undefined) => {
+        if (provider !== 'stripe') return Math.round(amount * 0.0275);
+        return method === 'ach' ? Math.round((amount * bankPct) / 100) : Math.round((amount * (2.9 + cardPct)) / 100) + 30;
+      };
 
-      const paidRows = (paid ?? []).map((r) => {
-        const gross = (r.price ?? 0) / 100;
-        const processingFee = parseFloat((gross * feeRate).toFixed(2));
-        const net = parseFloat((gross - processingFee).toFixed(2));
+      let totalGrossCents = 0;
+      let totalFeeCents = 0;
+      const paidRows = payments.map((pay) => {
+        const prop = byId.get(pay.proposal_id);
+        const fee = feeCents(pay.amount_cents, pay.method, prop?.payment_provider);
+        totalGrossCents += pay.amount_cents;
+        totalFeeCents += fee;
         return {
-          'Date':             r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-US') : '',
+          'Date':             pay.paid_at ? new Date(pay.paid_at).toLocaleDateString('en-US') : '',
           'Type':             'Payment Received',
-          'Customer':         r.customer_name ?? '',
-          'Description':      `${(r.payment_type ?? 'full').replace('_', ' ')} payment`,
-          'Gross Amount ($)': gross.toFixed(2),
-          'Processing Fee ($)': processingFee.toFixed(2),
-          'Net to Bank ($)':  net.toFixed(2),
-          'Proposal ID':      r.id,
+          'Customer':         prop?.customer_name ?? '',
+          'Description':      `${pay.method === 'ach' ? 'Bank' : 'Card'} payment${prop?.payment_type === 'installment' ? ' (installment plan)' : ''}`,
+          'Gross Amount ($)': (pay.amount_cents / 100).toFixed(2),
+          'Processing Fee ($)': (fee / 100).toFixed(2),
+          'Net to Bank ($)':  ((pay.amount_cents - fee) / 100).toFixed(2),
+          'Proposal ID':      pay.proposal_id,
         };
       });
 
@@ -271,11 +285,11 @@ export async function GET(request: NextRequest) {
         new Date(b['Date']).getTime() - new Date(a['Date']).getTime()
       );
 
-      const totalGross  = (paid ?? []).reduce((s, r) => s + (r.price ?? 0), 0) / 100;
-      const totalFees   = parseFloat((totalGross * feeRate).toFixed(2));
-      const totalNet    = parseFloat((totalGross - totalFees).toFixed(2));
+      const totalGross  = totalGrossCents / 100;
+      const totalFees   = totalFeeCents / 100;
+      const totalNet    = totalGross - totalFees;
       const totalRefunds = (refunded ?? []).reduce((s, r) => s + (r.price ?? 0), 0) / 100;
-      const netDeposit  = parseFloat((totalNet - totalRefunds).toFixed(2));
+      const netDeposit  = totalNet - totalRefunds;
 
       return NextResponse.json({
         rows,

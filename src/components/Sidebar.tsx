@@ -93,7 +93,7 @@ const paymentsItems: NavItem[] = [
   { label: 'Installments', href: '/dashboard/payments/installments', icon: Calendar, navId: 'nav_payments_installments' },
   { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw, navId: 'nav_payments_subscriptions' },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard, navId: 'nav_transactions' },
-  { label: 'Settings', href: '/dashboard/payments/settings', icon: Settings, navId: 'nav_payments_settings' },
+  { label: 'Payment settings', href: '/dashboard/payments/settings', icon: Settings, navId: 'nav_payments_settings' },
 ];
 
 const marketingItems: NavItem[] = [
@@ -457,12 +457,13 @@ export default function Sidebar({
     refreshPaymentsActive();
   }, [refreshPaymentsActive]);
 
-  // Listen for the global "open onboarding" event fired by the settings banner.
+  // "Open onboarding" (fired by payment lock screens and notices) goes to
+  // Payment settings, the one place venues set up and manage StoryPay™.
   useEffect(() => {
-    const handler = () => setShowOnboardingModal(true);
+    const handler = () => router.push('/dashboard/payments/settings');
     window.addEventListener('storypay:open-onboarding', handler);
     return () => window.removeEventListener('storypay:open-onboarding', handler);
-  }, []);
+  }, [router]);
 
   // /dashboard/directory-billing is the SaaS plan & billing page. It also has a
   // legacy entry under "Venue listing" but its canonical home is Settings → Billing.
@@ -956,7 +957,7 @@ export default function Sidebar({
                   {!isNativeApp() && paymentsActive === false && (
                     <button
                       type="button"
-                      onClick={() => setShowOnboardingModal(true)}
+                      onClick={() => router.push('/dashboard/payments/settings')}
                       className="flex w-full items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors whitespace-nowrap"
                     >
                       {paymentsPaused
@@ -1278,7 +1279,7 @@ export default function Sidebar({
             {!isNativeApp() && paymentsActive === false && (
               <button
                 type="button"
-                onClick={() => { setShowOnboardingModal(true); setFlyout(null); setFlyoutPos(null); }}
+                onClick={() => { router.push('/dashboard/payments/settings'); setFlyout(null); setFlyoutPos(null); }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 border-b border-gray-100 whitespace-nowrap"
               >
                 {paymentsPaused

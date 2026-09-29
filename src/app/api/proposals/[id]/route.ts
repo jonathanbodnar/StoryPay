@@ -101,11 +101,11 @@ export async function PATCH(
 
     const { data: venue } = await supabaseAdmin
       .from('venues')
-      .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name')
+      .select('lunarpay_secret_key, payments_provider, ghl_connected, ghl_access_token, ghl_location_id, name')
       .eq('id', venueId)
       .single();
 
-    if (venue?.lunarpay_secret_key && !existing.customer_lunarpay_id) {
+    if (venue?.lunarpay_secret_key && venue.payments_provider !== 'stripe' && !existing.customer_lunarpay_id) {
       try {
         const { firstName, lastName } = splitCustomerName(name, email);
         const lpResult = await createCustomer(venue.lunarpay_secret_key, {

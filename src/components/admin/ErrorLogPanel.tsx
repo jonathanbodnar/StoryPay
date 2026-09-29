@@ -165,7 +165,7 @@ function explainError(r: ErrorRow): { what: string; impact: string; outcome: str
 function buildFixPrompt(r: ErrorRow, venueName?: string): string {
   const lines: string[] = [];
   const seen = r.occurrence_count > 1 ? ` (seen ${r.occurrence_count}x)` : '';
-  lines.push(`Fix this StoryPay ${r.source} error${seen}.`);
+  lines.push(`Fix this StoryVenue ${r.source} error${seen}.`);
   lines.push('');
   lines.push(`Error: ${r.message}`);
   if (r.route)  lines.push(`Where: ${r.method ? r.method + ' ' : ''}${r.route}${r.http_status ? ` [HTTP ${r.http_status}]` : ''}`);

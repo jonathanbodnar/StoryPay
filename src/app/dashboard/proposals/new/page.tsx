@@ -528,7 +528,7 @@ return {};
  />
  </div>
  <p className="sm:col-span-2 text-xs text-gray-400">
- A new customer record will be created in your StoryPay merchant account when the proposal is sent. If messaging is connected, a contact will also be created in StoryVenue Legacy for SMS.
+ The client is added to your contacts when you send the proposal. If messaging is connected, a contact will also be created in StoryVenue Legacy for SMS.
  </p>
  </div>
  )}

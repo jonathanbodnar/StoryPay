@@ -1638,7 +1638,7 @@ Results are paginated (20 per page). Use the page navigation bar at the bottom t
         id: 'cust-profile',
         title: 'Contact profile — overview and tabs',
         tags: ['contact profile', 'crm', 'profile', 'tabs', 'overview', 'history', 'edit note', 'edit notes', 'new proposal', 'new invoice'],
-        body: `Click a contact's name to open their full profile. Contacts you see on this list come from three sources — storyvenue.com signups, StoryPay merchant payment records, and Legacy imports — all unified into one record per person. The profile has seven tabs:
+        body: `Click a contact's name to open their full profile. Contacts you see on this list come from three sources — storyvenue.com signups, StoryPay™ payments, and Legacy imports — all unified into one record per person. The profile has seven tabs:
 
 Overview
 - Edit contact info inline (name, email, phone, address)
@@ -1834,7 +1834,7 @@ Step 5 — Choose a payment type:
 - Subscription — recurring weekly/monthly charges
 
 Step 6 — Choose how you'll collect payment:
-- Online — client pays by card or bank transfer (ACH) through the secure StoryPay link
+- Online — client pays by card or bank transfer (ACH) through StoryPay™ (powered by Stripe), right on the proposal or invoice
 - Manually — you collect cash or check directly. The client-facing page shows a "venue collects directly" message instead of a payment form. For manual proposals, you can also uncheck "Require client e-signature" if you'll get a wet signature in person.
 
 Step 7 — Click Send to email the proposal/invoice to the customer, or Save Draft to keep it for later.
@@ -3422,100 +3422,86 @@ Availability note: Two-factor authentication is currently in limited rollout. If
     articles: [
       {
         id: 'storypay-overview',
-        title: 'What is StoryPay™ and how do I apply?',
-        tags: ['storypay', 'payment processing', 'lunarpay', 'fortis', 'apply', 'merchant', 'onboarding', 'payments', 'accept payments'],
-        body: `StoryPay™ is the payment processing layer inside StoryVenue. It runs on top of StoryPay's merchant platform (our underlying processor partner) and enables you to accept credit card payments, ACH transfers, installment plans, and subscriptions for your proposals and invoices.
+        title: 'What is StoryPay™ and how do I set it up?',
+        tags: ['storypay', 'stripe', 'payment processing', 'set up payments', 'connect', 'merchant', 'onboarding', 'payments', 'accept payments', 'fees', 'payouts'],
+        body: `StoryPay™, powered by Stripe, lets your clients pay deposits, installments and balances online (by card, Apple Pay, Google Pay or bank transfer) right from the proposal or invoice you send.
 
-Do I need StoryPay™?
-To collect online payments from clients (proposals/invoices with payment enabled), you must apply for StoryPay™ and complete merchant onboarding. Until then, the proposals and invoices you send won't have an active payment button for your clients.
+Setting up StoryPay™
+1. Go to Payments → Payment settings and click Connect with Stripe.
+2. Stripe's secure signup takes about 10 minutes. Have ready: your business's legal name and EIN (or your SSN if you're a sole proprietor), business address, the owner's date of birth and last 4 of their SSN, and the bank account you want payouts sent to.
+3. You come back to StoryVenue when you're done. Stripe usually approves within minutes, occasionally a business day or two, and online payments turn on automatically.
 
-Applying for StoryPay™
-1. Go to Payments → Settings (or click the "Apply for StoryPay™" prompt that appears in payment areas)
-2. The StoryPay onboarding wizard walks you through:
-   - Business information (legal name, address, industry)
-   - Owner details (name, date of birth, SSN last 4)
-   - Banking details (where payments are deposited)
-3. Submit for review. Our merchant partner processes the application — approval typically takes 1–3 business days.
+You get your own Stripe account and dashboard for payouts, refunds and reports. Payment settings always shows where your setup stands.
 
-Once approved
-- The StoryPay™ banner disappears from Settings
-- Proposals and invoices can accept live credit card payments
-- Funds are deposited into the bank account you provided
+What it costs
+StoryPay™ fees are taken from each payout; your clients never pay them directly.
+- Paid plans: 3.4% + 30¢ on any card, 1% on bank transfers
+- Free plan: 3.9% + 30¢ on any card, 1.5% on bank transfers
 
-Security note
-Card numbers from clients go directly to our PCI-certified merchant processor — StoryVenue never sees or stores raw card data. The integration is PCI SAQ-A compliant.
+The service fee (clients cover the cost)
+Every new invoice and proposal includes a "Service fee" line, 3.5% by default, so your clients cover processing and you keep your full price. You can change the % on any invoice to split the cost, or remove it. Set your default in Payments → Payment settings. Clients pay the service fee however they pay (card, bank transfer or check), and it's always shown as its own line before they pay.
 
-If payments are showing as unavailable
-Check that your StoryPay merchant onboarding shows as approved in Payments → Settings. If you believe it should be active, contact StoryVenue support with your business name and application date.`,
+Payouts
+Stripe sends your money to your bank automatically, usually within 2 business days. Open Payments → Payouts, or your Stripe dashboard, to see every payout.
+
+Refunds
+Issue refunds from Transactions. The client gets their money back on the card or bank account they used. StoryVenue's share of the fee is refunded too; Stripe keeps its processing fee.
+
+Security
+Card and bank details go straight to Stripe. StoryVenue never sees or stores them.
+
+If payments show as unavailable
+Open Payments → Payment settings. If Stripe still needs details, click Continue setup; if Stripe is reviewing your account, payments turn on as soon as it approves. Contact StoryVenue support if it's taking longer than a couple of business days.`,
       },
       {
         id: 'storypay-inline-checkout',
         title: 'How the client payment form works',
-        tags: ['storypay', 'checkout', 'payment form', 'inline', 'pay now', 'client pays', 'credit card form', 'card form', 'pay button'],
-        body: `When a client clicks the Pay button on a proposal or invoice, the payment form appears inline on the same page — they never leave your proposal or get redirected to a separate checkout site.
+        tags: ['storypay', 'stripe', 'checkout', 'payment form', 'inline', 'pay now', 'client pays', 'credit card form', 'card form', 'pay button', 'installments', 'apple pay'],
+        body: `When your client opens a proposal (after signing) or an invoice, Stripe's secure payment form appears right on the same page. They never leave your proposal or get sent to another site.
 
-How the inline payment form works
-- The payment form is embedded securely inside the proposal/invoice page.
-- Card numbers go straight to our PCI-certified processor without ever touching StoryVenue's servers.
-- If both card and ACH are enabled on your merchant account, clients see two tabs: "Card" (credit/debit) and "Bank account" (eCheck/ACH). They pick the method they prefer.
-- After the client fills in their payment details and clicks the Pay button in the form, the payment processes in real time. A success screen appears on the same page once confirmed.
+What your client sees
+- The amount due, with your service fee shown as its own line in the total
+- A Card tab (credit or debit, plus Apple Pay or Google Pay on supported devices)
+- A US bank account tab, if you accept bank transfers (Payments → Payment settings)
 
-For installment plans
-- The client's card or bank account is saved (vaulted) securely when they pay the first installment so future installment charges happen automatically — the client only needs to enter their payment info once.
-- Pay-in-full proposals do not vault the card.
+Some banks ask the client to confirm the payment in a pop-up (3D Secure). That's normal; the payment finishes as soon as they approve it.
 
-For subscriptions (SaaS plan signups)
-- The inline form is also used during signup at storyvenue.com/signup — the payment form appears on the signup page itself so new venues never leave the flow.
-- The card is validated at signup; if a free trial is active the first charge is deferred until the trial ends.
+After they pay
+- Card payments are confirmed instantly, the proposal or invoice is marked paid, and your client gets a receipt by email.
+- You get a "payment received" notification.
 
-Processing fees
-- If your venue has a processing fee configured (Payments → Settings), it is shown to the client in the payment form before they click Pay. They see the base amount and the fee separately so the total is always transparent.
+Installment plans
+- The client's card or bank account is saved when they pay the first installment.
+- Each remaining installment is charged automatically on its due date. They don't need to do anything.
+- If an automatic payment fails, it's retried on day 2, 4 and 7. Your client gets an email with a link to update their card, and you're notified.
 
-What if the payment form doesn't load?
-- The form requires JavaScript and a modern browser (Chrome, Safari, Firefox, Edge). Older browsers or aggressive ad blockers can prevent the iframe from loading.
-- If a client reports the form is blank or won't load, ask them to try a different browser or disable browser extensions. Incognito mode is a reliable test.
-- The form will not load on HTTP (non-secure) connections — it requires HTTPS (storyvenue.com proposals always use HTTPS).`,
+If the payment form doesn't load
+- Ask the client to use an up-to-date browser (Chrome, Safari, Firefox or Edge) and turn off ad blockers, or try a private/incognito window.
+- The form only loads over a secure connection; StoryVenue links always use one.`,
       },
       {
         id: 'storypay-ach',
-        title: 'Accepting ACH (bank transfer / eCheck) payments',
-        tags: ['storypay', 'ach', 'echeck', 'bank transfer', 'bank account', 'payment methods', 'lunarpay', 'fortis'],
-        body: `StoryPay supports ACH (electronic check / bank transfer) payments alongside credit & debit cards. Customers can pay directly from their bank account using their routing and account numbers — no card needed.
+        title: 'Accepting bank transfer (ACH) payments',
+        tags: ['storypay', 'stripe', 'ach', 'echeck', 'bank transfer', 'bank account', 'payment methods'],
+        body: `StoryPay™ lets clients pay directly from their US bank account alongside cards. It's much cheaper for large wedding payments: 1% on paid plans (1.5% on Free) instead of the card rate.
 
-Why offer ACH
-- Lower processing fees compared to cards (especially on large amounts)
-- No card-decline risk for high-ticket bookings
-- Some clients prefer paying directly from their bank, especially for deposits and large balances
-
-Where ACH appears
-When ACH is enabled, the StoryPay-hosted checkout page that opens when a customer clicks "Pay" on a proposal or invoice shows two tabs:
-- Card (credit / debit)
-- Bank account (eCheck)
-
-The customer picks the tab they prefer. ACH can be used for one-time payments, installment plans, and recurring subscriptions — exactly the same as cards.
+How clients pay by bank
+On the payment form they choose "US bank account" and connect their bank in seconds through Stripe (or enter their routing and account numbers). They can use it for one-time payments and installment plans.
 
 Settlement timing
-- Cards: clear instantly (status flips to "paid" immediately)
-- ACH: returns "submitted" right away, but takes 3–5 business days to fully settle. The customer-facing success page tells them this. The proposal/invoice in your dashboard is marked paid as soon as the customer confirms the bank info, since they've authorized the transfer.
+- Bank payments take 3–5 business days to clear.
+- Until then the proposal shows "Your bank payment is processing". When it clears, it's marked paid and the client gets their receipt.
+- If a bank payment bounces (for example, insufficient funds), you and the client are both notified and the client can pay again.
 
-Enabling ACH on your venue
-1. Go to Payments → Settings → Customer Payment Methods (visible once your StoryPay onboarding is approved)
-2. Toggle "ACH / Bank Transfer" ON (enabled by default for new venues)
-3. Save — change takes effect on the next proposal/invoice your customer opens
-
-Important — ACH must be enabled on your StoryPay merchant account too
-Even if you turn the toggle ON in StoryVenue, ACH only appears on checkout if your underlying StoryPay merchant account also has ACH activated. Most onboarding flows include both card and ACH, but if ACH didn't get included on your application, contact StoryVenue support to have it added. Until then the ACH tab simply won't appear and only the card tab is shown.
-
-Disabling ACH
-Same place — Payments → Settings → Customer Payment Methods — flip the toggle OFF. Your future checkout pages will show card only. Cards are always on.
+Turning bank transfers on or off
+Go to Payments → Payment settings → Customer Payment Methods and use the ACH / Bank Transfer toggle. It's on by default; cards are always on.
 
 Refunds
-ACH refunds work the same as card refunds, but each leg takes 3–5 business days to settle. From the StoryVenue dashboard you click "Refund" exactly the same way regardless of payment method.
+Bank refunds work like card refunds, but take 3–5 business days to reach the client.
 
 Common questions
-- Can I require ACH only? Not currently — cards are always offered. If you turn ACH on, both methods appear and the customer chooses.
-- What if an ACH transfer fails (insufficient funds, closed account)? You'll receive a notification from your StoryPay merchant account. The proposal will need to be marked unpaid manually until the customer pays again. (Card fallback is recommended for time-sensitive deposits.)
-- Are there extra fees? Check your StoryPay merchant dashboard for ACH transaction pricing — typically a flat fee per transaction (vs. a percentage), making it cheaper for amounts above a few hundred dollars.`,
+- Can I require bank transfer only? Not currently. When it's on, clients choose between card and bank.
+- Does the service fee change for bank payments? No. It's the same % whichever way the client pays.`,
       },
     ],
   },
@@ -3888,7 +3874,7 @@ Managing your add-ons:
         body: `All new StoryVenue accounts (signed up after June 25, 2026) must complete a 4-step onboarding to go live.
 
 The 4 onboarding steps:
-1. Connect — set up your StoryPay merchant account for payment processing
+1. Connect — find and import your venue from Google
 2. Details — fill in your listing information
 3. Go live — publish your listing (a test lead is sent to your inbox so you can see how it works)
 4. Access — enter your credit card to start your 14-day free trial of Bride Booking System™
@@ -4255,7 +4241,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/payments/payouts':       ['pay-transactions', 'rep-overview'],
   '/dashboard/payments/accounting':    ['rep-overview', 'rep-download', 'pay-transactions'],
   '/dashboard/payments/coupons':       ['pay-new', 'offerings-overview'],
-  '/dashboard/payments/settings':      ['gs-overview', 'gs-onboarding'],
+  '/dashboard/payments/settings':      ['storypay-overview', 'storypay-ach', 'storypay-inline-checkout'],
 
   // Reports
   '/dashboard/reports': ['rep-overview', 'rep-download'],

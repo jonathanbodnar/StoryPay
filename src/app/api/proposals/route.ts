@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
   // independent queries that used to run sequentially.
   const venueQuery = supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name, email, brand_color, brand_logo_url')
+    .select('lunarpay_secret_key, payments_provider, ghl_connected, ghl_access_token, ghl_location_id, name, email, brand_color, brand_logo_url')
     .eq('id', venueId)
     .single();
 
@@ -255,7 +255,8 @@ export async function POST(request: NextRequest) {
   // 1. Create LunarPay customer for payment processing
   let customerLunarpayId = customerId || null;
 
-  if (venue?.lunarpay_secret_key && !customerLunarpayId) {
+  // LunarPay customer record only for venues still taking payments on LunarPay.
+  if (venue?.lunarpay_secret_key && venue.payments_provider !== 'stripe' && !customerLunarpayId) {
     try {
       const { firstName, lastName } = splitCustomerName(customerName, customerEmail);
       const lpResult = await createCustomer(venue.lunarpay_secret_key, {

@@ -82,6 +82,11 @@ export type AdminVenueRow = Record<string, unknown> & {
   directory_trial_ends_at?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
   lunarpay_admin?: LunarPayAdminSummary;
+  /** StoryPay™ on Stripe Connect. */
+  stripe_account_id?: string | null;
+  stripe_account_status?: string | null;
+  stripe_charges_enabled?: boolean | null;
+  payments_provider?: string | null;
   /** Protected demo venue — cannot be deleted by anyone. */
   is_demo?: boolean | null;
   /** Venue owner login is suspended (churned account). */
@@ -182,6 +187,36 @@ function LunarPayStatusCell({
       )}
     </div>
   );
+}
+
+/** StoryPay™ status: the venue's Stripe account when it has one, else legacy LunarPay (with its tools). */
+function StoryPayStatusCell(props: {
+  venue: AdminVenueRow;
+  summary: LunarPayAdminSummary;
+  onLpAction?: (action: 'sync' | 'reset' | 'unlink') => void;
+  lpBusyAction?: string | null;
+}) {
+  const v = props.venue;
+  if (!v.stripe_account_id) return <LunarPayStatusCell {...props} />;
+  const active = v.payments_provider === 'stripe' && v.stripe_charges_enabled === true;
+  const label = active ? 'StoryPay™ · Stripe' : v.stripe_account_status === 'pending' ? 'Stripe review' : 'Stripe signup';
+  const sub = active ? 'Can charge' : v.stripe_account_status === 'pending' ? 'Waiting on Stripe' : 'Signup not finished';
+  return (
+    <div className="space-y-0.5">
+      <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${active ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+        {label}
+      </span>
+      <div className="text-[10px] text-gray-400 leading-none">
+        <a href={`https://dashboard.stripe.com/connect/accounts/${String(v.stripe_account_id)}`} target="_blank" rel="noreferrer" className="hover:underline">{sub}</a>
+      </div>
+    </div>
+  );
+}
+
+/** Which StoryPay™ bucket a venue is in, for the admin filter + counts. */
+function storyPayBucket(v: AdminVenueRow, lp: LunarPayAdminSummary): 'stripe_active' | 'stripe_setup' | 'lunarpay_active' | 'not_connected' {
+  if (v.stripe_account_id) return v.payments_provider === 'stripe' && v.stripe_charges_enabled === true ? 'stripe_active' : 'stripe_setup';
+  return lp.payments_ready ? 'lunarpay_active' : 'not_connected';
 }
 
 /**
@@ -640,12 +675,7 @@ export function VenueManagementPortal({
         if (!blob.includes(q)) return false;
       }
       const lp = lunarPaySummaryForRow(v);
-      if (filterLunarPay === 'ready' && !lp.payments_ready) return false;
-      if (filterLunarPay === 'not_ready' && lp.payments_ready) return false;
-      if (filterLunarPay === 'denied' && lp.category !== 'denied') return false;
-      if (filterLunarPay === 'not_provisioned' && lp.category !== 'not_provisioned') return false;
-      if (filterLunarPay === 'not_applied' && lp.category !== 'provisioned_not_applied') return false;
-      if (filterLunarPay === 'in_progress' && lp.category !== 'pending_review') return false;
+      if (filterLunarPay !== 'any' && storyPayBucket(v, lp) !== filterLunarPay) return false;
       if (filterVerified !== 'any') {
         const vs = (v.directory_verified_status as string) || 'none';
         if (vs !== filterVerified) return false;
@@ -683,11 +713,14 @@ export function VenueManagementPortal({
   const totalRealVenues = useMemo(() => venues.filter((v) => !v.is_demo).length, [venues]);
 
   const lunarPayCounts = useMemo(() => {
-    let ready = 0;
+    let stripe = 0;
+    let legacy = 0;
     for (const v of venues) {
-      if (lunarPaySummaryForRow(v).payments_ready) ready++;
+      const b = storyPayBucket(v, lunarPaySummaryForRow(v));
+      if (b === 'stripe_active') stripe++;
+      else if (b === 'lunarpay_active') legacy++;
     }
-    return { ready, total: venues.length };
+    return { stripe, legacy, total: venues.length };
   }, [venues]);
 
   async function patchVenue(
@@ -1284,25 +1317,22 @@ export function VenueManagementPortal({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1">LunarPay</label>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">StoryPay™</label>
             <select
               value={filterLunarPay}
               onChange={(e) => setFilterLunarPay(e.target.value)}
               className="w-full lg:w-48 rounded-xl border border-gray-200 px-3 py-2 text-sm"
             >
               <option value="any">Any</option>
-              <option value="ready">Active &amp; approved (can charge)</option>
-              <option value="not_ready">Not approved / not ready</option>
-              <option value="in_progress">Application in progress</option>
-              <option value="not_applied">Not applied (merchant only)</option>
-              <option value="denied">Denied</option>
-              <option value="not_provisioned">No merchant</option>
+              <option value="stripe_active">Taking payments (Stripe)</option>
+              <option value="stripe_setup">Stripe signup / review</option>
+              <option value="lunarpay_active">LunarPay (legacy) active</option>
+              <option value="not_connected">Not connected</option>
             </select>
           </div>
         </div>
         <p className="text-xs text-gray-400">
-          Showing {totalRegular} of {venues.length} venues · LunarPay ready: {lunarPayCounts.ready} /{' '}
-          {lunarPayCounts.total}
+          Showing {totalRegular} of {venues.length} venues · StoryPay™ on Stripe: {lunarPayCounts.stripe} · LunarPay (legacy): {lunarPayCounts.legacy}
         </p>
       </div>
 
@@ -1434,7 +1464,7 @@ export function VenueManagementPortal({
 
               {/* ── Strip 2: status pills + dropdowns ── */}
               <div className="flex flex-wrap items-center gap-2">
-                <LunarPayStatusCell
+                <StoryPayStatusCell
                   venue={venue}
                   summary={lpSum}
                   onLpAction={(action) => void runLunarPayAction(venue, action)}
@@ -2075,7 +2105,7 @@ function VenueMobileCard({
         </span>
       </div>
       <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-2 py-2">
-        <LunarPayStatusCell venue={venue} summary={lpSummary} />
+        <StoryPayStatusCell venue={venue} summary={lpSummary} />
       </div>
       <div className="text-[11px] text-gray-400">Plan: {planLabelText}</div>
       <div className="text-[10px] text-gray-500">SaaS billing: {(venue.directory_subscription_status as string) || '—'}</div>
@@ -2299,7 +2329,7 @@ function DemoVenueCard({
 
           {/* Strip 2: pills + dropdowns */}
           <div className="flex flex-wrap items-center gap-2">
-            <LunarPayStatusCell venue={venue} summary={lpSum} />
+            <StoryPayStatusCell venue={venue} summary={lpSum} />
             <div className="flex items-center gap-1">
               <span className="text-[10px] font-semibold text-gray-400">Plan</span>
               <select value={venue.directory_plan_id || ''} disabled={busy}

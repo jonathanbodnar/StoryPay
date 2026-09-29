@@ -11,7 +11,6 @@ import {
   Percent,
 } from 'lucide-react';
 import PaymentsOnboarding from '@/components/settings/PaymentsOnboarding';
-import PaymentGate from '@/components/PaymentGate';
 import { trackClient } from '@/lib/analytics-client';
 
 interface VenueInfo {
@@ -107,9 +106,9 @@ function PaymentSettingsInner() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="font-heading text-2xl font-semibold text-gray-900">Payment Settings</h1>
+        <h1 className="font-heading text-2xl font-semibold text-gray-900">Payment settings</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Configure your StoryPay merchant account and customer payment options
+          StoryPay™, powered by Stripe: your payment processing, service fee and payment methods
         </p>
       </div>
 
@@ -120,8 +119,8 @@ function PaymentSettingsInner() {
           <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
             <CreditCard size={18} className="text-gray-400" />
             <div>
-              <h2 className="font-heading text-base font-semibold text-gray-900">Payment Processing</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Get paid online by card and bank transfer</p>
+              <h2 className="font-heading text-base font-semibold text-gray-900">StoryPay™ payment processing</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Powered by Stripe · get paid online by card and bank transfer</p>
             </div>
           </div>
           <div className="px-6 py-6">
@@ -220,7 +219,7 @@ function PaymentSettingsInner() {
                       <p className="text-[11px] text-blue-700">
                         {onStripe
                           ? 'Clients connect their bank in seconds through Stripe. Bank payments take 3–5 business days to clear.'
-                          : 'ACH appears at checkout only when both this toggle and your StoryPay merchant account have ACH enabled. Contact StoryPay support if you need merchant-level ACH activation.'}
+                          : 'ACH appears at checkout only when both this toggle and your StoryPay™ merchant account have ACH enabled. Contact StoryVenue support if you need merchant-level ACH activation.'}
                       </p>
                     </div>
                   </div>
@@ -260,7 +259,7 @@ function PaymentSettingsInner() {
             <div>
               <p className="text-sm font-medium text-gray-700">Payment methods available after setup</p>
               <p className="mt-0.5 text-xs text-gray-500">
-                Once your StoryPay merchant account is active, you can enable ACH / Bank Transfer
+                Once StoryPay™ is active, you can enable ACH / Bank Transfer
                 so clients can pay directly from their bank account — in addition to standard card payments.
               </p>
             </div>
@@ -272,6 +271,8 @@ function PaymentSettingsInner() {
   );
 }
 
+// Always open: this is where venues set up StoryPay™ (Stripe Connect) and
+// manage their payment settings, so it isn't behind the payments lock.
 export default function PaymentSettingsPage() {
-  return <PaymentGate><PaymentSettingsInner /></PaymentGate>;
+  return <PaymentSettingsInner />;
 }

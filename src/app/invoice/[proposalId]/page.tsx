@@ -111,7 +111,9 @@ export default function InvoicePage() {
     : invoice.proposal_id.slice(0, 8).toUpperCase();
   const payments =
     invoice.payment_type === 'installment' && invoice.payment_config
-      ? ((invoice.payment_config as { payments: Array<{ amount: number; date: string }> }).payments ?? [])
+      ? ((invoice.payment_config as { payments?: Array<{ amount: number; date: string }>; installments?: Array<{ amount: number; date: string }> }).installments
+        ?? (invoice.payment_config as { payments?: Array<{ amount: number; date: string }> }).payments
+        ?? [])
       : [];
   const schedulePayments = invoice.schedule?.payments ?? [];
   // The venue's service fee is a line item already included in the price, so
@@ -180,7 +182,7 @@ export default function InvoicePage() {
 
     // Bill to + meta
     doc.setTextColor(60, 60, 60);
-    let y = 130;
+    const y = 130;
     doc.setFont('helvetica', 'bold');
     doc.text('BILL TO', M, y);
     doc.text('STATUS', pageW - M - 160, y);

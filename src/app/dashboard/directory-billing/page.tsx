@@ -266,7 +266,7 @@ function friendlyError(raw: string): string {
     return 'Billing isn\'t fully configured on the server yet. Please contact support — we\'ll get this resolved quickly.';
   }
   if (lower.includes('lunarpay api error 5')) {
-    return 'Our payment processor (StoryPay\'s merchant platform) is temporarily unavailable. Please try again in a moment.';
+    return 'Our payment processor is temporarily unavailable. Please try again in a moment.';
   }
   return raw;
 }
@@ -1762,7 +1762,7 @@ function UpgradePlanModal({
               <div className="space-y-2">
                 <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700">
                   <p>
-                    You&apos;ll be sent to <strong>StoryPay&apos;s secure merchant checkout</strong> to
+                    You&apos;ll be sent to <strong>our secure checkout</strong> to
                     enter your card details. Your subscription activates the moment payment succeeds.
                   </p>
                 </div>

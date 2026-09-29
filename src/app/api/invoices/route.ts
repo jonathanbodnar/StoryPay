@@ -68,13 +68,13 @@ export async function POST(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, ghl_connected, ghl_access_token, ghl_location_id, name, brand_color, brand_logo_url')
+    .select('lunarpay_secret_key, payments_provider, ghl_connected, ghl_access_token, ghl_location_id, name, brand_color, brand_logo_url')
     .eq('id', venueId)
     .single();
 
   let customerLunarpayId = null;
 
-  if (!asDraft && venue?.lunarpay_secret_key && customerEmail) {
+  if (!asDraft && venue?.lunarpay_secret_key && venue.payments_provider !== 'stripe' && customerEmail) {
     try {
       const { firstName, lastName } = splitCustomerName(customerName, customerEmail);
       const lpResult = await createCustomer(venue.lunarpay_secret_key, {
@@ -257,7 +257,7 @@ export async function POST(request: NextRequest) {
                   <div style="text-align: center; margin: 32px 0;">
                     <a href="${proposalUrl}" style="display: inline-block; background-color: #1b1b1b; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">View & Pay Invoice</a>
                   </div>
-                  <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 24px; margin-bottom: 0;">Powered by StoryVenue · Payments by StoryPay</p>
+                  <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 24px; margin-bottom: 0;">Powered by StoryVenue · Payments by StoryPay™</p>
                 </div>
               </div>
             `,

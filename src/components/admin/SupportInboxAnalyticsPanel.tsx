@@ -248,7 +248,7 @@ export default function SupportInboxAnalyticsPanel() {
 
   const exportCsv = useCallback(() => {
     const rows: (string | number)[][] = [];
-    rows.push(['StoryPay Support Analytics Export']);
+    rows.push(['StoryVenue Support Analytics Export']);
     rows.push(['Range', `${range.from} to ${range.to}`]);
     rows.push([]);
     rows.push(['— Per-agent leaderboard —']);

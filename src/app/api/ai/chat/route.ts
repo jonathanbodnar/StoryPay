@@ -232,7 +232,7 @@ Five tabs covering every aspect of how your calendar works:
 - Go to Payments → New to create a proposal or invoice.
 - Proposals include an e-signature step and a contract body; invoices are line-item-only (no contract, pre-signed).
 - Payment types: Full Payment, Installment Plan, Subscription.
-- **How will you collect payment?** When creating a proposal or invoice you choose Online (StoryPay card/ACH) or Manually (cash or check). Manual proposals suppress the online payment form on the client-facing page and show a "venue collects directly" message instead.
+- **How will you collect payment?** When creating a proposal or invoice you choose Online (StoryPay™ card or bank transfer, powered by Stripe) or Manually (cash or check). Manual proposals suppress the online payment form on the client-facing page and show a "venue collects directly" message instead.
 - **E-signature**: for manual proposals you can optionally uncheck "Require client e-signature" to skip the signing step when you'll get a wet signature in person.
 - Clients receive a branded email/SMS with a link to review, sign (if required), and pay.
 - **Proposal statuses**: Draft, Sent, Opened, Signed, Paid, Partially Paid, Refunded, Partial Refund, Expired, Cancelled, Declined. "Partially Paid" is set automatically when one or more manual payments cover part of the total but not all of it.
@@ -499,10 +499,14 @@ Setup checklist for a speed-to-lead funnel:
 
 ## StoryPay™ (Payment Processing)
 - StoryPay™ is the payment processing tier built into StoryVenue. Venues must complete merchant onboarding before they can accept online payments.
-- Until StoryPay™ is active, a banner reminds owners to apply. **Apply**: Payments → Settings or click the "Apply for StoryPay™" prompt.
+- Until StoryPay™ is active, payment pages show a "Connect with Stripe" prompt. **Set up**: Payments → Payment settings → Connect with Stripe.
 - The onboarding wizard collects business information, owner details, and banking info. StoryVenue never stores raw card numbers — all card data goes directly to our secure payment processor.
 - Once approved: proposals and invoices can accept credit card payments, installments, and subscriptions online.
-- If payment processing shows as unavailable: check that your StoryPay merchant onboarding is complete. Contact support if you believe it should be active.
+- If payment processing shows as unavailable: open Payments → Payment settings. StoryPay™ (powered by Stripe) must be connected and approved by Stripe. Contact support if you believe it should be active.
+- **StoryPay™ fees (paid by the venue, taken from each payout):** paid plans: any card 3.4% + 30¢, bank transfer 1%. Free plan: any card 3.9% + 30¢, bank transfer 1.5%. Couples never pay these directly.
+- **Service fee:** every new invoice and proposal gets a "Service fee" line (default 3.5%, set in Payment settings). The venue can change the % on any invoice to split the cost with the couple, or remove it. Couples pay it whether they pay by card, bank transfer or check, so at 3.5% it covers card processing and the venue keeps its full price.
+- **Installment plans:** the first payment is made on the proposal/invoice and saves the card; the rest are charged automatically on their due dates. If one fails it retries on day 2, 4 and 7 and emails the couple a link to update their card.
+- **Payouts:** Stripe pays out to the venue's bank automatically (usually within 2 business days). Payouts, refunds and reports are also in the venue's own Stripe dashboard.
 
 ### Client payment form
 - When a client clicks Pay on a proposal or invoice, a secure payment form loads inline on the same page — no redirect to an external checkout.
@@ -620,7 +624,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 
 ## Refunds
 - Go to Transactions → Charges → find the charge → click Refund.
-- Confirm the amount and click Issue Refund. Processes immediately through your StoryPay merchant account.
+- Confirm the amount and click Issue Refund. The refund goes back to the client's card or bank through StoryPay™ (Stripe); StoryVenue's share of the fee is refunded too, Stripe keeps its processing fee.
 
 ## Payment Processing
 - StoryVenue uses a PCI-compliant payment processor for all payment processing. Card numbers go directly to the processor — StoryVenue never stores raw card data.
@@ -636,7 +640,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - How do I create a proposal? Payments → New → select a template → fill in client details → Send.
 - How do I see my revenue? Reports → Revenue (filter by date range, then preview or download).
 - How do I refund a payment? Transactions → Charges → click Refund.
-- Why can't I accept payments? Your StoryPay merchant account may still be pending review. Check Payments → Settings.
+- Why can't I accept payments? Your StoryPay™ (Stripe) setup may not be finished, or Stripe may still be reviewing it. Check Payments → Payment settings.
 - How do I add my logo? Settings → Branding → upload a logo file, or choose an image from Media (JPG/PNG/WebP/AVIF/GIF).
 - How do I manage my email notification templates? Settings → Notifications. Each template has an on/off toggle and a full editor. Payment Reminder lets you configure overdue reminder timing (days after the due date, not before).
 - How do I turn off a specific email notification? Settings → Notifications → click the template in the left list → toggle the switch off. Saved immediately.
@@ -691,7 +695,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - After the initial sync, do I need to keep using GHL for contacts? No. Manage contacts in StoryVenue — changes sync back to GHL automatically. New contacts created in StoryVenue are also added to GHL.
 - How do I update my email or password? Click your name/avatar in the sidebar → My Profile. Enter your new email or password and save. No current-password re-entry required.
 - How does client / couple login work? Couples use app.storyvenue.com/couple/login with the email and password they set at signup. They can view their proposals and documents.
-- How do I apply for StoryPay™? Payments → Settings (or click the "Apply for StoryPay™" prompt). Complete the StoryPay merchant onboarding wizard to activate payment processing.
+- How do I set up StoryPay™? Payments → Payment settings → Connect with Stripe. Stripe's secure signup takes about 10 minutes (business details and a payout bank account); online payments turn on as soon as Stripe approves.
 - How do I connect Google Calendar for two-way sync? Settings → Calendar → Connections tab → connect your Google account. Pick which calendar to write new events to, and select any personal/team calendars to use as conflict blockers.
 - How do I set my available hours for bookings? Settings → Calendar → Availability tab. Toggle each weekday on/off and set start/end times. Add date-specific overrides for holidays or special days.
 - How do I set minimum notice for bookings? Settings → Calendar → Booking Rules → Minimum Scheduling Notice. Set to 0 for same-day, up to 72 hours.
@@ -759,14 +763,14 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - **AI Concierge gating**: AI Concierge is only available on plans where the admin has enabled a checkbox in the directory plan settings. If your plan doesn't include it, the AI Concierge toggle is greyed out with a tooltip directing you to schedule a demo. You cannot enable AI Concierge without being on an eligible plan.
 
 ## 14-Day Free Trial & CC Gate (New Account Onboarding)
-- New venue accounts must complete a 4-step onboarding modal to go live: **Connect** (StoryPay merchant account) → **Details** (listing info) → **Go live** (publish listing + send test lead) → **Access** (enter credit card).
+- New venue accounts must complete a 4-step onboarding modal to go live: **Connect** (import your venue from Google) → **Details** (listing info) → **Go live** (publish listing + send test lead) → **Access** (enter credit card).
 - **The credit card step is a hard gate** — you cannot access the full dashboard until a card is on file. The onboarding modal always re-opens until the card step is completed. There is no way to skip it.
 - After entering a card, a **14-day free trial** begins. The venue's listing goes live, the test lead lands in the inbox, and full dashboard access is granted.
 - **If the trial expires and the venue has not downgraded to Free**, the $97/month Bride Booking System™ charge is automatically applied. There is no auto-downgrade — venues must actively choose to downgrade before their trial ends if they want the free tier.
 - A trial countdown ribbon appears at the top of the dashboard throughout the trial period, showing days remaining and an option to downgrade.
 - **Grandfathered / pre-existing accounts** (signed up before June 25, 2026) are exempt from the CC gate. They can use the onboarding modal to build their listing/pricing guide without being forced to enter a card. If they are on a Legacy Plan, the modal popup is not shown at all.
 - **Legacy Plan accounts** are fully exempt — no modal gate, no trial, no auto-charge. Billing is managed directly by StoryVenue.
-- Billing statements read as "StoryVenue" (not StoryPay).
+- Billing statements read as "StoryVenue" (not StoryPay™).
 
 ## Verified & Sponsored Listings
 - Path: /dashboard/listing/directory — manage your Verified and Sponsored listing status.
@@ -806,7 +810,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 
 ## Dashboard Onboarding Modal (4-Step Hard Gate)
 - After signup, all new venues see a 4-step onboarding modal that must be completed to gain full dashboard access:
-  1. **Connect** — complete StoryPay merchant account setup (payment processing).
+  1. **Connect** — find and import your venue from Google.
   2. **Details** — fill in listing info (name, description, photos, etc.).
   3. **Go live** — publish the listing. A test inquiry is sent so the venue can see a lead land in their inbox in real time. The test lead is tagged with a "test" label so it's visible in the inbox but excluded from lead metrics.
   4. **Access** — enter credit card details to start the 14-day free trial of Bride Booking System™ ($97/mo). This is the hard gate.
@@ -984,7 +988,7 @@ export async function POST(request: NextRequest) {
 
   // Fetch venue + live data context
   const [{ data: venue }, { data: proposals }, { data: customers }] = await Promise.all([
-    supabaseAdmin.from('venues').select('id, name, email, onboarding_status, setup_completed, ghl_connected').eq('id', venueId).single(),
+    supabaseAdmin.from('venues').select('id, name, email, onboarding_status, setup_completed, ghl_connected, payments_provider, stripe_account_status, stripe_charges_enabled').eq('id', venueId).single(),
     supabaseAdmin.from('proposals').select('id, customer_name, customer_email, status, price, payment_type, sent_at, paid_at, created_at').eq('venue_id', venueId).order('created_at', { ascending: false }).limit(100),
     supabaseAdmin.from('proposals').select('customer_email, price, status').eq('venue_id', venueId),
   ]);
@@ -1009,7 +1013,15 @@ VENUE ACCOUNT:
 - Name: ${venue?.name || 'Unknown'}
 - Email: ${venue?.email || 'Not set'}
 - Account ID: ${venueId}
-- Payment processing: ${venue?.onboarding_status || 'unknown'} ${venue?.setup_completed ? '(setup complete)' : '(setup not complete)'}
+- Payment processing (StoryPay™): ${
+      venue?.payments_provider === 'stripe' && venue?.stripe_charges_enabled
+        ? 'active on Stripe'
+        : venue?.stripe_account_status
+          ? `Stripe setup ${venue.stripe_account_status === 'pending' ? 'in Stripe review' : 'not finished'}`
+          : venue?.onboarding_status === 'active'
+            ? 'active (legacy processor)'
+            : 'not set up'
+    }
 - GHL/Messaging connected: ${venue?.ghl_connected ? 'Yes' : 'No'}
 
 LIVE FINANCIAL DATA:
