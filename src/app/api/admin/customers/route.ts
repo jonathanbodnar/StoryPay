@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { verifyMasterAdminToken } from '@/lib/admin-token';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
 async function verifyAdmin() {
@@ -9,12 +9,21 @@ async function verifyAdmin() {
   return verifyMasterAdminToken(token);
 }
 
-export async function GET() {
+/** The dashboard's Unique contacts list: couples on proposals created in the date range, demo venue left out. */
+export async function GET(request: NextRequest) {
   if (!(await verifyAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { data } = await supabaseAdmin
+  const from = request.nextUrl.searchParams.get('from');
+  const to = request.nextUrl.searchParams.get('to');
+  const { data: demos } = await supabaseAdmin.from('venues').select('id').eq('is_demo', true);
+  const notDemo = `(${(demos ?? []).map((d) => d.id).join(',') || '00000000-0000-0000-0000-000000000000'})`;
+  let q = supabaseAdmin
     .from('proposals')
     .select('customer_name, customer_email, customer_phone, price, status, created_at, venue_id')
+    .not('venue_id', 'in', notDemo)
     .order('created_at', { ascending: false });
+  if (from) q = q.gte('created_at', from);
+  if (to) q = q.lte('created_at', `${to}T23:59:59.999Z`);
+  const { data } = await q;
 
   // Deduplicate by email
   const seen = new Set<string>();

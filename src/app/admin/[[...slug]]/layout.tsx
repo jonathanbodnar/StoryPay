@@ -148,6 +148,8 @@ function adminHref(tab: AdminTabKey, rest: string[] = []): string {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Venue { id: string; name: string; email: string | null; ghl_location_id: string | null; onboarding_status: string; setup_completed: boolean; created_at: string; login_url: string | null; venue_tokens: { token: string }[]; }
+/** A venue in the dashboard's subscription breakdown (drill-down rows). */
+type BreakdownVenue = { id: string; name: string; email: string; ghl_location_id: string; setup_completed: boolean; created_at: string };
 interface AdminStats {
   totalRevenue: number; totalProposals: number; pendingPayments: number;
   failedPayments: number; uniqueCustomers: number; uniqueVenues: number;
@@ -158,20 +160,20 @@ interface AdminStats {
   directoryActiveMrrCents?: number;
   directoryScheduledMrrCents?: number;
   directoryScheduledVenueCount?: number;
-  directoryAssignedMrrCents?: number;
   directoryActiveSubscriptionCount?: number;
-  directoryAssignedPayingVenueCount?: number;
+  directoryPayingByProvider?: { stripe: number; lunarpay: number };
+  directoryPastDueCount?: number;
+  directoryPastDueCents?: number;
+  totalContacts?: number;
+  saasLiveWarnings?: string[];
   directoryMrrByPlan?: { planId: string; name: string; slug: string; venueCount: number; mrrCents: number }[];
   platformSaaSRevenueInRangeCents?: number;
   platformSaaSMonthlyChart?: { month: string; label: string; revenue: number }[];
-  trialFunnel?: {
-    totalSignups: { count: number; venues: any[] };
-    activeTrialing: { count: number; venues: any[] };
-    expiredNoAction: { count: number; venues: any[] };
-    upgraded: { count: number; venues: any[] };
-    downgraded: { count: number; venues: any[] };
-    neverLoggedIn: { count: number; venues: any[] };
-  };
+  /** Every non-demo venue in exactly one subscription bucket (plus "never logged in", a subset of trialEnded). */
+  subscriptionBreakdown?: Record<
+    'total' | 'paying' | 'pastDue' | 'trialActive' | 'trialEnded' | 'neverLoggedIn' | 'free' | 'canceled' | 'legacy',
+    { count: number; venues: BreakdownVenue[] }
+  >;
   trialPlanPriceCents?: number;
 }
 interface Announcement { id: string; message: string; link_text: string | null; link_url: string | null; is_active: boolean; created_at: string; }
@@ -182,7 +184,7 @@ function formatShort(c: number) { const d = c / 100; return d >= 1000 ? `$${(d/1
 function getDefaultRange(): DateRange { const p = PRESETS.find(x => x.label === 'Last 30 days')!; return { ...p.getRange(), label: p.label }; }
 
 // Drill-down types
-type DrillKey = 'venues' | 'waitlist' | 'customers' | 'failed' | 'pending' | 'trial_total' | 'trial_active' | 'trial_expired' | 'trial_never_logged_in' | 'trial_upgraded' | 'trial_downgraded' | null;
+type DrillKey = 'venues' | 'waitlist' | 'customers' | 'failed' | 'pending' | 'trial_total' | 'trial_active' | 'trial_expired' | 'trial_never_logged_in' | 'trial_upgraded' | 'trial_downgraded' | 'trial_past_due' | 'trial_free' | 'trial_legacy' | null;
 interface WaitlistEntry { id: string; first_name: string | null; last_name: string | null; email: string; phone: string | null; venue_name: string | null; referral_source: string | null; created_at: string; }
 interface FailedPayment { id: string; customer_name: string | null; price: number; status: string; created_at: string; }
 interface ChangelogEntry { id: string; title: string; description: string; category: string; released_at: string; }
@@ -1401,15 +1403,18 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
     try {
       if (key === 'venues') {
         const res = await fetch('/api/admin/venues');
-        if (res.ok) { const d = await res.json(); setDrillData(d.venues || []); }
+        if (res.ok) {
+          const d = await res.json();
+          setDrillData((d.venues || []).filter((v: { is_demo?: boolean; is_suspended?: boolean }) => !v.is_demo && !v.is_suspended));
+        }
       } else if (key === 'waitlist') {
         const res = await fetch('/api/admin/waitlist');
         if (res.ok) setDrillData(await res.json());
       } else if (key === 'customers') {
-        const res = await fetch('/api/admin/customers');
+        const res = await fetch(`/api/admin/customers?${new URLSearchParams({ from: dateRange.from, to: dateRange.to })}`);
         if (res.ok) setDrillData(await res.json());
       } else if (key === 'failed' || key === 'pending') {
-        const res = await fetch(`/api/admin/payments?status=${key}`);
+        const res = await fetch(`/api/admin/payments?${new URLSearchParams({ status: key, from: dateRange.from, to: dateRange.to })}`);
         if (res.ok) setDrillData(await res.json());
       }
     } finally { setDrillLoading(false); }
@@ -1737,27 +1742,36 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
             {/* KPI grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <KPICard label="Total Revenue" value={statsLoading ? '...' : formatCents(stats?.totalRevenue ?? 0)} icon={DollarSign} color={BRAND} />
+              <KPICard label="StoryPay™ volume" value={statsLoading ? '...' : formatCents(stats?.totalRevenue ?? 0)} icon={DollarSign} color={BRAND} sub="Paid online by couples" />
               <KPICard label="Active Venues" value={statsLoading ? '...' : stats?.venueCount ?? 0} icon={Building2} color="#7c3aed" onClick={() => openDrill('venues')} />
               <KPICard label="Proposals" value={statsLoading ? '...' : stats?.totalProposals ?? 0} icon={FileText} color="#1b1b1b" />
               <KPICard label="Waitlist" value={statsLoading ? '...' : stats?.waitlistCount ?? 0} icon={Users} color="#10b981" onClick={() => openDrill('waitlist')} />
               <KPICard label="Unique Contacts" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#f59e0b" onClick={() => openDrill('customers')} />
               <KPICard label="Pending Payments" value={statsLoading ? '...' : stats?.pendingPayments ?? 0} icon={Clock} color="#f59e0b" onClick={() => openDrill('pending')} />
               <KPICard label="Failed Payments" value={statsLoading ? '...' : stats?.failedPayments ?? 0} icon={XCircle} color="#ef4444" onClick={() => openDrill('failed')} />
-              <KPICard label="Total Contacts" value={statsLoading ? '...' : stats?.uniqueCustomers ?? 0} icon={Users} color="#888888" onClick={() => openDrill('customers')} />
+              <KPICard label="Total Contacts" value={statsLoading ? '...' : (stats?.totalContacts ?? 0).toLocaleString('en-US')} icon={Users} color="#888888" sub="All venues' contacts" onClick={() => router.push(adminHref('contacts'))} />
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-4 sm:p-5 space-y-4">
               <div>
-                <h3 className="text-sm font-semibold text-gray-900">Directory SaaS (StoryVenue)</h3>
+                <h3 className="text-sm font-semibold text-gray-900">StoryVenue subscriptions (SaaS)</h3>
                 <p className="text-xs text-gray-500 mt-1 max-w-3xl">
-                  <strong>Active MRR</strong> = paid subscriptions billing today. <strong>Scheduled MRR</strong> = trialing venues with a card on file whose first charge fires when their trial ends (committed future revenue). SaaS cash sums actual charges from <code className="text-[10px] bg-white px-1 rounded border">platform_billing_events</code>.
+                  <strong>MRR</strong> = what paying venues are billed each month, read live from Stripe and LunarPay. <strong>Scheduled MRR</strong> = venues in a trial with a card on file (first charge when the trial ends). <strong>SaaS cash</strong> = subscription payments collected in the date range: Stripe records each one instantly, and LunarPay&apos;s are synced when this page loads. The demo venue is left out.
                 </p>
+                {(stats?.saasLiveWarnings?.length ?? 0) > 0 && (
+                  <p className="mt-2 text-xs text-amber-700">{stats!.saasLiveWarnings!.join(' ')}</p>
+                )}
               </div>
 
               {/* Revenue row */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <KPICard label="MRR (active subs)" value={statsLoading ? '...' : formatCents(stats?.directoryActiveMrrCents ?? 0)} icon={Repeat} color="#0d9488" onClick={undefined} />
+                <KPICard
+                  label="MRR"
+                  value={statsLoading ? '...' : formatCents(stats?.directoryActiveMrrCents ?? 0)}
+                  icon={Repeat}
+                  color="#0d9488"
+                  sub={statsLoading ? undefined : `${stats?.directoryPayingByProvider?.stripe ?? 0} on Stripe · ${stats?.directoryPayingByProvider?.lunarpay ?? 0} on LunarPay`}
+                />
                 <KPICard
                   label="Scheduled MRR"
                   value={statsLoading ? '...' : formatCents(stats?.directoryScheduledMrrCents ?? 0)}
@@ -1765,33 +1779,43 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
                   color="#6366f1"
                   sub={statsLoading ? undefined : `${stats?.directoryScheduledVenueCount ?? 0} venue${(stats?.directoryScheduledVenueCount ?? 0) === 1 ? '' : 's'} — card on file, trial active`}
                 />
-                <KPICard label="Active subscriptions" value={statsLoading ? '...' : stats?.directoryActiveSubscriptionCount ?? 0} icon={Check} color="#0d9488" />
+                <KPICard
+                  label="Paying venues"
+                  value={statsLoading ? '...' : stats?.directoryActiveSubscriptionCount ?? 0}
+                  icon={Check}
+                  color="#0d9488"
+                  sub={statsLoading ? undefined : `${stats?.directoryPastDueCount ?? 0} past due${(stats?.directoryPastDueCents ?? 0) > 0 ? ` (${formatCents(stats!.directoryPastDueCents!)}/mo)` : ''}`}
+                />
                 <KPICard label="SaaS cash (range)" value={statsLoading ? '...' : formatCents(stats?.platformSaaSRevenueInRangeCents ?? 0)} icon={Wallet} color="#b45309" />
               </div>
 
-              {/* Trial funnel */}
+              {/* Every venue's subscription status */}
               {(() => {
-                const f = stats?.trialFunnel;
+                const f = stats?.subscriptionBreakdown;
                 const price = stats?.trialPlanPriceCents ?? 9700;
                 const fmt = (n: number) => formatCents(n);
-                const pct = (n: number) => f?.totalSignups?.count ? Math.round((n / f.totalSignups.count) * 100) : 0;
+                const pct = (n: number) => f?.total?.count ? Math.round((n / f.total.count) * 100) : 0;
                 if (statsLoading || !f) return (
                   <div className="rounded-lg border border-gray-100 bg-white p-4 text-xs text-gray-400">
-                    {statsLoading ? 'Loading trial funnel…' : 'No trial data yet.'}
+                    {statsLoading ? 'Loading subscriptions…' : 'No subscription data yet.'}
                   </div>
                 );
-                const rows: { label: string; count: number; sub: string; color: string; dot: string; drillKey: DrillKey; data: any[] }[] = [
-                  { label: 'Total signups', count: f.totalSignups.count, sub: 'All non-demo venues', color: 'text-gray-700', dot: 'bg-gray-400', drillKey: 'trial_total', data: f.totalSignups.venues },
-                  { label: 'Active trial', count: f.activeTrialing.count, sub: `${pct(f.activeTrialing.count)}% of signups · potential ${fmt(f.activeTrialing.count * price)}/mo`, color: 'text-blue-700', dot: 'bg-blue-400', drillKey: 'trial_active', data: f.activeTrialing.venues },
-                  { label: 'Trial expired – no action', count: f.expiredNoAction.count, sub: `${pct(f.expiredNoAction.count)}% of signups · ${fmt(f.expiredNoAction.count * price)}/mo opportunity`, color: 'text-amber-700', dot: 'bg-amber-400', drillKey: 'trial_expired', data: f.expiredNoAction.venues },
-                  { label: '↳ Never logged in after signup', count: f.neverLoggedIn.count, sub: `Ghosted — signed up but never returned`, color: 'text-amber-600', dot: 'bg-amber-200', drillKey: 'trial_never_logged_in', data: f.neverLoggedIn.venues },
-                  { label: 'Upgraded to paid', count: f.upgraded.count, sub: `${pct(f.upgraded.count)}% conversion · ${fmt(f.upgraded.count * price)}/mo actual MRR`, color: 'text-emerald-700', dot: 'bg-emerald-400', drillKey: 'trial_upgraded', data: f.upgraded.venues },
-                  { label: 'Downgraded / churned', count: f.downgraded.count, sub: `${pct(f.downgraded.count)}% of signups · ${fmt(f.downgraded.count * price)}/mo lost MRR`, color: 'text-red-600', dot: 'bg-red-400', drillKey: 'trial_downgraded', data: f.downgraded.venues },
+                const byProvider = stats?.directoryPayingByProvider;
+                const rows: { label: string; count: number; sub: string; color: string; dot: string; drillKey: DrillKey; data: BreakdownVenue[] }[] = [
+                  { label: 'All venues', count: f.total.count, sub: 'Every venue except the demo · the rows below add up to this', color: 'text-gray-700', dot: 'bg-gray-400', drillKey: 'trial_total', data: f.total.venues },
+                  { label: 'Paying', count: f.paying.count, sub: `${byProvider?.stripe ?? 0} on Stripe · ${byProvider?.lunarpay ?? 0} still on LunarPay · ${fmt(stats?.directoryActiveMrrCents ?? 0)}/mo`, color: 'text-emerald-700', dot: 'bg-emerald-400', drillKey: 'trial_upgraded', data: f.paying.venues },
+                  { label: 'Past due', count: f.pastDue.count, sub: 'Their last charge failed · locked until they pay', color: 'text-red-600', dot: 'bg-red-400', drillKey: 'trial_past_due', data: f.pastDue.venues },
+                  { label: 'In a free trial', count: f.trialActive.count, sub: `${stats?.directoryScheduledVenueCount ?? 0} with a card on file · ${fmt(stats?.directoryScheduledMrrCents ?? 0)}/mo scheduled`, color: 'text-blue-700', dot: 'bg-blue-400', drillKey: 'trial_active', data: f.trialActive.venues },
+                  { label: 'Trial ended — no card', count: f.trialEnded.count, sub: `${pct(f.trialEnded.count)}% of venues · ${fmt(f.trialEnded.count * price)}/mo opportunity`, color: 'text-amber-700', dot: 'bg-amber-400', drillKey: 'trial_expired', data: f.trialEnded.venues },
+                  { label: '↳ Never logged in after signup', count: f.neverLoggedIn.count, sub: 'Signed up but never came back', color: 'text-amber-600', dot: 'bg-amber-200', drillKey: 'trial_never_logged_in', data: f.neverLoggedIn.venues },
+                  { label: 'Free plan', count: f.free.count, sub: 'Chose the free plan', color: 'text-gray-600', dot: 'bg-gray-300', drillKey: 'trial_free', data: f.free.venues },
+                  { label: 'Canceled / not subscribed', count: f.canceled.count, sub: 'Paid plan, but no subscription', color: 'text-red-600', dot: 'bg-red-300', drillKey: 'trial_downgraded', data: f.canceled.venues },
+                  { label: 'Legacy (free)', count: f.legacy.count, sub: 'Grandfathered legacy clients · not billed', color: 'text-gray-600', dot: 'bg-gray-300', drillKey: 'trial_legacy', data: f.legacy.venues },
                 ];
                 return (
                   <div className="rounded-lg border border-gray-100 bg-white overflow-hidden">
                     <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
-                      <p className="text-xs font-semibold text-gray-700">Trial funnel <span className="font-normal text-gray-400">— {fmt(price)}/mo per venue</span></p>
+                      <p className="text-xs font-semibold text-gray-700">Venues by subscription <span className="font-normal text-gray-400">— paid plan {fmt(price)}/mo</span></p>
                     </div>
                     <div className="divide-y divide-gray-50">
                       {rows.map((r) => (
@@ -1822,7 +1846,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
               {(stats?.directoryMrrByPlan?.length ?? 0) > 0 ? (
                 <div className="rounded-lg border border-gray-100 bg-white p-3 text-xs">
-                  <p className="font-semibold text-gray-600 mb-2">MRR by plan (active paid only)</p>
+                  <p className="font-semibold text-gray-600 mb-2">MRR by plan (paying venues, actual billed amounts)</p>
                   <ul className="space-y-1.5">
                     {stats!.directoryMrrByPlan!.map((row) => (
                       <li key={row.planId} className="flex flex-wrap justify-between gap-2 text-gray-700">
@@ -1890,12 +1914,15 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
                   case 'customers': return 'Contacts';
                   case 'failed': return 'Failed Payments';
                   case 'pending': return 'Pending Payments';
-                  case 'trial_total': return 'Total Signups';
-                  case 'trial_active': return 'Active Trial Venues';
-                  case 'trial_expired': return 'Expired Trial Venues';
+                  case 'trial_total': return 'All Venues';
+                  case 'trial_active': return 'Venues in a Free Trial';
+                  case 'trial_expired': return 'Trial Ended — No Card';
                   case 'trial_never_logged_in': return 'Never Logged In Venues';
-                  case 'trial_upgraded': return 'Upgraded Venues';
-                  case 'trial_downgraded': return 'Downgraded Venues';
+                  case 'trial_upgraded': return 'Paying Venues';
+                  case 'trial_downgraded': return 'Canceled / Not Subscribed';
+                  case 'trial_past_due': return 'Past Due Venues';
+                  case 'trial_free': return 'Free Plan Venues';
+                  case 'trial_legacy': return 'Legacy Venues';
                   default: return 'Details';
                 }
               };
@@ -2007,9 +2034,9 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
               <div className="rounded-xl bg-white border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Venue customer payments</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">StoryPay™ volume</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{statsLoading ? '...' : formatCents(stats?.totalRevenue ?? 0)}</p>
-                    <p className="text-[11px] text-gray-400 mt-1">Paid proposals in range (your venues&apos; buyers)</p>
+                    <p className="text-[11px] text-gray-400 mt-1">Paid online by couples in range (demo venue excluded)</p>
                   </div>
                   <TrendingUp size={20} style={{ color: BRAND }} />
                 </div>

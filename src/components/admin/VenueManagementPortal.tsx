@@ -29,10 +29,7 @@ import {
   planIncludesSponsored,
   planIncludesConcierge,
 } from '@/lib/directory-addons';
-import {
-  getLunarPayAdminSummary,
-  type LunarPayAdminSummary,
-} from '@/lib/lunarpay-venue-admin';
+import type { LunarPayAdminSummary } from '@/lib/lunarpay-venue-admin';
 import { furthestStage } from '@/lib/funnel-stage';
 import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 import { StripeBillingCard } from '@/components/admin/StripeBillingCard';
@@ -86,6 +83,7 @@ export type AdminVenueRow = Record<string, unknown> & {
   stripe_account_id?: string | null;
   stripe_account_status?: string | null;
   stripe_charges_enabled?: boolean | null;
+  stripe_account_synced_at?: string | null;
   payments_provider?: string | null;
   /** Protected demo venue — cannot be deleted by anyone. */
   is_demo?: boolean | null;
@@ -95,128 +93,72 @@ export type AdminVenueRow = Record<string, unknown> & {
   suspended_by?: string | null;
 };
 
-function lunarPaySummaryForRow(v: AdminVenueRow): LunarPayAdminSummary {
-  const a = v.lunarpay_admin;
-  if (a && typeof a === 'object' && 'payments_ready' in a) {
-    return a;
-  }
-  return getLunarPayAdminSummary(v as Record<string, unknown>);
+/**
+ * Where a venue is with StoryPay™ (Stripe Connect). Stripe keeps these columns
+ * current: account.updated webhooks sync the venue the moment Stripe changes
+ * the account, and the hourly cron re-checks accounts still in signup/review.
+ */
+type StoryPayStage = 'live' | 'in_review' | 'not_finished' | 'not_applied';
+
+function storyPayStage(v: AdminVenueRow): StoryPayStage {
+  if (!v.stripe_account_id) return 'not_applied';
+  if (v.payments_provider === 'stripe' && v.stripe_charges_enabled === true) return 'live';
+  return v.stripe_account_status === 'pending' ? 'in_review' : 'not_finished';
 }
 
-function LunarPayStatusCell({
-  venue,
-  summary,
-  onLpAction,
-  lpBusyAction,
-}: {
+const STORYPAY_STAGES: Record<StoryPayStage, { label: string; sub: string; className: string }> = {
+  live:         { label: 'Live',         sub: 'Taking payments',        className: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
+  in_review:    { label: 'Applied',      sub: 'Stripe is reviewing',    className: 'border-blue-200 bg-blue-50 text-blue-800' },
+  not_finished: { label: 'Not finished', sub: 'Stripe needs more info', className: 'border-amber-200 bg-amber-50 text-amber-800' },
+  not_applied:  { label: 'Not applied',  sub: 'Hasn’t started',         className: 'border-gray-200 bg-gray-100 text-gray-600' },
+};
+
+function timeAgo(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  return hrs < 48 ? `${hrs}h ago` : `${Math.round(hrs / 24)}d ago`;
+}
+
+/** The venue's StoryPay™ stage pill, with a link to its Stripe account and a manual re-sync. */
+function StoryPayStatusCell({ venue, onSync, syncing }: {
   venue: AdminVenueRow;
-  summary: LunarPayAdminSummary;
-  /** Wire up the admin Sync / Reset / Unlink actions (desktop rows only). */
-  onLpAction?: (action: 'sync' | 'reset' | 'unlink') => void;
-  lpBusyAction?: string | null;
+  /** Re-read the account from Stripe now (desktop rows only). */
+  onSync?: () => void;
+  syncing?: boolean;
 }) {
-  const badgeClass =
-    summary.category === 'active_approved'
-      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-      : summary.category === 'denied'
-        ? 'border-red-200 bg-red-50 text-red-800'
-        : summary.category === 'not_provisioned'
-          ? 'border-gray-200 bg-gray-100 text-gray-600'
-          : summary.category === 'provisioned_not_applied'
-            ? 'border-slate-200 bg-slate-50 text-slate-500'
-            : 'border-amber-200 bg-amber-50 text-amber-800';
-
-  const mid = venue.lunarpay_merchant_id;
-  const sub = summary.payments_ready
-    ? 'Can charge'
-    : summary.category === 'not_provisioned'
-      ? 'No merchant'
-      : summary.category === 'provisioned_not_applied'
-        ? 'Merchant auto-created · no application'
-        : summary.onboarding_status
-          ? summary.onboarding_status.charAt(0).toUpperCase() + summary.onboarding_status.slice(1)
-          : null;
-
-  const hasMerchant = mid != null && String(mid).length > 0;
-  const applicationInFlight =
-    summary.onboarding_status === 'bank_information_sent' || summary.onboarding_status === 'under_review';
-  const busy = Boolean(lpBusyAction);
-
+  const stage = STORYPAY_STAGES[storyPayStage(venue)];
+  const acct = venue.stripe_account_id ? String(venue.stripe_account_id) : null;
+  const synced = timeAgo(venue.stripe_account_synced_at);
   return (
     <div className="space-y-0.5">
-      <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${badgeClass}`}>
-        {summary.label}
+      <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${stage.className}`}>
+        StoryPay™ · {stage.label}
       </span>
-      <div className="text-[10px] text-gray-400 leading-none">
-        {hasMerchant ? `#${String(mid)}${sub ? ` · ${sub}` : ''}` : sub ?? '—'}
-      </div>
-      {onLpAction && hasMerchant && (
-        <div className="flex items-center gap-2 pt-0.5">
+      <div className="flex items-center gap-2 text-[10px] text-gray-400 leading-none">
+        {acct ? (
+          <a href={`https://dashboard.stripe.com/connect/accounts/${acct}`} target="_blank" rel="noreferrer" className="hover:underline" title={synced ? `Synced from Stripe ${synced}` : undefined}>
+            {stage.sub}
+          </a>
+        ) : (
+          <span>{stage.sub}</span>
+        )}
+        {acct && onSync && (
           <button
             type="button"
-            disabled={busy}
-            onClick={() => onLpAction('sync')}
-            className="text-[10px] font-medium text-blue-600 hover:underline disabled:opacity-40"
-            title="Re-fetch live status and keys from LunarPay"
+            disabled={syncing}
+            onClick={onSync}
+            className="font-medium text-blue-600 hover:underline disabled:opacity-40"
+            title="Re-check this venue's account with Stripe now"
           >
-            {lpBusyAction === 'sync' ? 'Syncing…' : 'Sync'}
+            {syncing ? 'Syncing…' : 'Sync'}
           </button>
-          {applicationInFlight && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onLpAction('reset')}
-              className="text-[10px] font-medium text-amber-700 hover:underline disabled:opacity-40"
-              title="Send the venue back to the banking step so they can resubmit their application"
-            >
-              {lpBusyAction === 'reset' ? 'Resetting…' : 'Reset app'}
-            </button>
-          )}
-          {summary.category !== 'active_approved' && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onLpAction('unlink')}
-              className="text-[10px] font-medium text-red-600 hover:underline disabled:opacity-40"
-              title="Detach the LunarPay merchant so the venue restarts the wizard from scratch"
-            >
-              {lpBusyAction === 'unlink' ? 'Unlinking…' : 'Unlink'}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** StoryPay™ status: the venue's Stripe account when it has one, else legacy LunarPay (with its tools). */
-function StoryPayStatusCell(props: {
-  venue: AdminVenueRow;
-  summary: LunarPayAdminSummary;
-  onLpAction?: (action: 'sync' | 'reset' | 'unlink') => void;
-  lpBusyAction?: string | null;
-}) {
-  const v = props.venue;
-  if (!v.stripe_account_id) return <LunarPayStatusCell {...props} />;
-  const active = v.payments_provider === 'stripe' && v.stripe_charges_enabled === true;
-  const label = active ? 'StoryPay™ · Stripe' : v.stripe_account_status === 'pending' ? 'Stripe review' : 'Stripe signup';
-  const sub = active ? 'Can charge' : v.stripe_account_status === 'pending' ? 'Waiting on Stripe' : 'Signup not finished';
-  return (
-    <div className="space-y-0.5">
-      <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${active ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
-        {label}
-      </span>
-      <div className="text-[10px] text-gray-400 leading-none">
-        <a href={`https://dashboard.stripe.com/connect/accounts/${String(v.stripe_account_id)}`} target="_blank" rel="noreferrer" className="hover:underline">{sub}</a>
+        )}
       </div>
     </div>
   );
-}
-
-/** Which StoryPay™ bucket a venue is in, for the admin filter + counts. */
-function storyPayBucket(v: AdminVenueRow, lp: LunarPayAdminSummary): 'stripe_active' | 'stripe_setup' | 'lunarpay_active' | 'not_connected' {
-  if (v.stripe_account_id) return v.payments_provider === 'stripe' && v.stripe_charges_enabled === true ? 'stripe_active' : 'stripe_setup';
-  return lp.payments_ready ? 'lunarpay_active' : 'not_connected';
 }
 
 /**
@@ -496,7 +438,7 @@ export function VenueManagementPortal({
   const [filterVerified, setFilterVerified] = useState<string>('any');
   const [filterSponsored, setFilterSponsored] = useState<string>('any');
   const [filterPlan, setFilterPlan] = useState<string>('any');
-  const [filterLunarPay, setFilterLunarPay] = useState<string>('any');
+  const [filterStoryPay, setFilterStoryPay] = useState<string>('any');
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -567,34 +509,20 @@ export function VenueManagementPortal({
   const [suspending, setSuspending] = useState(false);
   const [suspendToast, setSuspendToast] = useState<{ id: string; msg: string; ok: boolean } | null>(null);
 
-  // Per-row LunarPay admin action state: `${venueId}:${action}` while running
-  const [lpActionKey, setLpActionKey] = useState<string | null>(null);
+  // Venue whose StoryPay™ (Stripe) status is being re-synced.
+  const [stripeSyncId, setStripeSyncId] = useState<string | null>(null);
 
-  async function runLunarPayAction(venue: AdminVenueRow, action: 'sync' | 'reset' | 'unlink') {
-    if (action === 'reset' && !confirm(
-      `Reset the payment application for "${venue.name}"?\n\nTheir wizard goes back to the banking step so they can resubmit. If Fortis already issued their signing form, resubmitting returns the same form.`,
-    )) return;
-    if (action === 'unlink' && !confirm(
-      `Unlink the LunarPay merchant from "${venue.name}"?\n\nAll merchant ids/keys are cleared and they restart the wizard from scratch. Re-registering with the same email re-adopts this same merchant — a brand-new Fortis application needs a different email or deleting the merchant in LunarPay admin.`,
-    )) return;
-    setLpActionKey(`${venue.id}:${action}`);
+  async function runStripeSync(venue: AdminVenueRow) {
+    setStripeSyncId(venue.id);
     try {
-      const res = await fetch(`/api/admin/venues/${venue.id}/lunarpay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      const d = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-      if (!res.ok) {
-        alert(d.error || `LunarPay ${action} failed`);
-      } else if (d.message) {
-        alert(d.message);
-      }
+      const res = await fetch(`/api/admin/venues/${venue.id}/stripe-sync`, { method: 'POST' });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) alert(d.error || 'Could not sync with Stripe');
       await onRefresh();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Request failed');
     } finally {
-      setLpActionKey(null);
+      setStripeSyncId(null);
     }
   }
 
@@ -657,8 +585,8 @@ export function VenueManagementPortal({
   const [page, setPage] = useState(1);
 
   // Reset to page 1 whenever filters/search change.
-  const prevFiltersRef = { search, filterVerified, filterSponsored, filterPlan, filterLunarPay };
-  useEffect(() => { setPage(1); }, [search, filterVerified, filterSponsored, filterPlan, filterLunarPay]); // eslint-disable-line react-hooks/exhaustive-deps
+  const prevFiltersRef = { search, filterVerified, filterSponsored, filterPlan, filterStoryPay };
+  useEffect(() => { setPage(1); }, [search, filterVerified, filterSponsored, filterPlan, filterStoryPay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -670,8 +598,7 @@ export function VenueManagementPortal({
           .toLowerCase();
         if (!blob.includes(q)) return false;
       }
-      const lp = lunarPaySummaryForRow(v);
-      if (filterLunarPay !== 'any' && storyPayBucket(v, lp) !== filterLunarPay) return false;
+      if (filterStoryPay !== 'any' && storyPayStage(v) !== filterStoryPay) return false;
       if (filterVerified !== 'any') {
         const vs = (v.directory_verified_status as string) || 'none';
         if (vs !== filterVerified) return false;
@@ -693,7 +620,7 @@ export function VenueManagementPortal({
       if (!a.is_demo && b.is_demo) return 1;
       return 0;
     });
-  }, [venues, search, filterVerified, filterSponsored, filterPlan, filterLunarPay]);
+  }, [venues, search, filterVerified, filterSponsored, filterPlan, filterStoryPay]);
 
   // Split filtered list into pinned demos + paginated regulars.
   const demoVenues    = useMemo(() => filtered.filter((v) => v.is_demo),  [filtered]);
@@ -708,15 +635,10 @@ export function VenueManagementPortal({
   // Total real (non-demo) venues ever registered (unfiltered).
   const totalRealVenues = useMemo(() => venues.filter((v) => !v.is_demo).length, [venues]);
 
-  const lunarPayCounts = useMemo(() => {
-    let stripe = 0;
-    let legacy = 0;
-    for (const v of venues) {
-      const b = storyPayBucket(v, lunarPaySummaryForRow(v));
-      if (b === 'stripe_active') stripe++;
-      else if (b === 'lunarpay_active') legacy++;
-    }
-    return { stripe, legacy, total: venues.length };
+  const storyPayCounts = useMemo(() => {
+    const counts: Record<StoryPayStage, number> = { live: 0, in_review: 0, not_finished: 0, not_applied: 0 };
+    for (const v of venues) if (!v.is_demo) counts[storyPayStage(v)]++;
+    return counts;
   }, [venues]);
 
   async function patchVenue(
@@ -1298,20 +1220,20 @@ export function VenueManagementPortal({
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">StoryPay™</label>
             <select
-              value={filterLunarPay}
-              onChange={(e) => setFilterLunarPay(e.target.value)}
+              value={filterStoryPay}
+              onChange={(e) => setFilterStoryPay(e.target.value)}
               className="w-full lg:w-48 rounded-xl border border-gray-200 px-3 py-2 text-sm"
             >
               <option value="any">Any</option>
-              <option value="stripe_active">Taking payments (Stripe)</option>
-              <option value="stripe_setup">Stripe signup / review</option>
-              <option value="lunarpay_active">LunarPay (legacy) active</option>
-              <option value="not_connected">Not connected</option>
+              <option value="live">Live</option>
+              <option value="in_review">Applied (Stripe reviewing)</option>
+              <option value="not_finished">Not finished</option>
+              <option value="not_applied">Not applied</option>
             </select>
           </div>
         </div>
         <p className="text-xs text-gray-400">
-          Showing {totalRegular} of {venues.length} venues · StoryPay™ on Stripe: {lunarPayCounts.stripe} · LunarPay (legacy): {lunarPayCounts.legacy}
+          Showing {totalRegular} of {venues.length} venues · StoryPay™: {storyPayCounts.live} live · {storyPayCounts.in_review} applied · {storyPayCounts.not_finished} not finished · {storyPayCounts.not_applied} not applied
         </p>
       </div>
 
@@ -1327,7 +1249,6 @@ export function VenueManagementPortal({
             <VenueMobileCard
               key={venue.id}
               venue={venue}
-              lpSummary={lunarPaySummaryForRow(venue)}
               plans={plans}
               planLabelText={planLabel(venue)}
               savingKey={savingKey}
@@ -1374,13 +1295,11 @@ export function VenueManagementPortal({
           const vs = (venue.directory_verified_status as string) || 'none';
           const ss = (venue.directory_sponsored_status as string) || 'none';
           const busy = savingKey !== null;
-          const lpSum = lunarPaySummaryForRow(venue);
           const hasBilling = Boolean(venue.directory_plan_id || venue.directory_subscription_external_id);
           return venue.is_demo
             ? <DemoVenueCard
                 key={venue.id}
                 venue={venue}
-                lpSum={lpSum}
                 busy={busy}
                 plans={plans}
                 hasBilling={hasBilling}
@@ -1445,9 +1364,8 @@ export function VenueManagementPortal({
               <div className="flex flex-wrap items-center gap-2">
                 <StoryPayStatusCell
                   venue={venue}
-                  summary={lpSum}
-                  onLpAction={(action) => void runLunarPayAction(venue, action)}
-                  lpBusyAction={lpActionKey?.startsWith(`${venue.id}:`) ? lpActionKey.split(':')[1] : null}
+                  onSync={() => void runStripeSync(venue)}
+                  syncing={stripeSyncId === venue.id}
                 />
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] font-semibold text-gray-400">Plan</span>
@@ -2012,7 +1930,6 @@ export function VenueManagementPortal({
 
 function VenueMobileCard({
   venue,
-  lpSummary,
   plans,
   planLabelText,
   savingKey,
@@ -2033,7 +1950,6 @@ function VenueMobileCard({
   onUnsuspend,
 }: {
   venue: AdminVenueRow;
-  lpSummary: LunarPayAdminSummary;
   plans: PlanOpt[];
   planLabelText: string;
   savingKey: string | null;
@@ -2084,7 +2000,7 @@ function VenueMobileCard({
         </span>
       </div>
       <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-2 py-2">
-        <StoryPayStatusCell venue={venue} summary={lpSummary} />
+        <StoryPayStatusCell venue={venue} />
       </div>
       <div className="text-[11px] text-gray-400">Plan: {planLabelText}</div>
       <div className="text-[10px] text-gray-500">SaaS billing: {(venue.directory_subscription_status as string) || '—'}</div>
@@ -2230,13 +2146,12 @@ function VenueMobileCard({
 // list. Collapsed by default to keep it out of the way.
 
 function DemoVenueCard({
-  venue, lpSum, busy, plans, hasBilling,
+  venue, busy, plans, hasBilling,
   copiedId, invitingId, inviteToastId, inviteToastMsg,
   onCopyLogin, onSendInvite, onViewAs, onPatch, onSetPw,
   onExtendTrial, onBilling, onCopyBillingLink,
 }: {
   venue: AdminVenueRow;
-  lpSum: LunarPayAdminSummary;
   busy: boolean;
   plans: PlanOpt[];
   hasBilling: boolean;
@@ -2308,7 +2223,7 @@ function DemoVenueCard({
 
           {/* Strip 2: pills + dropdowns */}
           <div className="flex flex-wrap items-center gap-2">
-            <StoryPayStatusCell venue={venue} summary={lpSum} />
+            <StoryPayStatusCell venue={venue} />
             <div className="flex items-center gap-1">
               <span className="text-[10px] font-semibold text-gray-400">Plan</span>
               <select value={venue.directory_plan_id || ''} disabled={busy}
