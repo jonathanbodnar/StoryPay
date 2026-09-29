@@ -31,8 +31,12 @@ import {
   Pencil,
   Trash2,
   Plus,
+  Circle,
+  Lock,
+  ChevronDown,
 } from 'lucide-react';
 import { coupleAuthedFetch, getCoupleSupabase } from '@/lib/couple-browser';
+import { PLANNER_SETUP_ITEMS, type PlannerSetupKey, type PlannerSetupState } from '@/lib/couple-planner-setup';
 
 type Venue = {
   id: string;
@@ -87,6 +91,17 @@ type Link_ = {
 
 type SearchItem = { slug: string; name: string | null; cover_image_url: string | null; location: string | null };
 
+/** /api/couple/home: the setup checklist and the "at a glance" numbers. */
+type HomeData = {
+  setup: { items: PlannerSetupState[]; doneCount: number; total: number; venuePending: boolean } | null;
+  glance: {
+    guests: { total: number; attending: number; declined: number; pending: number; headcount: number } | null;
+    todos: { done: number; total: number; next: { title: string; dueDate: string | null } | null } | null;
+    budget: { target: number; estimated: number; actual: number } | null;
+    website: { status: 'published' | 'draft' | 'none'; slug: string | null } | null;
+  };
+};
+
 const DIRECTORY =
   process.env.NEXT_PUBLIC_DIRECTORY_URL || process.env.NEXT_PUBLIC_DIRECTORY_SITE_URL || 'https://storyvenue.com';
 
@@ -107,6 +122,7 @@ export default function CoupleWeddingPage() {
   const [access, setAccess] = useState<'owner' | 'edit' | 'view' | null>(null);
   const [pendingInvite, setPendingInvite] = useState<{ id: string; venue: Venue } | null>(null);
   const [coupleWeddingDate, setCoupleWeddingDate] = useState<string | null>(null);
+  const [home, setHome] = useState<HomeData | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -124,12 +140,16 @@ export default function CoupleWeddingPage() {
       router.replace('/couple/login');
       return;
     }
-    const res = await coupleAuthedFetch('/api/couple/wedding');
+    const [res, homeRes] = await Promise.all([
+      coupleAuthedFetch('/api/couple/wedding'),
+      coupleAuthedFetch('/api/couple/home').catch(() => null),
+    ]);
     if (res.status === 401) {
       router.replace('/couple/login');
       return;
     }
     const data = await res.json().catch(() => ({}));
+    if (homeRes?.ok) setHome((await homeRes.json().catch(() => null)) as HomeData | null);
     if (!res.ok) {
       setError(typeof data.error === 'string' ? data.error : 'Failed to load');
       setLoading(false);
@@ -226,6 +246,23 @@ export default function CoupleWeddingPage() {
     }
   }
 
+  async function toggleSetup(key: PlannerSetupKey, done: boolean) {
+    const before = home;
+    setHome((h) => {
+      if (!h?.setup) return h;
+      const items = h.setup.items.map((i) => (i.key === key ? { ...i, done } : i));
+      return { ...h, setup: { ...h.setup, items, doneCount: items.filter((i) => i.done).length } };
+    });
+    const res = await coupleAuthedFetch('/api/couple/home', {
+      method: 'PATCH',
+      body: JSON.stringify({ key, done }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setHome(before);
+      setError('Could not save your checklist. Please try again.');
+    }
+  }
+
   const venueLoc = useMemo(() => {
     const v = link?.venue;
     if (!v) return null;
@@ -240,6 +277,9 @@ export default function CoupleWeddingPage() {
   const isOwner = access === 'owner';
   const isCollaborator = access === 'edit' || access === 'view';
   const isReadOnly = access === 'view';
+  const isLinked = link?.status === 'linked';
+  // The couple whose planner this is (the owner, or a couple with no venue yet).
+  const isPlannerCouple = access === 'owner' || access === null;
 
   if (loading) {
     return (
@@ -300,6 +340,18 @@ export default function CoupleWeddingPage() {
         </div>
       )}
 
+      {/* The best-practice first steps, ticked off as the couple goes. */}
+      {isPlannerCouple && home?.setup && (
+        <SetupChecklist
+          setup={home.setup}
+          venueName={link?.venue?.name ?? null}
+          onToggle={(key, done) => void toggleSetup(key, done)}
+        />
+      )}
+
+      {isLinked && home?.glance && <AtAGlance glance={home.glance} showBudget={isOwner} />}
+
+      <div id="venue" className="scroll-mt-24">
       {/* State: linked */}
       {link && link.status === 'linked' && (
         <div className="mt-8 overflow-hidden rounded-2xl border border-gray-200 bg-white">
@@ -429,11 +481,6 @@ export default function CoupleWeddingPage() {
               <span className="text-sm font-medium text-gray-700 underline">Manage</span>
             </Link>
 
-            <WeddingPlannerTools unread={link.thread?.unread ?? 0} showBudget={isOwner} />
-
-            {/* Owner-only: manage the up-to-5 people invited into the planner. */}
-            {isOwner && <CollaboratorsCard />}
-
             <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-4 text-sm">
               {link.venue?.slug && (
                 <a
@@ -490,7 +537,8 @@ export default function CoupleWeddingPage() {
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-6">
             <h2 className="font-heading text-lg text-gray-900">Connect with your venue</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Search for the venue you&apos;ve booked. We&apos;ll send them a request to connect.
+              Your venue unlocks the rest of your Wedding Planner: guest list &amp; RSVPs, seating, budget, timeline and
+              messages. Search for the venue you&apos;ve booked and we&apos;ll send them a request to connect.
             </p>
 
             {!selected ? (
@@ -568,11 +616,21 @@ export default function CoupleWeddingPage() {
           </div>
         </div>
       )}
+      </div>
+
+      <WeddingPlannerTools unread={link?.thread?.unread ?? 0} showBudget={isPlannerCouple} locked={!isLinked} />
+
+      {/* Owner-only: manage the up-to-5 people invited into the planner. */}
+      {isOwner && isLinked && (
+        <div id="collaborators" className="scroll-mt-24">
+          <CollaboratorsCard />
+        </div>
+      )}
     </div>
   );
 }
 
-const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode; ownerOnly?: boolean }[] = [
+const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactNode; ownerOnly?: boolean; worksWithoutVenue?: boolean }[] = [
   { href: '/couple/guests', label: 'Guests & RSVPs', desc: 'Track invites, meals & replies', icon: <Users className="h-5 w-5" /> },
   { href: '/couple/seating', label: 'Seating', desc: 'Arrange tables & assign guests', icon: <Armchair className="h-5 w-5" /> },
   { href: '/couple/timeline', label: 'Day-of timeline', desc: 'Plan your day minute by minute', icon: <Clock className="h-5 w-5" /> },
@@ -580,17 +638,20 @@ const HUB_TOOLS: { href: string; label: string; desc: string; icon: React.ReactN
   { href: '/couple/budget', label: 'Budget', desc: 'Track spending — private to you', icon: <Wallet className="h-5 w-5" />, ownerOnly: true },
   { href: '/couple/vendors', label: 'Vendors', desc: 'All your day-of contacts', icon: <Contact className="h-5 w-5" /> },
   { href: '/couple/inspiration', label: 'Inspiration', desc: 'Your style & mood board', icon: <Images className="h-5 w-5" /> },
-  { href: '/couple/site', label: 'Wedding website', desc: 'Your public wedding page', icon: <Globe className="h-5 w-5" /> },
+  { href: '/couple/site', label: 'Wedding website', desc: 'Your public wedding page', icon: <Globe className="h-5 w-5" />, worksWithoutVenue: true },
   { href: '/couple/invite-guests', label: 'Invite to website', desc: 'Email guests your wedding site', icon: <Send className="h-5 w-5" />, ownerOnly: true },
 ];
 
-function WeddingPlannerTools({ unread, showBudget }: { unread: number; showBudget: boolean }) {
+function WeddingPlannerTools({ unread, showBudget, locked }: { unread: number; showBudget: boolean; locked: boolean }) {
   // Budget + website invites are private to the owning couple — hide owner-only
   // tools entirely for collaborators.
   const tools = showBudget ? HUB_TOOLS : HUB_TOOLS.filter((t) => !t.ownerOnly);
   return (
-    <div className="mt-6">
+    <div className="mt-8">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Plan your wedding</h3>
+      {locked && (
+        <p className="mt-1 text-xs text-gray-500">Connect your venue to unlock the tools marked with a lock.</p>
+      )}
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {tools.map((t) => (
           <Link
@@ -605,7 +666,11 @@ function WeddingPlannerTools({ unread, showBudget }: { unread: number; showBudge
               <p className="text-sm font-semibold text-gray-900">{t.label}</p>
               <p className="truncate text-xs text-gray-500">{t.desc}</p>
             </div>
-            <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
+            {locked && !t.worksWithoutVenue ? (
+              <Lock className="h-4 w-4 shrink-0 text-gray-300" aria-label="Unlocks when your venue connects" />
+            ) : (
+              <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
+            )}
           </Link>
         ))}
         <Link
@@ -624,7 +689,11 @@ function WeddingPlannerTools({ unread, showBudget }: { unread: number; showBudge
             <p className="text-sm font-semibold text-gray-900">Messages</p>
             <p className="truncate text-xs text-gray-500">Chat directly with your venue</p>
           </div>
-          <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
+          {locked ? (
+            <Lock className="h-4 w-4 shrink-0 text-gray-300" aria-label="Unlocks when your venue connects" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5" />
+          )}
         </Link>
       </div>
     </div>
@@ -924,6 +993,180 @@ function CollaboratorsCard() {
           )}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * The best-practice first steps (lib/couple-planner-setup.ts). Items tick
+ * themselves when the app sees them done, and the couple can tick or untick any
+ * of them. Items that need the venue stay locked until it connects.
+ */
+function SetupChecklist({
+  setup,
+  venueName,
+  onToggle,
+}: {
+  setup: NonNullable<HomeData['setup']>;
+  venueName: string | null;
+  onToggle: (key: PlannerSetupKey, done: boolean) => void;
+}) {
+  const allDone = setup.doneCount >= setup.total;
+  const [open, setOpen] = useState(!allDone);
+  const pct = setup.total ? Math.round((setup.doneCount / setup.total) * 100) : 0;
+  const byKey = new Map(setup.items.map((i) => [i.key, i]));
+
+  return (
+    <div className="mt-8 rounded-2xl border border-gray-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-4 px-5 pt-4 pb-3 text-left"
+        aria-expanded={open}
+      >
+        <div className="min-w-0">
+          <h2 className="font-heading text-lg text-gray-900">
+            {allDone ? 'Your planner is all set up' : 'Set up your Wedding Planner'}
+          </h2>
+          <p className="mt-0.5 text-sm text-gray-500">
+            {allDone
+              ? 'Every first step is done. Nice work!'
+              : `${setup.doneCount} of ${setup.total} done · the first steps to get the most out of your planner`}
+          </p>
+        </div>
+        <ChevronDown className={`h-5 w-5 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <div className="px-5 pb-4">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+      {open && (
+        <ul className="divide-y divide-gray-100 border-t border-gray-100">
+          {PLANNER_SETUP_ITEMS.map((item) => {
+            const state = byKey.get(item.key);
+            if (!state) return null;
+            const venuePending = item.key === 'venue' && setup.venuePending && !state.done;
+            const desc = state.locked
+              ? 'Unlocks when your venue connects.'
+              : venuePending
+                ? `Request sent${venueName ? ` to ${venueName}` : ''}. You'll be connected once they approve.`
+                : item.desc;
+            const cta = 'shrink-0 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50';
+            return (
+              <li key={item.key} className="flex items-center gap-3 px-5 py-3.5">
+                <button
+                  type="button"
+                  disabled={state.locked}
+                  onClick={() => onToggle(item.key, !state.done)}
+                  aria-label={state.done ? `Mark "${item.title}" as not done` : `Mark "${item.title}" as done`}
+                  className="shrink-0 disabled:cursor-not-allowed"
+                >
+                  {state.locked ? (
+                    <Lock className="h-5 w-5 text-gray-300" />
+                  ) : state.done ? (
+                    <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                  ) : (
+                    <Circle className="h-6 w-6 text-gray-300 transition-colors hover:text-gray-400" />
+                  )}
+                </button>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-medium ${state.done ? 'text-gray-400 line-through' : state.locked ? 'text-gray-400' : 'text-gray-900'}`}>
+                    {item.title}
+                  </p>
+                  <p className="text-xs text-gray-500">{desc}</p>
+                </div>
+                {!state.done && !state.locked && !venuePending &&
+                  (item.href.startsWith('#') ? (
+                    <a href={item.href} className={cta}>{item.cta}</a>
+                  ) : (
+                    <Link href={item.href} className={cta}>{item.cta}</Link>
+                  ))}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** The key numbers for the big day, each linking to where they're managed. */
+function AtAGlance({ glance, showBudget }: { glance: HomeData['glance']; showBudget: boolean }) {
+  const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+  const shortDate = (d: string) => {
+    const parsed = new Date(`${d}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+  const g = glance.guests;
+  const t = glance.todos;
+  const b = showBudget ? glance.budget : null;
+  const w = glance.website;
+  const tiles: { href: string; label: string; value: string; sub: string; icon: React.ReactNode }[] = [];
+  if (g) {
+    tiles.push({
+      href: '/couple/guests',
+      label: 'Guests',
+      value: g.total ? `${g.headcount} attending` : 'No guests yet',
+      sub: g.total ? `${g.total} on your list · ${g.pending} awaiting reply` : 'Add your guest list',
+      icon: <Users className="h-4 w-4" />,
+    });
+  }
+  if (t) {
+    tiles.push({
+      href: '/couple/checklist',
+      label: 'To-dos',
+      value: t.total ? `${t.done} of ${t.total} done` : 'No to-dos yet',
+      sub: t.next
+        ? `Next: ${t.next.title}${t.next.dueDate ? ` · ${shortDate(t.next.dueDate)}` : ''}`
+        : t.total
+          ? 'All caught up'
+          : 'Start your checklist',
+      icon: <ListChecks className="h-4 w-4" />,
+    });
+  }
+  if (b) {
+    tiles.push({
+      href: '/couple/budget',
+      label: 'Budget',
+      value: `${money(b.actual)} spent`,
+      sub: b.target > 0 ? `of ${money(b.target)} budget` : b.estimated > 0 ? `of ${money(b.estimated)} planned` : 'Set your budget',
+      icon: <Wallet className="h-4 w-4" />,
+    });
+  }
+  if (w) {
+    tiles.push({
+      href: '/couple/site',
+      label: 'Website',
+      value: w.status === 'published' ? 'Live' : w.status === 'draft' ? 'Draft' : 'Not started',
+      sub:
+        w.status === 'published' && w.slug
+          ? `${DIRECTORY.replace(/^https?:\/\//, '').replace(/\/$/, '')}/${w.slug}`
+          : w.status === 'draft'
+            ? 'Publish it to share'
+            : 'Build your wedding website',
+      icon: <Globe className="h-4 w-4" />,
+    });
+  }
+  if (!tiles.length) return null;
+  return (
+    <div className="mt-6">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">At a glance</h3>
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {tiles.map((tile) => (
+          <Link
+            key={tile.label}
+            href={tile.href}
+            className="rounded-2xl border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300 hover:bg-gray-50"
+          >
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              {tile.icon} {tile.label}
+            </p>
+            <p className="mt-2 text-base font-semibold text-gray-900">{tile.value}</p>
+            <p className="mt-0.5 truncate text-xs text-gray-500">{tile.sub}</p>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

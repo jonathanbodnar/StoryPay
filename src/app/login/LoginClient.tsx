@@ -463,10 +463,14 @@ function CoupleLoginForm({
         setError(signErr.message);
         return;
       }
-      // Brides always land in the "My wedding" (Wedding Planner) hub on both
-      // web and native, unless a specific post-login path was requested.
-      const fallback = '/couple/wedding';
-      const target = nextPath && nextPath.startsWith('/') ? nextPath : fallback;
+      // Couples always land on the Wedding Planner home (the overview). The
+      // only exceptions finish something they started before signing in:
+      // accepting a planner invite, claiming a venue's invite, saving a venue.
+      const home = '/couple/wedding';
+      const finishesAnAction =
+        !!nextPath &&
+        (nextPath.startsWith('/couple/accept-invite') || nextPath.startsWith('/couple/claim/') || nextPath.startsWith('/couple/save/'));
+      const target = finishesAnAction ? nextPath! : home;
       router.push(target);
       router.refresh();
     } finally {

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
-// Renamed to "Favorites" — keep the old path working for bookmarks and any
-// existing post-auth redirects that still point at /couple/dashboard.
+// Old path (it was the Favorites list). Couples' home is the Wedding Planner
+// overview, so bookmarks and any old post-login links land there.
 export default function CoupleDashboardRedirect() {
-  redirect('/couple/favorites');
+  redirect('/couple/wedding');
 }
