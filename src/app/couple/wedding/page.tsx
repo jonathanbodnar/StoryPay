@@ -968,8 +968,9 @@ function CollaboratorsCard() {
 }
 
 /**
- * The top of the dashboard: a welcome and how long until the big day, or a
- * nudge to add the date.
+ * The top of the dashboard: a golden-hour wedding photo with the welcome, and a
+ * live countdown once the wedding date is set (or a nudge to add it).
+ * Photo: Unsplash (free license), public/couple/hero-golden-hour.jpg.
  */
 function DashboardHero({
   greetName,
@@ -988,47 +989,83 @@ function DashboardHero({
   canEditDate: boolean;
 }) {
   const target = useMemo(() => (date ? new Date(`${date}T00:00:00`).getTime() : NaN), [date]);
+  const hasDate = !Number.isNaN(target);
   const [now, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
+    if (!hasDate) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, []);
-  const days = Number.isNaN(target) ? null : Math.ceil((target - now) / 86_400_000);
+  }, [hasDate]);
+
+  const diff = hasDate ? target - now : 0;
+  const isToday = hasDate && diff <= 0 && diff > -86_400_000;
+  const isPast = hasDate && diff <= -86_400_000;
   const names = [firstName, partnerFirstName].filter(Boolean).join(' & ');
-  const details = [names, fmtDate(date), venueName].filter(Boolean).join(' · ');
+  const dateLine = [fmtDate(date), venueName].filter(Boolean).join(' · ');
+  const cells: [number, string][] = [
+    [Math.floor(diff / 86_400_000), 'days'],
+    [Math.floor((diff % 86_400_000) / 3_600_000), 'hrs'],
+    [Math.floor((diff % 3_600_000) / 60_000), 'min'],
+    [Math.floor((diff % 60_000) / 1000), 'sec'],
+  ];
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-[#1b1b1b] px-6 py-7 text-white sm:px-8 sm:py-8">
-      <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-white/[0.06]" />
-      <div aria-hidden className="pointer-events-none absolute -bottom-24 right-24 h-48 w-48 rounded-full bg-white/[0.04]" />
-      <p className="relative text-sm text-white/60">{greetName ? `Welcome back, ${greetName}` : 'Welcome to the Wedding Planner'}</p>
-      {days != null && days > 0 ? (
-        <>
-          <p className="relative mt-2 font-heading text-4xl sm:text-5xl">
-            {days.toLocaleString('en-US')} {days === 1 ? 'day' : 'days'} to go
-          </p>
-          {details && <p className="relative mt-2 text-sm text-white/70">{details}</p>}
-        </>
-      ) : days === 0 ? (
-        <p className="relative mt-2 font-heading text-4xl sm:text-5xl">Today&apos;s the day! 🤍</p>
-      ) : days != null ? (
-        <>
-          <p className="relative mt-2 font-heading text-4xl sm:text-5xl">You&apos;re married! 🤍</p>
-          {details && <p className="relative mt-2 text-sm text-white/70">{details}</p>}
-        </>
-      ) : (
-        <>
-          <p className="relative mt-2 font-heading text-3xl sm:text-4xl">Let&apos;s plan your wedding</p>
-          {canEditDate && (
-            <Link
-              href="/couple/profile"
-              className="relative mt-4 inline-flex items-center gap-1.5 rounded-2xl bg-white px-4 py-2 text-sm font-medium text-[#1b1b1b] transition-opacity hover:opacity-90"
-            >
-              <CalendarDays className="h-4 w-4" /> Add your wedding date
-            </Link>
-          )}
-        </>
-      )}
+    <div className="relative overflow-hidden rounded-3xl bg-[#1b1b1b] text-white">
+      <Image
+        src="/couple/hero-golden-hour.jpg"
+        alt=""
+        fill
+        priority
+        sizes="(min-width: 1280px) 1152px, 100vw"
+        className="object-cover object-[68%_40%] sm:object-[50%_38%]"
+      />
+      {/* Keeps the text readable: a bottom fade on phones, a left fade on wider screens. */}
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent sm:bg-gradient-to-r sm:from-black/65 sm:via-black/20 sm:to-transparent"
+      />
+      <div className="relative flex min-h-[420px] flex-col justify-end px-6 pb-7 pt-24 sm:min-h-[340px] sm:max-w-[27rem] sm:justify-center sm:px-9 sm:py-9">
+        <p className="text-sm text-white/85 drop-shadow">
+          {greetName ? `Welcome back, ${greetName}` : 'Welcome to the Wedding Planner'}
+        </p>
+        {hasDate && !isToday && !isPast ? (
+          <>
+            <p className="mt-1.5 font-heading text-3xl leading-tight drop-shadow sm:text-4xl">{names || 'Your wedding day'}</p>
+            {dateLine && <p className="mt-1 text-sm text-white/85 drop-shadow">{dateLine}</p>}
+            <div className="mt-5 flex gap-2" aria-label="Countdown to your wedding">
+              {cells.map(([value, label]) => (
+                <div key={label} className="w-16 rounded-2xl bg-white/15 py-2.5 text-center ring-1 ring-white/25 backdrop-blur-md">
+                  <p className="text-2xl font-semibold leading-none tabular-nums">{String(Math.max(0, value)).padStart(2, '0')}</p>
+                  <p className="mt-1 text-[10px] uppercase tracking-wider text-white/75">{label}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-white/75">until you say “I do”</p>
+          </>
+        ) : isToday ? (
+          <>
+            <p className="mt-1.5 font-heading text-3xl leading-tight drop-shadow sm:text-4xl">Today&apos;s the day! 🤍</p>
+            {dateLine && <p className="mt-1 text-sm text-white/85 drop-shadow">{dateLine}</p>}
+          </>
+        ) : isPast ? (
+          <>
+            <p className="mt-1.5 font-heading text-3xl leading-tight drop-shadow sm:text-4xl">You&apos;re married! 🤍</p>
+            {dateLine && <p className="mt-1 text-sm text-white/85 drop-shadow">{dateLine}</p>}
+          </>
+        ) : (
+          <>
+            <p className="mt-1.5 font-heading text-3xl leading-tight drop-shadow sm:text-4xl">Let&apos;s plan your wedding</p>
+            {canEditDate && (
+              <Link
+                href="/couple/profile"
+                className="mt-5 inline-flex w-fit items-center gap-1.5 rounded-2xl bg-white px-4 py-2.5 text-sm font-medium text-[#1b1b1b] transition-opacity hover:opacity-90"
+              >
+                <CalendarDays className="h-4 w-4" /> Add your wedding date
+              </Link>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -1046,7 +1083,8 @@ function SetupChecklist({
   onToggle: (key: PlannerSetupKey, done: boolean) => void;
 }) {
   const allDone = setup.doneCount >= setup.total;
-  const [open, setOpen] = useState(!allDone);
+  // Collapsed until the couple opens it.
+  const [open, setOpen] = useState(false);
   const pct = setup.total ? Math.round((setup.doneCount / setup.total) * 100) : 0;
   const byKey = new Map(setup.items.map((i) => [i.key, i]));
 
