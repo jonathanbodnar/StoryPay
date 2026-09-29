@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import DOMPurify from 'isomorphic-dompurify';
 import { formatCents, formatDate } from '@/lib/utils';
+import StripeProposalPaymentForm, { type StripeProposalIntent } from '@/components/payments/StripeProposalPaymentForm';
 
 interface FortisElements {
   create(opts: Record<string, unknown>): void;
@@ -56,6 +57,8 @@ interface ProposalData {
   is_invoice?: boolean;
   /** Owner collects cash/check directly — suppress the online payment form. */
   collect_manually?: boolean;
+  /** A bank payment was submitted and is still clearing (3–5 business days). */
+  payment_processing?: boolean;
   /** When false, the client signs in person — skip the e-signature step. */
   require_signature?: boolean;
   venue_name: string;
@@ -139,6 +142,8 @@ function SignatureCanvas({ onSignatureChange }: { onSignatureChange: (dataUrl: s
 }
 
 interface PaymentIntentData {
+  /** 'stripe' when the venue takes payments on its Stripe account (Connect). */
+  provider?: 'stripe';
   clientToken: string;
   environment: string;
   amountCents: number;
@@ -150,10 +155,12 @@ function InlinePaymentForm({
   token,
   brandColor,
   onSuccess,
+  onProcessing,
 }: {
   token: string;
   brandColor: string;
   onSuccess: () => void;
+  onProcessing: () => void;
 }) {
   const [intent, setIntent] = useState<PaymentIntentData | null>(null);
   const [intentLoading, setIntentLoading] = useState(true);
@@ -174,7 +181,8 @@ function InlinePaymentForm({
   }, [token]);
 
   useEffect(() => {
-    if (!intent || mountedRef.current) return;
+    // Stripe venues render Stripe's own form below instead of Fortis.
+    if (!intent || mountedRef.current || intent.provider === 'stripe') return;
     mountedRef.current = true;
 
     const sdkUrl =
@@ -321,6 +329,18 @@ function InlinePaymentForm({
       setProcessing(false);
     }
   };
+
+  if (intent?.provider === 'stripe') {
+    return (
+      <StripeProposalPaymentForm
+        token={token}
+        intent={intent as unknown as StripeProposalIntent}
+        brandColor={brandColor}
+        onSuccess={onSuccess}
+        onProcessing={onProcessing}
+      />
+    );
+  }
 
   const isLoading = intentLoading || elementsLoading;
 
@@ -529,6 +549,7 @@ export default function ProposalPage() {
     ? (proposal.status === 'sent' || proposal.status === 'opened' || proposal.status === 'signed')
     : (requireSignature ? proposal.status === 'signed' : (proposal.status === 'sent' || proposal.status === 'opened' || proposal.status === 'signed')));
   const isPaid = proposal.status === 'paid';
+  const paymentProcessing = !isPaid && proposal.payment_processing === true;
   // Manual deals are "complete" from the client's side once they've reviewed
   // (and signed, if required) — there's nothing left for them to do online.
   const manualComplete = collectManually && !isPaid && !canSign;
@@ -758,8 +779,24 @@ export default function ProposalPage() {
             </div>
           )}
 
+          {/* Bank payment submitted and still clearing */}
+          {paymentProcessing && (
+            <div className="border-t border-gray-100 px-8 py-12 text-center">
+              <div className="w-16 h-16 bg-sky-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
+                <svg className="w-8 h-8 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Your bank payment is processing</h2>
+              <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
+                Thank you, {proposal.customer_name}. Bank payments take 3–5 business days to clear. We&apos;ll email your
+                receipt as soon as it does.
+              </p>
+            </div>
+          )}
+
           {/* Signed confirmation + payment */}
-          {needsPayment && (
+          {needsPayment && !paymentProcessing && (
             <div className="border-t border-gray-100 px-8 py-8">
               {!isInvoice && (
                 <div className="text-center mb-8">
@@ -804,6 +841,7 @@ export default function ProposalPage() {
               <InlinePaymentForm
                 token={token}
                 brandColor={proposal.venue_brand?.color || '#1b1b1b'}
+                onProcessing={() => setProposal((prev) => (prev ? { ...prev, payment_processing: true } : prev))}
                 onSuccess={async () => {
                   // Optimistic: mark paid immediately so the form unmounts and
                   // the user sees the "Payment Complete!" panel without any

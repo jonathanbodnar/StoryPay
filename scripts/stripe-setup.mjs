@@ -5,9 +5,14 @@
  *   node scripts/stripe-setup.mjs --url https://app.storyvenue.com/api/webhooks/stripe \
  *        [--railway-service "StoryVenue Backend"] [--recreate]
  *
- * Creates the webhook endpoint for the events lib/stripe/webhooks.ts handles,
- * pinned to the API version the app's Stripe SDK uses (otherwise Stripe sends
- * events in the account's default version, which can be years older).
+ *   node scripts/stripe-setup.mjs --connect --url https://app.storyvenue.com/api/webhooks/stripe-connect \
+ *        [--railway-service "StoryVenue Backend"] [--recreate]
+ *
+ * Creates the webhook endpoint for the events lib/stripe/webhooks.ts handles
+ * (SaaS billing), or with --connect a Connect endpoint for events from venues'
+ * own Stripe accounts (lib/stripe/connect-webhooks.ts), pinned to the API
+ * version the app's Stripe SDK uses (otherwise Stripe sends events in the
+ * account's default version, which can be years older).
  *
  * With --railway-service, STRIPE_SECRET_KEY is read from that Railway service
  * when it isn't in the environment or .env.local, and the endpoint's signing
@@ -44,6 +49,8 @@ const arg = (flag) => {
 const url = arg('--url');
 const railwayService = arg('--railway-service');
 const recreate = args.includes('--recreate');
+const connect = args.includes('--connect');
+const SECRET_VAR = connect ? 'STRIPE_CONNECT_WEBHOOK_SECRET' : 'STRIPE_WEBHOOK_SECRET';
 
 if (!url || !/^https:\/\//.test(url)) {
   console.error('Usage: node scripts/stripe-setup.mjs --url https://<app>/api/webhooks/stripe [--railway-service "<name>"] [--recreate]');
@@ -86,16 +93,25 @@ if (railwayVars) {
   }
 }
 
-// Must match STRIPE_WEBHOOK_EVENTS in src/lib/stripe/webhooks.ts.
-const EVENTS = [
-  'checkout.session.completed',
-  'customer.subscription.created',
-  'customer.subscription.updated',
-  'customer.subscription.deleted',
-  'customer.subscription.trial_will_end',
-  'invoice.paid',
-  'invoice.payment_failed',
-];
+// Must match STRIPE_WEBHOOK_EVENTS in src/lib/stripe/webhooks.ts and
+// STRIPE_CONNECT_WEBHOOK_EVENTS in src/lib/stripe/connect-webhooks.ts.
+const EVENTS = connect
+  ? [
+      'payment_intent.succeeded',
+      'payment_intent.processing',
+      'payment_intent.payment_failed',
+      'charge.refunded',
+      'account.updated',
+    ]
+  : [
+      'checkout.session.completed',
+      'customer.subscription.created',
+      'customer.subscription.updated',
+      'customer.subscription.deleted',
+      'customer.subscription.trial_will_end',
+      'invoice.paid',
+      'invoice.payment_failed',
+    ];
 
 const stripe = new Stripe(key);
 const API_VERSION = Stripe.API_VERSION;
@@ -117,17 +133,20 @@ const ep = await stripe.webhookEndpoints.create({
   url,
   enabled_events: EVENTS,
   api_version: API_VERSION,
-  description: 'StoryVenue SaaS billing (lib/stripe/webhooks.ts)',
+  ...(connect ? { connect: true } : {}),
+  description: connect
+    ? 'StoryVenue venue payments, Stripe Connect (lib/stripe/connect-webhooks.ts)'
+    : 'StoryVenue SaaS billing (lib/stripe/webhooks.ts)',
 });
 console.log(`[${mode}] Created webhook endpoint ${ep.id} → ${url} (API ${API_VERSION})`);
 
 if (railwayService) {
-  execFileSync('railway', ['variable', 'set', 'STRIPE_WEBHOOK_SECRET', '--stdin', '--service', railwayService], {
+  execFileSync('railway', ['variable', 'set', SECRET_VAR, '--stdin', '--service', railwayService], {
     input: ep.secret,
     stdio: ['pipe', 'ignore', 'inherit'],
   });
-  console.log(`Saved STRIPE_WEBHOOK_SECRET on Railway service "${railwayService}" (not printed). Railway redeploys to apply it.`);
+  console.log(`Saved ${SECRET_VAR} on Railway service "${railwayService}" (not printed). Railway redeploys to apply it.`);
 } else {
-  console.log(`STRIPE_WEBHOOK_SECRET=${ep.secret}`);
+  console.log(`${SECRET_VAR}=${ep.secret}`);
   console.log('Add that to your server environment. It is not shown again.');
 }

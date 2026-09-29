@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createIntention } from '@/lib/lunarpay';
+import { stripePublishableKey } from '@/lib/stripe/client';
+import { loadConnectVenue, venueTakesStripePayments } from '@/lib/stripe/connect';
+import { acceptsBank, firstPaymentCents, payableNow, type PaymentProposal } from '@/lib/stripe/proposal-payments';
 
 interface InstallmentConfig { installments: Array<{ amount: number; date: string }>; }
 
@@ -31,6 +34,32 @@ export async function POST(
   const allowedStatuses = isInvoice ? ['sent', 'opened', 'signed'] : ['signed'];
   if (!allowedStatuses.includes(proposal.status as string)) {
     return NextResponse.json({ error: 'Proposal not ready for payment' }, { status: 400 });
+  }
+
+  // Venue on Stripe Connect: the page shows Stripe's payment form and confirms
+  // through /api/proposals/public/[token]/stripe-pay.
+  const connectVenue = await loadConnectVenue(proposal.venue_id as string);
+  if (connectVenue && venueTakesStripePayments(connectVenue)) {
+    const p = proposal as unknown as PaymentProposal;
+    const notPayable = payableNow(p);
+    if (notPayable) return NextResponse.json({ error: notPayable }, { status: 400 });
+    if (p.payment_processing_at) {
+      return NextResponse.json({ error: 'A bank payment for this invoice is already processing.' }, { status: 409 });
+    }
+    const publishableKey = stripePublishableKey();
+    if (!publishableKey) return NextResponse.json({ error: 'Online payments are not configured.' }, { status: 503 });
+    const installments = ((p.payment_config as { installments?: unknown[] } | null)?.installments ?? []).length;
+    return NextResponse.json({
+      provider: 'stripe',
+      publishableKey,
+      stripeAccount: connectVenue.stripe_account_id,
+      amountCents: firstPaymentCents(p),
+      paymentType: p.payment_type || 'full',
+      paymentMethods: acceptsBank(p, connectVenue) ? ['card', 'us_bank_account'] : ['card'],
+      savePaymentMethod: p.payment_type === 'installment' && installments > 1,
+      customerName: p.customer_name ?? '',
+      customerEmail: p.customer_email ?? '',
+    });
   }
 
   const { data: venue } = await supabaseAdmin

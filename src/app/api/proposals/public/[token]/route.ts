@@ -85,6 +85,8 @@ export async function GET(
     paid_at: proposal.paid_at,
     is_invoice: isInvoice,
     collect_manually: proposal.collect_manually === true,
+    // A bank payment was submitted and is still clearing (Stripe, 3–5 business days).
+    payment_processing: Boolean((proposal as { payment_processing_at?: string | null }).payment_processing_at),
     require_signature: proposal.require_signature !== false,
     venue_name: venue?.name ?? '',
     venue_logo_url: venue?.brand_logo_url || venue?.logo_url || null,
