@@ -6,7 +6,8 @@ import {
 } from '@/lib/platform-directory-billing';
 import { computeMonthlyTotalCents } from '@/lib/directory-addons';
 import { listDirectoryPlanCatalog, loadAddonPrices } from '@/lib/venue-billing';
-import { saasBillingConfiguredFor } from '@/lib/stripe/billing';
+import { saasBillingConfiguredFor, isStripeBillingVenue } from '@/lib/stripe/billing';
+import { SAAS_ON_STRIPE_MESSAGE, lunarPayRetiredResponse } from '@/lib/lunarpay-retired';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -35,6 +36,9 @@ export async function POST(req: NextRequest) {
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // New billing runs on Stripe: this LunarPay route only serves venues still
+  // billed there (lib/lunarpay-retired.ts).
+  if (await isStripeBillingVenue(venueId)) return lunarPayRetiredResponse(SAAS_ON_STRIPE_MESSAGE);
 
   let body: { plan_id?: string; addon_verified?: boolean; addon_sponsored?: boolean; addon_concierge?: boolean };
   try {

@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { createCustomer, splitCustomerName } from '@/lib/lunarpay';
 import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail } from '@/lib/email';
@@ -68,27 +67,9 @@ export async function POST(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, payments_provider, ghl_connected, ghl_access_token, ghl_location_id, name, brand_color, brand_logo_url')
+    .select('ghl_connected, ghl_access_token, ghl_location_id, name, brand_color, brand_logo_url')
     .eq('id', venueId)
     .single();
-
-  let customerLunarpayId = null;
-
-  if (!asDraft && venue?.lunarpay_secret_key && venue.payments_provider !== 'stripe' && customerEmail) {
-    try {
-      const { firstName, lastName } = splitCustomerName(customerName, customerEmail);
-      const lpResult = await createCustomer(venue.lunarpay_secret_key, {
-        firstName,
-        lastName,
-        email: customerEmail,
-        phone: customerPhone || undefined,
-      });
-      const lpCustomer = lpResult.data || lpResult;
-      customerLunarpayId = lpCustomer.id;
-    } catch (err) {
-      console.error('LunarPay customer creation failed:', err);
-    }
-  }
 
   const items = lineItemsNorm;
 
@@ -148,7 +129,6 @@ export async function POST(request: NextRequest) {
     customer_name: customerName || null,
     customer_email: customerEmail || null,
     customer_phone: customerPhone || null,
-    customer_lunarpay_id: customerLunarpayId,
     price: price || 0,
     payment_type: paymentType || 'full',
     payment_config: paymentConfig || {},

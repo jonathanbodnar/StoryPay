@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { createCustomer } from '@/lib/lunarpay';
 import { mergeVenueContacts, type ContactSort } from '@/lib/merge-venue-contacts';
 
 export const dynamic = 'force-dynamic';
@@ -42,7 +41,7 @@ export async function POST(request: NextRequest) {
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const { firstName, lastName, email, phone, address, city, state, zip } = body;
+  const { firstName, lastName, email, phone } = body;
 
   const firstNameTrimmed = String(firstName ?? '').trim();
   const lastNameTrimmed  = String(lastName  ?? '').trim();
@@ -53,35 +52,6 @@ export async function POST(request: NextRequest) {
   if (!lastNameTrimmed)  return NextResponse.json({ error: 'Last name is required' }, { status: 400 });
   if (!emailTrimmed)     return NextResponse.json({ error: 'Email is required' }, { status: 400 });
   if (!phoneTrimmed)     return NextResponse.json({ error: 'Phone is required' }, { status: 400 });
-
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('lunarpay_secret_key, payments_provider')
-    .eq('id', venueId)
-    .single();
-
-  // Best-effort LunarPay sync (only when the venue has connected it).
-  let lunarpayCustomerId: string | null = null;
-  let lunarpayError: string | null = null;
-  if (venue?.lunarpay_secret_key && venue.payments_provider !== 'stripe') {
-    try {
-      const lp = await createCustomer(venue.lunarpay_secret_key, {
-        // LP validates firstName & lastName separately and rejects `name`.
-        firstName: firstNameTrimmed,
-        lastName:  lastNameTrimmed,
-        email:     emailTrimmed,
-        phone:     phoneTrimmed || undefined,
-        address:   address || undefined,
-        city:      city    || undefined,
-        state:     state   || undefined,
-        zip:       zip     || undefined,
-      });
-      lunarpayCustomerId = String((lp as { id?: string | number })?.id ?? '') || null;
-    } catch (err) {
-      lunarpayError = err instanceof Error ? err.message : 'LunarPay sync failed';
-      console.error('[customers] LunarPay sync error:', err);
-    }
-  }
 
   // Always persist to StoryVenue's own venue_customers table. This is the source
   // of truth inside the dashboard — LunarPay / GHL are downstream sinks.
@@ -94,7 +64,6 @@ export async function POST(request: NextRequest) {
         first_name:           firstName,
         last_name:            lastName,
         phone:                phone || null,
-        lunarpay_customer_id: lunarpayCustomerId,
         updated_at:           new Date().toISOString(),
       },
       { onConflict: 'venue_id,customer_email' },
@@ -120,8 +89,5 @@ export async function POST(request: NextRequest) {
     source:    row.lunarpay_customer_id ? 'lunarpay' : 'storypay',
   };
 
-  return NextResponse.json(
-    { ...customer, warnings: lunarpayError ? [lunarpayError] : undefined },
-    { status: 201 },
-  );
+  return NextResponse.json(customer, { status: 201 });
 }

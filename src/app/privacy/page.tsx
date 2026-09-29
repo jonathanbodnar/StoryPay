@@ -29,7 +29,7 @@ export default function PrivacyPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-500 mb-10">Last updated: September 25, 2026</p>
+        <p className="text-sm text-gray-500 mb-10">Last updated: September 29, 2026</p>
 
         <div className="prose prose-gray max-w-none space-y-8 text-sm leading-relaxed text-gray-700">
 
@@ -52,8 +52,14 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-5 space-y-1">
               <li>Customer names, emails, and phone numbers you enter into the platform</li>
               <li>Proposal and invoice content you create</li>
-              <li>Payment transaction records and amounts</li>
+              <li>Payment records (amounts, dates, status, and payment method type)</li>
               <li>Signed contract data and e-signature records</li>
+            </ul>
+            <p className="font-semibold mt-4 mb-1">Payment &amp; Billing Information</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>When you set up StoryPay&trade;, you give your business, identity, and bank details directly to Stripe to create your Stripe account. Stripe tells us your account status (for example, whether you can take payments) and shares the records of payments made to you through StoryVenue.</li>
+              <li>When you or your customers pay by card or bank transfer, the card or bank details are entered directly into Stripe&rsquo;s secure payment forms. StoryVenue never receives or stores full card or bank account numbers. We keep Stripe&rsquo;s reference IDs so we can show payments, run scheduled installments, and issue refunds.</li>
+              <li>Your StoryVenue subscription is billed through Stripe the same way: Stripe stores your card, and we keep a reference to it and your billing history.</li>
             </ul>
             <p className="font-semibold mt-4 mb-1">Automatically Collected Information</p>
             <ul className="list-disc pl-5 space-y-1">
@@ -68,7 +74,8 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-5 space-y-1">
               <li>Operate and provide the StoryVenue platform</li>
               <li>Send proposals, invoices, and payment links to your customers on your behalf</li>
-              <li>Process payments through LunarPay (powered by Fortis)</li>
+              <li>Process payments through StoryPay&trade;, powered by Stripe, including deposits, scheduled installments, and refunds</li>
+              <li>Bill your StoryVenue subscription</li>
               <li>Send SMS notifications through your connected messaging account</li>
               <li>Generate reports on your revenue and business activity</li>
               <li>Deliver automated emails using your configured templates</li>
@@ -82,7 +89,7 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-bold text-gray-900 mb-3">4. Information Sharing</h2>
             <p>We may share your information with:</p>
             <ul className="list-disc pl-5 space-y-1 mt-2">
-              <li><strong>LunarPay / Fortis:</strong> To process payments. Card data goes directly to Fortis and never touches our servers (PCI SAQ-A compliant).</li>
+              <li><strong>Stripe:</strong> To process payments made through StoryPay&trade;, bill StoryVenue subscriptions, verify venues&rsquo; payment accounts, and prevent fraud. Card and bank details go directly to Stripe and never touch our servers (PCI SAQ-A). Stripe handles this information under the <a href="https://stripe.com/privacy" target="_blank" rel="noreferrer" className="text-gray-900 underline">Stripe Privacy Policy</a>.</li>
               <li><strong>StoryVenue Legacy:</strong> To send SMS and email notifications to your customers when connected.</li>
               <li><strong>Resend:</strong> To deliver transactional and conversation-related emails.</li>
               <li><strong>OpenAI:</strong> To power the Ask AI assistant. Only non-identifying account context is shared.</li>
@@ -97,7 +104,7 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-5 space-y-1">
               <li>SSL/TLS encryption for all data in transit</li>
               <li>Secure, isolated database storage per venue</li>
-              <li>PCI SAQ-A compliance — card numbers never touch StoryVenue servers</li>
+              <li>Payments run on Stripe, a PCI DSS Level 1 certified provider. Card and bank details never touch StoryVenue servers (PCI SAQ-A)</li>
               <li>Session tokens stored in secure, httpOnly cookies</li>
               <li>Email and password authentication with bcrypt hashing</li>
             </ul>
@@ -123,7 +130,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">8. Cookies</h2>
-            <p>We use cookies solely for authentication (session management). We do not use advertising or third-party tracking cookies. You can manage cookies through your browser settings, but disabling them will prevent you from staying signed in.</p>
+            <p>We use cookies for authentication (session management). Pages where you enter payment details also load Stripe, which sets its own cookies to process payments securely and prevent fraud. We do not use advertising cookies. You can manage cookies through your browser settings, but disabling them will prevent you from staying signed in and may stop payments from working.</p>
           </section>
 
           <section>

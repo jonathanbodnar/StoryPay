@@ -99,8 +99,8 @@ function PaymentSettingsInner() {
     );
   }
 
-  const onStripe = venue?.payments_provider === 'stripe' && venue?.stripe_charges_enabled === true;
-  const isActive = onStripe || venue?.onboarding_status === 'active';
+  // Only Stripe counts: LunarPay is retired (lib/lunarpay-retired.ts).
+  const isActive = venue?.payments_provider === 'stripe' && venue?.stripe_charges_enabled === true;
   const achEnabled = venue?.accept_ach !== false;
 
   return (
@@ -187,9 +187,8 @@ function PaymentSettingsInner() {
                   <div>
                     <p className="text-sm font-medium text-gray-900">Credit &amp; Debit Cards</p>
                     <p className="mt-0.5 text-xs text-gray-500">
-                      {onStripe
-                        ? 'Always enabled. Visa, Mastercard, Amex and Discover, plus Apple Pay and Google Pay. Payouts usually reach your bank in 2 business days.'
-                        : 'Always enabled. Visa, Mastercard, Amex, and Discover accepted. Funds settle to your account in 1–2 business days.'}
+                      Always enabled. Visa, Mastercard, Amex and Discover, plus Apple Pay and Google Pay.
+                      Payouts usually reach your bank in 2 business days.
                     </p>
                   </div>
                 </div>
@@ -218,9 +217,7 @@ function PaymentSettingsInner() {
                     <div className="mt-2 flex items-start gap-1.5 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
                       <Info size={12} className="mt-0.5 shrink-0 text-blue-500" />
                       <p className="text-[11px] text-blue-700">
-                        {onStripe
-                          ? 'Clients connect their bank in seconds through Stripe. Bank payments take 3–5 business days to clear.'
-                          : 'ACH appears at checkout only when both this toggle and your StoryPay™ merchant account have ACH enabled. Contact StoryVenue support if you need merchant-level ACH activation.'}
+                        Clients connect their bank in seconds through Stripe. Bank payments take 3–5 business days to clear.
                       </p>
                     </div>
                   </div>

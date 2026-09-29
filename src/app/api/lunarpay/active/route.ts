@@ -4,10 +4,11 @@
  * Lightweight check: can this venue take payments? DB only (no outbound call),
  * so the sidebar and page guards can call it freely.
  *
- * Covers both processors: an approved LunarPay merchant, or a venue whose own
- * Stripe account can take payments (Stripe Connect). A venue with Stripe
- * payments available is never shown the StoryPay "paused" state; it sets up
- * Stripe instead.
+ * Only Stripe counts: the venue's own Stripe account can take payments
+ * (Stripe Connect). LunarPay is retired (lib/lunarpay-retired.ts), so an old
+ * LunarPay account on file doesn't make a venue active; it connects Stripe
+ * like everyone else. A venue with Stripe payments available is never shown
+ * the StoryPay™ "paused" state; it sets up Stripe instead.
  */
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
@@ -25,23 +26,19 @@ export async function GET() {
 
   const { data } = await supabaseAdmin
     .from('venues')
-    .select('id, onboarding_status, lunarpay_merchant_id, slug, email, notification_email, stripe_account_id, stripe_account_status, stripe_charges_enabled, payments_provider')
+    .select('id, slug, email, notification_email, stripe_account_id, stripe_account_status, stripe_charges_enabled, payments_provider')
     .eq('id', venueId)
     .maybeSingle();
 
-  const row = data as (Pick<ConnectVenue, 'id' | 'slug' | 'email' | 'notification_email' | 'stripe_account_id' | 'stripe_account_status' | 'stripe_charges_enabled' | 'payments_provider'> & {
-    onboarding_status?: string | null;
-  }) | null;
-  const status = row?.onboarding_status ?? null;
-  const lunarPayActive = status === 'active';
+  const row = data as Pick<ConnectVenue, 'id' | 'slug' | 'email' | 'notification_email' | 'stripe_account_id' | 'stripe_account_status' | 'stripe_charges_enabled' | 'payments_provider'> | null;
   const stripeActive = row ? venueTakesStripePayments(row) : false;
   const stripeAvailable = row ? stripeConnectAvailableFor(row) : false;
-  const active = lunarPayActive || stripeActive;
+  const active = stripeActive;
 
   return NextResponse.json({
     active,
-    status: status ?? (active ? 'active' : 'not_started'),
-    provider: stripeActive ? 'stripe' : lunarPayActive ? 'lunarpay' : null,
+    status: active ? 'active' : 'not_started',
+    provider: stripeActive ? 'stripe' : null,
     // Signup is paused for this venue (exempt venues keep full access). Venues
     // that can use Stripe are never paused.
     paused: !stripeAvailable && !stripeActive && isStoryPayPaused(row?.slug),

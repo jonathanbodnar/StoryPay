@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { createCustomer, splitCustomerName } from '@/lib/lunarpay';
 import { sendSms, sendEmail, findOrCreateContact, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
 import { sendEmail as directSendEmail } from '@/lib/email';
@@ -168,7 +167,7 @@ export async function POST(request: NextRequest) {
   // independent queries that used to run sequentially.
   const venueQuery = supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key, payments_provider, ghl_connected, ghl_access_token, ghl_location_id, name, email, brand_color, brand_logo_url')
+    .select('ghl_connected, ghl_access_token, ghl_location_id, name, email, brand_color, brand_logo_url')
     .eq('id', venueId)
     .single();
 
@@ -252,25 +251,8 @@ export async function POST(request: NextRequest) {
 
   // --- Sending flow ---
 
-  // 1. Create LunarPay customer for payment processing
-  let customerLunarpayId = customerId || null;
-
-  // LunarPay customer record only for venues still taking payments on LunarPay.
-  if (venue?.lunarpay_secret_key && venue.payments_provider !== 'stripe' && !customerLunarpayId) {
-    try {
-      const { firstName, lastName } = splitCustomerName(customerName, customerEmail);
-      const lpResult = await createCustomer(venue.lunarpay_secret_key, {
-        firstName,
-        lastName,
-        email: customerEmail,
-        phone: customerPhone || undefined,
-      });
-      const lpCustomer = lpResult.data || lpResult;
-      customerLunarpayId = lpCustomer.id;
-    } catch (err) {
-      console.error('[proposal-send] LunarPay customer creation failed:', err);
-    }
-  }
+  // LunarPay is retired (lib/lunarpay-retired.ts): nothing is created there.
+  const customerLunarpayId = customerId || null;
 
   // 2. Insert proposal
   const { data: proposal, error: insertError } = await insertProposalRow({

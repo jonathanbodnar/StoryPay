@@ -1018,9 +1018,7 @@ VENUE ACCOUNT:
         ? 'active on Stripe'
         : venue?.stripe_account_status
           ? `Stripe setup ${venue.stripe_account_status === 'pending' ? 'in Stripe review' : 'not finished'}`
-          : venue?.onboarding_status === 'active'
-            ? 'active (legacy processor)'
-            : 'not set up'
+          : 'not set up'
     }
 - GHL/Messaging connected: ${venue?.ghl_connected ? 'Yes' : 'No'}
 

@@ -512,7 +512,6 @@ export function VenueManagementPortal({
   // Legacy-migration friendly options
   const [createOpts, setCreateOpts] = useState({
     sendInvite:   true,
-    skipLunarPay: false,
     isLegacy:     true,
   });
   const [createSuccess, setCreateSuccess] = useState<{
@@ -522,7 +521,6 @@ export function VenueManagementPortal({
     loginUrl:    string | null;
     inviteSent:  boolean;
     inviteError: string | null;
-    lunarPayWarning: string | null;
   } | null>(null);
   const [copiedNewLink, setCopiedNewLink] = useState(false);
   const [postCreateInviting, setPostCreateInviting] = useState(false);
@@ -633,7 +631,6 @@ export function VenueManagementPortal({
         error?: string;
         inviteSent?: boolean;
         inviteError?: string | null;
-        lunarPayWarning?: string | null;
       };
       if (res.ok) {
         setCreateSuccess({
@@ -643,7 +640,6 @@ export function VenueManagementPortal({
           loginUrl:        d.venue?.login_url ?? null,
           inviteSent:      Boolean(d.inviteSent),
           inviteError:     d.inviteError ?? null,
-          lunarPayWarning: d.lunarPayWarning ?? null,
         });
         setPostCreateInviteMsg('');
         setFormData({ name: '', email: '', firstName: '', lastName: '', phone: '', ghlLocationId: '' });
@@ -1121,18 +1117,6 @@ export function VenueManagementPortal({
             <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
               <input
                 type="checkbox"
-                checked={createOpts.skipLunarPay}
-                onChange={(e) => setCreateOpts({ ...createOpts, skipLunarPay: e.target.checked })}
-                className="mt-0.5"
-              />
-              <span>
-                <span className="font-medium block">Skip LunarPay setup</span>
-                <span className="text-xs text-gray-500">Use for legacy clients on a different processor — provision later.</span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
                 checked={createOpts.isLegacy}
                 onChange={(e) => setCreateOpts({ ...createOpts, isLegacy: e.target.checked })}
                 className="mt-0.5"
@@ -1246,11 +1230,6 @@ export function VenueManagementPortal({
             <p className={`mt-2 text-xs ${tone.sub}`}>{postCreateInviteMsg}</p>
           )}
 
-          {createSuccess.lunarPayWarning && (
-            <p className="mt-3 text-xs rounded-lg bg-amber-100 border border-amber-200 text-amber-900 px-3 py-2">
-              <strong>Heads up:</strong> {createSuccess.lunarPayWarning}
-            </p>
-          )}
         </div>
         );
       })()}

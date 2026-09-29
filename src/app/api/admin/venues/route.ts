@@ -2,9 +2,7 @@ import { cookies } from 'next/headers';
 import { verifyMasterAdminToken } from '@/lib/admin-token';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { agencyCreateMerchant } from '@/lib/lunarpay';
 import { getLunarPayAdminSummary } from '@/lib/lunarpay-venue-admin';
-import { normalizeLunarPayStatus } from '@/lib/lunarpay-status';
 import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
 import { normalizePhone } from '@/lib/ghl';
@@ -98,13 +96,12 @@ export async function POST(request: Request) {
     const {
       name, email, firstName, lastName, phone, ghlLocationId,
       // Legacy-client friendly options:
-      skipLunarPay = false, // when true, don't try to provision a merchant
       sendInvite   = true,  // email the owner a magic login link after create
       isLegacy     = false, // mark venue as a legacy-migration import
     } = body as {
       name?: string; email?: string; firstName?: string; lastName?: string;
       phone?: string; ghlLocationId?: string;
-      skipLunarPay?: boolean; sendInvite?: boolean; isLegacy?: boolean;
+      sendInvite?: boolean; isLegacy?: boolean;
     };
 
     // All five owner-identity fields are required so this venue is
@@ -131,49 +128,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Phone looks invalid (need at least 7 digits)' }, { status: 400 });
     }
 
-    let merchantData: Record<string, unknown> = {};
-    let lunarPayWarning: string | null = null;
-
-    if (!skipLunarPay && process.env.LP_AGENCY_KEY) {
-      try {
-        const password = `SP_${crypto.randomUUID().slice(0, 12)}`;
-
-        const lpResult = await agencyCreateMerchant({
-          email:        trimmedEmail,
-          password,
-          firstName:    trimmedFirst,
-          lastName:     trimmedLast,
-          phone:        trimmedPhone,
-          businessName: trimmedName,
-        });
-
-        const merchant = lpResult.data || lpResult;
-        merchantData = {
-          lunarpay_merchant_id: merchant.merchantId,
-          lunarpay_organization_id: merchant.organizationId,
-          lunarpay_secret_key: merchant.secretKey,
-          lunarpay_publishable_key: merchant.publishableKey,
-          lunarpay_org_token: merchant.orgToken,
-          // Merchant created at LunarPay but no onboarding form submitted
-          // yet — "registered", NOT "pending". The two used to be conflated,
-          // which made the admin UI show "Pending onboarding" for venues
-          // that had in fact finished registration.
-          onboarding_status: normalizeLunarPayStatus(
-            (merchant.onboardingStatus as string | undefined) ?? 'registered',
-            'registered',
-          ),
-          onboarding_mpa_url: merchant.mpaEmbedUrl || null,
-        };
-      } catch (lpErr) {
-        // Don't block legacy-migration flows on LunarPay outages — surface
-        // the warning back to the admin so they can retry merchant
-        // provisioning manually later.
-        const msg = lpErr instanceof Error ? lpErr.message : String(lpErr);
-        console.warn('[admin venue create] LunarPay merchant create failed, continuing:', msg);
-        lunarPayWarning = `LunarPay merchant could not be created (${msg}). Venue saved without payment processing — provision later.`;
-      }
-    }
-
     // Identity payload — saved on the venues row so every notification,
     // automation, email signature, contact-card, etc. uses the owner's
     // name/email/phone, not the StoryVenue concierge team's. This mirrors
@@ -196,11 +150,9 @@ export async function POST(request: Request) {
       owner_last_name:     trimmedLast,
       setup_completed:     true,
       ghl_location_id:     ghlLocationId || null,
-      // Venue row created before any LunarPay merchant exists — this is the
-      // canonical "hasn't started" state. If merchant provisioning succeeded,
-      // the spread of `merchantData` below overrides this to "registered".
+      // Payments aren't set up yet: the venue connects Stripe itself from
+      // Payment settings (LunarPay is retired, lib/lunarpay-retired.ts).
       onboarding_status:   'not_started',
-      ...merchantData,
     };
 
     // Columns that may not exist on a legacy production schema. We strip
@@ -290,7 +242,6 @@ export async function POST(request: Request) {
       },
       inviteSent,
       inviteError,
-      lunarPayWarning,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

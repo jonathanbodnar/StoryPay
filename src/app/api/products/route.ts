@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { tryCreateLunarPayProduct } from '@/lib/lunarpay';
 
 async function getVenueId() {
   const c = await cookies();
@@ -80,30 +79,5 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  let row = data;
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('lunarpay_secret_key')
-    .eq('id', venueId)
-    .maybeSingle();
-
-  if (venue?.lunarpay_secret_key) {
-    const lpId = await tryCreateLunarPayProduct(venue.lunarpay_secret_key, {
-      name: row.name,
-      description: row.description,
-      priceCents: row.price,
-      recurrence: row.recurrence,
-    });
-    if (lpId) {
-      const { data: updated } = await supabaseAdmin
-        .from('venue_products')
-        .update({ lunarpay_product_id: lpId, updated_at: new Date().toISOString() })
-        .eq('id', row.id)
-        .select()
-        .single();
-      if (updated) row = updated;
-    }
-  }
-
-  return NextResponse.json(row, { status: 201 });
+  return NextResponse.json(data, { status: 201 });
 }

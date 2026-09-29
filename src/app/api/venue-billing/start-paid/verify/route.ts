@@ -7,6 +7,8 @@ import {
 } from '@/lib/platform-directory-billing';
 import { getCheckoutSession, listSubscriptions } from '@/lib/lunarpay';
 import { scheduleOwnerGhlSync } from '@/lib/owner-ghl-sync';
+import { isStripeBillingVenue } from '@/lib/stripe/billing';
+import { SAAS_ON_STRIPE_MESSAGE, lunarPayRetiredResponse } from '@/lib/lunarpay-retired';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -24,6 +26,9 @@ export async function POST(req: NextRequest) {
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // New billing runs on Stripe: this LunarPay route only serves venues still
+  // billed there (lib/lunarpay-retired.ts).
+  if (await isStripeBillingVenue(venueId)) return lunarPayRetiredResponse(SAAS_ON_STRIPE_MESSAGE);
 
   const body = (await req.json().catch(() => ({}))) as { session_id?: string };
   const sessionId = body.session_id;

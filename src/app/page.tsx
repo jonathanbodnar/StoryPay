@@ -40,11 +40,11 @@ function CDUnit({ v, label }: { v: number; label: string }) {
 const FAQS = [
   {
     q: 'What is StoryVenue\u2122?',
-    a: 'StoryVenue\u2122 is a proposal and payment platform built specifically for wedding venues. Send beautiful contracts, collect e-signatures, and get paid, all from one dashboard.',
+    a: 'StoryVenue\u2122 is a proposal and payment platform built specifically for wedding venues. Send beautiful contracts, collect e-signatures, and get paid with StoryPay\u2122, powered by Stripe, all from one dashboard.',
   },
   {
     q: "What's included in early access?",
-    a: 'Early access members get full platform access, founding member pricing, priority onboarding, and a direct line to our team to shape the product roadmap.',
+    a: 'Early access members get full platform access, priority onboarding, and a direct line to our team to shape the product roadmap.',
   },
   {
     q: 'How do I get started?',
@@ -56,7 +56,7 @@ const FAQS = [
   },
   {
     q: 'How much will this cost?',
-    a: 'Pricing will be announced at launch. Early access members will receive special founding member rates, significantly lower than standard pricing. Plus 0% processing fees.',
+    a: 'StoryVenue\u2122 has a free plan, and the Bride Booking System\u2122 is $97/month with a 14-day free trial. Payments run on StoryPay\u2122, powered by Stripe: no setup or monthly fees, just a small fee on each payment, and an automatic service fee on your invoices helps cover it.',
   },
 ];
 
@@ -360,6 +360,8 @@ export default function LandingPage() {
   const [showModal, setShowModal] = useState(false);
   const [count, setCount]         = useState(247);
   const countdown                 = useCountdown(LAUNCH_DATE);
+  // Launch has passed once the countdown reads zero; hide it rather than show 00:00:00:00.
+  const launched = countdown.days + countdown.hours + countdown.minutes + countdown.seconds === 0;
 
   useEffect(() => {
     fetch('/api/waitlist').then(r => r.json()).then(d => {
@@ -427,7 +429,8 @@ export default function LandingPage() {
             </span>
           </div>
 
-          {/* Countdown */}
+          {/* Countdown (until launch) */}
+          {!launched && (
           <div className="flex items-center justify-center gap-3 sm:gap-6 mb-8 sm:mb-10">
             <CDUnit v={countdown.days}    label="Days"    />
             <span className="text-2xl sm:text-3xl font-light text-gray-300 pb-5">:</span>
@@ -437,10 +440,11 @@ export default function LandingPage() {
             <span className="text-2xl sm:text-3xl font-light text-gray-300 pb-5">:</span>
             <CDUnit v={countdown.seconds} label="Seconds" />
           </div>
+          )}
 
-          {/* 0% fee badge — single line on all devices */}
+          {/* Payments badge — single line on all devices */}
           <div className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 mb-10 sm:mb-14 whitespace-nowrap">
-            <span className="text-xs sm:text-sm font-semibold text-emerald-700">0% processing fees. You keep 100% of every payment.</span>
+            <span className="text-xs sm:text-sm font-semibold text-emerald-700">Get paid with StoryPay&#8482;, powered by Stripe</span>
           </div>
 
           {/* iPhone mockup */}

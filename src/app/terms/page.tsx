@@ -29,7 +29,7 @@ export default function TermsPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Terms of Use</h1>
-        <p className="text-sm text-gray-500 mb-10">Last updated: September 25, 2026</p>
+        <p className="text-sm text-gray-500 mb-10">Last updated: September 29, 2026</p>
 
         <div className="prose prose-gray max-w-none space-y-8 text-sm leading-relaxed text-gray-700">
 
@@ -74,14 +74,17 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-bold text-gray-900 mb-3">5. Payment Processing</h2>
-            <p>Payment processing is provided through LunarPay (powered by Fortis). By accepting payments through StoryVenue, you acknowledge that:</p>
+            <h2 className="text-lg font-bold text-gray-900 mb-3">5. Payment Processing (StoryPay&trade;)</h2>
+            <p>StoryPay&trade; is StoryVenue&rsquo;s payment feature, powered by Stripe. Payment processing services for venues on StoryVenue are provided by Stripe and are subject to the <a href="https://stripe.com/legal/ssa" target="_blank" rel="noreferrer" className="text-gray-900 underline">Stripe Services Agreement</a>, which you accept when you set up your Stripe account through StoryVenue, as Stripe may modify it from time to time. As a condition of StoryVenue enabling payment processing through Stripe, you agree to provide StoryVenue accurate and complete information about you and your business, and you authorize StoryVenue to share it, and transaction information related to your use of Stripe&rsquo;s payment processing services, with Stripe. By accepting payments through StoryVenue, you also acknowledge that:</p>
             <ul className="list-disc pl-5 space-y-1 mt-2">
-              <li>Payment processing is subject to LunarPay&rsquo;s and Fortis&rsquo;s terms and conditions</li>
-              <li>Card data goes directly to Fortis — StoryVenue never stores cardholder data</li>
-              <li>You must complete merchant onboarding before accepting payments</li>
-              <li>Processing fees apply as described in your account agreement</li>
-              <li>You are responsible for refunds, chargebacks, and disputes with your customers</li>
+              <li>You must connect a Stripe account in Payments → Payment settings, and Stripe must approve it, before you can accept payments</li>
+              <li>Payments go directly to your Stripe account, and Stripe pays them out to your bank account. StoryVenue never holds your funds</li>
+              <li>Card and bank details go directly to Stripe. StoryVenue never stores full card or bank account numbers</li>
+              <li>Each payment carries Stripe&rsquo;s processing fee and a StoryVenue platform fee, both deducted from the payment. The current rates for your plan are shown in Payment settings. We may change our platform fee, and we will notify you before a change takes effect</li>
+              <li>StoryVenue can add a service fee line to your invoices and proposals (3.5% by default). You decide whether to charge it and at what rate, and you are responsible for making sure your fees, and the way you advertise your prices, comply with the laws that apply to you, including rules on surcharges and price disclosure</li>
+              <li>When a customer chooses a payment plan, they authorize the scheduled charges to their saved payment method, and StoryVenue runs those charges for you through Stripe on the due dates</li>
+              <li>When you refund a payment, StoryVenue returns its platform fee on the refunded amount. Stripe&rsquo;s processing fees are handled under the Stripe Services Agreement</li>
+              <li>You are responsible for refunds, chargebacks, and disputes with your customers, and for any amounts owed on your Stripe account</li>
             </ul>
           </section>
 
