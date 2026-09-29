@@ -19,12 +19,13 @@ import {
 } from '@/lib/venue-coupons-logic';
 import { formatInTimeZone } from 'date-fns-tz';
 import { resolveVenueTimezone } from '@/lib/venue-timezone';
+import { DEFAULT_SERVICE_FEE_PCT, formatServiceFeePct, normalizeServiceFeePct, serviceFeeLabel } from '@/lib/service-fee';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 const AIProposalGenerator = dynamic(() => import('@/components/AIProposalGenerator'), { ssr: false });
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const SURCHARGE_RATE = 0.0275;
+// The venue's service fee line (same for every payment method — see lib/service-fee.ts).
 const SURCHARGE_ID = '__surcharge__';
 const COUPON_LINE_ID = '__coupon__';
 
@@ -94,8 +95,8 @@ function today() {
 }
 
 function emptyItem(): LineItem { return { id: uid(), name: '', description: '', amount: '' }; }
-function surcharge(subtotalCents: number): LineItem {
- return { id: SURCHARGE_ID, name: 'Processing Fee (2.75%)', description: 'Credit card processing surcharge', amount: ((subtotalCents * SURCHARGE_RATE) / 100).toFixed(2), isSurcharge: true };
+function surcharge(subtotalCents: number, pct = DEFAULT_SERVICE_FEE_PCT): LineItem {
+ return { id: SURCHARGE_ID, name: serviceFeeLabel(pct), description: '', amount: ((subtotalCents * pct) / 100 / 100).toFixed(2), isSurcharge: true };
 }
 
 function lineCents(amountStr: string): number {
@@ -112,8 +113,9 @@ function withDerivedFromCore(
   hasSurcharge: boolean,
   applied: string | null,
   couponList: VenueCouponRow[],
+  feePct: number = DEFAULT_SERVICE_FEE_PCT,
 ): LineItem[] {
-  let rows = [...core];
+  const rows = [...core];
   if (applied) {
     const c = couponList.find((x) => x.id === applied);
     if (c && c.active !== false) {
@@ -131,13 +133,7 @@ function withDerivedFromCore(
   }
   const net = rows.reduce((s, i) => s + lineCents(i.amount), 0);
   if (hasSurcharge) {
-    rows.push({
-      id: SURCHARGE_ID,
-      name: 'Processing Fee (2.75%)',
-      description: 'Credit card processing surcharge',
-      amount: ((net * SURCHARGE_RATE) / 100).toFixed(2),
-      isSurcharge: true,
-    });
+    rows.push(surcharge(net, feePct));
   }
   return rows;
 }
@@ -280,6 +276,10 @@ function NewProposalInvoicePageInner() {
 
  // Line items
  const [lineItems, setLineItems] = useState<LineItem[]>([emptyItem(), surcharge(0)]);
+ // Service fee % for this invoice; starts at the venue's default rate.
+ const feePctRef = useRef(DEFAULT_SERVICE_FEE_PCT);
+ const venueFeePctRef = useRef(DEFAULT_SERVICE_FEE_PCT);
+ const [feePctInput, setFeePctInput] = useState(formatServiceFeePct(DEFAULT_SERVICE_FEE_PCT));
  const [venueCoupons, setVenueCoupons] = useState<VenueCouponRow[]>([]);
  const [appliedCouponId, setAppliedCouponId] = useState<string | null>(null);
  const [products, setProducts] = useState<Product[]>([]);
@@ -384,6 +384,15 @@ function NewProposalInvoicePageInner() {
  fetch('/api/templates').then(r=>r.json()).then(d=>setTemplates(Array.isArray(d)?d:[]));
  fetch('/api/products').then(r=>r.json()).then(d=>setProducts(Array.isArray(d)?d:[]));
  fetch('/api/venues/me').then(r=>r.json()).then(d=>{
+ const pct = normalizeServiceFeePct(d.service_fee_rate);
+ venueFeePctRef.current = pct > 0 ? pct : DEFAULT_SERVICE_FEE_PCT;
+ feePctRef.current = pct;
+ setFeePctInput(formatServiceFeePct(pct));
+ setLineItems((prev) => {
+   if (!prev.some((i) => i.isSurcharge)) return prev;
+   if (pct <= 0) return prev.filter((i) => !i.isSurcharge);
+   return withDerivedFromCore(stripDerived(prev), true, null, [], pct);
+ });
  setVenueName(d.name||'');
  setLogoUrl(d.brand_logo_url||'');
  setVenueTimezone(typeof d.timezone === 'string' ? d.timezone : null);
@@ -451,7 +460,7 @@ function NewProposalInvoicePageInner() {
    setLineItems((prev) => {
      const hasSurcharge = prev.some((i) => i.isSurcharge);
      const core = stripDerived(prev);
-     return withDerivedFromCore(core, hasSurcharge, id, venueCoupons);
+     return withDerivedFromCore(core, hasSurcharge, id, venueCoupons, feePctRef.current);
    });
  }
 
@@ -467,7 +476,7 @@ function NewProposalInvoicePageInner() {
      const core = stripDerived(prev).map((i) =>
        i.id === id ? { ...i, [field]: value } : i,
      );
-     return withDerivedFromCore(core, hasSurcharge, appliedCouponId, venueCoupons);
+     return withDerivedFromCore(core, hasSurcharge, appliedCouponId, venueCoupons, feePctRef.current);
    });
    if (field === 'name' && id !== SURCHARGE_ID && id !== COUPON_LINE_ID) {
      clearTimeout(suggestTimers.current[id]);
@@ -493,8 +502,29 @@ function NewProposalInvoicePageInner() {
      const hasSurcharge = id === SURCHARGE_ID ? false : prev.some((i) => i.isSurcharge);
      const core = stripDerived(prev).filter((i) => i.id !== id);
      const nextApplied = id === COUPON_LINE_ID ? null : appliedCouponId;
-     return withDerivedFromCore(core, hasSurcharge, nextApplied, venueCoupons);
+     return withDerivedFromCore(core, hasSurcharge, nextApplied, venueCoupons, feePctRef.current);
    });
+ }
+
+ /** Change this invoice's service fee % (the venue can lower it to share the cost, or raise it). */
+ function applyFeePct(pct: number) {
+   feePctRef.current = pct;
+   setLineItems((prev) =>
+     prev.some((i) => i.isSurcharge)
+       ? withDerivedFromCore(stripDerived(prev), true, appliedCouponId, venueCoupons, pct)
+       : prev,
+   );
+ }
+
+ /** Add the service fee line back at the venue's default rate. */
+ function addServiceFee() {
+   if (feePctRef.current <= 0) feePctRef.current = venueFeePctRef.current;
+   setFeePctInput(formatServiceFeePct(feePctRef.current));
+   setLineItems((prev) =>
+     prev.some((i) => i.isSurcharge)
+       ? prev
+       : withDerivedFromCore(stripDerived(prev), true, appliedCouponId, venueCoupons, feePctRef.current),
+   );
  }
 
  function addItem() {
@@ -502,7 +532,7 @@ function NewProposalInvoicePageInner() {
    setLineItems((prev) => {
      const hasSurcharge = prev.some((i) => i.isSurcharge);
      const core = [...stripDerived(prev), newItem];
-     return withDerivedFromCore(core, hasSurcharge, appliedCouponId, venueCoupons);
+     return withDerivedFromCore(core, hasSurcharge, appliedCouponId, venueCoupons, feePctRef.current);
    });
    // New rows start fresh — picker will open on first focus
    activatedItems.current.delete(newItem.id);
@@ -522,7 +552,7 @@ function NewProposalInvoicePageInner() {
            }
          : i,
      );
-     return withDerivedFromCore(core, hasSurcharge, appliedCouponId, venueCoupons);
+     return withDerivedFromCore(core, hasSurcharge, appliedCouponId, venueCoupons, feePctRef.current);
    });
    setShowSuggestions((prev) => ({ ...prev, [itemId]: false }));
  }
@@ -560,7 +590,7 @@ function NewProposalInvoicePageInner() {
      name: pkg.name,
      minimum_subtotal_cents: pkg.minimum_subtotal_cents ?? 0,
    });
-   setLineItems(withDerivedFromCore(core, hasSurchargeRow, appliedCouponId, venueCoupons));
+   setLineItems(withDerivedFromCore(core, hasSurchargeRow, appliedCouponId, venueCoupons, feePctRef.current));
    applyPackageContract(pkg);
    setError('');
  }
@@ -956,7 +986,7 @@ function NewProposalInvoicePageInner() {
    // Only auto-close if picker is open for THIS item and user isn't interacting with picker
    setTimeout(()=>setItemPickerId(id=>id===item.id?null:id),300);
  }}
- placeholder={item.isSurcharge?'Processing Fee (2.75%)':`Item ${idx+1}`}
+ placeholder={item.isSurcharge?'Service fee':`Item ${idx+1}`}
  className={`w-full rounded-lg border px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none transition-colors ${item.isSurcharge?'border-gray-200 bg-gray-100 text-gray-600 font-medium':'border-gray-200 text-gray-900 focus:border-gray-400'}`}/>
  )}
  {/* Autocomplete product suggestions */}
@@ -975,10 +1005,33 @@ function NewProposalInvoicePageInner() {
  </div>
  {item.isCoupon ? (
  <p className="w-full rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs text-emerald-800">{item.description || 'Discount'}</p>
+ ) : item.isSurcharge ? (
+ <div className="flex w-full items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-100 px-3 py-1.5">
+   <input type="text" inputMode="decimal" value={feePctInput} aria-label="Service fee percent"
+     onChange={e => {
+       const v = e.target.value;
+       if (!/^\d{0,2}(\.\d{0,2})?$/.test(v)) return;
+       setFeePctInput(v);
+       const n = parseFloat(v);
+       if (Number.isFinite(n)) applyFeePct(n);
+     }}
+     onBlur={() => {
+       const n = parseFloat(feePctInput);
+       if (!Number.isFinite(n) || n <= 0) {
+         removeItem(SURCHARGE_ID);
+         feePctRef.current = venueFeePctRef.current;
+         setFeePctInput(formatServiceFeePct(venueFeePctRef.current));
+       } else {
+         setFeePctInput(formatServiceFeePct(n));
+       }
+     }}
+     className="w-12 bg-transparent text-sm font-medium text-gray-700 focus:outline-none"/>
+   <span className="text-xs text-gray-500">% — lower it to share the cost, or remove it</span>
+ </div>
  ) : (
  <input type="text"value={item.description}
  onChange={e=>updateItem(item.id,'description',e.target.value)}
- placeholder={item.isSurcharge?'Credit card surcharge':'Optional note'}
+ placeholder='Optional note'
  className={`w-full rounded-lg border px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none transition-colors ${item.isSurcharge?'border-gray-200 bg-gray-100 text-gray-600':'border-gray-200 text-gray-900 focus:border-gray-400'}`}/>
  )}
  <div className="relative w-full sm:w-auto">
@@ -1005,6 +1058,7 @@ function NewProposalInvoicePageInner() {
    }
  }}
  placeholder="0.00"
+ readOnly={item.isSurcharge}
  className={`w-full rounded-lg border pl-6 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none transition-colors ${item.isSurcharge?'border-gray-200 bg-gray-100 font-medium':'border-gray-200 focus:border-gray-400'}`}/>
  </>
  )}
@@ -1056,13 +1110,13 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
                <div><p className="font-semibold text-gray-900">Apply coupon</p><p className="text-xs text-gray-400 mt-0.5">{appliedCouponId ? 'Change or remove discount' : 'Add a discount code'}</p></div>
              </button>
            )}
-           {/* Processing fee */}
+           {/* Service fee */}
            {!hasSurcharge() && (
              <button type="button"
-               onMouseDown={e => { e.preventDefault(); setLineItems(prev => { if (prev.some(i => i.isSurcharge)) return prev; return withDerivedFromCore(stripDerived(prev), true, appliedCouponId, venueCoupons); }); activatedItems.current.add(itemPickerId!); setItemPickerId(null); }}
+               onMouseDown={e => { e.preventDefault(); addServiceFee(); activatedItems.current.add(itemPickerId!); setItemPickerId(null); }}
                className="flex items-center gap-3 rounded-xl border-2 border-amber-100 bg-amber-50 px-4 py-3.5 text-left hover:border-amber-300 hover:bg-amber-100 transition-all cursor-pointer">
                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-amber-200 text-amber-600 shadow-sm"><Percent size={16}/></span>
-               <div><p className="font-semibold text-gray-900">Processing fee</p><p className="text-xs text-gray-400 mt-0.5">Add 2.75% card surcharge</p></div>
+               <div><p className="font-semibold text-gray-900">Service fee</p><p className="text-xs text-gray-400 mt-0.5">Add a {formatServiceFeePct(venueFeePctRef.current)}% service fee</p></div>
              </button>
            )}
          </div>
@@ -1127,7 +1181,7 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
                    }
                    if (!core.length) { setError('This package has no active products.'); setItemPickerId(null); return; }
                    setAppliedPackage({ id: pkg.id, name: pkg.name, minimum_subtotal_cents: pkg.minimum_subtotal_cents ?? 0 });
-                   setLineItems(withDerivedFromCore(core, hasSurchargeRow, appliedCouponId, venueCoupons));
+                   setLineItems(withDerivedFromCore(core, hasSurchargeRow, appliedCouponId, venueCoupons, feePctRef.current));
                    applyPackageContract(pkg);
                    setError('');
                    setItemPickerId(null);

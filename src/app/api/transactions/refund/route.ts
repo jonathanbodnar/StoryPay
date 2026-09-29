@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { refundCharge } from '@/lib/lunarpay';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
+import { getStripe } from '@/lib/stripe/client';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -16,23 +17,64 @@ export async function POST(request: NextRequest) {
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
-    .select('lunarpay_secret_key')
+    .select('lunarpay_secret_key, stripe_account_id')
     .eq('id', venueId)
     .single();
 
-  if (!venue?.lunarpay_secret_key) {
-    return NextResponse.json({ error: 'LunarPay not configured' }, { status: 400 });
-  }
-
   const { data: proposal } = await supabaseAdmin
     .from('proposals')
-    .select('id, status, charge_id, transaction_id, price, customer_email, customer_name')
+    .select('id, status, charge_id, transaction_id, price, customer_email, customer_name, payment_provider, stripe_payment_intent_id')
     .eq('id', proposalId)
     .eq('venue_id', venueId)
     .single();
 
   if (!proposal) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
   if (proposal.status === 'refunded') return NextResponse.json({ error: 'Already refunded' }, { status: 400 });
+
+  // Paid on the venue's own Stripe account (Stripe Connect): refund there.
+  // StoryVenue's fee is refunded proportionally; Stripe keeps its own fee.
+  if (proposal.payment_provider === 'stripe') {
+    const account = (venue as { stripe_account_id?: string | null } | null)?.stripe_account_id;
+    const paymentIntent = typeof chargeId === 'string' && chargeId.startsWith('pi_') ? chargeId : proposal.stripe_payment_intent_id;
+    if (!account || !paymentIntent) return NextResponse.json({ error: 'No Stripe payment found for this transaction' }, { status: 400 });
+    if (amountCents !== undefined && amountCents !== null && amountCents <= 0) {
+      return NextResponse.json({ error: 'Refund amount must be greater than $0' }, { status: 400 });
+    }
+    try {
+      const refund = await getStripe().refunds.create(
+        {
+          payment_intent: paymentIntent,
+          ...(amountCents ? { amount: Math.round(amountCents) } : {}),
+          refund_application_fee: true,
+          metadata: { storyvenue_proposal_id: proposalId },
+        },
+        { stripeAccount: account },
+      );
+      const isFullRefund = !amountCents || amountCents >= (proposal.price ?? 0);
+      await supabaseAdmin
+        .from('proposals')
+        .update({ status: isFullRefund ? 'refunded' : 'partial_refund', refunded_at: new Date().toISOString() })
+        .eq('id', proposalId);
+      const refundEmail = (proposal.customer_email as string | null)?.trim();
+      if (refundEmail) {
+        ensureSystemTagsForVenue(venueId).then(() => applySystemTagByEmail(venueId, refundEmail, 'refunded')).catch(() => {});
+      }
+      void notifyOwner({
+        venueId,
+        scenario: 'refund_issued',
+        vars: { customer_name: (proposal.customer_name as string | null) || 'Customer', amount: formatAmount(refund.amount) },
+        actionUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com'}/dashboard/transactions`,
+      });
+      return NextResponse.json({ success: true, refundedAmount: refund.amount, fullRefund: isFullRefund });
+    } catch (err) {
+      console.error('Stripe refund error:', err);
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'Refund failed' }, { status: 500 });
+    }
+  }
+
+  if (!venue?.lunarpay_secret_key) {
+    return NextResponse.json({ error: 'LunarPay not configured' }, { status: 400 });
+  }
 
   // Prefer the explicit chargeId from the request, then proposal.charge_id,
   // then proposal.transaction_id (older proposals paid through hosted

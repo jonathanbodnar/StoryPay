@@ -183,7 +183,7 @@ function LivePreview({ brand }: { brand: BrandState }) {
  {[
  { desc: 'Grand Ballroom — Full Day', amount: '$4,500.00' },
  { desc: 'Catering Package', amount: '$2,200.00' },
- { desc: 'Processing Fee (2.75%)', amount: '$184.25' },
+ { desc: 'Service fee (3.5%)', amount: '$234.50' },
  ].map((row, i) => (
  <div key={i} className="px-4 py-2.5 grid grid-cols-[1fr_80px] text-xs border-t border-gray-50">
  <span className="text-gray-700">{row.desc}</span>
@@ -192,7 +192,7 @@ function LivePreview({ brand }: { brand: BrandState }) {
  ))}
  <div className="px-4 py-3 grid grid-cols-[1fr_80px] border-t-2 border-gray-200">
  <span className="text-sm font-bold text-gray-900">Total Due</span>
- <span className="text-right text-base font-bold text-gray-900">$6,884.25</span>
+ <span className="text-right text-base font-bold text-gray-900">$6,934.50</span>
  </div>
  </div>
 

@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Send, FileText, Plus, Trash2, Save, Search, UserPlus, X } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
+import { DEFAULT_SERVICE_FEE_PCT, formatServiceFeePct, normalizeServiceFeePct, serviceFeeCents, serviceFeeLabel } from '@/lib/service-fee';
 
 interface Template {
  id: string;
@@ -97,6 +98,16 @@ export default function NewProposalPage() {
  const [priceDollars, setPriceDollars] = useState('');
  const [includeSurcharge, setIncludeSurcharge] = useState(true);
  const [surchargeOverride, setSurchargeOverride] = useState(''); // empty = auto
+ // The venue's service fee % (default 3.5%; 0 = off by default).
+ const [feePct, setFeePct] = useState(DEFAULT_SERVICE_FEE_PCT);
+ useEffect(() => {
+   fetch('/api/venues/me').then((r) => (r.ok ? r.json() : null)).then((d) => {
+     if (!d) return;
+     const pct = normalizeServiceFeePct(d.service_fee_rate);
+     if (pct > 0) setFeePct(pct);
+     else setIncludeSurcharge(false);
+   }).catch(() => {});
+ }, []);
   const [paymentType, setPaymentType] = useState<'full' | 'installment'>('full');
 
  const [installments, setInstallments] = useState<Installment[]>([
@@ -226,6 +237,15 @@ return {};
    acceptAch,
    asDraft,
    surchargeAmount: surchargeCents,
+   // Show the couple the service fee as its own line.
+   ...(basePriceCents > 0 && surchargeCents > 0
+     ? {
+         lineItems: [
+           { name: 'Proposal', description: '', amount: basePriceCents },
+           { name: serviceFeeLabel(feePct), description: '', amount: surchargeCents, isSurcharge: true },
+         ],
+       }
+     : {}),
   };
  }
 
@@ -297,7 +317,7 @@ return {};
  const surchargeCents = includeSurcharge
  ? surchargeOverride !== ''
  ? Math.round(parseFloat(surchargeOverride || '0') * 100)
- : Math.round(basePriceCents * 0.0275)
+ : serviceFeeCents(basePriceCents, feePct)
  : 0;
  const pricePreview = basePriceCents + surchargeCents;
 
@@ -544,7 +564,7 @@ return {};
  onChange={e => { setIncludeSurcharge(e.target.checked); setSurchargeOverride(''); }}
  className="rounded border-gray-300 text-brand-900"
  />
- Include 2.75% processing fee
+ Include a {formatServiceFeePct(feePct)}% service fee
  </label>
  {includeSurcharge && (
  <span className="text-xs text-blue-600 font-medium">
@@ -563,11 +583,11 @@ return {};
  step="0.01"
  value={surchargeOverride}
  onChange={e => setSurchargeOverride(e.target.value)}
- placeholder={(basePriceCents * 0.0275 / 100).toFixed(2)}
+ placeholder={(serviceFeeCents(basePriceCents, feePct) / 100).toFixed(2)}
  className="w-full rounded-lg border border-blue-200 bg-white pl-5 pr-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:ring-1 focus:ring-brand-900/20 outline-none"
  />
  </div>
- <span className="text-xs text-gray-400">Leave blank for auto (2.75%)</span>
+ <span className="text-xs text-gray-400">Leave blank for {formatServiceFeePct(feePct)}%</span>
  </div>
  )}
  </div>

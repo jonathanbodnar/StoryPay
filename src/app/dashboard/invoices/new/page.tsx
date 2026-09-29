@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Send, Save, Plus, Trash2 } from 'lucide-react';
 import { formatCents } from '@/lib/utils';
+import { DEFAULT_SERVICE_FEE_PCT, formatServiceFeePct, normalizeServiceFeePct, serviceFeeLabel } from '@/lib/service-fee';
 
-const SURCHARGE_RATE = 0.0275; // 2.75%
+// The venue's service fee line (same for every payment method — see lib/service-fee.ts).
 const SURCHARGE_ID = '__surcharge__';
 
 interface Product { id: string; name: string; description: string | null; price: number; unit: string; }
@@ -55,9 +56,9 @@ function emptyLineItem(): LineItem {
  return { id: uid(), name: '', description: '', amount: '' };
 }
 
-function makeSurcharge(subtotalCents: number): LineItem {
- const amt = ((subtotalCents * SURCHARGE_RATE) / 100).toFixed(2);
- return { id: SURCHARGE_ID, name: 'Processing Fee (2.75%)', description: 'Credit card processing surcharge', amount: amt, isSurcharge: true };
+function makeSurcharge(subtotalCents: number, pct = DEFAULT_SERVICE_FEE_PCT): LineItem {
+ const amt = ((subtotalCents * pct) / 100 / 100).toFixed(2);
+ return { id: SURCHARGE_ID, name: serviceFeeLabel(pct), description: '', amount: amt, isSurcharge: true };
 }
 
 export default function NewInvoicePage() {
@@ -106,6 +107,25 @@ const [installments, setInstallments] = useState<Installment[]>([
  const [saving, setSaving] = useState(false);
  const [error, setError] = useState('');
 
+ // Service fee % for this invoice; starts at the venue's default rate.
+ const [feePct, setFeePct] = useState(DEFAULT_SERVICE_FEE_PCT);
+ const [feePctInput, setFeePctInput] = useState(formatServiceFeePct(DEFAULT_SERVICE_FEE_PCT));
+ const venueFeePctRef = useRef(DEFAULT_SERVICE_FEE_PCT);
+ useEffect(() => {
+   fetch('/api/venues/me').then((r) => (r.ok ? r.json() : null)).then((d) => {
+     if (!d) return;
+     const pct = normalizeServiceFeePct(d.service_fee_rate);
+     venueFeePctRef.current = pct > 0 ? pct : DEFAULT_SERVICE_FEE_PCT;
+     setFeePct(pct);
+     setFeePctInput(formatServiceFeePct(pct));
+     setLineItems((prev) => {
+       if (pct <= 0) return prev.filter((i) => !i.isSurcharge);
+       const sub = prev.filter((i) => !i.isSurcharge).reduce((s, i) => { const v = parseFloat((i.amount || '0').replace(/,/g, '')); return s + (isNaN(v) ? 0 : Math.round(v * 100)); }, 0);
+       return prev.map((i) => (i.isSurcharge ? makeSurcharge(sub, pct) : i));
+     });
+   }).catch(() => {});
+ }, []);
+
  useEffect(() => {
  const name = searchParams.get('name');
  const email = searchParams.get('email');
@@ -130,7 +150,7 @@ const [installments, setInstallments] = useState<Installment[]>([
  .filter(i => !i.isSurcharge)
  .reduce((s, i) => { const v = parseFloat(i.amount || '0'); return s + (isNaN(v) ? 0 : Math.round(v * 100)); }, 0);
  return updated.map(i => i.isSurcharge
- ? { ...i, amount: ((newSubtotal * SURCHARGE_RATE) / 100).toFixed(2) }
+ ? { ...i, amount: ((newSubtotal * feePct) / 100 / 100).toFixed(2) }
  : i
  );
  }
@@ -143,10 +163,19 @@ const [installments, setInstallments] = useState<Installment[]>([
  }
 
  function addSurcharge() {
+ const pct = feePct > 0 ? feePct : venueFeePctRef.current;
+ setFeePct(pct);
+ setFeePctInput(formatServiceFeePct(pct));
  setLineItems(prev => {
  if (prev.find(i => i.isSurcharge)) return prev;
- return [...prev, makeSurcharge(subtotalCents)];
+ return [...prev, makeSurcharge(subtotalCents, pct)];
  });
+ }
+
+ /** Change this invoice's service fee % (lower it to share the cost, or raise it). */
+ function applyFeePct(pct: number) {
+   setFeePct(pct);
+   setLineItems((prev) => prev.map((i) => (i.isSurcharge ? makeSurcharge(subtotalCents, pct) : i)));
  }
 
  const totalCents = lineItems.reduce((sum, item) => {
@@ -297,7 +326,7 @@ return {};
  }}
  onFocus={() => { if (!item.isSurcharge && item.name) searchProducts(item.id, item.name); }}
  onBlur={() => setTimeout(() => setShowSuggestions(prev => ({ ...prev, [item.id]: false })), 150)}
- placeholder={item.isSurcharge ? 'Processing Fee (2.75%)' : `Item ${idx + 1} — type to search products`}
+ placeholder={item.isSurcharge ? 'Service fee' : `Item ${idx + 1} — type to search products`}
  className={`w-full rounded-md border px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 ${item.isSurcharge ? 'border-blue-200 bg-blue-50/60 font-medium text-blue-900' : 'border-gray-300'}`}
  />
  {!item.isSurcharge && showSuggestions[item.id] && (suggestions[item.id] ?? []).length > 0 && (
@@ -316,13 +345,38 @@ return {};
  </div>
  )}
  </div>
+ {item.isSurcharge ? (
+ <div className="flex w-full items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50/60 px-3 py-1.5">
+   <input type="text" inputMode="decimal" value={feePctInput} aria-label="Service fee percent"
+     onChange={(e) => {
+       const v = e.target.value;
+       if (!/^\d{0,2}(\.\d{0,2})?$/.test(v)) return;
+       setFeePctInput(v);
+       const n = parseFloat(v);
+       if (Number.isFinite(n)) applyFeePct(n);
+     }}
+     onBlur={() => {
+       const n = parseFloat(feePctInput);
+       if (!Number.isFinite(n) || n <= 0) {
+         removeLineItem(SURCHARGE_ID);
+         setFeePct(venueFeePctRef.current);
+         setFeePctInput(formatServiceFeePct(venueFeePctRef.current));
+       } else {
+         setFeePctInput(formatServiceFeePct(n));
+       }
+     }}
+     className="w-12 bg-transparent text-sm font-medium text-blue-900 focus:outline-none" />
+   <span className="text-xs text-blue-700">% — lower it to share the cost, or remove it</span>
+ </div>
+ ) : (
  <input
  type="text"
  value={item.description}
  onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
- placeholder={item.isSurcharge ? 'Credit card processing surcharge' : 'Optional note...'}
- className={`w-full rounded-md border px-3 py-2 text-sm placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 ${item.isSurcharge ? 'border-blue-200 bg-blue-50/60 text-blue-700' : 'border-gray-300 text-gray-900'}`}
+ placeholder='Optional note...'
+ className="w-full rounded-md border px-3 py-2 text-sm placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 border-gray-300 text-gray-900"
  />
+ )}
  <div className="flex items-center gap-2">
  <div className="relative flex-1 sm:flex-none sm:w-full">
  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
@@ -345,6 +399,7 @@ return {};
    }
  }}
  placeholder="0.00"
+ readOnly={item.isSurcharge}
  className={`w-full rounded-md border pl-6 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-900 ${item.isSurcharge ? 'border-blue-200 bg-blue-50/60 font-medium' : 'border-gray-300'}`}
  />
  </div>
@@ -360,7 +415,7 @@ return {};
  type="button"
  onClick={() => removeLineItem(item.id)}
  className="hidden sm:block mt-1.5 p-1.5 text-gray-400 hover:text-red-500 transition-colors"
- title={item.isSurcharge ? 'Remove processing fee' : 'Remove item'}
+ title={item.isSurcharge ? 'Remove service fee' : 'Remove item'}
  >
  <Trash2 size={15} />
  </button>
@@ -391,7 +446,7 @@ return {};
  className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
  >
  <Plus size={12} />
- Add 2.75% fee
+ Add {formatServiceFeePct(venueFeePctRef.current)}% service fee
  </button>
  )}
  </div>
