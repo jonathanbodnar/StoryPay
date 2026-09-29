@@ -160,6 +160,12 @@ function parseFromString(raw: string): { header: string; email: string } {
   return parseFromString(RESEND_FROM_FALLBACK);
 }
 
+/** A From header that always shows a sender name ("StoryVenue" unless one is given). */
+export function brandedFrom(raw: string): string {
+  const { header, email } = parseFromString(raw);
+  return header.includes('<') ? header : `StoryVenue <${email}>`;
+}
+
 function getDefaultFrom(): { header: string; email: string } {
   const raw = process.env.RESEND_DEFAULT_FROM?.trim() || RESEND_FROM_FALLBACK;
   return parseFromString(raw);
@@ -259,7 +265,10 @@ export async function sendEmail({
 
   const def = getDefaultFrom();
   const requestedFromEmail = from?.email?.trim() || '';
-  const fromName = from?.name?.trim() || '';
+  // Every email shows a sender name: the caller's (e.g. a venue name), else the
+  // name on RESEND_DEFAULT_FROM, else "StoryVenue". Never a bare address.
+  const defaultName = /^(.+?)\s*</u.exec(def.header)?.[1]?.replace(/^["']|["']$/g, '').trim() || 'StoryVenue';
+  const fromName = from?.name?.trim() || defaultName;
 
   // Decide the actual From: address.
   //
@@ -286,7 +295,7 @@ export async function sendEmail({
     );
   }
 
-  const fromHeader = fromName ? `${fromName} <${actualFromEmail}>` : actualFromEmail;
+  const fromHeader = `${fromName} <${actualFromEmail}>`;
   const effectiveReplyTo = (replyTo?.trim() || inheritedReplyTo) ?? undefined;
 
   const ccList = normalizeEmailList(cc);
@@ -351,7 +360,7 @@ export async function sendEmail({
     console.warn(
       `[email] Domain ${actualFromEmail} appears unverified in Resend — auto-retrying with ${def.email}`,
     );
-    const retryFromHeader = fromName ? `${fromName} <${def.email}>` : def.email;
+    const retryFromHeader = `${fromName} <${def.email}>`;
     // Make sure the retry preserves the venue's email as Reply-To.
     const restoredReplyTo = effectiveReplyTo || requestedFromEmail || undefined;
     result = await (async (): Promise<{ success: boolean; error?: string; id?: string }> => {

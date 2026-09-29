@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { RESEND_FROM_FALLBACK } from '@/lib/email';
+import { RESEND_FROM_FALLBACK, brandedFrom } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
 import { supabaseAdmin } from '@/lib/supabase';
 
@@ -74,7 +74,7 @@ async function sendEmail(data: {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: process.env.RESEND_DEFAULT_FROM?.trim() || RESEND_FROM_FALLBACK,
+        from: brandedFrom(process.env.RESEND_DEFAULT_FROM?.trim() || RESEND_FROM_FALLBACK),
         to: [NOTIFY_EMAIL],
         reply_to: data.email,
         subject: 'New StoryVenue invite requested',

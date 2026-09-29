@@ -8,6 +8,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { renderMergeVars, systemDateVars, enrichTransactionalVars } from '@/lib/merge-variables';
+import { capitalizeName } from '@/lib/format-name';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -174,13 +175,25 @@ export async function getVenueEmailTemplate(
 
 // ─── Variable substitution ────────────────────────────────────────────────────
 
+/** Merge variables that hold a person's name (always capitalized in email). */
+const PERSON_NAME_VARS = /^(customer|client|contact|owner|couple|partner|lead|guest|member|signer)_name$|(^|_)(first|last|full)_name$/;
+
+/** Branding rule: a person's name always starts with a capital ("jason westbrook" → "Jason Westbrook"). */
+function withCapitalizedNames(vars: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = { ...vars };
+  for (const [key, value] of Object.entries(vars)) {
+    if (typeof value === 'string' && PERSON_NAME_VARS.test(key) && !value.includes('@')) out[key] = capitalizeName(value);
+  }
+  return out;
+}
+
 export function fillTemplate(
   text: string,
   vars: Record<string, string>
 ): string {
   // Enrich with canonical equivalents before rendering so both flat tags
   // ({{customer_name}}) and canonical tags ({{contact.first_name}}) resolve.
-  return renderMergeVars(text, enrichTransactionalVars({ ...systemDateVars(), ...vars }));
+  return renderMergeVars(text, enrichTransactionalVars({ ...systemDateVars(), ...withCapitalizedNames(vars) }));
 }
 
 // ─── Shared system email chassis ───────────────────────────────────────────────
@@ -201,9 +214,9 @@ export const STORYVENUE_DARK_LOGO_URL =
   '/storyvenue-logo-dark.png';
 
 export interface SystemEmailOptions {
-  /** Centered logo at the top of the card. Defaults to the StoryVenue dark logo. */
+  /** @deprecated Ignored: every email shows the StoryVenue dark logo (branding rule). */
   logoUrl?: string;
-  /** Alt text for the logo image. */
+  /** @deprecated Ignored with `logoUrl`. */
   logoAlt?: string;
   /** @deprecated Ignored. We never render a text logo — when `logoUrl` is empty
    *  we fall back to the black StoryVenue logo image. Kept for caller compatibility. */
@@ -232,15 +245,13 @@ function escapeAttr(s: string): string {
 
 export function buildSystemEmail(opts: SystemEmailOptions): string {
   const accent   = (opts.accentColor || '#1b1b1b').trim() || '#1b1b1b';
-  const logoUrl  = opts.logoUrl && opts.logoUrl.trim().length > 0 ? opts.logoUrl.trim() : null;
-  const logoAlt  = opts.logoAlt || 'StoryVenue';
   const title    = opts.title || 'StoryVenue';
 
-  // Always render a real logo image — never a text-based logo. Use the venue's
-  // uploaded logo when provided, otherwise fall back to the black StoryVenue mark.
-  const logoHtml = logoUrl
-    ? `<img src="${escapeAttr(logoUrl)}" alt="${escapeAttr(logoAlt)}" style="display:inline-block;max-height:44px;max-width:200px;width:auto;height:auto;border:0;outline:none;text-decoration:none;">`
-    : `<img src="${escapeAttr(STORYVENUE_DARK_LOGO_URL)}" alt="StoryVenue" height="30" style="display:inline-block;height:30px;width:auto;border:0;outline:none;text-decoration:none;">`;
+  // Branding rule: every email carries the official StoryVenue dark logo, on
+  // venue-branded mail too (the venue's name is in the email itself). Venue
+  // uploads can be light/white logos that vanish on the white card, so
+  // `logoUrl` / `logoAlt` are accepted for compatibility but not rendered.
+  const logoHtml = `<img src="${escapeAttr(STORYVENUE_DARK_LOGO_URL)}" alt="StoryVenue" height="30" style="display:inline-block;height:30px;width:auto;border:0;outline:none;text-decoration:none;">`;
 
   const headingLines = opts.heading
     ? (Array.isArray(opts.heading) ? opts.heading : [opts.heading])
