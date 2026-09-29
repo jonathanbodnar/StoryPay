@@ -3,15 +3,17 @@
 import { Sparkles } from 'lucide-react';
 
 /**
- * The "StoryPay is getting a big update" notice.
+ * The "StoryPay™ is getting a big update" notice (StoryPay™ is moving to
+ * Stripe).
  *
  * Shown instead of any StoryPay / Payments surface while the pause is on —
  * both by PaymentGate (page-level wrapper) and by DashboardShell (which gates
  * the whole Payments & proposals menu by path prefix, so every current and
  * future page under it is covered without needing its own wrapper).
  *
- * The button opens the full explainer modal via the same event the sidebar and
- * banner use, so there is one place that owns the StoryPay messaging.
+ * The button goes to Payment settings (the storypay:open-onboarding event),
+ * which shows the full explainer (StoryPayComingSoon), so there is one place
+ * that owns the StoryPay™ messaging.
  */
 export default function StoryPayPausedNotice() {
   return (
@@ -22,11 +24,12 @@ export default function StoryPayPausedNotice() {
       <span className="mb-3 inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-indigo-700">
         Coming soon
       </span>
-      <h2 className="mb-2 text-xl font-bold text-gray-900">StoryPay is getting a big update</h2>
+      <h2 className="mb-2 text-xl font-bold text-gray-900">StoryPay™ is getting a big update</h2>
       <p className="mb-6 max-w-md text-sm leading-relaxed text-gray-500">
-        Stay tuned! We&apos;ve paused StoryPay while we finish a newer, better payments experience.
-        This section will be back shortly. If you&apos;d like a walkthrough in the meantime, schedule
-        a demo and we&apos;ll show you what&apos;s coming.
+        Stay tuned! StoryPay™ is moving to Stripe, so couples can pay deposits and installments by card
+        or bank transfer right from their proposal or invoice. This section opens as soon as it&apos;s
+        ready for your venue. If you&apos;d like a walkthrough in the meantime, schedule a demo and
+        we&apos;ll show you what&apos;s coming.
       </p>
       <button
         type="button"

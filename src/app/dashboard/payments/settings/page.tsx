@@ -139,9 +139,9 @@ function PaymentSettingsInner() {
           </div>
           <div className="px-6 py-6 space-y-3">
             <p className="text-sm text-gray-600">
-              Your clients pay the service fee whether they pay by card, bank transfer or check. At 3.5% it covers
-              online payment processing, so you keep your full price. You can change or remove it on any invoice.
-              Set 0 to leave it off by default.
+              Your clients pay the service fee whether they pay by card, bank transfer or check, so it helps cover
+              your online processing costs. You can change or remove it on any invoice. Set 0 to leave it off by
+              default.
             </p>
             <div className="flex items-center gap-2">
               <div className="relative w-28">
@@ -187,8 +187,9 @@ function PaymentSettingsInner() {
                   <div>
                     <p className="text-sm font-medium text-gray-900">Credit &amp; Debit Cards</p>
                     <p className="mt-0.5 text-xs text-gray-500">
-                      Always enabled. Visa, Mastercard, Amex, and Discover accepted.
-                      Funds settle to your account in 1–2 business days.
+                      {onStripe
+                        ? 'Always enabled. Visa, Mastercard, Amex and Discover, plus Apple Pay and Google Pay. Payouts usually reach your bank in 2 business days.'
+                        : 'Always enabled. Visa, Mastercard, Amex, and Discover accepted. Funds settle to your account in 1–2 business days.'}
                     </p>
                   </div>
                 </div>

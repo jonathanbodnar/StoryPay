@@ -3438,8 +3438,8 @@ StoryPay™ fees are taken from each payout; your clients never pay them directl
 - Paid plans: 3.4% + 30¢ on any card, 1% on bank transfers
 - Free plan: 3.9% + 30¢ on any card, 1.5% on bank transfers
 
-The service fee (clients cover the cost)
-Every new invoice and proposal includes a "Service fee" line, 3.5% by default, so your clients cover processing and you keep your full price. You can change the % on any invoice to split the cost, or remove it. Set your default in Payments → Payment settings. Clients pay the service fee however they pay (card, bank transfer or check), and it's always shown as its own line before they pay.
+The service fee (clients help cover the cost)
+Every new invoice and proposal includes a "Service fee" line, 3.5% by default, so your clients help cover processing. On paid plans, 3.5% covers nearly all of the card fee and more than covers bank transfers. You can change the % on any invoice to split the cost, or remove it. Set your default in Payments → Payment settings. Clients pay the service fee however they pay (card, bank transfer or check), and it's always shown as its own line before they pay.
 
 Payouts
 Stripe sends your money to your bank automatically, usually within 2 business days. Open Payments → Payouts, or your Stripe dashboard, to see every payout.

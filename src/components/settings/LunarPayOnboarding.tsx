@@ -6,8 +6,12 @@
  * Self-contained multi-step wizard that walks a venue owner through applying
  * for a StoryPay (LunarPay) merchant account.
  *
+ * StoryPay™ is moving to Stripe, so new LunarPay applications are closed: the
+ * welcome step shows what's coming (StoryPayComingSoon). Steps 2–5 remain
+ * only for a venue with a LunarPay application or account already on file.
+ *
  * Steps:
- *   0 — Welcome / explainer
+ *   0 — StoryPay™ is moving to Stripe (StoryPayComingSoon)
  *   1 — Business info  (name, contact)
  *   2 — Processing details  (address, banking, volume)
  *   3 — Sign the Fortis MPA (hand-off to the LunarPay-hosted signing page)
@@ -18,7 +22,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2,
-  CreditCard,
   Building2,
   Landmark,
   FileText,
@@ -28,13 +31,10 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
-  ShieldCheck,
   BadgeCheck,
   ExternalLink,
-  CalendarClock,
-  Sparkles,
 } from 'lucide-react';
-import DashboardBookingModal from '@/components/DashboardBookingModal';
+import StoryPayComingSoon from '@/components/settings/StoryPayComingSoon';
 
 /**
  * Hand-off to the LunarPay-hosted signing page. Fortis whitelists ONLY
@@ -153,9 +153,7 @@ function Select({
 export default function LunarPayOnboarding({ onActivated }: Props) {
   const [lpStatus, setLpStatus] = useState<LunarPayStatus | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
-  const [step, setStep] = useState(0); // 0=welcome,1=biz,2=banking,3=mpa,4=pending,5=active
-  const [paused, setPaused] = useState(false);
-  const [demoOpen, setDemoOpen] = useState(false);
+  const [step, setStep] = useState(0); // 0=coming soon,1=biz,2=banking,3=mpa,4=pending,5=active
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -194,10 +192,7 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
       setLpStatus(data);
       // Paused wins over everything except exempt venues, including over an
       // already-approved merchant account: everyone else sees the notice.
-      const isPaused = data.paused === true;
-      setPaused(isPaused);
-
-      if (isPaused) {
+      if (data.paused === true) {
         setStep(0);
       } else if (data.isActive) {
         setStep(5);
@@ -604,110 +599,8 @@ export default function LunarPayOnboarding({ onActivated }: Props) {
     );
   }
 
-  // ── Step 0: WELCOME ───────────────────────────────────────────────────────────
-  return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600">
-            {paused ? <Sparkles size={20} className="text-white" /> : <CreditCard size={20} className="text-white" />}
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">
-              {paused ? 'StoryPay™ is getting a big update' : 'Signup for StoryPay™ Payments'}
-            </h3>
-            <p className="text-xs text-gray-500">
-              {paused
-                ? 'Stay tuned — signups are paused while we roll out a new payments experience.'
-                : 'Powered by the StoryPay™ merchant platform · PCI-compliant'}
-            </p>
-          </div>
-        </div>
-
-        {paused && (
-          <div className="mb-5 flex items-start gap-3 rounded-xl border border-indigo-200 bg-white px-4 py-3.5">
-            <Sparkles size={18} className="mt-0.5 shrink-0 text-indigo-500" />
-            <div>
-              <p className="text-sm font-semibold text-indigo-900">StoryPay™ is getting a big update — stay tuned!</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-indigo-800">
-                We&apos;ve paused new signups while we finish a newer, better payments experience.
-                Everything below is what&apos;s coming. If you&apos;d like a walkthrough in the meantime,
-                schedule a demo and we&apos;ll show you.
-              </p>
-            </div>
-          </div>
-        )}
-
-        <p className="text-sm text-gray-600 mb-5">
-          Accept credit cards and bank transfers directly through StoryPay™. Send proposals, collect
-          deposits, and run payment schedules — all without leaving the platform.
-        </p>
-
-        {/* Free for venue owners — highlighted as top feature */}
-        <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <BadgeCheck size={20} className="shrink-0 text-emerald-600" />
-          <div>
-            <p className="text-sm font-bold text-emerald-800">Free for Venue Owners — 0% Processing Fees</p>
-            <p className="text-xs text-emerald-700">Keep 100% of every payment. No monthly fees, no hidden charges.</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 mb-6">
-          {[
-            { icon: ShieldCheck, title: 'PCI-Compliant', desc: 'Card data never touches your servers' },
-            { icon: CreditCard,  title: 'Cards + ACH',   desc: 'Credit, debit & bank transfers' },
-            { icon: Clock,       title: '24–48h Approval', desc: 'Typical Fortis review time' },
-          ].map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="flex items-start gap-2 rounded-xl border border-indigo-100 bg-white p-3">
-              <Icon size={16} className="mt-0.5 shrink-0 text-indigo-500" />
-              <div>
-                <p className="text-xs font-semibold text-gray-800">{title}</p>
-                <p className="text-[11px] text-gray-500">{desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">How it works</p>
-          <ol className="space-y-2">
-            {[
-              'Enter your business & contact info',
-              'Provide banking details for fund deposits',
-              'Sign the Fortis Merchant Processing Agreement',
-              'Fortis reviews your application (24–48 h)',
-              "You're approved and can start processing payments",
-            ].map((text, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-bold text-indigo-700">
-                  {i + 1}
-                </span>
-                {text}
-              </li>
-            ))}
-          </ol>
-        </div>
-
-        {paused ? (
-          <button
-            onClick={() => setDemoOpen(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-          >
-            <CalendarClock size={16} /> Schedule a demo
-          </button>
-        ) : (
-          <button
-            onClick={() => setStep(1)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-          >
-            Get Started <ChevronRight size={16} />
-          </button>
-        )}
-      </div>
-
-      <DashboardBookingModal open={demoOpen} onClose={() => setDemoOpen(false)} />
-    </div>
-  );
+  // ── Step 0: StoryPay™ is moving to Stripe ─────────────────────────────────────
+  return <StoryPayComingSoon />;
 }
 
 // ── Progress indicator ────────────────────────────────────────────────────────

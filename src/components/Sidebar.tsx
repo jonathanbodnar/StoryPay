@@ -35,7 +35,6 @@ import { unregisterNativePush } from '@/components/NativePushRegistrar';
 import { LEADS_SEEN_KEY } from '@/lib/leads-badge';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
-import PaymentsOnboarding from '@/components/settings/PaymentsOnboarding';
 import { LockedFeatureModal } from '@/components/LockedFeatureView';
 
 interface Venue { id: string; name: string; ghl_location_id: string; }
@@ -265,7 +264,6 @@ export default function Sidebar({
   const [vcUnread, setVcUnread] = useState(0);
   const [paymentsActive, setPaymentsActive] = useState<boolean | null>(null); // null = loading
   const [paymentsPaused, setPaymentsPaused] = useState(false);
-  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   /** Locked-feature upgrade modal (opened when a locked menu item is clicked). */
   const [lockedItem, setLockedItem] = useState<NavItem | null>(null);
 
@@ -1315,50 +1313,6 @@ export default function Sidebar({
         navId={lockedItem?.navId}
       />
 
-      {/* StoryPay Onboarding Modal */}
-      {showOnboardingModal && mounted && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-          <div
-            className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl scrollbar-autohide"
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              el.classList.add('is-scrolling');
-              clearTimeout((el as HTMLElement & { _scrollTimer?: ReturnType<typeof setTimeout> })._scrollTimer);
-              (el as HTMLElement & { _scrollTimer?: ReturnType<typeof setTimeout> })._scrollTimer = setTimeout(() => {
-                el.classList.remove('is-scrolling');
-              }, 800);
-            }}
-          >
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-              <div className="flex items-center gap-2.5">
-                {paymentsPaused
-                  ? <Sparkles size={18} className="text-indigo-600" />
-                  : <Zap size={18} className="text-indigo-600" />}
-                <h2 className="font-semibold text-gray-900">
-                  {paymentsPaused ? 'StoryPay™ — coming soon' : 'Signup for StoryPay™'}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowOnboardingModal(false)}
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="px-6 py-5">
-              <PaymentsOnboarding
-                onActivated={() => {
-                  refreshPaymentsActive();
-                  setShowOnboardingModal(false);
-                }}
-              />
-            </div>
-          </div>
-        </div>,
-        document.body,
-      )}
     </>
   );
 }

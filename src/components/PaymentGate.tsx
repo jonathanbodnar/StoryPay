@@ -9,12 +9,13 @@
  *   - The user can open the onboarding modal directly from here.
  *
  * When StoryPay signup is paused, the locked state explains the pause instead
- * of pushing the venue into an application flow that is switched off. Approved
- * merchants are never affected. Venues that can use Stripe Connect get a
- * "Connect with Stripe" button instead.
+ * of pushing the venue into an application flow that is switched off. Venues
+ * that can use Stripe Connect get a "Connect with Stripe" button instead.
+ * New LunarPay applications are closed, so any other venue that isn't set up
+ * sees the same "moving to Stripe" notice.
  */
 import { useEffect, useState } from 'react';
-import { Zap, Lock, Loader2 } from 'lucide-react';
+import { Zap, Loader2 } from 'lucide-react';
 import StoryPayPausedNotice from '@/components/StoryPayPausedNotice';
 import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
@@ -100,25 +101,7 @@ export default function PaymentGate({ children }: { children: React.ReactNode })
     );
   }
 
-  // Not approved — show locked state
-  return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
-      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 ring-1 ring-red-100">
-        <Lock size={28} className="text-red-500" />
-      </div>
-      <h2 className="mb-2 text-xl font-bold text-gray-900">Payment processing required</h2>
-      <p className="mb-6 max-w-sm text-sm text-gray-500">
-        You need an approved StoryPay™ merchant account before you can send proposals or process
-        payments. The application takes just a few minutes — and it&apos;s free for venue owners.
-      </p>
-      <button
-        type="button"
-        onClick={() => window.dispatchEvent(new CustomEvent('storypay:open-onboarding'))}
-        className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
-      >
-        <Zap size={15} />
-        Signup for StoryPay™
-      </button>
-    </div>
-  );
+  // Not set up and Stripe isn't open to this venue yet: nothing to sign up
+  // for until it is (new LunarPay applications are closed).
+  return <StoryPayPausedNotice />;
 }

@@ -102,7 +102,7 @@ export default function StripeConnectPanel({ onActivated }: { onActivated?: () =
 
   const fees = state?.fees;
   const feeLine = fees
-    ? `Cards ${fees.cardPercent}% + 30¢ · Bank transfers ${fees.bankPercent}%. The automatic service fee on your invoices lets your clients cover it.`
+    ? `Cards ${fees.cardPercent}% + 30¢ · Bank transfers ${fees.bankPercent}%. The automatic service fee on your invoices helps cover it.`
     : null;
   const noticeClasses =
     notice?.tone === 'ok'
