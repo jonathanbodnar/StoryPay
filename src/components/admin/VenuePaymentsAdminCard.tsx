@@ -25,14 +25,21 @@ export function VenuePaymentsAdminCard({ venueId }: { venueId: string }) {
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/admin/venues/${venueId}/payments`, { cache: 'no-store' });
-    if (!res.ok) return;
-    const d = (await res.json()) as Data;
+    return res.ok ? ((await res.json()) as Data) : null;
+  }, [venueId]);
+
+  const apply = useCallback((d: Data | null) => {
+    if (!d) return;
     setData(d);
     setCard(d.override.card_fee_percent != null ? String(d.override.card_fee_percent) : '');
     setBank(d.override.bank_total_percent != null ? String(d.override.bank_total_percent) : '');
-  }, [venueId]);
+  }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    load().then((d) => { if (!cancelled) apply(d); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [load, apply]);
 
   async function save() {
     setSaving(true);
@@ -45,7 +52,7 @@ export function VenuePaymentsAdminCard({ venueId }: { venueId: string }) {
     const d = (await res.json().catch(() => ({}))) as { error?: string };
     setMsg(res.ok ? 'Saved.' : d.error || 'Could not save.');
     setSaving(false);
-    if (res.ok) void load();
+    if (res.ok) apply(await load());
   }
 
   if (!data) return null;
