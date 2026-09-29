@@ -184,6 +184,8 @@ export async function startProposalPayment(token: string, confirmationTokenId: s
         customer,
         confirm: true,
         confirmation_token: ct.id,
+        // Must match the payment form's list exactly (Stripe rejects a mismatch).
+        payment_method_types: acceptsBank(p, v) ? ['card', 'us_bank_account'] : ['card'],
         application_fee_amount: fee,
         // Keep the card or bank account for the automatic installments.
         ...(isPlan ? { setup_future_usage: 'off_session' as const } : {}),
