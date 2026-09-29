@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Loader2,
   Info,
-  Percent,
 } from 'lucide-react';
 import PaymentsOnboarding from '@/components/settings/PaymentsOnboarding';
 import { trackClient } from '@/lib/analytics-client';
@@ -17,7 +16,6 @@ interface VenueInfo {
   id: string;
   onboarding_status: string | null;
   accept_ach: boolean | null;
-  service_fee_rate: number;
   payments_provider?: string | null;
   stripe_charges_enabled?: boolean | null;
 }
@@ -27,18 +25,13 @@ function PaymentSettingsInner() {
   const [loading, setLoading] = useState(true);
   const [achSaving, setAchSaving] = useState(false);
   const [achSaved, setAchSaved] = useState(false);
-  const [feeInput, setFeeInput] = useState('');
-  const [feeSaving, setFeeSaving] = useState(false);
-  const [feeMsg, setFeeMsg] = useState<string | null>(null);
 
   async function loadVenue(showSpinner = false) {
     if (showSpinner) setLoading(true);
     try {
       const res = await fetch('/api/venues/me');
       if (res.ok) {
-        const v = (await res.json()) as VenueInfo;
-        setVenue(v);
-        setFeeInput(String(Number(v.service_fee_rate ?? 3.5)));
+        setVenue((await res.json()) as VenueInfo);
       }
     } finally {
       setLoading(false);
@@ -71,26 +64,6 @@ function PaymentSettingsInner() {
     }
   };
 
-  const saveServiceFee = async () => {
-    const n = parseFloat(feeInput);
-    if (!Number.isFinite(n) || n < 0 || n > 25) {
-      setFeeMsg('Enter a percentage between 0 and 25.');
-      return;
-    }
-    setFeeSaving(true);
-    setFeeMsg(null);
-    try {
-      const res = await fetch('/api/venues/me', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ service_fee_rate: Math.round(n * 100) / 100 }),
-      });
-      setFeeMsg(res.ok ? 'Saved. New invoices and proposals will use this rate.' : 'Could not save. Please try again.');
-    } finally {
-      setFeeSaving(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -108,7 +81,7 @@ function PaymentSettingsInner() {
       <div className="mb-8">
         <h1 className="font-heading text-2xl font-semibold text-gray-900">Payment settings</h1>
         <p className="mt-1 text-sm text-gray-500">
-          StoryPay™, powered by Stripe: your payment processing, service fee and payment methods
+          StoryPay™, powered by Stripe: your payment processing and payment methods
         </p>
       </div>
 
@@ -125,46 +98,6 @@ function PaymentSettingsInner() {
           </div>
           <div className="px-6 py-6">
             <PaymentsOnboarding onActivated={() => void loadVenue()} />
-          </div>
-        </section>
-
-        {/* Default service fee on invoices and proposals */}
-        <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
-            <Percent size={18} className="text-gray-400" />
-            <div>
-              <h2 className="font-heading text-base font-semibold text-gray-900">Service fee</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Added to every new invoice and proposal as its own line</p>
-            </div>
-          </div>
-          <div className="px-6 py-6 space-y-3">
-            <p className="text-sm text-gray-600">
-              Your clients pay the service fee whether they pay by card, bank transfer or check, so it helps cover
-              your online processing costs. You can change or remove it on any invoice. Set 0 to leave it off by
-              default.
-            </p>
-            <div className="flex items-center gap-2">
-              <div className="relative w-28">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={feeInput}
-                  onChange={(e) => { if (/^\d{0,2}(\.\d{0,2})?$/.test(e.target.value)) setFeeInput(e.target.value); }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 pr-7 text-sm text-gray-900 focus:border-gray-400 focus:outline-none"
-                  aria-label="Default service fee percent"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => void saveServiceFee()}
-                disabled={feeSaving}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[#1b1b1b] px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
-              >
-                {feeSaving && <Loader2 size={14} className="animate-spin" />} Save
-              </button>
-            </div>
-            {feeMsg && <p className="text-xs text-gray-500">{feeMsg}</p>}
           </div>
         </section>
 
