@@ -46,6 +46,7 @@ export default function DashboardShell({
   trialEndsAt = null,
   trialHasCard = false,
   trialFreePlan = false,
+  planEndsAt = null,
   children,
 }: {
   venue: Venue;
@@ -74,6 +75,8 @@ export default function DashboardShell({
   trialHasCard?: boolean;
   /** True when the venue downgraded to Free but is still inside the trial window. */
   trialFreePlan?: boolean;
+  /** The venue cancelled: its plan stays on until this ISO date, then it moves to Free. */
+  planEndsAt?: string | null;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -223,7 +226,26 @@ export default function DashboardShell({
         <MobileDashboardRedirect />
         <main className={`mx-auto flex w-full flex-1 flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
           {role !== 'member' && <OnboardingLauncher />}
-          {trialCountdown ? (
+          {planEndsAt ? (
+            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex-1">
+                <span className="font-semibold">
+                  Your plan ends {new Date(planEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                </span>
+                {' '}
+                <span className="text-gray-500">
+                  After that you&apos;re on the Free plan and won&apos;t be charged again. Your listing, leads and account stay right here.
+                </span>
+              </div>
+              <Link
+                href="/dashboard/directory-billing"
+                onClick={(e) => routeBillingOut(e, '/dashboard/directory-billing')}
+                className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
+              >
+                Manage plan
+              </Link>
+            </div>
+          ) : trialCountdown ? (
             trialFreePlan ? (
               <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex-1">

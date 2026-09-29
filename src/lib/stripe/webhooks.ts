@@ -94,8 +94,9 @@ async function onSubscriptionChanged(sub: Stripe.Subscription): Promise<void> {
 async function onSubscriptionDeleted(sub: Stripe.Subscription): Promise<void> {
   const v = await venueForSubscriptionChange(sub);
   if (!v || v.stripe_subscription_id !== sub.id) return; // already cleared by our own cancel path
-  if (v.directory_downgrade_at) {
-    // The owner chose "Switch to Free" during the trial; the trial just ended.
+  if (v.directory_downgrade_at || sub.cancel_at_period_end) {
+    // The venue cancelled and the term it paid for (or its trial) just ended:
+    // it moves to Free and stays on the platform.
     const { applyFreeDowngrade } = await import('@/lib/venue-billing');
     await supabaseAdmin.from('venues').update({ stripe_subscription_id: null, directory_subscription_external_id: null }).eq('id', v.id);
     await applyFreeDowngrade(v.id);

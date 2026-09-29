@@ -217,6 +217,10 @@ type BillingSummary = {
   stripe_move_available?: boolean;
   /** Plan and add-on changes are locked (private client on a plan-only price). */
   plan_changes_locked?: boolean;
+  /** The venue cancelled: its plan stays on until this date, then it moves to Free. */
+  scheduled_downgrade_at?: string | null;
+  /** The pending cancel can be undone ("Keep my plan"). */
+  can_keep_plan?: boolean;
 };
 
 function formatTrialDuration(p: Pick<Plan, 'trial_period_value' | 'trial_period_unit'>): string {
@@ -385,13 +389,18 @@ export default function DirectoryBillingPage() {
       const d = (await res.json().catch(() => ({}))) as
         | { kind: 'switched'; plan_id: string }
         | { kind: 'checkout_required'; url: string; plan_id: string }
+        | { kind: 'scheduled'; plan_id: string; downgrade_at: string }
         | { error?: string };
       if (!res.ok) throw new Error((d as { error?: string }).error || 'Plan change failed');
       if ((d as { kind?: string }).kind === 'checkout_required') {
         void redirectToCheckout((d as { url: string }).url);
         return;
       }
-      setInfo('Plan updated.');
+      if ((d as { kind?: string }).kind === 'scheduled') {
+        setInfo(`Done. You'll keep your current plan until ${formatDate((d as { downgrade_at: string }).downgrade_at)}, then move to ${target ? displayPlanName(target.name) : 'the Free plan'}.`);
+      } else {
+        setInfo('Plan updated.');
+      }
       await load();
     } catch (e) {
       setError(friendlyError(e instanceof Error ? e.message : 'Plan change failed'));
@@ -513,12 +522,33 @@ export default function DirectoryBillingPage() {
     setInfo('');
     try {
       const res = await fetch('/api/venue-billing/cancel', { method: 'POST' });
-      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      const d = (await res.json().catch(() => ({}))) as { kind?: 'scheduled' | 'downgraded'; downgradeAt?: string; error?: string };
       if (!res.ok) throw new Error(d.error || 'Cancel failed');
-      setInfo('Subscription canceled. You can resubscribe anytime.');
+      setInfo(
+        d.kind === 'scheduled' && d.downgradeAt
+          ? `Subscription canceled. You'll keep your plan until ${formatDate(d.downgradeAt)}, then move to the Free plan. You won't be charged again.`
+          : "Subscription canceled. You're now on the Free plan and won't be charged again.",
+      );
       await load();
     } catch (e) {
       setError(friendlyError(e instanceof Error ? e.message : 'Cancel failed'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function keepPlan() {
+    setBusy('keep_plan');
+    setError('');
+    setInfo('');
+    try {
+      const res = await fetch('/api/venue-billing/keep-plan', { method: 'POST' });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(d.error || 'Could not keep your plan');
+      setInfo('Your plan is back on and will renew as usual.');
+      await load();
+    } catch (e) {
+      setError(friendlyError(e instanceof Error ? e.message : 'Could not keep your plan'));
     } finally {
       setBusy(null);
     }
@@ -624,6 +654,11 @@ export default function DirectoryBillingPage() {
   const isPastDue = status === 'past_due';
   const isPending = status === 'pending';
   const confirmTarget = confirmPlanId ? plans.find((p) => p.id === confirmPlanId) : null;
+  // Cancelled: the plan stays on until this date, then the venue moves to Free.
+  const scheduledEnd = summary.scheduled_downgrade_at ?? null;
+  // Where a cancel would land: the end of the paid term (or carded trial).
+  const termEndsAt = isActive ? summary.subscription?.next_payment_on ?? null : null;
+  const currentPlanLabel = currentPlan ? displayPlanName(currentPlan.name) : 'your plan';
 
   return (
     <div className="space-y-6">
@@ -689,7 +724,39 @@ export default function DirectoryBillingPage() {
       {/* Trial banner — only shown during an active trial (not expired — everyone
           has a card on file from onboarding, so LunarPay auto-charges at trial
           end; the past-due wall handles any failed charge automatically). */}
-      {summary.trial.status === 'active' || summary.trial.status === 'forever' ? (
+      {scheduledEnd ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <Calendar size={18} className="mt-0.5 flex-shrink-0 text-amber-700" />
+              <div>
+                <h3 className="font-semibold text-amber-900">
+                  {currentPlan ? displayPlanName(currentPlan.name) : 'Your plan'} ends {formatDate(scheduledEnd)}
+                </h3>
+                <p className="mt-1 text-sm text-amber-800">
+                  Your subscription is canceled, so you won&apos;t be charged again. Everything stays on until
+                  then. After that your venue moves to the Free plan, and your listing, leads and account stay
+                  on StoryVenue.
+                </p>
+              </div>
+            </div>
+            {summary.can_keep_plan ? (
+              <button
+                type="button"
+                onClick={() => void keepPlan()}
+                disabled={busy === 'keep_plan'}
+                className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-xl px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50 sm:self-auto"
+                style={{ backgroundColor: BRAND }}
+              >
+                {busy === 'keep_plan' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                Keep my plan
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {!scheduledEnd && (summary.trial.status === 'active' || summary.trial.status === 'forever') ? (
         <TrialActiveBanner
           trial={summary.trial}
           chargeTotalCents={summary.charge.total_cents}
@@ -828,7 +895,9 @@ export default function DirectoryBillingPage() {
                               {cents > 0 ? formatCents(cents) : 'Free'}
                               {cents > 0 && <span className="text-xs font-normal ml-0.5 text-gray-500">/mo</span>}
                             </div>
-                            {summary.subscription?.next_payment_on && isCurrent ? (
+                            {isCurrent && scheduledEnd ? (
+                              <div className="text-[10px] text-amber-700">Ends {formatDate(scheduledEnd)}</div>
+                            ) : summary.subscription?.next_payment_on && isCurrent ? (
                               <div className="text-[10px] text-gray-400">Next: {formatDate(summary.subscription.next_payment_on)}</div>
                             ) : null}
                           </>
@@ -917,7 +986,12 @@ export default function DirectoryBillingPage() {
 
                       {/* ── Actions ── */}
                       {isCurrent ? (
-                        (isActive || isPastDue) ? (
+                        scheduledEnd ? (
+                          <p className="text-xs text-gray-500">
+                            Canceled. This plan stays on until {formatDate(scheduledEnd)}, then your venue moves to the
+                            Free plan.
+                          </p>
+                        ) : (isActive || isPastDue) ? (
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
@@ -958,6 +1032,10 @@ export default function DirectoryBillingPage() {
                             See the full platform in action. Free 30-minute demo — no pressure.
                           </p>
                         </div>
+                      ) : scheduledEnd && cents === 0 ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2 text-xs font-semibold text-gray-700">
+                          <Calendar size={12} /> Starts {formatDate(scheduledEnd)}
+                        </span>
                       ) : (
                         <button
                           type="button"
@@ -1012,9 +1090,11 @@ export default function DirectoryBillingPage() {
             </div>
           ) : (
             <p className="text-sm text-gray-500">
-              {currentCents > 0
-                ? 'No card on file. Add one to keep your subscription active.'
-                : 'No card on file. Switch to a paid plan to add a payment method.'}
+              {scheduledEnd
+                ? 'No card needed. Your subscription is canceled and won’t renew.'
+                : currentCents > 0
+                  ? 'No card on file. Add one to keep your subscription active.'
+                  : 'No card on file. Switch to a paid plan to add a payment method.'}
             </p>
           )}
           {/*
@@ -1023,7 +1103,7 @@ export default function DirectoryBillingPage() {
             their saved card was removed (or to swap it out before renewal).
             Free plans don't need a card so we hide it there.
           */}
-          {currentCents > 0 ? (
+          {currentCents > 0 && !scheduledEnd ? (
             <button
               type="button"
               disabled={busy === 'update_pm'}
@@ -1118,6 +1198,7 @@ export default function DirectoryBillingPage() {
           paymentMethod={summary.payment_method}
           trial={summary.trial}
           subscriptionExists={Boolean(summary.subscription)}
+          termEndsAt={termEndsAt}
           busy={busy === `change:${confirmTarget.id}`}
           addonBusy={busy?.startsWith('addon:') ? (busy.split(':')[1] as 'verified' | 'sponsored' | 'concierge') : null}
           onToggleAddon={(kind) => void toggleAddon(kind)}
@@ -1130,10 +1211,18 @@ export default function DirectoryBillingPage() {
         <ConfirmDialog
           title="Cancel your StoryVenue subscription?"
           body={
-            <>
-              Your paid plan will end and your venue will drop back to the free tier. Billing stops
-              immediately — you won&apos;t be charged again on your card. You can resubscribe later.
-            </>
+            termEndsAt ? (
+              <>
+                You&apos;ll keep <strong>{currentPlanLabel}</strong> until <strong>{formatDate(termEndsAt)}</strong>.
+                After that your venue moves to the Free plan and you won&apos;t be charged again. Your listing,
+                leads and account stay on StoryVenue.
+              </>
+            ) : (
+              <>
+                Your venue moves to the Free plan now and you won&apos;t be charged again. Your listing, leads
+                and account stay on StoryVenue.
+              </>
+            )
           }
           confirmLabel="Cancel subscription"
           confirmTone="danger"
@@ -1649,6 +1738,7 @@ function UpgradePlanModal({
   paymentMethod,
   trial,
   subscriptionExists,
+  termEndsAt,
   busy,
   addonBusy,
   onToggleAddon,
@@ -1664,6 +1754,8 @@ function UpgradePlanModal({
   paymentMethod: PaymentMethod;
   trial: TrialState;
   subscriptionExists: boolean;
+  /** End of the paid term (or carded trial): switching to Free takes effect then. */
+  termEndsAt: string | null;
   busy: boolean;
   addonBusy: 'verified' | 'sponsored' | 'concierge' | null;
   onToggleAddon: (kind: 'verified' | 'sponsored' | 'concierge') => void;
@@ -1765,10 +1857,20 @@ function UpgradePlanModal({
               </div>
             ) : isDowngradeToFree ? (
               <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
-                <p>
-                  You&apos;ll be moved to the <strong>{displayPlanName(plan.name)}</strong> plan immediately. Your
-                  current paid subscription will be canceled and you won&apos;t be charged again.
-                </p>
+                {subscriptionExists && termEndsAt ? (
+                  <p>
+                    You&apos;ll keep{' '}
+                    <strong>{currentPlan ? displayPlanName(currentPlan.name) : 'your current plan'}</strong> until{' '}
+                    <strong>{formatDate(termEndsAt)}</strong>, then move to the{' '}
+                    <strong>{displayPlanName(plan.name)}</strong> plan. Your subscription won&apos;t renew, so you
+                    won&apos;t be charged again.
+                  </p>
+                ) : (
+                  <p>
+                    You&apos;ll be moved to the <strong>{displayPlanName(plan.name)}</strong> plan immediately. Your
+                    current paid subscription will be canceled and you won&apos;t be charged again.
+                  </p>
+                )}
               </div>
             ) : willPatch ? (
               <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900 space-y-1">

@@ -77,6 +77,8 @@ export type AdminVenueRow = Record<string, unknown> & {
   wedding_planner?: boolean | null;
   directory_subscription_status?: string | null;
   directory_trial_ends_at?: string | null;
+  /** The venue cancelled: its plan stays on until this date, then it moves to Free. */
+  directory_downgrade_at?: string | null;
   directory_plans?: { id: string; name: string; slug: string } | null;
   lunarpay_admin?: LunarPayAdminSummary;
   /** StoryPay™ on Stripe Connect. */
@@ -123,6 +125,14 @@ function timeAgo(iso: string | null | undefined): string | null {
 }
 
 /** The venue's StoryPay™ stage pill, with a link to its Stripe account and a manual re-sync. */
+/** SaaS status for the admin rows, with the Free date when the venue cancelled. */
+function saasStatusText(venue: AdminVenueRow): string {
+  const status = String(venue.directory_subscription_status ?? '');
+  if (!venue.directory_downgrade_at) return status;
+  const on = new Date(venue.directory_downgrade_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${status} · canceled, Free on ${on}`;
+}
+
 function StoryPayStatusCell({ venue, onSync, syncing }: {
   venue: AdminVenueRow;
   /** Re-read the account from Stripe now (desktop rows only). */
@@ -1384,7 +1394,7 @@ export function VenueManagementPortal({
                 </div>
                 {(venue.directory_subscription_status as string) && (
                   <span className="text-[10px] text-gray-400">
-                    SaaS: <span className="text-gray-600">{String(venue.directory_subscription_status)}</span>
+                    SaaS: <span className="text-gray-600">{saasStatusText(venue)}</span>
                   </span>
                 )}
                 <FunnelStagePill venue={venue} />
@@ -2003,7 +2013,7 @@ function VenueMobileCard({
         <StoryPayStatusCell venue={venue} />
       </div>
       <div className="text-[11px] text-gray-400">Plan: {planLabelText}</div>
-      <div className="text-[10px] text-gray-500">SaaS billing: {(venue.directory_subscription_status as string) || '—'}</div>
+      <div className="text-[10px] text-gray-500">SaaS billing: {saasStatusText(venue) || '—'}</div>
       <select
         value={venue.directory_plan_id || ''}
         disabled={busy}
@@ -2235,7 +2245,7 @@ function DemoVenueCard({
             </div>
             {(venue.directory_subscription_status as string) && (
               <span className="text-[10px] text-gray-400">
-                SaaS: <span className="text-gray-600">{String(venue.directory_subscription_status)}</span>
+                SaaS: <span className="text-gray-600">{saasStatusText(venue)}</span>
               </span>
             )}
             <FunnelStagePill venue={venue} />

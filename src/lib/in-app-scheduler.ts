@@ -27,6 +27,9 @@
  *                                      (separate from the bride/lead thread
  *                                      model above — see concierge-sms-sync.ts)
  *   - ai-send               every 10m  AI Concierge follow-up SMS dispatch
+ *   - free-downgrades       every 10m  venues that cancelled move to Free at
+ *                                      the end of the term they paid for
+ *                                      (see trial-sweep.ts)
  *   - owner-ghl-stage-sync  every 30m  keeps the platform owner's "SaaS
  *                                      Clients" GHL pipeline in sync with
  *                                      every venue's trial/paid/canceled
@@ -170,6 +173,18 @@ const JOBS: ScheduledJob[] = [
       const r = await runAiSendCron();
       if (r.killSwitchEngaged) return 'kill-switch engaged; skipped';
       return `scanned=${r.scanned} sent=${r.sent} expired=${r.expired} retried=${r.retried} optedOut=${r.optedOut} errors=${r.errors.length}`;
+    },
+  },
+  {
+    // A venue that cancels keeps its plan until the end of the term it paid
+    // for, then moves to Free (lib/trial-sweep.ts). A few minutes late is fine.
+    name: 'free-downgrades',
+    intervalMs: 10 * 60 * 1000,
+    initialDelayMs: 2 * 60 * 1000,
+    run: async () => {
+      const { applyDueFreeDowngrades } = await import('@/lib/trial-sweep');
+      const r = await applyDueFreeDowngrades();
+      return r.applied > 0 || r.errors > 0 ? `applied=${r.applied} errors=${r.errors}` : null;
     },
   },
   {

@@ -94,27 +94,59 @@ export async function processTrialSweep(): Promise<TrialSweepResult> {
 
   // ── 2. Honor explicit, user-chosen deferred downgrades ────────────────────
   try {
-    const { data: dueDowngrades } = await supabaseAdmin
-      .from('venues')
-      .select('id, directory_downgrade_at')
-      .not('directory_downgrade_at', 'is', null)
-      .lte('directory_downgrade_at', nowIso)
-      .limit(200);
-
-    for (const row of (dueDowngrades ?? []) as Record<string, unknown>[]) {
-      const venueId = String(row.id);
-      try {
-        await applyFreeDowngrade(venueId);
-        result.downgradesApplied += 1;
-      } catch (e) {
-        console.error('[trial-sweep] downgrade failed', venueId, e);
-        result.errors += 1;
-      }
-    }
+    const due = await applyDueFreeDowngrades();
+    result.downgradesApplied += due.applied;
+    result.errors += due.errors;
   } catch (e) {
     console.error('[trial-sweep] downgrade query failed', e);
     result.errors += 1;
   }
 
   return result;
+}
+
+/** How long past a Stripe venue's end date to leave it to Stripe's own webhook. */
+const STRIPE_WEBHOOK_GRACE_MS = 30 * 60 * 1000;
+
+/**
+ * Venues that cancelled keep their plan until `directory_downgrade_at` (the end
+ * of the term they paid for, or their trial), then move to Free here. Stripe
+ * ends its subscription at that moment and its webhook usually gets there
+ * first; this covers everything else (LunarPay venues, trials with no card, a
+ * missed webhook). Run by the in-app scheduler (lib/in-app-scheduler.ts).
+ */
+export async function applyDueFreeDowngrades(): Promise<{ applied: number; errors: number }> {
+  const now = Date.now();
+  const out = { applied: 0, errors: 0 };
+  const { data, error } = await supabaseAdmin
+    .from('venues')
+    .select('id, directory_downgrade_at, stripe_subscription_id')
+    .not('directory_downgrade_at', 'is', null)
+    .lte('directory_downgrade_at', new Date(now).toISOString())
+    .limit(200);
+  if (error) throw new Error(error.message);
+
+  for (const row of (data ?? []) as { id: string; directory_downgrade_at: string; stripe_subscription_id: string | null }[]) {
+    if (row.stripe_subscription_id && new Date(row.directory_downgrade_at).getTime() > now - STRIPE_WEBHOOK_GRACE_MS) {
+      continue;
+    }
+    // Claim the row so a second run can't apply (and email) it twice.
+    const { data: claimed } = await supabaseAdmin
+      .from('venues')
+      .update({ directory_downgrade_at: null })
+      .eq('id', row.id)
+      .eq('directory_downgrade_at', row.directory_downgrade_at)
+      .select('id');
+    if (!claimed?.length) continue;
+    try {
+      await applyFreeDowngrade(row.id);
+      out.applied += 1;
+    } catch (e) {
+      // Put the date back so the next run tries again.
+      await supabaseAdmin.from('venues').update({ directory_downgrade_at: row.directory_downgrade_at }).eq('id', row.id);
+      console.error('[free-downgrades] downgrade failed', row.id, e);
+      out.errors += 1;
+    }
+  }
+  return out;
 }

@@ -31,7 +31,7 @@ export default async function DashboardLayout({
  // don't hit the venues table 3 times per page render.
  const { data: venueRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge, wedding_planner, billing_provider, slug, email, notification_email')
+   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge, wedding_planner, billing_provider, slug, email, notification_email, directory_downgrade_at')
    .eq('id', user.venueId)
    .maybeSingle();
 
@@ -145,7 +145,10 @@ export default async function DashboardLayout({
  // stays gated to the no-card trialing path — a card-on-file venue auto-charges
  // at trial end rather than getting locked out.
  const showTrialCountdown = (inTrial && trialStatus === 'active') || onFreeDuringTrialWindow;
- const trialExpiredWall = inTrial && !hasExternalSub && trialStatus === 'expired';
+ // A venue that cancelled keeps its plan until this moment, then moves to Free
+ // (lib/venue-billing.ts). It's never walled while that switch is pending.
+ const planEndsAt = ungated ? null : ((vr.directory_downgrade_at as string | null) ?? null);
+ const trialExpiredWall = inTrial && !hasExternalSub && trialStatus === 'expired' && !planEndsAt;
  const trialDaysRemaining = showTrialCountdown ? daysRemainingInTrial(trialState) : 0;
  const trialEndsAt = (vr.directory_trial_ends_at as string | null) ?? null;
 
@@ -206,6 +209,7 @@ trialCountdown={showTrialCountdown}
  trialEndsAt={trialEndsAt}
  trialHasCard={hasExternalSub}
  trialFreePlan={onFreeDuringTrialWindow}
+ planEndsAt={planEndsAt}
  >
  {children}
  </DashboardShell>

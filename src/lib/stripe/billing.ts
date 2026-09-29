@@ -824,28 +824,74 @@ export async function cancelVenueSubscriptionStripe(venueId: string): Promise<vo
 }
 
 /**
- * "Switch to Free": during a trial, stop the future charge but keep access
- * until the trial ends (Stripe cancels at that moment and the webhook applies
- * Free). Otherwise switch now — the same rule the LunarPay path follows.
+ * Cancel / "Switch to Free": the venue keeps its plan until the end of the
+ * term it paid for (or its carded trial), then moves to Free and stays on the
+ * platform. The subscription is set to end at that moment so it never renews;
+ * Stripe's end-of-term webhook applies Free, and the free-downgrades job
+ * (lib/trial-sweep.ts) is the backstop. No subscription, or nothing left of
+ * the term → Free now.
  */
 export async function scheduleDowngradeToFreeStripe(venueId: string): Promise<{ kind: 'scheduled'; downgradeAt: string } | { kind: 'downgraded' }> {
   const v = await loadBillingVenue(venueId);
   if (!v) throw new Error('Venue not found');
-  const trialEnds = v.directory_trial_ends_at ? new Date(v.directory_trial_ends_at) : null;
-  const inTrial = v.directory_subscription_status === 'trialing' && trialEnds && trialEnds.getTime() > Date.now() + 60_000;
-  if (inTrial && trialEnds && v.stripe_subscription_id) {
-    await getStripe().subscriptions.update(v.stripe_subscription_id, { cancel_at: toUnix(trialEnds), proration_behavior: 'none' });
-    await updateVenue(venueId, { directory_downgrade_at: trialEnds.toISOString() });
+  const now = Date.now();
+  if (v.directory_downgrade_at && new Date(v.directory_downgrade_at).getTime() > now) {
+    return { kind: 'scheduled', downgradeAt: v.directory_downgrade_at };
+  }
+
+  let endsAt: Date | null = null;
+  const sub = v.stripe_subscription_id ? await retrieveSaasSub(v.stripe_subscription_id) : null;
+  if (sub && (sub.status === 'active' || sub.status === 'trialing')) {
+    // A trialing subscription's current period is the trial.
+    const end = sub.status === 'trialing' ? sub.trial_end : sub.items.data[0]?.current_period_end;
+    if (end && end * 1000 > now + 60_000) {
+      const updated = await getStripe().subscriptions.update(sub.id, { cancel_at_period_end: true });
+      endsAt = new Date((updated.cancel_at ?? end) * 1000);
+    }
+  }
+
+  if (endsAt) {
+    await updateVenue(venueId, { directory_downgrade_at: endsAt.toISOString() });
     await recordStripeBillingEvent({
-      venueId, planId: null, amountCents: 0, eventType: 'subscription_cancel',
-      externalEventId: `downgrade_scheduled:${venueId}:${Date.now()}`,
-      metadata: { reason: 'user_downgrade_scheduled', downgrade_at: trialEnds.toISOString(), subscription_id: v.stripe_subscription_id },
+      venueId, planId: v.directory_plan_id, amountCents: 0, eventType: 'subscription_cancel_scheduled',
+      externalEventId: `cancel_scheduled:${venueId}:${now}`,
+      metadata: { reason: 'user_cancel', downgrade_at: endsAt.toISOString(), subscription_id: sub?.id ?? null },
     });
-    return { kind: 'scheduled', downgradeAt: trialEnds.toISOString() };
+    scheduleOwnerGhlSync(venueId);
+    return { kind: 'scheduled', downgradeAt: endsAt.toISOString() };
   }
   const { applyFreeDowngrade } = await import('@/lib/venue-billing');
   await applyFreeDowngrade(venueId);
   return { kind: 'downgraded' };
+}
+
+export const PLAN_CANT_BE_KEPT_MESSAGE =
+  'Your plan can’t be restarted from here. It stays on until its end date, and you can choose a plan again anytime after that.';
+
+/**
+ * "Keep my plan": undo a pending cancel before its end date. The subscription
+ * renews as normal again; a trial with no card simply carries on.
+ */
+export async function keepPlanStripe(venueId: string): Promise<void> {
+  const v = await loadBillingVenue(venueId);
+  if (!v) throw new Error('Venue not found');
+  if (!v.directory_downgrade_at) return;
+  if (v.stripe_subscription_id) {
+    const sub = await retrieveSaasSub(v.stripe_subscription_id);
+    if (!sub) throw new Error(PLAN_CANT_BE_KEPT_MESSAGE);
+    if (sub.cancel_at_period_end) await getStripe().subscriptions.update(sub.id, { cancel_at_period_end: false });
+    else if (sub.cancel_at) await getStripe().subscriptions.update(sub.id, { cancel_at: '' });
+  } else if (v.directory_subscription_status !== 'trialing') {
+    // A paid term with no subscription left behind it (e.g. a cancelled LunarPay plan).
+    throw new Error(PLAN_CANT_BE_KEPT_MESSAGE);
+  }
+  await updateVenue(venueId, { directory_downgrade_at: null });
+  await recordStripeBillingEvent({
+    venueId, planId: v.directory_plan_id, amountCents: 0, eventType: 'subscription_resumed',
+    externalEventId: `resumed:${venueId}:${Date.now()}`,
+    metadata: { reason: 'user_kept_plan', canceled_downgrade_at: v.directory_downgrade_at, subscription_id: v.stripe_subscription_id },
+  });
+  scheduleOwnerGhlSync(venueId);
 }
 
 export async function extendTrialStripe(venueId: string, newTrialEndsAt: Date): Promise<{ trialEndsAt: string; newSubId: string | null }> {
