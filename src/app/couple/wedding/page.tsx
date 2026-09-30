@@ -144,6 +144,25 @@ export default function CoupleWeddingPage() {
   const [selected, setSelected] = useState<SearchItem | null>(null);
   const [message, setMessage] = useState('');
   const [showVenueSearch, setShowVenueSearch] = useState(false);
+  // "My venue isn't here": a suggestion the StoryVenue team can follow up on.
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestLocation, setSuggestLocation] = useState('');
+  const [suggestState, setSuggestState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  async function sendVenueSuggestion() {
+    const venueName = query.trim();
+    if (venueName.length < 2) return;
+    setSuggestState('sending');
+    try {
+      const res = await coupleAuthedFetch('/api/couple/venue-suggestion', {
+        method: 'POST',
+        body: JSON.stringify({ venueName, location: suggestLocation.trim() || undefined }),
+      });
+      setSuggestState(res.ok ? 'sent' : 'error');
+    } catch {
+      setSuggestState('error');
+    }
+  }
 
   const load = useCallback(async () => {
     const supabase = getCoupleSupabase();
@@ -620,7 +639,10 @@ export default function CoupleWeddingPage() {
                         className={`${INPUT} pl-9`}
                         placeholder="Search venue by name"
                         value={query}
-                        onChange={(e) => setQuery(e.target.value)}
+                        onChange={(e) => {
+                          setQuery(e.target.value);
+                          if (suggestState !== 'idle') setSuggestState('idle');
+                        }}
                       />
                       {searching && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />}
                     </div>
@@ -649,7 +671,51 @@ export default function CoupleWeddingPage() {
                       </ul>
                     )}
                     {query.trim().length >= 2 && !searching && results.length === 0 && (
-                      <p className="mt-3 text-sm text-gray-400">No venues found. Try a different name.</p>
+                      suggestState === 'sent' ? (
+                        <p className="mt-3 text-sm text-gray-600">
+                          Thanks! We&apos;ll invite {query.trim()} to StoryVenue. Your planner works either way.
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-sm text-gray-500">
+                            No venues found. Try a different name, or{' '}
+                            {!suggestOpen ? (
+                              <button
+                                type="button"
+                                onClick={() => setSuggestOpen(true)}
+                                className="font-semibold text-gray-800 underline"
+                              >
+                                tell us your venue
+                              </button>
+                            ) : (
+                              'tell us your venue'
+                            )}
+                            {' '}and we&apos;ll invite them.
+                          </p>
+                          {suggestOpen && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <input
+                                id="venue-suggest-location"
+                                className={`${INPUT} min-w-0 flex-1`}
+                                placeholder={`City and state for ${query.trim()} (optional)`}
+                                value={suggestLocation}
+                                onChange={(e) => setSuggestLocation(e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void sendVenueSuggestion()}
+                                disabled={suggestState === 'sending'}
+                                className="shrink-0 rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                              >
+                                {suggestState === 'sending' ? 'Sending…' : 'Send'}
+                              </button>
+                            </div>
+                          )}
+                          {suggestState === 'error' && (
+                            <p className="text-xs text-red-600">That didn&apos;t send. Please try again.</p>
+                          )}
+                        </div>
+                      )
                     )}
                   </>
                 ) : (

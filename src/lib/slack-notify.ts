@@ -239,3 +239,28 @@ export async function notifySubscriptionCanceled(opts: {
     `Subscription canceled — ${opts.venueName}`,
   );
 }
+
+/** A couple's venue isn't on StoryVenue yet: a warm lead for the team to invite. */
+export async function notifyVenueSuggestion(opts: {
+  venueName: string;
+  location: string | null;
+  coupleName: string | null;
+  coupleEmail: string | null;
+  weddingDate: string | null;
+}): Promise<void> {
+  const where = opts.location ? ` (${opts.location})` : '';
+  const who = [opts.coupleName, opts.coupleEmail].filter(Boolean).join(' · ') || 'A couple';
+  const when = opts.weddingDate ? `\nWedding date: ${opts.weddingDate}` : '';
+  await postToSlack(
+    [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `🏛️ Venue to invite — *${truncate(opts.venueName, 120)}*${where}\nSuggested by ${who} in their Wedding Planner.${when}`,
+        },
+      },
+    ],
+    `Venue to invite — ${opts.venueName}`,
+  );
+}
