@@ -480,7 +480,7 @@ export function VenueManagementPortal({
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [copiedGhl, setCopiedGhl] = useState(false);
+  const [copiedLogin, setCopiedLogin] = useState(false);
   // Per-row send-invite state
   const [invitingId,    setInvitingId]   = useState<string | null>(null);
   const [inviteToastId, setInviteToastId] = useState<string | null>(null);
@@ -952,13 +952,13 @@ export function VenueManagementPortal({
             const url =
               (venues[0]?.login_url as string | null)?.split('/login/')[0] ||
               (typeof window !== 'undefined' ? window.location.origin : '');
-            void navigator.clipboard.writeText(`${url}/login/ghl`);
-            setCopiedGhl(true);
-            setTimeout(() => setCopiedGhl(false), 2000);
+            void navigator.clipboard.writeText(`${url}/login`);
+            setCopiedLogin(true);
+            setTimeout(() => setCopiedLogin(false), 2000);
           }}
           className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
         >
-          {copiedGhl ? 'Copied Legacy login URL' : 'Copy Legacy login URL'}
+          {copiedLogin ? 'Copied login URL' : 'Copy login URL'}
         </button>
       </div>
 
