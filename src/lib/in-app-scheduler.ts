@@ -30,6 +30,8 @@
  *   - free-downgrades       every 10m  venues that cancelled move to Free at
  *                                      the end of the term they paid for
  *                                      (see trial-sweep.ts)
+ *   - no-card-trials        every 30m  trial emails for venues without a card,
+ *                                      then Free after a 7-day grace period
  *   - owner-ghl-stage-sync  every 30m  keeps the platform owner's "SaaS
  *                                      Clients" GHL pipeline in sync with
  *                                      every venue's trial/paid/canceled
@@ -185,6 +187,21 @@ const JOBS: ScheduledJob[] = [
       const { applyDueFreeDowngrades } = await import('@/lib/trial-sweep');
       const r = await applyDueFreeDowngrades();
       return r.applied > 0 || r.errors > 0 ? `applied=${r.applied} errors=${r.errors}` : null;
+    },
+  },
+  {
+    // Trials that end without a card: a heads-up 3 days out, one notice on the
+    // end date, then Free after a 7-day grace period (lib/trial-sweep.ts).
+    name: 'no-card-trials',
+    intervalMs: 30 * 60 * 1000,
+    initialDelayMs: 3 * 60 * 1000,
+    run: async () => {
+      const { processNoCardTrials } = await import('@/lib/trial-sweep');
+      const r = await processNoCardTrials();
+      const total = r.reminded + r.endedNotices + r.movedToFree + r.errors;
+      return total > 0
+        ? `reminded=${r.reminded} ended_notices=${r.endedNotices} moved_to_free=${r.movedToFree} errors=${r.errors}`
+        : null;
     },
   },
   {

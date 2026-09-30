@@ -104,6 +104,44 @@ export async function notifyVenueTrialEndingSoon(
   );
 }
 
+const PLANS_URL = `${APP_URL}/dashboard/directory-billing`;
+
+/** A trial with no card ends in a few days: add one, or it moves to Free. Email only. */
+export async function notifyVenueTrialEndingNoCard(
+  venueId: string,
+  opts: { trialEndsAt: string; amountCents: number; daysLeft: number },
+): Promise<void> {
+  const owner = await loadOwner(venueId);
+  if (!owner?.email) return;
+  const when = fmtDate(opts.trialEndsAt);
+  const price = opts.amountCents > 0 ? ` for ${dollars(opts.amountCents)}/mo` : '';
+  const html = wrapHtml(
+    `Your free trial ends in ${opts.daysLeft} day${opts.daysLeft === 1 ? '' : 's'}`,
+    `<p>Your Bride Booking System™ trial for <strong>${owner.venueName}</strong> ends on <strong>${when}</strong>.</p>
+     <p>Add a card to keep instant guide delivery and speed-to-lead follow-up running${price}. You won't be charged before ${when}.</p>
+     <p>If you don't add one, your account moves to the Free plan. Your listing stays live and couples can still find you.</p>`,
+    { label: 'Add a card', url: PLANS_URL },
+  );
+  await sendEmail({ to: owner.email, subject: `Your free trial ends ${when}`, html }).catch(() => {});
+}
+
+/** A trial with no card just ended: add one now, or move to Free on `freeOn`. Email only. */
+export async function notifyVenueTrialEndedNoCard(
+  venueId: string,
+  opts: { freeOn: string; amountCents: number },
+): Promise<void> {
+  const owner = await loadOwner(venueId);
+  if (!owner?.email) return;
+  const price = opts.amountCents > 0 ? ` for ${dollars(opts.amountCents)}/mo` : '';
+  const html = wrapHtml(
+    'Your free trial ended',
+    `<p>The Bride Booking System™ trial for <strong>${owner.venueName}</strong> has ended.</p>
+     <p>Add a card to turn it back on${price}. Otherwise, on <strong>${fmtDate(opts.freeOn)}</strong> your account moves to the Free plan. Your listing stays live, so couples can still find you.</p>`,
+    { label: 'Keep the Booking System', url: PLANS_URL },
+  );
+  await sendEmail({ to: owner.email, subject: 'Your free trial ended', html }).catch(() => {});
+}
+
 /** Charge succeeded (trial converted or renewal) — recognizable receipt. */
 export async function notifyVenueSubscriptionCharged(venueId: string, amountCents: number): Promise<void> {
   const owner = await loadOwner(venueId);

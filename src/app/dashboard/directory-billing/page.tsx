@@ -227,6 +227,17 @@ function planHasTrial(p: Pick<Plan, 'trial_period_value' | 'trial_period_unit'>)
   return (typeof p.trial_period_value === 'number' ? p.trial_period_value : 0) > 0;
 }
 
+/** Cancel reasons; keys match /api/venue-billing/cancel. */
+const CANCEL_REASONS: { key: string; label: string }[] = [
+  { key: 'too_expensive', label: 'It costs too much' },
+  { key: 'not_enough_leads', label: 'Not getting enough leads or bookings' },
+  { key: 'missing_feature', label: 'Missing something I need' },
+  { key: 'hard_to_use', label: 'Too hard to use' },
+  { key: 'switching', label: 'Switching to another tool' },
+  { key: 'closing', label: 'Closing or pausing my venue' },
+  { key: 'other', label: 'Something else' },
+];
+
 /** Private clients on a plan-only price (matches the server's PLAN_CHANGES_LOCKED_MESSAGE). */
 const PLAN_LOCKED_NOTE = 'Your plan is managed by your StoryVenue team. Contact us to change your plan or add-ons.';
 
@@ -278,6 +289,8 @@ export default function DirectoryBillingPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmPlanId, setConfirmPlanId] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelNote, setCancelNote] = useState('');
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
 
@@ -465,7 +478,11 @@ export default function DirectoryBillingPage() {
     setError('');
     setInfo('');
     try {
-      const res = await fetch('/api/venue-billing/cancel', { method: 'POST' });
+      const res = await fetch('/api/venue-billing/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: cancelReason || undefined, note: cancelNote.trim() || undefined }),
+      });
       const d = (await res.json().catch(() => ({}))) as { kind?: 'scheduled' | 'downgraded'; downgradeAt?: string; error?: string };
       if (!res.ok) throw new Error(d.error || 'Cancel failed');
       setInfo(
@@ -1157,18 +1174,58 @@ export default function DirectoryBillingPage() {
         <ConfirmDialog
           title="Cancel your StoryVenue subscription?"
           body={
-            termEndsAt ? (
-              <>
-                You&apos;ll keep <strong>{currentPlanLabel}</strong> until <strong>{formatDate(termEndsAt)}</strong>.
-                After that your venue moves to the Free plan and you won&apos;t be charged again. Your listing,
-                leads and account stay on StoryVenue.
-              </>
-            ) : (
-              <>
-                Your venue moves to the Free plan now and you won&apos;t be charged again. Your listing, leads
-                and account stay on StoryVenue.
-              </>
-            )
+            <div className="space-y-3">
+              <p>
+                {termEndsAt ? (
+                  <>
+                    You&apos;ll keep <strong>{currentPlanLabel}</strong> until <strong>{formatDate(termEndsAt)}</strong>.
+                    After that your venue moves to the Free plan and you won&apos;t be charged again. Your listing,
+                    leads and account stay on StoryVenue.
+                  </>
+                ) : (
+                  <>
+                    Your venue moves to the Free plan now and you won&apos;t be charged again. Your listing, leads
+                    and account stay on StoryVenue.
+                  </>
+                )}
+              </p>
+              <fieldset className="space-y-1.5">
+                <legend className="mb-1 text-xs font-semibold text-gray-700">What&apos;s the main reason? (optional)</legend>
+                {CANCEL_REASONS.map((r) => (
+                  <label key={r.key} htmlFor={`cancel-reason-${r.key}`} className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="radio"
+                      id={`cancel-reason-${r.key}`}
+                      name="cancel-reason"
+                      value={r.key}
+                      checked={cancelReason === r.key}
+                      onChange={() => setCancelReason(r.key)}
+                    />
+                    {r.label}
+                  </label>
+                ))}
+              </fieldset>
+              <textarea
+                id="cancel-note"
+                value={cancelNote}
+                onChange={(e) => setCancelNote(e.target.value)}
+                rows={2}
+                maxLength={1000}
+                placeholder="Anything we could do better? (optional)"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800"
+              />
+              <p className="text-xs text-gray-500">
+                Want help first?{' '}
+                <button
+                  type="button"
+                  className="font-semibold text-gray-800 underline"
+                  onClick={() => { setConfirmCancel(false); setBookingModalOpen(true); }}
+                >
+                  Book a free call with our team
+                </button>
+                .
+              </p>
+            </div>
           }
           confirmLabel="Cancel subscription"
           confirmTone="danger"

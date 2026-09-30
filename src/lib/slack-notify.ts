@@ -212,3 +212,30 @@ export async function notifyTicketReply(opts: {
     text,
   );
 }
+
+/** A venue canceled its StoryVenue subscription, with the reason it gave (if any). */
+export async function notifySubscriptionCanceled(opts: {
+  venueName: string;
+  venueId: string;
+  reason: string | null;
+  note: string | null;
+  endsAt: string | null;
+}): Promise<void> {
+  const ends = opts.endsAt
+    ? `Plan stays on until ${new Date(opts.endsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, then Free.`
+    : 'On the Free plan now.';
+  const reasonLine = opts.reason ? `\nReason: *${opts.reason}*` : '\nReason: not given';
+  const noteLine = opts.note ? `\n> ${truncate(opts.note, 400)}` : '';
+  await postToSlack(
+    [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `💔 Subscription canceled — *${opts.venueName}*${reasonLine}${noteLine}\n${ends}\nVenue: \`${opts.venueId}\``,
+        },
+      },
+    ],
+    `Subscription canceled — ${opts.venueName}`,
+  );
+}

@@ -1347,8 +1347,10 @@ export type ScheduleDowngradeResult =
  * the subscription is cancelled. LunarPay is then done for the venue, so any
  * plan it picks later bills on Stripe.
  */
-export async function scheduleVenueDowngradeToFree(venueId: string): Promise<ScheduleDowngradeResult> {
-  if (await isStripeBillingVenue(venueId)) return scheduleDowngradeToFreeStripe(venueId);
+export type CancelReason = { reason?: string | null; note?: string | null };
+
+export async function scheduleVenueDowngradeToFree(venueId: string, why: CancelReason = {}): Promise<ScheduleDowngradeResult> {
+  if (await isStripeBillingVenue(venueId)) return scheduleDowngradeToFreeStripe(venueId, why);
   const { data: row } = await supabaseAdmin
     .from('venues')
     .select(
@@ -1404,7 +1406,7 @@ export async function scheduleVenueDowngradeToFree(venueId: string): Promise<Sch
       0,
       'subscription_cancel_scheduled',
       `cancel_scheduled:${venueId}:${now}`,
-      { reason: 'user_cancel', downgrade_at: endsAt.toISOString(), previous_subscription_id: subId },
+      { reason: 'user_cancel', downgrade_at: endsAt.toISOString(), previous_subscription_id: subId, cancel_reason: why.reason ?? null, cancel_note: why.note ?? null },
     );
     scheduleOwnerGhlSync(venueId);
     return { kind: 'scheduled', downgradeAt: endsAt.toISOString() };
@@ -1426,7 +1428,7 @@ export async function keepVenuePlan(venueId: string): Promise<void> {
  * clears the deferred-downgrade marker, and notifies the owner. Used by both the
  * downgrade-free route and the trial-sweep cron so the end state is identical.
  */
-export async function applyFreeDowngrade(venueId: string): Promise<void> {
+export async function applyFreeDowngrade(venueId: string, opts: { notify?: boolean } = {}): Promise<void> {
   const { resolveFreePlan } = await import('@/lib/trial-plans');
   const freePlan = await resolveFreePlan();
 
@@ -1463,10 +1465,12 @@ export async function applyFreeDowngrade(venueId: string): Promise<void> {
     .update({ directory_downgrade_at: null })
     .eq('id', venueId);
 
-  try {
-    const { notifyVenueDowngradedToFree } = await import('@/lib/saas-billing-notifications');
-    await notifyVenueDowngradedToFree(venueId);
-  } catch { /* best-effort */ }
+  if (opts.notify !== false) {
+    try {
+      const { notifyVenueDowngradedToFree } = await import('@/lib/saas-billing-notifications');
+      await notifyVenueDowngradedToFree(venueId);
+    } catch { /* best-effort */ }
+  }
 
   scheduleOwnerGhlSync(venueId);
 }

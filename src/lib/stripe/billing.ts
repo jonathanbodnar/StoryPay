@@ -831,7 +831,10 @@ export async function cancelVenueSubscriptionStripe(venueId: string): Promise<vo
  * (lib/trial-sweep.ts) is the backstop. No subscription, or nothing left of
  * the term → Free now.
  */
-export async function scheduleDowngradeToFreeStripe(venueId: string): Promise<{ kind: 'scheduled'; downgradeAt: string } | { kind: 'downgraded' }> {
+export async function scheduleDowngradeToFreeStripe(
+  venueId: string,
+  why: { reason?: string | null; note?: string | null } = {},
+): Promise<{ kind: 'scheduled'; downgradeAt: string } | { kind: 'downgraded' }> {
   const v = await loadBillingVenue(venueId);
   if (!v) throw new Error('Venue not found');
   const now = Date.now();
@@ -855,7 +858,7 @@ export async function scheduleDowngradeToFreeStripe(venueId: string): Promise<{ 
     await recordStripeBillingEvent({
       venueId, planId: v.directory_plan_id, amountCents: 0, eventType: 'subscription_cancel_scheduled',
       externalEventId: `cancel_scheduled:${venueId}:${now}`,
-      metadata: { reason: 'user_cancel', downgrade_at: endsAt.toISOString(), subscription_id: sub?.id ?? null },
+      metadata: { reason: 'user_cancel', downgrade_at: endsAt.toISOString(), subscription_id: sub?.id ?? null, cancel_reason: why.reason ?? null, cancel_note: why.note ?? null },
     });
     scheduleOwnerGhlSync(venueId);
     return { kind: 'scheduled', downgradeAt: endsAt.toISOString() };

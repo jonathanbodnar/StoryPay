@@ -14,7 +14,8 @@ export const runtime = 'nodejs';
  * needing to log into the LunarPay dashboard.
  *
  * Body:
- *   { action: 'cancel_subscription' }
+ *   { action: 'cancel_subscription' }   keep the paid term, then Free
+ *   { action: 'cancel_now' }            end today and move to Free
  *     — Cancels the venue's active directory subscription on LunarPay and
  *       stamps directory_subscription_status = 'canceled' locally.
  *
@@ -49,6 +50,24 @@ let body: { action?: string; charge_id?: string; amount_cents?: number; status?:
 
   const { action } = body;
   if (!action) return NextResponse.json({ error: 'Missing action' }, { status: 400 });
+
+  // Cancel works like the venue's own cancel: the plan stays on until the end
+  // of the term they paid for, then the venue moves to Free (owner's call,
+  // Sep 30). "End now" stops it today and moves them to Free, e.g. with a refund.
+  if (action === 'cancel_subscription' || action === 'cancel_now') {
+    try {
+      const { scheduleVenueDowngradeToFree, cancelVenueSubscription, applyFreeDowngrade } = await import('@/lib/venue-billing');
+      if (action === 'cancel_subscription') {
+        const result = await scheduleVenueDowngradeToFree(venueId);
+        return NextResponse.json({ ok: true, ...result });
+      }
+      await cancelVenueSubscription(venueId);
+      await applyFreeDowngrade(venueId);
+      return NextResponse.json({ ok: true, kind: 'downgraded' });
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : 'Cancel failed' }, { status: 502 });
+    }
+  }
 
   // Load venue + current subscription id
   const { data: venue } = await supabaseAdmin
@@ -90,15 +109,6 @@ let body: { action?: string; charge_id?: string; amount_cents?: number; status?:
         });
       } catch (e) {
         return NextResponse.json({ error: `Could not fetch subscription: ${e instanceof Error ? e.message : 'Stripe error'}` }, { status: 502 });
-      }
-    }
-    if (action === 'cancel_subscription') {
-      try {
-        const { cancelVenueSubscriptionStripe } = await import('@/lib/stripe/billing');
-        await cancelVenueSubscriptionStripe(venueId);
-        return NextResponse.json({ ok: true, canceled_subscription_id: subId, provider: 'stripe' });
-      } catch (e) {
-        return NextResponse.json({ error: `Stripe returned an error: ${e instanceof Error ? e.message : 'unknown'}` }, { status: 502 });
       }
     }
     if (action === 'refund_charge') {
@@ -161,47 +171,6 @@ let body: { action?: string; charge_id?: string; amount_cents?: number; status?:
       const msg = e instanceof Error ? e.message : 'LunarPay error';
       return NextResponse.json({ error: `Could not fetch subscription: ${msg}` }, { status: 502 });
     }
-  }
-
-  // ── cancel_subscription ───────────────────────────────────────────────────
-  if (action === 'cancel_subscription') {
-    if (!subId) {
-      return NextResponse.json(
-        { error: 'This venue has no active subscription on file.' },
-        { status: 400 },
-      );
-    }
-
-    try {
-      await cancelSubscription(secret, subId);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'LunarPay error';
-      console.error('[admin/billing-action] cancelSubscription failed:', msg);
-      return NextResponse.json(
-        { error: `LunarPay returned an error: ${msg}` },
-        { status: 502 },
-      );
-    }
-
-    // Update DB to reflect cancellation
-    await supabaseAdmin
-      .from('venues')
-      .update({ directory_subscription_status: 'canceled' })
-      .eq('id', venueId);
-
-    // Log event
-    await supabaseAdmin.from('platform_billing_events').insert({
-      venue_id:          venueId,
-      directory_plan_id: (v.directory_plan_id as string | null) ?? null,
-      amount_cents:      0,
-      currency:          'usd',
-      external_event_id: `admin_cancel:${subId}`,
-      event_type:        'subscription_canceled_by_admin',
-      metadata:          { subscription_id: subId, admin_action: true },
-    });
-
-    console.log('[admin/billing-action] canceled subscription', subId, 'for venue', venueId);
-    return NextResponse.json({ ok: true, canceled_subscription_id: subId });
   }
 
   // ── refund_charge ─────────────────────────────────────────────────────────

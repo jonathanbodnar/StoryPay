@@ -571,11 +571,16 @@ function BillingModal({ venueId, venueName, onClose, onChanged }: { venueId: str
     })();
   }, [action]);
 
-  const cancelSub = async () => {
-    if (!confirm(`Cancel the subscription for "${venueName}"? Future charges stop immediately.`)) return;
+  const cancelSub = async (endNow = false) => {
+    const question = endNow
+      ? `End "${venueName}"'s subscription today and move them to the Free plan?`
+      : `Cancel "${venueName}"'s subscription? Their plan stays on until the end of the term they paid for, then they move to the Free plan.`;
+    if (!confirm(question)) return;
     setWorking(true);
-    const d = await action({ action: 'cancel_subscription' }) as { ok?: boolean; error?: string };
-    setMsg(d.ok ? { text: 'Subscription canceled.', ok: true } : { text: d.error || 'Cancel failed', ok: false });
+    const d = await action({ action: endNow ? 'cancel_now' : 'cancel_subscription' }) as { ok?: boolean; error?: string; kind?: string };
+    setMsg(d.ok
+      ? { text: d.kind === 'scheduled' ? 'Canceled. They move to Free at the end of their term.' : 'Canceled. They\u2019re on the Free plan now.', ok: true }
+      : { text: d.error || 'Cancel failed', ok: false });
     if (d.ok) { setSub(null); onChanged(); }
     setWorking(false);
   };
@@ -608,10 +613,16 @@ function BillingModal({ venueId, venueName, onClose, onChanged }: { venueId: str
         )}
 
         {sub && (
-          <button onClick={cancelSub} disabled={working}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50">
-            {working && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Cancel subscription
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => void cancelSub(false)} disabled={working}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50">
+              {working && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Cancel at end of term
+            </button>
+            <button type="button" onClick={() => void cancelSub(true)} disabled={working}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">
+              End now (move to Free)
+            </button>
+          </div>
         )}
 
         <div className="space-y-2 border-t border-gray-100 pt-3">

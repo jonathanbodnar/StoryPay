@@ -784,20 +784,28 @@ export function VenueManagementPortal({
     }
   }
 
-  async function billingCancelSub() {
+  async function billingCancelSub(endNow = false) {
     if (!billingTarget) return;
-    if (!confirm(`Cancel the ${billingProviderName(billingTarget)} subscription for "${billingTarget.name}"? This stops future charges immediately.`)) return;
+    const question = endNow
+      ? `End "${billingTarget.name}"'s subscription today and move them to the Free plan? No further charges. Use this alongside a refund.`
+      : `Cancel "${billingTarget.name}"'s subscription? No further charges; their plan stays on until the end of the term they paid for, then they move to the Free plan.`;
+    if (!confirm(question)) return;
     setBillingWorking(true);
     setBillingMsg(null);
     try {
       const res = await fetch(`/api/admin/venues/${billingTarget.id}/billing-action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'cancel_subscription' }),
+        body: JSON.stringify({ action: endNow ? 'cancel_now' : 'cancel_subscription' }),
       });
-      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; kind?: string; downgradeAt?: string };
       if (res.ok && d.ok) {
-        setBillingMsg({ text: 'Subscription canceled successfully.', ok: true });
+        setBillingMsg({
+          text: d.kind === 'scheduled' && d.downgradeAt
+            ? `Canceled. Their plan stays on until ${new Date(d.downgradeAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, then they move to Free.`
+            : 'Canceled. They\u2019re on the Free plan now.',
+          ok: true,
+        });
         setBillingLiveSub(null);
         await onRefresh();
       } else {
@@ -1784,17 +1792,29 @@ export function VenueManagementPortal({
           <div className="rounded-xl border border-red-100 bg-red-50 p-4 mb-4">
             <h4 className="text-xs font-semibold text-red-800 mb-1 flex items-center gap-1.5"><Ban size={13} /> Cancel subscription</h4>
             <p className="text-xs text-red-700 mb-3">
-              Cancels on {billingProviderName(billingTarget)} immediately — no further charges. Updates the venue&apos;s status to &ldquo;canceled&rdquo; in the DB.
+              No further charges either way. <strong>Cancel</strong> keeps their plan until the end of the term they paid
+              for, then moves them to Free (same as a venue canceling). <strong>End now</strong> moves them to Free today,
+              e.g. with a refund.
             </p>
-            <button
-              type="button"
-              disabled={billingWorking || !billingTarget.directory_subscription_external_id}
-              onClick={() => void billingCancelSub()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {billingWorking ? <Loader2 size={12} className="animate-spin" /> : <Ban size={12} />}
-              Cancel subscription
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={billingWorking || !billingTarget.directory_subscription_external_id}
+                onClick={() => void billingCancelSub(false)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {billingWorking ? <Loader2 size={12} className="animate-spin" /> : <Ban size={12} />}
+                Cancel at end of term
+              </button>
+              <button
+                type="button"
+                disabled={billingWorking}
+                onClick={() => void billingCancelSub(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                End now (move to Free)
+              </button>
+            </div>
           </div>
 
           {/* Refund charge */}
