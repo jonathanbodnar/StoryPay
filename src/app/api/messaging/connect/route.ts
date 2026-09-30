@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getOAuthUrl } from '@/lib/ghl';
+import { signGhlOAuthState } from '@/lib/ghl-oauth-state';
 
 export async function GET(request: Request) {
   const cookieStore = await cookies();
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
   const redirectUri = `${appUrl}/api/messaging/callback`;
-  const oauthUrl = getOAuthUrl(clientId, redirectUri, venueId);
+  const oauthUrl = getOAuthUrl(clientId, redirectUri, signGhlOAuthState(venueId));
 
   return NextResponse.redirect(oauthUrl);
 }
