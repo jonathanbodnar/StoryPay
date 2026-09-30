@@ -107,6 +107,33 @@ async function assertThreadVenue(threadId: string, venueId: string) {
   return { ok: true as const, thread: data };
 }
 
+/**
+ * The inline GHL text sync used to run on every open and on every 3-second
+ * poll, and took about 2 seconds each time, so opening a thread was slow.
+ * Now each thread syncs at most every 10 seconds, and a request waits at most
+ * 0.7 seconds for it: the sync keeps running in the background and the next
+ * poll picks up anything it imported. Webhooks and the background jobs still
+ * deliver new texts on their own.
+ */
+const THREAD_SYNC_EVERY_MS = 10_000;
+const THREAD_SYNC_WAIT_MS = 700;
+const threadSyncs = new Map<string, { startedAt: number; running: Promise<void> | null }>();
+
+async function syncThreadWithinBudget(threadId: string, sync: () => Promise<unknown>): Promise<void> {
+  const now = Date.now();
+  const prev = threadSyncs.get(threadId);
+  if (prev && (prev.running || now - prev.startedAt < THREAD_SYNC_EVERY_MS)) return;
+  const entry: { startedAt: number; running: Promise<void> | null } = { startedAt: now, running: null };
+  entry.running = sync()
+    .then(() => undefined, (e) => { console.warn('[thread messages] background sync failed', threadId, e); })
+    .finally(() => { entry.running = null; });
+  threadSyncs.set(threadId, entry);
+  if (threadSyncs.size > 2000) {
+    for (const [id, v] of threadSyncs) if (!v.running && now - v.startedAt > 60_000) threadSyncs.delete(id);
+  }
+  await Promise.race([entry.running, new Promise((r) => setTimeout(r, THREAD_SYNC_WAIT_MS))]);
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ threadId: string }> },
@@ -150,11 +177,13 @@ export async function GET(
       if (smsMsg) shouldSyncSms = true;
     }
     if (shouldSyncSms) {
-      await syncInboundSmsFromGhlForThread({
-        venueId,
-        threadId,
-        venueCustomerId: thread.venue_customer_id,
-      });
+      await syncThreadWithinBudget(threadId, () =>
+        syncInboundSmsFromGhlForThread({
+          venueId,
+          threadId,
+          venueCustomerId: thread.venue_customer_id,
+        }),
+      );
     }
   }
 

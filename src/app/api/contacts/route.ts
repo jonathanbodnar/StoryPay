@@ -2,7 +2,6 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ghlRequest, refreshAccessToken, getGhlToken } from '@/lib/ghl';
-import { listCustomers } from '@/lib/lunarpay';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,34 +86,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Query LunarPay customers and merge (deduplicate by email)
-  if (venue.lunarpay_secret_key) {
-    try {
-      const lpResult = await listCustomers(venue.lunarpay_secret_key, search, 1, parseInt(limit));
-      const raw = lpResult.data || lpResult;
-      const list = Array.isArray(raw) ? raw : [];
-
-      for (const c of list) {
-        const email = (c.email as string) || '';
-        if (email && seenEmails.has(email.toLowerCase())) continue;
-
-        const firstName = (c.firstName as string) || '';
-        const lastName = (c.lastName as string) || '';
-        results.push({
-          id: `lp_${c.id}`,
-          source: 'lunarpay',
-          firstName,
-          lastName,
-          name: (c.name as string) || [firstName, lastName].filter(Boolean).join(' ') || email || 'Unknown',
-          email,
-          phone: (c.phone as string) || '',
-        });
-        if (email) seenEmails.add(email.toLowerCase());
-      }
-    } catch (err) {
-      console.error('[contacts] LunarPay search error:', err);
-    }
-  }
+  // LunarPay customers are no longer merged in: LunarPay is retired for venue
+  // payments and these merchant accounts were never approved (403 every time).
 
   if (results.length === 0 && !venue.ghl_connected && !venue.lunarpay_secret_key) {
     return NextResponse.json({ error: 'No contact sources configured' }, { status: 400 });

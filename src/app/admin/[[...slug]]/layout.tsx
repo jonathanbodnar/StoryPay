@@ -1091,7 +1091,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   // Refresh support count every 60s so team always sees current numbers
   useEffect(() => {
     if (authState !== 'authenticated') return;
-    const id = setInterval(() => void fetchSupportInboxCount(), 60_000);
+    const id = setInterval(() => { if (document.visibilityState !== 'hidden') void fetchSupportInboxCount(); }, 60_000);
     return () => clearInterval(id);
   }, [authState, fetchSupportInboxCount]);
   // Error Log badge: realtime push on every new error (no refresh) + 60s poll
@@ -1103,7 +1103,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   );
   useEffect(() => {
     if (authState !== 'authenticated') return;
-    const id = setInterval(() => void fetchErrorCount(), 60_000);
+    const id = setInterval(() => { if (document.visibilityState !== 'hidden') void fetchErrorCount(); }, 60_000);
     return () => clearInterval(id);
   }, [authState, fetchErrorCount]);
   // Allow any panel (e.g. SupportInboxPanel after Close) to force-refresh the

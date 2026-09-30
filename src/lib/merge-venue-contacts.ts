@@ -1,5 +1,4 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { listCustomers } from '@/lib/lunarpay';
 import { ghlRequest, refreshAccessToken } from '@/lib/ghl';
 
 export type MergedContactSource = 'ghl' | 'lunarpay' | 'storypay';
@@ -333,12 +332,9 @@ export async function mergeVenueContacts(
             return { contacts: [] };
           })
         : Promise.resolve({ contacts: [] }),
-      venue.lunarpay_secret_key
-        ? listCustomers(venue.lunarpay_secret_key, search, page, limit).catch(err => {
-            console.error('[mergeVenueContacts] LunarPay fetch error:', err);
-            return { data: [] };
-          })
-        : Promise.resolve({ data: [] }),
+      // LunarPay is retired for venue payments and these merchant accounts were
+      // never approved (every call came back 403), so it isn't asked anymore.
+      Promise.resolve({ data: [] }),
       leadRowsPromise,
     ]);
     leadRows = rows;

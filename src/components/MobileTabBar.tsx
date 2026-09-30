@@ -51,7 +51,7 @@ export default function MobileTabBar({ venueId, hasConciergeAddon = false }: { v
         })
         .catch(() => {});
     load();
-    const t = setInterval(load, 45_000);
+    const t = setInterval(() => { if (document.visibilityState !== 'hidden') load(); }, 45_000);
     const onEvt = () => load();
     window.addEventListener('storypay:conversations-unread', onEvt);
     return () => {
@@ -71,7 +71,7 @@ export default function MobileTabBar({ venueId, hasConciergeAddon = false }: { v
         })
         .catch(() => {});
     load();
-    const t = setInterval(load, 45_000);
+    const t = setInterval(() => { if (document.visibilityState !== 'hidden') load(); }, 45_000);
     const onEvt = () => load();
     window.addEventListener('storypay:venue-concierge-unread', onEvt);
     return () => {
@@ -108,7 +108,7 @@ export default function MobileTabBar({ venueId, hasConciergeAddon = false }: { v
 
   useEffect(() => {
     refreshLeads();
-    const t = setInterval(refreshLeads, 45_000);
+    const t = setInterval(() => { if (document.visibilityState !== 'hidden') refreshLeads(); }, 45_000);
     const onEvt = () => refreshLeads();
     window.addEventListener('storypay:leads-unread', onEvt);
     return () => {

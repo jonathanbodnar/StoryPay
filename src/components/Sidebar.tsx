@@ -37,6 +37,14 @@ import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
 import { supportChannels } from '@/lib/realtime/channels';
 import { LockedFeatureModal } from '@/components/LockedFeatureView';
 
+/** Wrap a timed badge check so it skips while the tab is hidden. */
+function whenTabVisible(fn: () => void): () => void {
+  return () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    fn();
+  };
+}
+
 interface Venue { id: string; name: string; ghl_location_id: string; }
 type UserRole = 'owner' | 'admin' | 'member';
 
@@ -340,9 +348,23 @@ export default function Sidebar({
       .catch(() => {});
   }, [hasConciergeAddon]);
 
+  // Badges skip their timed checks while the tab is in the background (most
+  // open dashboards sit in one all day); catch up as soon as it's visible.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      refreshConvUnread();
+      refreshLeadsUnread();
+      refreshConciergeUnread();
+      refreshVcUnread();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refreshConvUnread, refreshLeadsUnread, refreshConciergeUnread, refreshVcUnread]);
+
   useEffect(() => {
     refreshConvUnread();
-    const t = setInterval(refreshConvUnread, 45000);
+    const t = setInterval(whenTabVisible(refreshConvUnread), 45000);
     const onEvt = () => refreshConvUnread();
     window.addEventListener('storypay:conversations-unread', onEvt);
     return () => {
@@ -353,7 +375,7 @@ export default function Sidebar({
 
   useEffect(() => {
     refreshUpdatesUnread();
-    const t = setInterval(refreshUpdatesUnread, 5 * 60 * 1000);
+    const t = setInterval(whenTabVisible(refreshUpdatesUnread), 5 * 60 * 1000);
     const onSeen = () => setUpdatesUnread(0);
     window.addEventListener('storypay:updates-seen', onSeen);
     return () => {
@@ -368,7 +390,7 @@ export default function Sidebar({
 
   useEffect(() => {
     refreshLeadsUnread();
-    const t = setInterval(refreshLeadsUnread, 45000);
+    const t = setInterval(whenTabVisible(refreshLeadsUnread), 45000);
     const onEvt = () => refreshLeadsUnread();
     window.addEventListener('storypay:leads-unread', onEvt);
     return () => {
@@ -398,7 +420,7 @@ export default function Sidebar({
 
   useEffect(() => {
     refreshConciergeUnread();
-    const t = setInterval(refreshConciergeUnread, 45000);
+    const t = setInterval(whenTabVisible(refreshConciergeUnread), 45000);
     const onEvt = () => refreshConciergeUnread();
     window.addEventListener('storypay:concierge-unread', onEvt);
     return () => {
@@ -424,7 +446,7 @@ export default function Sidebar({
   // Venue Concierge (general channel) unread badge.
   useEffect(() => {
     refreshVcUnread();
-    const t = setInterval(refreshVcUnread, 45000);
+    const t = setInterval(whenTabVisible(refreshVcUnread), 45000);
     const onEvt = () => refreshVcUnread();
     window.addEventListener('storypay:venue-concierge-unread', onEvt);
     return () => {
