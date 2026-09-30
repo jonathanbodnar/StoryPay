@@ -382,7 +382,7 @@ export default function BrandingPage() {
  <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
  <div>
  <h1 className="font-heading text-2xl text-gray-900">Branding &amp; Customization</h1>
- <p className="mt-1 text-sm text-gray-500">Customize your brand colors and logo for invoices and payment links</p>
+ <p className="mt-1 text-sm text-gray-500">Customize your brand colors and logo for proposals, invoices and emails</p>
  </div>
  <button
  onClick={save}

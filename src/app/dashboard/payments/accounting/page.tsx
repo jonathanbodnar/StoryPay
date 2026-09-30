@@ -35,8 +35,8 @@ export default function AccountingExportPage() {
       </Link>
       <h1 className="text-2xl font-bold text-gray-900">Accounting export</h1>
       <p className="mt-2 text-sm text-gray-600">
-        Download a CSV of paid proposals and refunds for your bookkeeper. Posting dates use paid time for payments
-        and last update time for refunds (full refund rows are negative amounts).
+        Download a CSV for your bookkeeper: every payment on the day it was paid (each payment of a payment plan,
+        card, bank, cash and check) and every refund on the day it was refunded, as a negative amount.
       </p>
 
       <div className="mt-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-6">

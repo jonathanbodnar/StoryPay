@@ -91,15 +91,11 @@ export const NOTIFICATION_SCENARIOS = [
     emailDefault: true,
     smsDefault: false,
   },
-  {
-    key: 'subscription_created',
-    label: 'New subscription',
-    description: 'A recurring payment plan starts.',
-    icon: 'RefreshCw',
-    emailDefault: true,
-    smsDefault: false,
-  },
 ] as const;
+// Removed as of 2026-09-30: `subscription_created`. Recurring subscriptions
+// were retired for payment plans (Payments → Payment plans), and only the
+// retired LunarPay flow ever fired it.
+//
 // Removed as of 2026-08-11: `invoice_paid`, `subscription_cancelled`, and
 // `new_customer` were defined here (and had matching toggles + push keys)
 // but nothing anywhere in the app ever called notifyOwner() with those

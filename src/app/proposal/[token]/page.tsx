@@ -437,7 +437,7 @@ export default function ProposalPage() {
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           {/* Proposal header */}
           <div className="px-8 pt-8 pb-6 border-b border-gray-100">
-            <p className="text-xs font-semibold uppercase tracking-widest text-brand-900 mb-2">Proposal</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-brand-900 mb-2">{isInvoice ? 'Invoice' : 'Proposal'}</p>
             {proposal.venue_logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={proposal.venue_logo_url} alt={proposal.venue_name} className="h-12 object-contain mb-3" />
@@ -626,6 +626,11 @@ export default function ProposalPage() {
                     Signed on {proposal.signed_at ? formatDate(proposal.signed_at) : 'just now'}.
                     Please complete your payment below.
                   </p>
+                  {proposal.signed_at && (
+                    <a href={`/api/proposals/public/${token}/contract-pdf`} className="mt-2 inline-block text-xs font-medium text-gray-500 underline underline-offset-2 hover:text-gray-800">
+                      Download your signed contract (PDF)
+                    </a>
+                  )}
                 </div>
               )}
 
@@ -701,6 +706,11 @@ export default function ProposalPage() {
                 payment (cash or check) with them — no online payment is needed here.
                 {proposal.signed_at ? ` Signed on ${formatDate(proposal.signed_at)}.` : ''}
               </p>
+              {proposal.signed_at && !isInvoice && (
+                <a href={`/api/proposals/public/${token}/contract-pdf`} className="mt-4 inline-block text-sm font-medium text-gray-600 underline underline-offset-2 hover:text-gray-900">
+                  Download your signed contract (PDF)
+                </a>
+              )}
             </div>
           )}
 
@@ -734,6 +744,13 @@ export default function ProposalPage() {
                 </svg>
                 View Invoice
               </button>
+              {proposal.signed_at && !isInvoice && (
+                <div className="mt-4">
+                  <a href={`/api/proposals/public/${token}/contract-pdf`} className="text-sm font-medium text-gray-600 underline underline-offset-2 hover:text-gray-900">
+                    Download your signed contract (PDF)
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>

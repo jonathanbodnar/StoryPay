@@ -95,7 +95,7 @@ const paymentsItems: NavItem[] = [
   { label: 'New', href: '/dashboard/payments/new', icon: Plus, navId: 'nav_payments_new' },
   { label: 'Packages', href: '/dashboard/offerings', icon: Package, navId: 'nav_offerings' },
   { label: 'Coupons', href: '/dashboard/payments/coupons', icon: Ticket, navId: 'nav_payments_coupons' },
-  { label: 'Proposals', href: '/dashboard/payments/proposals', icon: FileText, navId: 'nav_payments_proposals' },
+  { label: 'Proposals & invoices', href: '/dashboard/payments/proposals', icon: FileText, navId: 'nav_payments_proposals' },
   { label: 'Proposal Templates', href: '/dashboard/proposals/templates', icon: Receipt, navId: 'nav_proposals_hub' },
   { label: 'Payment plans', href: '/dashboard/payments/installments', icon: Calendar, navId: 'nav_payments_installments' },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard, navId: 'nav_transactions' },

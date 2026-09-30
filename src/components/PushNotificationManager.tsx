@@ -40,7 +40,6 @@ const SCENARIO_TOGGLES: { key: string; label: string; description: string; defau
   { key: 'push_payment_received',     label: 'Payment received',      description: 'Any successful payment from a customer.',                defaultOn: true },
   { key: 'push_payment_failed',       label: 'Payment failed',        description: 'A charge attempt declines.',                             defaultOn: true },
   { key: 'push_refund_issued',        label: 'Refund issued',         description: 'A refund is processed.',                                 defaultOn: true },
-  { key: 'push_subscription_created', label: 'New subscription',      description: 'A recurring plan starts.',                               defaultOn: false },
 ];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

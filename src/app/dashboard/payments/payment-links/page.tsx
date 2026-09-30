@@ -1,45 +1,7 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { Link2, Plus } from 'lucide-react';
-import Link from 'next/link';
-import PaymentGate from '@/components/PaymentGate';
-
-function PaymentLinksInner() {
- return (
- <div>
- <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
- <div>
- <h1 className="font-heading text-2xl text-gray-900">Payment Links</h1>
- <p className="mt-1 text-sm text-gray-500">Create shareable payment links for quick checkout</p>
- </div>
- <button
- className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
- >
- <Plus size={18} /> Create payment link
- </button>
- </div>
-
- <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
- <div className="py-16 text-center">
- <Link2 size={40} className="mx-auto mb-4 text-gray-200"/>
- <p className="text-sm font-medium text-gray-500">No payment links yet</p>
- <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
- Payment links let you accept one-time payments without a full proposal or invoice.
- </p>
- <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
- <Link href="/dashboard/invoices/new"
- className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
- Create an Invoice instead
- </Link>
- </div>
- </div>
- </div>
- </div>
- );
-}
-
-// Payment links take one-time payments, so this page follows the same pause gate
-// as the rest of the payment surfaces.
+// Payment links were never built; an invoice is how a venue asks for a
+// one-off payment (it's paid right from its link), so send venues there.
 export default function PaymentLinksPage() {
-  return <PaymentGate><PaymentLinksInner /></PaymentGate>;
+  redirect('/dashboard/payments/new?type=invoice');
 }

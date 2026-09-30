@@ -27,8 +27,8 @@ export async function POST(
     return NextResponse.json({ error: 'This document is collected directly by the venue.' }, { status: 400 });
   }
 
-  // Invoices have no template_id (same logic as the public proposals GET route)
-  const isInvoice = !proposal.template_id;
+  // Invoices have no signing step; a proposal must be signed first.
+  const isInvoice = (proposal as { is_invoice?: boolean }).is_invoice === true;
   const allowedStatuses = isInvoice ? ['sent', 'opened', 'signed'] : ['signed'];
   if (!allowedStatuses.includes(proposal.status as string)) {
     return NextResponse.json({ error: 'Proposal not ready for payment' }, { status: 400 });

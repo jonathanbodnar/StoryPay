@@ -2,10 +2,8 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { paymentTermsError } from '@/lib/payment-plan';
 import { supabaseAdmin } from '@/lib/supabase';
-import { sendSms, sendEmail, findOrCreateContact, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
-import { sendEmail as directSendEmail } from '@/lib/email';
-import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { sendClientDocument } from '@/lib/client-document-send';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import {
   normalizeLineItemsFromRequest,
@@ -50,6 +48,7 @@ export async function GET(request: NextRequest) {
   // Prefer to include the newer columns; degrade gracefully if a migration
   // (154 collect_manually / 156 proposal_number) hasn't been applied yet.
   const colVariants = [
+    BASE_COLS + ', collect_manually, proposal_number, is_invoice, require_signature',
     BASE_COLS + ', collect_manually, proposal_number',
     BASE_COLS + ', collect_manually',
     BASE_COLS,
@@ -87,6 +86,15 @@ export async function GET(request: NextRequest) {
       }
     }
   } catch { /* proposal_payments not available yet — skip totals */ }
+
+  // Flag bookings whose automatic payment failed, for the list's filter.
+  const { data: failed } = await supabaseAdmin
+    .from('proposal_installments')
+    .select('proposal_id')
+    .eq('venue_id', venueId)
+    .eq('status', 'failed');
+  const failedIds = new Set(((failed ?? []) as Array<{ proposal_id: string }>).map((r) => r.proposal_id));
+  if (failedIds.size) for (const r of rows) if (failedIds.has(String(r.id))) r.payment_failed = true;
 
   return NextResponse.json(rows);
 }
@@ -166,14 +174,7 @@ export async function POST(request: NextRequest) {
       ? overrideContent
       : null;
 
-  // Fetch venue, template, and signature fields in parallel — three
-  // independent queries that used to run sequentially.
-  const venueQuery = supabaseAdmin
-    .from('venues')
-    .select('ghl_connected, ghl_access_token, ghl_location_id, name, email, brand_color, brand_logo_url')
-    .eq('id', venueId)
-    .single();
-
+  // Fetch the template and its signature fields in parallel.
   let template: { content: string } | null = null;
   let sigFields: unknown[] = [];
 
@@ -201,8 +202,6 @@ export async function POST(request: NextRequest) {
     template = tmplData;
     sigFields = sigData ?? [];
   }
-
-  const { data: venue } = await venueQuery;
 
   const resolvedContent = contentForProposal ?? template?.content ?? '';
 
@@ -300,121 +299,17 @@ export async function POST(request: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
   const proposalUrl = `${appUrl}/proposal/${publicToken}`;
 
-  // 3. Send via GHL (SMS + Email)
-  // Use per-venue OAuth token if available; fall back to the shared GHL_PRIVATE_KEY
-  // so venues that signed up via location ID get SMS without needing to OAuth connect.
-  const ghlToken = venue ? getGhlToken(venue) : null;
-  if (venue?.ghl_location_id && ghlToken) {
-    try {
-      // Find or use existing GHL contact
-      let contactId = ghlContactId || null;
-
-      if (!contactId) {
-        const phoneE164 = normalizePhone(customerPhone) || undefined;
-        contactId = await findOrCreateContact(
-          ghlToken,
-          venue.ghl_location_id,
-          {
-            email: customerEmail,
-            phone: phoneE164,
-            firstName: customerName.split(' ')[0],
-            lastName: customerName.split(' ').slice(1).join(' ') || undefined,
-          }
-        );
-      }
-
-      if (contactId) {
-        // Send SMS if customer has a phone number (must be valid E.164)
-        const phoneE164 = normalizePhone(customerPhone);
-        if (phoneE164) {
-          try {
-            await sendSms(
-              ghlToken,
-              venue.ghl_location_id,
-              contactId,
-              `Hi ${customerName.split(' ')[0]}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`
-            );
-            console.log(`[proposal-send] SMS sent to contact ${contactId}`);
-          } catch (smsErr) {
-            console.error('[proposal-send] SMS failed:', smsErr);
-          }
-        }
-
-        // Send email
-        try {
-          await sendEmail(
-            ghlToken,
-            venue.ghl_location_id,
-            {
-              contactId,
-              subject: `Proposal from ${venue.name}`,
-              html: `
-                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                  <h2 style="color: #1a1a2e;">You have a new proposal from ${venue.name}</h2>
-                  <p style="color: #555; font-size: 16px; line-height: 1.6;">
-                    Hi ${customerName.split(' ')[0]},<br><br>
-                    ${venue.name} has prepared a proposal for you. Click the button below to review, sign, and complete your payment.
-                  </p>
-                  <div style="text-align: center; margin: 32px 0;">
-                    <a href="${proposalUrl}" style="display: inline-block; background-color: #1b1b1b; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
-                      View Proposal
-                    </a>
-                  </div>
-                  <p style="color: #999; font-size: 13px;">
-                    If the button doesn't work, copy and paste this link: ${proposalUrl}
-                  </p>
-                  <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
-                  <p style="color: #bbb; font-size: 12px; text-align: center;">
-                    Sent via StoryVenue on behalf of ${venue.name}
-                  </p>
-                </div>
-              `,
-            }
-          );
-          console.log(`[proposal-send] Email sent to contact ${contactId}`);
-        } catch (emailErr) {
-          console.error('[proposal-send] Email failed:', emailErr);
-        }
-      } else {
-        console.error('[proposal-send] Could not find or create GHL contact for', customerEmail);
-      }
-    } catch (err) {
-      console.error('[proposal-send] GHL contact lookup failed:', err);
-    }
-  } else {
-    console.log('[proposal-send] GHL not connected — sending direct email');
-  }
-
-  // Always send direct email using the venue's saved template
-  if (customerEmail) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-    const proposalUrl = `${appUrl}/proposal/${publicToken}`;
-
-    // brand_color / brand_logo_url already fetched in the parallel pre-fetch above.
-    const venueData = venue;
-
-    const tmpl = await getVenueEmailTemplate(venueId, 'proposal');
-    if (tmpl) {
-      const venueName = venue?.name || 'Your Venue';
-      const vars: Record<string, string> = {
-        organization:   venueName,
-        customer_name:  customerName,
-        amount:         `$${((price ?? 0) / 100).toFixed(2)}`,
-      };
-      await directSendEmail({
-        to: customerEmail,
-        subject: fillTemplate(tmpl.subject, vars),
-        html: buildEmailHtml({
-          template: tmpl,
-          vars,
-          actionUrl: proposalUrl,
-          brandColor: venueData?.brand_color || '#1b1b1b',
-          logoUrl:    venueData?.brand_logo_url || undefined,
-          venueName,
-        }),
-      });
-    }
-  }
+  // 3. One branded email (through the venue's CRM when it's connected) and a text.
+  await sendClientDocument({
+    venueId,
+    kind: 'proposal',
+    url: proposalUrl,
+    customerName,
+    customerEmail,
+    customerPhone,
+    ghlContactId: ghlContactId || null,
+    vars: { amount: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((price ?? 0) / 100) },
+  });
 
   // Auto-apply proposal_sent tag
   if (customerEmail) {

@@ -4244,7 +4244,6 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/transactions': ['pay-transactions', 'pay-numbers', 'pay-status'],
 
   // Other payment sub-pages
-  '/dashboard/payments/payment-links': ['pay-new', 'pay-transactions'],
   '/dashboard/payments/payouts':       ['pay-transactions', 'rep-overview'],
   '/dashboard/payments/accounting':    ['rep-overview', 'rep-download', 'pay-transactions'],
   '/dashboard/payments/coupons':       ['pay-new', 'offerings-overview'],

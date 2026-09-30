@@ -66,6 +66,7 @@ export interface PaymentProposal {
   payment_type: string | null;
   payment_config: Record<string, unknown> | null;
   template_id: string | null;
+  is_invoice: boolean | null;
   public_token: string;
   collect_manually: boolean | null;
   accept_ach: boolean | null;
@@ -77,7 +78,7 @@ export interface PaymentProposal {
 }
 
 const PROPOSAL_COLUMNS =
-  'id, venue_id, status, price, customer_name, customer_email, payment_type, payment_config, template_id, ' +
+  'id, venue_id, status, price, customer_name, customer_email, payment_type, payment_config, template_id, is_invoice, ' +
   'public_token, collect_manually, accept_ach, payment_provider, stripe_customer_id, stripe_payment_method_id, ' +
   'stripe_payment_intent_id, payment_processing_at';
 
@@ -124,9 +125,10 @@ export async function amountDueNowCents(p: Pick<PaymentProposal, 'id' | 'payment
 }
 
 /** Whether this proposal can take an online payment right now (same rules as the LunarPay flow). */
-export function payableNow(p: Pick<PaymentProposal, 'template_id' | 'status' | 'collect_manually' | 'payment_type'>): string | null {
+export function payableNow(p: Pick<PaymentProposal, 'is_invoice' | 'status' | 'collect_manually' | 'payment_type'>): string | null {
   if (p.collect_manually === true) return 'This document is collected directly by the venue.';
-  const allowed = !p.template_id ? ['sent', 'opened', 'signed'] : ['signed'];
+  // An invoice is paid as soon as it's opened; a proposal is signed first.
+  const allowed = p.is_invoice === true ? ['sent', 'opened', 'signed'] : ['signed'];
   if (!allowed.includes(p.status)) return 'This proposal isn’t ready for payment.';
   const type = p.payment_type || 'full';
   if (type !== 'full' && type !== 'installment') return `Payment type "${type}" isn’t supported online.`;

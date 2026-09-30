@@ -22,7 +22,34 @@ interface Proposal {
  template_id?: string | null;
  collect_manually?: boolean;
  total_paid_cents?: number;
+ is_invoice?: boolean;
+ require_signature?: boolean;
+ /** An automatic plan payment failed. */
+ payment_failed?: boolean;
 }
+
+type ListFilter = 'all' | 'draft' | 'sign' | 'pay' | 'paying' | 'paid' | 'failed' | 'refunded';
+
+/** Which filter chip a document belongs to (besides "All"). */
+function filterOf(p: Proposal): Exclude<ListFilter, 'all'> {
+ if (p.status === 'draft') return 'draft';
+ if (p.payment_failed) return 'failed';
+ if (p.status === 'refunded' || p.status === 'partial_refund') return 'refunded';
+ if (!p.is_invoice && p.require_signature !== false && (p.status === 'sent' || p.status === 'opened')) return 'sign';
+ if (p.status === 'paid') return displayStatus(p) === 'paying' ? 'paying' : 'paid';
+ return 'pay';
+}
+
+const FILTERS: Array<{ key: ListFilter; label: string }> = [
+ { key: 'all', label: 'All' },
+ { key: 'sign', label: 'Needs signature' },
+ { key: 'pay', label: 'Awaiting payment' },
+ { key: 'paying', label: 'Paying' },
+ { key: 'failed', label: 'Payment failed' },
+ { key: 'paid', label: 'Paid' },
+ { key: 'refunded', label: 'Refunded' },
+ { key: 'draft', label: 'Drafts' },
+];
 
 function docNo(p: Proposal): string {
  return p.proposal_number != null ? `#${p.proposal_number}` : `#${p.id.slice(0, 8).toUpperCase()}`;
@@ -62,6 +89,7 @@ function PaymentsProposalsPageInner() {
  const [deletingId, setDeletingId] = useState<string | null>(null);
  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
  const [recordingFor, setRecordingFor] = useState<Proposal | null>(null);
+ const [listFilter, setListFilter] = useState<ListFilter>('all');
 
  async function fetchProposals() {
    setLoading(true);
@@ -97,7 +125,11 @@ function PaymentsProposalsPageInner() {
  async function resend(p: Proposal) {
  setSendingId(p.id);
  try {
- await fetch(`/api/proposals/${p.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sendNow:true}) });
+ const res = await fetch(`/api/proposals/${p.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sendNow:true}) });
+ if (!res.ok) {
+   const data = await res.json().catch(() => null);
+   alert((data && data.error) || 'This couldn’t be sent. Open it to check the details.');
+ }
  fetchProposals();
  } finally { setSendingId(null); }
  }
@@ -128,21 +160,27 @@ function PaymentsProposalsPageInner() {
  );
  }, [proposals, search]);
 
- const drafts = filtered.filter(p=>p.status==='draft');
- const sent = filtered.filter(p=>p.status!=='draft');
+ const counts = useMemo(() => {
+ const c: Record<ListFilter, number> = { all: filtered.length, draft: 0, sign: 0, pay: 0, paying: 0, paid: 0, failed: 0, refunded: 0 };
+ for (const p of filtered) c[filterOf(p)]++;
+ return c;
+ }, [filtered]);
+ const shown = listFilter === 'all' ? filtered : filtered.filter((p) => filterOf(p) === listFilter);
+ const drafts = shown.filter(p=>p.status==='draft');
+ const sent = shown.filter(p=>p.status!=='draft');
 
  return (
  <div>
  <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
  <div>
- <h1 className="text-2xl font-bold text-gray-900">Proposals</h1>
- <p className="mt-1 text-sm text-gray-500">Manage drafts and track sent proposals</p>
+ <h1 className="text-2xl font-bold text-gray-900">Proposals &amp; invoices</h1>
+ <p className="mt-1 text-sm text-gray-500">Everything you&apos;ve sent: who still needs to sign, who owes, and who&apos;s paid</p>
  </div>
  <Link
  href="/dashboard/payments/new"
  className="inline-flex items-center gap-2 rounded-lg bg-brand-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-800"
  >
- <Plus size={18} /> New proposal
+ <Plus size={18} /> New
  </Link>
  </div>
 
@@ -153,6 +191,24 @@ function PaymentsProposalsPageInner() {
  className="w-full rounded-2xl border border-gray-200 bg-white pl-9 pr-10 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none transition-colors"
  style={{ fontSize: 16 }} />
  {search && <button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={14}/></button>}
+ </div>
+
+ {/* Filters */}
+ <div className="mb-5 flex flex-wrap gap-2">
+ {FILTERS.filter((f) => f.key === 'all' || counts[f.key] > 0 || listFilter === f.key).map((f) => (
+ <button
+ key={f.key}
+ type="button"
+ onClick={() => setListFilter(f.key)}
+ className={classNames(
+ 'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+ listFilter === f.key ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300',
+ f.key === 'failed' && listFilter !== f.key ? 'text-red-600' : '',
+ )}
+ >
+ {f.label} <span className={listFilter === f.key ? 'text-white/70' : 'text-gray-400'}>{counts[f.key]}</span>
+ </button>
+ ))}
  </div>
 
 {loadError && (

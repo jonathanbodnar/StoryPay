@@ -48,7 +48,7 @@ export async function GET(
 
       // Apply proposal_viewed or invoice_viewed system tag (fire-and-forget)
       if (proposal.customer_email) {
-        const isInvoice = !proposal.template_id;
+        const isInvoice = proposal.is_invoice === true;
         ensureSystemTagsForVenue(proposal.venue_id as string)
           .then(() => applySystemTagByEmail(
             proposal.venue_id as string,
@@ -66,10 +66,10 @@ export async function GET(
 
   const venue = proposal.venues as { name: string; logo_url: string | null; service_fee_rate: number; brand_logo_url?: string; brand_tagline?: string; brand_email?: string; brand_phone?: string; brand_website?: string; brand_color?: string; brand_address?: string; brand_city?: string; brand_state?: string; brand_zip?: string; brand_footer_note?: string } | null;
 
-  // Invoice-style records are created via /api/invoices and have no
-  // template_id (and therefore no client signing flow). Surface this so
-  // the public payment page can skip signing entirely for invoices.
-  const isInvoice = !proposal.template_id;
+  // Invoices (created via /api/invoices, marked is_invoice) have no signing
+  // step. A proposal always does, even when its contract was written freeform
+  // or with AI instead of from a template.
+  const isInvoice = proposal.is_invoice === true;
 
   // A payment plan under way: what's left and the next automatic payment.
   let balanceCents: number | null = null;

@@ -1,9 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { findOrCreateContact, sendSms, sendEmail, normalizePhone, getGhlToken } from '@/lib/ghl';
-import { sendEmail as directSendEmail } from '@/lib/email';
-import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { sendClientDocument } from '@/lib/client-document-send';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { paymentTermsError, termsFingerprint } from '@/lib/payment-plan';
 import { sumManualPayments } from '@/lib/proposal-payments';
@@ -134,112 +132,38 @@ export async function PATCH(
       return NextResponse.json({ error: 'A valid price is required to send' }, { status: 400 });
     }
 
-    const { data: venue } = await supabaseAdmin
-      .from('venues')
-      .select('ghl_connected, ghl_access_token, ghl_location_id, name')
-      .eq('id', venueId)
-      .single();
-
-    updateData.status = 'sent';
-    updateData.sent_at = new Date().toISOString();
+    const isInvoice = existing.is_invoice === true;
+    if (existing.status === 'draft') {
+      // First send. An invoice has no signing step (same as /api/invoices).
+      const nowIso = new Date().toISOString();
+      updateData.status = isInvoice ? 'signed' : 'sent';
+      updateData.sent_at = nowIso;
+      if (isInvoice) updateData.signed_at = nowIso;
+    }
+    // A resend keeps the status as it is: it never un-signs a signed proposal.
     updateData.customer_name = name;
     updateData.customer_email = email;
     updateData.customer_phone = phone || null;
 
+    // One branded email (through the venue's CRM when it's connected) and a text.
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-    const proposalUrl = `${appUrl}/proposal/${existing.public_token}`;
-
-    const ghlToken = venue ? getGhlToken(venue) : null;
-    if (venue?.ghl_location_id && ghlToken) {
-      try {
-        const phoneE164 = normalizePhone(phone) || undefined;
-        const contactId = await findOrCreateContact(
-          ghlToken,
-          venue.ghl_location_id,
-          {
-            email,
-            phone: phoneE164,
-            firstName: name.split(' ')[0],
-            lastName: name.split(' ').slice(1).join(' ') || undefined,
-          }
-        );
-
-        if (contactId) {
-          const phoneE164Check = normalizePhone(phone);
-          if (phoneE164Check) {
-            try {
-              await sendSms(
-                ghlToken,
-                venue.ghl_location_id,
-                contactId,
-                `Hi ${name.split(' ')[0]}, ${venue.name} has sent you a proposal. View and sign here: ${proposalUrl}`
-              );
-            } catch (smsErr) {
-              console.error('[proposal-send-draft] SMS failed:', smsErr);
-            }
-          }
-
-          try {
-            await sendEmail(ghlToken, venue.ghl_location_id, {
-              contactId,
-              subject: `Proposal from ${venue.name}`,
-              html: `
-                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                  <h2 style="color: #1a1a2e;">You have a new proposal from ${venue.name}</h2>
-                  <p style="color: #555; font-size: 16px; line-height: 1.6;">
-                    Hi ${name.split(' ')[0]},<br><br>
-                    ${venue.name} has prepared a proposal for you. Click the button below to review, sign, and complete your payment.
-                  </p>
-                  <div style="text-align: center; margin: 32px 0;">
-                    <a href="${proposalUrl}" style="display: inline-block; background-color: #1b1b1b; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
-                      View Proposal
-                    </a>
-                  </div>
-                  <p style="color: #999; font-size: 13px;">
-                    If the button doesn't work, copy and paste this link: ${proposalUrl}
-                  </p>
-                </div>
-              `,
-            });
-          } catch (emailErr) {
-            console.error('[proposal-send-draft] Email failed:', emailErr);
-          }
-        }
-      } catch (err) {
-        console.error('[proposal-send-draft] GHL contact lookup failed:', err);
-      }
-    }
-
-    // Always send direct email using the venue's saved template
-    if (email) {
-      const { data: brandData } = await supabaseAdmin
-        .from('venues')
-        .select('brand_color, brand_logo_url')
-        .eq('id', venueId)
-        .single();
-
-      const tmpl = await getVenueEmailTemplate(venueId, 'proposal');
-      if (tmpl) {
-        const venueName = venue?.name || 'Your Venue';
-        const vars: Record<string, string> = {
-          organization:  venueName,
-          customer_name: name,
-          amount:        finalPrice ? `$${(finalPrice / 100).toFixed(2)}` : '',
-        };
-        await directSendEmail({
-          to: email,
-          subject: fillTemplate(tmpl.subject, vars),
-          html: buildEmailHtml({
-            template:   tmpl,
-            vars,
-            actionUrl:  proposalUrl,
-            brandColor: brandData?.brand_color  || '#1b1b1b',
-            logoUrl:    brandData?.brand_logo_url || undefined,
-            venueName,
-          }),
-        });
-      }
-    }
+    const cfg = (nextConfig ?? {}) as { due_date?: unknown };
+    const due = typeof cfg.due_date === 'string' ? cfg.due_date.slice(0, 10) : '';
+    await sendClientDocument({
+      venueId,
+      kind: isInvoice ? 'invoice' : 'proposal',
+      url: `${appUrl}/proposal/${existing.public_token}`,
+      customerName: name,
+      customerEmail: email,
+      customerPhone: phone,
+      vars: {
+        amount: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((Number(finalPrice) || 0) / 100),
+        invoice_number: String(existing.public_token || '').slice(0, 8).toUpperCase(),
+        due_date: /^\d{4}-\d{2}-\d{2}$/.test(due)
+          ? new Date(`${due}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+          : '',
+      },
+    });
   }
 
   const { data: updated, error: updateError } = await supabaseAdmin

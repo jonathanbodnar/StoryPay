@@ -2,10 +2,8 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { paymentTermsError } from '@/lib/payment-plan';
 import { supabaseAdmin } from '@/lib/supabase';
-import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
-import { sendEmail as directSendEmail } from '@/lib/email';
-import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { sendClientDocument } from '@/lib/client-document-send';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import {
   normalizeLineItemsFromRequest,
@@ -67,12 +65,6 @@ export async function POST(request: NextRequest) {
 
   const publicToken = generateToken();
   const invoiceNumber = publicToken.slice(0, 8).toUpperCase();
-
-  const { data: venue } = await supabaseAdmin
-    .from('venues')
-    .select('ghl_connected, ghl_access_token, ghl_location_id, name, brand_color, brand_logo_url')
-    .eq('id', venueId)
-    .single();
 
   const items = lineItemsNorm;
 
@@ -137,6 +129,7 @@ export async function POST(request: NextRequest) {
     payment_config: paymentConfig || {},
     content: invoiceContent,
     status: asDraft ? 'draft' : 'signed',
+    is_invoice: true,
     sent_at: asDraft ? null : nowIso,
     signed_at: asDraft ? null : nowIso,
     public_token: publicToken,
@@ -190,103 +183,27 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const ghlToken = venue ? getGhlToken(venue) : null;
-  if (!asDraft && venue?.ghl_location_id && ghlToken && customerEmail) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-    const proposalUrl = `${appUrl}/proposal/${publicToken}`;
-
-    try {
-      const phoneE164 = normalizePhone(customerPhone) || undefined;
-      const contactId = await findOrCreateContact(
-        ghlToken,
-        venue.ghl_location_id,
-        {
-          email: customerEmail,
-          phone: phoneE164,
-          firstName: (customerName || '').split(' ')[0],
-          lastName: (customerName || '').split(' ').slice(1).join(' ') || undefined,
-        }
-      );
-
-      if (contactId) {
-        const phoneE164Check = normalizePhone(customerPhone);
-        if (phoneE164Check) {
-          try {
-            await sendSms(
-              ghlToken,
-              venue.ghl_location_id,
-              contactId,
-              `Hi ${(customerName || '').split(' ')[0]}, ${venue.name} has sent you an invoice. View and pay here: ${proposalUrl}`
-            );
-          } catch (smsErr) {
-            console.error('[invoice] SMS failed:', smsErr);
-          }
-        }
-
-        try {
-          await ghlSendEmail(ghlToken, venue.ghl_location_id, {
-            contactId,
-            subject: `Invoice from ${venue.name}`,
-            html: `
-              <div style="font-family: 'Open Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background-color: #1b1b1b; padding: 24px 32px; border-radius: 12px 12px 0 0;">
-                  <h1 style="color: white; font-family: 'Open Sans', -apple-system, sans-serif; font-size: 24px; margin: 0; font-weight: 400;">Invoice from ${venue.name}</h1>
-                </div>
-                <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                  <p style="color: #374151; font-size: 15px; line-height: 1.6;">
-                    Hi ${(customerName || '').split(' ')[0]},<br><br>
-                    You have a new invoice from ${venue.name}. Click below to review and complete payment.
-                  </p>
-                  <div style="text-align: center; margin: 32px 0;">
-                    <a href="${proposalUrl}" style="display: inline-block; background-color: #1b1b1b; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">View & Pay Invoice</a>
-                  </div>
-                  <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 24px; margin-bottom: 0;">Powered by StoryVenue · Payments by StoryPay™</p>
-                </div>
-              </div>
-            `,
-          });
-        } catch (emailErr) {
-          console.error('[invoice] Email failed:', emailErr);
-        }
-      }
-    } catch (err) {
-      console.error('[invoice] GHL contact failed:', err);
-    }
-  }
-
-  // Always send direct email using the venue's saved template
+  // One branded email (through the venue's CRM when it's connected) and a text.
   if (!asDraft && customerEmail) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-    const invoiceUrl = `${appUrl}/proposal/${proposal.public_token}`;
-    const brandColor = (venue as { brand_color?: string })?.brand_color || '#1b1b1b';
-    const logoUrl    = (venue as { brand_logo_url?: string })?.brand_logo_url || undefined;
-    const amountStr  = `$${((price || 0) / 100).toFixed(2)}`;
-    const venueName  = venue?.name || 'Your Venue';
-
-    const tmpl = await getVenueEmailTemplate(venueId, 'invoice');
-    if (tmpl) {
-      const vars: Record<string, string> = {
-        organization:   venueName,
-        customer_name:  customerName || 'there',
-        amount:         amountStr,
+    const due = typeof (paymentConfig as { due_date?: unknown } | null)?.due_date === 'string'
+      ? String((paymentConfig as { due_date: string }).due_date).slice(0, 10)
+      : '';
+    await sendClientDocument({
+      venueId,
+      kind: 'invoice',
+      url: `${appUrl}/proposal/${proposal.public_token}`,
+      customerName: customerName || '',
+      customerEmail,
+      customerPhone,
+      vars: {
+        amount: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((price || 0) / 100),
         invoice_number: invoiceNumber,
-        due_date:       '',
-      };
-      console.log(`[invoice] Sending templated email to ${customerEmail}`);
-      const emailResult = await directSendEmail({
-        to: customerEmail,
-        subject: fillTemplate(tmpl.subject, vars),
-        html: buildEmailHtml({
-          template: tmpl,
-          vars,
-          actionUrl: invoiceUrl,
-          brandColor,
-          logoUrl,
-          venueName,
-        }),
-      });
-      console.log('[invoice] Email result:', JSON.stringify(emailResult));
-    }
+        due_date: /^\d{4}-\d{2}-\d{2}$/.test(due)
+          ? new Date(`${due}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+          : '',
+      },
+    });
   }
 
   // Auto-apply invoice_sent tag if not a draft

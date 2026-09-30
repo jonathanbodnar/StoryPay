@@ -30,6 +30,7 @@ interface Proposal {
   content: string | null;
   collect_manually?: boolean;
   require_signature?: boolean;
+  is_invoice?: boolean;
 }
 
 interface LedgerPayment {
@@ -263,6 +264,14 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
         >
           <Receipt size={14} /> Invoice &amp; receipt
         </Link>
+        {proposal.signed_at && !proposal.is_invoice && (
+          <a
+            href={`/api/proposals/public/${proposal.public_token}/contract-pdf`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <FileText size={14} /> Signed contract (PDF)
+          </a>
+        )}
         {!isDraft && proposal.status !== 'paid' && (
           <button
             onClick={resend}

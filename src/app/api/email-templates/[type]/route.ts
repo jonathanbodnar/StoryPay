@@ -11,6 +11,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const venueId = await getVenueId();
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { type } = await params;
+  if (!/^[a-z_]{2,40}$/.test(type)) return NextResponse.json({ error: 'Unknown email type' }, { status: 400 });
   const { subject, heading, body, button_text, footer, enabled } = await request.json();
 
   // Try upsert

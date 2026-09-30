@@ -5,6 +5,7 @@ import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
+import { emailSignedContract } from '@/lib/signed-contract';
 
 /**
  * Default ESIGN/UETA consent disclosure shown on the public proposal
@@ -181,6 +182,10 @@ export async function POST(
         .catch(() => {});
     }
   }
+
+  // The couple's copy of what they signed (PDF by email). In the background,
+  // so they go straight on to payment.
+  void emailSignedContract(proposal.id as string).catch((e) => console.error('[proposal-sign] signed copy email failed:', e));
 
   return NextResponse.json({ success: true });
 }
