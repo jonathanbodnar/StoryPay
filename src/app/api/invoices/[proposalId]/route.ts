@@ -27,15 +27,19 @@ export async function GET(
   try {
     const { data: pays } = await supabaseAdmin
       .from('proposal_payments')
-      .select('id, payment_number, amount_cents, method, source, check_number, note, paid_at')
+      .select('id, payment_number, amount_cents, refunded_cents, refunded_at, method, source, check_number, note, paid_at')
       .eq('proposal_id', proposalId)
       .order('paid_at', { ascending: true });
     if (pays) ledger = pays as Array<Record<string, unknown>>;
   } catch { /* ledger unavailable — ignore */ }
 
   const priceCents = Number(proposal.price) || 0;
-  const totalPaidCents = ledger.reduce((acc, p) => acc + (Number(p.amount_cents) || 0), 0);
-  const balanceCents = Math.max(priceCents - totalPaidCents, 0);
+  // A refund is a credit: the balance counts everything paid (before refunds),
+  // and "paid" is what the couple has paid net of refunds.
+  const grossPaidCents = ledger.reduce((acc, p) => acc + (Number(p.amount_cents) || 0), 0);
+  const refundedCents = ledger.reduce((acc, p) => acc + (Number(p.refunded_cents) || 0), 0);
+  const totalPaidCents = grossPaidCents - refundedCents;
+  const balanceCents = Math.max(priceCents - grossPaidCents, 0);
   let scheduleData = null;
   let subscriptionData = null;
 
@@ -105,6 +109,7 @@ export async function GET(
     created_at: proposal.created_at,
     payments: ledger,
     total_paid_cents: totalPaidCents,
+    refunded_cents: refundedCents,
     balance_cents: balanceCents,
     venue_name: venue?.name ?? '',
     venue_logo_url: venue?.brand_logo_url || venue?.logo_url || null,

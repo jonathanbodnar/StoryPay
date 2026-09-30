@@ -45,14 +45,18 @@ export async function GET(
   }
 
   const payments = data ?? [];
-  const totalPaidCents = payments.reduce((acc, p) => acc + (Number(p.amount_cents) || 0), 0);
+  const grossCents = payments.reduce((acc, p) => acc + (Number(p.amount_cents) || 0), 0);
+  const refundedCents = payments.reduce((acc, p) => acc + (Number((p as { refunded_cents?: number }).refunded_cents) || 0), 0);
   const priceCents = Number(proposal.price) || 0;
 
+  // A refund is a credit: the balance is what's left after everything paid
+  // (before refunds), and "paid" is what the venue kept.
   return NextResponse.json({
     payments,
-    total_paid_cents: totalPaidCents,
+    total_paid_cents: grossCents - refundedCents,
+    refunded_cents: refundedCents,
     price_cents: priceCents,
-    balance_cents: Math.max(priceCents - totalPaidCents, 0),
+    balance_cents: Math.max(priceCents - grossCents, 0),
   });
 }
 

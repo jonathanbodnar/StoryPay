@@ -21,6 +21,7 @@ interface LedgerPayment {
   note: string | null;
   recorded_by: string | null;
   paid_at: string;
+  refunded_cents?: number | null;
 }
 
 export function paymentMethodLabel(method: string, checkNumber?: string | null): string {
@@ -146,6 +147,7 @@ export default function RecordPaymentModal({ proposal, onClose, onSaved }: {
                       {formatCents(p.amount_cents)} <span className="text-gray-400 font-normal">· {paymentMethodLabel(p.method, p.check_number)}</span>
                     </p>
                     <p className="text-xs text-gray-400 truncate">{formatDate(p.paid_at)}{p.note ? ` · ${p.note}` : ''}{p.recorded_by ? ` · ${p.recorded_by}` : ''}</p>
+                    {Number(p.refunded_cents ?? 0) > 0 && <p className="text-xs text-red-600">{formatCents(Number(p.refunded_cents))} refunded</p>}
                   </div>
                   {p.source !== 'online' && (
                     <button onClick={() => removePayment(p.id)} disabled={deletingId === p.id} className="text-gray-300 hover:text-red-500 transition-colors p-1 disabled:opacity-50" title="Remove">

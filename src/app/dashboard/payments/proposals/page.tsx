@@ -31,6 +31,7 @@ function docNo(p: Proposal): string {
 function statusLabel(status: string): string {
  if (status === 'partially_paid') return 'Partial';
  if (status === 'paying') return 'Paying';
+ if (status === 'partial_refund') return 'Partly refunded';
  return status;
 }
 

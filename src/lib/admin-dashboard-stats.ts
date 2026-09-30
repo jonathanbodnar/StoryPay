@@ -42,7 +42,7 @@ export async function loadAdminDashboardStats(from: string | null, to: string | 
   let q = supabaseAdmin.from('proposals').select('id, status, price, created_at, paid_at, customer_email, venue_id').not('venue_id', 'in', notDemo);
   if (from)   q = q.gte('created_at', from);
   if (toEnd)  q = q.lte('created_at', toEnd);
-  let lq = supabaseAdmin.from('proposal_payments').select('amount_cents, paid_at').eq('source', 'online').not('venue_id', 'in', notDemo);
+  let lq = supabaseAdmin.from('proposal_payments').select('amount_cents, refunded_cents, paid_at').eq('source', 'online').not('venue_id', 'in', notDemo);
   if (from)   lq = lq.gte('paid_at', from);
   if (toEnd)  lq = lq.lte('paid_at', toEnd);
   let fq = supabaseAdmin.from('proposal_installments').select('proposal_id').eq('status', 'failed').not('venue_id', 'in', notDemo);
@@ -71,7 +71,8 @@ export async function loadAdminDashboardStats(from: string | null, to: string | 
 
   // Money couples actually paid online through StoryPay™ (the payments ledger;
   // an installment plan counts as each payment lands, not at its full price).
-  const totalRevenue = (onlinePayments ?? []).reduce((s, p) => s + (p.amount_cents ?? 0), 0);
+  // Net of refunds.
+  const totalRevenue = (onlinePayments ?? []).reduce((s, p) => s + (p.amount_cents ?? 0) - (Number((p as { refunded_cents?: number | null }).refunded_cents) || 0), 0);
   const totalProposals = rows.length;
   const pendingPayments = rows.filter((r) => AWAITING_PAYMENT.includes(r.status)).length;
   // Same rules as the Failed payments list (/api/admin/payments?status=failed).

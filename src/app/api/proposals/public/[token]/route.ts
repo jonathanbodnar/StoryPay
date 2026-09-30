@@ -74,7 +74,7 @@ export async function GET(
   // A payment plan under way: what's left and the next automatic payment.
   let balanceCents: number | null = null;
   let nextPayment: { amount_cents: number; due_date: string } | null = null;
-  if (proposal.payment_type === 'installment' && ['paid', 'partially_paid'].includes(String(proposal.status))) {
+  if (proposal.payment_type === 'installment' && ['paid', 'partially_paid', 'partial_refund'].includes(String(proposal.status))) {
     const [{ data: ledger }, { data: upcoming }] = await Promise.all([
       supabaseAdmin.from('proposal_payments').select('amount_cents').eq('proposal_id', proposal.id),
       supabaseAdmin

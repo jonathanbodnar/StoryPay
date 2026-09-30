@@ -86,7 +86,7 @@ async function couplePayments(
     .select('id, public_token, price, status, payment_type, payment_config, payment_provider, collect_manually, created_at')
     .eq('venue_id', venueId)
     .in('customer_email', variants)
-    .in('status', ['sent', 'opened', 'signed', 'paid', 'partially_paid'])
+    .in('status', ['sent', 'opened', 'signed', 'paid', 'partially_paid', 'partial_refund'])
     .order('created_at', { ascending: false })
     .limit(20);
   const docs = (data ?? []) as Array<{
@@ -97,12 +97,15 @@ async function couplePayments(
 
   const ids = docs.map((d) => d.id);
   const [{ data: ledger }, { data: rows }] = await Promise.all([
-    supabaseAdmin.from('proposal_payments').select('proposal_id, amount_cents').in('proposal_id', ids),
+    supabaseAdmin.from('proposal_payments').select('proposal_id, amount_cents, refunded_cents').in('proposal_id', ids),
     supabaseAdmin.from('proposal_installments').select('proposal_id, amount_cents, due_date').in('proposal_id', ids).eq('status', 'scheduled'),
   ]);
+  // Balances count everything paid (a refund is a credit); "paid" shown to them is net of refunds.
   const paidBy = new Map<string, number>();
-  for (const r of (ledger ?? []) as Array<{ proposal_id: string; amount_cents: number }>) {
+  let refundedCents = 0;
+  for (const r of (ledger ?? []) as Array<{ proposal_id: string; amount_cents: number; refunded_cents: number | null }>) {
     paidBy.set(r.proposal_id, (paidBy.get(r.proposal_id) ?? 0) + (Number(r.amount_cents) || 0));
+    refundedCents += Number(r.refunded_cents) || 0;
   }
 
   let paidCents = 0;
@@ -140,7 +143,7 @@ async function couplePayments(
   }
   const n = next as (CouplePayments['next'] & { url: string }) | null;
   return {
-    paidCents,
+    paidCents: paidCents - refundedCents,
     totalCents,
     balanceCents: Math.max(totalCents - paidCents, 0),
     next: n ? { amountCents: n.amountCents, date: n.date } : null,

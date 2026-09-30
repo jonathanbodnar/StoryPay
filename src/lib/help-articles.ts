@@ -1997,20 +1997,24 @@ See "Payment plans" for how to set one up and manage it from Payments → Paymen
       {
         id: 'pay-transactions',
         title: 'Viewing transactions and issuing refunds',
-        tags: ['transactions', 'charges', 'refund', 'history'],
+        tags: ['transactions', 'charges', 'refund', 'history', 'partial refund', 'payment plan'],
         body: `Go to Payments → Transactions (or click Transactions in the sidebar).
 
-The Charges tab lists every payment received, with customer name, amount, date, and status.
+Transactions lists every payment received, one line each: every payment of a payment plan, and cash or check payments you recorded. Each shows the method, amount, date, any amount refunded, and a link to the booking.
 
-To issue a refund:
-1. Find the charge in the list
-2. Click Refund
-3. Enter the refund amount (partial or full)
-4. Confirm — the refund is processed and the customer is notified by email
+To refund a payment (card or bank, paid online):
+1. Click Refund next to the payment, here or in the booking's payment list.
+2. Refund all of it or part of it.
+3. On a payment plan, choose whether to also cancel the remaining automatic payments (for a booking that's off). Leave it unchecked and the plan keeps running.
+4. Confirm. The money goes back to your client's card or bank account, usually within 5–10 business days.
 
-Refunds typically appear in the customer's account within 3–7 business days.
+A refund is a credit: your client is never charged that amount again. The booking shows "Partly refunded" until everything paid has been refunded; then it shows "Refunded" and any remaining automatic payments stop.
 
-The Installments and Subscriptions tabs list active payment plans.`,
+Refunds you make in your own Stripe dashboard are picked up automatically, whichever payment they're on. StoryVenue's fee on a refunded payment is refunded in proportion; Stripe keeps its own processing fee.
+
+Cash and check payments aren't refunded through StoryPay™: give the money back directly and remove the record from the booking.
+
+Payment plans are listed under Payments → Payment plans.`,
       },
     ],
   },

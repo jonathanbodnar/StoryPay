@@ -69,22 +69,91 @@ async function stripeTransactions(venueId: string, type: string): Promise<unknow
     p.proposal_number != null ? String(p.proposal_number) : (p.public_token ?? p.id).slice(0, 8).toUpperCase();
 
   if (type === 'charges') {
-    return rows.map((p) => ({
-      id: p.id,
-      invoiceNumber: invNum(p),
-      description: `Invoice #${invNum(p)} - ${p.customer_name}`,
-      amount: actualPaidAmountCents(p),
-      fullInvoiceAmount: p.price,
-      paymentType: p.payment_type,
-      status: p.status,
-      date: (p.paid_at as string | null) || (p.created_at as string),
-      refundedAt: (p.refunded_at as string | null) || null,
-      chargeId: (p.stripe_payment_intent_id as string | null) ?? null,
-      transactionId: (p.transaction_id as string | null) ?? null,
-      sessionId: null,
-      customerId: null,
-      customerName: p.customer_name,
-    }));
+    // Every payment from the ledger (each plan payment, and cash/check too),
+    // plus any older paid booking that predates the ledger.
+    const { data: pays } = await supabaseAdmin
+      .from('proposal_payments')
+      .select('id, proposal_id, payment_number, amount_cents, refunded_cents, refunded_at, method, source, reference, check_number, paid_at')
+      .eq('venue_id', venueId)
+      .order('paid_at', { ascending: false })
+      .limit(1000);
+    const ledger = (pays ?? []) as Array<{
+      id: string; proposal_id: string; payment_number: number | null; amount_cents: number; refunded_cents: number | null;
+      refunded_at: string | null; method: string; source: string | null; reference: string | null; check_number: string | null; paid_at: string;
+    }>;
+    const byId = new Map(rows.map((p) => [p.id, p]));
+    const missing = [...new Set(ledger.map((r) => r.proposal_id))].filter((id) => !byId.has(id));
+    if (missing.length) {
+      const { data: more } = await supabaseAdmin
+        .from('proposals')
+        .select('id, public_token, proposal_number, customer_name, price, status, paid_at, refunded_at, created_at, payment_type, payment_config, payment_provider, stripe_payment_intent_id, transaction_id')
+        .in('id', missing);
+      for (const p of (more ?? []) as typeof rows) byId.set(p.id, p);
+    }
+    const { data: waiting } = await supabaseAdmin
+      .from('proposal_installments')
+      .select('proposal_id')
+      .eq('venue_id', venueId)
+      .in('status', ['scheduled', 'failed']);
+    const withPlan = new Set(((waiting ?? []) as Array<{ proposal_id: string }>).map((r) => r.proposal_id));
+    const methodName = (m: string, check: string | null) =>
+      m === 'cc' ? 'Card' : m === 'ach' ? 'Bank' : m === 'check' ? (check ? `Check #${check}` : 'Check') : m === 'cash' ? 'Cash' : 'Other';
+
+    const out: unknown[] = ledger.map((r) => {
+      const p = byId.get(r.proposal_id);
+      const refunded = Number(r.refunded_cents ?? 0);
+      const num = p ? invNum(p) : r.proposal_id.slice(0, 8).toUpperCase();
+      return {
+        id: r.id,
+        paymentId: r.id,
+        proposalId: r.proposal_id,
+        paymentNumber: r.payment_number,
+        invoiceNumber: num,
+        description: `${p?.customer_name || 'Client'} · Invoice #${num}`,
+        method: methodName(r.method, r.check_number),
+        online: r.source === 'online',
+        amount: r.amount_cents,
+        refundedCents: refunded,
+        fullInvoiceAmount: p?.price ?? null,
+        paymentType: p?.payment_type ?? null,
+        status: refunded >= r.amount_cents ? 'refunded' : refunded > 0 ? 'partial_refund' : 'paid',
+        date: r.paid_at,
+        refundedAt: r.refunded_at,
+        chargeId: r.source === 'online' ? r.reference : null,
+        transactionId: null,
+        sessionId: null,
+        customerId: null,
+        customerName: p?.customer_name ?? null,
+        hasScheduledPayments: withPlan.has(r.proposal_id),
+      };
+    });
+    const inLedger = new Set(ledger.map((r) => r.proposal_id));
+    for (const p of rows) {
+      if (inLedger.has(p.id)) continue;
+      out.push({
+        id: p.id,
+        paymentId: null,
+        proposalId: p.id,
+        invoiceNumber: invNum(p),
+        description: `${p.customer_name || 'Client'} · Invoice #${invNum(p)}`,
+        method: null,
+        online: false,
+        amount: actualPaidAmountCents(p),
+        refundedCents: 0,
+        fullInvoiceAmount: p.price,
+        paymentType: p.payment_type,
+        status: p.status,
+        date: (p.paid_at as string | null) || (p.created_at as string),
+        refundedAt: (p.refunded_at as string | null) || null,
+        chargeId: (p.stripe_payment_intent_id as string | null) ?? null,
+        transactionId: (p.transaction_id as string | null) ?? null,
+        sessionId: null,
+        customerId: null,
+        customerName: p.customer_name,
+        hasScheduledPayments: false,
+      });
+    }
+    return out;
   }
 
   if (type === 'schedules') return paymentPlans(venueId);
@@ -173,7 +242,8 @@ async function paymentPlans(venueId: string): Promise<unknown[]> {
       nextPaymentAmount: next?.amount ?? null,
       collection: auto ? 'automatic' : p.collect_manually === true ? 'manual' : 'online',
       status,
-      effectiveStatus: p.status === 'refunded' || p.status === 'partial_refund' ? p.status : status,
+      // A partly refunded plan that's still running shows as running.
+      effectiveStatus: p.status === 'refunded' || (p.status === 'partial_refund' && status !== 'active' && status !== 'failed') ? p.status : status,
     };
   });
 }

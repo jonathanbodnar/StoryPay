@@ -192,17 +192,29 @@ export async function GET(request: NextRequest) {
       if (from)  q = q.gte('created_at', from);
       if (toEnd) q = q.lte('created_at', toEnd);
       const { data } = await q;
+      // What was actually refunded, per booking, from the payment ledger (a
+      // plan or a partial refund is never the whole price). Older bookings
+      // without ledger refunds fall back to their price.
+      const ids = (data ?? []).map((r) => r.id as string);
+      const { data: refundedPays } = ids.length
+        ? await supabaseAdmin.from('proposal_payments').select('proposal_id, refunded_cents').in('proposal_id', ids).gt('refunded_cents', 0)
+        : { data: [] };
+      const refundedBy = new Map<string, number>();
+      for (const r of (refundedPays ?? []) as Array<{ proposal_id: string; refunded_cents: number }>) {
+        refundedBy.set(r.proposal_id, (refundedBy.get(r.proposal_id) ?? 0) + (Number(r.refunded_cents) || 0));
+      }
+      const refundAmount = (r: { id: string; price: number | null }) => refundedBy.get(r.id) ?? (r.price ?? 0);
       const rows = (data ?? []).map((r) => ({
         'Customer Name':  r.customer_name ?? '',
         'Customer Email': r.customer_email ?? '',
-        'Amount ($)':     ((r.price ?? 0) / 100).toFixed(2),
+        'Amount ($)':     (refundAmount(r) / 100).toFixed(2),
         'Type':           r.status === 'partial_refund' ? 'Partial Refund' : 'Full Refund',
         'Payment Type':   r.payment_type ?? '',
         'Original Date':  r.paid_at ? new Date(r.paid_at).toLocaleDateString('en-US') : '',
         'Refund Date':    r.refunded_at ? new Date(r.refunded_at).toLocaleDateString('en-US') : '',
         'Proposal ID':    r.id,
       }));
-      const total = (data ?? []).reduce((s, r) => s + (r.price ?? 0), 0);
+      const total = (data ?? []).reduce((s, r) => s + refundAmount(r), 0);
       return NextResponse.json({ rows, summary: { 'Total Refunds': rows.length, 'Total Refunded': `$${(total / 100).toFixed(2)}` } });
     }
 
@@ -228,7 +240,27 @@ export async function GET(request: NextRequest) {
       if (from)  qRef = qRef.gte('paid_at', from);
       if (toEnd) qRef = qRef.lte('paid_at', toEnd);
 
-      const [{ data: pays }, { data: refunded }] = await Promise.all([qPay, qRef]);
+      // Refunds on individual payments (the ledger), dated when they were refunded.
+      let qLedgerRef = supabaseAdmin
+        .from('proposal_payments')
+        .select('proposal_id, refunded_cents, refunded_at')
+        .eq('venue_id', venueId)
+        .eq('source', 'online')
+        .gt('refunded_cents', 0);
+      if (from)  qLedgerRef = qLedgerRef.gte('refunded_at', from);
+      if (toEnd) qLedgerRef = qLedgerRef.lte('refunded_at', toEnd);
+
+      const [{ data: pays }, { data: refundedAll }, { data: ledgerRefunds }] = await Promise.all([qPay, qRef, qLedgerRef]);
+      const refundedPayments = (ledgerRefunds ?? []) as Array<{ proposal_id: string; refunded_cents: number; refunded_at: string | null }>;
+      type RefundedBooking = { id: string; customer_name: string | null; price: number | null; status: string; paid_at: string | null; refunded_at: string | null };
+      const refundedBookings = (refundedAll ?? []) as RefundedBooking[];
+      // Bookings refunded before refunds were recorded per payment count their price, as before.
+      const bookingIds = refundedBookings.map((r) => r.id);
+      const { data: recorded } = bookingIds.length
+        ? await supabaseAdmin.from('proposal_payments').select('proposal_id').in('proposal_id', bookingIds).gt('refunded_cents', 0)
+        : { data: [] };
+      const withLedgerRefund = new Set(((recorded ?? []) as Array<{ proposal_id: string }>).map((r) => r.proposal_id));
+      const refunded = refundedBookings.filter((r) => !withLedgerRefund.has(r.id));
       const payments = (pays ?? []) as Array<{ id: string; proposal_id: string; amount_cents: number; method: string; paid_at: string | null }>;
 
       const proposalIds = Array.from(new Set(payments.map((p) => p.proposal_id)));
@@ -281,14 +313,30 @@ export async function GET(request: NextRequest) {
         };
       });
 
-      const rows = [...paidRows, ...refundRows].sort((a, b) =>
+      const refundedNames = new Map(refundedBookings.map((r) => [r.id, r.customer_name]));
+      const paymentRefundRows = refundedPayments.map((r) => {
+        const amt = (Number(r.refunded_cents) || 0) / 100;
+        return {
+          'Date':               r.refunded_at ? new Date(r.refunded_at).toLocaleDateString('en-US') : '',
+          'Type':               'Refund Issued',
+          'Customer':           byId.get(r.proposal_id)?.customer_name ?? refundedNames.get(r.proposal_id) ?? '',
+          'Description':        'Refund of an online payment',
+          'Gross Amount ($)':   `(${amt.toFixed(2)})`,
+          'Processing Fee ($)': '—',
+          'Net to Bank ($)':    `(${amt.toFixed(2)})`,
+          'Proposal ID':        r.proposal_id,
+        };
+      });
+
+      const rows = [...paidRows, ...refundRows, ...paymentRefundRows].sort((a, b) =>
         new Date(b['Date']).getTime() - new Date(a['Date']).getTime()
       );
 
       const totalGross  = totalGrossCents / 100;
       const totalFees   = totalFeeCents / 100;
       const totalNet    = totalGross - totalFees;
-      const totalRefunds = (refunded ?? []).reduce((s, r) => s + (r.price ?? 0), 0) / 100;
+      const totalRefunds =
+        (refunded.reduce((s, r) => s + (r.price ?? 0), 0) + refundedPayments.reduce((s, r) => s + (Number(r.refunded_cents) || 0), 0)) / 100;
       const netDeposit  = totalNet - totalRefunds;
 
       return NextResponse.json({

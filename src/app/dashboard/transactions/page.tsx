@@ -2,13 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, Eye, X, RotateCcw, User } from 'lucide-react';
+import { Loader2, Eye, X, RotateCcw, User, FileText } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 import PaymentGate from '@/components/PaymentGate';
 import RefundModal from '@/components/RefundModal';
 
 interface Charge {
  id: string;
+ /** The payment-ledger row (one per payment); null for an older booking without one. */
+ paymentId?: string | null;
+ proposalId?: string | null;
+ paymentNumber?: number | null;
+ method?: string | null;
+ online?: boolean;
+ refundedCents?: number;
+ hasScheduledPayments?: boolean;
  invoiceNumber?: string | null;
  description: string;
  amount: number;
@@ -24,15 +32,22 @@ interface Charge {
  customerName?: string | null;
 }
 
+const STATUS_LABEL: Record<string, string> = { paid: 'Paid', refunded: 'Refunded', partial_refund: 'Partly refunded' };
+
+/** Online payments with something left to refund (and older bookings the refund route still handles). */
+function canRefund(c: Charge): boolean {
+ if (c.paymentId) return !!c.online && (c.refundedCents ?? 0) < c.amount;
+ return c.status !== 'refunded' && c.status !== 'partial_refund';
+}
+
 function TransactionsPageInner() {
  const [charges, setCharges] = useState<Charge[]>([]);
  const [loading, setLoading] = useState(true);
  const [selectedCharge, setSelectedCharge] = useState<Charge | null>(null);
  const [refundTarget, setRefundTarget] = useState<Charge | null>(null);
 
- useEffect(() => {
- setLoading(true);
- fetch('/api/transactions?type=charges')
+ function load() {
+ fetch('/api/transactions?type=charges', { cache: 'no-store' })
  .then((res) => (res.ok ? res.json() : []))
  .then((data) => {
  const items = Array.isArray(data) ? data : data.data ?? [];
@@ -40,13 +55,15 @@ function TransactionsPageInner() {
  })
  .catch(() => {})
  .finally(() => setLoading(false));
- }, []);
+ }
+
+ useEffect(() => { load(); }, []);
 
  return (
  <div>
  <div className="mb-8">
  <h1 className="font-heading text-2xl font-semibold text-gray-900">Transactions</h1>
- <p className="mt-1 text-sm text-gray-500">Payment history and charge records</p>
+ <p className="mt-1 text-sm text-gray-500">Every payment received: card, bank, cash and check. Refund a payment from here or from its booking.</p>
  </div>
 
  {loading ? (
@@ -60,7 +77,7 @@ function TransactionsPageInner() {
  ) : (
  <div className="divide-y divide-gray-200">
  {/* Desktop header */}
- <div className="hidden sm:grid grid-cols-[1fr_90px_90px_100px_auto] gap-2 px-5 py-2.5 bg-gray-50/60">
+ <div className="hidden sm:grid grid-cols-[1fr_110px_110px_100px_auto] gap-2 px-5 py-2.5 bg-gray-50/60">
  {['Description','Amount','Status','Date','Actions'].map(h => (
  <span key={h} className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{h}</span>
  ))}
@@ -72,15 +89,24 @@ function TransactionsPageInner() {
  {/* Mobile card */}
  <div className="sm:hidden px-4 py-3.5 space-y-2">
  <div className="flex items-start justify-between gap-2">
- <p className="text-sm font-medium text-gray-900 flex-1">{c.description}</p>
- <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize flex-shrink-0', color.bg, color.text)}>{c.status}</span>
+ <div className="flex-1 min-w-0">
+ <p className="text-sm font-medium text-gray-900">{c.description}</p>
+ {c.method && <p className="text-xs text-gray-400">{c.method}{c.paymentNumber ? ` · #${c.paymentNumber}` : ''}</p>}
+ </div>
+ <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium flex-shrink-0', color.bg, color.text)}>{STATUS_LABEL[c.status] ?? c.status}</span>
  </div>
  <div className="flex items-center justify-between gap-2">
  <div>
  <p className="text-sm font-semibold text-gray-800">{formatCents(c.amount)}</p>
+ {(c.refundedCents ?? 0) > 0 && <p className="text-xs text-red-600">{formatCents(c.refundedCents ?? 0)} refunded</p>}
  <p className="text-xs text-gray-400">{formatDate(c.date)}</p>
  </div>
  <div className="flex items-center gap-1 flex-wrap justify-end">
+ {c.proposalId && (
+ <Link href={`/dashboard/proposals/${c.proposalId}`} prefetch={false} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
+ <FileText size={12} /> Booking
+ </Link>
+ )}
  {c.customerId && (
  <Link href={`/dashboard/contacts/${c.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <User size={12} /> Customer
@@ -89,7 +115,7 @@ function TransactionsPageInner() {
  <button onClick={() => setSelectedCharge(c)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <Eye size={12} /> View
  </button>
-{c.status !== 'refunded' && c.status !== 'partial_refund' && (
+{canRefund(c) && (
 <button onClick={() => setRefundTarget(c)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
 <RotateCcw size={12} /> Refund
 </button>
@@ -98,12 +124,23 @@ function TransactionsPageInner() {
 </div>
 </div>
 {/* Desktop row */}
- <div className="hidden sm:grid grid-cols-[1fr_90px_90px_100px_auto] gap-2 px-5 py-3.5 items-center">
+ <div className="hidden sm:grid grid-cols-[1fr_110px_110px_100px_auto] gap-2 px-5 py-3.5 items-center">
+ <div className="min-w-0">
  <p className="text-sm font-medium text-gray-900 truncate">{c.description}</p>
+ {c.method && <p className="text-xs text-gray-400 truncate">{c.method}{c.paymentNumber ? ` · #${c.paymentNumber}` : ''}</p>}
+ </div>
+ <div>
  <p className="text-sm text-gray-700">{formatCents(c.amount)}</p>
- <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize w-fit', color.bg, color.text)}>{c.status}</span>
+ {(c.refundedCents ?? 0) > 0 && <p className="text-[11px] text-red-600">{formatCents(c.refundedCents ?? 0)} refunded</p>}
+ </div>
+ <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium w-fit', color.bg, color.text)}>{STATUS_LABEL[c.status] ?? c.status}</span>
  <p className="text-sm text-gray-500">{formatDate(c.date)}</p>
  <div className="flex items-center justify-end gap-1">
+ {c.proposalId && (
+ <Link href={`/dashboard/proposals/${c.proposalId}`} prefetch={false} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
+ <FileText size={13} /> Booking
+ </Link>
+ )}
  {c.customerId && (
  <Link href={`/dashboard/contacts/${c.customerId}`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <User size={13} /> View Customer
@@ -112,7 +149,7 @@ function TransactionsPageInner() {
  <button onClick={() => setSelectedCharge(c)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100">
  <Eye size={13} /> View Transaction
  </button>
-{c.status !== 'refunded' && c.status !== 'partial_refund' && (
+{canRefund(c) && (
 <button onClick={() => setRefundTarget(c)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
 <RotateCcw size={13} /> Refund
 </button>
@@ -130,14 +167,14 @@ function TransactionsPageInner() {
  {/* Refund Modal */}
  {refundTarget && (
  <RefundModal
- proposalId={refundTarget.id}
+ proposalId={refundTarget.proposalId || refundTarget.id}
+ paymentId={refundTarget.paymentId}
  chargeId={refundTarget.chargeId}
  customerName={refundTarget.customerName || refundTarget.description}
  originalAmount={refundTarget.amount}
-onSuccess={(fullRefund) => {
-setCharges(prev => prev.map(c => c.id === refundTarget.id ? { ...c, status: fullRefund ? 'refunded' : 'partial_refund' } : c));
-setRefundTarget(null);
-}}
+ refundedAmount={refundTarget.refundedCents ?? 0}
+ hasScheduledPayments={refundTarget.hasScheduledPayments}
+ onSuccess={() => load()}
  onClose={() => setRefundTarget(null)}
  />
  )}
@@ -180,7 +217,7 @@ setRefundTarget(null);
  getStatusColor(selectedCharge.status).text
  )}
  >
- {selectedCharge.status}
+ {STATUS_LABEL[selectedCharge.status] ?? selectedCharge.status}
  </span>
  </dd>
  </div>
@@ -209,7 +246,7 @@ setRefundTarget(null);
 {selectedCharge.refundedAt && (
 <div className="flex justify-between">
 <dt className="text-sm font-medium text-gray-500">Refunded</dt>
-<dd className="text-sm text-gray-700">{formatDate(selectedCharge.refundedAt)}</dd>
+<dd className="text-sm text-gray-700">{(selectedCharge.refundedCents ?? 0) > 0 ? `${formatCents(selectedCharge.refundedCents ?? 0)} · ` : ''}{formatDate(selectedCharge.refundedAt)}</dd>
 </div>
 )}
 </dl>

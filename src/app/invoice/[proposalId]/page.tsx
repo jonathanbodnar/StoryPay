@@ -26,6 +26,7 @@ interface LedgerPayment {
   check_number: string | null;
   note: string | null;
   paid_at: string;
+  refunded_cents?: number | null;
 }
 
 interface InvoiceData {
@@ -43,6 +44,7 @@ interface InvoiceData {
   created_at: string;
   payments: LedgerPayment[];
   total_paid_cents: number;
+  refunded_cents?: number;
   balance_cents: number;
   venue_name: string;
   venue_logo_url: string | null;
@@ -122,6 +124,7 @@ export default function InvoicePage() {
 
   const ledger = invoice.payments ?? [];
   const totalPaid = invoice.total_paid_cents ?? 0;
+  const refundedTotal = invoice.refunded_cents ?? 0;
   const balance = invoice.balance_cents ?? Math.max(invoice.price - totalPaid, 0);
   // A receipt-style status that reflects the actual ledger, not just the
   // proposal's stored status string.
@@ -131,8 +134,10 @@ export default function InvoicePage() {
       : totalPaid > 0
         ? 'partial'
         : 'due';
-  const statusLabel = payState === 'paid' ? 'Paid in full' : payState === 'partial' ? 'Partially paid' : 'Balance due';
-  const statusClasses = payState === 'paid'
+  const statusLabel = invoice.status === 'refunded' ? 'Refunded' : payState === 'paid' ? 'Paid in full' : payState === 'partial' ? 'Partially paid' : 'Balance due';
+  const statusClasses = invoice.status === 'refunded'
+    ? 'bg-gray-100 text-gray-600'
+    : payState === 'paid'
     ? 'bg-emerald-100 text-emerald-700'
     : payState === 'partial'
       ? 'bg-amber-100 text-amber-700'
@@ -199,6 +204,7 @@ export default function InvoicePage() {
       body: [[`Proposal — ${invoice.customer_name || ''}`, formatCents(invoice.price)]],
       foot: [
         ['Total', formatCents(totalWithFee)],
+        ...(refundedTotal > 0 ? [['Refunded', `(${formatCents(refundedTotal)})`]] : []),
         ['Paid', formatCents(totalPaid)],
         ['Balance', formatCents(balance)],
       ],
@@ -219,7 +225,9 @@ export default function InvoicePage() {
           p.payment_number != null ? `#${p.payment_number}` : '—',
           formatDate(p.paid_at),
           fmtMethod(p),
-          formatCents(p.amount_cents),
+          Number(p.refunded_cents ?? 0) > 0
+            ? `${formatCents(p.amount_cents)} (${formatCents(Number(p.refunded_cents))} refunded)`
+            : formatCents(p.amount_cents),
         ]),
         theme: 'grid',
         headStyles: { fillColor: [rgb[0], rgb[1], rgb[2]] },
@@ -366,6 +374,12 @@ export default function InvoicePage() {
             </div>
             {ledger.length > 0 && (
               <div className="mt-3 space-y-2 border-t border-gray-200 pt-3">
+                {refundedTotal > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Refunded</span>
+                    <span className="font-medium text-gray-700">−{formatCents(refundedTotal)}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">Paid to date</span>
                   <span className="font-medium text-emerald-700">{formatCents(totalPaid)}</span>
@@ -401,6 +415,11 @@ export default function InvoicePage() {
                       <div>
                         <p className="text-sm text-gray-700">{fmtMethod(p)}</p>
                         <p className="text-xs text-gray-400">{formatDate(p.paid_at)}</p>
+                        {Number(p.refunded_cents ?? 0) > 0 && (
+                          <p className="text-xs text-red-600">
+                            {Number(p.refunded_cents) >= p.amount_cents ? 'Refunded' : `${formatCents(Number(p.refunded_cents))} refunded`}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <span className="text-sm font-medium text-gray-900">

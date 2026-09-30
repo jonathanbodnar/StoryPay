@@ -4,14 +4,14 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { refundCharge } from '@/lib/lunarpay';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
-import { getStripe } from '@/lib/stripe/client';
+import { refundPayment } from '@/lib/stripe/refunds';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { proposalId, chargeId, amountCents } = await request.json();
+  const { proposalId, paymentId, chargeId, amountCents, cancelRemaining } = await request.json();
 
   if (!proposalId) return NextResponse.json({ error: 'proposalId is required' }, { status: 400 });
 
@@ -31,45 +31,29 @@ export async function POST(request: NextRequest) {
   if (!proposal) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
   if (proposal.status === 'refunded') return NextResponse.json({ error: 'Already refunded' }, { status: 400 });
 
-  // Paid on the venue's own Stripe account (Stripe Connect): refund there.
-  // StoryVenue's fee is refunded proportionally; Stripe keeps its own fee.
+  // Paid on the venue's own Stripe account (Stripe Connect): refund one payment
+  // there (lib/stripe/refunds.ts). StoryVenue's fee is refunded in proportion;
+  // Stripe keeps its own fee.
   if (proposal.payment_provider === 'stripe') {
-    const account = (venue as { stripe_account_id?: string | null } | null)?.stripe_account_id;
-    const paymentIntent = typeof chargeId === 'string' && chargeId.startsWith('pi_') ? chargeId : proposal.stripe_payment_intent_id;
-    if (!account || !paymentIntent) return NextResponse.json({ error: 'No Stripe payment found for this transaction' }, { status: 400 });
-    if (amountCents !== undefined && amountCents !== null && amountCents <= 0) {
-      return NextResponse.json({ error: 'Refund amount must be greater than $0' }, { status: 400 });
+    let id = typeof paymentId === 'string' ? paymentId : '';
+    if (!id) {
+      // Older callers name the charge instead: find that payment in the ledger.
+      const reference = typeof chargeId === 'string' && chargeId.startsWith('pi_') ? chargeId : proposal.stripe_payment_intent_id;
+      const { data: row } = reference
+        ? await supabaseAdmin.from('proposal_payments').select('id').eq('proposal_id', proposalId).eq('reference', reference).maybeSingle()
+        : { data: null };
+      id = (row as { id?: string } | null)?.id ?? '';
     }
-    try {
-      const refund = await getStripe().refunds.create(
-        {
-          payment_intent: paymentIntent,
-          ...(amountCents ? { amount: Math.round(amountCents) } : {}),
-          refund_application_fee: true,
-          metadata: { storyvenue_proposal_id: proposalId },
-        },
-        { stripeAccount: account },
-      );
-      const isFullRefund = !amountCents || amountCents >= (proposal.price ?? 0);
-      await supabaseAdmin
-        .from('proposals')
-        .update({ status: isFullRefund ? 'refunded' : 'partial_refund', refunded_at: new Date().toISOString() })
-        .eq('id', proposalId);
-      const refundEmail = (proposal.customer_email as string | null)?.trim();
-      if (refundEmail) {
-        ensureSystemTagsForVenue(venueId).then(() => applySystemTagByEmail(venueId, refundEmail, 'refunded')).catch(() => {});
-      }
-      void notifyOwner({
-        venueId,
-        scenario: 'refund_issued',
-        vars: { customer_name: (proposal.customer_name as string | null) || 'Customer', amount: formatAmount(refund.amount) },
-        actionUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com'}/dashboard/transactions`,
-      });
-      return NextResponse.json({ success: true, refundedAmount: refund.amount, fullRefund: isFullRefund });
-    } catch (err) {
-      console.error('Stripe refund error:', err);
-      return NextResponse.json({ error: err instanceof Error ? err.message : 'Refund failed' }, { status: 500 });
-    }
+    if (!id) return NextResponse.json({ error: 'Choose the payment to refund on the booking page.' }, { status: 400 });
+    const result = await refundPayment({
+      venueId,
+      proposalId,
+      paymentId: id,
+      amountCents: amountCents ?? null,
+      cancelRemaining: cancelRemaining === true,
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ success: true, refundedAmount: result.refundedCents, fullRefund: result.fullRefund, message: result.message });
   }
 
   if (!venue?.lunarpay_secret_key) {

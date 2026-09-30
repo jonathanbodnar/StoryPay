@@ -5,9 +5,17 @@ import { X, Loader2, AlertTriangle, RotateCcw, CheckCircle2 } from 'lucide-react
 
 interface RefundModalProps {
   proposalId: string;
+  /** The payment to refund (a payment-ledger row). */
+  paymentId?: string | null;
+  /** Older bookings without a ledger row: the charge to refund. */
   chargeId?: string | null;
   customerName: string;
-  originalAmount: number; // in cents
+  /** The payment's amount, in cents. */
+  originalAmount: number;
+  /** Already refunded from this payment, in cents. */
+  refundedAmount?: number;
+  /** The booking still has automatic payments scheduled. */
+  hasScheduledPayments?: boolean;
   onSuccess: (fullRefund: boolean) => void;
   onClose: () => void;
 }
@@ -17,18 +25,19 @@ function formatCents(c: number) {
 }
 
 export default function RefundModal({
-  proposalId, chargeId, customerName, originalAmount, onSuccess, onClose,
+  proposalId, paymentId, chargeId, customerName, originalAmount, refundedAmount = 0, hasScheduledPayments, onSuccess, onClose,
 }: RefundModalProps) {
+  const refundable = Math.max(originalAmount - refundedAmount, 0);
   const [type, setType]           = useState<'full' | 'partial'>('full');
   const [partialDollars, setPartialDollars] = useState('');
+  const [cancelRemaining, setCancelRemaining] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError]         = useState('');
-  const [done, setDone]           = useState(false);
-  const [result, setResult]       = useState<{ refundedAmount: number; fullRefund: boolean } | null>(null);
+  const [result, setResult]       = useState<{ refundedAmount: number; fullRefund: boolean; message?: string } | null>(null);
 
   const partialCents = Math.round(parseFloat(partialDollars || '0') * 100);
-  const refundCents  = type === 'full' ? originalAmount : partialCents;
-  const valid        = type === 'full' || (partialCents > 0 && partialCents <= originalAmount);
+  const refundCents  = type === 'full' ? refundable : partialCents;
+  const valid        = refundable > 0 && (type === 'full' || (partialCents > 0 && partialCents <= refundable));
 
   async function submit() {
     if (!valid) return;
@@ -40,14 +49,15 @@ export default function RefundModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           proposalId,
+          paymentId: paymentId || undefined,
           chargeId,
           amountCents: type === 'partial' ? partialCents : null,
+          cancelRemaining: hasScheduledPayments ? cancelRemaining : false,
         }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Refund failed'); return; }
       setResult(data);
-      setDone(true);
       onSuccess(data.fullRefund);
     } catch {
       setError('Network error. Please try again.');
@@ -67,7 +77,7 @@ export default function RefundModal({
               <RotateCcw size={16} className="text-red-600" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900">Issue Refund</h3>
+              <h3 className="text-sm font-semibold text-gray-900">Refund payment</h3>
               <p className="text-xs text-gray-400 mt-0.5">{customerName}</p>
             </div>
           </div>
@@ -76,20 +86,18 @@ export default function RefundModal({
           </button>
         </div>
 
-        {done && result ? (
+        {result ? (
           /* Success state */
           <div className="flex flex-col items-center gap-4 px-6 py-10 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50">
               <CheckCircle2 size={28} className="text-emerald-500" />
             </div>
             <div>
-              <p className="text-base font-semibold text-gray-900">Refund Issued</p>
+              <p className="text-base font-semibold text-gray-900">Refund issued</p>
               <p className="text-sm text-gray-500 mt-1">
-                {formatCents(result.refundedAmount)} has been refunded to {customerName}.
+                {result.message || `${formatCents(result.refundedAmount)} has been refunded to ${customerName}.`}
               </p>
-              {!result.fullRefund && (
-                <p className="text-xs text-gray-400 mt-1">Partial refund — transaction remains active.</p>
-              )}
+              <p className="text-xs text-gray-400 mt-2">It usually reaches their card or bank account in 5–10 business days.</p>
             </div>
             <button onClick={onClose} className="rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90" style={{ backgroundColor: '#1b1b1b' }}>
               Done
@@ -97,15 +105,23 @@ export default function RefundModal({
           </div>
         ) : (
           <div className="px-6 py-5 space-y-4">
-            {/* Original amount */}
-            <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 flex items-center justify-between">
-              <span className="text-sm text-gray-500">Original charge</span>
-              <span className="text-base font-bold text-gray-900">{formatCents(originalAmount)}</span>
+            {/* This payment */}
+            <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500">This payment</span>
+                <span className="text-base font-bold text-gray-900">{formatCents(originalAmount)}</span>
+              </div>
+              {refundedAmount > 0 && (
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>Already refunded</span>
+                  <span>{formatCents(refundedAmount)}</span>
+                </div>
+              )}
             </div>
 
             {/* Refund type */}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2.5">Refund Type</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2.5">Refund</p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -116,8 +132,8 @@ export default function RefundModal({
                       : 'border-gray-200 text-gray-600 hover:border-gray-300'
                   }`}
                 >
-                  Full Refund
-                  <span className="block text-xs font-normal mt-0.5 opacity-70">{formatCents(originalAmount)}</span>
+                  {refundedAmount > 0 ? 'The rest' : 'Full refund'}
+                  <span className="block text-xs font-normal mt-0.5 opacity-70">{formatCents(refundable)}</span>
                 </button>
                 <button
                   type="button"
@@ -128,7 +144,7 @@ export default function RefundModal({
                       : 'border-gray-200 text-gray-600 hover:border-gray-300'
                   }`}
                 >
-                  Partial Refund
+                  Part of it
                   <span className="block text-xs font-normal mt-0.5 opacity-70">Custom amount</span>
                 </button>
               </div>
@@ -146,7 +162,7 @@ export default function RefundModal({
                     type="number"
                     min="0.01"
                     step="0.01"
-                    max={(originalAmount / 100).toFixed(2)}
+                    max={(refundable / 100).toFixed(2)}
                     value={partialDollars}
                     onChange={e => setPartialDollars(e.target.value)}
                     placeholder="0.00"
@@ -155,26 +171,35 @@ export default function RefundModal({
                     style={{ fontSize: 16 }}
                   />
                 </div>
-                {partialCents > 0 && partialCents <= originalAmount && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    Remaining after refund: {formatCents(originalAmount - partialCents)}
-                  </p>
-                )}
-                {partialCents > originalAmount && (
-                  <p className="text-xs text-red-500 mt-1">Cannot exceed original charge of {formatCents(originalAmount)}</p>
+                {partialCents > refundable && (
+                  <p className="text-xs text-red-500 mt-1">You can refund up to {formatCents(refundable)} of this payment.</p>
                 )}
               </div>
             )}
 
-            {/* Warning */}
+            {/* The plan's remaining payments */}
+            {hasScheduledPayments && (
+              <label className="flex items-start gap-2.5 rounded-xl border border-gray-200 px-3.5 py-3 cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={cancelRemaining}
+                  onChange={(e) => setCancelRemaining(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-xs text-gray-600 leading-relaxed">
+                  <span className="font-semibold text-gray-800">Also cancel the remaining automatic payments.</span>{' '}
+                  For a booking that&apos;s off. Leave unchecked and the plan keeps running as scheduled.
+                </span>
+              </label>
+            )}
+
+            {/* What happens */}
             <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3.5 py-3">
               <AlertTriangle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
               <p className="text-xs text-amber-700 leading-relaxed">
-                {type === 'full'
-                  ? 'This will issue a full refund of ' + formatCents(originalAmount) + ' to the client. This cannot be undone.'
-                  : partialCents > 0
-                    ? 'This will refund ' + formatCents(partialCents) + ' to the client. The remaining balance stays paid.'
-                    : 'Enter an amount to refund.'}
+                {refundCents > 0
+                  ? `${formatCents(refundCents)} goes back to your client's card or bank account. It can't be undone, and they won't be charged this amount again.`
+                  : 'Enter an amount to refund.'}
               </p>
             </div>
 
@@ -194,7 +219,7 @@ export default function RefundModal({
               >
                 {processing
                   ? <><Loader2 size={14} className="animate-spin" /> Processing...</>
-                  : `Refund ${type === 'full' ? formatCents(originalAmount) : partialCents > 0 ? formatCents(refundCents) : '...'}`}
+                  : `Refund ${refundCents > 0 ? formatCents(refundCents) : '...'}`}
               </button>
             </div>
           </div>

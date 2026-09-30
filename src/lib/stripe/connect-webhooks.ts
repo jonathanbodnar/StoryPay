@@ -3,7 +3,7 @@
  *
  *   payment_intent.*   a couple's payment settled, is clearing, or bounced
  *                      (bank payments settle days after they're submitted)
- *   charge.refunded    a refund made from the venue's Stripe dashboard
+ *   charge.refunded    a refund on any payment, from the app or the venue's Stripe dashboard
  *   account.updated    the venue's Stripe account changed (approval, new requirements)
  *
  * Each event is processed once (stripe_events). Everything here is idempotent,
@@ -15,6 +15,7 @@ import type Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/supabase';
 import { syncConnectedAccount } from '@/lib/stripe/connect';
 import { finalizeFirstPayment, onFirstPaymentFailed, onInstallmentIntentUpdate } from '@/lib/stripe/proposal-payments';
+import { recordChargeRefund } from '@/lib/stripe/refunds';
 
 async function claimEvent(event: Stripe.Event): Promise<boolean> {
   const { data: existing } = await supabaseAdmin.from('stripe_events').select('id, processed_at').eq('id', event.id).maybeSingle();
@@ -45,9 +46,14 @@ async function onPaymentIntent(event: Stripe.Event): Promise<void> {
   else await finalizeFirstPayment(proposalId, pi);
 }
 
-/** A refund issued from the venue's own Stripe dashboard: keep the proposal's status in step. */
+/**
+ * A refund on any payment, made in the app or in the venue's own Stripe
+ * dashboard: record it on that payment and keep the booking's status in step.
+ */
 async function onChargeRefunded(event: Stripe.Event): Promise<void> {
   const charge = event.data.object as Stripe.Charge;
+  if (await recordChargeRefund(charge)) return;
+  // A payment that predates the ledger: fall back to the booking's first payment.
   const pi = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
   if (!pi) return;
   const status = charge.refunded ? 'refunded' : 'partial_refund';

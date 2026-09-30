@@ -45,8 +45,11 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com'
 /** Retry a failed installment this many days after each failed attempt (4 attempts in total). */
 const RETRY_AFTER_DAYS = [2, 2, 3];
 
-/** Proposal statuses that stop a payment plan. */
-const PLAN_STOPPED = ['refunded', 'partial_refund', 'cancelled', 'declined', 'expired'];
+/**
+ * Proposal statuses that stop a payment plan. A partial refund doesn't: it's a
+ * credit, and the venue chooses whether to cancel the rest (lib/stripe/refunds.ts).
+ */
+const PLAN_STOPPED = ['refunded', 'cancelled', 'declined', 'expired'];
 
 /** canceled_reason for a payment that was paid another way (a check, cash, an earlier overpayment). */
 const COVERED = 'covered';

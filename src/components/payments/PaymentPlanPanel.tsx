@@ -56,11 +56,14 @@ export default function PaymentPlanPanel({
   proposalId,
   onChanged,
   onRecordPayment,
+  onScheduleKnown,
 }: {
   proposalId: string;
   /** The ledger or status may have changed (a payment was charged). */
   onChanged?: () => void;
   onRecordPayment?: () => void;
+  /** Whether automatic payments are still scheduled (the refund window offers to cancel them). */
+  onScheduleKnown?: (hasScheduled: boolean) => void;
 }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,11 +76,15 @@ export default function PaymentPlanPanel({
     try {
       const res = await fetch(`/api/proposals/${proposalId}/plan`, { cache: 'no-store' });
       const data = await res.json().catch(() => null);
-      if (res.ok) setPlan((data?.plan as Plan | null) ?? null);
+      if (res.ok) {
+        const next = (data?.plan as Plan | null) ?? null;
+        setPlan(next);
+        onScheduleKnown?.(!!next?.auto && next.payments.some((p) => p.status === 'scheduled' || p.status === 'failed'));
+      }
     } finally {
       setLoading(false);
     }
-  }, [proposalId]);
+  }, [proposalId, onScheduleKnown]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -115,7 +122,7 @@ export default function PaymentPlanPanel({
   const paidCount = plan.payments.filter((p) => p.status === 'paid' || p.status === 'covered').length;
   const open = plan.payments.filter((p) => p.id && (p.status === 'scheduled' || p.status === 'failed'));
   const next = open.filter((p) => p.status === 'scheduled').sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))[0];
-  const stopped = ['refunded', 'partial_refund', 'cancelled'].includes(plan.status);
+  const stopped = ['refunded', 'cancelled'].includes(plan.status);
 
   return (
     <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
