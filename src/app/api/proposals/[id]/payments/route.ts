@@ -9,6 +9,7 @@ import {
 } from '@/lib/proposal-payments';
 import { rebalanceScheduledInstallments } from '@/lib/stripe/proposal-payments';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
+import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 
 export const dynamic = 'force-dynamic';
 
@@ -131,6 +132,22 @@ export async function POST(
   // is never charged for what they already paid.
   await rebalanceScheduledInstallments(id);
   void syncPaymentRemindersForProposal(id);
+
+  // The same payment tags as an online payment: the first payment books the
+  // date, and paying the balance closes the booking.
+  const tagEmail = (proposal.customer_email as string | null)?.trim();
+  if (tagEmail && recompute) {
+    const first = recompute.totalPaidCents - amountCents <= 0;
+    const paidInFull = recompute.priceCents > 0 && recompute.balanceCents <= 0;
+    if (first || paidInFull) {
+      ensureSystemTagsForVenue(venueId)
+        .then(() => Promise.all([
+          ...(first ? ['deposit_paid', 'date_confirmed'] : []),
+          ...(paidInFull ? ['paid_in_full', 'closed_won'] : []),
+        ].map((tag) => applySystemTagByEmail(venueId, tagEmail, tag))))
+        .catch(() => {});
+    }
+  }
 
   if (sendReceipt && proposal.customer_email) {
     await sendManualPaymentReceipt({

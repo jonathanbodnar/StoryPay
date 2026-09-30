@@ -154,14 +154,16 @@ export async function POST(
     }
   })();
 
-  // Add an activity note so it shows in the timeline
+  // Add a note so the scheduling shows in the contact's notes (the same table
+  // the Notes panel reads; the lead version of this route writes lead_notes).
   try {
-    await supabaseAdmin.from('venue_customer_notes').insert({
-      venue_customer_id: customerId,
-      venue_id:          venueId,
-      content:           `Appointment scheduled: ${title} on ${new Date(body.start_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.`,
-      author_name:       'system',
+    const { error: noteErr } = await supabaseAdmin.from('customer_notes').insert({
+      customer_id: customerId,
+      venue_id:    venueId,
+      content:     `Appointment scheduled: ${title} on ${new Date(body.start_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.`,
+      author_name: 'system',
     });
+    if (noteErr) console.warn('[customer-appointments] note not saved:', noteErr.message);
   } catch { /* non-fatal */ }
 
   return NextResponse.json(event, { status: 201 });

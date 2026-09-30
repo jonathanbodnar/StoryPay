@@ -5,8 +5,9 @@
  * "Proposal" or "Invoice"). A CRM-connected venue sends it through its CRM, so
  * it shows in the conversation and the client's reply lands there. Without a
  * CRM, or if the CRM send fails, it goes out directly under the venue's name
- * with replies going to the venue. The text message is unchanged: sent through
- * the CRM when the client has a phone number.
+ * with replies going to the venue. A text goes out too, through the CRM, only
+ * when the venue's A2P texting is approved and the client opted in to texts
+ * (the owner's rule, 2026-09-30).
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
@@ -15,6 +16,29 @@ import { sendEmail as directSendEmail } from '@/lib/email';
 import { buildEmailHtml, fillTemplate, getVenueEmailTemplate } from '@/lib/email-templates';
 
 export type ClientDocumentKind = 'proposal' | 'invoice';
+
+/**
+ * May this client get a text about their proposal or invoice? Only when the
+ * venue's A2P texting is approved and the client is a lead who gave texting
+ * consent and hasn't opted out (as a lead or as a contact). No lead on record
+ * means no recorded opt-in, so no text.
+ */
+export async function clientTextAllowed(venueId: string, email: string): Promise<boolean> {
+  const { data: v } = await supabaseAdmin.from('venues').select('a2p_verified').eq('id', venueId).maybeSingle();
+  if ((v as { a2p_verified?: boolean | null } | null)?.a2p_verified !== true) return false;
+  const pattern = email.trim().replace(/[%_\\]/g, '\\$&');
+  if (!pattern) return false;
+  const [{ data: leads }, { data: contacts }] = await Promise.all([
+    supabaseAdmin.from('leads').select('sms_consent, sms_dnd').eq('venue_id', venueId).ilike('email', pattern),
+    supabaseAdmin.from('venue_customers').select('sms_dnd').eq('venue_id', venueId).ilike('customer_email', pattern),
+  ]);
+  const ls = (leads ?? []) as Array<{ sms_consent: boolean | null; sms_dnd: boolean | null }>;
+  if (!ls.length) return false;
+  if (ls.some((l) => l.sms_dnd === true)) return false;
+  if (((contacts ?? []) as Array<{ sms_dnd: boolean | null }>).some((c) => c.sms_dnd === true)) return false;
+  // Same reading as every other automated text (lib/sms-consent.ts): only an explicit "no" blocks.
+  return ls.some((l) => l.sms_consent !== false);
+}
 
 export interface SendClientDocumentResult {
   /** crm: sent through the venue's CRM; direct: sent by StoryVenue; off: the venue turned this email off. */
@@ -78,7 +102,9 @@ export async function sendClientDocument(args: {
         }));
       if (contactId) {
         const phone = normalizePhone(args.customerPhone ?? '');
-        if (phone) {
+        const mayText = phone ? await clientTextAllowed(venueId, args.customerEmail) : false;
+        if (phone && !mayText) console.log(`[send-${kind}] no text: A2P not approved or no texting opt-in`);
+        if (phone && mayText) {
           try {
             await sendSms(
               ghlToken,

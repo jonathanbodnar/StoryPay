@@ -374,11 +374,15 @@ async function recordPaymentReceived(args: {
     const email = p.customer_email;
     ensureSystemTagsForVenue(p.venue_id)
       .then(() => {
-        if (first) applySystemTagByEmail(p.venue_id, email, 'deposit_paid').catch(() => {});
+        // The deposit books the date (the tag's own meaning: "Deposit paid and
+        // date officially booked"); the last payment closes the booking.
+        if (first) {
+          applySystemTagByEmail(p.venue_id, email, 'deposit_paid').catch(() => {});
+          applySystemTagByEmail(p.venue_id, email, 'date_confirmed').catch(() => {});
+        }
         if (paidInFull) {
           applySystemTagByEmail(p.venue_id, email, 'paid_in_full').catch(() => {});
           applySystemTagByEmail(p.venue_id, email, 'closed_won').catch(() => {});
-          applySystemTagByEmail(p.venue_id, email, 'date_confirmed').catch(() => {});
         }
         if (first && paymentType === 'installment') applySystemTagByEmail(p.venue_id, email, 'payment_plan_active').catch(() => {});
       })
