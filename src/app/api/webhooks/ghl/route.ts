@@ -98,6 +98,10 @@ export async function POST(request: NextRequest) {
             logPrefix:       '[ghl webhook]',
           });
         }
+      } else if (inboundSms.locationId && inboundSms.locationId === process.env.OWNER_GHL_LOCATION_ID?.trim()) {
+        // Texts to StoryVenue's own CRM account (clients replying to you), not
+        // a venue's. Expected, so not an error; your CRM keeps the message.
+        console.info('[ghl webhook] inbound SMS for the StoryVenue owner account; no venue thread to add it to');
       } else {
         console.warn('[ghl webhook] inbound SMS: no venue for locationId', inboundSms.locationId);
         void logError({

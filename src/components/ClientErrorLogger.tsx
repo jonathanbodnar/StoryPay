@@ -93,11 +93,35 @@ function shouldIgnore(msg: string): boolean {
   return IGNORE.some((re) => re.test(msg));
 }
 
+/**
+ * After a deploy, a tab that was already open asks for code files that no
+ * longer exist. Reload once so the visitor gets the new version instead of a
+ * broken page; the timestamp guard stops a reload loop if it keeps failing.
+ */
+const STALE_CHUNK = /ChunkLoadError|Loading chunk [\w-]+ failed|Failed to load chunk|Importing a module script failed|error loading dynamically imported module/i;
+const RELOAD_KEY = 'sv-chunk-reload-at';
+function recoverFromStaleChunk(msg: string): boolean {
+  if (!STALE_CHUNK.test(msg)) return false;
+  try {
+    const last = Number(window.sessionStorage.getItem(RELOAD_KEY) || 0);
+    if (Date.now() - last < 60_000) return false; // already tried: let it be reported
+    window.sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+  } catch {
+    return false; // no storage means no loop guard, so don't auto-reload
+  }
+  window.location.reload();
+  return true;
+}
+
+/** Background polls (badges, live counters) fail harmlessly when a tab sleeps or the network blips. */
+const BACKGROUND_POLL = /\/(unread-count|unread|badge-count|inbox-count|realtime|lead-funnel)$/;
+
 export default function ClientErrorLogger() {
   useEffect(() => {
     const onError = (e: ErrorEvent) => {
       const msg = e.message || 'Uncaught error';
       if (shouldIgnore(msg) || (e.filename && /extension:\/\//.test(e.filename))) return;
+      if (recoverFromStaleChunk(msg)) return;
       reportClientError({
         category: 'window_error',
         message: msg,
@@ -111,6 +135,7 @@ export default function ClientErrorLogger() {
         : typeof reason === 'string' ? reason
         : (() => { try { return JSON.stringify(reason); } catch { return 'Unhandled promise rejection'; } })();
       if (shouldIgnore(msg)) return;
+      if (recoverFromStaleChunk(msg || '')) return;
       reportClientError({
         category: 'unhandled_rejection',
         message: msg || 'Unhandled promise rejection',
@@ -152,8 +177,11 @@ export default function ClientErrorLogger() {
         return res;
       } catch (err) {
         // Network-level failure (offline, CORS, aborted, DNS). Only log our API
-        // calls so we don't capture every 3rd-party beacon that gets blocked.
-        if (isApi && !isSelf) {
+        // calls so we don't capture every 3rd-party beacon that gets blocked,
+        // and skip cancelled requests and background badge polls.
+        const aborted = err instanceof DOMException && err.name === 'AbortError';
+        const backgroundPoll = method === 'GET' && BACKGROUND_POLL.test(cleanPath(url));
+        if (isApi && !isSelf && !aborted && !backgroundPoll) {
           reportClientError({
             level: 'error',
             category: 'api_network',

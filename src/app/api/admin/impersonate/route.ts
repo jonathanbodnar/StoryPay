@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { setSignedCookie, clearSignedCookie } from '@/lib/venue-session';
+import { IMPERSONATION_COOKIE, impersonationCookieValue } from '@/lib/admin-impersonation';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
     httpOnly: true,
   });
 
-  res.cookies.set('admin_impersonating', '1', {
+  res.cookies.set(IMPERSONATION_COOKIE, impersonationCookieValue(venueId), {
     ...COOKIE_BASE,
     httpOnly: true,
     maxAge: 60 * 60 * 4,

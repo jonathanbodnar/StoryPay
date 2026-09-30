@@ -7,9 +7,9 @@ import { trackClient } from '@/lib/analytics-client';
 import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
 /**
- * Full-page blocking wall shown when a venue's 14-day Venue Pro trial has
+ * Full-page blocking wall shown when a venue's 14-day Bride Booking System™ trial has
  * ended and no card is on file. The venue must either:
- *   • Add a card → converts to a paid Venue Pro subscription (billed today), or
+ *   • Add a card → converts to a paid Bride Booking System™ subscription (billed today), or
  *   • Downgrade to Free → no subscription, Free-plan access only.
  *
  * Rendered server-side from dashboard/layout.tsx INSTEAD of the dashboard, so
@@ -105,7 +105,7 @@ export default function TrialExpiredWall({ venueName }: { venueName: string }) {
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-gray-500">
             {venueName ? <><strong className="text-gray-700">{venueName}</strong> — y</> : 'Y'}our
-            14-day Venue Pro trial is over. Add a card to keep full access, or
+            14-day Bride Booking System™ trial is over. Add a card to keep full access, or
             switch to the Free plan to continue with limited features.
           </p>
         </div>
@@ -156,7 +156,7 @@ export default function TrialExpiredWall({ venueName }: { venueName: string }) {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b1b1b] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
             >
               {busy === 'add_card' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-              Add a card &amp; keep Venue Pro
+              Add a card &amp; keep the Booking System
             </button>
 
             <button
@@ -172,7 +172,7 @@ export default function TrialExpiredWall({ venueName }: { venueName: string }) {
         )}
 
         <p className="mt-6 text-center text-xs text-gray-400">
-          You can upgrade back to Venue Pro anytime from your billing settings.
+          You can upgrade back to the Bride Booking System™ anytime from your billing settings.
         </p>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getSessionUser } from '@/lib/session';
 import { trackEvent } from '@/lib/analytics';
+import { IMPERSONATION_COOKIE, isAdminImpersonating } from '@/lib/admin-impersonation';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     // Drop all events when a super admin is impersonating a venue — their
     // browsing activity should never pollute real usage stats.
     const jar = await cookies();
-    if (jar.get('admin_impersonating')?.value === '1') {
+    if (isAdminImpersonating(jar.get(IMPERSONATION_COOKIE)?.value, jar.get('venue_id')?.value)) {
       return NextResponse.json({ ok: true, recorded: 0 });
     }
 

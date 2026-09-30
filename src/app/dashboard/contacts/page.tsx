@@ -764,6 +764,7 @@ export default function ContactsPage() {
                     <div className="flex flex-wrap items-center justify-end gap-1">
                       <Link
                         href={`/dashboard/contacts/${encodeURIComponent(String(c.id))}`}
+                        prefetch={false}
                         className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
                         title="View contact"
                       >
@@ -772,6 +773,7 @@ export default function ContactsPage() {
                       </Link>
                       <Link
                         href={`/dashboard/payments/new?type=proposal&email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
+                        prefetch={false}
                         className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
                         title="Create Proposal"
                       >
@@ -780,6 +782,7 @@ export default function ContactsPage() {
                       </Link>
                       <Link
                         href={`/dashboard/payments/new?type=invoice&email=${encodeURIComponent(c.email || '')}&name=${encodeURIComponent(c.name || '')}`}
+                        prefetch={false}
                         className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100"
                         title="Create Invoice"
                       >

@@ -85,6 +85,16 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
         ],
       },
+      // Sign-in pages, the couple portal and payments setup are signed-in
+      // surfaces too. (Public couple websites, forms and guides live elsewhere
+      // and stay embeddable.)
+      {
+        source: "/(login|couple|setup|reset-password)/:path*",
+        headers: [
+          { key: "X-Frame-Options",         value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        ],
+      },
       // ── Immutable hashed static assets ────────────────────────────────────
       // Next.js content-hashes every file under /_next/static so a 1-year TTL
       // is safe — a new deploy always produces new URLs.

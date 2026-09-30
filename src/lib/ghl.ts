@@ -956,19 +956,42 @@ export async function listGhlConversationIdsForContactOrdered(
  * can scan it directly. Search remains the primary path (it returns multiple
  * ordered conversations); the fallback only kicks in when search finds nothing.
  */
+/**
+ * Contacts GHL says no longer exist (deleted in the venue's CRM). The inbound
+ * SMS pollers otherwise ask about them every few seconds forever. Kept in
+ * memory only, so nothing is changed in the database; a restart re-checks
+ * each one once.
+ */
+const missingGhlContacts = new Map<string, number>();
+const MISSING_CONTACT_RECHECK_MS = 6 * 60 * 60 * 1000;
+
+function isContactNotFoundError(message: string): boolean {
+  return /CONTACT_NOT_FOUND|Contact not found/i.test(message);
+}
+
 export async function getOrCreateGhlConversationIdsForContact(
   accessToken: string,
   locationId: string,
   contactId: string,
   searchLimit = 25
 ): Promise<string[]> {
+  const missingKey = `${locationId}:${contactId}`;
+  const seenMissingAt = missingGhlContacts.get(missingKey);
+  if (seenMissingAt && Date.now() - seenMissingAt < MISSING_CONTACT_RECHECK_MS) return [];
+
   try {
     const ids = await listGhlConversationIdsForContactOrdered(accessToken, locationId, contactId, searchLimit);
     if (ids.length > 0) return ids;
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (isContactNotFoundError(msg)) {
+      missingGhlContacts.set(missingKey, Date.now());
+      console.warn('[ghl] contact no longer exists in the CRM; pausing lookups for 6h', { contactId });
+      return [];
+    }
     console.warn('[ghl] conversation search failed, trying get-or-create fallback', {
       contactId,
-      error: e instanceof Error ? e.message : String(e),
+      error: msg,
     });
   }
 
@@ -992,6 +1015,11 @@ export async function getOrCreateGhlConversationIdsForContact(
     if (m?.[1]) {
       console.log(`[ghl] recovered existing conversation for contact ${contactId} via 400: ${m[1]}`);
       return [m[1]];
+    }
+    if (isContactNotFoundError(msg)) {
+      missingGhlContacts.set(missingKey, Date.now());
+      console.warn('[ghl] contact no longer exists in the CRM; pausing lookups for 6h', { contactId });
+      return [];
     }
     console.warn('[ghl] get-or-create conversation fallback failed', { contactId, error: msg });
   }

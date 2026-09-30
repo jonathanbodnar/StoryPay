@@ -107,7 +107,7 @@ function explainError(r: ErrorRow): { what: string; impact: string; outcome: str
       };
     case 'payment':
       return {
-        what: 'A billing or payment action with the card processor (LunarPay) failed.',
+        what: 'A billing or payment action with the card processor (Stripe) failed.',
         impact: 'A charge, subscription update, or payout may not have gone through — this can affect money and billing for this account.',
         outcome: 'Once fixed, payments and billing updates will process correctly.',
       };

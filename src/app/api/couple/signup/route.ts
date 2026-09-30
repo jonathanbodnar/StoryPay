@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { checkPassword } from '@/lib/password-policy';
+import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -10,6 +11,15 @@ function isEmail(s: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  // Each sign-up sends an email; cap it per IP so the form can't be used to flood inboxes.
+  const gate = rateLimit(`couple-signup:${getClientIp(request)}`, 10, 60 * 60 * 1000);
+  if (!gate.allowed) {
+    return NextResponse.json(
+      { error: `Too many sign-ups from this network. Try again in ${formatRetryAfter(gate.retryAfterMs)}.` },
+      { status: 429 },
+    );
+  }
+
   let body: {
     email?: string;
     password?: string;

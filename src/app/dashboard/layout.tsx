@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getSessionUser } from '@/lib/session';
+import { IMPERSONATION_COOKIE, isAdminImpersonating } from '@/lib/admin-impersonation';
 import { loadDirectoryNavAccess } from '@/lib/directory-plans-venue';
 import { supabaseAdmin } from '@/lib/supabase';
 import { deriveTrialStatus, daysRemainingInTrial, type VenueTrialState } from '@/lib/directory-trial';
@@ -25,7 +26,7 @@ export default async function DashboardLayout({
  }
 
  const cookieStore = await cookies();
- const isImpersonating = cookieStore.get('admin_impersonating')?.value === '1';
+ const isImpersonating = isAdminImpersonating(cookieStore.get(IMPERSONATION_COOKIE)?.value, user.venueId);
 
  // Single venues query covering all fields needed by the layout so we
  // don't hit the venues table 3 times per page render.

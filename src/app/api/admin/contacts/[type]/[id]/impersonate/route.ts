@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { CONTACT_TYPES, type ContactType } from '@/lib/admin-contacts';
 import { setSignedCookie, clearSignedCookie } from '@/lib/venue-session';
+import { IMPERSONATION_COOKIE, impersonationCookieValue } from '@/lib/admin-impersonation';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -59,7 +60,7 @@ export async function POST(
     });
     setSignedCookie(res, 'venue_id', id, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
     clearSignedCookie(res, 'member_id', { ...COOKIE_BASE, httpOnly: true });
-    res.cookies.set('admin_impersonating', '1', { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
+    res.cookies.set(IMPERSONATION_COOKIE, impersonationCookieValue(id), { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
     res.cookies.set('impersonate_return', returnUrl, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
     return res;
   }
@@ -88,7 +89,7 @@ export async function POST(
     });
     setSignedCookie(res, 'venue_id', venueId, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
     setSignedCookie(res, 'member_id', id, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
-    res.cookies.set('admin_impersonating', '1', { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
+    res.cookies.set(IMPERSONATION_COOKIE, impersonationCookieValue(venueId), { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
     res.cookies.set('impersonate_return', returnUrl, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
     return res;
   }

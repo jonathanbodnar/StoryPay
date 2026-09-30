@@ -29,7 +29,7 @@ export default function TermsPage() {
 
       <main className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Terms of Use</h1>
-        <p className="text-sm text-gray-500 mb-10">Last updated: September 29, 2026</p>
+        <p className="text-sm text-gray-500 mb-10">Last updated: September 30, 2026</p>
 
         <div className="prose prose-gray max-w-none space-y-8 text-sm leading-relaxed text-gray-700">
 
@@ -51,7 +51,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-bold text-gray-900 mb-3">3. Account Registration &amp; Access</h2>
-            <p>Access to StoryVenue is provided by invitation from Story Venue Marketing. When your account is created, you receive a secure login link by email. You agree to:</p>
+            <p>Any wedding venue can create a StoryVenue account, and our team can also set one up for you. You sign in with your email and password or with a secure login link sent by email. Payment processing through StoryPay&trade;, powered by Stripe, is available to every venue (see section 5). You agree to:</p>
             <ul className="list-disc pl-5 space-y-1 mt-2">
               <li>Keep your login credentials and links confidential</li>
               <li>Not share your login link with unauthorized persons</li>

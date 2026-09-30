@@ -68,6 +68,9 @@ const GHL_SYSTEM_FIELDS = new Set([
   'lastAttributionSource',
   'contactName',
   'fullNameLowerCase',
+  'firstNameLowerCase',
+  'lastNameLowerCase',
+  'emailLowerCase',
   'companyName',
   'source',
 ]);
@@ -204,7 +207,8 @@ export async function pushVenueCustomerToGhl(params: {
   if (lastName) putBody.lastName = lastName;
   if (emailForGhl) putBody.email = emailForGhl;
   if (phoneE164) putBody.phone = phoneE164;
-  putBody.locationId = locationId;
+  // No locationId in the body: GHL's contact update rejects it (422), which
+  // made every one of these updates fail. The location comes from the token.
 
   let putErrorMessage: string | null = null;
   try {

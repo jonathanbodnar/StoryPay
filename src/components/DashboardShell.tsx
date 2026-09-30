@@ -65,7 +65,7 @@ export default function DashboardShell({
   hasBridePortal?: boolean;
   /** Directory SaaS: priced plan assigned, payment still required. */
   directoryBillingPending?: boolean;
-  /** True when the venue is on an active (not-yet-expired) Venue Pro trial. */
+  /** True when the venue is on an active (not-yet-expired) Bride Booking System™ trial. */
   trialCountdown?: boolean;
   /** Whole days left in the active trial. */
   trialDaysRemaining?: number;
@@ -87,7 +87,7 @@ export default function DashboardShell({
   const startTrialEarly = useCallback(async () => {
     setStartEarlyBusy(true);
     setStartEarlyError('');
-    trackClient('upgrade_started', { label: 'Start Venue Pro early' });
+    trackClient('upgrade_started', { label: 'Start Bride Booking System early' });
     try {
       const res = await fetch('/api/venue-billing/start-paid', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
@@ -290,7 +290,7 @@ export default function DashboardShell({
               <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex-1">
                   <span className="font-semibold">
-                    Venue Pro trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
+                    Bride Booking System™ trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
                   </span>
                   {' '}
                   <span className="text-gray-500">
@@ -307,7 +307,7 @@ export default function DashboardShell({
                   disabled={startEarlyBusy}
                   className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black disabled:opacity-60"
                 >
-                  {startEarlyBusy ? 'Starting…' : 'Start Venue Pro early'}
+                  {startEarlyBusy ? 'Starting…' : 'Start my plan early'}
                 </button>
               </div>
             )

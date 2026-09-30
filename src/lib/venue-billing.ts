@@ -139,14 +139,42 @@ export type VenueBillingSubscription = {
 export type VenueBillingHistoryEntry = {
   id: string;
   event_type: string;
+  /** What the venue sees in the Description column. */
+  label: string;
   amount_cents: number;
   currency: string;
   occurred_at: string;
   plan_id: string | null;
   plan_name: string | null;
   external_event_id: string | null;
-  status: 'paid' | 'refunded' | 'failed' | 'pending';
+  /** 'info' rows are plan milestones (no money moved), shown without a badge. */
+  status: 'paid' | 'refunded' | 'failed' | 'pending' | 'info';
 };
+
+/**
+ * How a billing event reads on the venue's billing page, or null to keep it
+ * off the page. Internal bookkeeping (admin overrides, resyncs, audits) stays
+ * in admin only.
+ */
+function describeBillingEvent(
+  event: string,
+  amountCents: number,
+): { label: string; status: VenueBillingHistoryEntry['status'] } | null {
+  if (/refund/i.test(event)) return { label: 'Refund', status: 'refunded' };
+  if (/fail|past_due|declin/i.test(event)) return { label: 'Payment failed', status: 'failed' };
+  if (/^admin_|resync|audit/i.test(event)) return null;
+  if (amountCents > 0) return { label: 'Payment', status: 'paid' };
+  if (/trial_start|signup_trial/i.test(event)) return { label: 'Free trial started', status: 'info' };
+  if (event === 'trial_extended') return { label: 'Trial extended', status: 'info' };
+  if (/^plan_change/.test(event)) return { label: 'Plan changed', status: 'info' };
+  if (event === 'subscription_cancel_scheduled') return { label: 'Cancellation scheduled', status: 'info' };
+  if (/^subscription_cancel/.test(event)) return { label: 'Subscription canceled', status: 'info' };
+  if (event === 'subscription_resumed') return { label: 'Plan kept', status: 'info' };
+  if (event === 'payment_method_updated') return { label: 'Card updated', status: 'info' };
+  if (/card_vaulted/.test(event)) return { label: 'Card saved', status: 'info' };
+  if (/migrat/i.test(event)) return { label: 'Billing moved to Stripe', status: 'info' };
+  return null;
+}
 
 export type VenueBillingSummary = {
   venue: {
@@ -369,16 +397,16 @@ async function loadBillingHistory(venueId: string): Promise<VenueBillingHistoryE
       : { data: [] as { id: string; name: string }[] };
   const planNameById = new Map((planRows || []).map((p) => [p.id as string, p.name as string]));
 
-  return rows.map((r) => {
+  return rows.flatMap((r): VenueBillingHistoryEntry[] => {
     const event = String(r.event_type);
-    let status: VenueBillingHistoryEntry['status'] = 'paid';
-    if (/refund/i.test(event)) status = 'refunded';
-    else if (/fail|past_due/i.test(event)) status = 'failed';
-    else if (/pending|scheduled/i.test(event)) status = 'pending';
-    return {
+    const amountCents = typeof r.amount_cents === 'number' ? (r.amount_cents as number) : 0;
+    const shown = describeBillingEvent(event, amountCents);
+    if (!shown) return [];
+    return [{
       id: String(r.id),
       event_type: event,
-      amount_cents: typeof r.amount_cents === 'number' ? (r.amount_cents as number) : 0,
+      label: shown.label,
+      amount_cents: amountCents,
       currency: String(r.currency || 'usd'),
       occurred_at: String(r.occurred_at),
       plan_id: (r.directory_plan_id as string | null) ?? null,
@@ -387,8 +415,8 @@ async function loadBillingHistory(venueId: string): Promise<VenueBillingHistoryE
           ? planNameById.get(r.directory_plan_id as string) || null
           : null,
       external_event_id: (r.external_event_id as string | null) ?? null,
-      status,
-    };
+      status: shown.status,
+    }];
   });
 }
 

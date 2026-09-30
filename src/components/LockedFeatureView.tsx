@@ -200,7 +200,7 @@ const FEATURE_OUTCOMES: Record<string, FeatureOutcome> = {
   nav_settings_integrations: {
     headline: 'Connect the tools you already use',
     outcome:
-      'Sync with QuickBooks, FreshBooks, Google Calendar, Calendly, and GoHighLevel. One platform that talks to everything — no manual data entry.',
+      'Sync with Google Calendar, Calendly, and GoHighLevel. One platform that talks to everything — no manual data entry.',
   },
   nav_settings_team: {
     headline: 'Bring your team in without losing control',

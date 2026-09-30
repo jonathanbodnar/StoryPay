@@ -117,6 +117,15 @@ async function lookupGhlContactId(
  * Resolve ghl_contact_id for venue_customers missing it, so the inbound
  * poller can match their replies. Returns customer ids that were backfilled.
  */
+/**
+ * Customers the backfill couldn't link (no CRM match, or their CRM contact is
+ * already linked to another record), set aside for a while so the newest few
+ * failures don't take every slot and starve older records. In memory; a
+ * restart simply retries them.
+ */
+const backfillSetAside = new Map<string, number>();
+const BACKFILL_RETRY_MS = 12 * 60 * 60 * 1000;
+
 async function backfillMissingContactIds(
   venues: GhlVenue[],
   limit: number,
@@ -124,17 +133,20 @@ async function backfillMissingContactIds(
 ): Promise<string[]> {
   if (limit <= 0) return [];
   const venueById = new Map(venues.map((v) => [v.id, v]));
+  const now = Date.now();
+  for (const [id, at] of backfillSetAside) if (now - at > BACKFILL_RETRY_MS) backfillSetAside.delete(id);
 
-  const { data: rows } = await supabaseAdmin
+  const { data: fetched } = await supabaseAdmin
     .from('venue_customers')
     .select('id, venue_id, phone, customer_email')
     .in('venue_id', venues.map((v) => v.id))
     .is('ghl_contact_id', null)
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(Math.min(500, limit + backfillSetAside.size));
+  const rows = (fetched ?? []).filter((row) => !backfillSetAside.has((row as { id: string }).id)).slice(0, limit);
 
   const backfilledIds: string[] = [];
-  for (const row of rows ?? []) {
+  for (const row of rows) {
     const r = row as { id: string; venue_id: string; phone?: string | null; customer_email?: string | null };
     const venue = venueById.get(r.venue_id);
     if (!venue) continue;
@@ -148,6 +160,7 @@ async function backfillMissingContactIds(
     const contactId = await lookupGhlContactId(venue, r.phone ?? null, r.customer_email ?? null);
     if (!contactId) {
       bucket.lookupFailed++;
+      backfillSetAside.set(r.id, Date.now());
       continue;
     }
 
@@ -161,6 +174,7 @@ async function backfillMissingContactIds(
       // owns this GHL contact. Skip rather than corrupt the mapping.
       console.warn('[ghl-inbound-cron] backfill update failed', { customerId: r.id, error: error.message });
       bucket.lookupFailed++;
+      backfillSetAside.set(r.id, Date.now());
       continue;
     }
     bucket.backfilled++;

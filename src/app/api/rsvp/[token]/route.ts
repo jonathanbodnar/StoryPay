@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { notifyCoupleOfRsvp } from '@/lib/rsvp-notify';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -122,6 +124,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Invalid RSVP link.' }, { status: 404 });
   }
 
+  // Generous, so a whole family replying from one Wi-Fi network is never blocked.
+  const gate = rateLimit(`rsvp:${getClientIp(request)}`, 60, 10 * 60 * 1000);
+  if (!gate.allowed) {
+    return NextResponse.json(
+      { error: `Too many replies from this network. Try again in ${formatRetryAfter(gate.retryAfterMs)}.` },
+      { status: 429 },
+    );
+  }
+
   const guest = await loadGuestByToken(token);
   if (!guest) {
     return NextResponse.json({ error: 'This RSVP link is no longer valid.' }, { status: 404 });
@@ -196,6 +207,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     console.error('[rsvp POST]', error);
     return NextResponse.json({ error: 'Could not save your RSVP. Please try again.' }, { status: 500 });
   }
+
+  // Let the couple know (only the couple); never holds up or fails the RSVP.
+  void notifyCoupleOfRsvp({
+    coupleWeddingId: guest.couple_wedding_id,
+    coupleId: guest.couple_id,
+    guestName: guest.full_name,
+    attending,
+    partySize: typeof update.party_size === 'number' ? update.party_size : null,
+    previousStatus: guest.rsvp_status,
+    previousPartySize: guest.party_size,
+  }).catch((e) => console.warn('[rsvp POST] couple notify failed', e));
 
   return NextResponse.json({ ok: true, attending });
 }

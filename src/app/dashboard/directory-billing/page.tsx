@@ -168,13 +168,15 @@ type Subscription = {
 type HistoryEntry = {
   id: string;
   event_type: string;
+  /** Plain description from the server (older responses may lack it). */
+  label?: string;
   amount_cents: number;
   currency: string;
   occurred_at: string;
   plan_id: string | null;
   plan_name: string | null;
   external_event_id: string | null;
-  status: 'paid' | 'refunded' | 'failed' | 'pending';
+  status: 'paid' | 'refunded' | 'failed' | 'pending' | 'info';
 };
 
 type Addons = {
@@ -1147,7 +1149,7 @@ export default function DirectoryBillingPage() {
                 {summary.history.map((row) => (
                   <tr key={row.id}>
                     <td className="px-6 py-3 text-gray-700">{formatDate(row.occurred_at)}</td>
-                    <td className="px-6 py-3 text-gray-700">{humaniseEventType(row.event_type)}</td>
+                    <td className="px-6 py-3 text-gray-700">{row.label || humaniseEventType(row.event_type)}</td>
                     <td className="px-6 py-3 text-gray-500">{row.plan_name || '—'}</td>
                     <td
                       className={`px-6 py-3 text-right font-mono ${
@@ -1158,24 +1160,28 @@ export default function DirectoryBillingPage() {
                             : 'text-gray-900'
                       }`}
                     >
-                      {row.status === 'refunded' && row.amount_cents > 0
-                        ? `-${formatCents(row.amount_cents)}`
-                        : formatCents(row.amount_cents)}
+                      {row.status === 'info' && row.amount_cents === 0
+                        ? '—'
+                        : row.status === 'refunded' && row.amount_cents > 0
+                          ? `-${formatCents(row.amount_cents)}`
+                          : formatCents(row.amount_cents)}
                     </td>
                     <td className="px-6 py-3">
-                      <span
-                        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${
-                          row.status === 'paid'
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                            : row.status === 'refunded'
-                              ? 'border-gray-200 bg-gray-50 text-gray-600'
-                              : row.status === 'failed'
-                                ? 'border-red-200 bg-red-50 text-red-700'
-                                : 'border-amber-200 bg-amber-50 text-amber-800'
-                        }`}
-                      >
-                        {row.status}
-                      </span>
+                      {row.status === 'info' ? null : (
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${
+                            row.status === 'paid'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : row.status === 'refunded'
+                                ? 'border-gray-200 bg-gray-50 text-gray-600'
+                                : row.status === 'failed'
+                                  ? 'border-red-200 bg-red-50 text-red-700'
+                                  : 'border-amber-200 bg-amber-50 text-amber-800'
+                          }`}
+                        >
+                          {row.status}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1784,11 +1790,6 @@ function UpgradePlanModal({
   const willStartTrial = !isFree && eligibleForTrial;
   const willCharge = !isFree && !hasActivePaid && !willStartTrial; // first paid signup → checkout redirect
   const willPatch = !isFree && hasActivePaid;   // already paying → patch the LunarPay subscription
-  const nextBillEstimate = useMemo(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + 1);
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  }, []);
   const trialDuration = formatTrialDuration(plan);
 
   return (
@@ -1878,7 +1879,9 @@ function UpgradePlanModal({
                   Your monthly charge will change to <strong>{formatCents(newTotalCents)}</strong> on the
                   card ending in <strong>•••• {paymentMethod?.last4 || '––––'}</strong>.
                 </p>
-                <p className="text-xs">Next bill estimate: {nextBillEstimate}</p>
+                {termEndsAt ? (
+                  <p className="text-xs">The new amount starts on your next billing date, {formatDate(termEndsAt)}.</p>
+                ) : null}
               </div>
             ) : willCharge ? (
               <div className="space-y-2">

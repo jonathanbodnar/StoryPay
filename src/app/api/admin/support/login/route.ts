@@ -7,6 +7,7 @@ import {
   verifySupportPassword,
   type SupportRole,
 } from '@/lib/support/auth';
+import { rateLimitAny, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,6 +24,20 @@ export async function POST(req: NextRequest) {
   const password = body.password || '';
   if (!email || !password) {
     return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
+  }
+
+  // Support agents can open every venue's inbox, so cap guesses per IP and
+  // per account (10 tries per 10 minutes each), like the admin login.
+  const ip = getClientIp(req);
+  const gate = rateLimitAny([
+    { key: `support-login:ip:${ip}`, limit: 10, windowMs: 10 * 60 * 1000 },
+    { key: `support-login:email:${email}`, limit: 10, windowMs: 10 * 60 * 1000 },
+  ]);
+  if (!gate.allowed) {
+    return NextResponse.json(
+      { error: `Too many attempts. Try again in ${formatRetryAfter(gate.retryAfterMs)}.` },
+      { status: 429 },
+    );
   }
 
   const { data: row } = await supabaseAdmin

@@ -178,29 +178,21 @@ export async function ensureSystemTagsForVenue(venueId: string, force = false): 
       auto_apply_events:  def.auto_apply_events,
     }));
 
-    const { error: upsertErr } = await supabaseAdmin
+    // Insert only the system tags this venue doesn't have yet. (An upsert on
+    // (venue_id, system_key) can't work here: the unique index is partial, so
+    // it always failed and fell back to exactly this path.)
+    const { data: existing } = await supabaseAdmin
       .from('marketing_tags')
-      .upsert(rows, { onConflict: 'venue_id,system_key', ignoreDuplicates: false })
-      .select('id');
-
-    if (upsertErr) {
-      // onConflict can fail if the unique index isn't there yet. Fall back to
-      // inserting only the system_keys that don't already exist so we never
-      // leave a venue with an empty tag library.
-      console.error('[system-tags] upsert failed, falling back to insert-missing:', upsertErr.message);
-      const { data: existing } = await supabaseAdmin
-        .from('marketing_tags')
-        .select('system_key')
-        .eq('venue_id', venueId)
-        .not('system_key', 'is', null);
-      const have = new Set((existing ?? []).map(r => (r as { system_key: string }).system_key));
-      const missing = rows.filter(r => !have.has(r.system_key));
-      if (missing.length > 0) {
-        const { error: insErr } = await supabaseAdmin.from('marketing_tags').insert(missing);
-        if (insErr) {
-          console.error('[system-tags] insert-missing failed:', insErr.message);
-          return; // do NOT mark seeded — retry next call
-        }
+      .select('system_key')
+      .eq('venue_id', venueId)
+      .not('system_key', 'is', null);
+    const have = new Set((existing ?? []).map(r => (r as { system_key: string }).system_key));
+    const missing = rows.filter(r => !have.has(r.system_key));
+    if (missing.length > 0) {
+      const { error: insErr } = await supabaseAdmin.from('marketing_tags').insert(missing);
+      if (insErr) {
+        console.error('[system-tags] insert-missing failed:', insErr.message);
+        return; // do NOT mark seeded — retry next call
       }
     }
 
