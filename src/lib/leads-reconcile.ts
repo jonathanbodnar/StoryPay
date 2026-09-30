@@ -86,6 +86,8 @@ export async function createLeadFromVenueCustomerIfMissing(
       // what split the state in the first place.
       phone: phone.trim() || null,
       source: 'contact',
+      // Made from a CRM contact, not our form: no recorded consent to text (owner's call, Sep 30).
+      sms_consent: false,
       status,
       pipeline_id: vc.pipeline_id,
       stage_id: vc.stage_id,
@@ -467,6 +469,8 @@ export async function reconcileLeadsForKanban(venueId: string): Promise<void> {
         email: em,
         phone,
         source: 'contact',
+        // Made from a CRM contact, not our form: no recorded consent to text (owner's call, Sep 30).
+        sms_consent: false,
         status: legacyStatusForStageName(stageNameForStatus),
         pipeline_id: pid,
         stage_id: sid,

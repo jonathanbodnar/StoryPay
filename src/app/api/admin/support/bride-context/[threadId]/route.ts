@@ -328,6 +328,8 @@ export async function GET(
               email:      email || null,
               phone:      phone || null,
               source:     'contact',
+              // Made from a CRM contact, not our form: no recorded consent to text (owner's call, Sep 30).
+              sms_consent: false,
               status:     'new',
               position:   0,
             })

@@ -300,8 +300,45 @@ export async function recordSmsConsentEvidence(input: {
       user_agent: input.userAgent ? input.userAgent.slice(0, 500) : null,
       page_url: input.pageUrl ? input.pageUrl.slice(0, 1000) : null,
     });
-    if (error) console.warn('[sms-consent] evidence not recorded:', error.message, { venueId: input.venueId });
+    if (error) {
+      console.warn('[sms-consent] evidence not recorded:', error.message, { venueId: input.venueId });
+      return;
+    }
   } catch (e) {
     console.warn('[sms-consent] evidence write threw (non-fatal):', e, { venueId: input.venueId });
+    return;
+  }
+  await reopenTextingAfterNewConsent(input.venueId, phone, input.email ?? null);
+}
+
+/**
+ * A fresh, recorded opt-in is newer than any "do not disturb" already on this
+ * venue's matching contact, so it re-authorizes texting (owner's call, Sep 30).
+ * Clears it here and in the CRM through the same path as a "START" reply. No
+ * text is sent from here, and AI follow-ups stay paused until the venue resumes
+ * them. Only runs for new consents; older blocked leads are left as they are.
+ */
+async function reopenTextingAfterNewConsent(venueId: string, phone: string, email: string | null): Promise<void> {
+  try {
+    const { normalizePhone } = await import('@/lib/ghl');
+    const target = normalizePhone(phone);
+    const mail = email?.trim().toLowerCase() || null;
+    const { data: rows } = await supabaseAdmin
+      .from('venue_customers')
+      .select('id, phone, customer_email')
+      .eq('venue_id', venueId)
+      .eq('sms_dnd', true);
+    const matches = ((rows ?? []) as { id: string; phone: string | null; customer_email: string | null }[]).filter(
+      (r) =>
+        (target && normalizePhone(r.phone) === target) ||
+        (mail && (r.customer_email || '').trim().toLowerCase() === mail),
+    );
+    if (!matches.length) return;
+    const { applySmsOptInForVenueCustomer } = await import('@/lib/sms-compliance');
+    for (const m of matches) {
+      await applySmsOptInForVenueCustomer({ venueId, venueCustomerId: m.id, source: 'form_reopt_in' });
+    }
+  } catch (e) {
+    console.warn('[sms-consent] re-opt-in after new consent failed (non-fatal):', e, { venueId });
   }
 }

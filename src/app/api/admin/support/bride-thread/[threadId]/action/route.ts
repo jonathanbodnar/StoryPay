@@ -163,6 +163,8 @@ async function ensureLeadForVenueCustomer(
       email:       email || null,
       phone:       phone || null,
       source:      'contact',
+      // Made from a CRM contact, not our form: no recorded consent to text (owner's call, Sep 30).
+      sms_consent: false,
       status:      'new',
       pipeline_id: c.pipeline_id,
       stage_id:    c.stage_id,
