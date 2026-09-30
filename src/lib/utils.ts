@@ -48,6 +48,7 @@ export function getStatusColor(status: string): { bg: string; text: string } {
     case 'refunded': return { bg: 'bg-red-100', text: 'text-red-700' };
     case 'partial_refund': return { bg: 'bg-orange-100', text: 'text-orange-700' };
     case 'completed': return { bg: 'bg-emerald-100', text: 'text-emerald-700' };
+    case 'overdue': return { bg: 'bg-red-100', text: 'text-red-700' };
     default: return { bg: 'bg-gray-100', text: 'text-gray-700' };
   }
 }

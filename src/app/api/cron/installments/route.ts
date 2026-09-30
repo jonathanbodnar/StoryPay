@@ -4,6 +4,7 @@
  * Runs hourly (.github/workflows/installments-cron.yml):
  *   • charges installments that are due on venues' Stripe accounts (claimed
  *     row by row, so overlapping runs never charge twice)
+ *   • emails couples 3 days before each automatic payment
  *   • re-reads Stripe accounts still in signup or review, so a venue Stripe
  *     approves later starts taking payments without visiting the app
  */
@@ -11,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { syncConnectedAccount } from '@/lib/stripe/connect';
-import { chargeDueInstallments } from '@/lib/stripe/proposal-payments';
+import { chargeDueInstallments, sendUpcomingPaymentHeadsUps } from '@/lib/stripe/proposal-payments';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -29,6 +30,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const installments = await chargeDueInstallments();
+    // Couples get an email 3 days before each automatic payment.
+    const headsUps = await sendUpcomingPaymentHeadsUps().catch((e) => {
+      console.error('[cron/installments] heads-ups failed', e);
+      return null;
+    });
 
     let accountsSynced = 0;
     const { data } = await supabaseAdmin
@@ -45,7 +51,7 @@ export async function GET(request: NextRequest) {
         console.warn('[cron/installments] account sync failed', row.id, e instanceof Error ? e.message : e);
       }
     }
-    return NextResponse.json({ ok: true, result: { installments, accountsSynced } });
+    return NextResponse.json({ ok: true, result: { installments, headsUps, accountsSynced } });
   } catch (e) {
     console.error('[cron/installments]', e);
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : 'failed' }, { status: 500 });

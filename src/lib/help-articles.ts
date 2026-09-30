@@ -1828,10 +1828,9 @@ Step 3 — For proposals, choose a template (or start from scratch) and edit the
 
 Step 4 — Add line items. Type a product name (autocompletes from saved products) or enter a custom item.
 
-Step 5 — Choose a payment type:
-- Full payment — customer pays the full amount at once
-- Installment plan — deposit, second payment, final balance with due dates
-- Subscription — recurring weekly/monthly charges
+Step 5 — Choose how they pay:
+- Pay in full — one payment. Optionally set when it's due (on receipt, 7, 14 or 30 days, or a date); if it isn't paid by then, your client gets a reminder email.
+- Payment plan — a deposit, then payments on set dates. See "Payment plans" for the options.
 
 Step 6 — Choose how you'll collect payment:
 - Online — client pays by card or bank transfer (ACH) through StoryPay™ (powered by Stripe), right on the proposal or invoice
@@ -1967,29 +1966,33 @@ This page is public and shareable — couples can forward the link to parents or
       },
       {
         id: 'pay-installments',
-        title: 'Installment plans',
-        tags: ['installment', 'payment plan', 'deposit', 'schedule'],
-        body: `Installment plans let customers pay in structured stages. When creating a proposal or invoice, select "Installment Plan" as the payment type.
+        title: 'Payment plans',
+        tags: ['installment', 'payment plan', 'deposit', 'schedule', 'monthly', 'final payment', 'wedding date', 'charge now', 'reschedule', 'update card'],
+        body: `A payment plan lets a couple pay over time. When creating a proposal or invoice, choose "Payment plan" and pick how it runs:
+- Monthly payments — a deposit due at signing (a dollar amount or a % of the total), then monthly payments from the date you choose. The plan can end a set number of days before the wedding (the lead's wedding date fills in automatically), on a date, or after a number of payments.
+- Deposit + final payment — the deposit at signing and the rest on one date, for example 30 days before the wedding.
+- Custom — set each payment's amount and date yourself.
 
-You can configure:
-- Deposit amount and due date (often due at signing)
-- Second payment amount and due date
-- Final balance due date (remainder of total)
+StoryVenue works out the payments from the total, so they always add up: regular payments are whole dollars and the last one takes the difference. Click "Edit amounts and dates" to adjust any of them.
 
-Customers are automatically reminded by email as due dates approach. You can view all active plans at Payments → Installments.`,
+How it's collected online (StoryPay™, powered by Stripe):
+- Payment 1 is paid when your client signs (or opens an invoice).
+- The rest are charged automatically on their dates to the same card or bank account.
+- Your client gets an email 3 days before each payment, with a link to update their card.
+- If a payment fails, it's retried after 2, 4 and 7 days, and your client gets a link to update their card.
+- Nothing is ever charged beyond the balance.
+
+Managing a plan: open the booking from Payments → Payment plans. From there you can change a payment's date, move all remaining payments a month later, charge a payment now, send a card update link, record a check or cash payment (the next payments go down to match), or cancel the remaining payments.
+
+Cash/check plans: you record each payment as it comes in. If one is overdue, your client gets a reminder email (set the timing under Settings → Notifications → Payment Reminder).`,
       },
       {
         id: 'pay-subscriptions',
-        title: 'Subscriptions',
+        title: 'Recurring payments',
         tags: ['subscription', 'recurring', 'weekly', 'monthly'],
-        body: `Subscriptions charge the customer on a repeating schedule (weekly or monthly) until cancelled.
+        body: `Open-ended recurring subscriptions aren't offered for proposals and invoices. To have a couple pay monthly, use a payment plan: a deposit, then monthly payments charged automatically until the balance is paid, ending on the date you choose (for example 30 days before the wedding).
 
-When creating a proposal or invoice, select "Subscription" as the payment type and set:
-- Charge amount
-- Frequency (weekly / monthly)
-- Start date
-
-The customer's card is charged automatically. You can view and cancel active subscriptions at Payments → Subscriptions.`,
+See "Payment plans" for how to set one up and manage it from Payments → Payment plans.`,
       },
       {
         id: 'pay-transactions',

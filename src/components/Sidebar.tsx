@@ -9,7 +9,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, FileText, Users, CreditCard, BarChart2,
   Sparkles, Megaphone, Settings, Palette, Mail, UsersRound,
-  Bell, Receipt, Link2, RefreshCw, Plus, Calendar,
+  Bell, Receipt, Link2, Plus, Calendar,
   Menu, X, ChevronDown, ChevronLeft, ChevronRight,
   HelpCircle, LogOut, BookOpen, Store, Inbox, Share2, LayoutTemplate, MessageCircle,
   BarChart3, Workflow, Star,
@@ -97,8 +97,7 @@ const paymentsItems: NavItem[] = [
   { label: 'Coupons', href: '/dashboard/payments/coupons', icon: Ticket, navId: 'nav_payments_coupons' },
   { label: 'Proposals', href: '/dashboard/payments/proposals', icon: FileText, navId: 'nav_payments_proposals' },
   { label: 'Proposal Templates', href: '/dashboard/proposals/templates', icon: Receipt, navId: 'nav_proposals_hub' },
-  { label: 'Installments', href: '/dashboard/payments/installments', icon: Calendar, navId: 'nav_payments_installments' },
-  { label: 'Subscriptions', href: '/dashboard/payments/subscriptions', icon: RefreshCw, navId: 'nav_payments_subscriptions' },
+  { label: 'Payment plans', href: '/dashboard/payments/installments', icon: Calendar, navId: 'nav_payments_installments' },
   { label: 'Transactions', href: '/dashboard/transactions', icon: CreditCard, navId: 'nav_transactions' },
   { label: 'Payment settings', href: '/dashboard/payments/settings', icon: Settings, navId: 'nav_payments_settings' },
 ];

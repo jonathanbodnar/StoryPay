@@ -46,6 +46,13 @@ const SAMPLE_VARS: Record<string, Record<string, string>> = {
     amount:        '$4,500.00',
     reason:        'Insufficient funds',
   },
+  payment_upcoming: {
+    organization:   '{{organization}}',
+    customer_name:  'Jane Smith',
+    amount:         '$1,250.00',
+    due_date:       'June 15, 2026',
+    payment_method: 'Visa ending in 4242',
+  },
   payment_reminder: {
     organization:  '{{organization}}',
     customer_name: 'Jane Smith',

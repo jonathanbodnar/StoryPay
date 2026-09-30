@@ -20,8 +20,8 @@ import { NOTIFICATION_SCENARIOS } from '@/lib/notification-settings';
 // subject/body, but they're controlled from the "Alerts about your
 // business" section below (per-person on/off) rather than edited here.
 const CUSTOMER_FACING_TEMPLATE_TYPES = new Set([
-  'invoice', 'proposal', 'payment_confirmation', 'subscription_confirmation',
-  'payment_failed', 'payment_reminder',
+  'invoice', 'proposal', 'payment_confirmation',
+  'payment_upcoming', 'payment_failed', 'payment_reminder',
 ]);
 
 const SCENARIO_ICON_MAP: Record<string, React.ElementType> = {
@@ -618,7 +618,7 @@ export default function NotificationsPage() {
                     <CreditCard size={14} className="text-gray-400" />
                     <div className="flex-1">
                       <p className="text-sm font-semibold text-gray-900">Reminder schedule</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Set how long after each installment due date to send overdue reminders. Up to 3 reminders.</p>
+                      <p className="text-xs text-gray-400 mt-0.5">How long after a missed due date to send overdue reminders, up to 3. Payments charged automatically don&apos;t get these; the client gets a heads-up before each charge instead.</p>
                     </div>
                   </div>
                   <div className="px-5 py-4 space-y-4">

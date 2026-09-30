@@ -38,7 +38,7 @@ import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-ta
 import { formatAmount, notifyOwner } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { buildBalanceLine, recordOnlinePaymentLedger } from '@/lib/proposal-payments';
-import { MIN_PAYMENT_CENTS } from '@/lib/payment-plan';
+import { MIN_PAYMENT_CENTS, addDaysYmd, addMonthsYmd, toYmd } from '@/lib/payment-plan';
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
 
@@ -672,11 +672,104 @@ export async function markInstallmentFailed(row: InstallmentRow, reason: string,
   });
 }
 
+export type ChargeOutcome =
+  | { result: 'charged' }
+  | { result: 'processing' }
+  | { result: 'failed'; reason: string }
+  | { result: 'skipped'; reason: string };
+
 /**
- * Charge every installment that's due (hourly cron). Each row is claimed before
- * charging, so overlapping runs can't charge twice, and a charge never goes
- * above what the couple still owes.
+ * Charge one scheduled payment now: bring the plan in line with what's still
+ * owed, claim the payment so overlapping runs can't charge it twice, and never
+ * charge more than the balance.
  */
+async function chargeInstallment(due: { id: string; proposal_id: string }): Promise<ChargeOutcome> {
+  await rebalanceScheduledInstallments(due.proposal_id);
+  const claimedAt = new Date().toISOString();
+  const { data: claimed } = await supabaseAdmin
+    .from('proposal_installments')
+    .update({ status: 'processing', updated_at: claimedAt })
+    .eq('id', due.id)
+    .eq('status', 'scheduled')
+    .select(INSTALLMENT_COLUMNS);
+  const row = ((claimed ?? []) as unknown as InstallmentRow[])[0];
+  if (!row) return { result: 'skipped', reason: 'This payment isn’t waiting to be charged.' };
+
+  const p = await loadPaymentProposal({ id: row.proposal_id });
+  const v = p ? await loadConnectVenue(p.venue_id) : null;
+  if (!p || PLAN_STOPPED.includes(p.status)) {
+    await supabaseAdmin.from('proposal_installments').update({ status: 'canceled', updated_at: new Date().toISOString() }).eq('id', row.id);
+    return { result: 'skipped', reason: 'The proposal was refunded or canceled.' };
+  }
+
+  // Never charge more than what's still owed.
+  const owed = await stillOwedCents(p, row.id);
+  if (owed < MIN_PAYMENT_CENTS) {
+    await supabaseAdmin
+      .from('proposal_installments')
+      .update({ status: 'canceled', canceled_reason: COVERED, updated_at: new Date().toISOString() })
+      .eq('id', row.id);
+    return { result: 'skipped', reason: 'Nothing is owed. The balance is already paid.' };
+  }
+  if (owed < row.amount_cents) {
+    await supabaseAdmin.from('proposal_installments').update({ amount_cents: owed }).eq('id', row.id);
+    row.amount_cents = owed;
+  }
+  if (!v || !venueTakesStripePayments(v) || !v.stripe_account_id || !p.stripe_customer_id || !p.stripe_payment_method_id) {
+    await supabaseAdmin
+      .from('proposal_installments')
+      .update({ status: 'scheduled', last_error: 'Online payments are not active for this venue.', next_attempt_at: new Date(Date.now() + 86_400_000).toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', row.id);
+    return { result: 'skipped', reason: 'Online payments are not active for this venue.' };
+  }
+
+  const stripe = getStripe();
+  const account = v.stripe_account_id;
+  try {
+    const pm = await stripe.paymentMethods.retrieve(p.stripe_payment_method_id, {}, { stripeAccount: account });
+    const kind = kindOfType(pm.type);
+    const pi = await stripe.paymentIntents.create(
+      {
+        amount: row.amount_cents,
+        currency: 'usd',
+        customer: p.stripe_customer_id,
+        payment_method: pm.id,
+        off_session: true,
+        confirm: true,
+        application_fee_amount: await applicationFeeCents(v, row.amount_cents, kind),
+        description: `${v.name ?? 'Venue'} — Payment ${row.installment_number} of ${row.installment_count}`,
+        metadata: {
+          storyvenue_proposal_id: p.id,
+          storyvenue_venue_id: p.venue_id,
+          storyvenue_installment_id: row.id,
+          installment_number: String(row.installment_number),
+          payment_kind: kind,
+        },
+      },
+      // One key per claim: Stripe's own network retries reuse it, and a new
+      // attempt (a retry, a new card, "charge now") never replays an old one.
+      { stripeAccount: account, idempotencyKey: `sv-installment-${row.id}-${row.attempts + 1}-${Date.parse(claimedAt)}` },
+    );
+    if (pi.status === 'succeeded') {
+      await markInstallmentPaid(row, pi);
+      return { result: 'charged' };
+    }
+    if (pi.status === 'processing') {
+      await supabaseAdmin.from('proposal_installments').update({ payment_intent_id: pi.id, updated_at: new Date().toISOString() }).eq('id', row.id);
+      return { result: 'processing' };
+    }
+    const reason = pi.last_payment_error?.message || 'The payment was declined';
+    await markInstallmentFailed(row, reason, pi.id);
+    return { result: 'failed', reason };
+  } catch (e) {
+    const err = e as { message?: string; raw?: { payment_intent?: { id?: string } } };
+    const reason = err.message || 'The payment was declined';
+    await markInstallmentFailed(row, reason, err.raw?.payment_intent?.id ?? null);
+    return { result: 'failed', reason };
+  }
+}
+
+/** Charge every installment that's due (hourly cron). */
 export async function chargeDueInstallments(limit = 50): Promise<{ charged: number; processing: number; failed: number; skipped: number }> {
   const out = { charged: 0, processing: 0, failed: 0, skipped: 0 };
   const { data } = await supabaseAdmin
@@ -686,92 +779,8 @@ export async function chargeDueInstallments(limit = 50): Promise<{ charged: numb
     .lte('next_attempt_at', new Date().toISOString())
     .order('next_attempt_at', { ascending: true })
     .limit(limit);
-
   for (const due of (data ?? []) as Array<{ id: string; proposal_id: string }>) {
-    // Bring the plan in line with what's still owed (a check the venue
-    // recorded, say), then claim the payment so overlapping runs can't
-    // charge it twice.
-    await rebalanceScheduledInstallments(due.proposal_id);
-    const { data: claimed } = await supabaseAdmin
-      .from('proposal_installments')
-      .update({ status: 'processing', updated_at: new Date().toISOString() })
-      .eq('id', due.id)
-      .eq('status', 'scheduled')
-      .select(INSTALLMENT_COLUMNS);
-    const row = ((claimed ?? []) as unknown as InstallmentRow[])[0];
-    if (!row) { out.skipped++; continue; }
-
-    const p = await loadPaymentProposal({ id: row.proposal_id });
-    const v = p ? await loadConnectVenue(p.venue_id) : null;
-    if (!p || PLAN_STOPPED.includes(p.status)) {
-      await supabaseAdmin.from('proposal_installments').update({ status: 'canceled', updated_at: new Date().toISOString() }).eq('id', row.id);
-      out.skipped++;
-      continue;
-    }
-
-    // Never charge more than what's still owed.
-    const owed = await stillOwedCents(p, row.id);
-    if (owed < MIN_PAYMENT_CENTS) {
-      await supabaseAdmin
-        .from('proposal_installments')
-        .update({ status: 'canceled', canceled_reason: COVERED, updated_at: new Date().toISOString() })
-        .eq('id', row.id);
-      out.skipped++;
-      continue;
-    }
-    if (owed < row.amount_cents) {
-      await supabaseAdmin.from('proposal_installments').update({ amount_cents: owed }).eq('id', row.id);
-      row.amount_cents = owed;
-    }
-    if (!v || !venueTakesStripePayments(v) || !v.stripe_account_id || !p.stripe_customer_id || !p.stripe_payment_method_id) {
-      await supabaseAdmin
-        .from('proposal_installments')
-        .update({ status: 'scheduled', last_error: 'Online payments are not active for this venue.', next_attempt_at: new Date(Date.now() + 86_400_000).toISOString(), updated_at: new Date().toISOString() })
-        .eq('id', row.id);
-      out.skipped++;
-      continue;
-    }
-
-    const stripe = getStripe();
-    const account = v.stripe_account_id;
-    try {
-      const pm = await stripe.paymentMethods.retrieve(p.stripe_payment_method_id, {}, { stripeAccount: account });
-      const kind = kindOfType(pm.type);
-      const pi = await stripe.paymentIntents.create(
-        {
-          amount: row.amount_cents,
-          currency: 'usd',
-          customer: p.stripe_customer_id,
-          payment_method: pm.id,
-          off_session: true,
-          confirm: true,
-          application_fee_amount: await applicationFeeCents(v, row.amount_cents, kind),
-          description: `${v.name ?? 'Venue'} — Payment ${row.installment_number} of ${row.installment_count}`,
-          metadata: {
-            storyvenue_proposal_id: p.id,
-            storyvenue_venue_id: p.venue_id,
-            storyvenue_installment_id: row.id,
-            installment_number: String(row.installment_number),
-            payment_kind: kind,
-          },
-        },
-        { stripeAccount: account, idempotencyKey: `sv-installment-${row.id}-${row.attempts + 1}` },
-      );
-      if (pi.status === 'succeeded') {
-        await markInstallmentPaid(row, pi);
-        out.charged++;
-      } else if (pi.status === 'processing') {
-        await supabaseAdmin.from('proposal_installments').update({ payment_intent_id: pi.id, updated_at: new Date().toISOString() }).eq('id', row.id);
-        out.processing++;
-      } else {
-        await markInstallmentFailed(row, pi.last_payment_error?.message || 'The payment was declined', pi.id);
-        out.failed++;
-      }
-    } catch (e) {
-      const err = e as { message?: string; raw?: { payment_intent?: { id?: string } } };
-      await markInstallmentFailed(row, err.message || 'The payment was declined', err.raw?.payment_intent?.id ?? null);
-      out.failed++;
-    }
+    out[(await chargeInstallment(due)).result]++;
   }
   return out;
 }
@@ -793,3 +802,235 @@ export async function onInstallmentIntentUpdate(pi: Stripe.PaymentIntent): Promi
   }
 }
 
+// ── Heads-up before each automatic payment ───────────────────────────────────
+
+function longDate(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** "Visa ending in 4242" / "bank account ending in 6789" for the saved payment method. */
+export async function paymentMethodLabel(p: Pick<PaymentProposal, 'stripe_payment_method_id'>, account: string): Promise<string> {
+  if (!p.stripe_payment_method_id) return 'the card on file';
+  try {
+    const pm = await getStripe().paymentMethods.retrieve(p.stripe_payment_method_id, {}, { stripeAccount: account });
+    if (pm.card) {
+      const brand = pm.card.brand ? pm.card.brand.charAt(0).toUpperCase() + pm.card.brand.slice(1) : 'Card';
+      return `${brand === 'Amex' ? 'American Express' : brand} ending in ${pm.card.last4}`;
+    }
+    if (pm.us_bank_account) return `${pm.us_bank_account.bank_name || 'Bank account'} ending in ${pm.us_bank_account.last4}`;
+  } catch {
+    /* fall through */
+  }
+  return 'the card on file';
+}
+
+/**
+ * Email the couple 3 days before each automatic payment (hourly cron), with
+ * the amount, date, card and a link to update it. Each payment gets one
+ * heads-up; changing its date sends a new one.
+ */
+export async function sendUpcomingPaymentHeadsUps(limit = 50): Promise<{ sent: number; skipped: number }> {
+  const out = { sent: 0, skipped: 0 };
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabaseAdmin
+    .from('proposal_installments')
+    .select('id, proposal_id, amount_cents, due_date')
+    .eq('status', 'scheduled')
+    .eq('attempts', 0)
+    .is('heads_up_sent_at', null)
+    .gt('due_date', today)
+    .lte('due_date', addDaysYmd(today, 3))
+    .order('due_date', { ascending: true })
+    .limit(limit);
+
+  for (const row of (data ?? []) as Array<{ id: string; proposal_id: string; amount_cents: number; due_date: string }>) {
+    const { data: claimed } = await supabaseAdmin
+      .from('proposal_installments')
+      .update({ heads_up_sent_at: new Date().toISOString() })
+      .eq('id', row.id)
+      .is('heads_up_sent_at', null)
+      .select('id');
+    if (!claimed?.length) continue;
+
+    const p = await loadPaymentProposal({ id: row.proposal_id });
+    const v = p ? await loadPaymentVenue(p.venue_id) : null;
+    if (!p?.customer_email || PLAN_STOPPED.includes(p.status) || !v || !venueTakesStripePayments(v) || !v.stripe_account_id) {
+      out.skipped++;
+      continue;
+    }
+    const amount = Math.min(row.amount_cents, await stillOwedCents(p, row.id));
+    if (amount < MIN_PAYMENT_CENTS) { out.skipped++; continue; }
+    const tmpl = await getVenueEmailTemplate(p.venue_id, 'payment_upcoming');
+    if (!tmpl) { out.skipped++; continue; } // the venue turned this email off
+
+    try {
+      const venueName = v.name || 'Your Venue';
+      const vars: Record<string, string> = {
+        organization: venueName,
+        customer_name: p.customer_name || 'there',
+        amount: formatAmount(amount),
+        due_date: longDate(String(row.due_date).slice(0, 10)),
+        payment_method: await paymentMethodLabel(p, v.stripe_account_id),
+      };
+      const { data: brand } = await supabaseAdmin.from('venues').select('brand_email, email').eq('id', p.venue_id).maybeSingle();
+      const replyTo = (brand as { brand_email?: string | null; email?: string | null } | null)?.brand_email
+        || (brand as { email?: string | null } | null)?.email
+        || undefined;
+      const r = await directSendEmail({
+        to: p.customer_email,
+        subject: fillTemplate(tmpl.subject, vars),
+        html: buildEmailHtml({
+          template: tmpl,
+          vars,
+          actionUrl: await cardUpdateLink(p),
+          brandColor: v.brand_color || '#1b1b1b',
+          logoUrl: v.brand_logo_url ?? undefined,
+          venueName,
+        }),
+        replyTo,
+        from: { name: venueName },
+      });
+      if (r.success) out.sent++;
+      else out.skipped++;
+    } catch (e) {
+      console.error('[stripe-pay] heads-up email failed:', e);
+      out.skipped++;
+    }
+  }
+  return out;
+}
+
+// ── The venue managing a payment plan ───────────────────────────────────────
+
+export type PlanAction =
+  | { action: 'reschedule'; installmentId: string; date: string }
+  | { action: 'push_all'; months?: number }
+  | { action: 'charge_now'; installmentId: string }
+  | { action: 'cancel_remaining' }
+  | { action: 'send_card_link' };
+
+export type PlanActionResult = { ok: true; message: string } | { ok: false; error: string };
+
+const OPEN_STATUSES = ['scheduled', 'failed'];
+
+/** Tell the couple where to update the card for their payment plan. */
+async function emailCardUpdateLink(p: PaymentProposal, v: PaymentVenue): Promise<boolean> {
+  if (!p.customer_email) return false;
+  const venueName = v.name || 'Your Venue';
+  const vars: Record<string, string> = { organization: venueName, customer_name: p.customer_name || 'there' };
+  const template = {
+    type: 'card_update_link',
+    subject: 'Update your payment method — {{organization}}',
+    heading: 'Update your payment method',
+    body: 'Hi {{customer_name}},\n\n{{organization}} sent you this link to update the card or bank account used for your payment plan. It only takes a minute, and your next payments will use the new one.',
+    button_text: 'Update payment method',
+    footer: null,
+    enabled: true,
+  };
+  const r = await directSendEmail({
+    to: p.customer_email,
+    subject: fillTemplate(template.subject, vars),
+    html: buildEmailHtml({
+      template,
+      vars,
+      actionUrl: await cardUpdateLink(p),
+      brandColor: v.brand_color || '#1b1b1b',
+      logoUrl: v.brand_logo_url ?? undefined,
+      venueName,
+    }),
+    from: { name: venueName },
+  });
+  return r.success;
+}
+
+/**
+ * The venue's plan tools: move a payment's date, move every remaining payment
+ * a month later, charge a payment now, cancel the rest, or send the couple a
+ * card-update link. Only for plans charged automatically on the venue's Stripe.
+ */
+export async function managePaymentPlan(venueId: string, proposalId: string, a: PlanAction): Promise<PlanActionResult> {
+  const p = await loadPaymentProposal({ id: proposalId });
+  if (!p || p.venue_id !== venueId) return { ok: false, error: 'Payment plan not found.' };
+  if (p.payment_type !== 'installment' || p.payment_provider !== 'stripe') {
+    return { ok: false, error: 'This isn’t an automatic payment plan.' };
+  }
+  if (PLAN_STOPPED.includes(p.status)) return { ok: false, error: 'This plan was refunded or canceled.' };
+  const now = new Date().toISOString();
+  const today = now.slice(0, 10);
+
+  if (a.action === 'send_card_link') {
+    const v = await loadPaymentVenue(p.venue_id);
+    if (!v || !(await emailCardUpdateLink(p, v))) return { ok: false, error: 'The email couldn’t be sent.' };
+    return { ok: true, message: `Sent a card update link to ${p.customer_email}.` };
+  }
+
+  if (a.action === 'cancel_remaining') {
+    const { data } = await supabaseAdmin
+      .from('proposal_installments')
+      .update({ status: 'canceled', canceled_reason: 'plan_canceled', updated_at: now })
+      .eq('proposal_id', p.id)
+      .in('status', OPEN_STATUSES)
+      .select('id');
+    const n = data?.length ?? 0;
+    return { ok: true, message: n ? `Canceled ${n} remaining payment${n === 1 ? '' : 's'}. Nothing more will be charged automatically.` : 'No payments were waiting.' };
+  }
+
+  if (a.action === 'push_all') {
+    const months = Math.max(1, Math.min(Math.round(Number(a.months) || 1), 12));
+    const { data } = await supabaseAdmin
+      .from('proposal_installments')
+      .select('id, due_date')
+      .eq('proposal_id', p.id)
+      .in('status', OPEN_STATUSES);
+    const rows = (data ?? []) as Array<{ id: string; due_date: string }>;
+    const tomorrow = addDaysYmd(today, 1);
+    for (const r of rows) {
+      const moved = addMonthsYmd(String(r.due_date).slice(0, 10), months);
+      const date = moved < tomorrow ? tomorrow : moved;
+      await supabaseAdmin
+        .from('proposal_installments')
+        .update({ due_date: date, next_attempt_at: `${date}T15:00:00Z`, status: 'scheduled', last_error: null, heads_up_sent_at: null, updated_at: now })
+        .eq('id', r.id)
+        .in('status', OPEN_STATUSES);
+    }
+    return { ok: true, message: rows.length ? `Moved ${rows.length} payment${rows.length === 1 ? '' : 's'} ${months} month${months === 1 ? '' : 's'} later.` : 'No payments were waiting.' };
+  }
+
+  // Actions on one payment.
+  const { data: rowData } = await supabaseAdmin
+    .from('proposal_installments')
+    .select('id, proposal_id, status')
+    .eq('id', a.installmentId)
+    .eq('proposal_id', p.id)
+    .maybeSingle();
+  const row = rowData as { id: string; proposal_id: string; status: string } | null;
+  if (!row) return { ok: false, error: 'Payment not found.' };
+  if (!OPEN_STATUSES.includes(row.status)) return { ok: false, error: 'Only a payment that’s waiting or failed can be changed.' };
+
+  if (a.action === 'reschedule') {
+    const date = toYmd(a.date);
+    if (!date || date <= today) return { ok: false, error: 'Pick a date after today.' };
+    await supabaseAdmin
+      .from('proposal_installments')
+      .update({ due_date: date, next_attempt_at: `${date}T15:00:00Z`, status: 'scheduled', last_error: null, heads_up_sent_at: null, updated_at: now })
+      .eq('id', row.id)
+      .in('status', OPEN_STATUSES);
+    return { ok: true, message: `Moved to ${longDate(date)}.` };
+  }
+
+  // charge_now
+  await supabaseAdmin
+    .from('proposal_installments')
+    .update({ status: 'scheduled', next_attempt_at: now, updated_at: now })
+    .eq('id', row.id)
+    .in('status', OPEN_STATUSES);
+  const outcome = await chargeInstallment({ id: row.id, proposal_id: p.id });
+  if (outcome.result === 'charged' || outcome.result === 'processing') {
+    return {
+      ok: true,
+      message: outcome.result === 'charged' ? 'Charged. A receipt was emailed to your client.' : 'Bank payment submitted. It takes 3–5 business days to clear.',
+    };
+  }
+  return { ok: false, error: outcome.reason };
+}

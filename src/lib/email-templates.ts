@@ -82,6 +82,14 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
     button_text: 'View in Dashboard',
     footer:      null,
   },
+  // Customer-facing heads-up 3 days before an automatic payment-plan charge.
+  payment_upcoming: {
+    subject:     'Upcoming payment: {{amount}} on {{due_date}} — {{organization}}',
+    heading:     'Your next payment is coming up',
+    body:        'Hi {{customer_name}},\n\nA quick heads-up: your next payment to {{organization}} will be charged automatically.\n\nAmount: {{amount}}\nDate: {{due_date}}\nPayment method: {{payment_method}}\n\nNeed to use a different card or account? Update it with the button below before the payment date.',
+    button_text: 'Update payment method',
+    footer:      null,
+  },
   payment_reminder: {
     subject:     'Payment overdue: {{amount}} was due {{due_date}} — {{organization}}',
     heading:     'Payment overdue',

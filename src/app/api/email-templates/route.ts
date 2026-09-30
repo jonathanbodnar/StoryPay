@@ -81,9 +81,21 @@ export const DEFAULT_TEMPLATES: Record<string, {
       button_text: 'Update Payment Method',
     },
   },
+  payment_upcoming: {
+    label: 'Upcoming Payment',
+    description: 'Sent 3 days before each automatic payment-plan charge, with a link to update the card',
+    icon: 'Bell',
+    variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{payment.amount}}', '{{invoice.due_date}}', '{{payment.method}}', '{{venue.name}}'],
+    defaults: {
+      subject: 'Upcoming payment: {{amount}} on {{due_date}} - {{organization}}',
+      heading: 'Your next payment is coming up',
+      body: 'Hi {{customer_name}},\n\nA quick heads-up: your next payment to {{organization}} will be charged automatically.\n\nAmount: {{amount}}\nDate: {{due_date}}\nPayment method: {{payment_method}}\n\nNeed to use a different card or account? Update it with the button below before the payment date.',
+      button_text: 'Update payment method',
+    },
+  },
   payment_reminder: {
     label: 'Payment Reminder',
-    description: 'Overdue reminder sent after each installment due date',
+    description: 'Sent when a payment is overdue: cash/check plans, an unpaid first payment, or an invoice past its due date',
     icon: 'Bell',
     variables: ['{{contact.first_name}}', '{{contact.full_name}}', '{{payment.amount}}', '{{invoice.due_date}}', '{{payment.overdue_by}}', '{{venue.name}}'],
     defaults: {

@@ -55,7 +55,7 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_offerings', label: 'Packages — Items & bundles', pathPrefix: '/dashboard/offerings', group: 'payments' },
   { id: 'nav_payments_coupons', label: 'Payments — Coupons', pathPrefix: '/dashboard/payments/coupons', group: 'payments' },
   { id: 'nav_payments_proposals', label: 'Payments — Proposals', pathPrefix: '/dashboard/payments/proposals', group: 'payments' },
-  { id: 'nav_payments_installments', label: 'Payments — Installments', pathPrefix: '/dashboard/payments/installments', group: 'payments' },
+  { id: 'nav_payments_installments', label: 'Payments — Payment plans', pathPrefix: '/dashboard/payments/installments', group: 'payments' },
   { id: 'nav_payments_subscriptions', label: 'Payments — Subscriptions', pathPrefix: '/dashboard/payments/subscriptions', group: 'payments' },
   { id: 'nav_payments_invoices', label: 'Payments — Invoices', pathPrefix: '/dashboard/payments/invoices', group: 'payments' },
   // Payment Links intentionally excluded — feature not yet implemented. Add back once LunarPay payment link API is integrated.

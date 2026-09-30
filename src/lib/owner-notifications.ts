@@ -194,7 +194,7 @@ const SCENARIO_META: Record<OwnerScenario, {
     defaultEmailBody:    'A new subscription started for {{organization}}.\n\nCustomer: {{customer_name}}\nAmount: {{amount}} {{frequency}}',
     defaultPushTitle: 'StoryVenue',
     defaultPushBody:  'New subscription: {{customer_name}} — {{amount}} {{frequency}}',
-    defaultPushUrl:   '/dashboard/payments/subscriptions',
+    defaultPushUrl:   '/dashboard/payments/installments',
   },
   refund_issued: {
     emailKey: 'email_refund_issued',

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 import RecordPaymentModal, { paymentMethodLabel } from '@/components/RecordPaymentModal';
+import PaymentPlanPanel from '@/components/payments/PaymentPlanPanel';
 
 interface Proposal {
   id: string;
@@ -58,6 +59,8 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
   const [copied, setCopied] = useState(false);
   const [resending, setResending] = useState(false);
   const [recording, setRecording] = useState(false);
+  // Bumped after a payment is recorded so the plan panel reloads.
+  const [planKey, setPlanKey] = useState(0);
 
   async function loadProposal() {
     const res = await fetch(`/api/proposals/${id}`, { cache: 'no-store' });
@@ -270,6 +273,16 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
         )}
       </div>
 
+      {/* Payment plan: every payment and, for automatic plans, the plan tools */}
+      {proposal.payment_type === 'installment' && !isDraft && (
+        <PaymentPlanPanel
+          key={planKey}
+          proposalId={proposal.id}
+          onChanged={() => { void loadPayments(); void loadProposal(); }}
+          onRecordPayment={() => setRecording(true)}
+        />
+      )}
+
       {/* Payment ledger */}
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
         <div className="flex items-center justify-between mb-3">
@@ -318,7 +331,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
         <RecordPaymentModal
           proposal={{ id: proposal.id, customer_name: proposal.customer_name, customer_email: proposal.customer_email, price: proposal.price }}
           onClose={() => setRecording(false)}
-          onSaved={() => { void loadPayments(); void loadProposal(); }}
+          onSaved={() => { void loadPayments(); void loadProposal(); setPlanKey((k) => k + 1); }}
         />
       )}
     </div>
