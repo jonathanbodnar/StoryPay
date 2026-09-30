@@ -11,8 +11,10 @@
  *     method (card or bank).
  *   • Later installments: charged automatically on their due date from the
  *     card or bank account saved with the first payment (chargeDueInstallments,
- *     run daily). A failure retries on day 2, 4 and 7 and emails the couple a
- *     link to update their card.
+ *     run hourly). A failure retries on day 2, 4 and 7 and emails the couple a
+ *     link to update their card. A check or cash payment the venue records
+ *     lowers the next payments (rebalanceScheduledInstallments), so nothing
+ *     is ever charged beyond the balance.
  *   • Bank (ACH) payments take 3–5 business days. The proposal shows
  *     "processing" until Stripe reports success or failure (Connect webhook).
  */
@@ -36,11 +38,18 @@ import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-ta
 import { formatAmount, notifyOwner } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { buildBalanceLine, recordOnlinePaymentLedger } from '@/lib/proposal-payments';
+import { MIN_PAYMENT_CENTS } from '@/lib/payment-plan';
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
 
 /** Retry a failed installment this many days after each failed attempt (4 attempts in total). */
 const RETRY_AFTER_DAYS = [2, 2, 3];
+
+/** Proposal statuses that stop a payment plan. */
+const PLAN_STOPPED = ['refunded', 'partial_refund', 'cancelled', 'declined', 'expired'];
+
+/** canceled_reason for a payment that was paid another way (a check, cash, an earlier overpayment). */
+const COVERED = 'covered';
 
 // ── Rows ─────────────────────────────────────────────────────────────────────
 
@@ -170,7 +179,10 @@ export async function startProposalPayment(token: string, confirmationTokenId: s
   const kind = kindOfType(ct.payment_method_preview?.type);
   if (kind === 'bank' && !acceptsBank(p, v)) return { status: 'failed', error: 'Bank payments aren’t accepted for this invoice.' };
 
-  const amount = firstPaymentCents(p);
+  // Never ask for more than what's still owed (the venue may have recorded a check).
+  const owed = Math.max(Math.round(Number(p.price)) - (await ledgerTotalCents(p.id)), 0);
+  if (owed <= 0) return { status: 'failed', error: 'This invoice is already paid.' };
+  const amount = Math.min(firstPaymentCents(p), owed);
   const installments = installmentsOf(p);
   const isPlan = p.payment_type === 'installment' && installments.length > 1;
   const customer = await ensureCoupleCustomer(p, account);
@@ -294,6 +306,7 @@ export async function finalizeFirstPayment(proposalId: string, pi: Stripe.Paymen
       installment_count: installments.length,
       due_date: String(inst.date).slice(0, 10),
       amount_cents: Math.round(Number(inst.amount)),
+      planned_amount_cents: Math.round(Number(inst.amount)),
       status: 'scheduled',
       next_attempt_at: `${String(inst.date).slice(0, 10)}T15:00:00Z`,
     }));
@@ -309,6 +322,8 @@ export async function finalizeFirstPayment(proposalId: string, pi: Stripe.Paymen
     reference: pi.id,
     first: true,
   });
+  // The scheduled payments add up to what's left, even if part was paid another way.
+  await rebalanceScheduledInstallments(p.id);
 }
 
 // ── Shared "payment received" side effects ──────────────────────────────────
@@ -337,6 +352,8 @@ async function recordPaymentReceived(args: {
     method: kind === 'bank' ? 'ach' : 'cc',
     reference,
   });
+  const balanceCents = Math.max(Number(p.price) - (await ledgerTotalCents(p.id)), 0);
+  const paidInFull = (first && paymentType === 'full') || !!args.finalInstallment || balanceCents <= 0;
 
   if (first) {
     void syncPaymentRemindersForProposal(p.id);
@@ -348,7 +365,7 @@ async function recordPaymentReceived(args: {
     ensureSystemTagsForVenue(p.venue_id)
       .then(() => {
         if (first) applySystemTagByEmail(p.venue_id, email, 'deposit_paid').catch(() => {});
-        if ((first && paymentType === 'full') || args.finalInstallment) {
+        if (paidInFull) {
           applySystemTagByEmail(p.venue_id, email, 'paid_in_full').catch(() => {});
           applySystemTagByEmail(p.venue_id, email, 'closed_won').catch(() => {});
           applySystemTagByEmail(p.venue_id, email, 'date_confirmed').catch(() => {});
@@ -385,8 +402,7 @@ async function recordPaymentReceived(args: {
       const tmpl = await getVenueEmailTemplate(p.venue_id, 'payment_confirmation');
       if (tmpl) {
         const venueName = v.name || 'Your Venue';
-        const balanceCents = Math.max(Number(p.price) - (await ledgerTotalCents(p.id)), 0);
-        const usd = (c: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c / 100);
+        const usd =(c: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c / 100);
         const vars = {
           organization: venueName,
           customer_name: customerName,
@@ -494,6 +510,95 @@ interface InstallmentRow {
   payment_intent_id: string | null;
 }
 
+const INSTALLMENT_COLUMNS = 'id, proposal_id, venue_id, installment_number, installment_count, amount_cents, attempts, payment_intent_id';
+
+/**
+ * What the couple still owes: the price, less everything in the payment
+ * ledger and any automatic payment already on its way (a bank payment that
+ * hasn't settled, or one another run is charging right now).
+ */
+async function stillOwedCents(p: Pick<PaymentProposal, 'id' | 'price'>, exceptInstallmentId?: string): Promise<number> {
+  const [paid, { data }] = await Promise.all([
+    ledgerTotalCents(p.id),
+    supabaseAdmin.from('proposal_installments').select('id, amount_cents').eq('proposal_id', p.id).eq('status', 'processing'),
+  ]);
+  const inFlight = ((data ?? []) as Array<{ id: string; amount_cents: number }>)
+    .filter((r) => r.id !== exceptInstallmentId)
+    .reduce((s, r) => s + (Number(r.amount_cents) || 0), 0);
+  return Math.max(Math.round(Number(p.price)) - paid - inFlight, 0);
+}
+
+/**
+ * Keep the payments still to come in line with what's owed. After a payment
+ * made another way (a check or cash the venue recorded), the next payments
+ * are trimmed first and any no longer needed are canceled; if that payment is
+ * removed again, they go back toward their original amounts. An automatic
+ * payment never goes above what the couple agreed to.
+ */
+export async function rebalanceScheduledInstallments(proposalId: string): Promise<void> {
+  const [{ data: prop }, { data: rowData }] = await Promise.all([
+    supabaseAdmin.from('proposals').select('id, price, status').eq('id', proposalId).maybeSingle(),
+    supabaseAdmin
+      .from('proposal_installments')
+      .select('id, amount_cents, planned_amount_cents, status, canceled_reason, due_date')
+      .eq('proposal_id', proposalId)
+      .order('installment_number', { ascending: true }),
+  ]);
+  const p = prop as { id: string; price: number; status: string } | null;
+  const rows = (rowData ?? []) as Array<{
+    id: string;
+    amount_cents: number;
+    planned_amount_cents: number | null;
+    status: string;
+    canceled_reason: string | null;
+    due_date: string;
+  }>;
+  if (!p || !rows.length || PLAN_STOPPED.includes(p.status)) return;
+
+  let left = await stillOwedCents(p);
+  const open = rows.filter(
+    (r) => r.status === 'scheduled' || r.status === 'failed' || (r.status === 'canceled' && r.canceled_reason === COVERED),
+  );
+  const now = new Date().toISOString();
+
+  // What's owed goes to the latest payments first, so a check covers the next payment.
+  for (const r of [...open].reverse()) {
+    const planned = Number(r.planned_amount_cents ?? r.amount_cents);
+    const amount = Math.min(planned, left);
+    if (amount >= MIN_PAYMENT_CENTS) {
+      left -= amount;
+      if (r.status === 'canceled') {
+        const dueAt = `${String(r.due_date).slice(0, 10)}T15:00:00Z`;
+        await supabaseAdmin
+          .from('proposal_installments')
+          .update({
+            status: 'scheduled',
+            amount_cents: amount,
+            canceled_reason: null,
+            attempts: 0,
+            last_error: null,
+            next_attempt_at: dueAt > now ? dueAt : now,
+            updated_at: now,
+          })
+          .eq('id', r.id)
+          .eq('status', 'canceled');
+      } else if (amount !== r.amount_cents) {
+        await supabaseAdmin
+          .from('proposal_installments')
+          .update({ amount_cents: amount, updated_at: now })
+          .eq('id', r.id)
+          .in('status', ['scheduled', 'failed']);
+      }
+    } else if (r.status !== 'canceled') {
+      await supabaseAdmin
+        .from('proposal_installments')
+        .update({ status: 'canceled', canceled_reason: COVERED, updated_at: now })
+        .eq('id', r.id)
+        .in('status', ['scheduled', 'failed']);
+    }
+  }
+}
+
 /** A link for the couple to update the card used for their installments. */
 async function cardUpdateLink(p: PaymentProposal): Promise<string> {
   const token = randomBytes(24).toString('hex');
@@ -527,6 +632,8 @@ export async function markInstallmentPaid(row: InstallmentRow, pi: Stripe.Paymen
     first: false,
     finalInstallment: row.installment_number >= row.installment_count,
   });
+  // Paid in full early: the payments still waiting are no longer needed.
+  await rebalanceScheduledInstallments(row.proposal_id);
 }
 
 export async function markInstallmentFailed(row: InstallmentRow, reason: string, paymentIntentId: string | null): Promise<void> {
@@ -561,34 +668,55 @@ export async function markInstallmentFailed(row: InstallmentRow, reason: string,
 }
 
 /**
- * Charge every installment that's due (daily cron). Each row is claimed before
- * charging, so overlapping runs can't charge twice.
+ * Charge every installment that's due (hourly cron). Each row is claimed before
+ * charging, so overlapping runs can't charge twice, and a charge never goes
+ * above what the couple still owes.
  */
 export async function chargeDueInstallments(limit = 50): Promise<{ charged: number; processing: number; failed: number; skipped: number }> {
   const out = { charged: 0, processing: 0, failed: 0, skipped: 0 };
   const { data } = await supabaseAdmin
     .from('proposal_installments')
-    .select('id, proposal_id, venue_id, installment_number, installment_count, amount_cents, attempts, payment_intent_id')
+    .select('id, proposal_id')
     .eq('status', 'scheduled')
     .lte('next_attempt_at', new Date().toISOString())
     .order('next_attempt_at', { ascending: true })
     .limit(limit);
 
-  for (const row of (data ?? []) as InstallmentRow[]) {
+  for (const due of (data ?? []) as Array<{ id: string; proposal_id: string }>) {
+    // Bring the plan in line with what's still owed (a check the venue
+    // recorded, say), then claim the payment so overlapping runs can't
+    // charge it twice.
+    await rebalanceScheduledInstallments(due.proposal_id);
     const { data: claimed } = await supabaseAdmin
       .from('proposal_installments')
       .update({ status: 'processing', updated_at: new Date().toISOString() })
-      .eq('id', row.id)
+      .eq('id', due.id)
       .eq('status', 'scheduled')
-      .select('id');
-    if (!claimed?.length) { out.skipped++; continue; }
+      .select(INSTALLMENT_COLUMNS);
+    const row = ((claimed ?? []) as unknown as InstallmentRow[])[0];
+    if (!row) { out.skipped++; continue; }
 
     const p = await loadPaymentProposal({ id: row.proposal_id });
     const v = p ? await loadConnectVenue(p.venue_id) : null;
-    if (!p || ['refunded', 'partial_refund', 'cancelled', 'declined', 'expired'].includes(p.status)) {
+    if (!p || PLAN_STOPPED.includes(p.status)) {
       await supabaseAdmin.from('proposal_installments').update({ status: 'canceled', updated_at: new Date().toISOString() }).eq('id', row.id);
       out.skipped++;
       continue;
+    }
+
+    // Never charge more than what's still owed.
+    const owed = await stillOwedCents(p, row.id);
+    if (owed < MIN_PAYMENT_CENTS) {
+      await supabaseAdmin
+        .from('proposal_installments')
+        .update({ status: 'canceled', canceled_reason: COVERED, updated_at: new Date().toISOString() })
+        .eq('id', row.id);
+      out.skipped++;
+      continue;
+    }
+    if (owed < row.amount_cents) {
+      await supabaseAdmin.from('proposal_installments').update({ amount_cents: owed }).eq('id', row.id);
+      row.amount_cents = owed;
     }
     if (!v || !venueTakesStripePayments(v) || !v.stripe_account_id || !p.stripe_customer_id || !p.stripe_payment_method_id) {
       await supabaseAdmin

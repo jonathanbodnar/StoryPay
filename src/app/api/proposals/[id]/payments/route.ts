@@ -7,6 +7,8 @@ import {
   sendManualPaymentReceipt,
   type ManualPaymentMethod,
 } from '@/lib/proposal-payments';
+import { rebalanceScheduledInstallments } from '@/lib/stripe/proposal-payments';
+import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 
 export const dynamic = 'force-dynamic';
 
@@ -121,6 +123,10 @@ export async function POST(
 
   const recompute = await recomputeProposalPaymentStatus(id);
   const balanceCents = recompute?.balanceCents ?? Math.max((Number(proposal.price) || 0) - amountCents, 0);
+  // On an automatic payment plan, this lowers the next payments so the couple
+  // is never charged for what they already paid.
+  await rebalanceScheduledInstallments(id);
+  void syncPaymentRemindersForProposal(id);
 
   if (sendReceipt && proposal.customer_email) {
     await sendManualPaymentReceipt({

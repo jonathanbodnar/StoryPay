@@ -5,6 +5,8 @@ import { findOrCreateContact, sendSms, sendEmail, normalizePhone, getGhlToken } 
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
+import { paymentTermsError, termsFingerprint } from '@/lib/payment-plan';
+import { sumManualPayments } from '@/lib/proposal-payments';
 
 export async function GET(
   _request: NextRequest,
@@ -70,6 +72,40 @@ export async function PATCH(
       { error: 'Paid proposals cannot be resent' },
       { status: 409 }
     );
+  }
+
+  // Payment terms after this update.
+  const nextPrice = price !== undefined ? price : existing.price;
+  const nextType = paymentType !== undefined ? paymentType : existing.payment_type;
+  const nextConfig = paymentConfig !== undefined ? paymentConfig : existing.payment_config;
+  const termsChanged =
+    termsFingerprint(nextPrice, nextType, nextConfig) !==
+    termsFingerprint(existing.price, existing.payment_type, existing.payment_config);
+
+  // Locked once money has changed hands: the balance and the automatic
+  // payments are worked out from them.
+  if (termsChanged) {
+    const moneyMoved =
+      !!existing.paid_at ||
+      !!existing.payment_processing_at ||
+      ['paid', 'partially_paid', 'refunded', 'partial_refund'].includes(existing.status) ||
+      (await sumManualPayments(id)) > 0;
+    if (moneyMoved) {
+      return NextResponse.json(
+        { error: 'The price and payment plan can’t change after a payment has been made.' },
+        { status: 409 }
+      );
+    }
+  }
+  // Checked when a draft is sent, or when terms change on one that's out.
+  if ((sendNow && existing.status === 'draft') || (termsChanged && existing.status !== 'draft')) {
+    const termsError = paymentTermsError({
+      priceCents: Math.round(Number(nextPrice) || 0),
+      paymentType: nextType,
+      paymentConfig: nextConfig,
+      collectManually: existing.collect_manually === true,
+    });
+    if (termsError) return NextResponse.json({ error: termsError }, { status: 400 });
   }
 
   const updateData: Record<string, unknown> = {};

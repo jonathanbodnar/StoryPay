@@ -30,7 +30,7 @@ export function methodLabel(method: string, checkNumber?: string | null): string
   return 'Other';
 }
 
-/** Sum of all manual payments recorded against a proposal/invoice (in cents). */
+/** Sum of every payment in a proposal/invoice's ledger, manual and online (in cents). */
 export async function sumManualPayments(proposalId: string): Promise<number> {
   const { data } = await supabaseAdmin
     .from('proposal_payments')
@@ -59,7 +59,7 @@ interface RecomputeResult {
 export async function recomputeProposalPaymentStatus(proposalId: string): Promise<RecomputeResult | null> {
   const { data: proposal } = await supabaseAdmin
     .from('proposals')
-    .select('id, price, status, template_id, signed_at, sent_at, paid_at')
+    .select('id, price, status, template_id, signed_at, sent_at, paid_at, payment_provider')
     .eq('id', proposalId)
     .single();
 
@@ -72,6 +72,11 @@ export async function recomputeProposalPaymentStatus(proposalId: string): Promis
   // Never downgrade a proposal that was already settled online.
   if (proposal.status === 'refunded' || proposal.status === 'partial_refund') {
     return { status: proposal.status, totalPaidCents, balanceCents, priceCents };
+  }
+  // A payment plan the couple started online stays 'paid' (booked, with the
+  // rest charged automatically); the ledger shows what's still owed.
+  if (proposal.status === 'paid' && proposal.payment_provider === 'stripe' && totalPaidCents > 0) {
+    return { status: 'paid', totalPaidCents, balanceCents, priceCents };
   }
 
   let nextStatus: string;

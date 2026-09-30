@@ -7,6 +7,8 @@ import {
   normalizeReminderOffsets,
 } from '@/lib/appointment-reminders';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { sumManualPayments } from '@/lib/proposal-payments';
+import { planPayments, toYmd } from '@/lib/payment-plan';
 
 /** Default overdue-reminder offsets: 1 day after, 3 days after, 7 days after. */
 export const DEFAULT_PAYMENT_REMINDER_OFFSETS: ReminderOffset[] = [
@@ -38,15 +40,42 @@ function formatOffsetLabel(o: ReminderOffset): string {
   return parts.length ? parts.join(', ') : '0';
 }
 
-interface InstallmentRow {
-  amount: number;
-  date: string;
+/** No reminders for these: not sent yet, or the deal is off or refunded. */
+const NO_REMINDERS = ['draft', 'cancelled', 'declined', 'expired', 'refunded', 'partial_refund'];
+
+interface ReminderProposal {
+  status: string | null;
+  price: number | null;
+  payment_type: string | null;
+  payment_config: unknown;
+  collect_manually: boolean | null;
 }
 
-function parseYmd(s: string): string | null {
-  const t = (s || '').trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
-  return t;
+/**
+ * The payments a client can be reminded about, with how much is due through
+ * each one (cumulative). A payment plan's later payments are left out when
+ * they're charged automatically: the couple gets a heads-up before each
+ * charge and a card-update link if one fails, so an "overdue" email would
+ * only confuse them.
+ */
+function remindableSchedule(p: ReminderProposal): Array<{ index: number; amount: number; date: string; dueThrough: number }> {
+  const out: Array<{ index: number; amount: number; date: string; dueThrough: number }> = [];
+  if (p.payment_type === 'installment') {
+    let running = 0;
+    planPayments(p.payment_config).forEach((inst, index) => {
+      if (!Number.isFinite(inst.amount) || inst.amount <= 0) return;
+      running += inst.amount;
+      const date = toYmd(inst.date);
+      if (!date) return;
+      if (index > 0 && p.collect_manually !== true) return;
+      out.push({ index, amount: inst.amount, date, dueThrough: running });
+    });
+  } else if ((p.payment_type || 'full') === 'full') {
+    const due = toYmd((p.payment_config as { due_date?: unknown } | null)?.due_date);
+    const price = Math.round(Number(p.price) || 0);
+    if (due && price > 0) out.push({ index: 0, amount: price, date: due, dueThrough: price });
+  }
+  return out;
 }
 
 /** Due anchor: 12:00 local on the installment date (venue time zone). */
@@ -61,7 +90,7 @@ export async function syncPaymentRemindersForProposal(proposalId: string): Promi
   const { data: proposal, error: pErr } = await supabaseAdmin
     .from('proposals')
     .select(
-      'id, venue_id, status, payment_type, payment_config, customer_email, customer_name, signed_at, public_token',
+      'id, venue_id, status, price, payment_type, payment_config, collect_manually, customer_email, customer_name, signed_at, public_token',
     )
     .eq('id', proposalId)
     .maybeSingle();
@@ -72,21 +101,16 @@ export async function syncPaymentRemindersForProposal(proposalId: string): Promi
   }
 
   const status = String((proposal as { status?: string }).status || '');
-  if (status === 'draft' || status === 'cancelled') return;
+  if (NO_REMINDERS.includes(status)) return;
 
+  // Invoices are marked signed when they're sent.
   if (!(proposal as { signed_at?: string | null }).signed_at) return;
-
-  if ((proposal as { payment_type?: string }).payment_type !== 'installment') return;
 
   const email = String((proposal as { customer_email?: string | null }).customer_email || '').trim();
   if (!email) return;
 
-  const cfg = (proposal as { payment_config?: unknown }).payment_config as
-    | { installments?: InstallmentRow[] }
-    | null
-    | undefined;
-  const installments = Array.isArray(cfg?.installments) ? cfg!.installments! : [];
-  if (!installments.length) return;
+  const schedule = remindableSchedule(proposal as unknown as ReminderProposal);
+  if (!schedule.length) return;
 
   const { data: venue } = await supabaseAdmin
     .from('venues')
@@ -117,10 +141,9 @@ export async function syncPaymentRemindersForProposal(proposalId: string): Promi
     installment_amount_cents: number | null;
   }> = [];
 
-  installments.forEach((inst, instIdx) => {
-    const ymd = parseYmd(inst.date);
-    if (!ymd) return;
-    const dueAt = installmentDueInstant(ymd, tz);
+  schedule.forEach((inst) => {
+    const instIdx = inst.index;
+    const dueAt = installmentDueInstant(inst.date, tz);
     if (dueAt.getTime() <= now) return;
 
     offsets.forEach((o, rIdx) => {
@@ -138,7 +161,7 @@ export async function syncPaymentRemindersForProposal(proposalId: string): Promi
         offset_minutes: o.m,
         send_at: sendAt.toISOString(),
         due_at: dueAt.toISOString(),
-        installment_amount_cents: typeof inst.amount === 'number' ? inst.amount : null,
+        installment_amount_cents: inst.amount,
       });
     });
   });
@@ -155,9 +178,8 @@ export async function refreshPaymentRemindersForVenue(venueId: string): Promise<
     .select('id')
     .eq('venue_id', venueId)
     .not('signed_at', 'is', null)
-    .eq('payment_type', 'installment')
-    .neq('status', 'draft')
-    .neq('status', 'cancelled');
+    .in('payment_type', ['installment', 'full'])
+    .not('status', 'in', `(${[...NO_REMINDERS, 'paid'].join(',')})`);
 
   if (error) {
     console.error('[payment-reminders] list proposals', error);
@@ -182,16 +204,26 @@ export async function sendPaymentDueReminderEmail(row: {
 }): Promise<{ ok: boolean; error?: string }> {
   const { data: proposal } = await supabaseAdmin
     .from('proposals')
-    .select('customer_email, customer_name, status, payment_type, signed_at, public_token')
+    .select('customer_email, customer_name, status, price, payment_type, payment_config, collect_manually, signed_at, public_token')
     .eq('id', row.proposal_id)
     .maybeSingle();
 
-  if (!proposal || (proposal as { status?: string }).status === 'cancelled') {
+  if (!proposal || NO_REMINDERS.includes(String((proposal as { status?: string }).status || ''))) {
     return { ok: false, error: 'proposal_gone' };
   }
   if (!(proposal as { signed_at?: string | null }).signed_at) {
     return { ok: false, error: 'not_signed' };
   }
+
+  // Only remind someone who still owes: everything due through this payment
+  // must not already be in the payment ledger (online, cash or check).
+  const p = proposal as unknown as ReminderProposal;
+  if ((p.payment_type || 'full') === 'full' && p.status === 'paid') return { ok: false, error: 'already_paid' };
+  const slot = remindableSchedule(p).find((s) => s.index === row.installment_index);
+  if (!slot) return { ok: false, error: 'proposal_gone' };
+  const paidCents = await sumManualPayments(row.proposal_id);
+  const stillDue = Math.min(slot.amount, slot.dueThrough - paidCents);
+  if (stillDue <= 0) return { ok: false, error: 'already_paid' };
 
   const to = String((proposal as { customer_email?: string | null }).customer_email || '').trim();
   if (!to) return { ok: false, error: 'no_email' };
@@ -211,15 +243,10 @@ export async function sendPaymentDueReminderEmail(row: {
     h: row.offset_hours,
     m: row.offset_minutes,
   };
-  const amountStr =
-    row.installment_amount_cents != null
-      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
-          row.installment_amount_cents / 100,
-        )
-      : '';
+  const amountStr = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(stillDue / 100);
 
   const token = String((proposal as { public_token?: string }).public_token || '');
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
   const payLink = token ? `${appUrl}/proposal/${token}` : appUrl;
 
   // Load the venue's branded `payment_reminder` email template (or fall back
@@ -233,7 +260,7 @@ export async function sendPaymentDueReminderEmail(row: {
   const vars: Record<string, string> = {
     organization:  venueName,
     customer_name: customerName,
-    amount:        amountStr || '$0.00',
+    amount:        amountStr,
     due_date:      when,
     // offset_label now reflects how long AFTER the due date this reminder fires.
     offset_label:  formatOffsetLabel(o),
@@ -314,7 +341,7 @@ export async function processPaymentRemindersCron(): Promise<{
       if (!upErr) sent++;
       else errors++;
     } else {
-      if (result.error === 'proposal_gone' || result.error === 'no_email' || result.error === 'not_signed') {
+      if (result.error === 'proposal_gone' || result.error === 'no_email' || result.error === 'not_signed' || result.error === 'already_paid') {
         await supabaseAdmin.from('proposal_payment_reminders').delete().eq('id', row.id);
       } else {
         errors++;

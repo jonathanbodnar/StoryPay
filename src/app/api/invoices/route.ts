@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { paymentTermsError } from '@/lib/payment-plan';
 import { supabaseAdmin } from '@/lib/supabase';
 import { findOrCreateContact, sendSms, sendEmail as ghlSendEmail, normalizePhone, getGhlToken } from '@/lib/ghl';
 import { generateToken } from '@/lib/utils';
@@ -60,6 +61,8 @@ export async function POST(request: NextRequest) {
     if (!price || price <= 0) {
       return NextResponse.json({ error: 'A valid price is required' }, { status: 400 });
     }
+    const termsError = paymentTermsError({ priceCents, paymentType, paymentConfig, collectManually: collectManuallyFlag });
+    if (termsError) return NextResponse.json({ error: termsError }, { status: 400 });
   }
 
   const publicToken = generateToken();

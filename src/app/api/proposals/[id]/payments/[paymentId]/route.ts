@@ -2,6 +2,8 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { recomputeProposalPaymentStatus } from '@/lib/proposal-payments';
+import { rebalanceScheduledInstallments } from '@/lib/stripe/proposal-payments';
+import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +19,7 @@ export async function DELETE(
 
   const { data: existing } = await supabaseAdmin
     .from('proposal_payments')
-    .select('id')
+    .select('id, source')
     .eq('id', paymentId)
     .eq('proposal_id', id)
     .eq('venue_id', venueId)
@@ -26,18 +28,26 @@ export async function DELETE(
   if (!existing) {
     return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
   }
+  // A card or bank payment really happened; it's undone with a refund, not deleted.
+  if (existing.source === 'online') {
+    return NextResponse.json({ error: 'Online payments can’t be removed. Issue a refund instead.' }, { status: 409 });
+  }
 
   const { error } = await supabaseAdmin
     .from('proposal_payments')
     .delete()
     .eq('id', paymentId)
-    .eq('venue_id', venueId);
+    .eq('venue_id', venueId)
+    .neq('source', 'online');
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const recompute = await recomputeProposalPaymentStatus(id);
+  // On an automatic payment plan, the next payments go back toward their amounts.
+  await rebalanceScheduledInstallments(id);
+  void syncPaymentRemindersForProposal(id);
 
   return NextResponse.json({
     deleted: true,
