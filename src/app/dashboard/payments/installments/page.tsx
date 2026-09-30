@@ -144,7 +144,9 @@ function PaymentPlansPageInner() {
                       <p className="text-xs text-gray-400">{s.paymentsCompleted ?? 0} of {s.paymentsTotal ?? 0} payments</p>
                     </div>
                     <p className="text-sm text-gray-600 sm:self-center">
-                      {s.nextPaymentDate && s.nextPaymentAmount ? `${formatCents(s.nextPaymentAmount)} · ${formatDate(s.nextPaymentDate)}` : '—'}
+                      {s.nextPaymentAmount
+                        ? `${formatCents(s.nextPaymentAmount)} · ${s.nextPaymentDate ? formatDate(s.nextPaymentDate) : 'at signing'}`
+                        : '—'}
                     </p>
                     <div className="sm:self-center">
                       <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold', color.bg, color.text)}>

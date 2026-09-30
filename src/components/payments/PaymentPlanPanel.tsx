@@ -149,7 +149,7 @@ export default function PaymentPlanPanel({
                 <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[11px] font-bold text-gray-500">{p.number}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-900">{p.amount_cents != null ? formatCents(p.amount_cents) : '—'}</p>
-                  <p className="text-xs text-gray-400">{p.due_date ? formatDate(p.due_date) : '—'}</p>
+                  <p className="text-xs text-gray-400">{p.due_date ? formatDate(p.due_date) : p.number === 1 ? 'At signing' : '—'}</p>
                 </div>
                 <span className={classNames('rounded-full px-2.5 py-0.5 text-[11px] font-semibold', badge.cls)}>{badge.label}</span>
                 {canChange && !isEditing && (

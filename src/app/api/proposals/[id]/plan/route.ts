@@ -89,17 +89,19 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     ];
   } else {
     // Cash/check (or not started): a payment is paid once the ledger covers it.
+    // An online plan's first payment is due when the client signs, so it's
+    // never "overdue" here; the rest start once that's paid.
+    const notStartedOnline = p.collect_manually !== true && paidCents === 0;
     let running = 0;
     payments = schedule.map((s, i) => {
       running += s.amount;
       const date = toYmd(s.date);
-      return {
-        id: null,
-        number: i + 1,
-        amount_cents: s.amount,
-        due_date: date,
-        status: paidCents >= running ? 'paid' : date && date < today ? 'overdue' : 'upcoming',
-      };
+      const status = paidCents >= running
+        ? 'paid'
+        : notStartedOnline
+          ? (i === 0 ? 'due' : 'upcoming')
+          : date && date < today ? 'overdue' : 'upcoming';
+      return { id: null, number: i + 1, amount_cents: s.amount, due_date: notStartedOnline && i === 0 ? null : date, status };
     });
   }
 

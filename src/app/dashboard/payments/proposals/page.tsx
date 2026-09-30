@@ -30,7 +30,20 @@ function docNo(p: Proposal): string {
 
 function statusLabel(status: string): string {
  if (status === 'partially_paid') return 'Partial';
+ if (status === 'paying') return 'Paying';
  return status;
+}
+
+/** A payment plan with money still owed shows as "Paying", not "Paid". */
+function displayStatus(p: Proposal): string {
+ if (p.status === 'paid' && p.payment_type === 'installment' && (p.total_paid_cents ?? p.price) < p.price) return 'paying';
+ return p.status;
+}
+
+function paymentTypeLabel(type: string): string {
+ if (type === 'installment') return 'Payment plan';
+ if (type === 'full') return 'Pay in full';
+ return type;
 }
 
 /** Manual-collection proposals/invoices the owner can still record payments against. */
@@ -261,7 +274,8 @@ function PaymentsProposalsPageInner() {
  </div>
  <div className="divide-y divide-gray-200">
  {sent.map(p=>{
- const color = getStatusColor(p.status);
+ const shown = displayStatus(p);
+ const color = getStatusColor(shown === 'paying' ? 'partially_paid' : shown);
  return (
  <div key={p.id} className="hover:bg-gray-50/50 transition-colors">
  {/* Mobile card */}
@@ -272,11 +286,11 @@ function PaymentsProposalsPageInner() {
  <p className="text-[11px] font-mono text-gray-400">{docNo(p)}</p>
  {p.customer_email && <p className="text-xs text-gray-400 truncate">{p.customer_email}</p>}
  </div>
- <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize flex-shrink-0', color.bg, color.text)}>{statusLabel(p.status)}</span>
+ <span className={classNames('inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize flex-shrink-0', color.bg, color.text)}>{statusLabel(shown)}</span>
  </div>
  <div className="flex items-center gap-4 text-sm text-gray-500">
  <span className="font-semibold text-gray-800">{formatCents(p.price)}</span>
- <span className="capitalize">{p.payment_type}</span>
+ <span>{paymentTypeLabel(p.payment_type)}</span>
  {p.sent_at && <span>{formatDate(p.sent_at)}</span>}
  </div>
  {p.collect_manually && (p.total_paid_cents ?? 0) > 0 && p.status !== 'paid' && (
@@ -294,14 +308,14 @@ function PaymentsProposalsPageInner() {
  <Link href={`/dashboard/proposals/${p.id}`} className="text-sm font-semibold text-gray-900 hover:underline truncate block">{p.customer_name||'Unknown'}</Link>
  <p className="text-[11px] font-mono text-gray-400">{docNo(p)} {p.customer_email ? `· ${p.customer_email}` : ''}</p>
  </div>
- <span className={classNames('inline-block self-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize w-fit', color.bg, color.text)}>{statusLabel(p.status)}</span>
+ <span className={classNames('inline-block self-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize w-fit', color.bg, color.text)}>{statusLabel(shown)}</span>
  <div className="self-center">
  <p className="text-sm text-gray-700">{formatCents(p.price)}</p>
  {p.collect_manually && (p.total_paid_cents ?? 0) > 0 && p.status !== 'paid' && (
  <p className="text-xs text-amber-600">Bal {formatCents(Math.max(p.price - (p.total_paid_cents ?? 0), 0))}</p>
  )}
  </div>
- <p className="text-sm text-gray-500 self-center capitalize">{p.payment_type}</p>
+ <p className="text-sm text-gray-500 self-center">{paymentTypeLabel(p.payment_type)}</p>
  <p className="text-sm text-gray-500 self-center">{p.sent_at?formatDate(p.sent_at):'—'}</p>
  <div className="self-center">
  {canRecord(p) ? (

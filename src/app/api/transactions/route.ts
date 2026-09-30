@@ -149,10 +149,12 @@ async function paymentPlans(venueId: string): Promise<unknown[]> {
       count = schedule.length;
       let running = 0;
       completed = 0;
+      const notStartedOnline = p.collect_manually !== true && paid === 0;
       for (const s of schedule) {
         running += s.amount;
         if (paid >= running) completed++;
-        else if (!next) next = { date: toYmd(s.date) ?? '', amount: Math.min(s.amount, running - paid) };
+        // An online plan's first payment is due when the client signs.
+        else if (!next) next = { date: notStartedOnline ? '' : (toYmd(s.date) ?? ''), amount: Math.min(s.amount, running - paid) };
       }
       status = paid >= total && total > 0 ? 'completed' : paid === 0 && p.collect_manually !== true ? 'pending' : next && next.date && next.date < today ? 'overdue' : 'active';
     }
