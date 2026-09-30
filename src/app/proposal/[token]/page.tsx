@@ -6,15 +6,6 @@ import DOMPurify from 'isomorphic-dompurify';
 import { formatCents, formatDate } from '@/lib/utils';
 import StripeProposalPaymentForm, { type StripeProposalIntent } from '@/components/payments/StripeProposalPaymentForm';
 
-interface FortisElements {
-  create(opts: Record<string, unknown>): void;
-  eventBus: { on(evt: string, cb: (d: unknown) => void): void };
-}
-// Access the Fortis SDK via a local cast (avoids conflicting with update-card page's global declaration)
-function getFortisSDK(): { elements: new (token: string) => FortisElements } | undefined {
-  return (window as unknown as { Commerce?: { elements: new (token: string) => FortisElements } }).Commerce;
-}
-
 const ESIGN_CONSENT_TEXT =
   'By signing electronically below, I consent to do business electronically with the venue, ' +
   'agree that this electronic signature is the legal equivalent of a handwritten signature, ' +
@@ -144,16 +135,11 @@ function SignatureCanvas({ onSignatureChange }: { onSignatureChange: (dataUrl: s
   );
 }
 
-interface PaymentIntentData {
-  /** 'stripe' when the venue takes payments on its Stripe account (Connect). */
-  provider?: 'stripe';
-  clientToken: string;
-  environment: string;
-  amountCents: number;
-  paymentType: string;
-  paymentMethods: string[];
-}
-
+/**
+ * The couple's payment form: Stripe's Payment Element on the venue's own
+ * Stripe account (StoryPay™, powered by Stripe). LunarPay is retired, so a
+ * venue that hasn't connected Stripe gets a clear message instead of a form.
+ */
 function InlinePaymentForm({
   token,
   brandColor,
@@ -165,230 +151,47 @@ function InlinePaymentForm({
   onSuccess: () => void;
   onProcessing: () => void;
 }) {
-  const [intent, setIntent] = useState<PaymentIntentData | null>(null);
-  const [intentLoading, setIntentLoading] = useState(true);
-  const [elementsLoading, setElementsLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
+  const [intent, setIntent] = useState<StripeProposalIntent | null>(null);
+  const [loading, setLoading] = useState(true);
   const [payError, setPayError] = useState<string | null>(null);
-  const mountedRef = useRef(false);
 
   useEffect(() => {
     fetch(`/api/proposals/public/${token}/payment-intent`, { method: 'POST' })
       .then((r) => r.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
-        setIntent(data as PaymentIntentData);
+        if (data.provider !== 'stripe') throw new Error('Online payment isn’t available for this invoice yet. Please contact the venue.');
+        setIntent(data as StripeProposalIntent);
       })
       .catch((err: unknown) => setPayError(err instanceof Error ? err.message : 'Failed to load payment form'))
-      .finally(() => setIntentLoading(false));
+      .finally(() => setLoading(false));
   }, [token]);
 
-  useEffect(() => {
-    // Stripe venues render Stripe's own form below instead of Fortis.
-    if (!intent || mountedRef.current || intent.provider === 'stripe') return;
-    mountedRef.current = true;
-
-    const sdkUrl =
-      intent.environment === 'production'
-        ? 'https://js.fortis.tech/commercejs-v1.0.0.min.js'
-        : 'https://js.sandbox.fortis.tech/commercejs-v1.0.0.min.js';
-
-    const existing = document.querySelector(`script[src="${sdkUrl}"]`);
-    const loadSdk: Promise<void> = existing
-      ? Promise.resolve()
-      : new Promise((resolve, reject) => {
-          const s = document.createElement('script');
-          s.src = sdkUrl;
-          s.onload = () => resolve();
-          s.onerror = () => reject(new Error('Failed to load payment SDK'));
-          document.head.appendChild(s);
-        });
-
-    loadSdk
-      .then(() => {
-        const SDK = getFortisSDK();
-        if (!SDK) throw new Error('Payment SDK unavailable');
-        const elements = new SDK.elements(intent.clientToken);
-        elements.create({
-          container: '#fortis-payment-form',
-          environment: intent.environment,
-          theme: 'default',
-          floatingLabels: true,
-          showSubmitButton: true,
-          hideTotal: true,
-          hideAgreementCheckbox: true,
-          appearance: {
-            colorButtonActionBackground: '#1B1B1B',
-            colorButtonActionText: '#ffffff',
-            colorButtonSelectedBackground: '#1B1B1B',
-            colorButtonSelectedText: '#ffffff',
-            colorButtonText: '#4a5568',
-            colorButtonBackground: '#f7fafc',
-            colorBackground: '#ffffff',
-            colorText: '#1a202c',
-            fontFamily: 'SourceSans',
-            fontSize: '16px',
-            borderRadius: '8px',
-          },
-        });
-
-        // ── Event wiring ──────────────────────────────────────────────
-        // LP docs (https://app.lunarpay.com/developers):
-        //
-        //  • TICKET intention (hasRecurring:true → installments / SaaS):
-        //      Fortis fires `ticket_success`; payload IS the raw ticketId
-        //      string. Our backend saves the card + charges the first
-        //      installment.
-        //
-        //  • TRANSACTION intention (amount-only → pay-in-full):
-        //      Fortis fires `done` / `payment_success` with transaction
-        //      info. The charge already happened inside the iframe; our
-        //      backend just records the result.
-        //
-        // We guard each handler with a paymentType check so a rogue cross-
-        // fire never processes a payment through the wrong path.
-
-        // Ticket → installment save+charge
-        elements.eventBus.on('ticket_success', async (ticketPayload) => {
-          if (intent.paymentType !== 'installment') return;
-          setProcessing(true);
-          // LP docs: payload is the raw ticketId string. In some SDK
-          // versions it may be an object — handle both.
-          let ticketId: string | undefined;
-          let pmMethod = 'cc';
-          if (typeof ticketPayload === 'string') {
-            ticketId = ticketPayload;
-          } else if (ticketPayload && typeof ticketPayload === 'object') {
-            const p = ticketPayload as { id?: string; payment_method?: string };
-            ticketId = p.id ? String(p.id) : undefined;
-            pmMethod = p.payment_method || 'cc';
-          }
-          if (!ticketId) {
-            setPayError('Payment tokenization failed. Please try again.');
-            setProcessing(false);
-            return;
-          }
-          await submitToServer({ ticketId, paymentMethod: pmMethod });
-        });
-
-        // Transaction → record full payment (charge happened in iframe)
-        const onDone = async (payload: unknown) => {
-          if (intent.paymentType !== 'full') return;
-          setProcessing(true);
-          await submitToServer({ done: payload as Record<string, unknown>, paymentMethod: 'cc' });
-        };
-
-        elements.eventBus.on('done',            onDone);
-        elements.eventBus.on('payment_success', onDone);
-
-        elements.eventBus.on('validationError', (errPayload) => {
-          const e = (errPayload ?? {}) as { message?: string };
-          setPayError(e.message || 'Please check your card details and try again.');
-        });
-        elements.eventBus.on('error', (errPayload) => {
-          const e = (errPayload ?? {}) as { message?: string };
-          setPayError(e.message || 'Payment error. Please try again.');
-          setProcessing(false);
-        });
-
-        setElementsLoading(false);
-      })
-      .catch((err: unknown) => {
-        console.error('[InlinePaymentForm] init failed:', err);
-        const msg =
-          err instanceof Error                              ? err.message :
-          typeof err === 'string'                           ? err :
-          (err as { message?: string } | null)?.message ?? null;
-        setPayError(msg ? `Failed to initialize payment form: ${msg}` : 'Failed to initialize payment form');
-        setElementsLoading(false);
-      });
-  }, [intent, brandColor]);
-
-  const submitToServer = async ({
-    ticketId,
-    done,
-    paymentMethod,
-  }: {
-    ticketId?: string;
-    done?: Record<string, unknown>;
-    paymentMethod: string;
-  }) => {
-    setPayError(null);
-    try {
-      const res = await fetch(`/api/proposals/public/${token}/pay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticketId, done, paymentMethod }),
-      });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error || 'Payment failed');
-      // Clear the processing overlay BEFORE notifying the parent so the
-      // form unmounts immediately and we never get stuck on "Processing
-      // payment…" while waiting on the re-fetch.
-      setProcessing(false);
-      onSuccess();
-    } catch (err: unknown) {
-      setPayError(err instanceof Error ? err.message : 'Payment failed. Please try again.');
-      setProcessing(false);
-    }
-  };
-
-  if (intent?.provider === 'stripe') {
+  if (intent) {
     return (
       <StripeProposalPaymentForm
         token={token}
-        intent={intent as unknown as StripeProposalIntent}
+        intent={intent}
         brandColor={brandColor}
         onSuccess={onSuccess}
         onProcessing={onProcessing}
       />
     );
   }
-
-  const isLoading = intentLoading || elementsLoading;
-
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+        <span className="text-sm">Loading secure payment form…</span>
+      </div>
+    );
+  }
   return (
-    <div className="relative">
-      {isLoading && (
-        <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
-          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-          <span className="text-sm">Loading secure payment form…</span>
-        </div>
-      )}
-
-      {/* Processing overlay while our server handles the charge */}
-      {processing && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/80 backdrop-blur-sm">
-          <div className="flex items-center gap-2 text-gray-600">
-            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-            </svg>
-            <span className="text-sm font-medium">Processing payment…</span>
-          </div>
-        </div>
-      )}
-
-      <div
-        id="fortis-payment-form"
-        className={isLoading ? 'hidden' : 'mb-2'}
-        style={{ minHeight: isLoading ? 0 : 300 }}
-      />
-
-      {payError && (
-        <div className="mt-3 rounded-xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">
-          {payError}
-        </div>
-      )}
-
-      {!isLoading && (
-        <p className="mt-2 text-center text-xs text-gray-400">
-          Secured with 256-bit SSL encryption
-        </p>
-      )}
+    <div className="rounded-xl bg-red-50 border border-red-100 p-4 text-sm text-red-700">
+      {payError || 'Failed to load payment form'}
     </div>
   );
 }

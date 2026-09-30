@@ -21,6 +21,7 @@ import {
   ListChecks,
   Contact,
   Wallet,
+  CreditCard,
   Globe,
   ChevronRight,
   Mail,
@@ -111,6 +112,8 @@ type HomeMetrics = {
   budget: { target: number; estimated: number; actual: number } | null;
   vendors: number;
   inspiration: number;
+  /** What they've paid their venue (the couple only, once the venue is connected). */
+  payments?: { paidCents: number; totalCents: number; balanceCents: number; next: { amountCents: number; date: string | null } | null; url: string } | null;
 };
 
 const DIRECTORY =
@@ -1423,6 +1426,21 @@ function MetricsGrid({ metrics }: { metrics: HomeMetrics }) {
       sub: b.target > 0 ? `of ${money(b.target)} budget` : b.estimated > 0 ? `of ${money(b.estimated)} planned` : 'Set your budget',
       icon: <Wallet className="h-4 w-4" />,
       tone: 'bg-teal-50 text-teal-600',
+    });
+  }
+  const pay = metrics.payments;
+  if (pay) {
+    tiles.push({
+      href: pay.url,
+      label: 'Paid to your venue',
+      value: money(pay.paidCents / 100),
+      sub: pay.next
+        ? `Next: ${money(pay.next.amountCents / 100)} · ${pay.next.date ? shortDate(pay.next.date) : 'due now'}`
+        : pay.balanceCents > 0
+          ? `${money(pay.balanceCents / 100)} left`
+          : 'Paid in full',
+      icon: <CreditCard className="h-4 w-4" />,
+      tone: 'bg-emerald-50 text-emerald-700',
     });
   }
   if (metrics.invitesSent != null) {

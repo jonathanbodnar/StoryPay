@@ -5,7 +5,8 @@
  *           cover, the one image that themes both), the setup checklist
  *           (lib/couple-planner-setup.ts), and the dashboard metrics: website
  *           views, RSVP replies, guests coming, guestbook notes, invites sent,
- *           to-dos, budget and vendors.
+ *           to-dos, budget and vendors, and (for a couple whose venue is
+ *           connected) what they've paid the venue and their next payment.
  *   PATCH → { key, done } ticks or unticks a checklist item by hand
  *           (done: null goes back to the automatic check).
  *
@@ -28,6 +29,7 @@ import { sanitizeBudget } from '@/lib/wedding-budget';
 import { sanitizeInspiration } from '@/lib/wedding-inspiration';
 import { sanitizeVendors } from '@/lib/wedding-vendors';
 import { getPinterestConnection } from '@/lib/pinterest';
+import { planPayments, toYmd } from '@/lib/payment-plan';
 import {
   PLANNER_SETUP_ITEMS,
   isPlannerSetupKey,
@@ -51,6 +53,100 @@ function readOverrides(raw: unknown): Overrides {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+interface CouplePayments {
+  paidCents: number;
+  totalCents: number;
+  balanceCents: number;
+  next: { amountCents: number; date: string | null } | null;
+  url: string;
+}
+
+/**
+ * What the couple has paid their venue and what's next, from the proposals
+ * and invoices the venue sent to the couple's email. Private to the couple.
+ */
+async function couplePayments(
+  venueId: string,
+  venueCustomerId: string | null,
+  authEmail: string | null,
+): Promise<CouplePayments | null> {
+  const emails = new Set<string>();
+  if (authEmail) emails.add(authEmail.trim());
+  if (venueCustomerId) {
+    const { data: vc } = await supabaseAdmin.from('venue_customers').select('customer_email').eq('id', venueCustomerId).maybeSingle();
+    const e = (vc as { customer_email?: string | null } | null)?.customer_email?.trim();
+    if (e) emails.add(e);
+  }
+  const variants = [...new Set([...emails].flatMap((e) => [e, e.toLowerCase()]))];
+  if (!variants.length) return null;
+
+  const { data } = await supabaseAdmin
+    .from('proposals')
+    .select('id, public_token, price, status, payment_type, payment_config, payment_provider, collect_manually, created_at')
+    .eq('venue_id', venueId)
+    .in('customer_email', variants)
+    .in('status', ['sent', 'opened', 'signed', 'paid', 'partially_paid'])
+    .order('created_at', { ascending: false })
+    .limit(20);
+  const docs = (data ?? []) as Array<{
+    id: string; public_token: string; price: number; status: string; payment_type: string | null;
+    payment_config: unknown; payment_provider: string | null; collect_manually: boolean | null;
+  }>;
+  if (!docs.length) return null;
+
+  const ids = docs.map((d) => d.id);
+  const [{ data: ledger }, { data: rows }] = await Promise.all([
+    supabaseAdmin.from('proposal_payments').select('proposal_id, amount_cents').in('proposal_id', ids),
+    supabaseAdmin.from('proposal_installments').select('proposal_id, amount_cents, due_date').in('proposal_id', ids).eq('status', 'scheduled'),
+  ]);
+  const paidBy = new Map<string, number>();
+  for (const r of (ledger ?? []) as Array<{ proposal_id: string; amount_cents: number }>) {
+    paidBy.set(r.proposal_id, (paidBy.get(r.proposal_id) ?? 0) + (Number(r.amount_cents) || 0));
+  }
+
+  let paidCents = 0;
+  let totalCents = 0;
+  let next: (CouplePayments['next'] & { url: string }) | null = null;
+  const consider = (amountCents: number, date: string | null, url: string) => {
+    if (amountCents <= 0) return;
+    if (!next || (date ?? '') < (next.date ?? '')) next = { amountCents, date, url };
+  };
+  for (const d of docs) {
+    const price = Math.round(Number(d.price) || 0);
+    const paid = paidBy.get(d.id) ?? 0;
+    paidCents += paid;
+    totalCents += price;
+    if (paid >= price) continue;
+    const url = paid > 0 ? `/invoice/${d.id}` : `/proposal/${d.public_token}`;
+    const auto = (rows ?? []) as Array<{ proposal_id: string; amount_cents: number; due_date: string }>;
+    const scheduled = auto.filter((r) => r.proposal_id === d.id).sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
+    if (scheduled) {
+      consider(scheduled.amount_cents, String(scheduled.due_date).slice(0, 10), url);
+    } else if (d.payment_type === 'installment') {
+      // The first payment of the schedule not yet covered.
+      let running = 0;
+      for (const s of planPayments(d.payment_config)) {
+        running += s.amount;
+        if (paid < running) {
+          // An online plan's first payment is due when they sign.
+          consider(Math.min(s.amount, running - paid), paid === 0 && d.collect_manually !== true ? null : toYmd(s.date), url);
+          break;
+        }
+      }
+    } else {
+      consider(price - paid, toYmd((d.payment_config as { due_date?: unknown } | null)?.due_date), url);
+    }
+  }
+  const n = next as (CouplePayments['next'] & { url: string }) | null;
+  return {
+    paidCents,
+    totalCents,
+    balanceCents: Math.max(totalCents - paidCents, 0),
+    next: n ? { amountCents: n.amountCents, date: n.date } : null,
+    url: n?.url ?? `/invoice/${docs[0].id}`,
+  };
+}
 
 export async function GET(request: NextRequest) {
   const user = await getCoupleAuthUser(request);
@@ -133,6 +229,13 @@ export async function GET(request: NextRequest) {
     setup = { items, doneCount: items.filter((i) => i.done).length, total: items.length };
   }
 
+  // What they've paid the venue: the couple only, once their venue is connected.
+  const w = wedding as (typeof wedding & { venue_id?: string | null; venue_customer_id?: string | null }) | null;
+  const payments =
+    isCouple && w?.status === 'linked' && w.venue_id
+      ? await couplePayments(w.venue_id, w.venue_customer_id ?? null, user.email ?? null).catch(() => null)
+      : null;
+
   const todoItems = checklist.items;
   const nextTodo =
     todoItems.filter((i) => !i.done).sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))[0] ?? null;
@@ -180,6 +283,7 @@ export async function GET(request: NextRequest) {
         : null,
       vendors: vendorCount,
       inspiration: inspirationCount,
+      payments,
     },
   });
 }
