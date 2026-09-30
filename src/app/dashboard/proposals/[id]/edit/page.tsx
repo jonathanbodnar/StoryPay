@@ -1,17 +1,13 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useMemo, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Send, Save, Trash2, Plus, ArrowLeft, ExternalLink, Copy, RefreshCw, Receipt, Wallet } from 'lucide-react';
+import { Send, Save, Trash2, ArrowLeft, ExternalLink, Copy, RefreshCw, Receipt, Wallet } from 'lucide-react';
 import { formatCents, formatDate, getStatusColor, classNames } from '@/lib/utils';
 import RecordPaymentModal, { paymentMethodLabel } from '@/components/RecordPaymentModal';
-
-interface Installment {
- id: string;
- amount: string;
- date: string;
-}
+import PaymentPlanBuilder, { DueDateField } from '@/components/payments/PaymentPlanBuilder';
+import { defaultPlanDraft, planDraftFromConfig, planFromDraft, toYmd, type PlanDraft } from '@/lib/payment-plan';
 
 interface Proposal {
  id: string;
@@ -46,15 +42,6 @@ interface LedgerPayment {
  paid_at: string;
 }
 
-function uid() {
- return Math.random().toString(36).slice(2, 10);
-}
-
-function toDateValue(d?: string) {
- if (!d) return '';
- return d.slice(0, 10);
-}
-
 function today() {
  const d = new Date();
  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -81,12 +68,8 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  const [priceDollars, setPriceDollars] = useState('');
  const [paymentType, setPaymentType] = useState<'full' | 'installment' | 'subscription'>('full');
 
- const [installments, setInstallments] = useState<Installment[]>([
- { id: uid(), amount: '', date: '' },
- ]);
- const [subAmount, setSubAmount] = useState('');
- const [subFrequency, setSubFrequency] = useState<'monthly' | 'weekly'>('monthly');
- const [subStartDate, setSubStartDate] = useState('');
+ const [planDraft, setPlanDraft] = useState<PlanDraft>(() => defaultPlanDraft(today()));
+ const [dueDate, setDueDate] = useState('');
  const [acceptAch, setAcceptAch] = useState(true);
 
  async function loadPayments() {
@@ -116,20 +99,8 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  setPaymentType((data.payment_type as 'full' | 'installment' | 'subscription') || 'full');
 
  const config = data.payment_config || {};
- if (data.payment_type === 'installment' && Array.isArray(config.installments)) {
- setInstallments(
- (config.installments as { amount: number; date: string }[]).map((i) => ({
- id: uid(),
- amount: (i.amount / 100).toString(),
- date: toDateValue(i.date),
- }))
- );
- }
-    if (data.payment_type === 'subscription') {
-      setSubAmount(config.amount ? ((config.amount as number) / 100).toString() : '');
-      setSubFrequency((config.frequency as 'monthly' | 'weekly') || 'monthly');
-      setSubStartDate(toDateValue((config.start_date as string) || ''));
-     }
+ if (data.payment_type === 'installment') setPlanDraft(planDraftFromConfig(config, today()));
+ setDueDate(toYmd(config.due_date) ?? '');
      setAcceptAch(data.accept_ach !== false);
  } catch {
  setError('Proposal not found');
@@ -143,24 +114,15 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  const isDraft = proposal?.status === 'draft';
  const isPaid = proposal?.status === 'paid';
  const canEdit = isDraft;
+ const priceCentsNow = Math.round(parseFloat(priceDollars || '0') * 100);
+ const plan = useMemo(
+   () => planFromDraft(planDraft, priceCentsNow, today(), { collectManually: proposal?.collect_manually === true }),
+   [planDraft, priceCentsNow, proposal?.collect_manually],
+ );
 
  function buildPaymentConfig() {
- if (paymentType === 'installment') {
- return {
- installments: installments.map((i) => ({
- amount: Math.round(parseFloat(i.amount || '0') * 100),
- date: i.date,
- })),
- };
- }
- if (paymentType === 'subscription') {
- return {
- amount: Math.round(parseFloat(subAmount || '0') * 100),
- frequency: subFrequency,
- start_date: subStartDate,
- };
- }
- return {};
+ if (paymentType === 'installment') return { installments: plan.payments, plan: planDraft };
+ return dueDate ? { due_date: dueDate } : {};
  }
 
  function buildBody(sendNow: boolean) {
@@ -168,10 +130,15 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
    customerName: customerName || undefined,
    customerEmail: customerEmail || undefined,
    customerPhone: customerPhone || undefined,
-   price: Math.round(parseFloat(priceDollars || '0') * 100),
-   paymentType,
-   paymentConfig: buildPaymentConfig(),
-   acceptAch,
+   // Only a draft's price and payment terms can change; a resend keeps them.
+   ...(canEdit
+     ? {
+         price: Math.round(parseFloat(priceDollars || '0') * 100),
+         paymentType,
+         paymentConfig: buildPaymentConfig(),
+         acceptAch,
+       }
+     : {}),
    sendNow,
   };
  }
@@ -209,6 +176,10 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
  const price = Math.round(parseFloat(priceDollars || '0') * 100);
  if (price <= 0) {
  setError('A valid price is required to send.');
+ return;
+ }
+ if (canEdit && paymentType === 'installment' && plan.problem) {
+ setError(`Payment plan: ${plan.problem}`);
  return;
  }
 
@@ -481,7 +452,7 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
      } disabled:cursor-default`}
     >
-     {type === 'full' ? 'Full Payment' : 'Installment Plan'}
+     {type === 'full' ? 'Pay in full' : 'Payment plan'}
     </button>
    ))}
   </div>
@@ -504,113 +475,29 @@ export default function EditProposalPage({ params }: { params: Promise<{ id: str
   </span>
  </div>
 
- {/* Installment Schedule */}
+ {paymentType === 'full' && (
+ <DueDateField value={dueDate} onChange={setDueDate} disabled={!canEdit} />
+ )}
+
  {paymentType === 'installment' && (
  <div className="rounded-lg border border-gray-200 p-5">
- <h3 className="text-sm font-semibold text-gray-700 mb-3">Installment Schedule</h3>
- <div className="space-y-3">
- {installments.map((inst) => (
- <div key={inst.id} className="flex items-center gap-3">
- <div className="relative flex-1">
- <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
- <input
- type="number"
- min="0"
- step="0.01"
- value={inst.amount}
- onChange={(e) =>
- setInstallments((prev) =>
- prev.map((i) => (i.id === inst.id ? { ...i, amount: e.target.value } : i))
- )
- }
- placeholder="0.00"
+ <h3 className="text-sm font-semibold text-gray-700 mb-3">Payment plan</h3>
+ <PaymentPlanBuilder
+ totalCents={priceCentsNow}
+ draft={planDraft}
+ onChange={setPlanDraft}
+ payments={plan.payments}
+ problem={canEdit ? plan.problem : null}
+ collectManually={proposal.collect_manually === true}
  disabled={!canEdit}
- className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50"
  />
- </div>
- <input
- type="date"
- min={today()}
- value={toDateValue(inst.date)}
- onChange={(e) =>
- setInstallments((prev) =>
- prev.map((i) => (i.id === inst.id ? { ...i, date: e.target.value } : i))
- )
- }
- disabled={!canEdit}
- className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50"
- />
- {canEdit && (
- <button
- type="button"
- onClick={() => setInstallments((prev) => prev.filter((i) => i.id !== inst.id))}
- className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
- >
- <Trash2 size={14} />
- </button>
- )}
- </div>
- ))}
- </div>
- {canEdit && (
- <button
- type="button"
- onClick={() => setInstallments((prev) => [...prev, { id: uid(), amount: '', date: '' }])}
- className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-900 hover:text-brand-900 transition-colors"
- >
- <Plus size={14} />
- Add Payment
- </button>
- )}
  </div>
  )}
 
- {/* Subscription Details */}
  {paymentType === 'subscription' && (
- <div className="rounded-lg border border-gray-200 p-5">
- <h3 className="text-sm font-semibold text-gray-700 mb-3">Subscription Details</h3>
- <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Amount per Period</label>
- <div className="relative">
- <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
- <input
- type="number"
- min="0"
- step="0.01"
- value={subAmount}
- onChange={(e) => setSubAmount(e.target.value)}
- placeholder="0.00"
- disabled={!canEdit}
- className="w-full rounded-lg border border-gray-300 pl-7 pr-3.5 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50"
- />
- </div>
- </div>
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Frequency</label>
- <select
- value={subFrequency}
- onChange={(e) => setSubFrequency(e.target.value as 'monthly' | 'weekly')}
- disabled={!canEdit}
- className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50"
- >
- <option value="monthly">Monthly</option>
- <option value="weekly">Weekly</option>
- </select>
- </div>
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
- <input
- type="date"
- min={today()}
- value={toDateValue(subStartDate)}
- onChange={(e) => setSubStartDate(e.target.value)}
- disabled={!canEdit}
- className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-900 focus:ring-2 focus:ring-brand-900/20 outline-none transition disabled:bg-gray-50"
- />
- </div>
- </div>
- </div>
+ <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+ Recurring subscriptions are no longer available. {canEdit ? 'Choose Pay in full or a payment plan.' : ''}
+ </p>
  )}
 
  {error && (

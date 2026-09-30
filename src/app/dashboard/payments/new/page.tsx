@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -20,6 +20,8 @@ import {
 import { formatInTimeZone } from 'date-fns-tz';
 import { resolveVenueTimezone } from '@/lib/venue-timezone';
 import { DEFAULT_SERVICE_FEE_PCT, formatServiceFeePct, normalizeServiceFeePct, serviceFeeLabel } from '@/lib/service-fee';
+import { defaultPlanDraft, planFromDraft, type PlanDraft, type PlanPayment } from '@/lib/payment-plan';
+import PaymentPlanBuilder, { DueDateField, formatYmd } from '@/components/payments/PaymentPlanBuilder';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false });
 const AIProposalGenerator = dynamic(() => import('@/components/AIProposalGenerator'), { ssr: false });
@@ -31,7 +33,7 @@ const COUPON_LINE_ID = '__coupon__';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Mode = 'proposal' | 'invoice';
-type PaymentType = 'full' | 'installment' | 'subscription';
+type PaymentType = 'full' | 'installment';
 
 interface Customer { id: number; name: string; email: string; phone?: string; }
 interface Template { id: string; name: string; content: string; }
@@ -44,7 +46,6 @@ interface LineItem {
   isCoupon?: boolean;
   couponId?: string;
 }
-interface Installment { id: string; amount: string; date: string; }
 interface Product { id: string; name: string; description: string | null; price: number; }
 
 type PackageProductEmbed = {
@@ -144,11 +145,11 @@ const LABEL = 'block text-sm font-medium text-gray-700 mb-1.5';
 // ─── Live Preview ─────────────────────────────────────────────────────────────
 function LivePreview({
  mode, clientName, clientEmail, contractHtml, lineItems, paymentType,
- installments, subAmount, subFrequency, venueName, logoUrl, brandColor, onPreview,
+ schedule, dueDate, collectManually, venueName, logoUrl, brandColor, onPreview,
 }: {
  mode: Mode; clientName: string; clientEmail: string; contractHtml: string;
  lineItems: LineItem[]; paymentType: PaymentType;
- installments: Installment[]; subAmount: string; subFrequency: string;
+ schedule: PlanPayment[]; dueDate: string; collectManually: boolean;
  venueName: string; logoUrl: string; brandColor: string; onPreview?: () => void;
 }) {
  const totalCents = lineItems.reduce((s, i) => { const v = parseFloat(i.amount||'0'); return s + (isNaN(v)?0:Math.round(v*100)); }, 0);
@@ -213,23 +214,21 @@ function LivePreview({
  </div>
 
  {/* Payment info */}
- {paymentType === 'installment' && installments.length > 0 && (
+ {paymentType === 'installment' && schedule.length > 1 && (
  <div>
- <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Installment Schedule</p>
+ <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Payment Plan</p>
  <div className="space-y-1">
- {installments.map((inst, i) => (
- <div key={inst.id} className="flex justify-between text-xs text-gray-600">
- <span>Payment {i+1} — {inst.date || '—'}</span>
- <span className="font-medium">{formatCents(Math.round(parseFloat(inst.amount||'0')*100))}</span>
+ {schedule.map((inst, i) => (
+ <div key={i} className="flex justify-between text-xs text-gray-600">
+ <span>Payment {i+1} — {i === 0 && !collectManually ? 'At signing' : formatYmd(inst.date)}</span>
+ <span className="font-medium">{formatCents(inst.amount)}</span>
  </div>
  ))}
  </div>
  </div>
  )}
- {paymentType === 'subscription' && (
- <div className="text-xs text-gray-600">
- <span className="font-medium">{formatCents(Math.round(parseFloat(subAmount||'0')*100))}</span> / {subFrequency}
- </div>
+ {paymentType === 'full' && dueDate && (
+ <div className="text-xs text-gray-600">Due <span className="font-medium">{formatYmd(dueDate)}</span></div>
  )}
 
  {/* CTA */}
@@ -307,10 +306,9 @@ function NewProposalInvoicePageInner() {
 
  // Payment
  const [paymentType, setPaymentType] = useState<PaymentType>('full');
- const [installments, setInstallments] = useState<Installment[]>([{id:uid(),amount:'',date:''}]);
- const [subAmount, setSubAmount] = useState('');
- const [subFrequency, setSubFrequency] = useState('monthly');
- const [subStartDate, setSubStartDate] = useState('');
+ const [planDraft, setPlanDraft] = useState<PlanDraft>(() => defaultPlanDraft(today()));
+ // One-time payments: when it's due ('' = on receipt).
+ const [dueDate, setDueDate] = useState('');
  // Collection: 'online' = card/ACH via StoryPay, 'manual' = owner records cash/check.
  const [collectMethod, setCollectMethod] = useState<'online' | 'manual'>('online');
  // Manual proposals can skip the client e-signature (they sign in person).
@@ -357,6 +355,7 @@ function NewProposalInvoicePageInner() {
        name: string;
        email: string;
        phone: string | null;
+       wedding_date?: string | null;
      } } | null) => {
        if (cancelled || !d?.lead) return;
        const lead = d.lead;
@@ -372,6 +371,11 @@ function NewProposalInvoicePageInner() {
        }
        if (lead.email) setClientEmail(lead.email);
        if (lead.phone) setClientPhone(lead.phone);
+       // The wedding date lets a payment plan end a set number of days before it.
+       const wedding = (lead.wedding_date || '').slice(0, 10);
+       if (/^\d{4}-\d{2}-\d{2}$/.test(wedding)) {
+         setPlanDraft((prev) => (prev.eventDate ? prev : { ...prev, eventDate: wedding, endMode: prev.endMode === 'count' ? 'event' : prev.endMode }));
+       }
        setCustomerMode('new');
      });
    return () => {
@@ -454,6 +458,12 @@ function NewProposalInvoicePageInner() {
    .reduce((s, i) => s + lineCents(i.amount), 0);
 
  const totalCents = lineItems.reduce((s, i) => s + lineCents(i.amount), 0);
+
+ // The payment plan, worked out from the total so it always adds up.
+ const plan = useMemo(
+   () => planFromDraft(planDraft, totalCents, today(), { collectManually: collectMethod === 'manual' }),
+   [planDraft, totalCents, collectMethod],
+ );
 
  function setCouponSelection(id: string | null) {
    setAppliedCouponId(id);
@@ -649,11 +659,12 @@ function NewProposalInvoicePageInner() {
    ...(i.isSurcharge ? { isSurcharge: true } : {}),
  }));
 
- let paymentConfig = {};
+ let paymentConfig: Record<string, unknown> = {};
  if (paymentType==='installment') {
- paymentConfig = { installments: installments.map(i=>({ amount: Math.round(parseFloat(i.amount||'0')*100), date: i.date })) };
- } else if (paymentType==='subscription') {
- paymentConfig = { amount: Math.round(parseFloat(subAmount||'0')*100), frequency: subFrequency, start_date: subStartDate };
+ if (plan.problem && !asDraft) { setError(`Payment plan: ${plan.problem}`); return; }
+ paymentConfig = { installments: plan.payments, plan: planDraft };
+ } else if (dueDate) {
+ paymentConfig = { due_date: dueDate };
  }
 
  // Proposal mode: use proposals API (with or without template)
@@ -904,7 +915,7 @@ function NewProposalInvoicePageInner() {
  </select>
  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
  </div>
- {templates.length===0 && <p className="text-xs text-gray-400 mt-1">No templates yet. <a href="/dashboard/proposals/templates/new"className="text-gray-700 underline">Create one</a></p>}
+ {templates.length===0 && <p className="text-xs text-gray-400 mt-1">No templates yet. <Link href="/dashboard/proposals/templates/new" className="text-gray-700 underline">Create one</Link></p>}
  </div>
  {selectedTemplate && (
  <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-700">
@@ -1305,13 +1316,13 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
  {/* Payment Type */}
  <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
  <div className="px-5 py-4 border-b border-gray-200">
- <p className="text-sm font-semibold text-gray-900">Payment Type</p>
+ <p className="text-sm font-semibold text-gray-900">Payment</p>
  </div>
  <div className="px-5 py-4 space-y-4">
  <div className="flex flex-wrap gap-2">
 {([
-{key:'full', label:'Pay in Full'},
-{key:'installment',label:'Installments'},
+{key:'full', label:'Pay in full'},
+{key:'installment',label:'Payment plan'},
 ] as {key:PaymentType;label:string}[]).map(pt=>(
  <button key={pt.key} type="button"onClick={()=>setPaymentType(pt.key)}
  className={`rounded-2xl border-2 px-4 py-2 text-sm font-medium transition-all ${paymentType===pt.key?'border-gray-900 bg-gray-50 text-gray-900':'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
@@ -1320,81 +1331,19 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
  ))}
  </div>
 
- {paymentType==='installment' && (
- <div className="space-y-2">
- <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Installment Schedule</p>
- {installments.map(inst=>(
- <div key={inst.id} className="flex items-center gap-2">
- <div className="relative flex-1">
- <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
- <input type="text" inputMode="decimal" value={inst.amount}
- onChange={e=>{
-   const val = e.target.value;
-   if (!/^[0-9.,]*$/.test(val)) return;
-   setInstallments(p=>p.map(i=>i.id===inst.id?{...i,amount:val}:i));
- }}
- onBlur={() => {
-   const cleaned = inst.amount.replace(/,/g, '');
-   if (cleaned) {
-     const num = Number(cleaned);
-     if (!Number.isNaN(num)) {
-       setInstallments(p=>p.map(i=>i.id===inst.id?{...i,amount:num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}:i));
-     }
-   }
- }}
- placeholder="0.00"className="w-full rounded-2xl border border-gray-200 pl-7 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"/>
- </div>
- <input type="date"min={today()} value={inst.date}
- onChange={e=>setInstallments(p=>p.map(i=>i.id===inst.id?{...i,date:e.target.value}:i))}
- className="rounded-2xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"/>
- <button type="button"onClick={()=>setInstallments(p=>p.filter(i=>i.id!==inst.id))} className="text-gray-400 hover:text-red-500 transition-colors p-1.5"><Trash2 size={14}/></button>
- </div>
- ))}
- <button type="button"onClick={()=>setInstallments(p=>[...p,{id:uid(),amount:'',date:''}])}
- className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors">
- <Plus size={13}/> Add Payment
- </button>
- </div>
+ {paymentType==='full' && (
+ <DueDateField value={dueDate} onChange={setDueDate} />
  )}
 
- {paymentType==='subscription' && (
- <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1.5">Amount / Period</label>
- <div className="relative">
- <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
- <input type="text" inputMode="decimal" value={subAmount} 
- onChange={e=>{
-   const val = e.target.value;
-   if (!/^[0-9.,]*$/.test(val)) return;
-   setSubAmount(val);
- }}
- onBlur={() => {
-   const cleaned = subAmount.replace(/,/g, '');
-   if (cleaned) {
-     const num = Number(cleaned);
-     if (!Number.isNaN(num)) {
-       setSubAmount(num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-     }
-   }
- }}
- placeholder="0.00"className="w-full rounded-2xl border border-gray-200 pl-7 pr-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"/>
- </div>
- </div>
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1.5">Frequency</label>
- <select value={subFrequency} onChange={e=>setSubFrequency(e.target.value)} className="w-full rounded-2xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none appearance-none">
- <option value="monthly">Monthly</option>
- <option value="weekly">Weekly</option>
- <option value="quarterly">Quarterly</option>
- <option value="yearly">Yearly</option>
- </select>
- </div>
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1.5">Start Date</label>
- <input type="date"min={today()} value={subStartDate} onChange={e=>setSubStartDate(e.target.value)} className="w-full rounded-2xl border border-gray-200 px-3 py-2.5 text-sm focus:border-gray-400 focus:outline-none"/>
- </div>
- </div>
+ {paymentType==='installment' && (
+ <PaymentPlanBuilder
+ totalCents={totalCents}
+ draft={planDraft}
+ onChange={setPlanDraft}
+ payments={plan.payments}
+ problem={plan.problem}
+ collectManually={collectMethod==='manual'}
+ />
  )}
  </div>
  </div>
@@ -1417,8 +1366,8 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
  <LivePreview
  mode={mode} clientName={clientName} clientEmail={clientEmail}
  contractHtml={contractHtml} lineItems={lineItems}
- paymentType={paymentType} installments={installments}
- subAmount={subAmount} subFrequency={subFrequency}
+ paymentType={paymentType} schedule={plan.payments}
+ dueDate={dueDate} collectManually={collectMethod==='manual'}
  venueName={venueName} logoUrl={logoUrl} brandColor={brandColor}
  onPreview={() => setShowPreviewModal(true)}
  />
@@ -1516,23 +1465,23 @@ onMouseDown={e => { e.preventDefault(); setItemPickerId(null); setItemPickerMode
  </div>
 
  {/* Payment details */}
- {paymentType==='installment' && installments.filter(i=>i.amount&&i.date).length>0 && (
+ {paymentType==='installment' && plan.payments.length>1 && (
  <div>
- <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2">Installment Schedule</p>
+ <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2">Payment Plan</p>
  <div className="rounded-2xl border border-gray-200 overflow-hidden">
- {installments.filter(i=>i.amount&&i.date).map((inst,idx)=>(
- <div key={inst.id} className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 last:border-0">
- <span className="text-sm text-gray-600">Payment {idx+1} — {inst.date}</span>
- <span className="text-sm font-semibold text-gray-900">{formatCents(Math.round(parseFloat(inst.amount||'0')*100))}</span>
+ {plan.payments.map((inst,idx)=>(
+ <div key={idx} className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 last:border-0">
+ <span className="text-sm text-gray-600">Payment {idx+1} — {idx===0 && collectMethod!=='manual' ? 'At signing' : formatYmd(inst.date)}</span>
+ <span className="text-sm font-semibold text-gray-900">{formatCents(inst.amount)}</span>
  </div>
  ))}
  </div>
  </div>
  )}
- {paymentType==='subscription' && subAmount && (
+ {paymentType==='full' && dueDate && (
  <div className="rounded-2xl border border-gray-200 px-4 py-3">
- <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Recurring Payment</p>
- <p className="text-sm text-gray-900"><span className="font-bold">{formatCents(Math.round(parseFloat(subAmount||'0')*100))}</span> / {subFrequency}{subStartDate&&` starting ${subStartDate}`}</p>
+ <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-1">Due</p>
+ <p className="text-sm text-gray-900 font-semibold">{formatYmd(dueDate)}</p>
  </div>
  )}
 

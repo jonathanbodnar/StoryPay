@@ -65,6 +65,9 @@ interface ProposalData {
   venue_logo_url: string | null;
   venue_brand: VenueBrand | null;
   proposal_id: string;
+  /** A payment plan under way: what's still owed and the next automatic payment. */
+  balance_cents?: number | null;
+  next_payment?: { amount_cents: number; due_date: string } | null;
 }
 
 function SignatureCanvas({ onSignatureChange }: { onSignatureChange: (dataUrl: string | null) => void }) {
@@ -565,6 +568,13 @@ export default function ProposalPage() {
   const installments = proposal.payment_config
     ? (proposal.payment_config as { installments?: Array<{ amount: number; date: string }> }).installments
     : undefined;
+  const isPlan = proposal.payment_type === 'installment' && !!installments && installments.length > 1;
+  const dueDate = (() => {
+    const v = (proposal.payment_config as { due_date?: unknown } | null)?.due_date;
+    return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+  })();
+  // Payment 1 is paid online when the client signs (or opens an invoice).
+  const firstPaymentLabel = collectManually ? null : isInvoice ? 'Due now' : 'At signing';
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -665,10 +675,13 @@ export default function ProposalPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Total Due</p>
                 <p className="text-4xl font-bold text-gray-900 tracking-tight">{formatCents(proposal.price)}</p>
+                {proposal.payment_type === 'full' && dueDate && !isPaid && (
+                  <p className="mt-1 text-sm font-medium text-gray-600">Due {formatDate(dueDate)}</p>
+                )}
               </div>
               <div className="text-right">
-                <span className="inline-flex items-center rounded-lg bg-white border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 capitalize">
-                  {proposal.payment_type === 'full' ? 'One-time payment' : proposal.payment_type === 'installment' ? 'Installment plan' : 'Subscription'}
+                <span className="inline-flex items-center rounded-lg bg-white border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600">
+                  {proposal.payment_type === 'full' ? 'One-time payment' : proposal.payment_type === 'installment' ? 'Payment plan' : 'Subscription'}
                 </span>
               </div>
             </div>
@@ -682,7 +695,7 @@ export default function ProposalPage() {
                       <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500">
                         {i + 1}
                       </div>
-                      <span className="text-gray-600">{formatDate(p.date)}</span>
+                      <span className="text-gray-600">{i === 0 && firstPaymentLabel ? firstPaymentLabel : formatDate(p.date)}</span>
                     </div>
                     <span className="font-semibold text-gray-900">{formatCents(p.amount)}</span>
                   </div>
@@ -813,7 +826,7 @@ export default function ProposalPage() {
                 </div>
               )}
 
-              {proposal.payment_type === 'installment' && installments && installments.length > 1 ? (
+              {isPlan && installments ? (
                 <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm text-gray-500">Due today (Payment 1 of {installments.length})</span>
@@ -828,6 +841,10 @@ export default function ProposalPage() {
                       </div>
                     ))}
                   </div>
+                  <p className="mt-4 border-t border-gray-200 pt-3 text-xs leading-relaxed text-gray-500">
+                    The remaining payments are charged automatically on these dates to the card or bank account you
+                    use today. You&apos;ll get an email 3 days before each one, with a link to update your card anytime.
+                  </p>
                 </div>
               ) : (
                 <div className="rounded-xl bg-gray-50 border border-gray-100 p-6 mb-6">
@@ -892,9 +909,18 @@ export default function ProposalPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Complete!</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">{isPlan && proposal.balance_cents !== 0 ? 'Payment received' : 'Payment Complete!'}</h2>
               <p className="text-gray-500 text-sm mb-8 max-w-sm mx-auto">
                 Thank you, {proposal.customer_name}. Your payment has been processed successfully.
+                {isPlan && proposal.next_payment && (
+                  <>
+                    {' '}Your next payment of {formatCents(proposal.next_payment.amount_cents)} is on{' '}
+                    {formatDate(proposal.next_payment.due_date)}. It&apos;s charged automatically, and we&apos;ll email you 3 days before.
+                  </>
+                )}
+                {isPlan && !proposal.next_payment && (proposal.balance_cents ?? 0) > 0 && (
+                  <> Remaining balance: {formatCents(proposal.balance_cents ?? 0)}.</>
+                )}
               </p>
               <button
                 onClick={() => router.push(`/invoice/${proposal.proposal_id}`)}

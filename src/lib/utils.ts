@@ -6,7 +6,13 @@ export function formatCents(cents: number): string {
 }
 
 export function formatDate(date: string | Date): string {
-  return new Date(date).toLocaleDateString('en-US', {
+  // A plain calendar date (YYYY-MM-DD) is that day everywhere; read it in the
+  // viewer's own calendar so a US time zone doesn't show the day before.
+  const d =
+    typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)))
+      : new Date(date);
+  return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

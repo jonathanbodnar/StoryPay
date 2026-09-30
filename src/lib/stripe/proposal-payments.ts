@@ -114,6 +114,12 @@ export function firstPaymentCents(p: Pick<PaymentProposal, 'payment_type' | 'pay
   return Math.round(Number(p.price));
 }
 
+/** What the couple pays now: the first payment, but never more than what's still owed. */
+export async function amountDueNowCents(p: Pick<PaymentProposal, 'id' | 'payment_type' | 'payment_config' | 'price'>): Promise<number> {
+  const owed = Math.max(Math.round(Number(p.price)) - (await ledgerTotalCents(p.id)), 0);
+  return Math.min(firstPaymentCents(p), owed);
+}
+
 /** Whether this proposal can take an online payment right now (same rules as the LunarPay flow). */
 export function payableNow(p: Pick<PaymentProposal, 'template_id' | 'status' | 'collect_manually' | 'payment_type'>): string | null {
   if (p.collect_manually === true) return 'This document is collected directly by the venue.';
@@ -180,9 +186,8 @@ export async function startProposalPayment(token: string, confirmationTokenId: s
   if (kind === 'bank' && !acceptsBank(p, v)) return { status: 'failed', error: 'Bank payments aren’t accepted for this invoice.' };
 
   // Never ask for more than what's still owed (the venue may have recorded a check).
-  const owed = Math.max(Math.round(Number(p.price)) - (await ledgerTotalCents(p.id)), 0);
-  if (owed <= 0) return { status: 'failed', error: 'This invoice is already paid.' };
-  const amount = Math.min(firstPaymentCents(p), owed);
+  const amount = await amountDueNowCents(p);
+  if (amount <= 0) return { status: 'failed', error: 'This invoice is already paid.' };
   const installments = installmentsOf(p);
   const isPlan = p.payment_type === 'installment' && installments.length > 1;
   const customer = await ensureCoupleCustomer(p, account);

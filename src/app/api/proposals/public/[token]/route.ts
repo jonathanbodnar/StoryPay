@@ -71,6 +71,26 @@ export async function GET(
   // the public payment page can skip signing entirely for invoices.
   const isInvoice = !proposal.template_id;
 
+  // A payment plan under way: what's left and the next automatic payment.
+  let balanceCents: number | null = null;
+  let nextPayment: { amount_cents: number; due_date: string } | null = null;
+  if (proposal.payment_type === 'installment' && ['paid', 'partially_paid'].includes(String(proposal.status))) {
+    const [{ data: ledger }, { data: upcoming }] = await Promise.all([
+      supabaseAdmin.from('proposal_payments').select('amount_cents').eq('proposal_id', proposal.id),
+      supabaseAdmin
+        .from('proposal_installments')
+        .select('amount_cents, due_date')
+        .eq('proposal_id', proposal.id)
+        .in('status', ['scheduled', 'failed'])
+        .order('due_date', { ascending: true })
+        .limit(1),
+    ]);
+    const paid = ((ledger ?? []) as Array<{ amount_cents: number }>).reduce((s, r) => s + (Number(r.amount_cents) || 0), 0);
+    balanceCents = Math.max((Number(proposal.price) || 0) - paid, 0);
+    const n = (upcoming ?? [])[0] as { amount_cents: number; due_date: string } | undefined;
+    if (n && balanceCents > 0) nextPayment = { amount_cents: n.amount_cents, due_date: String(n.due_date).slice(0, 10) };
+  }
+
   return NextResponse.json({
     customer_name: proposal.customer_name,
     customer_email: proposal.customer_email,
@@ -104,5 +124,7 @@ export async function GET(
     },
     proposal_id: proposal.id,
     service_fee_rate: Number(venue?.service_fee_rate ?? 0),
+    balance_cents: balanceCents,
+    next_payment: nextPayment,
   });
 }

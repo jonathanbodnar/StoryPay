@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { LUNARPAY_PAYMENT_RETIRED_MESSAGE } from '@/lib/lunarpay-retired';
 import { stripePublishableKey } from '@/lib/stripe/client';
 import { loadConnectVenue, venueTakesStripePayments } from '@/lib/stripe/connect';
-import { acceptsBank, firstPaymentCents, payableNow, type PaymentProposal } from '@/lib/stripe/proposal-payments';
+import { acceptsBank, amountDueNowCents, payableNow, type PaymentProposal } from '@/lib/stripe/proposal-payments';
 
 export async function POST(
   _request: Request,
@@ -47,11 +47,13 @@ export async function POST(
     const publishableKey = stripePublishableKey();
     if (!publishableKey) return NextResponse.json({ error: 'Online payments are not configured.' }, { status: 503 });
     const installments = ((p.payment_config as { installments?: unknown[] } | null)?.installments ?? []).length;
+    const amountCents = await amountDueNowCents(p);
+    if (amountCents <= 0) return NextResponse.json({ error: 'This invoice is already paid.' }, { status: 409 });
     return NextResponse.json({
       provider: 'stripe',
       publishableKey,
       stripeAccount: connectVenue.stripe_account_id,
-      amountCents: firstPaymentCents(p),
+      amountCents,
       paymentType: p.payment_type || 'full',
       paymentMethods: acceptsBank(p, connectVenue) ? ['card', 'us_bank_account'] : ['card'],
       savePaymentMethod: p.payment_type === 'installment' && installments > 1,

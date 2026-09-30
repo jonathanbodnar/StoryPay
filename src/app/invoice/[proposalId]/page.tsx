@@ -522,6 +522,7 @@ function PaymentStatusBadge({ status }: { status: string }) {
     pending: 'bg-yellow-100 text-yellow-700',
     scheduled: 'bg-blue-100 text-blue-700',
     failed: 'bg-red-100 text-red-700',
+    covered: 'bg-emerald-50 text-emerald-700',
   };
   return (
     <span

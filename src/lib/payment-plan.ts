@@ -172,3 +172,137 @@ export function termsFingerprint(priceCents: unknown, paymentType: unknown, paym
     sub: [cfg.amount ?? null, cfg.frequency ?? null, toYmd(cfg.start_date)],
   });
 }
+
+// ── The payment builder's plan inputs (saved as payment_config.plan) ─────────
+
+export type PlanKind = 'monthly' | 'deposit_final' | 'custom';
+export type PlanEnd = 'event' | 'date' | 'count';
+
+export interface PlanDraft {
+  kind: PlanKind;
+  depositMode: 'amount' | 'percent';
+  /** Dollars (amount mode) or a percent of the total. */
+  deposit: string;
+  /** First monthly payment. */
+  firstDate: string;
+  /** How the plan ends: days before the wedding, on a date, or after a number of payments. */
+  endMode: PlanEnd;
+  endDate: string;
+  count: string;
+  eventDate: string;
+  daysBefore: string;
+  /** Custom schedule rows (dollars). Payment 1 is due at signing for online plans. */
+  rows: Array<{ amount: string; date: string }>;
+}
+
+export function dollarsToCents(value: string | number | null | undefined): number {
+  const n = typeof value === 'number' ? value : parseFloat(String(value ?? '').replace(/[,$\s]/g, ''));
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+
+export function defaultPlanDraft(today: string, eventDate = ''): PlanDraft {
+  return {
+    kind: 'monthly',
+    depositMode: 'percent',
+    deposit: '25',
+    firstDate: addMonthsYmd(today, 1),
+    endMode: eventDate ? 'event' : 'count',
+    endDate: '',
+    count: '6',
+    eventDate,
+    daysBefore: '30',
+    rows: [],
+  };
+}
+
+/** A saved plan's inputs, or a custom plan built from its schedule. */
+export function planDraftFromConfig(paymentConfig: unknown, today: string): PlanDraft {
+  const saved = (paymentConfig as { plan?: Partial<PlanDraft> } | null)?.plan;
+  const base = defaultPlanDraft(today);
+  if (saved && typeof saved === 'object' && (saved.kind === 'monthly' || saved.kind === 'deposit_final' || saved.kind === 'custom')) {
+    return { ...base, ...saved, rows: Array.isArray(saved.rows) ? saved.rows : [] };
+  }
+  const payments = planPayments(paymentConfig);
+  if (!payments.length) return base;
+  return {
+    ...base,
+    kind: 'custom',
+    rows: payments.map((p) => ({ amount: Number.isFinite(p.amount) ? (p.amount / 100).toFixed(2) : '', date: toYmd(p.date) ?? '' })),
+  };
+}
+
+/** The deposit in cents (the percent is of the total). */
+export function planDepositCents(d: PlanDraft, totalCents: number): number {
+  if (d.depositMode === 'percent') {
+    const pct = parseFloat(d.deposit);
+    return Number.isFinite(pct) && pct > 0 ? Math.round((totalCents * Math.min(pct, 100)) / 100) : 0;
+  }
+  return Math.max(0, dollarsToCents(d.deposit));
+}
+
+/** The plan's last date: days before the wedding, or the date the venue picked. */
+export function planEndDate(d: PlanDraft): string | null {
+  if (d.endMode === 'event') {
+    const event = toYmd(d.eventDate);
+    const days = parseInt(d.daysBefore, 10);
+    return event ? addDaysYmd(event, -(Number.isFinite(days) && days > 0 ? days : 0)) : null;
+  }
+  return toYmd(d.endDate);
+}
+
+/**
+ * The schedule for the builder's inputs, and what's wrong with it (if
+ * anything) in words a venue owner can act on. Payment 1 is due today (at
+ * signing) unless the venue collects by hand and dated it.
+ */
+export function planFromDraft(
+  d: PlanDraft,
+  totalCents: number,
+  today: string,
+  opts: { collectManually?: boolean } = {},
+): { payments: PlanPayment[]; problem: string | null } {
+  const none = (problem: string) => ({ payments: [] as PlanPayment[], problem });
+  if (totalCents <= 0) return none('Add line items first. The plan is worked out from the total.');
+
+  let payments: PlanPayment[];
+  if (d.kind === 'custom') {
+    payments = d.rows.map((r, i) => ({
+      amount: dollarsToCents(r.amount),
+      date: i === 0 && !opts.collectManually ? today : (toYmd(r.date) ?? ''),
+    }));
+  } else {
+    const deposit = planDepositCents(d, totalCents);
+    if (deposit > totalCents) return none('The deposit is more than the total.');
+    if (deposit === totalCents) return none('The deposit covers the whole total. Choose Pay in full instead.');
+    const end = planEndDate(d);
+    if (d.kind === 'deposit_final') {
+      if (deposit <= 0) return none('Enter the deposit due at signing.');
+      if (!end) return none(d.endMode === 'event' ? 'Enter the wedding date.' : 'Pick the date of the final payment.');
+      if (end <= today) return none('The final payment has to be after today.');
+      payments = [{ amount: deposit, date: today }, { amount: totalCents - deposit, date: end }];
+    } else {
+      const first = toYmd(d.firstDate);
+      if (!first) return none('Pick the date of the first monthly payment.');
+      if (first <= today) return none('The first monthly payment has to be after today.');
+      let count: number;
+      if (d.endMode === 'count') {
+        count = parseInt(d.count, 10);
+        if (!Number.isFinite(count) || count < 1) return none('Enter how many monthly payments.');
+      } else {
+        if (!end) return none(d.endMode === 'event' ? 'Enter the wedding date.' : 'Pick the date of the last payment.');
+        count = monthlyCountThrough(first, end);
+        if (count < 1) return none('The last payment date is before the first monthly payment.');
+      }
+      if (count > MAX_PLAN_PAYMENTS - 1) return none(`A plan can have up to ${MAX_PLAN_PAYMENTS} payments.`);
+      payments = buildMonthlyPlan({ totalCents, depositCents: deposit, firstDate: first, count, today });
+    }
+  }
+  const problem = paymentTermsError({
+    priceCents: totalCents,
+    paymentType: 'installment',
+    paymentConfig: { installments: payments },
+    collectManually: opts.collectManually,
+    today,
+  });
+  return { payments, problem };
+}

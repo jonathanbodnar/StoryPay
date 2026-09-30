@@ -46,17 +46,20 @@ export async function GET(
     if (cfg.length) {
       const { data: rows } = await supabaseAdmin
         .from('proposal_installments')
-        .select('installment_number, amount_cents, due_date, status')
+        .select('installment_number, amount_cents, due_date, status, canceled_reason')
         .eq('proposal_id', proposal.id)
         .order('installment_number', { ascending: true });
       const label: Record<string, string> = { scheduled: 'scheduled', processing: 'pending', paid: 'paid', failed: 'failed', canceled: 'canceled' };
+      // A payment covered by a check or cash payment isn't "canceled" to the couple.
+      const rowStatus = (r: { status: string; canceled_reason?: string | null }) =>
+        r.status === 'canceled' && r.canceled_reason === 'covered' ? 'covered' : label[r.status] ?? r.status;
       const first = {
         amount: cfg[0].amount,
         scheduledDate: (proposal.paid_at as string | null) ?? cfg[0].date,
         status: proposal.status === 'paid' ? 'paid' : proposal.payment_processing_at ? 'pending' : 'scheduled',
       };
       const later = (rows ?? []).length
-        ? (rows as Array<{ amount_cents: number; due_date: string; status: string }>).map((r) => ({ amount: r.amount_cents, scheduledDate: r.due_date, status: label[r.status] ?? r.status }))
+        ? (rows as Array<{ amount_cents: number; due_date: string; status: string; canceled_reason: string | null }>).map((r) => ({ amount: r.amount_cents, scheduledDate: r.due_date, status: rowStatus(r) }))
         : cfg.slice(1).map((c) => ({ amount: c.amount, scheduledDate: c.date, status: 'scheduled' }));
       scheduleData = { payments: [first, ...later] };
     }
