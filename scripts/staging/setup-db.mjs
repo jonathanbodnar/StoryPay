@@ -13,7 +13,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
@@ -58,6 +58,9 @@ const dump = join(dir, 'schema.sql');
 execFileSync(join(BIN, 'pg_dump'), [liveUrl, '--schema-only', '--schema=public', '--no-owner', `--file=${dump}`], { stdio: 'inherit' });
 const sql = readFileSync(dump, 'utf8');
 if (/^(COPY|INSERT INTO) /m.test(sql)) throw new Error('The dump contains rows. Stopping.');
+// A new project made with "Enable automatic RLS" already has
+// public.rls_auto_enable() (live has it too), so functions are replaced, not created.
+writeFileSync(dump, sql.replace(/^CREATE FUNCTION /gm, 'CREATE OR REPLACE FUNCTION '));
 
 // 2. What the structure needs first: the vector extension and the read-only agent role.
 await test.query('create extension if not exists vector with schema extensions');
