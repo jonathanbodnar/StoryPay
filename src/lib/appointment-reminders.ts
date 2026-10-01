@@ -5,31 +5,13 @@ import {
   buildNotifVarsForEvent,
   type NotifType,
 } from '@/lib/calendar-notifications';
+import {
+  type ReminderOffset,
+  DEFAULT_APPOINTMENT_REMINDER_OFFSETS,
+  normalizeReminderOffsets,
+} from '@/lib/reminder-offsets';
 
-export type ReminderOffset = { d: number; h: number; m: number };
-
-export const DEFAULT_APPOINTMENT_REMINDER_OFFSETS: ReminderOffset[] = [
-  { d: 1, h: 0, m: 0 },
-  { d: 0, h: 1, m: 0 },
-  { d: 0, h: 0, m: 10 },
-];
-
-const MAX_REMINDERS = 5;
-
-export function normalizeReminderOffsets(raw: unknown): ReminderOffset[] {
-  if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_APPOINTMENT_REMINDER_OFFSETS];
-  const out: ReminderOffset[] = [];
-  for (const row of raw.slice(0, MAX_REMINDERS)) {
-    if (!row || typeof row !== 'object') continue;
-    const o = row as Record<string, unknown>;
-    const d = Math.max(0, Math.min(365, Math.floor(Number(o.d ?? o.days ?? 0) || 0)));
-    const h = Math.max(0, Math.floor(Number(o.h ?? o.hours ?? 0) || 0));
-    const m = Math.max(0, Math.min(59, Math.floor(Number(o.m ?? o.minutes ?? 0) || 0)));
-    if (d === 0 && h === 0 && m === 0) continue;
-    out.push({ d, h, m });
-  }
-  return out.length ? out : [...DEFAULT_APPOINTMENT_REMINDER_OFFSETS];
-}
+export { type ReminderOffset, DEFAULT_APPOINTMENT_REMINDER_OFFSETS, normalizeReminderOffsets };
 
 function offsetToMs(o: ReminderOffset): number {
   const ms = ((o.d * 24 + o.h) * 60 + o.m) * 60 * 1000;

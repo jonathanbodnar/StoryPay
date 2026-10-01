@@ -19,6 +19,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
+import { loadVenueEmailBrand } from '@/lib/venue-email-brand';
 import { getGhlToken } from '@/lib/ghl';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
 import {
@@ -111,13 +112,12 @@ async function sendInviteEmail(venueId: string, leadId: string): Promise<boolean
   const lead = `Thanks for reaching out to ${venueName}${via ? ` through ${via}` : ''}! Your pricing & planning guide is ready.`;
 
   // The same shared shell as every other email the product sends: the venue's
-  // StoryVenue dark logo centered at the top (always), #1b1b1b button,
+  // logo (or its name) centered at the top, #1b1b1b button,
   // "Sent via StoryVenue on behalf of …" footer.
   const heading = 'Your pricing guide is ready';
   const p = (text: string) => `<p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 12px;">${escapeHtml(text)}</p>`;
   const html = buildSystemEmail({
-    // No logoUrl: the shell renders the StoryVenue dark logo — always.
-    logoAlt: 'StoryVenue',
+    venueBrand: await loadVenueEmailBrand(venueId),
     accentColor: '#1b1b1b',
     preheader: escapeHtml(lead),
     title: escapeHtml(heading),

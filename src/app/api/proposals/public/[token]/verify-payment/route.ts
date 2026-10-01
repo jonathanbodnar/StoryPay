@@ -6,6 +6,7 @@ import {
 } from '@/lib/lunarpay';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { loadVenueEmailBrand } from '@/lib/venue-email-brand';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
@@ -150,6 +151,7 @@ export async function POST(
                 vars,
                 actionUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.storypay.io'}/proposal/${token}`,
                 venueName: venue.name || 'Your Venue',
+                venueBrand: await loadVenueEmailBrand(proposal.venue_id as string),
               }),
             });
           } catch (err) {
@@ -445,7 +447,7 @@ export async function POST(
       if (fullProposal?.customer_email && venue?.id) {
         const { data: brandData } = await supabaseAdmin
           .from('venues')
-          .select('brand_color, brand_logo_url')
+          .select('brand_color')
           .eq('id', venue.id)
           .single();
 
@@ -453,7 +455,7 @@ export async function POST(
         const venueName   = venue.name || 'Your Venue';
         const invoiceUrl  = `${appUrl}/invoice/${proposal.id}`;
         const brandColor  = brandData?.brand_color   || '#1b1b1b';
-        const logoUrl     = brandData?.brand_logo_url || undefined;
+        const venueBrand  = await loadVenueEmailBrand(venue.id);
         const amountFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
           .format((fullProposal.price || 0) / 100);
 
@@ -486,7 +488,7 @@ export async function POST(
                 vars,
                 actionUrl:  invoiceUrl,
                 brandColor,
-                logoUrl,
+                venueBrand,
                 venueName,
               }),
             });
@@ -517,7 +519,7 @@ export async function POST(
                 vars,
                 actionUrl:  invoiceUrl,
                 brandColor,
-                logoUrl,
+                venueBrand,
                 venueName,
               }),
             });

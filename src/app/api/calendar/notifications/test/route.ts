@@ -14,6 +14,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import { sendEmail } from '@/lib/email';
 import { renderTemplate, plainToHtml } from '@/lib/calendar-notifications';
+import { loadVenueEmailBrand } from '@/lib/venue-email-brand';
 
 const TEST_VARS: Record<string, string> = {
   // Contact
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest) {
           `─────────────────────────────────\n\n` +
           renderedBody,
           venueName,
+          isContact ? await loadVenueEmailBrand(venueId) : undefined,
         ),
         from: { name: venueName },
       });

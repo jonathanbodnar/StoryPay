@@ -6,11 +6,11 @@ import {
   X, PenLine, RefreshCw, XCircle, AlertTriangle, ChevronRight, FilePen,
   UserPlus, MessageSquare, Building2, Users, Lock, Bot,
 } from 'lucide-react';
-import type { ReminderOffset } from '@/lib/appointment-reminders';
 import {
+  type ReminderOffset,
   DEFAULT_PAYMENT_REMINDER_OFFSETS,
   normalizePaymentReminderOffsets,
-} from '@/lib/payment-reminders';
+} from '@/lib/reminder-offsets';
 import { NOTIFICATION_SCENARIOS } from '@/lib/notification-settings';
 
 // Email templates that are sent to CUSTOMERS (invoice, proposal, receipts,

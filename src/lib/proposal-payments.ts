@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { loadVenueEmailBrand } from '@/lib/venue-email-brand';
 
 export type ManualPaymentMethod = 'cash' | 'check' | 'other';
 export type PaymentMethod = ManualPaymentMethod | 'cc' | 'ach';
@@ -225,7 +226,7 @@ export async function sendManualPaymentReceipt(args: ReceiptArgs): Promise<void>
         vars,
         actionUrl,
         brandColor: venue?.brand_color || '#1b1b1b',
-        logoUrl:    venue?.brand_logo_url || undefined,
+        venueBrand: await loadVenueEmailBrand(venueId),
         venueName,
       }),
     });

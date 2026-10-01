@@ -14,6 +14,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { findOrCreateContact, getGhlToken, normalizePhone, resolveLocationToken, sendEmail as ghlSendEmail, sendSms } from '@/lib/ghl';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { buildEmailHtml, fillTemplate, getVenueEmailTemplate } from '@/lib/email-templates';
+import { loadVenueEmailBrand } from '@/lib/venue-email-brand';
 
 export type ClientDocumentKind = 'proposal' | 'invoice';
 
@@ -82,7 +83,7 @@ export async function sendClientDocument(args: {
         vars,
         actionUrl: url,
         brandColor: venue.brand_color || '#1b1b1b',
-        logoUrl: venue.brand_logo_url || undefined,
+        venueBrand: await loadVenueEmailBrand(venueId),
         venueName,
       })
     : '';

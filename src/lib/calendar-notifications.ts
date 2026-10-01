@@ -19,6 +19,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
+import { loadVenueEmailBrand, type VenueEmailBrand } from '@/lib/venue-email-brand';
 import { renderMergeVars, systemDateVars } from '@/lib/merge-variables';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -313,7 +314,8 @@ function buildVarMap(venue: VenueRow, vars: CalendarNotifVars): Record<string, s
 
 // ── HTML wrapper for plain-text email bodies ──────────────────────────────────
 
-export function plainToHtml(text: string, venueName: string): string {
+/** `venueBrand`: set on email to the contact, so it shows the venue's logo (or name) instead of StoryVenue's. */
+export function plainToHtml(text: string, venueName: string, venueBrand?: VenueEmailBrand): string {
   const escaped = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -322,7 +324,8 @@ export function plainToHtml(text: string, venueName: string): string {
   return buildSystemEmail({
     brandName: venueName,
     logoAlt:   venueName,
-    title:     venueName,
+    venueBrand,
+    title:     safeVenue,
     bodyHtml: `<pre style="font-family:inherit;font-size:14px;line-height:1.8;color:#374151;margin:0;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">${escaped}</pre>`,
     footerHtml: `<p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;">Sent via StoryVenue on behalf of ${safeVenue}</p>`,
   });
@@ -562,7 +565,7 @@ export async function dispatchCalendarNotification(
           await sendEmail({
             to: vars.contact_email,
             subject,
-            html: plainToHtml(body, venueName),
+            html: plainToHtml(body, venueName, await loadVenueEmailBrand(venueId)),
             from: { name: venueName },
           }).catch((e) => console.error('[calendar-notifications] email_contact send error:', e));
         }

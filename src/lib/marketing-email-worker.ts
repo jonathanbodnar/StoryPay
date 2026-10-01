@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail, buildBulkEmailHeaders, htmlToPlainText, injectPreheaderHtml } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
+import { loadVenueEmailBrand } from '@/lib/venue-email-brand';
 import { findOrCreateContact, getGhlToken, normalizePhone, sendSms } from '@/lib/ghl';
 import { leadSmsAllowed } from '@/lib/sms-consent';
 import {
@@ -1136,7 +1137,7 @@ export async function sendBookingSystemGuide(
 
           const body     = mergeMarketingFields(rawBody, vars);
           // The same shared shell as every other email the product sends: the
-          // StoryVenue dark logo centered at the top (always), a
+          // venue's logo (or its name) centered at the top, a
           // #1b1b1b "View your pricing guide" button, and the "Sent via
           // StoryVenue on behalf of …" footer. A line that is nothing but the
           // guide link is dropped from the HTML body — the button carries it —
@@ -1159,8 +1160,7 @@ export async function sendBookingSystemGuide(
             replyTo: replyTo,
             subject,
             html: buildSystemEmail({
-              // No logoUrl: always the StoryVenue dark logo, centered.
-              logoAlt:     'StoryVenue',
+              venueBrand:  await loadVenueEmailBrand(venueId),
               accentColor: '#1b1b1b',
               title:       escapeText(subject),
               heading:     escapeText(`Your ${venueLabel} pricing guide`),

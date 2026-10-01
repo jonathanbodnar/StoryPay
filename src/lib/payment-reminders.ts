@@ -4,32 +4,20 @@ import { sendEmail } from '@/lib/email';
 import { resolveVenueTimezone, wallClockToUtc } from '@/lib/venue-timezone';
 import {
   type ReminderOffset,
-  normalizeReminderOffsets,
-} from '@/lib/appointment-reminders';
+  DEFAULT_PAYMENT_REMINDER_OFFSETS,
+  normalizePaymentReminderOffsets,
+} from '@/lib/reminder-offsets';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { loadVenueEmailBrand } from '@/lib/venue-email-brand';
 import { sumManualPayments } from '@/lib/proposal-payments';
 import { planPayments, toYmd } from '@/lib/payment-plan';
 
-/** Default overdue-reminder offsets: 1 day after, 3 days after, 7 days after. */
-export const DEFAULT_PAYMENT_REMINDER_OFFSETS: ReminderOffset[] = [
-  { d: 1, h: 0, m: 0 },
-  { d: 3, h: 0, m: 0 },
-  { d: 7, h: 0, m: 0 },
-];
+export { DEFAULT_PAYMENT_REMINDER_OFFSETS, normalizePaymentReminderOffsets };
 
 /** send_at = due_at + offset (fires AFTER the due date). */
 function computeReminderSendAfter(dueAt: Date, o: ReminderOffset): Date {
   const ms = ((o.d * 24 + o.h) * 60 + o.m) * 60 * 1000;
   return new Date(dueAt.getTime() + ms);
-}
-
-const MAX_PAYMENT_REMINDER_SLOTS = 3;
-
-/** Normalize and cap at 3 offsets for payment due emails. */
-export function normalizePaymentReminderOffsets(raw: unknown): ReminderOffset[] {
-  if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_PAYMENT_REMINDER_OFFSETS];
-  const n = normalizeReminderOffsets(raw.slice(0, MAX_PAYMENT_REMINDER_SLOTS));
-  return n.length ? n.slice(0, MAX_PAYMENT_REMINDER_SLOTS) : [...DEFAULT_PAYMENT_REMINDER_OFFSETS];
 }
 
 function formatOffsetLabel(o: ReminderOffset): string {
@@ -272,7 +260,7 @@ export async function sendPaymentDueReminderEmail(row: {
     vars,
     actionUrl:  payLink,
     brandColor: (venue as { brand_color?: string | null } | null)?.brand_color || '#1b1b1b',
-    logoUrl:    (venue as { brand_logo_url?: string | null } | null)?.brand_logo_url || undefined,
+    venueBrand: await loadVenueEmailBrand(row.venue_id),
     venueName,
   });
 

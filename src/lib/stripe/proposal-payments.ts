@@ -32,6 +32,7 @@ import {
 } from '@/lib/stripe/connect';
 import { sendEmail as directSendEmail } from '@/lib/email';
 import { buildEmailHtml, fillTemplate, getVenueEmailTemplate } from '@/lib/email-templates';
+import { loadVenueEmailBrand } from '@/lib/venue-email-brand';
 import { syncPaymentRemindersForProposal } from '@/lib/payment-reminders';
 import { onMarketingProposalPaid } from '@/lib/marketing-email-worker';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
@@ -434,7 +435,7 @@ async function recordPaymentReceived(args: {
             vars,
             actionUrl: `${APP_URL}/invoice/${p.id}`,
             brandColor: v.brand_color || '#1b1b1b',
-            logoUrl: v.brand_logo_url ?? undefined,
+            venueBrand: await loadVenueEmailBrand(p.venue_id),
             venueName,
           }),
         });
@@ -481,7 +482,7 @@ async function notifyPaymentFailed(args: {
     await directSendEmail({
       to: p.customer_email,
       subject: fillTemplate(tmpl.subject, vars),
-      html: buildEmailHtml({ template: tmpl, vars, actionUrl, venueName: v.name || 'Your Venue' }),
+      html: buildEmailHtml({ template: tmpl, vars, actionUrl, venueName: v.name || 'Your Venue', venueBrand: await loadVenueEmailBrand(p.venue_id) }),
     });
   } catch (e) {
     console.error('[stripe-pay] payment_failed email failed:', e);
@@ -894,7 +895,7 @@ export async function sendUpcomingPaymentHeadsUps(limit = 50): Promise<{ sent: n
           vars,
           actionUrl: await cardUpdateLink(p),
           brandColor: v.brand_color || '#1b1b1b',
-          logoUrl: v.brand_logo_url ?? undefined,
+          venueBrand: await loadVenueEmailBrand(p.venue_id),
           venueName,
         }),
         replyTo,
@@ -945,7 +946,7 @@ async function emailCardUpdateLink(p: PaymentProposal, v: PaymentVenue): Promise
       vars,
       actionUrl: await cardUpdateLink(p),
       brandColor: v.brand_color || '#1b1b1b',
-      logoUrl: v.brand_logo_url ?? undefined,
+      venueBrand: await loadVenueEmailBrand(p.venue_id),
       venueName,
     }),
     from: { name: venueName },

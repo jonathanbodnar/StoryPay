@@ -9,6 +9,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { renderMergeVars, systemDateVars, enrichTransactionalVars } from '@/lib/merge-variables';
 import { capitalizeName } from '@/lib/format-name';
+import type { VenueEmailBrand } from '@/lib/venue-email-brand';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -217,22 +218,28 @@ export function fillTemplate(
  * button, and an optional footer region above the card's bottom edge.
  *
  * Every system + transactional email should render through this so the whole
- * product shares one look and feel. Pass a venue logo + brand color for
- * venue-branded mail (invoices, proposals, receipts) or leave them off to get
- * the StoryVenue platform branding (concierge alerts, venue-direct, etc.).
+ * product shares one look and feel. Email a venue sends its own clients
+ * (invoices, proposals, receipts, guide delivery, tour confirmations) passes
+ * `venueBrand` and shows the venue's logo or name; everything else (owner
+ * alerts, account email, the couple's wedding planner) shows StoryVenue's.
  */
 export const STORYVENUE_DARK_LOGO_URL =
   (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '') +
   '/storyvenue-logo-dark.png';
 
 export interface SystemEmailOptions {
-  /** @deprecated Ignored: every email shows the StoryVenue dark logo (branding rule). */
+  /** @deprecated Ignored: pass `venueBrand` for a venue's logo. */
   logoUrl?: string;
   /** @deprecated Ignored with `logoUrl`. */
   logoAlt?: string;
-  /** @deprecated Ignored. We never render a text logo — when `logoUrl` is empty
-   *  we fall back to the black StoryVenue logo image. Kept for caller compatibility. */
+  /** @deprecated Ignored: `venueBrand` carries the venue's name. */
   brandName?: string;
+  /**
+   * Set on email a venue sends its own clients: the venue's logo (or its name
+   * as a text logo) replaces the StoryVenue logo. Resolve it with
+   * resolveVenueEmailBrand / loadVenueEmailBrand.
+   */
+  venueBrand?: VenueEmailBrand;
   /** Accent color for the CTA button + inline links. Defaults to #1b1b1b. */
   accentColor?: string;
   /** Hidden inbox-preview text (never visibly rendered). */
@@ -257,13 +264,17 @@ function escapeAttr(s: string): string {
 
 export function buildSystemEmail(opts: SystemEmailOptions): string {
   const accent   = (opts.accentColor || '#1b1b1b').trim() || '#1b1b1b';
-  const title    = opts.title || 'StoryVenue';
+  const brand    = opts.venueBrand;
+  const title    = opts.title || (brand ? escapeHtmlText(brand.name) : 'StoryVenue');
 
-  // Branding rule: every email carries the official StoryVenue dark logo, on
-  // venue-branded mail too (the venue's name is in the email itself). Venue
-  // uploads can be light/white logos that vanish on the white card, so
-  // `logoUrl` / `logoAlt` are accepted for compatibility but not rendered.
-  const logoHtml = `<img src="${escapeAttr(STORYVENUE_DARK_LOGO_URL)}" alt="StoryVenue" height="30" style="display:inline-block;height:30px;width:auto;border:0;outline:none;text-decoration:none;">`;
+  // Branding rule: a venue's email to its clients carries the venue's logo, or
+  // its name as a text logo when there's no logo that shows on white (checked
+  // in venue-email-brand.ts). Everything else carries the StoryVenue dark logo.
+  const logoHtml = brand
+    ? brand.logo
+      ? `<img src="${escapeAttr(brand.logo.url)}" alt="${escapeAttr(brand.name)}" width="${brand.logo.width}" height="${brand.logo.height}" style="display:inline-block;width:${brand.logo.width}px;height:${brand.logo.height}px;max-width:100%;border:0;outline:none;text-decoration:none;">`
+      : `<p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:600;letter-spacing:0.01em;line-height:1.3;color:#1b1b1b;">${escapeHtmlText(brand.name)}</p>`
+    : `<img src="${escapeAttr(STORYVENUE_DARK_LOGO_URL)}" alt="StoryVenue" height="30" style="display:inline-block;height:30px;width:auto;border:0;outline:none;text-decoration:none;">`;
 
   const headingLines = opts.heading
     ? (Array.isArray(opts.heading) ? opts.heading : [opts.heading])
@@ -328,6 +339,22 @@ export function buildSystemEmail(opts: SystemEmailOptions): string {
 // ─── HTML builder ─────────────────────────────────────────────────────────────
 
 /**
+ * Template types sent to the venue's client (the couple), not to the venue:
+ * these carry the venue's logo or name instead of StoryVenue's.
+ */
+const CLIENT_TEMPLATE_TYPES = new Set([
+  'invoice',
+  'proposal',
+  'payment_confirmation',
+  'subscription_confirmation',
+  'payment_failed',
+  'payment_upcoming',
+  'payment_reminder',
+  'signed_contract_copy',
+  'card_update_link',
+]);
+
+/**
  * Render a template row into a full HTML email using the venue's branding.
  * Call fillTemplate() on subject separately (not HTML).
  */
@@ -338,14 +365,18 @@ export function buildEmailHtml({
   brandColor = '#1b1b1b',
   logoUrl,
   venueName,
+  venueBrand,
   extraHtml,
 }: {
   template: EmailTemplateRow;
   vars: Record<string, string>;
   actionUrl?: string;
   brandColor?: string;
+  /** @deprecated Ignored: pass `venueBrand`. */
   logoUrl?: string;
   venueName: string;
+  /** The venue's checked logo, for client email (resolveVenueEmailBrand). Without it, client email shows the venue's name. */
+  venueBrand?: VenueEmailBrand;
   /** Ready-made HTML placed after the template body (e.g. the new-lead details table). */
   extraHtml?: string;
 }): string {
@@ -374,10 +405,13 @@ export function buildEmailHtml({
   }
   footerBits.push(`<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">Sent via StoryVenue on behalf of ${venueName}</p>`);
 
+  const toClient = CLIENT_TEMPLATE_TYPES.has(template.type);
+
   return buildSystemEmail({
     logoUrl,
     logoAlt:     venueName,
     brandName:   venueName,
+    venueBrand:  toClient ? { name: venueName, logo: venueBrand?.logo ?? null } : undefined,
     accentColor: brandColor,
     title:       heading,
     heading,

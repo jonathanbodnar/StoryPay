@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { getVenueEmailTemplate, buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { resolveVenueEmailBrand } from '@/lib/venue-email-brand';
 
 // Sample values used when previewing / test-sending
 const SAMPLE_VARS: Record<string, Record<string, string>> = {
@@ -156,7 +157,7 @@ export async function POST(
     vars,
     actionUrl:  '#',
     brandColor: venue?.brand_color    || '#1b1b1b',
-    logoUrl:    venue?.brand_logo_url || undefined,
+    venueBrand: await resolveVenueEmailBrand(venueName, venue?.brand_logo_url || venue?.logo_url),
     venueName,
   });
 

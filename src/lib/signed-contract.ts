@@ -13,6 +13,7 @@ import { renderSignedContractPdf } from '@/lib/signed-contract-pdf';
 import { planPayments, toYmd } from '@/lib/payment-plan';
 import { sendEmail } from '@/lib/email';
 import { buildEmailHtml, fillTemplate } from '@/lib/email-templates';
+import { loadVenueEmailBrand } from '@/lib/venue-email-brand';
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
 
@@ -156,7 +157,7 @@ export async function emailSignedContract(proposalId: string): Promise<boolean> 
       vars,
       actionUrl: `${APP_URL}/proposal/${p.public_token}`,
       brandColor: venue.brand_color || '#1b1b1b',
-      logoUrl: venue.brand_logo_url || undefined,
+      venueBrand: await loadVenueEmailBrand(p.venue_id),
       venueName: venue.name,
     }),
     from: { name: venue.name },
