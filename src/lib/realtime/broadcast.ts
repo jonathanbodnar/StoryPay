@@ -31,6 +31,7 @@ import {
   type VisitorPingEvent,
   type VenueConciergeMessageEvent,
 } from './channels';
+import { realtimeTopic } from './topic';
 
 // ─── HTTP broadcast ─────────────────────────────────────────────────────────
 
@@ -62,8 +63,10 @@ async function send(channelName: string, event: string, payload: unknown): Promi
     return;
   }
 
+  // Only the secret topic for this channel (topic.ts) is ever broadcast on, so
+  // nobody can listen in by guessing a channel name.
   const message: BroadcastHttpMessage = {
-    topic:   channelName,
+    topic:   realtimeTopic(channelName),
     event,
     payload,
   };

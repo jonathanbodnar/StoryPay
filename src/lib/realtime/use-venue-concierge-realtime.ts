@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useResolvedTopic } from '@/lib/realtime/topics-client';
 import { supportChannels, type VenueConciergeMessageEvent, type VenueConciergeTypingEvent } from '@/lib/realtime/channels';
 
 type Side = 'venue' | 'concierge';
@@ -43,13 +44,14 @@ export function useVenueConciergeRealtime(opts: {
   const lastSentTypingAt = useRef(0);
 
   const channelName = venueId ? supportChannels.venueConcierge(venueId) : null;
+  const topic = useResolvedTopic(channelName);
 
   useEffect(() => {
-    if (!channelName || !self) return;
+    if (!topic || !self) return;
     let disposed = false;
     subscribedRef.current = false;
 
-    const ch = supabase.channel(channelName, {
+    const ch = supabase.channel(topic, {
       config: { broadcast: { self: false }, presence: { key: self.id } },
     });
     channelRef.current = ch;
@@ -106,7 +108,7 @@ export function useVenueConciergeRealtime(opts: {
       if (channelRef.current === ch) channelRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelName, side, self?.id, self?.name]);
+  }, [topic, side, self?.id, self?.name]);
 
   const sendTyping = useCallback((typing: boolean) => {
     const ch = channelRef.current;

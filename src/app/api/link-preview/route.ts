@@ -6,24 +6,26 @@
  * the thread can render a small preview card instead of a raw link.
  *
  * Deliberately simple:
+ *   - Admin and support sign-in only (the support inbox is its only user).
  *   - Short fetch timeout (4s) so a slow/unreachable site never stalls the
  *     thread view — falls back to `{ ok: false }` (frontend renders a plain
  *     clickable link).
- *   - In-memory cache (1h TTL) per server instance — good enough since the
- *     frontend also caches per-session; no DB table needed.
- *   - Basic SSRF guard: only http/https, and rejects hostnames that resolve
- *     to loopback/private/link-local ranges so a malicious message body can't
- *     use this route to probe internal infra.
+ *   - In-memory cache (1h TTL, at most CACHE_MAX entries, oldest dropped
+ *     first) — good enough since the frontend also caches per-session.
+ *   - Every hop, redirects included, must reach a public address
+ *     (lib/safe-outbound-fetch), so a message body can't use this route to
+ *     reach internal services.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import dns from 'dns/promises';
-import net from 'net';
+import { verifySupportAccess } from '@/lib/support/auth';
+import { safeFetch } from '@/lib/safe-outbound-fetch';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const FETCH_TIMEOUT_MS = 4000;
 const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_MAX = 500;
 const MAX_HTML_BYTES = 500 * 1024;
 
 interface CacheEntry {
@@ -38,39 +40,16 @@ interface PreviewResult {
   image?: string | null;
 }
 
+// Map keeps insertion order, so the first key is the oldest entry.
 const cache = new Map<string, CacheEntry>();
 
-function isPrivateIp(ip: string): boolean {
-  if (net.isIP(ip) === 4) {
-    const parts = ip.split('.').map(Number);
-    if (parts[0] === 10) return true;
-    if (parts[0] === 127) return true;
-    if (parts[0] === 169 && parts[1] === 254) return true;
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-    if (parts[0] === 192 && parts[1] === 168) return true;
-    if (parts[0] === 0) return true;
-    return false;
-  }
-  // IPv6 loopback / link-local / unique-local
-  const lower = ip.toLowerCase();
-  return lower === '::1' || lower.startsWith('fe80:') || lower.startsWith('fc') || lower.startsWith('fd');
-}
-
-const TRUSTED_HOSTNAMES = ['storyvenue.com', 'app.storyvenue.com'];
-
-async function isSafeUrl(u: URL): Promise<boolean> {
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
-  const hostname = u.hostname.toLowerCase();
-  if (hostname === 'localhost' || hostname.endsWith('.local') || hostname.endsWith('.internal')) return false;
-  // Always allow our own domain — Railway's internal DNS resolves storyvenue.com
-  // subdomains to private IPs, which would otherwise trip the SSRF guard.
-  if (TRUSTED_HOSTNAMES.includes(hostname) || hostname.endsWith('.storyvenue.com')) return true;
-  if (net.isIP(hostname)) return !isPrivateIp(hostname);
-  try {
-    const addrs = await dns.lookup(hostname, { all: true });
-    return addrs.every(a => !isPrivateIp(a.address));
-  } catch {
-    return false;
+function remember(key: string, data: PreviewResult): void {
+  cache.delete(key);
+  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+  while (cache.size > CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
   }
 }
 
@@ -99,6 +78,9 @@ function extractMeta(html: string, property: string): string | null {
 }
 
 export async function GET(req: NextRequest) {
+  const { isSuperAdmin, agent } = await verifySupportAccess();
+  if (!isSuperAdmin && !agent) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+
   const raw = req.nextUrl.searchParams.get('url')?.trim();
   if (!raw) return NextResponse.json({ ok: false, error: 'url required' }, { status: 400 });
 
@@ -114,60 +96,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false });
   }
 
-  const safe = await isSafeUrl(parsed);
-  if (!safe) {
-    const result: PreviewResult = { ok: false };
-    cache.set(raw, { data: result, expiresAt: Date.now() + CACHE_TTL_MS });
-    return NextResponse.json(result);
-  }
-
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    const res = await fetch(parsed.toString(), {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; StoryVenueLinkPreview/1.0; +https://storyvenue.com)',
-        Accept: 'text/html,application/xhtml+xml',
-      },
-    }).finally(() => clearTimeout(timer));
+    const res = await safeFetch(parsed.toString(), {
+      accept: 'text/html,application/xhtml+xml',
+      maxBytes: MAX_HTML_BYTES,
+      timeoutMs: FETCH_TIMEOUT_MS,
+    });
+    if (res.status < 200 || res.status >= 300) throw new Error(`status ${res.status}`);
+    if (!res.contentType.includes('text/html')) throw new Error('not html');
 
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('text/html')) throw new Error('not html');
-
-    // Cap how much HTML we read — OG tags are always in <head>, near the top.
-    const reader = res.body?.getReader();
-    let html = '';
-    if (reader) {
-      let bytes = 0;
-      while (bytes < MAX_HTML_BYTES) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        html += Buffer.from(value).toString('utf-8');
-        bytes += value.byteLength;
-      }
-      void reader.cancel().catch(() => {});
-    } else {
-      html = await res.text();
-    }
-
-    const title = extractMeta(html, 'og:title') || (/<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ? decodeEntities(/<title[^>]*>([^<]*)<\/title>/i.exec(html)![1]) : null);
+    // OG tags are always in <head>, near the top; the read is capped.
+    const html = res.body.toString('utf-8');
+    const titleTag = /<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1];
+    const title = extractMeta(html, 'og:title') || (titleTag ? decodeEntities(titleTag) : null);
     const description = extractMeta(html, 'og:description') || extractMeta(html, 'description');
     let image = extractMeta(html, 'og:image');
     if (image && !/^https?:\/\//i.test(image)) {
-      try { image = new URL(image, parsed).toString(); } catch { image = null; }
+      try { image = new URL(image, res.finalUrl).toString(); } catch { image = null; }
     }
 
     const result: PreviewResult = { ok: true, url: raw, title, description, image };
-    cache.set(raw, { data: result, expiresAt: Date.now() + CACHE_TTL_MS });
+    remember(raw, result);
     return NextResponse.json(result);
   } catch {
+    // Failures are cached too, so a broken link isn't re-fetched on every render.
     const result: PreviewResult = { ok: false };
-    // Cache failures too (shorter isn't worth the complexity — same TTL),
-    // so a broken link doesn't get re-fetched on every render.
-    cache.set(raw, { data: result, expiresAt: Date.now() + CACHE_TTL_MS });
+    remember(raw, result);
     return NextResponse.json(result);
   }
 }

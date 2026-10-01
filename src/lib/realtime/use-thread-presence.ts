@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
+import { useResolvedTopic } from '@/lib/realtime/topics-client';
 import { supportChannels, type ThreadPresenceEvent } from '@/lib/realtime/channels';
 
 const PING_INTERVAL_MS = 10_000;
@@ -83,9 +84,10 @@ export function useThreadPresence(
   // Announce our own presence: ping on mount + heartbeat, leave on unmount/switch.
   const selfRef = useRef(self);
   useEffect(() => { selfRef.current = self; }, [self]);
+  const topic = useResolvedTopic(channelName);
   useEffect(() => {
-    if (!channelName || !self) return;
-    const ch = supabase.channel(channelName, { config: { broadcast: { self: false } } });
+    if (!topic || !self) return;
+    const ch = supabase.channel(topic, { config: { broadcast: { self: false } } });
     let subscribed = false;
     const send = (kindEvt: ThreadPresenceEvent['kind']) => {
       if (!subscribed || !selfRef.current) return;
@@ -107,7 +109,7 @@ export function useThreadPresence(
       clearInterval(heartbeat);
       setTimeout(() => { void supabase.removeChannel(ch); }, 250);
     };
-  }, [channelName, self?.agentId, self?.agentName]);
+  }, [topic, self?.agentId, self?.agentName]);
 
   return Object.values(others).sort((a, b) => a.agentName.localeCompare(b.agentName));
 }

@@ -4,8 +4,10 @@
  * useBroadcastChannel — subscribes the component to a single broadcast
  * channel and invokes onEvent whenever a matching event arrives.
  *
- * Uses the public anon-key Supabase client. Subscriptions are cheap; this
- * hook handles channel teardown on unmount + channelName change.
+ * Uses the public anon-key Supabase client. `channelName` is the logical
+ * name from channels.ts; the hook joins its secret topic (topics-client.ts),
+ * so only signed-in users allowed on that channel can listen. Subscriptions
+ * are cheap; this hook handles channel teardown on unmount + channelName change.
  *
  * Events are typed loosely (unknown payload) — the caller is responsible
  * for narrowing.
@@ -16,6 +18,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useResolvedTopic, useResolvedTopics } from '@/lib/realtime/topics-client';
 
 type EventCallback = (event: string, payload: unknown) => void;
 
@@ -26,9 +29,10 @@ export function useBroadcastChannel(
 ): void {
   const callbackRef = useRef<EventCallback>(onEvent);
   callbackRef.current = onEvent;
+  const topic = useResolvedTopic(channelName);
 
   useEffect(() => {
-    if (!channelName || events.length === 0) return;
+    if (!topic || events.length === 0) return;
 
     let disposed = false;
     let currentCh: ReturnType<typeof supabase.channel> | null = null;
@@ -38,7 +42,7 @@ export function useBroadcastChannel(
       if (disposed) return;
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 
-      const ch = supabase.channel(channelName!, {
+      const ch = supabase.channel(topic!, {
         config: { broadcast: { self: false } },
       });
       currentCh = ch;
@@ -84,7 +88,7 @@ export function useBroadcastChannel(
     };
     // events array compared by serialized form to avoid resubscribing on every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelName, events.join('|')]);
+  }, [topic, events.join('|')]);
 }
 
 /**
@@ -103,12 +107,13 @@ export function useBroadcastChannels(
   const callbackRef = useRef<EventCallback>(onEvent);
   callbackRef.current = onEvent;
 
+  const topics = useResolvedTopics(channelNames);
   // Stable serialization for the dep array
-  const channelsKey = channelNames.slice().sort().join('|');
+  const channelsKey = topics.slice().sort().join('|');
   const eventsKey = events.join('|');
 
   useEffect(() => {
-    if (channelNames.length === 0 || events.length === 0) return;
+    if (topics.length === 0 || events.length === 0) return;
 
     let disposed = false;
     const currentChannels: ReturnType<typeof supabase.channel>[] = [];
@@ -122,7 +127,7 @@ export function useBroadcastChannels(
         supabase.removeChannel(old).catch(() => {});
       }
 
-      for (const name of channelNames) {
+      for (const name of topics) {
         const ch = supabase.channel(name, { config: { broadcast: { self: false } } });
         for (const evt of events) {
           ch.on('broadcast', { event: evt }, (msg: { event: string; payload: unknown }) => {
