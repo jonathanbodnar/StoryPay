@@ -24,6 +24,7 @@ import { ensureSpeedToLeadAutomation } from '@/lib/booking-system-default-sequen
 import { isSystemTagInert } from '@/lib/system-tag-visibility';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
 import { logError } from '@/lib/error-log';
+import { nextTextingTime, textingZones } from '@/lib/texting-hours';
 
 const BATCH = 25;
 
@@ -1209,10 +1210,11 @@ export async function sendBookingSystemGuide(
           );
         } else if (!smsResult.ok) {
           const smsErr = (smsResult as { error?: string }).error ?? 'unknown';
-          // A consent skip is a deliberate non-send, not a delivery failure —
-          // don't raise a guide issue for it.
-          if (smsErr === 'no_sms_consent') {
-            console.log(`[guide] SMS guide skipped for ${leadId}: no sms_consent`);
+          // Deliberate non-sends aren't delivery failures, so they don't raise a
+          // guide issue: no texting consent, opted out (do-not-text), no phone,
+          // or a plan without texting.
+          if (smsErr === 'no_sms_consent' || smsErr === 'suppressed' || smsErr === 'no_phone' || smsErr === 'sms_not_available') {
+            console.log(`[guide] SMS guide skipped for ${leadId}: ${smsErr}`);
           } else {
             failures.push(`sms_failed: ${smsErr}`);
           }
@@ -1555,6 +1557,22 @@ export async function buildMergeVars(
     pricing_guide_url:         buildGuideShortUrl(base, venueId, forSms ? '' : leadId, (venue as { guide_short_code?: string | null } | null)?.guide_short_code),
     'venue.pricing_guide_url': buildGuideShortUrl(base, venueId, forSms ? '' : leadId, (venue as { guide_short_code?: string | null } | null)?.guide_short_code),
   };
+}
+
+/**
+ * When an automated text to this lead may go out, if not now: null means send
+ * now; a date means hold the step until then (9 am to 9 pm in the couple's
+ * time zone, lib/texting-hours).
+ */
+async function textingHoldUntil(venueId: string, leadId: string): Promise<Date | null> {
+  const [{ data: v }, phone] = await Promise.all([
+    supabaseAdmin.from('venues').select('timezone').eq('id', venueId).maybeSingle(),
+    resolvePhoneForLead(venueId, leadId),
+  ]);
+  const zones = textingZones(phone, (v as { timezone?: string | null } | null)?.timezone);
+  const now = new Date();
+  const next = nextTextingTime(now, zones);
+  return next.getTime() > now.getTime() ? next : null;
 }
 
 async function resolvePhoneForLead(venueId: string, leadId: string): Promise<string | null> {
@@ -2408,13 +2426,19 @@ async function processOneEnrollment(en: {
   lead_id: string;
   current_step_index: number;
 }): Promise<StepResult> {
-  // Stop-on-reply: if the lead has replied (last_inbound_at is set), stop the sequence.
-  const { data: leadRow } = await supabaseAdmin
-    .from('leads')
-    .select('last_inbound_at')
-    .eq('id', en.lead_id)
-    .maybeSingle();
-  if ((leadRow as { last_inbound_at?: string | null } | null)?.last_inbound_at) {
+  // Stop-on-reply: if the lead replied after entering this sequence, stop it.
+  // A reply from before (an old conversation) doesn't count.
+  const [{ data: leadRow }, { data: enrollmentRow }] = await Promise.all([
+    supabaseAdmin.from('leads').select('last_inbound_at').eq('id', en.lead_id).maybeSingle(),
+    supabaseAdmin.from('marketing_automation_enrollments').select('enrolled_at, started_at').eq('id', en.id).maybeSingle(),
+  ]);
+  const lastReplyAt = Date.parse((leadRow as { last_inbound_at?: string | null } | null)?.last_inbound_at ?? '');
+  const enteredAt = Date.parse(
+    (enrollmentRow as { enrolled_at?: string | null; started_at?: string | null } | null)?.enrolled_at
+      ?? (enrollmentRow as { started_at?: string | null } | null)?.started_at
+      ?? '',
+  );
+  if (Number.isFinite(lastReplyAt) && (!Number.isFinite(enteredAt) || lastReplyAt > enteredAt)) {
     // Mark the enrollment as completed — she replied, no more automated messages needed.
     await supabaseAdmin
       .from('marketing_automation_enrollments')
@@ -2570,6 +2594,17 @@ async function processOneEnrollment(en: {
         .update({ status: 'failed', last_error: 'Empty SMS body' })
         .eq('id', en.id);
       return 'failed';
+    }
+    // Texting hours (owner's rule): 9 am to 9 pm in the couple's time zone. A
+    // step that comes due at night waits for the next morning, unadvanced.
+    const holdUntil = await textingHoldUntil(en.venue_id, en.lead_id);
+    if (holdUntil) {
+      await supabaseAdmin
+        .from('marketing_automation_enrollments')
+        .update({ next_run_at: holdUntil.toISOString() })
+        .eq('id', en.id);
+      console.log(`[worker] SMS step enrollment=${en.id} held until ${holdUntil.toISOString()} (texting hours)`);
+      return 'delayed';
     }
     const send = await sendAutomationSmsToLead(en.venue_id, en.lead_id, body, cfg.media_urls);
     console.log(`[worker] SMS step enrollment=${en.id} ok=${send.ok} error=${send.error ?? 'none'}`);

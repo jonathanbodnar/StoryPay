@@ -52,7 +52,8 @@ import { resolveVenueTimezone } from '@/lib/venue-timezone';
 import { ensureVenueAiResources } from './venue-resources';
 import { moveLeadToAiStage, applyAiTag, removeAiTag } from './pipeline-tag-service';
 import { recordAiStateTransition } from './state-transitions';
-import { enforceQuietHours, isInsideQuietHours } from './quiet-hours';
+import { enforceQuietHours } from './quiet-hours';
+import { insideTextingHours, nextTextingTime, textingZones } from '@/lib/texting-hours';
 import { buildAiConciergeSystemPrompt } from './prompt-builder';
 import { generateSmsWithDeepSeek, clampSmsLength } from './llm';
 import { logAiOutboundMessage } from './conversation-helpers';
@@ -342,9 +343,12 @@ async function processOneLead(
     return { kind: 'expired' };
   }
 
-  // 3. Quiet hours guard (skipped for admin force-sends so testing works any time)
-  if (!bypassQuietHours && isInsideQuietHours(new Date(), tz)) {
-    const nextWindow = enforceQuietHours(new Date(), tz);
+  // 3. Quiet hours guard (skipped for admin force-sends so testing works any time):
+  //    9 am to 9 pm in the couple's own time zone, from their area code, with
+  //    the venue's time zone when the number doesn't tell (lib/texting-hours).
+  const textZones = textingZones(row.phone, row.timezone);
+  if (!bypassQuietHours && !insideTextingHours(new Date(), textZones)) {
+    const nextWindow = nextTextingTime(new Date(), textZones);
     await rescheduleLead(row.id, nextWindow);
     await logAiRun({
       leadId:    row.id,

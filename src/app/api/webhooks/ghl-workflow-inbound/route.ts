@@ -218,6 +218,7 @@ export async function POST(request: NextRequest) {
       threadId,
       venueCustomerId,
       contactName: contactName || null,
+      runSideEffects: false, // run below, for this webhook's own message
     });
 
     // Rare race: the workflow can fire before the message is queryable via the
@@ -229,6 +230,7 @@ export async function POST(request: NextRequest) {
         threadId,
         venueCustomerId,
         contactName: contactName || null,
+        runSideEffects: false,
       });
       imported = retry.imported;
       insertedMessages = retry.insertedMessages;

@@ -308,30 +308,31 @@ export async function recordSmsConsentEvidence(input: {
     console.warn('[sms-consent] evidence write threw (non-fatal):', e, { venueId: input.venueId });
     return;
   }
-  await reopenTextingAfterNewConsent(input.venueId, phone, input.email ?? null);
+  await reopenTextingAfterNewConsent(input.venueId, phone);
 }
 
 /**
  * A fresh, recorded opt-in is newer than any "do not disturb" already on this
- * venue's matching contact, so it re-authorizes texting (owner's call, Sep 30).
+ * venue's contact with the same phone number, so it re-authorizes texting to
+ * that number (owner's call, Sep 30).
  * Clears it here and in the CRM through the same path as a "START" reply. No
  * text is sent from here, and AI follow-ups stay paused until the venue resumes
  * them. Only runs for new consents; older blocked leads are left as they are.
  */
-async function reopenTextingAfterNewConsent(venueId: string, phone: string, email: string | null): Promise<void> {
+async function reopenTextingAfterNewConsent(venueId: string, phone: string): Promise<void> {
   try {
     const { normalizePhone } = await import('@/lib/ghl');
     const target = normalizePhone(phone);
-    const mail = email?.trim().toLowerCase() || null;
     const { data: rows } = await supabaseAdmin
       .from('venue_customers')
       .select('id, phone, customer_email')
       .eq('venue_id', venueId)
       .eq('sms_dnd', true);
+    // Only the number the couple typed: their consent covers that phone, so a
+    // contact with the same email but a different number stays opted out.
+    if (!target) return;
     const matches = ((rows ?? []) as { id: string; phone: string | null; customer_email: string | null }[]).filter(
-      (r) =>
-        (target && normalizePhone(r.phone) === target) ||
-        (mail && (r.customer_email || '').trim().toLowerCase() === mail),
+      (r) => normalizePhone(r.phone) === target,
     );
     if (!matches.length) return;
     const { applySmsOptInForVenueCustomer } = await import('@/lib/sms-compliance');

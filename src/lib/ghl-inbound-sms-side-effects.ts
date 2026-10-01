@@ -172,17 +172,21 @@ export async function runInboundGhlSmsSideEffects(params: {
   /** True when the message row was newly inserted (not a dedupe no-op).
    *  Attribution + AI only run for fresh inserts; TCPA keywords always run. */
   inserted: boolean;
+  /** False skips START-style opt-in keywords (used for texts picked up late
+   *  from old history: an opt-out is always honored, an opt-in only live). */
+  allowOptIn?: boolean;
   /** Log prefix so failures are attributable to the entry point. */
   logPrefix: string;
 }): Promise<void> {
   const { venueId, venueCustomerId, messageBody, ghlMessageId, inserted, logPrefix } = params;
+  const allowOptIn = params.allowOptIn !== false;
 
   // TCPA keyword routing — runs FIRST so the AI inbound handler sees the
   // correct dnd/ai_state. STOP is fully handled (DND + stage + activity);
   // START clears DND and restores the AI state.
   try {
     const wasStop = await handleStopKeyword({ venueId, venueCustomerId, messageBody, logPrefix });
-    if (!wasStop && isSmsOptInKeyword(messageBody)) {
+    if (!wasStop && allowOptIn && isSmsOptInKeyword(messageBody)) {
       await applySmsOptInForVenueCustomer({
         venueId,
         venueCustomerId,

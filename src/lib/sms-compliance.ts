@@ -2,45 +2,61 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { normalizePhone, updateGhlContactDnd, type GhlDndSettings, type GhlInboundDndSettings } from '@/lib/ghl';
 import { grantSmsConsentForLeadIds } from '@/lib/sms-consent';
 
-/** US carrier standard opt-out keywords (case-insensitive, single-word or phrase). */
-const SMS_OPT_OUT_KEYWORDS = new Set([
-  'stop',
-  'stopall',
-  'unsubscribe',
-  'cancel',
-  'end',
-  'quit',
+/** Carrier-standard opt-out keywords. The whole text has to be one of these. */
+const SMS_OPT_OUT_KEYWORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit', 'revoke', 'optout']);
+
+/** Words that may surround "stop" without changing what it means ("please stop", "stop texting me"). */
+const OPT_OUT_COURTESY_WORDS = new Set([
+  'stop', 'please', 'pls', 'plz', 'now', 'all', 'it', 'thanks', 'thank', 'you', 'thx',
+  'texting', 'texts', 'text', 'messaging', 'messages', 'message', 'me', 'us', 'sending',
 ]);
 
-/** US carrier standard opt-in / re-subscribe keywords. */
-const SMS_OPT_IN_KEYWORDS = new Set([
-  'start',
-  'unstop',
-  'yes',
-  'subscribe',
-]);
+/** Plain-language opt-outs that mean the same anywhere in a text. */
+const OPT_OUT_PHRASES = [
+  'stop texting', 'stop messaging', 'stop sending', 'stop contacting', 'stop text',
+  'unsubscribe', 'opt out', 'optout', 'remove me', 'take me off',
+  'do not text', 'dont text', 'do not message', 'dont message', 'do not contact', 'dont contact',
+  'no more texts', 'no more text', 'no more messages',
+];
 
-/**
- * True when the inbound SMS is an opt-out keyword (first word, ignoring punctuation).
- */
-export function isSmsOptOutKeyword(body: string): boolean {
-  const t = body.trim();
-  if (!t) return false;
-  const first = (t.split(/\s+/)[0] ?? '').replace(/[^a-zA-Z]/g, '');
-  const w = first.toLowerCase();
-  return SMS_OPT_OUT_KEYWORDS.has(w);
+/** Carrier-standard opt-in keywords. The whole text has to be one of these. */
+const SMS_OPT_IN_KEYWORDS = new Set(['start', 'unstop', 'yes', 'subscribe']);
+
+/** Lowercase words only: punctuation, emoji and apostrophes removed. */
+function normalizeSmsText(body: string): string {
+  return body
+    .toLowerCase()
+    .replace(/['’`]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
- * True when the inbound SMS is an opt-in / re-subscribe keyword.
- * Per TCPA, START / UNSTOP texts constitute legally-valid re-consent.
+ * True when the text asks to stop receiving texts: the whole message is a
+ * carrier keyword ("STOP", "Stop.", "unsubscribe"), "stop" with only courtesy
+ * words around it ("please stop texting me"), or a plain opt-out phrase. A
+ * keyword at the start of an ordinary reply ("End of August 2027", "Cancel
+ * our tour Saturday") is not an opt-out.
+ */
+export function isSmsOptOutKeyword(body: string): boolean {
+  const t = normalizeSmsText(body);
+  if (!t) return false;
+  if (SMS_OPT_OUT_KEYWORDS.has(t.replace(/ /g, ''))) return true;
+  const words = t.split(' ');
+  if (words.includes('stop') && words.length <= 6 && words.every((w) => OPT_OUT_COURTESY_WORDS.has(w))) return true;
+  const padded = ` ${t} `;
+  return OPT_OUT_PHRASES.some((p) => padded.includes(` ${p} `));
+}
+
+/**
+ * True when the text is an opt-in / re-subscribe keyword, the whole message
+ * ("START", "Unstop", "Yes"). Per TCPA, START / UNSTOP texts constitute
+ * legally-valid re-consent. A reply that merely begins with "Yes" isn't one.
  */
 export function isSmsOptInKeyword(body: string): boolean {
-  const t = body.trim();
-  if (!t) return false;
-  const first = (t.split(/\s+/)[0] ?? '').replace(/[^a-zA-Z]/g, '');
-  const w = first.toLowerCase();
-  return SMS_OPT_IN_KEYWORDS.has(w);
+  const t = normalizeSmsText(body).replace(/ please$/, '');
+  return SMS_OPT_IN_KEYWORDS.has(t);
 }
 
 const PLACEHOLDER_SMS_EMAIL = '@ghl-sms.storypay.placeholder';

@@ -599,6 +599,38 @@ export interface SyncedInboundSmsMessage {
 }
 
 /**
+ * The same follow-ups a webhook-delivered text gets, for texts this sync just
+ * stored (in practice most texts arrive this way). Oldest first, so a STOP
+ * followed by a START ends opted in. A STOP is honored however late the text
+ * is picked up; opting back in, consent, attribution and the AI Concierge only
+ * act on texts from the last 15 minutes, never on old history.
+ */
+async function runSyncedInboundSideEffects(venueId: string, messages: SyncedInboundSmsMessage[]): Promise<void> {
+  const { runInboundGhlSmsSideEffects } = await import('@/lib/ghl-inbound-sms-side-effects');
+  const freshCutoff = Date.now() - 15 * 60_000;
+  const time = (m: SyncedInboundSmsMessage) => {
+    const t = m.createdAt ? Date.parse(m.createdAt) : NaN;
+    return Number.isFinite(t) ? t : Date.now();
+  };
+  for (const m of [...messages].sort((a, b) => time(a) - time(b))) {
+    const fresh = time(m) >= freshCutoff;
+    try {
+      await runInboundGhlSmsSideEffects({
+        venueId,
+        venueCustomerId: m.venueCustomerId,
+        messageBody: m.body,
+        ghlMessageId: m.ghlMessageId,
+        inserted: fresh,
+        allowOptIn: fresh,
+        logPrefix: '[ghl-sms sync]',
+      });
+    } catch (e) {
+      console.error('[ghl-sms sync] inbound follow-ups failed', { venueId, ghlMessageId: m.ghlMessageId, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+}
+
+/**
  * Pull inbound SMS from GHL for this thread (covers missing / misconfigured InboundMessage webhooks).
  * Best-effort: errors are logged, never thrown.
  */
@@ -608,6 +640,12 @@ export async function syncInboundSmsFromGhlForThread(params: {
   venueCustomerId: string;
   /** Display name for newly-imported messages (e.g. from a workflow webhook payload). */
   contactName?: string | null;
+  /**
+   * Run the inbound follow-ups (STOP/START, texting consent, reply attribution,
+   * AI Concierge) for each newly stored text. Default true. The workflow
+   * webhook passes false because it runs them itself.
+   */
+  runSideEffects?: boolean;
 }): Promise<{ imported: number; insertedMessages: SyncedInboundSmsMessage[] }> {
   const { venueId, threadId, venueCustomerId, contactName } = params;
 
@@ -782,6 +820,9 @@ export async function syncInboundSmsFromGhlForThread(params: {
       inboundCandidates,
       imported,
     });
+    if (params.runSideEffects !== false && insertedMessages.length) {
+      await runSyncedInboundSideEffects(venueId, insertedMessages);
+    }
     if (firstNonInboundSample) {
       console.warn('[ghl-sms sync] inbound msg found but FAILED SMS filter:', {
         keys: Object.keys(firstNonInboundSample).slice(0, 30),
