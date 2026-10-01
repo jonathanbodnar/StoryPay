@@ -200,13 +200,18 @@ function escapeHtmlText(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** Fill merge tags with the values as given. */
+function renderVars(text: string, vars: Record<string, string>): string {
+  // Enrich with canonical equivalents before rendering so both flat tags
+  // ({{customer_name}}) and canonical tags ({{contact.first_name}}) resolve.
+  return renderMergeVars(text, enrichTransactionalVars({ ...systemDateVars(), ...vars }));
+}
+
 export function fillTemplate(
   text: string,
   vars: Record<string, string>
 ): string {
-  // Enrich with canonical equivalents before rendering so both flat tags
-  // ({{customer_name}}) and canonical tags ({{contact.first_name}}) resolve.
-  return renderMergeVars(text, enrichTransactionalVars({ ...systemDateVars(), ...withCapitalizedNames(vars) }));
+  return renderVars(text, withCapitalizedNames(vars));
 }
 
 // ─── Shared system email chassis ───────────────────────────────────────────────
@@ -381,13 +386,15 @@ export function buildEmailHtml({
   extraHtml?: string;
 }): string {
   // Merge values come from leads, couples and venues, so they're escaped for
-  // HTML here, once; callers pass them raw. Template text is plain text.
+  // HTML here, once; callers pass them raw. Names are capitalized before
+  // escaping: capitalizing after would turn "&amp;" into "&Amp;", which email
+  // apps show as is ("Sarah &Amp; Mike"). Template text is plain text.
   const htmlVars: Record<string, string> = {};
-  for (const [k, v] of Object.entries(vars)) htmlVars[k] = escapeHtmlText(String(v ?? ''));
-  const heading = fillTemplate(template.heading, htmlVars);
-  const body    = fillTemplate(template.body, htmlVars);
-  const btnText = template.button_text ? fillTemplate(template.button_text, htmlVars) : null;
-  const footer  = template.footer ? fillTemplate(template.footer, htmlVars) : null;
+  for (const [k, v] of Object.entries(withCapitalizedNames(vars))) htmlVars[k] = escapeHtmlText(String(v ?? ''));
+  const heading = renderVars(template.heading, htmlVars);
+  const body    = renderVars(template.body, htmlVars);
+  const btnText = template.button_text ? renderVars(template.button_text, htmlVars) : null;
+  const footer  = template.footer ? renderVars(template.footer, htmlVars) : null;
 
   const linkUrl = actionUrl && actionUrl !== '#' ? actionUrl : null;
 
