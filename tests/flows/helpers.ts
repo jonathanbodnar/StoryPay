@@ -67,6 +67,21 @@ export class Browser {
   }
 }
 
+let ownerSession: Promise<Browser> | null = null;
+
+/**
+ * The flow venue's owner, signed in once per run and shared: sign-in allows 5
+ * attempts a minute per account, so tests don't each sign in again.
+ */
+export function signedInOwner(): Promise<Browser> {
+  return (ownerSession ??= (async () => {
+    await ensureFlowVenue();
+    const b = new Browser();
+    await b.signIn(FLOW_VENUE.email);
+    return b;
+  })());
+}
+
 /** Submit a lead exactly as the directory site does: signed with the shared secret. */
 export async function submitListingLead(payload: Record<string, unknown>, opts: { sign?: boolean } = {}): Promise<Response> {
   const raw = JSON.stringify(payload);
@@ -118,6 +133,7 @@ export async function ensureFlowVenue(): Promise<void> {
     password_hash: await bcrypt.hash(env.password, 10),
     setup_completed: true,
     onboarding_status: 'registered',
+    onboarding_completed_at: new Date().toISOString(),
     directory_plan_id: plan?.id ?? null,
     directory_subscription_status: 'active',
     email_verified_at: new Date().toISOString(),

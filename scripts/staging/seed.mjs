@@ -80,16 +80,17 @@ async function main() {
   if (!plan) throw new Error('The Bride Booking System plan was not copied.');
   await test.query(
     `insert into public.venues (id, name, slug, email, notification_email, brand_email, brand_phone, password_hash,
-       setup_completed, onboarding_status, directory_plan_id, directory_subscription_status, email_verified_at,
+       setup_completed, onboarding_status, onboarding_completed_at, directory_plan_id, directory_subscription_status, email_verified_at,
        owner_first_name, owner_last_name, location_city, location_state, location_full, timezone, brand_color,
        venue_type, capacity_min, capacity_max, description, is_published, is_demo)
      values ($1, 'Maple Hollow Barn (Test)', 'maple-hollow-test', $2, $2, $2, '+12125550100', $3,
-       true, 'registered', $4, 'active', now(),
+       true, 'registered', now(), $4, 'active', now(),
        'Test', 'Owner', 'Asheville', 'NC', '123 Test Lane, Asheville, NC 28801', 'America/New_York', '#1b1b1b',
        'barn', 50, 220, 'A fake venue for the StoryVenue test copy.', true, false)
      on conflict (id) do update set email = excluded.email, notification_email = excluded.notification_email,
        brand_email = excluded.brand_email, password_hash = excluded.password_hash,
-       directory_plan_id = excluded.directory_plan_id, directory_subscription_status = excluded.directory_subscription_status`,
+       directory_plan_id = excluded.directory_plan_id, directory_subscription_status = excluded.directory_subscription_status,
+       onboarding_completed_at = coalesce(public.venues.onboarding_completed_at, excluded.onboarding_completed_at)`,
     [DEMO_VENUE_ID, ownerEmail, await bcrypt.hash(password, 10), plan.id],
   );
   console.log('demo venue: Maple Hollow Barn (Test), sign in with ADMIN_EMAIL + STAGING_PASSWORD');

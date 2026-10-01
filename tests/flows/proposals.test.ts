@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Browser, db, ensureFlowVenue, env, FLOW_VENUE, runId, waitForEmail } from './helpers';
+import { Browser, db, ensureFlowVenue, env, FLOW_VENUE, runId, signedInOwner, waitForEmail } from './helpers';
 
 const STORYVENUE_LOGO = 'storyvenue-logo-dark.png';
 // A tiny drawn signature (1×1 PNG), as the signature pad would send it.
 const SIGNATURE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
 describe('an owner sends a proposal and the couple signs it', () => {
-  const owner = new Browser();
+  let owner: Browser;
   const couple = new Browser();
   const coupleEmail = `jordan.${runId}@example.com`;
   let proposal: { id: string; public_token: string; status: string } = { id: '', public_token: '', status: '' };
@@ -14,7 +14,7 @@ describe('an owner sends a proposal and the couple signs it', () => {
 
   beforeAll(async () => {
     await ensureFlowVenue();
-    await owner.signIn(FLOW_VENUE.email);
+    owner = await signedInOwner();
     since = new Date().toISOString();
   });
 

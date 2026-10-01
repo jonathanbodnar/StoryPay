@@ -11,5 +11,7 @@ export default defineConfig({
     testTimeout: 60_000,
     hookTimeout: 60_000,
     fileParallelism: false,
+    // One shared owner session across files (sign-in is rate limited).
+    isolate: false,
   },
 });

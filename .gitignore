@@ -43,3 +43,8 @@ next-env.d.ts
 
 # graphify knowledge graph (rebuilt locally for free via git hook; not committed to avoid repo bloat)
 /graphify-out/
+
+# Browser tests (Playwright)
+/tests/browser/.auth/
+/playwright-report/
+/test-results/

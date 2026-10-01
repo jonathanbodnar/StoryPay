@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Browser, db, ensureFlowVenue, env, FLOW_VENUE } from './helpers';
+import { Browser, db, ensureFlowVenue, env, signedInOwner } from './helpers';
 
 // Who can reach what. The demo venue ("Maple Hollow Barn (Test)") is the
 // other venue: the flow venue must never see or change its records.
@@ -21,12 +21,12 @@ async function cron(job: string, secret?: string): Promise<Response> {
 }
 
 describe('who can reach what', () => {
-  const owner = new Browser();
+  let owner: Browser;
   let otherLeadId = '';
 
   beforeAll(async () => {
     await ensureFlowVenue();
-    await owner.signIn(FLOW_VENUE.email);
+    owner = await signedInOwner();
     const { data } = await db.from('leads').select('id').eq('venue_id', DEMO_VENUE_ID).limit(1).single();
     otherLeadId = data!.id;
   });

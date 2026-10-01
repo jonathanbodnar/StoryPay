@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Browser, db, ensureFlowVenue, env, FLOW_VENUE, runId } from './helpers';
+import { Browser, db, ensureFlowVenue, env, FLOW_VENUE, runId, signedInOwner } from './helpers';
 
 // A new member each run: the gate remembers account status for a minute, so
 // reusing one removed by the last run would look removed for a while.
@@ -9,7 +9,7 @@ const MEMBER = { id: randomUUID(), email: `flow-member.${runId}@example.com` };
 
 describe('team members', () => {
   const member = new Browser();
-  const owner = new Browser();
+  let owner: Browser;
 
   beforeAll(async () => {
     await ensureFlowVenue();
@@ -21,7 +21,7 @@ describe('team members', () => {
     }, { onConflict: 'id' });
     if (error) throw new Error(error.message);
     await member.signIn(MEMBER.email);
-    await owner.signIn(FLOW_VENUE.email);
+    owner = await signedInOwner();
   });
 
   it('a member without revenue access is refused revenue, but can work leads', async () => {
