@@ -10,14 +10,15 @@
  *
  * This calls the directory's `/api/revalidate` webhook so those pages refresh
  * within seconds. Best-effort and fully no-op when `DIRECTORY_REVALIDATE_SECRET`
- * isn't configured, so it never blocks or breaks the triggering admin/owner
+ * (or `REVALIDATE_SECRET`) isn't configured, so it never blocks or breaks the triggering admin/owner
  * action.
  */
 
 const DIRECTORY_BASE = (process.env.NEXT_PUBLIC_DIRECTORY_URL || 'https://storyvenue.com').replace(/\/$/, '');
 
 export async function revalidateDirectory(opts?: { slug?: string | null }): Promise<void> {
-  const secret = process.env.DIRECTORY_REVALIDATE_SECRET;
+  // Same value as the directory's REVALIDATE_SECRET; either name works here.
+  const secret = process.env.DIRECTORY_REVALIDATE_SECRET || process.env.REVALIDATE_SECRET;
   if (!secret) return; // not configured → skip silently
   try {
     await fetch(`${DIRECTORY_BASE}/api/revalidate`, {
