@@ -2,6 +2,7 @@
 // Requires RESEND_API_KEY. Set RESEND_DEFAULT_FROM on the host (e.g. Railway) — verified in Resend.
 
 import { isStaging, stagingEmailFilter } from '@/lib/staging';
+import { recordOutbox } from '@/lib/staging-outbox';
 
 /** Used when `RESEND_DEFAULT_FROM` is unset (e.g. local). Production: set env to your verified address. */
 export const RESEND_FROM_FALLBACK = 'StoryVenue <hello@storyvenue.com>';
@@ -262,7 +263,13 @@ export async function sendEmail({
   // The test copy only emails approved addresses, marked [TEST] (staging.ts).
   // What it skips counts as sent, so the rest of the flow still runs.
   if (isStaging()) {
-    const { blocked } = stagingEmailFilter([...(Array.isArray(to) ? to : [to]), ...(cc ?? []), ...(bcc ?? [])]);
+    const { allowed, blocked } = stagingEmailFilter([...(Array.isArray(to) ? to : [to]), ...(cc ?? []), ...(bcc ?? [])]);
+    // Every email is kept in the test copy's outbox for the flow tests.
+    const toList = Array.isArray(to) ? to : [to];
+    recordOutbox({
+      to: toList, cc: cc ?? [], bcc: bcc ?? [], subject, html,
+      from: from?.name, replyTo, delivered: toList.some((a) => allowed.includes(a)),
+    });
     if (blocked.length) {
       const keep = (list: string[]) => list.filter((a) => !blocked.includes(a));
       to = keep(Array.isArray(to) ? to : [to]);

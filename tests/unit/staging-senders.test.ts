@@ -91,3 +91,23 @@ describe('getStripe', () => {
     expect(getStripe()).toBeTruthy();
   });
 });
+
+describe('the test copy outbox', () => {
+  it('keeps every email, delivered or not, and nothing on the live site', async () => {
+    const { readOutbox, clearOutbox } = await import('@/lib/staging-outbox');
+    clearOutbox();
+    vi.stubEnv('APP_ENV', 'staging');
+    vi.stubEnv('STAGING_EMAIL_ALLOWLIST', '@tests.example.com');
+    captureResend();
+    await sendEmail({ to: 'bride@gmail.com', subject: 'Invoice', html: '<p>a</p>' });
+    await sendEmail({ to: 'ok@tests.example.com', cc: ['x@gmail.com'], subject: 'Receipt', html: '<p>b</p>' });
+    const box = readOutbox();
+    expect(box.map((e) => [e.subject, e.delivered])).toEqual([['Receipt', true], ['Invoice', false]]);
+    expect(readOutbox({ to: 'bride@' })).toHaveLength(1);
+    expect(box[1].html).toBe('<p>a</p>');
+    vi.stubEnv('APP_ENV', '');
+    clearOutbox();
+    await sendEmail({ to: 'bride@gmail.com', subject: 'Live', html: '<p>c</p>' });
+    expect(readOutbox()).toHaveLength(0);
+  });
+});
