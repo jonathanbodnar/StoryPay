@@ -1,5 +1,5 @@
 import { expect, request, test, type Page } from '@playwright/test';
-import { env, FLOW_VENUE, runId } from '../flows/helpers';
+import { env, FLOW_VENUE, runId, submitListingLead } from '../flows/helpers';
 
 /** On a phone, nothing should scroll sideways. */
 async function expectNoSidewaysScroll(page: Page): Promise<void> {
@@ -62,4 +62,24 @@ test('a couple opens their proposal and signs it', async ({ page }) => {
   await expect(page.getByRole('heading', { name: "You're all set" })).toBeVisible();
   await expect(page.getByText(/Signed on /)).toBeVisible();
   await expect(page.getByRole('link', { name: /Download your signed contract/ })).toBeVisible();
+});
+
+test.describe('live updates', () => {
+  test.use({ storageState: 'tests/browser/.auth/owner.json' });
+
+  test('a new lead lights up the Lead Inbox badge without a refresh', async ({ page }) => {
+    test.skip(test.info().project.name !== 'desktop', 'The phone tab bar has its own badge.');
+    await page.goto('/dashboard/leads'); // opening the inbox marks everything seen
+    await page.goto('/dashboard');
+    const inbox = page.getByRole('link', { name: /Lead Inbox/ }).first();
+    await expect(inbox).toBeVisible();
+    await expect(inbox).not.toHaveText(/\d/);
+    const last = `Live${runId}`;
+    const res = await submitListingLead({
+      venue_id: FLOW_VENUE.id, first_name: 'Morgan', last_name: last, email: `morgan.${last.toLowerCase()}@example.com`,
+      phone: '(212) 555-0177', source: 'directory', client_ip: '203.0.113.8',
+    });
+    expect(res.status).toBe(201);
+    await expect(inbox).toHaveText(/Lead Inbox\s*1\b/, { timeout: 20_000 });
+  });
 });
