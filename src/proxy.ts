@@ -22,16 +22,26 @@ const ABSOLUTE_MAX_SECONDS = 60 * 60 * 24 * 7; // 7-day hard cap (web default/le
 const IDLE_SECONDS = 60 * 60 * 8;              // 8-hour idle (default / legacy)
 
 /**
+ * Sessions signed with the old shared secret (NEXTAUTH_SECRET / ADMIN_SECRET)
+ * are accepted until this moment. SESSION_SECRET was set on Sep 30, 2026; any
+ * old-signed session used since then was re-signed with it, every web session
+ * from before then has hit its 7-day cap by this date, and an app session left
+ * unopened since then signs in once more.
+ */
+const LEGACY_SESSION_SECRET_UNTIL = Date.parse('2026-10-08T12:00:00Z');
+
+/**
  * Session signing secrets, newest first. SESSION_SECRET is venue sessions' own
- * secret; the older shared one (NEXTAUTH_SECRET / ADMIN_SECRET) still verifies
- * sessions issued before it was set, and those are re-signed with the new one
- * on their next request, so nobody is signed out. Drop the fallback once every
- * active session has been re-signed (a week for web; idle app sessions longer).
+ * secret; until LEGACY_SESSION_SECRET_UNTIL the older shared one still verifies
+ * sessions issued before it was set (they're re-signed on their next request,
+ * so nobody is signed out). Without SESSION_SECRET the shared one is used.
  */
 function getSecrets(): string[] {
   const primary = process.env.SESSION_SECRET;
   const legacy = process.env.NEXTAUTH_SECRET ?? process.env.ADMIN_SECRET ?? process.env.LEAD_WEBHOOK_SECRET;
-  return [primary, legacy].filter((s, i, a): s is string => !!s && a.indexOf(s) === i);
+  if (!primary) return legacy ? [legacy] : [];
+  if (legacy && legacy !== primary && Date.now() < LEGACY_SESSION_SECRET_UNTIL) return [primary, legacy];
+  return [primary];
 }
 
 /** True when `sig` is the HMAC of `message` under any of the secrets. */
