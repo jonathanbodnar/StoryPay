@@ -24,7 +24,7 @@ import {
   resolveDefaultStageIdByName,
 } from '@/lib/booking-system-stages';
 import { STL_NAME, PHASE4_NAME, PHASE5_NAME, PHASE6_NAME } from '@/lib/booking-system-sequences';
-import { DEFAULT_PHASE2_STEPS, bookingStepRows, type StepConfig } from '@/lib/booking-system-default-sequence';
+import { DEFAULT_PHASE2_STEPS, bookingStepRows, saveAutomationSteps, type StepConfig } from '@/lib/booking-system-default-sequence';
 
 // Re-exported for backwards compatibility with existing importers of this
 // route file (e.g. `stage-default/route.ts`). Source of truth now lives in
@@ -439,29 +439,12 @@ export async function PATCH(req: NextRequest) {
     const autoId = auto.id as string;
 
     if (steps !== undefined) {
-      // Delete all existing steps then re-insert in order.
-      const { error: delErr } = await supabaseAdmin
-        .from('marketing_automation_steps')
-        .delete()
-        .eq('automation_id', autoId);
-      if (delErr) {
-        console.error(`[booking-system] failed to clear existing steps for ${name}:`, delErr);
-        throw new Error(`Failed to clear existing steps: ${delErr.message}`);
-      }
-
-      if (steps.length > 0) {
-        const inserts = bookingStepRows(autoId, steps);
-        const { error: insErr } = await supabaseAdmin
-          .from('marketing_automation_steps')
-          .insert(inserts);
-        if (insErr) {
-          console.error(`[booking-system] failed to insert steps for ${name}:`, insErr);
-          const msg = insErr.message || 'Unknown insert error';
-          const hint = /step_type_check|violates check constraint/i.test(msg)
-            ? 'Database migration 119 has not been applied yet — please run migrations/119_booking_system_step_types.sql in Supabase.'
-            : null;
-          throw new Error(`Failed to save steps: ${msg}${hint ? ` (${hint})` : ''}`);
-        }
+      // Update each step in place (see saveAutomationSteps).
+      try {
+        await saveAutomationSteps(autoId, bookingStepRows(autoId, steps));
+      } catch (e) {
+        console.error(`[booking-system] failed to save steps for ${name}:`, e);
+        throw e;
       }
     }
   };
@@ -547,13 +530,7 @@ export async function replaceAutomationStepsOnly(
 
   const autoId = auto.id as string;
 
-  const { error: delErr } = await supabaseAdmin
-    .from('marketing_automation_steps')
-    .delete()
-    .eq('automation_id', autoId);
-  if (delErr) throw new Error(`Failed to clear existing steps: ${delErr.message}`);
-
-  if (steps.length > 0) {
+  {
     const inserts = steps.map((s, i) => ({
       automation_id: autoId,
       step_order:    i,
@@ -571,10 +548,7 @@ export async function replaceAutomationStepsOnly(
         mode:          s.step_type === 'send_email' ? 'quick' : undefined,
       },
     }));
-    const { error: insErr } = await supabaseAdmin
-      .from('marketing_automation_steps')
-      .insert(inserts);
-    if (insErr) throw new Error(`Failed to save steps: ${insErr.message}`);
+    await saveAutomationSteps(autoId, inserts as Array<{ automation_id: string; step_order: number; step_type: string; config_json: Record<string, unknown> }>);
   }
 
   return { automationId: autoId, automationActive: (auto.status as string) === 'active' };

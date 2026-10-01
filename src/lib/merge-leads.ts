@@ -320,10 +320,12 @@ export async function autoMergeExactDuplicates(
     return null;
   }
 
+  // Same email first (a venue can have far more than one page of leads).
   const { data: others, error } = await supabaseAdmin
     .from('leads')
     .select('id, email, phone, created_at')
     .eq('venue_id', venueId)
+    .ilike('email', em.replace(/[%_\\]/g, '\\$&'))
     .neq('id', newLeadId);
 
   if (error || !others?.length) {

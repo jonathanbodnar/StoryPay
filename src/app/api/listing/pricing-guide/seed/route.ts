@@ -33,7 +33,7 @@ export async function GET() {
     supabaseAdmin
       .from('venues')
       .select(
-        'id, name, description, venue_type, location_city, location_state, capacity_min, capacity_max, indoor_outdoor, features, cover_image_url, gallery_images, availability_notes, brand_logo_url, google_reviews_cache, phone, email, website, address',
+        'id, name, description, venue_type, location_city, location_state, capacity_min, capacity_max, indoor_outdoor, features, cover_image_url, gallery_images, availability_notes, brand_logo_url, google_reviews_cache, phone, email, website:brand_website, address',
       )
       .eq('id', venueId)
       .maybeSingle(),

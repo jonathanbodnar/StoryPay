@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { resolveCoupleWeddingContext } from '@/lib/couple-server';
 import { sendEmail } from '@/lib/email';
+import { resolveCoupleInviteFrom } from '@/lib/couple-website-invite';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const MAX_RECIPIENTS = 500;
+/**
+ * Guest emails share one rolling-24h allowance with website invites (the same
+ * send log): a few sends and a few hundred guests a day is plenty for a real
+ * couple and keeps the sending domain clean.
+ */
+const MAX_SENDS_PER_DAY = 3;
+const MAX_RECIPIENTS_PER_DAY = 500;
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -23,10 +31,10 @@ interface GuestLite {
  * POST /api/couple/guests/blast
  * Body: { subject, message, attendingOnly? }
  * Sends a custom email to the couple's guests (those with an email). Replies go
- * to the couple's own inbox. Bride-only; connected wedding required.
+ * to the couple's own inbox. The couple only (not collaborators).
  */
 export async function POST(request: NextRequest) {
-  const gate = await resolveCoupleWeddingContext(request, { write: true });
+  const gate = await resolveCoupleWeddingContext(request, { ownerOnly: true });
   if (!gate.ok) return gate.res;
   const { user, wedding: link } = gate.ctx;
 
@@ -73,6 +81,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, sent: 0, failed: 0, skippedNoEmail });
   }
 
+  // Shared daily allowance with website invites.
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: recentSends } = await supabaseAdmin
+    .from('couple_website_invite_sends')
+    .select('recipient_count')
+    .eq('couple_wedding_id', link.id)
+    .gte('created_at', since);
+  const sendsToday = (recentSends ?? []).length;
+  const recipientsToday = ((recentSends ?? []) as { recipient_count: number | null }[]).reduce((s, r) => s + (r.recipient_count ?? 0), 0);
+  if (sendsToday >= MAX_SENDS_PER_DAY) {
+    return NextResponse.json({ error: `You can send up to ${MAX_SENDS_PER_DAY} guest emails in 24 hours. Please try again tomorrow.` }, { status: 429 });
+  }
+  if (recipientsToday + targets.length > MAX_RECIPIENTS_PER_DAY) {
+    const left = Math.max(0, MAX_RECIPIENTS_PER_DAY - recipientsToday);
+    return NextResponse.json({
+      error: left > 0
+        ? `You can email up to ${MAX_RECIPIENTS_PER_DAY} guests in 24 hours, and ${left} are left today.`
+        : `You've emailed ${MAX_RECIPIENTS_PER_DAY} guests in the last 24 hours. Please try again tomorrow.`,
+    }, { status: 429 });
+  }
+
   const bodyHtml = esc(message).replace(/\n/g, '<br>');
 
   let sent = 0;
@@ -95,7 +124,7 @@ export async function POST(request: NextRequest) {
 
     const result = await sendEmail({
       to: g.email as string,
-      from: { name: coupleName },
+      from: resolveCoupleInviteFrom(coupleName),
       replyTo: user.email ?? undefined,
       subject,
       html,
@@ -103,6 +132,15 @@ export async function POST(request: NextRequest) {
     if (result.success) sent += 1;
     else failed += 1;
   }
+
+  await supabaseAdmin.from('couple_website_invite_sends').insert({
+    couple_wedding_id: link.id,
+    sent_by: user.id,
+    subject,
+    recipient_count: targets.length,
+    sent_count: sent,
+    failed_count: failed,
+  });
 
   return NextResponse.json({ ok: true, sent, failed, skippedNoEmail });
 }

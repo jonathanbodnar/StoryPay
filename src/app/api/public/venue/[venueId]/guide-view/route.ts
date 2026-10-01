@@ -15,6 +15,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getClientIp, rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +26,10 @@ export async function POST(
   try {
     const { venueId } = await params;
     if (!venueId) return NextResponse.json({ ok: false }, { status: 400 });
+    // A view note per open is plenty; this stops anyone flooding a thread.
+    if (!rateLimit(`guide-view:${getClientIp(req)}`, 30, 60 * 60 * 1000).allowed) {
+      return NextResponse.json({ ok: false }, { status: 429 });
+    }
 
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
     const leadId = typeof body.leadId === 'string' ? body.leadId.trim() : '';

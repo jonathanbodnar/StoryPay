@@ -111,6 +111,13 @@ export async function POST(
   // a test to silently fail because of that.
   const isTestSubmission = fd.get('_test') === '1';
 
+  // A form the venue turned off takes no real submissions (a cached page or a
+  // direct post would otherwise still create leads and send the guide). The
+  // editor's test submissions still work on drafts.
+  if (!isTestSubmission && (formRow as { published?: boolean | null }).published === false) {
+    return NextResponse.json({ error: 'This form is no longer accepting responses.' }, { status: 404 });
+  }
+
   const payload: Record<string, unknown> = {};
 
   // ── Test submission path: just record whatever fields were submitted ──────

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVenueId } from '@/lib/auth-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { AutomationTriggerConfig, AutomationTriggerType } from '@/lib/marketing-email-schema';
+import { saveAutomationSteps } from '@/lib/booking-system-default-sequence';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -128,16 +129,20 @@ export async function PATCH(
   }
 
   if (stepsProvided) {
-    await supabaseAdmin.from('marketing_automation_steps').delete().eq('automation_id', id);
-    if (body.steps!.length > 0) {
-      const rows = body.steps!.map((s) => ({
+    // Positions 0..n-1 in the editor's order, saved in place (couples partway
+    // through keep their position; overlapping saves can't collide).
+    const rows = [...body.steps!]
+      .sort((x, y) => (Number(x.step_order) || 0) - (Number(y.step_order) || 0))
+      .map((s, i) => ({
         automation_id: id,
-        step_order: s.step_order,
+        step_order: i,
         step_type: s.step_type,
-        config_json: s.config ?? {},
+        config_json: (s.config ?? {}) as Record<string, unknown>,
       }));
-      const { error: se } = await supabaseAdmin.from('marketing_automation_steps').insert(rows);
-      if (se) return NextResponse.json({ error: se.message }, { status: 500 });
+    try {
+      await saveAutomationSteps(id, rows);
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : 'Could not save steps' }, { status: 500 });
     }
   }
 

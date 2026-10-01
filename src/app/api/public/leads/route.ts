@@ -248,14 +248,24 @@ export async function POST(request: NextRequest) {
       .catch(() => { /* non-fatal */ });
   }
 
-  // Skip duplicate recording for demo venues — they exist to test resubmission.
+  // A couple who already asked (same email and phone) keeps their existing
+  // lead: merge the new row into it now, before anything below uses the id,
+  // so the guide, the sequence and the owner's link all reach the surviving
+  // lead. (Merging in the background deleted the new lead mid-request.)
+  // Demo venues skip it — they exist to test resubmission.
+  let leadId = lr.id;
+  let isRepeat = false;
   if (!(venue as { is_demo?: boolean }).is_demo) {
-    void autoMergeExactDuplicates(venue.id, lr.id, lr.email, lr.phone, lr.created_at);
+    const merged = await autoMergeExactDuplicates(venue.id, lr.id, lr.email, lr.phone, lr.created_at).catch(() => null);
+    if (merged?.mergedInto && merged.mergedInto !== lr.id) {
+      leadId = merged.mergedInto;
+      isRepeat = true;
+    }
   }
 
   // Apply new_lead, inquiry_received, form_submitted, directory_lead system tags (fire-and-forget)
   void ensureSystemTagsForVenue(venue.id)
-    .then(() => applySystemTags(venue.id, lr.id, [
+    .then(() => applySystemTags(venue.id, leadId, [
       'new_lead',
       'inquiry_received',
       'form_submitted',
@@ -272,7 +282,7 @@ export async function POST(request: NextRequest) {
   if (!dormant) {
     notifyOwnerNewLead({
       venueId:   venue.id,
-      leadId:    lr.id,
+      leadId:    leadId,
       fullName:  [firstName, lastName].filter(Boolean).join(' ').trim() || lr.email,
       email:     lr.email,
       phone:     phone || null,
@@ -284,13 +294,13 @@ export async function POST(request: NextRequest) {
   // Instant Lead Inbox badge update (sidebar + mobile tab bar).
   void import('@/lib/realtime/broadcast')
     .then(({ broadcastNewLead }) =>
-      broadcastNewLead({ venueId: venue.id, leadId: lr.id, source: payload.source || 'directory', createdAt: lr.created_at }))
+      broadcastNewLead({ venueId: venue.id, leadId: leadId, source: payload.source || 'directory', createdAt: lr.created_at }))
     .catch(() => {});
 
   // Fan out to Zapier / external integrations subscribed to lead.created
   void dispatchIntegrationEvent(venue.id, 'lead.created', {
     lead: {
-      id: lr.id,
+      id: leadId,
       first_name: firstName || '',
       last_name: lastName || '',
       full_name: [firstName, lastName].filter(Boolean).join(' ').trim() || lr.email,
@@ -417,9 +427,9 @@ export async function POST(request: NextRequest) {
         .eq('venue_id', venue.id)
         .ilike('email', lr.email)
         .neq('id', lr.id)
-        .or(
-          `excluded_from_pipeline.eq.true,stage_id.is.null,pipeline_id.is.null,pipeline_id.neq.${defaultPipelineId}`,
-        );
+        // Only leads that never made it onto a board; a lead the venue moved
+        // into another pipeline stays where it is.
+        .or('excluded_from_pipeline.eq.true,stage_id.is.null,pipeline_id.is.null');
       if (stuck.error && /column .*excluded_from_pipeline/i.test(stuck.error.message)) {
         await supabaseAdmin
           .from('leads')
@@ -450,7 +460,7 @@ export async function POST(request: NextRequest) {
   // Opportunity" + created date — so their conversation history always starts
   // with a record of when they came in. Awaited so it lands BEFORE the
   // guide-delivery messages and shows up as the first item in the thread.
-  await logNewLeadOpportunity(venue.id, lr.id, lr.created_at);
+  await logNewLeadOpportunity(venue.id, leadId, lr.created_at);
 
   // A form that collected a phone number is an explicit opt-in — they typed their
   // number into our own form asking to be contacted. This is what lifts the
@@ -462,7 +472,7 @@ export async function POST(request: NextRequest) {
     // form both show the form consent line under their submit button.
     void recordSmsConsentEvidence({
       venueId: venue.id,
-      leadId: lr.id,
+      leadId: leadId,
       phone,
       email: lr.email,
       source: 'form_submit',
@@ -478,7 +488,7 @@ export async function POST(request: NextRequest) {
   // Phase 1 — Booking System guide delivery (email + SMS), fire-and-forget.
   // This sends the pricing guide PDF link immediately after form submission,
   // independent of the Phase 2 automation sequence below.
-  void sendBookingSystemGuide(venue.id, lr.id).catch((e) =>
+  void sendBookingSystemGuide(venue.id, leadId).catch((e) =>
     console.error('[public/leads] sendBookingSystemGuide error:', e),
   );
 
@@ -516,8 +526,8 @@ export async function POST(request: NextRequest) {
   try {
     const formId = await ensureListingForm(venue.id);
     if (formId) {
-      console.log(`[public/leads] firing form trigger formId=${formId} venueId=${venue.id} leadId=${lr.id}`);
-      await onMarketingFormSubmitted(venue.id, lr.id, formId);
+      console.log(`[public/leads] firing form trigger formId=${formId} venueId=${venue.id} leadId=${leadId}`);
+      await onMarketingFormSubmitted(venue.id, leadId, formId);
       // Kick the cron after a short delay to advance any delay steps that were
       // just scheduled (fire-and-forget, never blocks the response).
       void (async () => {
@@ -548,11 +558,16 @@ export async function POST(request: NextRequest) {
       .catch((e) => console.warn('[public/leads] dormant alert', e));
   }
 
+  let trackToken = (lead as { track_token?: string }).track_token ?? null;
+  if (isRepeat) {
+    const { data: kept } = await supabaseAdmin.from('leads').select('track_token').eq('id', leadId).maybeSingle();
+    trackToken = (kept as { track_token?: string | null } | null)?.track_token ?? trackToken;
+  }
   return NextResponse.json(
     {
       ok: true,
-      lead_id: lead.id,
-      track_token: (lead as { track_token?: string }).track_token ?? null,
+      lead_id: leadId,
+      track_token: trackToken,
       venue_slug: venue.slug ?? null,
       venue_website: (venue as { brand_website?: string | null }).brand_website ?? null,
     },

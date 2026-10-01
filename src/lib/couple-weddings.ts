@@ -435,7 +435,7 @@ export async function importCoupleContactToVenue(
       .maybeSingle(),
     supabaseAdmin
       .from('venue_customers')
-      .select('first_name, last_name, customer_phone, customer_email')
+      .select('first_name, last_name, phone, customer_email')
       .eq('id', venueCustomerId)
       .maybeSingle(),
   ]);
@@ -443,7 +443,7 @@ export async function importCoupleContactToVenue(
   const venue = vc as {
     first_name: string | null;
     last_name: string | null;
-    customer_phone: string | null;
+    phone: string | null;
     customer_email: string | null;
   } | null;
   if (!couple || !venue) return;
@@ -455,7 +455,7 @@ export async function importCoupleContactToVenue(
   const patch: Record<string, unknown> = {};
   if (blank(venue.first_name) && !blank(couple.first_name)) patch.first_name = couple.first_name!.trim();
   if (blank(venue.last_name) && !blank(couple.last_name)) patch.last_name = couple.last_name!.trim();
-  if (blank(venue.customer_phone) && !blank(couple.phone)) patch.customer_phone = couple.phone!.trim();
+  if (blank(venue.phone) && !blank(couple.phone)) patch.phone = couple.phone!.trim();
   if ((blank(venue.customer_email) || placeholderEmail) && email) patch.customer_email = email;
 
   if (Object.keys(patch).length === 0) return;

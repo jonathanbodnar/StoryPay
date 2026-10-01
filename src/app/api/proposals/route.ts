@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
         .single(),
       supabaseAdmin
         .from('proposal_template_fields')
-        .select('id, field_type, label, sort_order, required, placeholder, options')
+        .select('id, field_type, label, sort_order, required')
         .eq('template_id', templateId)
         .order('sort_order', { ascending: true }),
     ]);

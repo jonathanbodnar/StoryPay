@@ -78,6 +78,30 @@ export function bookingStepRows(automationId: string, steps: StepConfig[]) {
 }
 
 /**
+ * Save a sequence's steps in place: each position is updated (or added) by its
+ * step number, and positions past the new end are removed. Unlike deleting
+ * every step and re-adding them, two overlapping saves can't collide, and a
+ * couple partway through keeps pointing at the same position.
+ */
+export async function saveAutomationSteps(
+  automationId: string,
+  rows: Array<{ automation_id: string; step_order: number; step_type: string; config_json: Record<string, unknown> }>,
+): Promise<void> {
+  if (rows.length > 0) {
+    const { error } = await supabaseAdmin
+      .from('marketing_automation_steps')
+      .upsert(rows, { onConflict: 'automation_id,step_order' });
+    if (error) throw new Error(`Failed to save steps: ${error.message}`);
+  }
+  const { error: delErr } = await supabaseAdmin
+    .from('marketing_automation_steps')
+    .delete()
+    .eq('automation_id', automationId)
+    .gte('step_order', rows.length);
+  if (delErr) throw new Error(`Failed to remove old steps: ${delErr.message}`);
+}
+
+/**
  * Create the default 14-day sequence for a venue that has never saved one.
  * Returns true when it was created. Safe to race: the database allows one per
  * venue (migration 265), so a second concurrent insert just fails.

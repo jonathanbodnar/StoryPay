@@ -155,22 +155,23 @@ export async function POST(req: NextRequest) {
 
   if (isLastStep) {
     // Mark completed rather than advancing past the end
-    await supabaseAdmin
+    const { error: doneErr } = await supabaseAdmin
       .from('marketing_automation_enrollments')
-      .update({ status: 'completed', updated_at: new Date().toISOString() })
+      .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('id', body.enrollmentId);
+    if (doneErr) return NextResponse.json({ error: doneErr.message }, { status: 500 });
     return NextResponse.json({ ok: true, action: 'completed', nextIndex });
   }
 
   // Advance the step and fire immediately (next_run_at = NOW)
-  await supabaseAdmin
+  const { error: advErr } = await supabaseAdmin
     .from('marketing_automation_enrollments')
     .update({
       current_step_index: nextIndex,
       next_run_at:        new Date().toISOString(),
-      updated_at:         new Date().toISOString(),
     })
     .eq('id', body.enrollmentId);
+  if (advErr) return NextResponse.json({ error: advErr.message }, { status: 500 });
 
   return NextResponse.json({ ok: true, action: 'advanced', nextIndex });
 }
