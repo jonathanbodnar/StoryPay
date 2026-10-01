@@ -172,6 +172,18 @@ export async function processPrivateClientMonthlyReminder(): Promise<PrivateClie
       continue;
     }
 
+    // Claim this month's reminder before sending (move next_at on), so two
+    // overlapping runs can't both send it; put it back if every send fails.
+    const prevNextAt = venue.private_client_monthly_reminder_next_at;
+    const { data: claimed } = await supabaseAdmin
+      .from('venues')
+      .update({ private_client_monthly_reminder_next_at: nextAtSeed })
+      .eq('id', venue.id)
+      .eq('private_client_monthly_reminder_next_at', prevNextAt)
+      .select('id');
+    if (!claimed?.length) continue;
+    const release = () => supabaseAdmin.from('venues').update({ private_client_monthly_reminder_next_at: prevNextAt }).eq('id', venue.id);
+
     // Route any reply into this venue's Venue Concierge thread (same signed
     // per-venue vcreply+ address the concierge notifications use): the reply
     // lands in venue_concierge_messages as a venue-side message, notifies our
@@ -218,6 +230,7 @@ export async function processPrivateClientMonthlyReminder(): Promise<PrivateClie
       );
       const anyOk = results.some((r) => r.status === 'fulfilled' && r.value.success);
       if (!anyOk) {
+        await release(); // tomorrow's run tries again
         result.errors += 1;
         console.warn(`[private-client-monthly-reminder] all sends failed for venue ${venue.id}`);
         continue;
@@ -225,13 +238,11 @@ export async function processPrivateClientMonthlyReminder(): Promise<PrivateClie
 
       await supabaseAdmin
         .from('venues')
-        .update({
-          private_client_monthly_reminder_next_at: nextAtSeed,
-          private_client_monthly_reminder_last_sent_at: nowIso,
-        })
+        .update({ private_client_monthly_reminder_last_sent_at: nowIso })
         .eq('id', venue.id);
       result.sent += 1;
     } catch (e) {
+      await release();
       result.errors += 1;
       console.error(`[private-client-monthly-reminder] error for venue ${venue.id}:`, e instanceof Error ? e.message : e);
     }

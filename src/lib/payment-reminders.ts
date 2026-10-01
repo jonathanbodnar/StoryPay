@@ -319,21 +319,31 @@ export async function processPaymentRemindersCron(): Promise<{
       installment_amount_cents: number | null;
     };
 
-    const result = await sendPaymentDueReminderEmail(row);
-    if (result.ok) {
-      const { error: upErr } = await supabaseAdmin
-        .from('proposal_payment_reminders')
-        .update({ sent_at: new Date().toISOString() })
-        .eq('id', row.id)
-        .is('sent_at', null);
-      if (!upErr) sent++;
-      else errors++;
-    } else {
-      if (result.error === 'proposal_gone' || result.error === 'no_email' || result.error === 'not_signed' || result.error === 'already_paid') {
+    // Claim the reminder before sending, so two overlapping runs can't both
+    // email it (a deploy briefly runs the old and new server side by side).
+    const { data: claimed } = await supabaseAdmin
+      .from('proposal_payment_reminders')
+      .update({ sent_at: new Date().toISOString() })
+      .eq('id', row.id)
+      .is('sent_at', null)
+      .select('id');
+    if (!claimed?.length) continue;
+
+    const release = () => supabaseAdmin.from('proposal_payment_reminders').update({ sent_at: null }).eq('id', row.id);
+    try {
+      const result = await sendPaymentDueReminderEmail(row);
+      if (result.ok) {
+        sent++;
+      } else if (result.error === 'proposal_gone' || result.error === 'no_email' || result.error === 'not_signed' || result.error === 'already_paid') {
         await supabaseAdmin.from('proposal_payment_reminders').delete().eq('id', row.id);
       } else {
+        await release(); // not sent: the next run tries again
         errors++;
       }
+    } catch (e) {
+      console.error('[cron payment-reminders] send failed', row.id, e);
+      await release();
+      errors++;
     }
   }
 

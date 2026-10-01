@@ -38,6 +38,17 @@
  *                                      lifecycle (see owner-ghl-sync.ts).
  *                                      Cheap steady-state: venues already in
  *                                      sync cost zero GHL calls per run.
+ *   - installments          every 60m  payment-plan charges, 3-day heads-ups,
+ *                                      Stripe accounts in review (see
+ *                                      stripe/installments-cron.ts)
+ *   - payment-reminders     daily 9:00 UTC   overdue-payment reminder emails
+ *   - private-client-reminder daily 17:00 UTC  Private Client monthly email
+ *   - tag-sweep             daily 3:00 UTC   date/activity system tags
+ *                                      These four ran only on GitHub before;
+ *                                      each claims its work first, so the
+ *                                      GitHub backup can't double-send, and a
+ *                                      daily job claims its day in
+ *                                      admin_kv_cache (one run per day).
  *
  * Guarantees:
  *   - Overlap guard: a tick is skipped when the previous run of that job is
@@ -77,6 +88,43 @@ const HOT_MAX_THREADS = 5;
 /** Last observed hot-thread count, so we log transitions (0→N, N→0) instead
  *  of every 7s scan — visible "locked on / released" evidence w/o flooding. */
 let lastHotCount = 0;
+
+/**
+ * Claim today's run of a daily job in admin_kv_cache, so a restart or a
+ * second server (deploys overlap briefly) doesn't run it again the same day.
+ */
+async function claimDay(job: string, day: string): Promise<boolean> {
+  const { supabaseAdmin } = await import('@/lib/supabase');
+  const key = `cron-day:${job}`;
+  const { data, error } = await supabaseAdmin.from('admin_kv_cache').select('value').eq('key', key).maybeSingle();
+  if (error) throw new Error(`[in-app-cron] could not read ${key}: ${error.message}`);
+  const last = (data?.value as { day?: string } | null)?.day ?? null;
+  if (last === day) return false;
+  if (!data) {
+    const { error: insertError } = await supabaseAdmin.from('admin_kv_cache').insert({ key, value: { day } });
+    return !insertError; // a duplicate key means another server claimed it first
+  }
+  let update = supabaseAdmin
+    .from('admin_kv_cache')
+    .update({ value: { day }, updated_at: new Date().toISOString() })
+    .eq('key', key);
+  update = last === null ? update.is('value->>day', null) : update.eq('value->>day', last);
+  const { data: claimed } = await update.select('key');
+  return !!claimed?.length;
+}
+
+/** Run once a UTC day, on the first tick at or after `hour`:00 UTC. */
+export function onceDailyAfter(hour: number, job: string, run: () => Promise<string | null>): () => Promise<string | null> {
+  let doneDay = '';
+  return async () => {
+    const now = new Date();
+    const day = now.toISOString().slice(0, 10);
+    if (now.getUTCHours() < hour || doneDay === day) return null;
+    const claimed = await claimDay(job, day);
+    doneDay = day; // claimed here, or already run elsewhere today
+    return claimed ? run() : null;
+  };
+}
 
 const JOBS: ScheduledJob[] = [
   {
@@ -222,6 +270,57 @@ const JOBS: ScheduledJob[] = [
       }
       return null;
     },
+  },
+  {
+    // Payment plans: each due payment is claimed before it's charged, so this
+    // and the GitHub backup can never charge it twice.
+    name: 'installments',
+    intervalMs: 60 * 60 * 1000,
+    initialDelayMs: 5 * 60 * 1000,
+    run: async () => {
+      const { isStripeConfigured } = await import('@/lib/stripe/client');
+      if (!isStripeConfigured()) return null;
+      const { runInstallmentsCron } = await import('@/lib/stripe/installments-cron');
+      const r = await runInstallmentsCron();
+      const i = r.installments;
+      const headsUps = r.headsUps?.sent ?? 0;
+      return i.charged + i.processing + i.failed + headsUps + r.accountsSynced > 0
+        ? `charged=${i.charged} processing=${i.processing} failed=${i.failed} skipped=${i.skipped} heads_ups=${headsUps} accounts_synced=${r.accountsSynced}`
+        : null;
+    },
+  },
+  {
+    // Overdue-payment reminders, at the same time of day as before.
+    name: 'payment-reminders',
+    intervalMs: 10 * 60 * 1000,
+    initialDelayMs: 4 * 60 * 1000,
+    run: onceDailyAfter(9, 'payment-reminders', async () => {
+      const { processPaymentRemindersCron } = await import('@/lib/payment-reminders');
+      const r = await processPaymentRemindersCron();
+      return `processed=${r.processed} sent=${r.sent} errors=${r.errors}`;
+    }),
+  },
+  {
+    // The Private Client monthly email goes out on the first run after its
+    // date, so the daily hour keeps it mid-day in the US.
+    name: 'private-client-reminder',
+    intervalMs: 10 * 60 * 1000,
+    initialDelayMs: 6 * 60 * 1000,
+    run: onceDailyAfter(17, 'private-client-reminder', async () => {
+      const { processPrivateClientMonthlyReminder } = await import('@/lib/private-client-monthly-reminder');
+      const r = await processPrivateClientMonthlyReminder();
+      return `processed=${r.processed} sent=${r.sent} seeded=${r.seeded} skipped=${r.skipped} errors=${r.errors}`;
+    }),
+  },
+  {
+    name: 'tag-sweep',
+    intervalMs: 10 * 60 * 1000,
+    initialDelayMs: 8 * 60 * 1000,
+    run: onceDailyAfter(3, 'tag-sweep', async () => {
+      const { runTagSweep } = await import('@/lib/tag-sweep');
+      const c = await runTagSweep();
+      return Object.entries(c).map(([k, v]) => `${k}=${v}`).join(' ');
+    }),
   },
 ];
 
