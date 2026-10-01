@@ -55,6 +55,7 @@
  */
 
 import { logError } from '@/lib/error-log';
+import { isStaging } from '@/lib/staging';
 
 interface ScheduledJob {
   name: string;
@@ -289,6 +290,10 @@ export function startInAppScheduler(): void {
   }
   if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_IN_APP_CRON !== '1') {
     console.log('[in-app-cron] not production and ENABLE_IN_APP_CRON not set — scheduler off');
+    return;
+  }
+  if (isStaging() && process.env.ENABLE_IN_APP_CRON !== '1') {
+    console.log('[in-app-cron] test copy and ENABLE_IN_APP_CRON not set — scheduler off');
     return;
   }
 

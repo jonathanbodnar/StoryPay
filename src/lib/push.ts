@@ -23,6 +23,7 @@
 
 import webpush from 'web-push';
 import { supabaseAdmin } from '@/lib/supabase';
+import { isStaging } from '@/lib/staging';
 
 const VAPID_PUBLIC  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
@@ -103,6 +104,7 @@ export async function sendPushToVenue(
   venueId: string,
   payload: PushPayload,
 ): Promise<{ sent: number; pruned: number; failed: number }> {
+  if (isStaging()) return { sent: 0, pruned: 0, failed: 0 }; // no app notifications from the test copy
   if (!configureOnce()) return { sent: 0, pruned: 0, failed: 0 };
 
   const { data, error } = await supabaseAdmin
@@ -128,6 +130,7 @@ export async function sendToSubscriptions(
   subs: SubscriptionRow[],
   payload: PushPayload,
 ): Promise<{ sent: number; pruned: number; failed: number }> {
+  if (isStaging()) return { sent: 0, pruned: 0, failed: 0 }; // no app notifications from the test copy
   if (!configureOnce()) return { sent: 0, pruned: 0, failed: 0 };
 
   // Trim payload to a safe size. Title + body limits are conservative —

@@ -35,6 +35,7 @@ import {
   updateOpportunityStage,
 } from '@/lib/ghl';
 import { choseFreePlan, choseProPlan, type VenueFunnelState } from '@/lib/funnel-stage';
+import { isStaging } from '@/lib/staging';
 
 const DIRECTORY_URL = (process.env.NEXT_PUBLIC_DIRECTORY_URL || 'https://storyvenue.com').replace(/\/$/, '');
 
@@ -92,6 +93,7 @@ interface OwnerGhlConfig {
  * environments where the integration isn't configured.
  */
 export function getOwnerGhlConfig(): OwnerGhlConfig | null {
+  if (isStaging()) return null; // the test copy never touches your real pipeline
   const locationId = (process.env.OWNER_GHL_LOCATION_ID || '').trim();
   const token = (process.env.OWNER_GHL_PIT_TOKEN || '').trim();
   if (!locationId || !token) return null;

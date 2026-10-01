@@ -25,6 +25,7 @@
 import jwt from 'jsonwebtoken';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getServerBadgeCount } from '@/lib/notification-badge';
+import { isStaging } from '@/lib/staging';
 
 const FCM_PROJECT_ID   = process.env.FCM_PROJECT_ID || '';
 const FCM_CLIENT_EMAIL = process.env.FCM_CLIENT_EMAIL || '';
@@ -111,6 +112,7 @@ export async function sendNativePush(
   venueId: string,
   payload: NativePushPayload,
 ): Promise<{ sent: number; pruned: number; failed: number }> {
+  if (isStaging()) return { sent: 0, pruned: 0, failed: 0 }; // no app notifications from the test copy
   if (!isNativePushConfigured()) {
     if (!_warned) {
       console.warn(

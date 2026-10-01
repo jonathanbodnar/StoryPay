@@ -15,6 +15,7 @@
  */
 
 import Stripe from 'stripe';
+import { isStaging } from '@/lib/staging';
 
 let client: Stripe | null = null;
 
@@ -26,6 +27,7 @@ export function isStripeConfigured(): boolean {
 export function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY?.trim();
   if (!key) throw new Error('Stripe is not configured (STRIPE_SECRET_KEY is missing).');
+  if (isStaging() && !key.startsWith('sk_test_')) throw new Error('The test copy only takes a Stripe test key (sk_test_).');
   client ??= new Stripe(key, { appInfo: { name: 'StoryVenue' }, maxNetworkRetries: 2 });
   return client;
 }

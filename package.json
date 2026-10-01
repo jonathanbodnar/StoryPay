@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "cap:sync": "cap sync",
     "cap:ios": "cap sync ios && cap open ios",
     "cap:android": "cap sync android && cap open android",
@@ -101,6 +103,7 @@
     "eslint-config-next": "16.3.8",
     "pg": "^8.20.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.11"
   }
 }

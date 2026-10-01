@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { STAGING_ACCESS_COOKIE, stagingAccessToken, stagingOpenPath, sameSecret } from '@/lib/staging-access';
 
 const APP_HOSTS = new Set(['app.storyvenue.com']);
 
@@ -177,6 +178,34 @@ function memberUsable(info: RowInfo, venueId: string): boolean {
 type Reissue = { id: string; value: string; iat: number; idle: number; absCap: number; principal: string };
 
 export async function proxy(request: NextRequest) {
+  if (process.env.APP_ENV !== 'staging') return sessionProxy(request);
+  // The test copy: password first (src/lib/staging-access.ts), never indexed.
+  const res = (await stagingGate(request)) ?? (await sessionProxy(request));
+  res.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  return res;
+}
+
+/** Null when the request may enter the test copy; otherwise the redirect / 401. */
+async function stagingGate(request: NextRequest): Promise<NextResponse | null> {
+  const { pathname, search } = request.nextUrl;
+  if (stagingOpenPath(pathname)) return null;
+  const password = process.env.STAGING_PASSWORD?.trim();
+  if (password) {
+    const key = request.headers.get('x-staging-key');
+    if (key && sameSecret(key, password)) return null;
+    const cookie = request.cookies.get(STAGING_ACCESS_COOKIE)?.value;
+    if (cookie && sameSecret(cookie, await stagingAccessToken(password))) return null;
+  }
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.json({ error: 'StoryVenue test copy: sign in at /staging-access' }, { status: 401 });
+  }
+  const url = request.nextUrl.clone();
+  url.pathname = '/staging-access';
+  url.search = `?next=${encodeURIComponent(pathname + search)}`;
+  return NextResponse.redirect(url, 307);
+}
+
+async function sessionProxy(request: NextRequest) {
   const host = request.headers.get('host')?.toLowerCase() ?? '';
   const hostname = host.split(':')[0];
 

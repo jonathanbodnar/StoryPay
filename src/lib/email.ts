@@ -1,6 +1,8 @@
 // Transactional email — Resend only (https://resend.com/docs/send-with-nextjs)
 // Requires RESEND_API_KEY. Set RESEND_DEFAULT_FROM on the host (e.g. Railway) — verified in Resend.
 
+import { isStaging, stagingEmailFilter } from '@/lib/staging';
+
 /** Used when `RESEND_DEFAULT_FROM` is unset (e.g. local). Production: set env to your verified address. */
 export const RESEND_FROM_FALLBACK = 'StoryVenue <hello@storyvenue.com>';
 
@@ -257,6 +259,21 @@ export async function sendEmail({
   /** File attachments. Either base64-encoded `content`, or a `path` URL Resend fetches directly. */
   attachments?: { filename: string; content?: string; path?: string }[];
 }): Promise<{ success: boolean; error?: string; id?: string }> {
+  // The test copy only emails approved addresses, marked [TEST] (staging.ts).
+  // What it skips counts as sent, so the rest of the flow still runs.
+  if (isStaging()) {
+    const { blocked } = stagingEmailFilter([...(Array.isArray(to) ? to : [to]), ...(cc ?? []), ...(bcc ?? [])]);
+    if (blocked.length) {
+      const keep = (list: string[]) => list.filter((a) => !blocked.includes(a));
+      to = keep(Array.isArray(to) ? to : [to]);
+      cc = cc && keep(cc);
+      bcc = bcc && keep(bcc);
+      console.log(`[staging] email not sent to ${blocked.join(', ')} (not on STAGING_EMAIL_ALLOWLIST): ${subject}`);
+    }
+    if (!to.length) return { success: true, id: 'staging-not-sent' };
+    subject = `[TEST] ${subject}`;
+  }
+
   const resendKey = process.env.RESEND_API_KEY?.trim();
   if (!resendKey) {
     console.warn('[email] RESEND_API_KEY is not set');
