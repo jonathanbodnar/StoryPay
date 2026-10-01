@@ -41,6 +41,9 @@ async function call(path, init = {}, withKey = true) {
 const locked = await call('/dashboard', {}, false);
 check(locked.status === 307 && (locked.headers.get('location') || '').includes('/staging-access'), 'pages are locked without the password', String(locked.status));
 check((await call('/api/leads', {}, false)).status === 401, 'APIs are locked without the password');
+const gate = await call('/staging-access', { method: 'POST', body: new URLSearchParams({ password: key, next: '/dashboard' }) }, false);
+const goesTo = gate.headers.get('location') || '';
+check(gate.status === 303 && (goesTo.startsWith('/') || goesTo.startsWith(base)), 'the password page sends you back to this site', goesTo);
 
 // 2. The demo owner signs in.
 const signIn = await call('/api/auth/sign-in', {

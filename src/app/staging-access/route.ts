@@ -3,7 +3,7 @@
  * src/lib/staging-access.ts). Not found on the live site.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { isStaging } from '@/lib/staging';
 import { STAGING_ACCESS_COOKIE, stagingAccessToken, sameSecret, safeNextPath } from '@/lib/staging-access';
 
@@ -49,9 +49,9 @@ export async function POST(request: NextRequest) {
     await new Promise((r) => setTimeout(r, 1000)); // slow down guessing
     return page(next, 'That password is not right.', 401);
   }
-  const res = NextResponse.redirect(new URL(next, request.nextUrl.origin), 303);
-  res.cookies.set(STAGING_ACCESS_COOKIE, await stagingAccessToken(password), {
-    path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge: 60 * 60 * 24 * 30,
-  });
+  // A relative Location: behind Railway the request's own origin is the
+  // container's (https://localhost:8080), not the public address.
+  const res = new Response(null, { status: 303, headers: { Location: next, 'cache-control': 'no-store' } });
+  res.headers.append('Set-Cookie', `${STAGING_ACCESS_COOKIE}=${await stagingAccessToken(password)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`);
   return res;
 }
