@@ -5,11 +5,14 @@ import { refundCharge } from '@/lib/lunarpay';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
 import { refundPayment } from '@/lib/stripe/refunds';
+import { requireOwnerOrAdmin } from '@/lib/session';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requireOwnerOrAdmin();
+  if (!gate.ok) return gate.res;
 
   const { proposalId, paymentId, chargeId, amountCents, cancelRemaining } = await request.json();
 

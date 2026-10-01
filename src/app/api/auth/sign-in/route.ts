@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
         const session = { rememberMe: Boolean(rememberMe), isNative: Boolean(isNative) };
         setSignedCookie(response, 'venue_id', member.venue_id, {
           path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
-        }, session);
+        }, { ...session, principal: { memberId: member.id } });
         setSignedCookie(response, 'member_id', member.id, {
           path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
         }, session);

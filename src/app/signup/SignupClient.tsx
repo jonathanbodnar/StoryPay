@@ -469,10 +469,10 @@ function CoupleSignupForm() {
               type={showPass ? 'text' : 'password'}
               required
               autoComplete="new-password"
-              minLength={8}
+              minLength={12}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 8 characters"
+              placeholder="At least 12 characters"
               className={`${INPUT} pr-10`}
             />
             <button

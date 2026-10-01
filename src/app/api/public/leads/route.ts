@@ -58,6 +58,8 @@ interface LeadPayload {
    * zero manual UTM setup required.
    */
   fbclid?: string;
+  /** The couple's IP, passed by a server-side caller inside the signed body. */
+  client_ip?: string;
 }
 
 function isEmail(s: string): boolean {
@@ -72,12 +74,13 @@ function isEmail(s: string): boolean {
  * On success: inserts lead → "New Lead" stage → fires form workflow trigger.
  */
 export async function POST(request: NextRequest) {
-  // Rate limit per-IP (40/hr) — generous for legitimate directory traffic but
-  // blocks naive lead-injection bots. The HMAC signature already gates this
-  // endpoint to the storyvenue.com directory, but a leaked secret would still
-  // benefit from a rate limit at the network layer.
+  // Rate limit per calling IP. Legitimate calls come from servers (the
+  // storyvenue.com directory, the embed proxy), so every couple's lead shares
+  // that server's address: the ceiling is generous. The HMAC signature already
+  // gates this endpoint; this only caps damage from a leaked secret. Each
+  // couple is also limited by their own IP below, when the caller passes it.
   const ip = getClientIp(request);
-  const rl = rateLimit(`public-leads:ip:${ip}`, 40, 60 * 60_000);
+  const rl = rateLimit(`public-leads:ip:${ip}`, 300, 60 * 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Too many lead submissions. Try again in ${formatRetryAfter(rl.retryAfterMs)}.` },
@@ -99,6 +102,22 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+
+  // The couple's own IP when the (signed) caller passes it; else the caller's.
+  const clientIp =
+    typeof payload.client_ip === 'string' && /^[0-9a-fA-F.:]{3,45}$/.test(payload.client_ip.trim())
+      ? payload.client_ip.trim()
+      : null;
+  if (clientIp) {
+    const perCouple = rateLimit(`public-leads:client:${clientIp}`, 20, 60 * 60_000);
+    if (!perCouple.allowed) {
+      return NextResponse.json(
+        { error: `Too many lead submissions. Try again in ${formatRetryAfter(perCouple.retryAfterMs)}.` },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(perCouple.retryAfterMs / 1000)) } },
+      );
+    }
+  }
+  const consentIp = clientIp ?? ip;
 
   // Resolve first / last name — accept split or combined
   const firstName = (payload.first_name ?? '').trim();
@@ -450,7 +469,7 @@ export async function POST(request: NextRequest) {
       sourceDetail: payload.source || 'directory',
       disclosureVersion: SMS_CONSENT_VERSION,
       disclosureText: withPolicyLinks(formConsentText(venue.name)),
-      ip,
+      ip: consentIp,
       userAgent: request.headers.get('user-agent'),
       pageUrl: request.headers.get('referer'),
     });

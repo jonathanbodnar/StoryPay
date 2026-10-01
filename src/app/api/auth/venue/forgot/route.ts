@@ -22,21 +22,40 @@ function sign(payload: string): string {
   return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 
-export function buildResetToken(venueId: string): string {
-  const exp = Date.now() + EXPIRY_MS;
-  const payload = `${venueId}:${exp}`;
-  const sig = sign(payload);
-  return Buffer.from(`${payload}:${sig}`).toString('base64url');
+/**
+ * The link is tied to the venue's current password: once the password
+ * changes, every earlier link stops working, so a link works once.
+ */
+function passwordFingerprint(passwordHash: string | null | undefined): string {
+  return crypto.createHash('sha256').update(passwordHash ?? 'no-password').digest('hex').slice(0, 16);
 }
 
-export function verifyResetToken(token: string): { venueId: string } | null {
+export function buildResetToken(venueId: string, passwordHash: string | null | undefined): string {
+  const exp = Date.now() + EXPIRY_MS;
+  const sig = sign(`${venueId}:${exp}:${passwordFingerprint(passwordHash)}`);
+  return Buffer.from(`${venueId}:${exp}:${sig}`).toString('base64url');
+}
+
+/** The venue a reset link names, before it's checked. */
+export function resetTokenVenueId(token: string): string | null {
   try {
-    const decoded = Buffer.from(token, 'base64url').toString('utf8');
-    const parts = decoded.split(':');
+    const parts = Buffer.from(token, 'base64url').toString('utf8').split(':');
+    return parts.length === 3 && parts[0] ? parts[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Valid only while unexpired and while the password is still the one it was issued for. */
+export function verifyResetToken(token: string, currentPasswordHash: string | null | undefined): { venueId: string } | null {
+  try {
+    const parts = Buffer.from(token, 'base64url').toString('utf8').split(':');
     if (parts.length !== 3) return null;
     const [venueId, expStr, sig] = parts;
-    const payload = `${venueId}:${expStr}`;
-    if (sign(payload) !== sig) return null;
+    const expected = sign(`${venueId}:${expStr}:${passwordFingerprint(currentPasswordHash)}`);
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
     if (Date.now() > Number(expStr)) return null;
     return { venueId };
   } catch {
@@ -77,7 +96,7 @@ export async function POST(req: NextRequest) {
 
   const { data: venue, error } = await supabaseAdmin
     .from('venues')
-    .select('id, name, email')
+    .select('id, name, email, password_hash')
     .ilike('email', email)
     .maybeSingle();
 
@@ -88,7 +107,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const token = buildResetToken(venue.id);
+  const token = buildResetToken(venue.id, (venue as { password_hash?: string | null }).password_hash);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.storyvenue.com';
   const resetUrl = `${appUrl}/reset-password/venue?token=${token}`;
 

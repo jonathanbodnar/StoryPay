@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { loadConnectVenue, venueTakesStripePayments } from '@/lib/stripe/connect';
 import { planPayments, toYmd } from '@/lib/payment-plan';
+import { denyIfRevenueHidden } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,8 @@ export async function GET(request: NextRequest) {
   if (!venueId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const hidden = await denyIfRevenueHidden();
+  if (hidden) return hidden;
 
   const type = request.nextUrl.searchParams.get('type') || 'charges';
 

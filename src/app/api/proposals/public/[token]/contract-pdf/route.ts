@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { getClientIp, rateLimit } from '@/lib/rate-limit';
 import { signedContractPdf } from '@/lib/signed-contract';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown';
+  const ip = getClientIp(request);
   if (!rateLimit(`contract-pdf:${ip}`, 30, 60 * 60 * 1000).allowed) {
     return NextResponse.json({ error: 'Too many downloads. Please try again later.' }, { status: 429 });
   }

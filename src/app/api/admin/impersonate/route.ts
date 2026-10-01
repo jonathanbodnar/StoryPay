@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     ...COOKIE_BASE,
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 30,
-  });
+  }, { principal: 'owner' });
 
   clearSignedCookie(res, 'member_id', {
     ...COOKIE_BASE,

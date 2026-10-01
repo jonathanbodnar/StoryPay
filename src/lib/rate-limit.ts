@@ -27,19 +27,85 @@ interface Entry {
 const buckets = new Map<string, Entry>();
 const MAX_KEYS = 50_000;
 
-/** Get the client IP from common proxy headers. */
+// Cloudflare's published edge ranges (https://www.cloudflare.com/ips/).
+const CLOUDFLARE_V4 = [
+  '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18',
+  '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17',
+  '162.158.0.0/15', '104.16.0.0/13', '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+];
+const CLOUDFLARE_V6 = [
+  '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32', '2405:8100::/32',
+  '2a06:98c0::/29', '2c0f:f248::/32',
+];
+
+function v4ToInt(ip: string): number | null {
+  const p = ip.split('.');
+  if (p.length !== 4) return null;
+  let n = 0;
+  for (const part of p) {
+    const x = Number(part);
+    if (!Number.isInteger(x) || x < 0 || x > 255) return null;
+    n = n * 256 + x;
+  }
+  return n;
+}
+
+function v6ToBigInt(ip: string): bigint | null {
+  const [head, tail = ''] = ip.toLowerCase().split('::');
+  const a = head ? head.split(':') : [];
+  const b = ip.includes('::') ? (tail ? tail.split(':') : []) : [];
+  const groups = ip.includes('::') ? [...a, ...Array(8 - a.length - b.length).fill('0'), ...b] : a;
+  if (groups.length !== 8) return null;
+  let n = BigInt(0);
+  for (const g of groups) {
+    if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
+    n = (n << BigInt(16)) + BigInt(parseInt(g, 16));
+  }
+  return n;
+}
+
+/** Is this address one of Cloudflare's edge servers? */
+export function isCloudflareIp(ip: string): boolean {
+  if (ip.includes(':')) {
+    const n = v6ToBigInt(ip);
+    if (n === null) return false;
+    return CLOUDFLARE_V6.some((cidr) => {
+      const [base, bits] = cidr.split('/');
+      const b = v6ToBigInt(base);
+      if (b === null) return false;
+      const shift = BigInt(128 - Number(bits));
+      return (n >> shift) === (b >> shift);
+    });
+  }
+  const n = v4ToInt(ip);
+  if (n === null) return false;
+  return CLOUDFLARE_V4.some((cidr) => {
+    const [base, bits] = cidr.split('/');
+    const b = v4ToInt(base);
+    if (b === null) return false;
+    const size = 2 ** (32 - Number(bits));
+    return Math.floor(n / size) === Math.floor(b / size);
+  });
+}
+
+/**
+ * The visitor's IP address.
+ *
+ * app.storyvenue.com sits behind Cloudflare, and Railway's edge sets
+ * X-Forwarded-For to the address that connected to it, which is Cloudflare's
+ * edge server, not the visitor. When that connecting address is a Cloudflare
+ * server, the visitor is in CF-Connecting-IP (Cloudflare sets it and
+ * overwrites any value a client sends). Anything that reaches Railway
+ * directly is its own connecting address, which can't be faked.
+ */
 export function getClientIp(req: NextRequest | Request): string {
   const headers = (req as NextRequest).headers ?? new Headers();
-  const xff = headers.get('x-forwarded-for');
-  if (xff) {
-    // x-forwarded-for: "client, proxy1, proxy2" — first is the real client
-    const first = xff.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  const real = headers.get('x-real-ip');
-  if (real) return real.trim();
-  const cf = headers.get('cf-connecting-ip');
-  if (cf) return cf.trim();
+  const peer = headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '';
+  const viaCloudflare = headers.get('cf-connecting-ip')?.trim() || '';
+  if (peer && viaCloudflare && isCloudflareIp(peer)) return viaCloudflare;
+  if (peer) return peer;
+  const real = headers.get('x-real-ip')?.trim();
+  if (real) return real;
   return 'unknown';
 }
 

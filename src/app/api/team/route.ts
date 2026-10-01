@@ -5,6 +5,7 @@ import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
 import { getEffectiveVenueId } from '@/lib/effective-venue';
 import { normalizePhone } from '@/lib/ghl';
+import { getSessionUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,6 +113,20 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { first_name, last_name, email, role, phone } = body;
 
+  // Only the owner or an admin invites, and only the owner adds an admin.
+  const session = await getSessionUser();
+  if (!session || session.venueId !== venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session.isAdmin) {
+    return NextResponse.json({ error: 'Only the venue owner or an admin can invite team members.' }, { status: 403 });
+  }
+  const wantedRole = role === 'admin' ? 'admin' : 'member';
+  if (role && role !== 'admin' && role !== 'member') {
+    return NextResponse.json({ error: 'Choose Admin or Member.' }, { status: 400 });
+  }
+  if (wantedRole === 'admin' && !(session.isOwner && session.memberId === null)) {
+    return NextResponse.json({ error: 'Only the venue owner can invite an admin.' }, { status: 403 });
+  }
+
   if (!first_name?.trim() || !email?.trim()) {
     return NextResponse.json({ error: 'First name and email are required' }, { status: 400 });
   }
@@ -151,7 +166,7 @@ export async function POST(request: NextRequest) {
       name:       [first_name.trim(), (last_name || '').trim()].filter(Boolean).join(' '),
       email:      email.trim().toLowerCase(),
       phone:      normalizedPhone,
-      role:       role || 'member',
+      role:       wantedRole,
       status:     'invited',
       invited_at: new Date().toISOString(),
     })

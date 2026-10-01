@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireVenueId } from '@/lib/auth-helpers';
 import { createApiKey, listApiKeys } from '@/lib/api-keys';
+import { requireOwnerOrAdmin } from '@/lib/session';
 
 /** GET — list this venue's API keys (no plaintext). */
 export async function GET() {
@@ -30,6 +31,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const venueId = await requireVenueId();
+    const gate = await requireOwnerOrAdmin();
+    if (!gate.ok) return gate.res;
     const body = (await request.json().catch(() => ({}))) as { name?: string; source?: string };
     const result = await createApiKey(venueId, {
       name: body.name,

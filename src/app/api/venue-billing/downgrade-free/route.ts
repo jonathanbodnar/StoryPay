@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { scheduleVenueDowngradeToFree } from '@/lib/venue-billing';
+import { requireOwnerOrAdmin } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -20,6 +21,8 @@ export async function POST() {
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requireOwnerOrAdmin();
+  if (!gate.ok) return gate.res;
 
   try {
     const result = await scheduleVenueDowngradeToFree(venueId);

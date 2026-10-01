@@ -17,6 +17,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { cancelSubscription } from '@/lib/lunarpay';
 import { requirePlatformLunarPaySecretKey } from '@/lib/platform-directory-billing';
 import { revalidateDirectory } from '@/lib/directory-revalidate';
+import { getSessionMemberId } from '@/lib/auth-helpers';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -24,7 +25,7 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
-  const memberId = c.get('member_id')?.value;
+  const memberId = (await getSessionMemberId()) ?? undefined;
 
   if (!venueId) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 

@@ -198,7 +198,7 @@ export default function CoupleProfilePage() {
     e.preventDefault();
     setPwError('');
     setPwFlash('');
-    if (pw.length < 8) { setPwError('Use at least 8 characters.'); return; }
+    if (pw.length < 12) { setPwError('Use at least 12 characters.'); return; }
     if (pw !== pw2) { setPwError('Passwords do not match.'); return; }
     setPwSaving(true);
     try {
@@ -451,7 +451,7 @@ export default function CoupleProfilePage() {
               className={INPUT}
               value={pw}
               onChange={(e) => setPw(e.target.value)}
-              placeholder="At least 8 characters"
+              placeholder="At least 12 characters"
             />
           </div>
           <div>

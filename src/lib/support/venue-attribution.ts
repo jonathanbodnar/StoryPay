@@ -16,6 +16,7 @@
  */
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getSessionMemberId } from '@/lib/auth-helpers';
 
 export interface VenueAttribution {
   venueId:      string;
@@ -35,7 +36,7 @@ export async function resolveVenueAttribution(): Promise<VenueAttribution | { er
   const venueId = c.get('venue_id')?.value;
   if (!venueId) return { error: 'Not signed in to a venue' };
 
-  const memberId = c.get('member_id')?.value || null;
+  const memberId = (await getSessionMemberId());
 
   // Team-member path
   if (memberId) {

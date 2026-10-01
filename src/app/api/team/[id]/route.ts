@@ -4,6 +4,7 @@ import { hash } from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSessionUser } from '@/lib/session';
 import { normalizePhone } from '@/lib/ghl';
+import { revokeMemberSessions } from '@/lib/session-revoke';
 
 async function getVenueId() {
   const c = await cookies();
@@ -57,6 +58,15 @@ export async function PATCH(
     updates.password_hash = await hash(body.password, 10);
   }
 
+  // ── Who may change what ────────────────────────────────────────────────────
+  // The owner manages everyone. An admin manages team members with the Member
+  // role (names, phone, email, status) but can't change roles or edit admins.
+  // Anyone may update their own name and phone; nothing else about themselves.
+  // Only the owner edits the owner's own login (email, phone, password).
+  const isSelf = session.memberId !== null && session.memberId === id;
+  const isOwnerSession = session.isOwner && session.memberId === null;
+  const forbidden = (msg: string) => NextResponse.json({ error: msg }, { status: 403 });
+
   // ── Who are we editing? ────────────────────────────────────────────────────
   // The team list contains two different kinds of row: real `venue_team_members`
   // rows, and a SYNTHESISED owner row whose id is `venues.owner_id` (see
@@ -76,6 +86,26 @@ export async function PATCH(
   }
 
   if (memberRow) {
+    if (updates.role === 'owner') return forbidden('The owner role can’t be given from the team list.');
+    if (isSelf && !isOwnerSession) {
+      // The edit form sends every field; unchanged ones are fine.
+      const current = memberRow as { email?: string | null; role?: string | null; status?: string | null };
+      const changed = Object.keys(updates).filter((k) => {
+        if (k === 'first_name' || k === 'last_name' || k === 'phone') return false;
+        if (k === 'email') return String(updates.email ?? '').trim().toLowerCase() !== String(current.email ?? '').trim().toLowerCase();
+        if (k === 'role') return updates.role !== current.role;
+        if (k === 'status') return updates.status !== current.status;
+        return true;
+      });
+      if (changed.length) {
+        return forbidden('You can change your own name and phone here. Ask the venue owner for anything else.');
+      }
+    } else if (!isOwnerSession) {
+      if (!session.isAdmin) return forbidden('Only the venue owner or an admin can edit team members.');
+      if ((memberRow as { role?: string | null }).role !== 'member') return forbidden('Only the venue owner can edit an admin.');
+      if (updates.role != null && updates.role !== 'member') return forbidden('Only the venue owner can change roles.');
+    }
+
     // Keep the denormalised name column in sync
     if (updates.first_name != null || updates.last_name != null) {
       const fn = (updates.first_name as string | undefined) ?? memberRow.first_name ?? '';
@@ -117,6 +147,7 @@ export async function PATCH(
   if (!isOwner) {
     return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
   }
+  if (!isOwnerSession) return forbidden('Only the venue owner can change the owner’s details.');
 
   // The owner cannot be demoted from this modal — they own the account.
   if (updates.role != null && updates.role !== 'owner') {
@@ -169,6 +200,27 @@ export async function DELETE(
 
   const { id } = await params;
 
+  // The owner removes anyone; an admin removes members with the Member role.
+  const session = await getSessionUser();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { data: target } = await supabaseAdmin
+    .from('venue_team_members')
+    .select('id, role')
+    .eq('id', id)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (!target) return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
+  const isOwnerSession = session.isOwner && session.memberId === null;
+  if (!isOwnerSession) {
+    if (!session.isAdmin) return NextResponse.json({ error: 'Only the venue owner or an admin can remove team members.' }, { status: 403 });
+    if ((target as { role?: string | null }).role !== 'member') {
+      return NextResponse.json({ error: 'Only the venue owner can remove an admin.' }, { status: 403 });
+    }
+  }
+
+  // Their open sessions end with the row (the proxy signs out a member whose
+  // record is gone); stamping the revocation first covers any cached check.
+  await revokeMemberSessions(id).catch(() => {});
   const { error } = await supabaseAdmin
     .from('venue_team_members')
     .delete()

@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { verifyTotp, generateBackupCodes } from '@/lib/totp';
 import { TWOFA_ENABLED } from '@/lib/feature-flags';
+import { getSessionMemberId } from '@/lib/auth-helpers';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   }
   const c = await cookies();
   const venueId = c.get('venue_id')?.value;
-  const memberId = c.get('member_id')?.value;
+  const memberId = (await getSessionMemberId()) ?? undefined;
   if (!venueId || memberId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

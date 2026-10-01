@@ -101,7 +101,25 @@ export type SessionOptions = {
   isNative?: boolean;
   /** Override issue time (unix seconds). Used when re-issuing after revocation. */
   iat?: number;
+  /**
+   * Who this venue session belongs to: the owner, or one team member. Stored
+   * in the signed venue_id meta, so clearing or swapping the member_id cookie
+   * can never turn a team member into the owner. Required for venue_id.
+   */
+  principal?: SessionPrincipal;
 };
+
+export type SessionPrincipal = 'owner' | { memberId: string };
+
+/** The principal recorded in a venue_id meta ("<iat>.<idle>.<absCap>.<o | m-<id>>"). */
+export type VenuePrincipal = { kind: 'owner' } | { kind: 'member'; memberId: string } | { kind: 'legacy' };
+
+export function venuePrincipalFromMeta(meta: string | null | undefined): VenuePrincipal {
+  const p = String(meta ?? '').split('.')[3] ?? '';
+  if (p === 'o') return { kind: 'owner' };
+  if (p.startsWith('m-') && p.length > 2) return { kind: 'member', memberId: p.slice(2) };
+  return { kind: 'legacy' };
+}
 
 /**
  * Set an id cookie plus its metadata + signature companions.
@@ -125,9 +143,12 @@ export function setSignedCookie(
       ? ABSOLUTE_MAX_SECONDS
       : IDLE_SECONDS;
   const absCap = session.isNative ? NATIVE_MAX_SECONDS : ABSOLUTE_MAX_SECONDS;
-  // 3-part meta: iat.idle.absCap. proxy.ts falls back to the legacy 7-day cap
-  // when reading older 2-part metas issued before this change.
-  const meta = `${iat}.${idle}.${absCap}`;
+  // 3-part meta: iat.idle.absCap, plus the principal for venue_id. proxy.ts
+  // falls back to the legacy 7-day cap when reading older 2-part metas.
+  let meta = `${iat}.${idle}.${absCap}`;
+  if (name === 'venue_id' && session.principal) {
+    meta += session.principal === 'owner' ? '.o' : `.m-${session.principal.memberId}`;
+  }
   const maxAge = Math.min(idle, absCap);
   const opts: CookieOptions = { ...options, maxAge };
 

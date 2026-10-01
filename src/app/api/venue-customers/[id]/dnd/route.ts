@@ -137,7 +137,7 @@ export async function PUT(
   const [vcResult, { data: venue }] = await Promise.all([
     supabaseAdmin
       .from('venue_customers')
-      .select('id, email, ghl_contact_id, ghl_dnd_settings, ghl_inbound_dnd_settings, sms_dnd, venue_id')
+      .select('id, customer_email, ghl_contact_id, ghl_dnd_settings, ghl_inbound_dnd_settings, sms_dnd, venue_id')
       .eq('venue_id', venueId)
       .eq('id', id)
       .maybeSingle(),
@@ -148,22 +148,9 @@ export async function PUT(
       .maybeSingle(),
   ]);
 
-  // Fallback: if lookup by venue_id+id fails (session venue mismatch), try by id only.
-  // This can happen when a contact record was created under a slightly different venue context.
-  let vc = vcResult.data;
-  if (!vc) {
-    const { data: fallbackVc } = await supabaseAdmin
-      .from('venue_customers')
-      .select('id, email, ghl_contact_id, ghl_dnd_settings, ghl_inbound_dnd_settings, sms_dnd, venue_id')
-      .eq('id', id)
-      .maybeSingle();
-    if (fallbackVc) {
-      console.warn(`[dnd PUT] session venue_id (${venueId}) does not match contact venue_id (${fallbackVc.venue_id}) — saving locally anyway`);
-      vc = fallbackVc;
-    }
-  }
-
-  if (!vc) return NextResponse.json({ error: 'Contact not found — this contact may not be linked to your account. Try refreshing the page.' }, { status: 404 });
+  // Only this venue's own contacts.
+  const vc = vcResult.data;
+  if (!vc) return NextResponse.json({ error: 'Contact not found. Try refreshing the page.' }, { status: 404 });
 
   // Build the new dndSettings from the `channels` shorthand if provided
   let newDndSettings: GhlDndSettings;
@@ -258,7 +245,7 @@ export async function PUT(
   }
 
   // Auto-apply system tags when DND is enabled
-  const contactEmail = (vc as { email?: string | null } | null)?.email;
+  const contactEmail = (vc as { customer_email?: string | null } | null)?.customer_email;
   if (contactEmail) {
     const smsDndActive = isGhlDndOn((newDndSettings as GhlDndSettings)?.SMS?.status);
     const allDndActive = isGhlDndOn((newDndSettings as GhlDndSettings)?.Email?.status) && smsDndActive;

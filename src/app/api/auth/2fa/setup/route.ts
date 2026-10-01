@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { generateTotpSecret, buildOtpAuthUri } from '@/lib/totp';
 import { TWOFA_ENABLED } from '@/lib/feature-flags';
+import { getSessionMemberId } from '@/lib/auth-helpers';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -32,7 +33,7 @@ export async function POST() {
   const venueId = c.get('venue_id')?.value;
   // Only the owner — not a team member impersonating via member_id — can
   // touch 2FA. The owner cookie is `venue_id` without `member_id`.
-  const memberId = c.get('member_id')?.value;
+  const memberId = (await getSessionMemberId()) ?? undefined;
   if (!venueId || memberId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

@@ -52,6 +52,10 @@ export async function POST(request: NextRequest) {
   if (!pwCheck.valid) {
     return NextResponse.json({ error: pwCheck.message }, { status: 400 });
   }
+  // Couple accounts live in Supabase Auth, which requires 12 characters.
+  if (password.length < 12) {
+    return NextResponse.json({ error: 'Use at least 12 characters for your password.' }, { status: 400 });
+  }
   if (!first_name) {
     return NextResponse.json({ error: 'First name is required.' }, { status: 400 });
   }
@@ -75,6 +79,7 @@ export async function POST(request: NextRequest) {
     if (/already|registered|exists/i.test(msg)) {
       return NextResponse.json({ error: 'An account with that email already exists.' }, { status: 409 });
     }
+    if (/password/i.test(msg)) return NextResponse.json({ error: msg }, { status: 400 });
     console.error('[couple/signup]', authErr);
     return NextResponse.json({ error: msg }, { status: 500 });
   }

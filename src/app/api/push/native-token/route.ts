@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getSessionMemberId } from '@/lib/auth-helpers';
 
 /**
  * Register / unregister a NATIVE push device token (APNs on iOS, FCM on
@@ -27,7 +28,7 @@ function isPlatform(v: unknown): v is Platform {
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId  = cookieStore.get('venue_id')?.value;
-  const memberId = cookieStore.get('member_id')?.value || null;
+  const memberId = (await getSessionMemberId());
   if (!venueId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

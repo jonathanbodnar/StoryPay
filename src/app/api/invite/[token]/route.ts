@@ -29,7 +29,7 @@ export async function GET(
     setSignedCookie(response, 'venue_id', member.venue_id, {
       path: '/', httpOnly: true, secure: true, sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 30,
-    });
+    }, { principal: { memberId: member.id } });
     setSignedCookie(response, 'member_id', member.id, {
       path: '/', httpOnly: true, secure: true, sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 30,

@@ -6,6 +6,7 @@ import { notifyOwner, formatAmount } from '@/lib/owner-notifications';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { applySystemTagByEmail, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { emailSignedContract } from '@/lib/signed-contract';
+import { getClientIp } from '@/lib/rate-limit';
 
 /**
  * Default ESIGN/UETA consent disclosure shown on the public proposal
@@ -17,17 +18,6 @@ export const ESIGN_CONSENT_TEXT =
   'agree that this electronic signature is the legal equivalent of a handwritten signature, ' +
   'and accept the terms outlined in this proposal. I understand I can request a paper copy ' +
   'or withdraw electronic consent by contacting the venue.';
-
-function getClientIp(request: Request): string {
-  const xff = request.headers.get('x-forwarded-for');
-  if (xff) {
-    const first = xff.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  return request.headers.get('x-real-ip')?.trim()
-    || request.headers.get('cf-connecting-ip')?.trim()
-    || 'unknown';
-}
 
 export async function POST(
   request: Request,

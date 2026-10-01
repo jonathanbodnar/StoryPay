@@ -19,6 +19,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'crypto';
+import { getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
@@ -47,8 +48,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Force source to 'embed' so the funnel tags it correctly.
-  body = { ...body, source: 'embed' };
+  // Force source to 'embed' so the funnel tags it correctly, and pass the
+  // couple's own IP inside the signed body: the forwarded request reaches
+  // /api/public/leads from this server, not from the couple.
+  body = { ...body, source: 'embed', client_ip: getClientIp(req) };
 
   const rawBody = JSON.stringify(body);
 
@@ -65,8 +68,6 @@ export async function POST(req: NextRequest) {
       headers: {
         'Content-Type':          'application/json',
         'x-storypay-signature':  signature,
-        // Forward the real client IP when available for rate-limiting purposes.
-        'x-forwarded-for': req.headers.get('x-forwarded-for') ?? '',
         // The couple's browser and page, for the proof-of-consent record.
         'user-agent': req.headers.get('user-agent') ?? '',
         referer: req.headers.get('referer') ?? '',

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
-import { verifyResetToken } from '../forgot/route';
+import { resetTokenVenueId, verifyResetToken } from '../forgot/route';
+import { revokeVenueSessions } from '@/lib/session-revoke';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { checkPassword } from '@/lib/password-policy';
 import { setSignedCookie } from '@/lib/venue-session';
@@ -45,23 +46,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: pwCheck.message }, { status: 400 });
   }
 
-  const parsed = verifyResetToken(token);
-  if (!parsed) {
-    return NextResponse.json(
-      { error: 'This reset link has expired or is invalid. Please request a new one.' },
-      { status: 400 },
-    );
-  }
+  const invalidLink = () => NextResponse.json(
+    { error: 'This reset link has expired or was already used. Please request a new one.' },
+    { status: 400 },
+  );
+  const linkVenueId = resetTokenVenueId(token);
+  if (!linkVenueId) return invalidLink();
 
   const { data: venue, error: venueErr } = await supabaseAdmin
     .from('venues')
-    .select('id, name')
-    .eq('id', parsed.venueId)
+    .select('id, name, password_hash')
+    .eq('id', linkVenueId)
     .maybeSingle();
 
-  if (venueErr || !venue) {
-    return NextResponse.json({ error: 'Venue not found.' }, { status: 404 });
-  }
+  if (venueErr || !venue) return invalidLink();
+  if (!verifyResetToken(token, (venue as { password_hash?: string | null }).password_hash)) return invalidLink();
 
   const passwordHash = await bcrypt.hash(password, 12);
 
@@ -77,10 +76,13 @@ export async function POST(req: NextRequest) {
 
   console.log('[venue/reset] password updated for venue:', venue.id);
 
+  // Every other session ends (the new cookie below is issued after this, so it stays).
+  await revokeVenueSessions(venue.id as string).catch((e) => console.error('[venue/reset] revoke sessions failed:', e));
+
   const maxAge = rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24 * 30;
   const response = NextResponse.json({ ok: true, redirect: '/dashboard' });
   setSignedCookie(response, 'venue_id', venue.id as string, {
     path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
-  }, { rememberMe });
+  }, { rememberMe, principal: 'owner' });
   return response;
 }

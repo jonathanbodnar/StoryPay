@@ -55,8 +55,8 @@ export async function POST(
 
     if (mode === 'set') {
       const pw = body.newPassword ?? '';
-      if (pw.length < 8) {
-        return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
+      if (pw.length < 12) {
+        return NextResponse.json({ error: 'Couple passwords need at least 12 characters.' }, { status: 400 });
       }
       const { error: upErr } = await supabaseAdmin.auth.admin.updateUserById(id, { password: pw });
       if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });

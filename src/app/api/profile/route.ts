@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getSessionMemberId } from '@/lib/auth-helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const cookieStore = await cookies();
   const venueId   = cookieStore.get('venue_id')?.value;
-  const memberId  = cookieStore.get('member_id')?.value;
+  const memberId  = (await getSessionMemberId()) ?? undefined;
 
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -96,7 +97,7 @@ export async function GET() {
 export async function PATCH(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId   = cookieStore.get('venue_id')?.value;
-  const memberId  = cookieStore.get('member_id')?.value;
+  const memberId  = (await getSessionMemberId()) ?? undefined;
 
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

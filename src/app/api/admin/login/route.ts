@@ -8,6 +8,7 @@ import {
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { secureCompare } from '@/lib/secure-compare';
 import { issueMasterAdminToken } from '@/lib/admin-token';
+import { ADMIN_OTP_PENDING_COOKIE, pendingCookieValue } from '@/lib/admin-otp';
 import { sendEmail } from '@/lib/email';
 import { buildEmailHtml, fillTemplate, type EmailTemplateRow } from '@/lib/email-templates';
 import { SYSTEM_EMAIL_BY_KEY } from '@/lib/system-email-registry';
@@ -77,9 +78,11 @@ export async function POST(request: Request) {
     // Clear any old unused tokens before inserting a fresh one.
     await supabaseAdmin.from('admin_otp_tokens').delete().eq('used', false);
 
-    const { error: insertErr } = await supabaseAdmin
+    const { data: otpRow, error: insertErr } = await supabaseAdmin
       .from('admin_otp_tokens')
-      .insert({ code, expires_at: expiresAt });
+      .insert({ code, expires_at: expiresAt })
+      .select('id')
+      .maybeSingle();
 
     // If the migration hasn't been applied yet (table missing), fall back to
     // direct login so the admin can get in and apply the migration.
@@ -108,12 +111,11 @@ export async function POST(request: Request) {
         .eq('key', 'admin_otp')
         .maybeSingle();
       if (override) {
-        subject     = (override as any).subject     || subject;
-        heading     = (override as any).heading     || heading;
-        bodyText    = (override as any).body        || bodyText;
-        button_text = (override as any).button_text !== undefined
-          ? (override as any).button_text
-          : button_text;
+        const o = override as { subject?: string | null; heading?: string | null; body?: string | null; button_text?: string | null };
+        subject     = o.subject     || subject;
+        heading     = o.heading     || heading;
+        bodyText    = o.body        || bodyText;
+        button_text = o.button_text !== undefined ? o.button_text : button_text;
       }
 
       const tplRow: EmailTemplateRow = {
@@ -145,7 +147,15 @@ export async function POST(request: Request) {
       console.warn(`[admin-otp] No ADMIN_EMAIL set. OTP code: ${code}`);
     }
 
-    return NextResponse.json({ step: 'otp_required' });
+    // Only this browser may answer for the code (lib/admin-otp).
+    const otpResponse = NextResponse.json({ step: 'otp_required' });
+    const otpId = (otpRow as { id?: string } | null)?.id;
+    if (otpId) {
+      otpResponse.cookies.set(ADMIN_OTP_PENDING_COOKIE, pendingCookieValue(String(otpId)), {
+        httpOnly: true, secure: true, sameSite: 'strict', path: '/', maxAge: 10 * 60,
+      });
+    }
+    return otpResponse;
   }
 
   // ─── 2. Team member (DB lookup) ──────────────────────────────────────────

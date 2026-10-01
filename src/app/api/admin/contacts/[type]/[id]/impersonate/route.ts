@@ -58,7 +58,7 @@ export async function POST(
       redirect: '/dashboard',
       venueName: (venue as { name: string }).name,
     });
-    setSignedCookie(res, 'venue_id', id, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
+    setSignedCookie(res, 'venue_id', id, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 }, { principal: 'owner' });
     clearSignedCookie(res, 'member_id', { ...COOKIE_BASE, httpOnly: true });
     res.cookies.set(IMPERSONATION_COOKIE, impersonationCookieValue(id), { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
     res.cookies.set('impersonate_return', returnUrl, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
@@ -87,7 +87,7 @@ export async function POST(
           (member as { last_name?: string | null }).last_name,
         ].filter(Boolean).join(' '),
     });
-    setSignedCookie(res, 'venue_id', venueId, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
+    setSignedCookie(res, 'venue_id', venueId, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 }, { principal: { memberId: id } });
     setSignedCookie(res, 'member_id', id, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 24 * 30 });
     res.cookies.set(IMPERSONATION_COOKIE, impersonationCookieValue(venueId), { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });
     res.cookies.set('impersonate_return', returnUrl, { ...COOKIE_BASE, httpOnly: true, maxAge: 60 * 60 * 4 });

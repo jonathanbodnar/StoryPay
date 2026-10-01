@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { mergePersonNotificationSettings, DEFAULT_PERSON_NOTIFICATIONS } from '@/lib/notification-settings';
+import { getSessionMemberId } from '@/lib/auth-helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ export const dynamic = 'force-dynamic';
 async function resolveIdentity() {
   const cookieStore = await cookies();
   const venueId  = cookieStore.get('venue_id')?.value;
-  const memberId = cookieStore.get('member_id')?.value;
+  const memberId = (await getSessionMemberId()) ?? undefined;
   if (!venueId) return null;
   return { venueId, memberId: memberId || null };
 }

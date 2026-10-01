@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { EVENT_LABELS, countryFlag } from '@/lib/listing-events';
 import { broadcastVisitorPing } from '@/lib/realtime/broadcast';
+import { getClientIp } from '@/lib/rate-limit';
 
 // Allow the listing page (served from a different domain, e.g. storyvenue.com)
 // to POST events to this API cross-origin.
@@ -30,20 +31,8 @@ const GEO_TTL_MS = 60 * 60 * 1000; // 1 hour
 let hasGeoCoords = true;
 
 function extractClientIp(req: NextRequest): string | null {
-  // Railway / Fastly / Cloudflare / Vercel all forward the client IP in one
-  // of these headers. x-forwarded-for may contain a comma-separated chain
-  // (client, proxy, proxy, ...); the first entry is the real client.
-  const xff = req.headers.get('x-forwarded-for');
-  if (xff) {
-    const first = xff.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  return (
-    req.headers.get('fastly-client-ip') ||
-    req.headers.get('cf-connecting-ip') ||
-    req.headers.get('x-real-ip') ||
-    null
-  );
+  const ip = getClientIp(req);
+  return ip === 'unknown' ? null : ip;
 }
 
 // Reverse geocode precise lat/lon → city/region/country using Nominatim

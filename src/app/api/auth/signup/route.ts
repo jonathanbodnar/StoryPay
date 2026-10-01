@@ -358,7 +358,7 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json({ ok: true, redirect: '/signup/success?plan=free' });
   setSignedCookie(response, 'venue_id', venue.id, {
     path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
-  });
+  }, { principal: 'owner' });
   return response;
 }
 

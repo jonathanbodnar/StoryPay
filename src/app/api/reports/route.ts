@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { feeTierFor, loadConnectVenue, loadFeeTiers } from '@/lib/stripe/connect';
+import { denyIfRevenueHidden } from '@/lib/session';
 
 // Report types:
 // revenue         - all paid proposals with breakdown
@@ -15,6 +16,8 @@ export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const hidden = await denyIfRevenueHidden();
+  if (hidden) return hidden;
 
   const { searchParams } = request.nextUrl;
   const type = searchParams.get('type') || 'revenue';

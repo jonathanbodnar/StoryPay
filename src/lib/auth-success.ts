@@ -22,6 +22,6 @@ export async function buildVenueAuthSuccessResponse(opts: {
   const response = NextResponse.json({ redirect: '/dashboard' });
   setSignedCookie(response, 'venue_id', opts.venueId, {
     path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge,
-  }, { rememberMe: opts.rememberMe, isNative: opts.isNative });
+  }, { rememberMe: opts.rememberMe, isNative: opts.isNative, principal: 'owner' });
   return response;
 }

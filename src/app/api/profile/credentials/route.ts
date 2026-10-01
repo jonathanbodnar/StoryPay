@@ -17,13 +17,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
+import { getSessionMemberId } from '@/lib/auth-helpers';
 
 export const dynamic = 'force-dynamic';
 
 export async function PATCH(req: NextRequest) {
   const cookieStore = await cookies();
   const venueId  = cookieStore.get('venue_id')?.value;
-  const memberId = cookieStore.get('member_id')?.value;
+  const memberId = (await getSessionMemberId()) ?? undefined;
   if (!venueId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   // ── Team member password change ───────────────────────────────────────────

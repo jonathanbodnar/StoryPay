@@ -1,6 +1,8 @@
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 import { supabaseAdmin } from './supabase';
 import { verifyMasterAdminToken } from './admin-token';
+import { venuePrincipalFromMeta } from './venue-session';
 
 export type UserRole = 'owner' | 'admin' | 'member';
 
@@ -80,7 +82,16 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   if (!venue) return null;
 
-  const memberId = cookieStore.get('member_id')?.value;
+  // Who signed in is recorded in the signed venue_id meta (venue-session.ts),
+  // so a missing or swapped member_id cookie can't make a member the owner.
+  // Older sessions without it fall back to the member_id cookie; the proxy
+  // already signed out the ambiguous ones (no member cookie at a venue with a
+  // team).
+  const principal = venuePrincipalFromMeta(cookieStore.get('venue_id_meta')?.value);
+  const memberId =
+    principal.kind === 'member' ? principal.memberId
+    : principal.kind === 'owner' ? undefined
+    : cookieStore.get('member_id')?.value;
 
   if (memberId) {
     // Team member session
@@ -89,17 +100,10 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       .select('id, first_name, last_name, name, email, role, hide_revenue')
       .eq('id', memberId)
       .eq('venue_id', venueId)
-      .single();
+      .maybeSingle();
 
-    if (!member) {
-      // Invalid member cookie — treat as owner fallback
-      return {
-        venueId, venueName: venue.name, role: 'owner',
-        memberId: null, memberName: null, memberEmail: null,
-        isOwner: true, isAdmin: true,
-        hideRevenue: false,
-      };
-    }
+    // A removed member is signed out, never treated as the owner.
+    if (!member) return null;
 
     const role = (member.role as UserRole) || 'member';
     const hideRev = Boolean((member as { hide_revenue?: boolean }).hide_revenue);
@@ -135,4 +139,27 @@ export async function getAdminFromSession() {
   const adminToken = cookieStore.get('admin_token')?.value;
   if (!verifyMasterAdminToken(adminToken)) return null;
   return { authenticated: true };
+}
+
+
+/**
+ * For actions that need the venue owner or an admin (refunds, plan changes,
+ * API keys). Returns the session, or a ready 401/403 response.
+ */
+export async function requireOwnerOrAdmin(): Promise<{ ok: true; user: SessionUser } | { ok: false; res: NextResponse }> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, res: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  if (!user.isAdmin) {
+    return { ok: false, res: NextResponse.json({ error: 'Only the venue owner or an admin can do this.' }, { status: 403 }) };
+  }
+  return { ok: true, user };
+}
+
+/** For revenue figures: a team member set to "Hide revenue" gets a 403. */
+export async function denyIfRevenueHidden(): Promise<NextResponse | null> {
+  const user = await getSessionUser();
+  if (user?.hideRevenue) {
+    return NextResponse.json({ error: 'Revenue is hidden for your account.' }, { status: 403 });
+  }
+  return null;
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logError, type ErrorLevel, type ErrorSource } from '@/lib/error-log';
 import { getSessionUser } from '@/lib/session';
+import { getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -39,9 +40,7 @@ const ALLOWED_LEVELS = new Set<ErrorLevel>(['info', 'warning', 'error', 'critica
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || req.headers.get('x-real-ip')
-      || 'unknown';
+    const ip = getClientIp(req);
     if (rateLimited(ip)) return new NextResponse(null, { status: 204 });
 
     const body = await req.json().catch(() => null) as null | {

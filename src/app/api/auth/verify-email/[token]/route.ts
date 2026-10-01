@@ -39,6 +39,6 @@ export async function GET(
     secure: true,
     sameSite: 'lax',
     maxAge: 60 * 60 * 24 * 30,
-  });
+  }, { principal: 'owner' });
   return response;
 }
