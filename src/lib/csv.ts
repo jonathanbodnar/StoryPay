@@ -1,6 +1,17 @@
-/** Escape a field for RFC 4180-style CSV (comma-separated). */
+/**
+ * A cell Excel, Sheets or Numbers would run as a formula (=, +, @, tab, CR, or
+ * a "-" that isn't a plain number) gets a leading apostrophe, so text a lead
+ * typed (a name like =HYPERLINK(…)) stays text.
+ */
+export function neutralizeFormula(s: string): string {
+  if (/^[=+@\t\r]/.test(s)) return `'${s}`;
+  if (s.startsWith('-') && !/^-\d+(\.\d+)?$/.test(s)) return `'${s}`;
+  return s;
+}
+
+/** Escape a field for RFC 4180-style CSV (comma-separated), formula-safe. */
 export function csvEscape(value: string): string {
-  const s = value ?? '';
+  const s = neutralizeFormula(value ?? '');
   if (/[",\r\n]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`;
   }

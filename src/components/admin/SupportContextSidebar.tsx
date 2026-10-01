@@ -242,21 +242,30 @@ export function SupportContextSidebar({
   const [actionStatus, setActionStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [actionPending, setActionPending] = useState(false);
 
+  // The thread on screen. A slower answer for a thread the admin already
+  // switched away from is dropped, so its stages and tags never show here.
+  const currentThreadRef = useRef<string | null>(threadId);
+  currentThreadRef.current = threadId;
+
   const load = useCallback(async () => {
     if (!threadId) return;
+    const forThread = threadId;
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch(`/api/admin/support/bride-context/${threadId}`, { cache: 'no-store' });
+      const r = await fetch(`/api/admin/support/bride-context/${forThread}`, { cache: 'no-store' });
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));
         throw new Error(d.error || `Failed (${r.status})`);
       }
-      setData((await r.json()) as ContextResponse);
+      const next = (await r.json()) as ContextResponse;
+      if (currentThreadRef.current !== forThread) return;
+      setData(next);
     } catch (e) {
+      if (currentThreadRef.current !== forThread) return;
       setError(e instanceof Error ? e.message : 'Failed to load context');
     } finally {
-      setLoading(false);
+      if (currentThreadRef.current === forThread) setLoading(false);
     }
   }, [threadId]);
 

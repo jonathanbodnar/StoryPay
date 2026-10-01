@@ -158,6 +158,20 @@ export async function PATCH(
   }
   if (body.pipelineId === null || typeof body.pipelineId === 'string') updates.pipeline_id = body.pipelineId || null;
   if (body.stageId === null || typeof body.stageId === 'string')       updates.stage_id    = body.stageId    || null;
+  // A pipeline or stage has to be one of this venue's own.
+  if (typeof updates.pipeline_id === 'string') {
+    const { data: pipe } = await supabaseAdmin
+      .from('lead_pipelines').select('id').eq('id', updates.pipeline_id).eq('venue_id', venueId).maybeSingle();
+    if (!pipe) return NextResponse.json({ error: 'Invalid pipeline' }, { status: 400 });
+  }
+  if (typeof updates.stage_id === 'string') {
+    const { data: stage } = await supabaseAdmin
+      .from('lead_pipeline_stages').select('id, pipeline_id').eq('id', updates.stage_id).eq('venue_id', venueId).maybeSingle();
+    if (!stage) return NextResponse.json({ error: 'Invalid stage' }, { status: 400 });
+    if (typeof updates.pipeline_id === 'string' && (stage as { pipeline_id: string }).pipeline_id !== updates.pipeline_id) {
+      return NextResponse.json({ error: 'Stage does not belong to that pipeline' }, { status: 400 });
+    }
+  }
   if (typeof body.position === 'number')           updates.position = body.position;
   if (body.lostReason === null || typeof body.lostReason === 'string') {
     updates.lost_reason = body.lostReason?.trim() || null;

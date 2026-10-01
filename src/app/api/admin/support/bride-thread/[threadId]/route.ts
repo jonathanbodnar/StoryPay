@@ -198,7 +198,7 @@ export async function GET(
   if (email) {
     const { data: leadRow } = await supabaseAdmin
       .from('leads')
-      .select('id, name, first_name, last_name, email, phone, status, pipeline_stage_id')
+      .select('id, name, first_name, last_name, email, phone, status, pipeline_stage_id:stage_id')
       .eq('venue_id', thread.venue_id)
       .ilike('email', email)
       .order('created_at', { ascending: false })

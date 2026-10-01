@@ -195,6 +195,10 @@ function withCapitalizedNames(vars: Record<string, string>): Record<string, stri
   return out;
 }
 
+function escapeHtmlText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 export function fillTemplate(
   text: string,
   vars: Record<string, string>
@@ -345,10 +349,14 @@ export function buildEmailHtml({
   /** Ready-made HTML placed after the template body (e.g. the new-lead details table). */
   extraHtml?: string;
 }): string {
-  const heading = fillTemplate(template.heading, vars);
-  const body    = fillTemplate(template.body, vars);
-  const btnText = template.button_text ? fillTemplate(template.button_text, vars) : null;
-  const footer  = template.footer ? fillTemplate(template.footer, vars) : null;
+  // Merge values come from leads, couples and venues, so they're escaped for
+  // HTML here, once; callers pass them raw. Template text is plain text.
+  const htmlVars: Record<string, string> = {};
+  for (const [k, v] of Object.entries(vars)) htmlVars[k] = escapeHtmlText(String(v ?? ''));
+  const heading = fillTemplate(template.heading, htmlVars);
+  const body    = fillTemplate(template.body, htmlVars);
+  const btnText = template.button_text ? fillTemplate(template.button_text, htmlVars) : null;
+  const footer  = template.footer ? fillTemplate(template.footer, htmlVars) : null;
 
   const linkUrl = actionUrl && actionUrl !== '#' ? actionUrl : null;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import StripeCardUpdateForm from '@/components/payments/StripeCardUpdateForm';
 
@@ -13,29 +13,12 @@ interface CardUpdateData {
   venue_logo_url: string | null;
 }
 
-interface CommerceInstance {
-  mount(el: HTMLElement): void;
-  on(event: string, cb: (data: Record<string, unknown>) => void): void;
-  destroy?(): void;
-}
-
-declare global {
-  interface Window {
-    Commerce?: {
-      elements: new (clientToken: string, options?: Record<string, unknown>) => CommerceInstance;
-    };
-  }
-}
-
 export default function UpdateCardPage() {
   const { token } = useParams<{ token: string }>();
   const [data, setData] = useState<CardUpdateData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [formLoading, setFormLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -55,99 +38,6 @@ export default function UpdateCardPage() {
     if (token) fetchData();
   }, [token]);
 
-  useEffect(() => {
-    if (!data || data.provider === 'stripe') return;
-    let destroyed = false;
-
-    async function initPayment() {
-      try {
-        const res = await fetch(`/api/card-update/${token}/intent`, {
-          method: 'POST',
-        });
-        if (!res.ok) {
-          const intentRes = await fetch(
-            `/api/proposals/public/${token}/payment-intent`,
-            { method: 'POST' }
-          );
-          if (!intentRes.ok) throw new Error('Failed to init payment');
-          const { clientToken, environment } = await intentRes.json();
-          loadCommerce(clientToken, environment, destroyed);
-          return;
-        }
-        const { clientToken, environment } = await res.json();
-        loadCommerce(clientToken, environment, destroyed);
-      } catch {
-        // Fallback: load a fresh intent via the card-update specific route if it exists,
-        // or show an error
-        try {
-          const res = await fetch(`/api/card-update/${token}/payment-intent`, {
-            method: 'POST',
-          });
-          if (!res.ok) throw new Error('Payment setup failed');
-          const { clientToken, environment } = await res.json();
-          loadCommerce(clientToken, environment, destroyed);
-        } catch {
-          if (!destroyed) {
-            setError('Unable to load payment form. Please try again later.');
-            setFormLoading(false);
-          }
-        }
-      }
-    }
-
-    function loadCommerce(clientToken: string, environment: string, isDestroyed: boolean) {
-      const script = document.createElement('script');
-      script.src = 'https://js.fortis.tech/commercejs-v1.0.0.min.js';
-      script.onload = () => {
-        if (isDestroyed || !window.Commerce?.elements || !containerRef.current) return;
-
-        const commerce = new window.Commerce.elements(clientToken, {
-          environment,
-          container: '#card-update-element',
-          showSubmitButton: false,
-        });
-
-        commerce.on('ready', () => {
-          if (!isDestroyed) setFormLoading(false);
-        });
-
-        commerce.on('token', async (tokenData: Record<string, unknown>) => {
-          if (isDestroyed) return;
-          setProcessing(true);
-          try {
-            const saveRes = await fetch(`/api/card-update/${token}/save`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                ticketId: tokenData.id || tokenData.ticketId,
-                nameHolder: tokenData.nameHolder || '',
-              }),
-            });
-            const result = await saveRes.json();
-            if (!saveRes.ok)
-              throw new Error(result.error || 'Failed to save card');
-            setSuccess(true);
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to update card');
-            setProcessing(false);
-          }
-        });
-
-        commerce.on('error', (errData: Record<string, unknown>) => {
-          if (!isDestroyed)
-            setError((errData.message as string) || 'Payment form error');
-        });
-
-        commerce.mount(containerRef.current!);
-      };
-      document.body.appendChild(script);
-    }
-
-    initPayment();
-    return () => {
-      destroyed = true;
-    };
-  }, [data, token]);
 
   if (loading) {
     return (
@@ -234,32 +124,10 @@ export default function UpdateCardPage() {
             {data.provider === 'stripe' ? (
               <StripeCardUpdateForm token={token} onSuccess={() => setSuccess(true)} />
             ) : (
-            <>
-            {formLoading && (
-              <div className="flex items-center justify-center py-10 text-gray-400">
-                <svg className="animate-spin h-6 w-6 mr-3" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                </svg>
-                Loading payment form…
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+                This link is from {data.venue_name || 'the venue'}&rsquo;s old payment system and no longer works.
+                Please ask them to send you a new link to update your card.
               </div>
-            )}
-            {error && (
-              <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-            <div id="card-update-element" ref={containerRef} />
-            {processing && (
-              <div className="mt-4 flex items-center justify-center text-brand-900 text-sm font-medium">
-                <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                </svg>
-                Updating your card…
-              </div>
-            )}
-            </>
             )}
           </div>
         </div>

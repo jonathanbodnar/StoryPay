@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminCookie } from '@/lib/admin-auth';
+import { neutralizeFormula } from '@/lib/csv';
 import {
   loadAllContacts,
   contactMatches,
@@ -33,7 +34,7 @@ const CSV_HEADERS = [
 
 function csvEscape(v: unknown): string {
   if (v == null) return '';
-  const s = String(v);
+  const s = neutralizeFormula(String(v));
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }

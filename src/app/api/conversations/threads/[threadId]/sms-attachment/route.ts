@@ -40,6 +40,11 @@ export async function POST(
   const formData = await request.formData();
   const file = formData.get('file') as File | null;
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+  // What a text message can carry: photos, short videos, PDFs and contact cards.
+  const MMS_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/quicktime', 'application/pdf', 'text/vcard', 'text/x-vcard'];
+  if (!MMS_TYPES.includes((file.type || '').toLowerCase())) {
+    return NextResponse.json({ error: 'Attach a photo, short video, PDF or contact card.' }, { status: 400 });
+  }
 
   try {
     await ensureBucket();

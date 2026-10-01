@@ -110,3 +110,18 @@ export function generateToken(): string {
   }
   return result;
 }
+
+
+/**
+ * Is this due date (a "YYYY-MM-DD" date, or a timestamp) before today in the
+ * viewer's own time zone? Parsing a bare date with new Date() reads it as UTC
+ * midnight, which in the US is the evening before, so a task due today showed
+ * as overdue from the night before.
+ */
+export function isPastDueDate(due: string | null | undefined): boolean {
+  const d = String(due ?? '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return d < today;
+}

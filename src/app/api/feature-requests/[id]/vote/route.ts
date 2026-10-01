@@ -33,7 +33,7 @@ export async function POST(
     // Check if this venue has already voted
     const { data: existing } = await supabaseAdmin
       .from('feature_request_votes')
-      .select('id')
+      .select('request_id')
       .eq('request_id', id)
       .eq('venue_id', venueId)
       .maybeSingle();

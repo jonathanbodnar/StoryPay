@@ -170,9 +170,12 @@ async function backfillMissingContactIds(
       .eq('id', r.id)
       .is('ghl_contact_id', null);
     if (error) {
-      // Most likely a unique clash: another customer row at this venue already
-      // owns this GHL contact. Skip rather than corrupt the mapping.
-      console.warn('[ghl-inbound-cron] backfill update failed', { customerId: r.id, error: error.message });
+      // A unique clash means another contact at this venue (usually a duplicate
+      // record for the same person, same phone) already owns this CRM contact,
+      // and texts from that number land on it. Expected, so not a warning.
+      if ((error as { code?: string }).code !== '23505') {
+        console.warn('[ghl-inbound-cron] backfill update failed', { customerId: r.id, error: error.message });
+      }
       bucket.lookupFailed++;
       backfillSetAside.set(r.id, Date.now());
       continue;

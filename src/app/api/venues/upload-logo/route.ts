@@ -18,14 +18,16 @@ export async function POST(request: NextRequest) {
   const file = formData.get('file') as File | null;
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-  if (!file.type.startsWith('image/')) {
-    return NextResponse.json({ error: 'File must be an image' }, { status: 400 });
+  // Photo formats only: logos go into emails (where SVG doesn't render) and a
+  // public bucket (where an SVG could carry a script).
+  if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+    return NextResponse.json({ error: 'Upload a PNG, JPG, WebP or GIF image' }, { status: 400 });
   }
   if (file.size > LOGO_MAX_BYTES) {
     return NextResponse.json({ error: 'File must be under 5MB' }, { status: 400 });
   }
 
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+  const ext = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' } as Record<string, string>)[file.type] ?? 'png';
   const path = `venue-logos/${venueId}/logo.${ext}`;
 
   const arrayBuffer = await file.arrayBuffer();

@@ -605,11 +605,11 @@ export async function notifyVenueOfConciergeMessage(input: {
       // chassis, so escape any dynamic (user-authored) values first.
       const resolvedSubject = fillTemplate(subject, { venue_name: venueName, author_name: author });
       const htmlVars: Record<string, string> = {
-        owner_first_name: escapeHtmlBasic(ownerFirst),
-        author_name:      escapeHtmlBasic(author),
-        venue_name:       escapeHtmlBasic(venueName),
-        message_preview:  escapeHtmlBasic(preview),
-        reply_hint:       escapeHtmlBasic(replyHint),
+        owner_first_name: ownerFirst,
+        author_name:      author,
+        venue_name:       venueName,
+        message_preview:  preview,
+        reply_hint:       replyHint,
       };
 
       const tplRow: EmailTemplateRow = {
@@ -899,7 +899,7 @@ export function notifyOwnerNewLead(input: {
         phone,
         source,
         created_at:    createdAt,
-        lead_intro:    escapeHtmlBasic(input.intro?.trim()
+        lead_intro:    (input.intro?.trim()
           || defaultLeadIntro((/^[a-z0-9_]+$/.test((input.source ?? '').trim()) ? input.source! : lead?.source ?? '').trim().toLowerCase())),
       },
       extraHtml: buildLeadDetailsHtml(rows, message, input.note?.trim() || null, input.originalEmail ?? null),

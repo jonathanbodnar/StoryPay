@@ -137,7 +137,7 @@ export async function GET() {
     wedding_date: string | null;
   }>).map((r) => ({
     author: r.reviewer_name ?? '',
-    location: r.wedding_date ? `Married ${new Date(r.wedding_date).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}` : '',
+    location: r.wedding_date ? `Married ${new Date(`${String(r.wedding_date).slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}` : '',
     body: r.body ?? '',
     rating: r.rating ?? 5,
   }));

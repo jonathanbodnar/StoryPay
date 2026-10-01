@@ -32,14 +32,6 @@ export type PrivateClientReminderResult = {
   errors: number;
 };
 
-function escapeHtmlBasic(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 /**
  * "Due at" marker: 1st of the following month at 12:00 UTC. This is intentionally
@@ -202,8 +194,8 @@ export async function processPrivateClientMonthlyReminder(): Promise<PrivateClie
       const html = buildEmailHtml({
         template: tplRow,
         vars: {
-          owner_first_name: escapeHtmlBasic(ownerFirst),
-          venue_name: escapeHtmlBasic(venueName),
+          owner_first_name: ownerFirst,
+          venue_name: venueName,
           action_url: actionUrl,
         },
         actionUrl,

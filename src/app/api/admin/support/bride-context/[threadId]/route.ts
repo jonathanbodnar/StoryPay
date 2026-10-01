@@ -167,7 +167,7 @@ export async function GET(
     v?.directory_plan_id
       ? supabaseAdmin
           .from('directory_plans')
-          .select('id, name, price_cents, is_legacy')
+          .select('id, name, price_cents:price_monthly_cents, is_legacy')
           .eq('id', v.directory_plan_id as string)
           .maybeSingle()
           .then(r => r.data)
@@ -377,7 +377,7 @@ export async function GET(
     lead?.id
       ? supabaseAdmin
           .from('ai_state_transitions')
-          .select('to_state, reason, trigger_keyword, created_at')
+          .select('to_state, reason, trigger_keyword:triggered_by, created_at')
           .eq('lead_id', lead.id as string)
           .eq('to_state', 'handoff')
           .order('created_at', { ascending: false })

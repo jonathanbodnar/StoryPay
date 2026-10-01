@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
+import DOMPurify from 'isomorphic-dompurify';
 import Link from 'next/link';
 import {
   ArrowLeft, Copy, ExternalLink, Receipt, RefreshCw, RotateCcw, Wallet, Pencil,
@@ -358,7 +359,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ id: s
           </div>
           <div
             className="prose prose-sm max-w-none text-gray-700"
-            dangerouslySetInnerHTML={{ __html: proposal.content }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(proposal.content) }}
           />
         </div>
       )}

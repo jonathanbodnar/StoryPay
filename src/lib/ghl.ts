@@ -107,11 +107,16 @@ export async function ghlRequest(
   // user-facing send failure. Other 4xx are never retried — those are real
   // validation/auth problems.
   const MAX_ATTEMPTS = 3;
+  // Reads run every few seconds (the text sync), so a successful read logs
+  // nothing unless GHL_DEBUG=1; writes (sends, updates) and every failure do.
+  const logCall = method !== 'GET' || process.env.GHL_DEBUG === '1';
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    console.log(
-      `[ghl] -> ${method} ${url} (tokenKind=${kind}${attempt > 1 ? `, retry=${attempt}` : ''})` +
-      (bodyPreview ? ` body=${bodyPreview}` : ''),
-    );
+    if (logCall || attempt > 1) {
+      console.log(
+        `[ghl] -> ${method} ${url} (tokenKind=${kind}${attempt > 1 ? `, retry=${attempt}` : ''})` +
+        (bodyPreview ? ` body=${bodyPreview}` : ''),
+      );
+    }
 
     let res: Response;
     try {
@@ -148,7 +153,7 @@ export async function ghlRequest(
       throw new Error(`GHL API error ${res.status}: ${errorText}`);
     }
 
-    console.log(`[ghl] <- ${method} ${url} :: ${res.status} OK`);
+    if (logCall) console.log(`[ghl] <- ${method} ${url} :: ${res.status} OK`);
     return res.json();
   }
   // Unreachable — every loop path either returns or throws — but keeps TS happy.

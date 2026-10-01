@@ -14,7 +14,7 @@ const BUCKET = 'customer-files';
 const ALLOWED_MIME_TYPES = new Set([
   // Images
   'image/jpeg', 'image/png', 'image/webp', 'image/gif',
-  'image/heic', 'image/heif', 'image/svg+xml', 'image/tiff',
+  'image/heic', 'image/heif', 'image/tiff',
   // Documents
   'application/pdf',
   'application/msword',

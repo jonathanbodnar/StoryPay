@@ -18,7 +18,7 @@ import VenueDirectPanel from '@/components/dashboard/VenueDirectPanel';
 import ContactConversationsTab from '@/components/contacts/ContactConversationsTab';
 import RoomCanvas, { type GuestLite } from '@/components/wedding-layout/RoomCanvas';
 import { EMPTY_LAYOUT, type WeddingLayout } from '@/lib/wedding-layout';
-import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
+import { formatCents, formatDate, formatDateTime, getStatusColor, classNames, toTitleCase, dispatchStageChange, onStageChange, isPastDueDate } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 import { bookingTimelineOptions } from '@/lib/booking-timeline';
 import { isNativeApp } from '@/lib/platform';
@@ -2183,7 +2183,7 @@ export default function ContactProfilePanel({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-900">{t.title}</p>
                       {t.due_date && (
-                        <p className={`text-xs mt-0.5 ${new Date(t.due_date) < new Date() ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                        <p className={`text-xs mt-0.5 ${isPastDueDate(t.due_date) ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
                           Due {formatDate(t.due_date)}
                         </p>
                       )}

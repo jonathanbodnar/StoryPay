@@ -433,45 +433,19 @@ async function dispatchSms(
 }
 
 /**
- * Resolve a fresh GHL access token for a venue, refreshing via OAuth if needed.
- * Falls back to the stored token if refresh fails so we always have something to try.
+ * The token to text with for this venue's CRM location, the same way every
+ * other text is sent (lib/ghl resolveLocationToken: a location token is used
+ * as is, an agency token is exchanged for this location). Falls back to the
+ * stored token so we always have something to try.
  */
-async function resolveVenueGhlToken(venueId: string, storedToken: string): Promise<string> {
+async function resolveVenueGhlToken(locationId: string, storedToken: string): Promise<string> {
   try {
-    const { supabaseAdmin: sba } = await import('@/lib/supabase');
-    const { data: v } = await sba
-      .from('venues')
-      .select('ghl_refresh_token, ghl_token_expires_at')
-      .eq('id', venueId)
-      .maybeSingle();
-
-    const expiresAt = (v as { ghl_token_expires_at?: string | null } | null)?.ghl_token_expires_at;
-    const refreshToken = (v as { ghl_refresh_token?: string | null } | null)?.ghl_refresh_token;
-
-    const isExpiredOrSoon = !expiresAt || new Date(expiresAt).getTime() < Date.now() + 5 * 60 * 1000;
-
-    if (isExpiredOrSoon && refreshToken) {
-      const { refreshAccessToken } = await import('@/lib/ghl') as {
-        refreshAccessToken: (rt: string) => Promise<{ access_token: string; expires_in?: number }>;
-      };
-      const result = await refreshAccessToken(refreshToken);
-      const newToken = result.access_token;
-      const newExpiry = result.expires_in
-        ? new Date(Date.now() + result.expires_in * 1000).toISOString()
-        : null;
-
-      // Persist the refreshed token back to the DB
-      const updateData: Record<string, string | null> = { ghl_access_token: newToken };
-      if (newExpiry) updateData.ghl_token_expires_at = newExpiry;
-      await sba.from('venues').update(updateData).eq('id', venueId);
-
-      console.log('[calendar-notifications] refreshed GHL token for venue', venueId);
-      return newToken;
-    }
+    const { resolveLocationToken } = await import('@/lib/ghl');
+    return await resolveLocationToken(storedToken, locationId);
   } catch (e) {
-    console.warn('[calendar-notifications] token refresh failed, using stored token:', e);
+    console.warn('[calendar-notifications] location token lookup failed, using stored token:', e);
+    return storedToken;
   }
-  return storedToken;
 }
 
 // ── Main dispatch ─────────────────────────────────────────────────────────────
@@ -529,7 +503,7 @@ export async function dispatchCalendarNotification(
     // Resolve a potentially-refreshed GHL token before any SMS dispatch
     let ghlToken = (venueRow as VenueRow | null)?.ghl_access_token ?? null;
     if (ghlToken && (venueRow as VenueRow | null)?.ghl_location_id) {
-      ghlToken = await resolveVenueGhlToken(venueId, ghlToken);
+      ghlToken = await resolveVenueGhlToken((venueRow as VenueRow).ghl_location_id as string, ghlToken);
     }
 
     if (!venueRow) return;

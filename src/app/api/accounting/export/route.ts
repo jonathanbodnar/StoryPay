@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVenueId } from '@/lib/auth-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
+import { neutralizeFormula } from '@/lib/csv';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 function csvEscape(s: string): string {
-  const t = s ?? '';
+  const t = neutralizeFormula(s ?? '');
   if (/[",\n\r]/.test(t)) return `"${t.replace(/"/g, '""')}"`;
   return t;
 }

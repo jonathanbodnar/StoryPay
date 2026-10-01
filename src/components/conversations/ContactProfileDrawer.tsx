@@ -11,7 +11,7 @@ import {
   RefreshCw, Info, CalendarPlus, Clock, MapPin,
   MessageCircle,
 } from 'lucide-react';
-import { classNames, formatCents, formatDate, formatDateTime, getStatusColor, toTitleCase, dispatchStageChange, onStageChange } from '@/lib/utils';
+import { classNames, formatCents, formatDate, formatDateTime, getStatusColor, toTitleCase, dispatchStageChange, onStageChange, isPastDueDate } from '@/lib/utils';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
 import { bookingTimelineLabel } from '@/lib/booking-timeline';
 
@@ -1121,7 +1121,7 @@ export default function ContactProfileDrawer({ venueCustomerId, onClose, initial
                         </div>
                       ) : (
                         <>
-                          <div className="flex-1 min-w-0"><p className="text-sm text-gray-900">{t.title}</p>{t.due_date&&<p className={`text-xs mt-0.5 ${new Date(t.due_date)<new Date()?'text-red-500 font-medium':'text-gray-400'}`}>Due {formatDate(t.due_date)}</p>}</div>
+                          <div className="flex-1 min-w-0"><p className="text-sm text-gray-900">{t.title}</p>{t.due_date&&<p className={`text-xs mt-0.5 ${isPastDueDate(t.due_date)?'text-red-500 font-medium':'text-gray-400'}`}>Due {formatDate(t.due_date)}</p>}</div>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={()=>void toggleTask(t)} className="text-xs text-emerald-600 font-medium flex items-center gap-0.5"><Check size={12}/>Done</button>
                             <button onClick={()=>{setEditingTaskId(t.id);setEditTaskTitle(t.title);setEditTaskDue(t.due_date??'');}} className="text-gray-400 hover:text-gray-700 ml-2"><Pencil size={13}/></button>

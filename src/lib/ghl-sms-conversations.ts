@@ -703,17 +703,20 @@ export async function syncInboundSmsFromGhlForThread(params: {
       8,
       Math.max(1, Number.parseInt(process.env.GHL_SMS_SYNC_MAX_CONVERSATIONS ?? '8', 10) || 8)
     );
-    // Always log enough to diagnose "imported: 0" without needing to set a
-    // separate env var. Sample-of-one structural dump is OFF by default — flip
-    // GHL_SMS_SYNC_DEBUG=1 in Railway when we need to see raw message shape.
+    // This runs every few seconds for active threads, so routine scans log
+    // nothing (they used to fill Railway's log history in minutes); a scan that
+    // imports texts logs one line. GHL_SMS_SYNC_DEBUG=1 in Railway brings back
+    // the step-by-step lines and a sample message.
     const debug = process.env.GHL_SMS_SYNC_DEBUG === '1';
 
-    console.log('[ghl-sms sync] starting', {
-      threadId,
-      contactId,
-      conversationsFound: convIds.length,
-      scanning: convIds.slice(0, maxConv),
-    });
+    if (debug) {
+      console.log('[ghl-sms sync] starting', {
+        threadId,
+        contactId,
+        conversationsFound: convIds.length,
+        scanning: convIds.slice(0, maxConv),
+      });
+    }
 
     let imported = 0;
     const insertedMessages: SyncedInboundSmsMessage[] = [];
@@ -735,11 +738,13 @@ export async function syncInboundSmsFromGhlForThread(params: {
         continue;
       }
       const list = ghlApiMessagesFromResponse(rawList);
-      console.log('[ghl-sms sync] conv scan', {
-        ghlConversationId,
-        messageCount: list.length,
-        sampleKeys: list[0] ? Object.keys(list[0]).slice(0, 20) : [],
-      });
+      if (debug) {
+        console.log('[ghl-sms sync] conv scan', {
+          ghlConversationId,
+          messageCount: list.length,
+          sampleKeys: list[0] ? Object.keys(list[0]).slice(0, 20) : [],
+        });
+      }
       if (debug && list[0]) {
         console.log('[ghl-sms sync] sample message', JSON.stringify(list[0]).slice(0, 800));
       }
@@ -809,21 +814,25 @@ export async function syncInboundSmsFromGhlForThread(params: {
       }
     }
 
-    console.log('[ghl-sms sync] done', {
-      threadId,
-      contactId,
-      conversationsScanned: Math.min(convIds.length, maxConv),
-      totalMsgs,
-      inboundCount,
-      outboundCount,
-      seenTypes,
-      inboundCandidates,
-      imported,
-    });
+    if (debug || imported > 0) {
+      console.log('[ghl-sms sync] done', {
+        threadId,
+        contactId,
+        conversationsScanned: Math.min(convIds.length, maxConv),
+        totalMsgs,
+        inboundCount,
+        outboundCount,
+        seenTypes,
+        inboundCandidates,
+        imported,
+      });
+    }
     if (params.runSideEffects !== false && insertedMessages.length) {
       await runSyncedInboundSideEffects(venueId, insertedMessages);
     }
-    if (firstNonInboundSample) {
+    // Inbound entries that aren't texts (reactions, "DnD enabled" activity, …)
+    // are expected; the sample is only for debugging the filter.
+    if (debug && firstNonInboundSample) {
       console.warn('[ghl-sms sync] inbound msg found but FAILED SMS filter:', {
         keys: Object.keys(firstNonInboundSample).slice(0, 30),
         direction: firstNonInboundSample.direction,
