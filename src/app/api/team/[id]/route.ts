@@ -64,7 +64,7 @@ export async function PATCH(
   // Anyone may update their own name and phone; nothing else about themselves.
   // Only the owner edits the owner's own login (email, phone, password).
   const isSelf = session.memberId !== null && session.memberId === id;
-  const isOwnerSession = session.isOwner && session.memberId === null;
+  const isOwnerSession = session.isOwner; // the account owner, or a team member with the Owner role
   const forbidden = (msg: string) => NextResponse.json({ error: msg }, { status: 403 });
 
   // ── Who are we editing? ────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ export async function DELETE(
     .eq('venue_id', venueId)
     .maybeSingle();
   if (!target) return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
-  const isOwnerSession = session.isOwner && session.memberId === null;
+  const isOwnerSession = session.isOwner; // the account owner, or a team member with the Owner role
   if (!isOwnerSession) {
     if (!session.isAdmin) return NextResponse.json({ error: 'Only the venue owner or an admin can remove team members.' }, { status: 403 });
     if ((target as { role?: string | null }).role !== 'member') {

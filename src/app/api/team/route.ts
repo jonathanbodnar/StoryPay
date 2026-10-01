@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
   if (role && role !== 'admin' && role !== 'member') {
     return NextResponse.json({ error: 'Choose Admin or Member.' }, { status: 400 });
   }
-  if (wantedRole === 'admin' && !(session.isOwner && session.memberId === null)) {
+  if (wantedRole === 'admin' && !session.isOwner) {
     return NextResponse.json({ error: 'Only the venue owner can invite an admin.' }, { status: 403 });
   }
 
