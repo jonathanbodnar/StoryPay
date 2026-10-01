@@ -21,12 +21,26 @@ const SIGNED_COOKIES: Array<{ id: string; table: string }> = [
 const ABSOLUTE_MAX_SECONDS = 60 * 60 * 24 * 7; // 7-day hard cap (web default/legacy)
 const IDLE_SECONDS = 60 * 60 * 8;              // 8-hour idle (default / legacy)
 
-function getSecret(): string | undefined {
-  return (
-    process.env.NEXTAUTH_SECRET ??
-    process.env.ADMIN_SECRET ??
-    process.env.LEAD_WEBHOOK_SECRET
-  );
+/**
+ * Session signing secrets, newest first. SESSION_SECRET is venue sessions' own
+ * secret; the older shared one (NEXTAUTH_SECRET / ADMIN_SECRET) still verifies
+ * sessions issued before it was set, and those are re-signed with the new one
+ * on their next request, so nobody is signed out. Drop the fallback once every
+ * active session has been re-signed (a week for web; idle app sessions longer).
+ */
+function getSecrets(): string[] {
+  const primary = process.env.SESSION_SECRET;
+  const legacy = process.env.NEXTAUTH_SECRET ?? process.env.ADMIN_SECRET ?? process.env.LEAD_WEBHOOK_SECRET;
+  return [primary, legacy].filter((s, i, a): s is string => !!s && a.indexOf(s) === i);
+}
+
+/** True when `sig` is the HMAC of `message` under any of the secrets. */
+async function signedByAny(secrets: string[], message: string, sig: string | undefined): Promise<boolean> {
+  if (!sig) return false;
+  for (const s of secrets) {
+    if (safeEqual(sig, await hmacBase64Url(s, message))) return true;
+  }
+  return false;
 }
 
 function toBase64Url(bytes: Uint8Array): string {
@@ -162,7 +176,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url, 307);
   }
 
-  const secret = getSecret();
+  const secrets = getSecrets();
+  const secret = secrets[0];
   // Without a signing secret we cannot verify. Fail OPEN so a misconfiguration
   // can't lock every tenant out — the signing side fails loudly on its own.
   if (!secret) return NextResponse.next();
@@ -189,8 +204,7 @@ export async function proxy(request: NextRequest) {
 
     if (metaVal) {
       // Current format: signature binds id + value + meta.
-      const expected = await hmacBase64Url(secret, `${id}=${value}.${metaVal}`);
-      if (!providedSig || !safeEqual(providedSig, expected)) {
+      if (!(await signedByAny(secrets, `${id}=${value}.${metaVal}`, providedSig))) {
         strip();
         continue;
       }
@@ -216,8 +230,7 @@ export async function proxy(request: NextRequest) {
       reissue.push({ id, value, iat, idle, absCap, principal });
     } else {
       // Legacy format (pre-metadata): HMAC(id=value). Verify once, then migrate.
-      const expectedLegacy = await hmacBase64Url(secret, `${id}=${value}`);
-      if (!providedSig || !safeEqual(providedSig, expectedLegacy)) {
+      if (!(await signedByAny(secrets, `${id}=${value}`, providedSig))) {
         strip();
         continue;
       }

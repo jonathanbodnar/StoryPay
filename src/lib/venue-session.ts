@@ -47,7 +47,10 @@ export function metaCookieName(name: string): string {
 }
 
 function getSecret(): string {
+  // Venue sessions' own secret when set (see proxy.ts getSecrets for the
+  // fallback that keeps older sessions signed in).
   const secret =
+    process.env.SESSION_SECRET ??
     process.env.NEXTAUTH_SECRET ??
     process.env.ADMIN_SECRET ??
     process.env.LEAD_WEBHOOK_SECRET;
