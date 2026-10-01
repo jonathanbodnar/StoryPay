@@ -1,0 +1,26 @@
+# Automated checks on every push to main and every pull request: the type
+# check and the fast checks (npm test, which includes LeadFinder's fixtures).
+# Report-only for now: Railway deploys main either way. This becomes the
+# release gate once the test copy is in place.
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Fast checks
+        run: npm test
