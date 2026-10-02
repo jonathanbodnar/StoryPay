@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { coupleTexts, db, ensureFlowVenue, FLOW_VENUE, runId, runJob, submitListingLead, texts } from './helpers';
+import { coupleTexts, db, ensureFlowVenue, FLOW_VENUE, runId, runJob, submitListingLead, texts, waitForText } from './helpers';
 
 // Texting end to end, against the test copy's stand-in texting service
 // (lib/staging-ghl): the guide by text, the follow-ups, a couple texting back,
@@ -8,18 +8,6 @@ const n = (parseInt(runId.slice(-5), 36) % 9000) + 1000;
 const phoneA = `(646) 555-${n}`;
 const phoneB = `(646) 556-${n}`;
 
-async function waitForText(phone: string, since: string, match: (body: string) => boolean, timeoutMs = 20_000) {
-  const until = Date.now() + timeoutMs;
-  for (;;) {
-    const hit = (await texts(phone, since)).find((t) => t.direction === 'outbound' && match(t.body));
-    if (hit) return hit;
-    if (Date.now() > until) {
-      const seen = (await texts(phone, since)).map((t) => `${t.direction}: ${t.body.slice(0, 70)}`);
-      throw new Error(`No matching text to ${phone} within ${timeoutMs / 1000}s. Seen: ${JSON.stringify(seen)}`);
-    }
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-}
 const textsTo = async (phone: string, since: string) => (await texts(phone, since)).filter((t) => t.direction === 'outbound');
 
 /** The next step of their follow-up sequence comes due, and the sequence job runs. */
@@ -81,7 +69,7 @@ describe('texting a couple', () => {
   });
 
   it('a reply the sync hasn’t picked up yet still stops the next follow-up', async () => {
-    const leadB = await newLead('casey', phoneB);
+    const leadB = await newLead('cameron', phoneB);
     await waitForText(phoneB, since, (b) => /guide/i.test(b));
     await nextStepDue(leadB); // the 1-day wait
     await coupleTexts(phoneB, 'We already booked a tour with you!');
@@ -90,7 +78,7 @@ describe('texting a couple', () => {
     expect(await textsTo(phoneB, before)).toHaveLength(0);
     const { data: ens } = await db.from('marketing_automation_enrollments').select('last_error').eq('lead_id', leadB);
     expect(ens!.some((e) => e.last_error === 'stopped_on_reply')).toBe(true);
-    expect(await repliesInConversation(`casey.${runId}@example.com`)).toContain('We already booked a tour with you!');
+    expect(await repliesInConversation(`cameron.${runId}@example.com`)).toContain('We already booked a tour with you!');
   });
 
   it('STOP turns their texts off', async () => {

@@ -6,6 +6,8 @@
  * like the email outbox: a restart clears it. Live site: never used.
  */
 
+import { recordOutbox } from '@/lib/staging-outbox';
+
 interface FakeContact {
   id: string;
   locationId: string;
@@ -183,6 +185,12 @@ export async function fakeGhlFetch(input: RequestInfo | URL, init?: RequestInit)
   if (path === '/conversations/messages' && method === 'POST') {
     const c = ghl().contacts.get(String(b.contactId ?? ''));
     if (!c) return json({ statusCode: 400, message: 'Contact not found' }, 400);
+    if (String(b.type ?? '').toLowerCase() === 'email') {
+      // An email sent through the venue's CRM (proposals, invoices): to the
+      // email outbox, like every other email the test copy sends.
+      recordOutbox({ to: c.email ? [c.email] : [], cc: [], bcc: [], subject: String(b.subject ?? ''), html: String(b.html ?? ''), delivered: false });
+      return json({ conversationId: conversationFor(c).id, messageId: newId('em'), emailMessageId: newId('em') });
+    }
     const m = addMessage(c, 'outbound', String(b.message ?? ''));
     return json({ conversationId: m.conversationId, messageId: m.id, msg: 'Message queued successfully.' });
   }

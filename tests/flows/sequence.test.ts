@@ -5,10 +5,10 @@ import { db, ensureFlowVenue, env, FLOW_VENUE, outbox, runId, submitListingLead,
 // follow-ups, and sending the form again doesn't re-send the guide (which asks
 // for their date again). Reported by a venue on Oct 1, 2026.
 describe('a couple who replies to the venue', () => {
-  const email = `jordan.${runId}@example.com`;
+  const email = `jamie.${runId}@example.com`;
   const clientIp = `198.51.100.${1 + (parseInt(runId.slice(-4), 36) % 250)}`;
   const form = {
-    venue_id: FLOW_VENUE.id, first_name: 'jordan', last_name: 'lake', email, phone: '(212) 555-0177',
+    venue_id: FLOW_VENUE.id, first_name: 'jamie', last_name: 'lake', email, phone: '(212) 555-0177',
     guest_count: 80, message: 'Pricing please!', source: 'directory', client_ip: clientIp,
   };
   const guideSubject = `Your pricing guide from ${FLOW_VENUE.name}`;
@@ -55,7 +55,7 @@ describe('a couple who replies to the venue', () => {
     await db.from('leads').update({ created_at: new Date(Date.now() - 2 * 3_600_000).toISOString() }).eq('id', leadId);
     const again = new Date().toISOString();
     expect((await submitListingLead({ ...form, message: 'Is June 14 open?' })).status).toBe(201);
-    await waitForEmail({ to: FLOW_VENUE.email, since: again }, (e) => e.subject === `Jordan Lake asked again — ${FLOW_VENUE.name}`);
+    await waitForEmail({ to: FLOW_VENUE.email, since: again }, (e) => e.subject === `Jamie Lake asked again — ${FLOW_VENUE.name}`);
     await new Promise((r) => setTimeout(r, 3000));
     expect((await outbox({ to: email, since })).filter((e) => e.subject === guideSubject)).toHaveLength(1);
   });

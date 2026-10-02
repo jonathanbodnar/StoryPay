@@ -68,11 +68,12 @@ describe('a bride fills in a venue’s listing form', () => {
     expect(count).toBe(1);
   });
 
-  it('a double submit sends the owner nothing more', async () => {
+  it('a double submit sends nothing more: one guide for her, one alert for the owner', async () => {
     await new Promise((r) => setTimeout(r, 4000));
     const toOwner = (await outbox({ to: FLOW_VENUE.email, since })).map((e) => e.subject);
     expect(toOwner.filter((s) => s.startsWith('New lead: Ava Flow'))).toHaveLength(1);
     expect(toOwner.filter((s) => s.startsWith('Ava Flow asked again'))).toHaveLength(0);
+    expect((await outbox({ to: email, since })).filter((e) => e.subject === `Your pricing guide from ${FLOW_VENUE.name}`)).toHaveLength(1);
   });
 
   it('when she asks again later, the owner gets one "asked again" email with her new message', async () => {

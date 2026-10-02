@@ -161,6 +161,20 @@ export async function texts(phone: string, since: string): Promise<Array<{ at: s
   return ((await res.json()) as { texts: Array<{ at: string; direction: 'inbound' | 'outbound'; body: string }> }).texts;
 }
 
+/** The next text the test copy sends to a phone that matches. */
+export async function waitForText(phone: string, since: string, match: (body: string) => boolean, timeoutMs = 20_000) {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    const hit = (await texts(phone, since)).find((t) => t.direction === 'outbound' && match(t.body));
+    if (hit) return hit;
+    if (Date.now() > until) {
+      const seen = (await texts(phone, since)).map((t) => `${t.direction}: ${t.body.slice(0, 70)}`);
+      throw new Error(`No matching text to ${phone} within ${timeoutMs / 1000}s. Seen: ${JSON.stringify(seen)}`);
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
 /** A couple texts the venue back (it waits in the stand-in texting service until the app picks it up). */
 export async function coupleTexts(from: string, body: string): Promise<void> {
   const res = await fetch(`${env.base}/api/staging/sms`, {

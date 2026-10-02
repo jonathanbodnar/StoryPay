@@ -13,7 +13,7 @@ import {
   resolvePostSubmit,
   type AddressFieldKey,
 } from '@/lib/marketing-form-schema';
-import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity, repliedWithinDays } from '@/lib/marketing-email-worker';
+import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity, repeatSkipsGuide } from '@/lib/marketing-email-worker';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 import { autoMergeExactDuplicates } from '@/lib/merge-leads';
 import { bucketLeadSource } from '@/lib/lead-source';
@@ -499,8 +499,8 @@ export async function POST(
   }
 
   // Phase 1 — Booking System guide delivery (email + SMS, fires immediately).
-  // Not again to a couple already talking with the venue (see public/leads).
-  if (createdLeadId && !(isRepeat && await repliedWithinDays(createdLeadId).catch(() => false))) {
+  // Not again on a repeat from a couple talking with the venue, or a double submit (see public/leads).
+  if (createdLeadId && !(isRepeat && await repeatSkipsGuide(createdLeadId).catch(() => false))) {
     void sendBookingSystemGuide(formRow.venue_id, createdLeadId)
       .catch((e) => console.warn('[form submit] guide delivery failed:', e));
   }

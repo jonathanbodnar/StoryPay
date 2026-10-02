@@ -2475,14 +2475,18 @@ async function pullUnseenTextReplies(venueId: string, leadId: string): Promise<v
 }
 
 /**
- * The couple has written to the venue in the last `days` days: they're in a
- * conversation, so a repeat form submission doesn't re-send the guide (its
- * text asks for their date again). The venue gets the "asked again" email.
+ * A repeat form submission (the couple was already a lead) doesn't re-send the
+ * guide when they're talking with the venue (replied in the last 30 days: the
+ * guide's text asks for their date again) or it's a double submit (their lead
+ * came in under 10 minutes ago: they just got it). The venue gets "asked again".
  */
-export async function repliedWithinDays(leadId: string, days = 30): Promise<boolean> {
-  const { data } = await supabaseAdmin.from('leads').select('last_inbound_at').eq('id', leadId).maybeSingle();
-  const at = Date.parse((data as { last_inbound_at?: string | null } | null)?.last_inbound_at ?? '');
-  return Number.isFinite(at) && Date.now() - at < days * 86_400_000;
+export async function repeatSkipsGuide(leadId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin.from('leads').select('last_inbound_at, created_at').eq('id', leadId).maybeSingle();
+  const row = data as { last_inbound_at?: string | null; created_at?: string | null } | null;
+  const replied = Date.parse(row?.last_inbound_at ?? '');
+  const created = Date.parse(row?.created_at ?? '');
+  return (Number.isFinite(replied) && Date.now() - replied < 30 * 86_400_000)
+    || (Number.isFinite(created) && Date.now() - created < 10 * 60_000);
 }
 
 async function processOneEnrollment(en: {
