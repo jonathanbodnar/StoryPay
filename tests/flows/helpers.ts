@@ -225,6 +225,24 @@ export function signedInSuperAdmin(): Promise<Browser> {
   })());
 }
 
+let masterSession: Promise<Browser> | null = null;
+
+/**
+ * The master admin (ADMIN_EMAIL), signed in once per run with the password and
+ * the emailed code (which stays in the test copy's outbox).
+ */
+export function signedInMasterAdmin(): Promise<Browser> {
+  return (masterSession ??= (async () => {
+    const b = new Browser();
+    const res = await b.fetch('/api/admin/login', { method: 'POST', json: { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD } });
+    if (!res.ok) throw new Error(`master admin sign-in: ${res.status} ${await res.text()}`);
+    const { data } = await db.from('admin_otp_tokens').select('code').eq('used', false).order('created_at', { ascending: false }).limit(1).single();
+    const ok = await b.fetch('/api/admin/auth/verify-otp', { method: 'POST', json: { code: String(data?.code) } });
+    if (!ok.ok) throw new Error(`master admin code: ${ok.status} ${await ok.text()}`);
+    return b;
+  })());
+}
+
 /** A couple with a Wedding Planner account, for couple-side checks. */
 export const SWEEP_COUPLE = {
   email: 'flow-sweep-couple@example.com',

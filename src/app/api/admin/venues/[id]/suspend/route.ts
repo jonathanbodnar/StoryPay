@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyMasterAdminOnly } from '@/lib/admin-auth';
 import { getAdminIdentity } from '@/lib/admin-identity';
-import { revokeVenueSessions } from '@/lib/session-revoke';
+import { forgetSessionRow, revokeVenueSessions } from '@/lib/session-revoke';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,10 +11,11 @@ export const runtime = 'nodejs';
  * POST /api/admin/venues/[id]/suspend
  * Body: { action: 'suspend' | 'unsuspend', reason?: string }
  *
- * Suspending sets a 100-year Supabase ban on the venue owner's auth user,
- * blocking their own credentials (email/password/magic-link-to-their-inbox).
- * Admin-generated sign-in links via the service role bypass the ban, so
- * super admin impersonation ("View as venue") continues to work unchanged.
+ * Suspending signs out the venue's owner and team and keeps them out: sign-in
+ * refuses them, the proxy treats any session of a suspended venue as signed
+ * out (sending the dashboard to /suspended), and its API keys stop working.
+ * The admin's signed "View as venue" cookie still gets in. The 100-year
+ * Supabase ban on the owner's auth user is kept for older auth paths.
  *
  * NOTE: This segment MUST use the slug name `[id]` to match the sibling
  * routes under /api/admin/venues/[id]/* — Next.js refuses to boot if two
@@ -125,6 +126,7 @@ export async function POST(
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
+  forgetSessionRow('venues', venueId);
 
   console.log(`[admin/suspend] venue ${venueId} unsuspended by ${adminEmail}`);
   return NextResponse.json({ ok: true, action: 'unsuspended', venueName: (venue as { name: string }).name });

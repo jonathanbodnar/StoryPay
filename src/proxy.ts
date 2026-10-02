@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { STAGING_ACCESS_COOKIE, stagingAccessToken, stagingOpenPath, sameSecret } from '@/lib/staging-access';
+import { IMPERSONATION_COOKIE, isAdminImpersonating } from '@/lib/admin-impersonation';
+import { ADMIN_REQUEST_HEADER } from '@/lib/admin-route-tabs';
 
 const APP_HOSTS = new Set(['app.storyvenue.com']);
 
@@ -98,16 +100,18 @@ function mutatesAuthCookies(pathname: string): boolean {
 
 /**
  * session_invalidated_before (unix seconds) for a tenant/member, whether the
- * row still exists, and (for members) its venue and status — cached ~60s.
- * Fails OPEN (row assumed present, nothing revoked) on any error so a DB
- * hiccup can never lock out every tenant. Uses a plain PostgREST fetch to stay
- * runtime-agnostic (no supabase-js).
+ * row still exists, (for venues) whether it's suspended and (for members) its
+ * venue and status — cached ~60s. Fails OPEN (row assumed present, nothing
+ * revoked) on any error so a DB hiccup can never lock out every tenant. Uses a
+ * plain PostgREST fetch to stay runtime-agnostic (no supabase-js).
  */
-type RowInfo = { before: number; exists: boolean; venueId: string | null; status: string | null };
+type RowInfo = { before: number; exists: boolean; venueId: string | null; status: string | null; suspended: boolean };
 type RevEntry = { info: RowInfo; exp: number };
-const revCache = new Map<string, RevEntry>();
+// Shared with src/lib/session-revoke.ts (same server process), which drops an
+// entry the moment a session is revoked or a venue suspended or restored.
+const revCache: Map<string, RevEntry> = ((globalThis as { __sessionRowCache?: Map<string, RevEntry> }).__sessionRowCache ??= new Map());
 const REV_TTL_MS = 60_000;
-const FAIL_OPEN: RowInfo = { before: 0, exists: true, venueId: null, status: null };
+const FAIL_OPEN: RowInfo = { before: 0, exists: true, venueId: null, status: null, suspended: false };
 
 async function sessionRow(table: string, id: string): Promise<RowInfo> {
   const cacheKey = `${table}:${id}`;
@@ -120,13 +124,13 @@ async function sessionRow(table: string, id: string): Promise<RowInfo> {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (url && svc) {
-      const cols = table === 'venue_team_members' ? 'session_invalidated_before,venue_id,status' : 'session_invalidated_before';
+      const cols = table === 'venue_team_members' ? 'session_invalidated_before,venue_id,status' : 'session_invalidated_before,is_suspended';
       const res = await fetch(
         `${url}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}&select=${cols}`,
         { headers: { apikey: svc, Authorization: `Bearer ${svc}` }, cache: 'no-store' },
       );
       if (res.ok) {
-        const rows = (await res.json()) as Array<{ session_invalidated_before: string | null; venue_id?: string | null; status?: string | null }>;
+        const rows = (await res.json()) as Array<{ session_invalidated_before: string | null; venue_id?: string | null; status?: string | null; is_suspended?: boolean | null }>;
         const row = rows?.[0];
         const t = row?.session_invalidated_before;
         info = {
@@ -134,6 +138,7 @@ async function sessionRow(table: string, id: string): Promise<RowInfo> {
           exists: !!row,
           venueId: row?.venue_id ?? null,
           status: row?.status ?? null,
+          suspended: row?.is_suspended === true,
         };
       }
     }
@@ -205,6 +210,20 @@ async function stagingGate(request: NextRequest): Promise<NextResponse | null> {
   return NextResponse.redirect(url, 307);
 }
 
+/**
+ * Pass the request on. An /api request carries its method and path to the
+ * admin permission checks (src/lib/admin-route-tabs.ts), set here and never
+ * taken from the client.
+ */
+function pass(request: NextRequest, headers?: Headers): NextResponse {
+  if (!request.nextUrl.pathname.startsWith('/api/')) {
+    return headers ? NextResponse.next({ request: { headers } }) : NextResponse.next();
+  }
+  const forwarded = headers ?? new Headers(request.headers);
+  forwarded.set(ADMIN_REQUEST_HEADER, `${request.method} ${request.nextUrl.pathname}`);
+  return NextResponse.next({ request: { headers: forwarded } });
+}
+
 async function sessionProxy(request: NextRequest) {
   const host = request.headers.get('host')?.toLowerCase() ?? '';
   const hostname = host.split(':')[0];
@@ -221,19 +240,20 @@ async function sessionProxy(request: NextRequest) {
     // Without a signing secret nothing can be verified. Locally that's fine;
     // on a live server every venue session counts as signed out rather than
     // trusting an unsigned id (instrumentation.ts logs it as critical).
-    if (process.env.NODE_ENV !== 'production') return NextResponse.next();
+    if (process.env.NODE_ENV !== 'production') return pass(request);
     const unsigned = new Set(SIGNED_COOKIES.flatMap(({ id }) => [id, `${id}_sig`, `${id}_meta`]));
     const kept = request.cookies.getAll().filter((c) => !unsigned.has(c.name));
     const headers = new Headers(request.headers);
     if (kept.length > 0) headers.set('cookie', kept.map((c) => `${c.name}=${c.value}`).join('; '));
     else headers.delete('cookie');
-    return NextResponse.next({ request: { headers } });
+    return pass(request, headers);
   }
 
   const nowSecs = Math.floor(Date.now() / 1000);
   const toStrip = new Set<string>();
   const reissue: Reissue[] = [];
   let venuePrincipal = '';
+  let venueSuspended = false;
 
   for (const { id, table } of SIGNED_COOKIES) {
     const sigName = `${id}_sig`;
@@ -249,6 +269,10 @@ async function sessionProxy(request: NextRequest) {
       toStrip.add(sigName);
       toStrip.add(metaName);
     };
+    // A suspended venue's own sessions (owner and team, however they signed
+    // in) count as signed out; only an admin's signed "view as venue" gets in.
+    const suspended = (row: RowInfo) =>
+      id === 'venue_id' && row.suspended && !isAdminImpersonating(request.cookies.get(IMPERSONATION_COOKIE)?.value, value);
 
     if (metaVal) {
       // Current format: signature binds id + value + meta.
@@ -272,6 +296,11 @@ async function sessionProxy(request: NextRequest) {
         strip(); // account gone, or session revoked server-side
         continue;
       }
+      if (suspended(row)) {
+        venueSuspended = true;
+        strip();
+        continue;
+      }
       // venue_id metas carry who signed in: "o" (owner) or "m-<member id>".
       const principal = id === 'venue_id' ? (parts[3] ?? '') : '';
       if (id === 'venue_id') venuePrincipal = principal;
@@ -284,6 +313,11 @@ async function sessionProxy(request: NextRequest) {
       }
       const row = await sessionRow(table, value);
       if (!row.exists || (row.before && nowSecs < row.before)) {
+        strip();
+        continue;
+      }
+      if (suspended(row)) {
+        venueSuspended = true;
         strip();
         continue;
       }
@@ -321,8 +355,16 @@ async function sessionProxy(request: NextRequest) {
     if (toStrip.has(reissue[i].id)) reissue.splice(i, 1);
   }
 
+  // A suspended venue's owner or team opening the dashboard is told why.
+  if (venueSuspended && request.nextUrl.pathname.startsWith('/dashboard')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/suspended';
+    url.search = '';
+    return NextResponse.redirect(url, 307);
+  }
+
   if (toStrip.size === 0 && reissue.length === 0) {
-    return NextResponse.next();
+    return pass(request);
   }
 
   // Rebuild the forwarded Cookie header without the untrusted cookies so every
@@ -336,7 +378,7 @@ async function sessionProxy(request: NextRequest) {
     requestHeaders.delete('cookie');
   }
 
-  const res = NextResponse.next({ request: { headers: requestHeaders } });
+  const res = pass(request, requestHeaders);
 
   // Sliding-window refresh: re-issue valid sessions with a fresh idle window,
   // capped by the absolute 7-day limit. Skipped on auth-mutating routes so we

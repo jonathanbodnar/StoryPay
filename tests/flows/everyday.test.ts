@@ -24,7 +24,7 @@ describe('everyday dashboard work', () => {
   beforeAll(async () => {
     owner = await signedInOwner();
     const res = await submitListingLead({
-      venue_id: FLOW_VENUE.id, first_name: 'Eve', last_name: 'Everyday', email: `eve.${runId}@example.com`,
+      venue_id: FLOW_VENUE.id, first_name: 'Eve', last_name: 'Everyday', email: `eve.everyday.${runId}@example.com`,
       phone: `(332) 560-${(parseInt(runId.slice(-5), 36) % 9000) + 1000}`, source: 'directory', client_ip: '203.0.113.81',
     });
     expect(res.status).toBe(201);

@@ -63,15 +63,17 @@ export async function PATCH(
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
+  const { data: updated, error } = await supabaseAdmin
     .from('lead_pipelines')
     .update(updates)
     .eq('id', id)
-    .eq('venue_id', venueId);
+    .eq('venue_id', venueId)
+    .select('id');
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  if (!updated?.length) return NextResponse.json({ error: 'Pipeline not found' }, { status: 404 });
 
   const pipelines = await loadPipelinesWithStages(venueId);
   return NextResponse.json({ pipelines });

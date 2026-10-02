@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { issueMasterAdminToken } from '@/lib/admin-token';
 import { SUPPORT_SESSION_COOKIE } from '@/lib/support/auth';
-import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { rateLimit, getClientIp, formatRetryAfter, perVisitorLimit } from '@/lib/rate-limit';
 import {
   ADMIN_OTP_PENDING_COOKIE,
   MAX_WRONG_ATTEMPTS,
@@ -23,7 +23,7 @@ interface VerifyBody { code?: string }
  */
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  const gate = rateLimit(`admin-otp:${ip}`, 10, 10 * 60 * 1000);
+  const gate = rateLimit(`admin-otp:${ip}`, perVisitorLimit(10), 10 * 60 * 1000);
   if (!gate.allowed) {
     return NextResponse.json(
       { error: `Too many attempts. Try again in ${formatRetryAfter(gate.retryAfterMs)}.` },

@@ -5,7 +5,7 @@ import {
   signSupportSession,
   verifySupportPassword,
 } from '@/lib/support/auth';
-import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { rateLimit, getClientIp, formatRetryAfter, perVisitorLimit } from '@/lib/rate-limit';
 import { secureCompare } from '@/lib/secure-compare';
 import { issueMasterAdminToken } from '@/lib/admin-token';
 import { ADMIN_OTP_PENDING_COOKIE, pendingCookieValue } from '@/lib/admin-otp';
@@ -41,7 +41,7 @@ function generateOtp(): string {
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  const gate = rateLimit(`admin-login:${ip}`, 10, 10 * 60 * 1000);
+  const gate = rateLimit(`admin-login:${ip}`, perVisitorLimit(10), 10 * 60 * 1000);
   if (!gate.allowed) {
     return NextResponse.json(
       { error: `Too many attempts. Try again in ${formatRetryAfter(gate.retryAfterMs)}.` },

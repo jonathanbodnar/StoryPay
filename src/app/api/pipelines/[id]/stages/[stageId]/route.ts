@@ -56,14 +56,16 @@ export async function PATCH(
     return NextResponse.json({ error: DEFAULT_PIPELINE_LOCKED_MESSAGE }, { status: 403 });
   }
 
-  const { error } = await supabaseAdmin
+  const { data: updated, error } = await supabaseAdmin
     .from('lead_pipeline_stages')
     .update(updates)
     .eq('id', stageId)
     .eq('pipeline_id', pipelineId)
-    .eq('venue_id', venueId);
+    .eq('venue_id', venueId)
+    .select('id');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!updated?.length) return NextResponse.json({ error: 'Stage not found' }, { status: 404 });
 
   const pipelines = await loadPipelinesWithStages(venueId);
   return NextResponse.json({ pipelines });

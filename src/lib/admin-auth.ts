@@ -1,7 +1,9 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSupportSession } from '@/lib/support/auth';
 import { verifyMasterAdminToken } from '@/lib/admin-token';
+import { resolveAllowedAdminTabs } from '@/lib/admin-tabs-registry';
+import { ADMIN_REQUEST_HEADER, adminRequestAllowed } from '@/lib/admin-route-tabs';
 
 /**
  * Returns true iff the caller is authenticated as an admin — EITHER the
@@ -30,11 +32,21 @@ export async function verifyAdminCookie(): Promise<boolean> {
 
   const { data } = await supabaseAdmin
     .from('support_team_members')
-    .select('id, active')
+    .select('id, active, is_super_admin, admin_tabs_allowed')
     .eq('id', session.sub)
     .maybeSingle();
 
-  return !!data && data.active !== false;
+  if (!data || data.active === false) return false;
+  return teamMemberMayMakeRequest(data.is_super_admin === true, resolveAllowedAdminTabs(false, data.admin_tabs_allowed));
+}
+
+/**
+ * A full team admin can do anything; anyone else can read, and change only
+ * what their tabs cover (src/lib/admin-route-tabs.ts).
+ */
+export async function teamMemberMayMakeRequest(isSuperAdmin: boolean, tabs: ReadonlySet<string>): Promise<boolean> {
+  if (isSuperAdmin) return true;
+  return adminRequestAllowed((await headers()).get(ADMIN_REQUEST_HEADER), tabs);
 }
 
 /**

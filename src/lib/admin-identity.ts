@@ -20,6 +20,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getSupportSession } from '@/lib/support/auth';
 import { resolveAllowedAdminTabs, ADMIN_TAB_KEY_SET } from '@/lib/admin-tabs-registry';
 import { verifyMasterAdminToken } from '@/lib/admin-token';
+import { teamMemberMayMakeRequest } from '@/lib/admin-auth';
 
 export interface AdminIdentity {
   /** True iff the master env-based super admin is logged in (has full access). */
@@ -99,10 +100,12 @@ export async function getAdminIdentity(): Promise<AdminIdentity> {
   };
 }
 
-/** Quick guard for API routes — returns true iff the caller has admin access. */
+/**
+ * Quick guard for API routes — returns true iff the caller has admin access
+ * (for a change, behind one of their tabs: see src/lib/admin-route-tabs.ts).
+ */
 export async function hasAdminAccess(): Promise<boolean> {
-  const id = await getAdminIdentity();
-  return id.isMasterSuperAdmin || !!id.member;
+  return (await requireAdmin()) !== null;
 }
 
 /** Tab-level guard. Used by API routes that back a specific tab. */
@@ -111,9 +114,10 @@ export async function hasAdminTabAccess(tabKey: string): Promise<boolean> {
   return id.allowedTabs.has(tabKey);
 }
 
-/** Returns identity if admin, else null. Convenience wrapper. */
+/** Returns identity if admin (and allowed to make this request), else null. */
 export async function requireAdmin(): Promise<AdminIdentity | null> {
   const id = await getAdminIdentity();
-  if (!id.isMasterSuperAdmin && !id.member) return null;
-  return id;
+  if (id.isMasterSuperAdmin) return id;
+  if (!id.member) return null;
+  return (await teamMemberMayMakeRequest(id.member.is_super_admin, id.allowedTabs)) ? id : null;
 }

@@ -59,13 +59,15 @@ export async function DELETE(
 
   const { id: leadId, noteId } = await context.params;
 
-  const { error } = await supabaseAdmin
+  const { data: deleted, error } = await supabaseAdmin
     .from('lead_notes')
     .delete()
     .eq('id', noteId)
     .eq('lead_id', leadId)
-    .eq('venue_id', venueId);
+    .eq('venue_id', venueId)
+    .select('id');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!deleted?.length) return NextResponse.json({ error: 'Note not found' }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

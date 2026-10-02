@@ -124,14 +124,16 @@ describe('nothing crashes, and venues can’t see each other', () => {
   it('the other venue’s records can’t be changed, added to or deleted', async () => {
     // What the other venue has, before every write route is tried with its ids.
     const snapshot = async () => {
-      const [leads, proposals, notes, tasks, payments] = await Promise.all([
+      const [leads, proposals, notes, tasks, payments, pipelines, stages] = await Promise.all([
         db.from('leads').select('id, notes, status, stage_id, ai_state, first_name').eq('venue_id', DEMO_VENUE_ID).order('id'),
         db.from('proposals').select('id, status, price, customer_email').eq('venue_id', DEMO_VENUE_ID).order('id'),
         db.from('lead_notes').select('id').in('lead_id', [theirs.lead ?? NONE]),
         db.from('lead_tasks').select('id').in('lead_id', [theirs.lead ?? NONE]),
         db.from('proposal_payments').select('id').in('proposal_id', [theirs.proposal ?? NONE]),
+        db.from('lead_pipelines').select('id, name, position').eq('venue_id', DEMO_VENUE_ID).order('id'),
+        db.from('lead_pipeline_stages').select('id, name, color, kind').eq('venue_id', DEMO_VENUE_ID).order('id'),
       ]);
-      return JSON.stringify([leads.data, proposals.data, notes.data?.length, tasks.data?.length, payments.data?.length]);
+      return JSON.stringify([leads.data, proposals.data, notes.data?.length, tasks.data?.length, payments.data?.length, pipelines.data, stages.data]);
     };
     const before = await snapshot();
     const writes = ROUTES.filter((r) => whoFor(r.path) === 'owner' && /\[[^.\]]+\]/.test(r.path) && !SKIP.test(r.path)

@@ -12,6 +12,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { validateApiKey, type ApiKeyRow } from './api-keys';
+import { supabaseAdmin } from './supabase';
 
 export interface AuthFailure {
   ok: false;
@@ -61,6 +62,18 @@ export async function authenticateApiV1(req: NextRequest | Request): Promise<Aut
 
   const row = await validateApiKey(token);
   if (!row) return unauthorized('Invalid or revoked API key.');
+
+  // A suspended venue's keys stop working with the rest of its access.
+  const { data: venue } = await supabaseAdmin.from('venues').select('is_suspended').eq('id', row.venue_id).maybeSingle();
+  if (venue?.is_suspended) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'account_suspended', message: 'This StoryVenue account is suspended.' },
+        { status: 403 },
+      ),
+    };
+  }
 
   return { ok: true, venueId: row.venue_id, apiKey: row };
 }

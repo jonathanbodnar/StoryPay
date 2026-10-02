@@ -61,12 +61,13 @@ export async function POST(request: NextRequest) {
     password_hash: string | null;
     directory_plan_id: string | null;
     directory_subscription_status: string | null;
+    is_suspended: boolean | null;
     totp_enabled_at?: string | null;
   };
   const venueColumns = [
     'id', 'name', 'email', 'setup_completed', 'onboarding_status',
     'login_token', 'password_hash', 'directory_plan_id',
-    'directory_subscription_status',
+    'directory_subscription_status', 'is_suspended',
     ...(TWOFA_ENABLED ? ['totp_enabled_at'] : []),
   ].join(', ');
 
@@ -96,6 +97,7 @@ export async function POST(request: NextRequest) {
     if (!valid) {
       return NextResponse.json({ error: 'Incorrect email or password.' }, { status: 401 });
     }
+    if (venue.is_suspended) return suspendedResponse();
 
     // ── 2FA gate ─────────────────────────────────────────────────────────────
     // Password is correct. If 2FA is enabled (feature flag on AND user has
@@ -179,6 +181,12 @@ export async function POST(request: NextRequest) {
       }
 
       if (memberValid) {
+        const { data: memberVenue } = await supabaseAdmin
+          .from('venues')
+          .select('is_suspended')
+          .eq('id', member.venue_id)
+          .maybeSingle();
+        if (memberVenue?.is_suspended) return suspendedResponse();
         const response = NextResponse.json({ redirect: '/dashboard' });
         const session = { rememberMe: Boolean(rememberMe), isNative: Boolean(isNative) };
         setSignedCookie(response, 'venue_id', member.venue_id, {
@@ -198,4 +206,12 @@ export async function POST(request: NextRequest) {
   // Same generic error as bad-password to prevent user enumeration.
   // Without this, an attacker could probe valid venue emails by reading the response.
   return NextResponse.json({ error: 'Incorrect email or password.' }, { status: 401 });
+}
+
+/** After the right password, for a venue the StoryVenue team has suspended. */
+function suspendedResponse() {
+  return NextResponse.json(
+    { error: 'This account is suspended. Please contact clients@storyvenue.com.' },
+    { status: 403 },
+  );
 }
