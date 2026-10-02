@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
-import { rateLimitAny, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAny, getClientIp, perVisitorLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   // Always return ok:true so attackers can't enumerate accounts.
   const ip = getClientIp(req);
   const rl = rateLimitAny([
-    { key: `couple-forgot:ip:${ip}`,       limit: 5, windowMs: 60 * 60_000 },
+    { key: `couple-forgot:ip:${ip}`,       limit: perVisitorLimit(5), windowMs: 60 * 60_000 },
     { key: `couple-forgot:email:${email}`, limit: 3, windowMs: 60 * 60_000 },
   ]);
   if (!rl.allowed) {

@@ -5,6 +5,8 @@ import {
   stagingBlocksHost,
   stagingConfigProblems,
   stagingEmailFilter,
+  setStagingQuiet,
+  stagingIsQuiet,
 } from '@/lib/staging';
 
 afterEach(() => {
@@ -79,6 +81,27 @@ describe('stagingEmailFilter', () => {
     vi.stubEnv('APP_ENV', 'staging');
     vi.stubEnv('STAGING_EMAIL_ALLOWLIST', '');
     expect(stagingEmailFilter(['a@x.com']).allowed).toEqual([]);
+  });
+
+  it('in quiet mode (while the tests run) emails nobody, approved or not, until it runs out', () => {
+    vi.stubEnv('APP_ENV', 'staging');
+    vi.stubEnv('STAGING_EMAIL_ALLOWLIST', 'owner@example.org');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    setStagingQuiet(30);
+    expect(stagingIsQuiet()).toBe(true);
+    expect(stagingEmailFilter(['owner@example.org'])).toEqual({ allowed: [], blocked: ['owner@example.org'] });
+    vi.advanceTimersByTime(31 * 60_000);
+    expect(stagingEmailFilter(['owner@example.org']).allowed).toEqual(['owner@example.org']);
+    setStagingQuiet(0);
+    vi.useRealTimers();
+  });
+
+  it('quiet mode never affects the live site', () => {
+    vi.stubEnv('APP_ENV', '');
+    setStagingQuiet(30);
+    expect(stagingIsQuiet()).toBe(false);
+    expect(stagingEmailFilter(['a@x.com']).allowed).toEqual(['a@x.com']);
+    setStagingQuiet(0);
   });
 });
 

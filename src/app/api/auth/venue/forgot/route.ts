@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
-import { rateLimitAny, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { rateLimitAny, getClientIp, formatRetryAfter, perVisitorLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
   // per-email (3/hr). Always return ok:true so attackers can't enumerate.
   const ip = getClientIp(req);
   const rl = rateLimitAny([
-    { key: `forgot:ip:${ip}`,       limit: 5, windowMs: 60 * 60_000 },
+    { key: `forgot:ip:${ip}`,       limit: perVisitorLimit(5), windowMs: 60 * 60_000 },
     { key: `forgot:email:${email}`, limit: 3, windowMs: 60 * 60_000 },
   ]);
   if (!rl.allowed) {

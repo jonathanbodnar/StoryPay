@@ -47,13 +47,29 @@ function bareEmail(addr: string): string {
   return (m ? m[1] : addr).trim().toLowerCase();
 }
 
+const quiet = globalThis as typeof globalThis & { __stagingQuietUntil?: number };
+
+/**
+ * Quiet mode: while the automated tests run, the test copy emails nobody, not
+ * even approved addresses; everything still lands in its outbox. The tests
+ * switch it on for their run (POST /api/staging/outbox), up to 3 hours.
+ */
+export function setStagingQuiet(minutes: number): void {
+  quiet.__stagingQuietUntil = Date.now() + Math.max(0, Math.min(minutes, 180)) * 60_000;
+}
+
+export function stagingIsQuiet(): boolean {
+  return isStaging() && Date.now() < (quiet.__stagingQuietUntil ?? 0);
+}
+
 /**
  * Which recipients the test copy may email: those on STAGING_EMAIL_ALLOWLIST
- * (comma-separated addresses, or "@domain" for a whole domain). The live site
- * may email everyone.
+ * (comma-separated addresses, or "@domain" for a whole domain), and nobody in
+ * quiet mode. The live site may email everyone.
  */
 export function stagingEmailFilter(recipients: string[]): { allowed: string[]; blocked: string[] } {
   if (!isStaging()) return { allowed: recipients, blocked: [] };
+  if (stagingIsQuiet()) return { allowed: [], blocked: recipients };
   const rules = (process.env.STAGING_EMAIL_ALLOWLIST ?? '')
     .split(',')
     .map((r) => r.trim().toLowerCase())
@@ -106,6 +122,11 @@ export function installStagingFetchGuard(): void {
     if (host && GHL_HOSTS.some((b) => host === b || host.endsWith(`.${b}`))) {
       // Texting/CRM: the stand-in records texts and plays couples' replies.
       return import('@/lib/staging-ghl').then(({ fakeGhlFetch }) => fakeGhlFetch(input, init));
+    }
+    if (host === 'api.resend.com') {
+      // Received email (LeadFinder, replies): answered by the stand-in. Sending stays real.
+      const url = input instanceof Request ? input.url : String(input);
+      return import('@/lib/staging-inbound').then(({ fakeResendReceivingFetch }) => fakeResendReceivingFetch(url) ?? realFetch(input, init));
     }
     if (host && stagingBlocksHost(host)) {
       console.warn(`[staging] blocked a request to ${host}`);

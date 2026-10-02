@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
 import bcrypt from 'bcryptjs';
-import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { rateLimit, getClientIp, formatRetryAfter, perVisitorLimit } from '@/lib/rate-limit';
 import { checkPassword } from '@/lib/password-policy';
 import { resolveVenueProPlan } from '@/lib/trial-plans';
 import { setSignedCookie } from '@/lib/venue-session';
@@ -29,6 +29,20 @@ interface SignupPayload {
   attribution?: Record<string, string>;
 }
 
+/**
+ * A couple's Wedding Planner login. Couples sign in through the same login
+ * service, with no venue, so they must never be mistaken for a leftover from a
+ * deleted venue: deleting one also deletes the couple's whole planner.
+ */
+async function isCoupleLogin(user: { id: string; user_metadata?: Record<string, unknown> | null }): Promise<boolean> {
+  if (user.user_metadata?.role === 'couple') return true;
+  const { data } = await supabaseAdmin.from('couple_profiles').select('id').eq('id', user.id).maybeSingle();
+  return !!data;
+}
+
+const COUPLE_EMAIL_TAKEN =
+  'That email is already used for a Wedding Planner (couple) account. Please use a different email for your venue.';
+
 function isEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
@@ -51,7 +65,7 @@ export async function POST(request: NextRequest) {
   // Rate limit: 3 signups per IP per hour. Prevents account-creation spam
   // (which would also fan out to LunarPay merchant onboarding + welcome emails).
   const ip = getClientIp(request);
-  const rl = rateLimit(`signup:ip:${ip}`, 3, 60 * 60_000);
+  const rl = rateLimit(`signup:ip:${ip}`, perVisitorLimit(3), 60 * 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Too many signup attempts. Try again in ${formatRetryAfter(rl.retryAfterMs)}.` },
@@ -121,7 +135,12 @@ export async function POST(request: NextRequest) {
       const users = list?.users ?? [];
       if (users.length === 0) break;
       const match = users.find((u) => (u.email || '').toLowerCase() === email);
-      if (match) foundOrphan = match.id;
+      if (match) {
+        if (await isCoupleLogin(match)) {
+          return NextResponse.json({ error: COUPLE_EMAIL_TAKEN }, { status: 409 });
+        }
+        foundOrphan = match.id;
+      }
       if (users.length < 200) break;
       page += 1;
     }
@@ -158,6 +177,9 @@ export async function POST(request: NextRequest) {
         if (users.length === 0) break;
         const match = users.find((u) => (u.email || '').toLowerCase() === email);
         if (match) {
+          if (await isCoupleLogin(match)) {
+            return NextResponse.json({ error: COUPLE_EMAIL_TAKEN }, { status: 409 });
+          }
           await supabaseAdmin.auth.admin.deleteUser(match.id);
           recovered = true;
         }

@@ -12,7 +12,7 @@ function allow(reason: string, ...keys: string[]) {
 }
 
 allow('test copy only (404 on the live site)',
-  'GET /api/staging/outbox', 'DELETE /api/staging/outbox', 'GET /api/staging/sms', 'POST /api/staging/sms', 'DELETE /api/staging/sms',
+  'GET /api/staging/outbox', 'POST /api/staging/outbox', 'DELETE /api/staging/outbox', 'GET /api/staging/sms', 'POST /api/staging/sms', 'DELETE /api/staging/sms', 'POST /api/staging/inbound-email',
   'GET /staging-access', 'POST /staging-access');
 allow('webhook that checks its sender’s signature',
   'POST /api/webhooks/stripe', 'POST /api/webhooks/stripe-connect', 'POST /api/webhooks/resend', 'GET /api/webhooks/ghl-workflow-inbound');

@@ -16,6 +16,7 @@
  */
 
 import type { NextRequest } from 'next/server';
+import { isStaging } from '@/lib/staging';
 
 interface Entry {
   /** Unix-ms timestamps of recent hits, oldest first. */
@@ -205,4 +206,13 @@ export function formatRetryAfter(ms: number): string {
   if (s < 60) return `${s} second${s === 1 ? '' : 's'}`;
   const m = Math.ceil(s / 60);
   return `${m} minute${m === 1 ? '' : 's'}`;
+}
+
+/**
+ * A per-visitor (per-IP) limit, raised on the test copy only: its automated
+ * tests run every sign-in path from one address many times an hour. Limits
+ * keyed on an email stay as they are.
+ */
+export function perVisitorLimit(limit: number): number {
+  return isStaging() ? Math.max(limit, 200) : limit;
 }

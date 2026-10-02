@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
-import { rateLimitAny, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { rateLimitAny, getClientIp, formatRetryAfter, perVisitorLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -23,25 +23,46 @@ function sign(payload: string): string {
 }
 
 /**
+ * The link is tied to the member's current password: once the password
+ * changes, every earlier link stops working, so a link works once.
+ */
+function passwordFingerprint(passwordHash: string | null | undefined): string {
+  return crypto.createHash('sha256').update(passwordHash ?? 'no-password').digest('hex').slice(0, 16);
+}
+
+/**
  * Reset tokens for support/admin team members. Namespaced with an `admin:`
  * prefix so a venue reset token can never be replayed here (and vice versa).
  */
-export function buildAdminResetToken(memberId: string): string {
+export function buildAdminResetToken(memberId: string, passwordHash: string | null | undefined): string {
   const exp = Date.now() + EXPIRY_MS;
   const payload = `admin:${memberId}:${exp}`;
-  const sig = sign(payload);
+  const sig = sign(`${payload}:${passwordFingerprint(passwordHash)}`);
   return Buffer.from(`${payload}:${sig}`).toString('base64url');
 }
 
-export function verifyAdminResetToken(token: string): { memberId: string } | null {
+/** The team member a reset link names, before it's checked. */
+export function adminResetTokenMemberId(token: string): string | null {
+  try {
+    const parts = Buffer.from(token, 'base64url').toString('utf8').split(':');
+    return parts.length === 4 && parts[0] === 'admin' && parts[1] ? parts[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Valid only while unexpired and while the password is still the one it was issued for. */
+export function verifyAdminResetToken(token: string, currentPasswordHash: string | null | undefined): { memberId: string } | null {
   try {
     const decoded = Buffer.from(token, 'base64url').toString('utf8');
     const parts = decoded.split(':');
     if (parts.length !== 4) return null;
     const [type, memberId, expStr, sig] = parts;
     if (type !== 'admin') return null;
-    const payload = `${type}:${memberId}:${expStr}`;
-    if (sign(payload) !== sig) return null;
+    const expected = sign(`${type}:${memberId}:${expStr}:${passwordFingerprint(currentPasswordHash)}`);
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
     if (Date.now() > Number(expStr)) return null;
     return { memberId };
   } catch {
@@ -69,7 +90,7 @@ export async function POST(req: NextRequest) {
   // Rate limit: per-IP (5/hr) AND per-email (3/hr). Always return ok:true.
   const ip = getClientIp(req);
   const rl = rateLimitAny([
-    { key: `admin-forgot:ip:${ip}`,       limit: 5, windowMs: 60 * 60_000 },
+    { key: `admin-forgot:ip:${ip}`,       limit: perVisitorLimit(5), windowMs: 60 * 60_000 },
     { key: `admin-forgot:email:${email}`, limit: 3, windowMs: 60 * 60_000 },
   ]);
   if (!rl.allowed) {
@@ -79,7 +100,7 @@ export async function POST(req: NextRequest) {
 
   const { data: member, error } = await supabaseAdmin
     .from('support_team_members')
-    .select('id, name, email, active')
+    .select('id, name, email, active, password_hash')
     .ilike('email', email)
     .maybeSingle();
 
@@ -91,7 +112,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const token = buildAdminResetToken(member.id as string);
+  const token = buildAdminResetToken(member.id as string, member.password_hash as string | null);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.storyvenue.com';
   const resetUrl = `${appUrl}/reset-password/admin?token=${token}`;
   const name = (member.name as string | null)?.trim() || 'there';

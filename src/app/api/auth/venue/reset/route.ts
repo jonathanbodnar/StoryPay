@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { resetTokenVenueId, verifyResetToken } from '../forgot/route';
 import { revokeVenueSessions } from '@/lib/session-revoke';
-import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { rateLimit, getClientIp, formatRetryAfter, perVisitorLimit } from '@/lib/rate-limit';
 import { checkPassword } from '@/lib/password-policy';
 import { setSignedCookie } from '@/lib/venue-session';
 
@@ -22,7 +22,7 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   // Rate limit reset-token submissions per IP (10/hr).
   const ip = getClientIp(req);
-  const rl = rateLimit(`reset:ip:${ip}`, 10, 60 * 60_000);
+  const rl = rateLimit(`reset:ip:${ip}`, perVisitorLimit(10), 60 * 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Too many reset attempts. Try again in ${formatRetryAfter(rl.retryAfterMs)}.` },

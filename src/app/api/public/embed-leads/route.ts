@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'crypto';
 import { getClientIp } from '@/lib/rate-limit';
+import { isStaging } from '@/lib/staging';
 
 export const dynamic = 'force-dynamic';
 export const runtime  = 'nodejs';
@@ -68,6 +69,8 @@ export async function POST(req: NextRequest) {
       headers: {
         'Content-Type':          'application/json',
         'x-storypay-signature':  signature,
+        // The test copy's password page guards every request, even its own.
+        ...(isStaging() ? { 'x-staging-key': process.env.STAGING_PASSWORD ?? '' } : {}),
         // The couple's browser and page, for the proof-of-consent record.
         'user-agent': req.headers.get('user-agent') ?? '',
         referer: req.headers.get('referer') ?? '',

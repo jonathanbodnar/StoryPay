@@ -20,6 +20,9 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 
   // The flow venue's owner, signed in once (sign-in allows 5 tries a minute).
   const api = await request.newContext({ baseURL, storageState: 'tests/browser/.auth/staging.json' });
+  // Quiet mode: no email leaves the test copy while the tests run.
+  const quietRes = await api.post('/api/staging/outbox', { data: { quietMinutes: 60 } });
+  if (!quietRes.ok()) throw new Error(`quiet mode: ${quietRes.status()}`);
   const res = await api.post('/api/auth/sign-in', { data: { email: FLOW_VENUE.email, password: env.password } });
   if (!res.ok()) throw new Error(`owner sign-in: ${res.status()} ${await res.text()}`);
   await api.storageState({ path: 'tests/browser/.auth/owner.json' });

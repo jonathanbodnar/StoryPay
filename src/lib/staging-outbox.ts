@@ -1,7 +1,7 @@
 /**
  * The test copy's outbox: every email it would send, delivered to an approved
  * address or not, kept in memory so the flow tests can check what went out
- * (GET /api/staging/outbox). Holds the latest 500. Live site: does nothing.
+ * (GET /api/staging/outbox). Holds the latest 3,000. Live site: does nothing.
  */
 
 import { isStaging } from '@/lib/staging';
@@ -19,7 +19,7 @@ export interface OutboxEmail {
   delivered: boolean;
 }
 
-const MAX = 500;
+const MAX = 3000;
 const store = globalThis as typeof globalThis & { __stagingOutbox?: OutboxEmail[] };
 
 export function recordOutbox(email: Omit<OutboxEmail, 'at'>): void {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { rateLimit, getClientIp, formatRetryAfter, perVisitorLimit } from '@/lib/rate-limit';
 import { checkPassword } from '@/lib/password-policy';
 import {
   SUPPORT_SESSION_COOKIE,
@@ -8,7 +8,7 @@ import {
   signSupportSession,
   type SupportRole,
 } from '@/lib/support/auth';
-import { verifyAdminResetToken } from '../forgot/route';
+import { adminResetTokenMemberId, verifyAdminResetToken } from '../forgot/route';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -24,7 +24,7 @@ export const runtime = 'nodejs';
  */
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
-  const rl = rateLimit(`admin-reset:ip:${ip}`, 10, 60 * 60_000);
+  const rl = rateLimit(`admin-reset:ip:${ip}`, perVisitorLimit(10), 60 * 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Too many reset attempts. Try again in ${formatRetryAfter(rl.retryAfterMs)}.` },
@@ -47,22 +47,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: pwCheck.message }, { status: 400 });
   }
 
-  const parsed = verifyAdminResetToken(token);
-  if (!parsed) {
-    return NextResponse.json(
-      { error: 'This reset link has expired or is invalid. Please request a new one.' },
-      { status: 400 },
-    );
-  }
+  const invalid = () => NextResponse.json(
+    { error: 'This reset link has expired or is invalid. Please request a new one.' },
+    { status: 400 },
+  );
+  const memberId = adminResetTokenMemberId(token);
+  if (!memberId) return invalid();
 
   const { data: member, error: memberErr } = await supabaseAdmin
     .from('support_team_members')
-    .select('id, email, name, role, active')
-    .eq('id', parsed.memberId)
+    .select('id, email, name, role, active, password_hash')
+    .eq('id', memberId)
     .maybeSingle();
 
-  if (memberErr || !member) {
-    return NextResponse.json({ error: 'Account not found.' }, { status: 404 });
+  // The link works once: it stops verifying when the password changes.
+  if (memberErr || !member || !verifyAdminResetToken(token, member.password_hash as string | null)) {
+    return invalid();
   }
   if (!member.active) {
     return NextResponse.json(

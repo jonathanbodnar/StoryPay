@@ -21,13 +21,20 @@
 
 import { createHmac, timingSafeEqual } from 'crypto';
 
+/** The test copy (lib/staging.ts isStaging); spelled out here because the
+ *  LeadFinder fixture script loads this file without the app's import paths. */
+const isStaging = () => process.env.APP_ENV === 'staging';
+
 /** Domain the address is built on. Shares the conversations inbound domain. */
 function inboundDomain(): string | null {
-  return process.env.CONVERSATIONS_INBOUND_DOMAIN?.trim() || null;
+  // The test copy has no inbound mail; its tests deliver through a stand-in.
+  return process.env.CONVERSATIONS_INBOUND_DOMAIN?.trim() || (isStaging() ? 'inbound.test-copy.example.com' : null);
 }
 
 function inboundSecret(): string | null {
-  return process.env.CONVERSATIONS_INBOUND_SECRET?.trim() || null;
+  const secret = process.env.CONVERSATIONS_INBOUND_SECRET?.trim();
+  if (secret) return secret;
+  return isStaging() && process.env.STAGING_PASSWORD ? `test-copy:${process.env.STAGING_PASSWORD}` : null;
 }
 
 /**
@@ -39,7 +46,8 @@ function inboundSecret(): string | null {
  *   LEADFINDER_VENUE_SLUGS=a,b     → on for these venues regardless of the above
  */
 export function leadFinderEnabledForSlug(slug: string | null | undefined): boolean {
-  if (process.env.LEADFINDER_ENABLED === 'true') return true;
+  // On for every venue on the live site; the test copy mirrors that.
+  if (process.env.LEADFINDER_ENABLED === 'true' || isStaging()) return true;
   if (!slug) return false;
   const allow = (process.env.LEADFINDER_VENUE_SLUGS ?? 'demo-venue')
     .split(',')

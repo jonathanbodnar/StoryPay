@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Browser } from './helpers';
-import { coupleTexts, db, ensureFlowVenue, FLOW_VENUE, runId, runJob, signedInOwner, submitListingLead, texts, waitForText } from './helpers';
+import { Browser, coupleTexts, db, ensureFlowVenue, FLOW_VENUE, runId, runJob, signedInOwner, signedInSuperAdmin, submitListingLead, texts, waitForText } from './helpers';
 
 // The AI Concierge, on the test copy (real AI, stand-in texting service): it
 // writes follow-up texts; a couple's reply hands them to the venue and quiets
@@ -97,5 +96,68 @@ describe('the AI Concierge', () => {
     });
     expect(reply.status, await reply.clone().text()).toBeLessThan(300);
     expect(await waitForAiState(leadD, (s) => s !== 'ai_active', 15_000)).toBe('paused');
+  });
+});
+
+// The controls: the emergency stop (StoryVenue team), and per couple, snooze
+// and pause/resume (the venue). If the stop button fails, the AI keeps texting.
+describe('the AI Concierge controls', () => {
+  const phoneE = `(646) 559-${n}`;
+  let owner: Browser;
+  let leadE = '';
+
+  beforeAll(async () => {
+    await db.from('venues').update({ ai_concierge_enabled: true, directory_addon_concierge: true, a2p_verified: true }).eq('id', FLOW_VENUE.id);
+    owner = await signedInOwner();
+    leadE = await newLead('emma', phoneE);
+    await aiOnFor(owner, leadE);
+  });
+
+  afterAll(async () => {
+    const admin = await signedInSuperAdmin();
+    await admin.fetch('/api/admin/ai-concierge/kill-switch', { method: 'PATCH', json: { enabled: false } });
+    await db.from('venues').update({ ai_concierge_enabled: false, directory_addon_concierge: false, a2p_verified: false }).eq('id', FLOW_VENUE.id);
+  });
+
+  it('the emergency stop stops every AI text until it’s switched off', async () => {
+    const admin = await signedInSuperAdmin();
+    const stop = await admin.fetch('/api/admin/ai-concierge/kill-switch', { method: 'PATCH', json: { enabled: true, reason: `flow test ${runId}` } });
+    expect(stop.status, await stop.clone().text()).toBe(200);
+    const since = new Date().toISOString();
+    const send = await owner.fetch(`/api/listing/ai-concierge/leads/${leadE}/force-send`, { method: 'POST' });
+    expect(send.status).toBe(409);
+    expect(((await send.json()) as { reason?: string }).reason).toBe('kill_switch');
+    expect((await runJob('ai-send')).status).toBe(200);
+    expect((await texts(phoneE, since)).filter((t) => t.direction === 'outbound')).toHaveLength(0);
+    const go = await admin.fetch('/api/admin/ai-concierge/kill-switch', { method: 'PATCH', json: { enabled: false } });
+    expect(go.status).toBe(200);
+    expect(((await (await admin.fetch('/api/admin/ai-concierge/kill-switch')).json()) as { killSwitchEnabled: boolean }).killSwitchEnabled).toBe(false);
+  });
+
+  it('pausing a couple stops the AI for them; resuming starts it again', async () => {
+    expect((await owner.fetch(`/api/listing/ai-concierge/leads/${leadE}/state`, { method: 'PATCH', json: { action: 'pause' } })).status).toBe(200);
+    expect(await aiState(leadE)).toBe('paused');
+    const since = new Date().toISOString();
+    await owner.fetch(`/api/listing/ai-concierge/leads/${leadE}/force-send`, { method: 'POST' });
+    expect((await texts(phoneE, since)).filter((t) => t.direction === 'outbound')).toHaveLength(0);
+    expect((await owner.fetch(`/api/listing/ai-concierge/leads/${leadE}/state`, { method: 'PATCH', json: { action: 'resume' } })).status).toBe(200);
+    expect(await aiState(leadE)).toBe('ai_active');
+  });
+
+  it('snoozing a couple holds the next AI text back', async () => {
+    const res = await owner.fetch(`/api/listing/ai-concierge/leads/${leadE}/snooze`, { method: 'PATCH', json: { minutes: 120 } });
+    expect(res.status, await res.clone().text()).toBe(200);
+    const { data } = await db.from('leads').select('ai_next_send_at').eq('id', leadE).single();
+    expect(Date.parse(data!.ai_next_send_at)).toBeGreaterThan(Date.now() + 100 * 60_000);
+    const since = new Date().toISOString();
+    expect((await runJob('ai-send')).status).toBe(200);
+    expect((await texts(phoneE, since)).filter((t) => t.direction === 'outbound')).toHaveLength(0);
+  });
+
+  it('another venue can’t control their couple', async () => {
+    const other = new Browser();
+    await other.signIn(process.env.ADMIN_EMAIL || '');
+    expect([403, 404]).toContain((await other.fetch(`/api/listing/ai-concierge/leads/${leadE}/state`, { method: 'PATCH', json: { action: 'pause' } })).status);
+    expect(await aiState(leadE)).toBe('ai_active');
   });
 });

@@ -16,7 +16,10 @@ export async function GET(
       .eq('invite_token', token)
       .maybeSingle();
 
-    if (error || !member) {
+    // The link accepts a pending invite, and doubles as the sign-in link for
+    // active members. A member the venue switched off (or removed) can't use
+    // an old email to switch themselves back on.
+    if (error || !member || !['invited', 'active'].includes(String(member.status))) {
       return safeRedirect('/invite/invalid');
     }
 

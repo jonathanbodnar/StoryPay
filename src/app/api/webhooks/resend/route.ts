@@ -29,6 +29,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { notifyCoupleInviteAlert } from '@/lib/slack-notify';
+import { isStaging } from '@/lib/staging';
+import { secureCompare } from '@/lib/secure-compare';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -231,14 +233,15 @@ async function maybeAutoPauseCouple(coupleWeddingId: string): Promise<void> {
 }
 
 export async function POST(request: NextRequest) {
-  const secret = process.env.RESEND_WEBHOOK_SECRET?.trim();
+  // The test copy has no Resend account; its tests sign with its own password.
+  const secret = process.env.RESEND_WEBHOOK_SECRET?.trim() || (isStaging() ? process.env.STAGING_PASSWORD?.trim() : undefined);
   if (!secret) {
     console.error('[webhooks/resend] RESEND_WEBHOOK_SECRET is not set');
     return new NextResponse('Webhook not configured', { status: 503 });
   }
 
   const provided = request.nextUrl.searchParams.get('secret')?.trim();
-  if (!provided || provided !== secret) {
+  if (!provided || !secureCompare(provided, secret)) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 

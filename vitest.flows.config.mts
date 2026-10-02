@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/flows/**/*.test.ts'],
+    // Quiet mode: no email leaves the test copy while the tests run.
+    globalSetup: ['tests/flows/global-setup.ts'],
     testTimeout: 60_000,
     hookTimeout: 60_000,
     fileParallelism: false,

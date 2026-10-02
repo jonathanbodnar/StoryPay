@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
-import { rateLimitAny, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAny, getClientIp, perVisitorLimit } from '@/lib/rate-limit';
 
 /** Magic-link token lifetime: 24 hours from issue. */
 const LOGIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   // Rate limit per-IP and per-email to prevent magic-link email-bombing.
   const ip = getClientIp(request);
   const rl = rateLimitAny([
-    { key: `request-login:ip:${ip}`,           limit: 5, windowMs: 60 * 60_000 },
+    { key: `request-login:ip:${ip}`,           limit: perVisitorLimit(5), windowMs: 60 * 60_000 },
     { key: `request-login:email:${normalized}`, limit: 3, windowMs: 60 * 60_000 },
   ]);
   if (!rl.allowed) {

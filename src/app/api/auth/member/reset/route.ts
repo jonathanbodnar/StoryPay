@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
-import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
+import { rateLimit, getClientIp, formatRetryAfter, perVisitorLimit } from '@/lib/rate-limit';
 import { checkPassword } from '@/lib/password-policy';
 import { setSignedCookie } from '@/lib/venue-session';
 import crypto from 'crypto';
@@ -20,7 +20,7 @@ export const runtime = 'nodejs';
  */
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
-  const rl = rateLimit(`member-reset:ip:${ip}`, 10, 60 * 60_000);
+  const rl = rateLimit(`member-reset:ip:${ip}`, perVisitorLimit(10), 60 * 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Too many attempts. Try again in ${formatRetryAfter(rl.retryAfterMs)}.` },
