@@ -63,12 +63,16 @@ test('a couple opens their proposal and signs it', async ({ page }) => {
   await expect(page.getByText(/Signed on /)).toBeVisible();
   await expect(page.getByRole('link', { name: /Download your signed contract/ })).toBeVisible();
 
-  // Couples see the venue only: no StoryVenue name or logo on their pages.
+  // Couples see the venue only: no StoryVenue name, logo, tab title or link preview.
   await expect(page.getByText(/StoryVenue/)).toHaveCount(0);
   await expect(page.getByAltText('StoryVenue')).toHaveCount(0);
+  await expect(page).toHaveTitle(`Proposal from ${FLOW_VENUE.name}`);
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', `Proposal from ${FLOW_VENUE.name}`);
+  await expect(page.locator('meta[property="og:image"]')).toHaveCount(0);
   await page.goto(`/invoice/${id}`);
   await expect(page.getByText(FLOW_VENUE.name).first()).toBeVisible();
   await expect(page.getByText(/StoryVenue/)).toHaveCount(0);
+  await expect(page).toHaveTitle(`Invoice from ${FLOW_VENUE.name}`);
 });
 
 test.describe('live updates', () => {
