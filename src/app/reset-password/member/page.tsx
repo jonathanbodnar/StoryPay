@@ -63,7 +63,7 @@ function MemberResetForm() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Image
-            src="/storyvenue-logo-dark.png"
+            src="/storyvenue-logo-dark-sm.png" unoptimized
             alt="StoryVenue"
             width={160}
             height={40}

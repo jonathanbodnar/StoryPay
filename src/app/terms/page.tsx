@@ -20,7 +20,7 @@ export default function TermsPage() {
       {/* Nav */}
       <nav className="border-b border-gray-100 px-6 py-4 flex items-center justify-between max-w-4xl mx-auto">
         <Link href="/">
-          <Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={130} height={32} />
+          <Image src="/storyvenue-logo-dark-sm.png" unoptimized alt="StoryVenue" width={130} height={32} />
         </Link>
         <Link href="/login" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
           Sign In

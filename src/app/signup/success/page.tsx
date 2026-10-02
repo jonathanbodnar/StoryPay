@@ -146,7 +146,7 @@ function SuccessInner() {
 
       <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
         <div className="mb-8">
-          <Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={120} height={30} />
+          <Image src="/storyvenue-logo-dark-sm.png" unoptimized alt="StoryVenue" width={120} height={30} />
         </div>
 
         <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8 shadow-sm text-center">

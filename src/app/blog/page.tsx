@@ -68,7 +68,7 @@ export default async function BlogPage() {
       <nav className="border-b border-gray-100 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={110} height={26} />
+            <Image src="/storyvenue-logo-dark-sm.png" unoptimized alt="StoryVenue" width={110} height={26} />
           </Link>
           <div className="flex items-center gap-4 text-sm">
             <Link href="/blog" className="font-medium text-gray-900">Blog</Link>

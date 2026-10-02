@@ -62,7 +62,7 @@ export function SignupClient() {
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
           <Link href="/">
-            <Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={130} height={32} />
+            <Image src="/storyvenue-logo-dark-sm.png" unoptimized alt="StoryVenue" width={130} height={32} />
           </Link>
         </div>
 

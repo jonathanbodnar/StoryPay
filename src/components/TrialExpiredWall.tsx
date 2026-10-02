@@ -68,7 +68,7 @@ export default function TrialExpiredWall({ venueName }: { venueName: string }) {
       <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-[#1b1b1b] px-4 py-10">
         <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-2xl">
           <div className="mb-6 flex justify-center">
-            <Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={132} height={33} priority />
+            <Image src="/storyvenue-logo-dark-sm.png" unoptimized alt="StoryVenue" width={132} height={33} priority />
           </div>
           <h1 className="text-xl font-semibold text-gray-900">Your account needs attention</h1>
           <p className="mt-2 text-sm leading-relaxed text-gray-500">
@@ -93,7 +93,7 @@ export default function TrialExpiredWall({ venueName }: { venueName: string }) {
     <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-[#1b1b1b] px-4 py-10">
       <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-8 shadow-2xl">
         <div className="mb-6 flex justify-center">
-          <Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={132} height={33} priority />
+          <Image src="/storyvenue-logo-dark-sm.png" unoptimized alt="StoryVenue" width={132} height={33} priority />
         </div>
 
         <div className="text-center">

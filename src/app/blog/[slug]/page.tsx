@@ -135,7 +135,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       {/* Nav */}
       <nav className="border-b border-gray-100 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <Link href="/"><Image src="/storyvenue-logo-dark.png" alt="StoryVenue" width={110} height={26} /></Link>
+          <Link href="/"><Image src="/storyvenue-logo-dark-sm.png" unoptimized alt="StoryVenue" width={110} height={26} /></Link>
           <div className="flex items-center gap-4 text-sm">
             <Link href="/blog" className="text-gray-500 hover:text-gray-800 transition-colors">← Blog</Link>
             <Link href="/login" className="rounded-lg border border-gray-200 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 transition-colors">Log In</Link>

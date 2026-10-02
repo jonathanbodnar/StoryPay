@@ -26,7 +26,7 @@ export function CoupleLogo() {
     <div className="flex items-center gap-2.5">
       <Link href={href} className="inline-flex items-center" aria-label="StoryVenue home">
         <Image
-          src="/storyvenue-logo-dark.png"
+          src="/storyvenue-logo-dark-sm.png" unoptimized
           alt="StoryVenue"
           width={130}
           height={32}
