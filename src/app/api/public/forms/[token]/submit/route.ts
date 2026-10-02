@@ -356,7 +356,8 @@ export async function POST(
               email:       emailVal,
               phone:       phoneVal || null,
               source:      'form',
-              status:      'lead',
+              // No status: the table's default. 'lead' isn't an allowed status
+              // (leads_status_check), so this insert always failed.
               pipeline_id: stageRow.pipeline_id,
               stage_id:    stageRow.id,
               position:    0,
@@ -435,7 +436,6 @@ export async function POST(
             email:      emailVal,
             phone:      phoneVal || null,
             source:     'form',
-            status:     'lead',
             first_touch_utm: firstTouchUtm,
           })
           .select('id')

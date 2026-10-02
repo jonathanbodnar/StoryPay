@@ -16,6 +16,7 @@ describe('a couple fills in the venue’s website form', () => {
   ];
   let formId = '';
   let token = '';
+  let stageId = '';
   let since = '';
 
   async function submit(message: string) {
@@ -27,15 +28,16 @@ describe('a couple fills in the venue’s website form', () => {
     fd.set('bf_msg', message);
     return fetch(`${env.base}/api/public/forms/${token}/submit`, { method: 'POST', headers: { 'x-staging-key': env.stagingKey }, body: fd });
   }
-  const herLeads = async () => (await db.from('leads').select('id').eq('venue_id', FLOW_VENUE.id).eq('email', email)).data ?? [];
+  const herLeads = async () => (await db.from('leads').select('id, stage_id').eq('venue_id', FLOW_VENUE.id).eq('email', email)).data ?? [];
   const ownerSubjects = async () => (await outbox({ to: FLOW_VENUE.email, since })).map((e) => e.subject);
 
   beforeAll(async () => {
     await ensureFlowVenue();
     const { data: stage } = await db.from('lead_pipeline_stages').select('id').eq('venue_id', FLOW_VENUE.id).limit(1).single();
+    stageId = stage!.id as string;
     const { data: f, error } = await db.from('marketing_forms').insert({
       venue_id: FLOW_VENUE.id, name: `Website form ${runId}`, published: true,
-      definition_json: { version: 1, blocks, settings: { pipelineStageId: stage!.id } },
+      definition_json: { version: 1, blocks, settings: { pipelineStageId: stageId } },
     }).select('id, embed_token').single();
     if (error) throw new Error(error.message);
     formId = f!.id as string;
@@ -47,11 +49,13 @@ describe('a couple fills in the venue’s website form', () => {
     if (formId) await db.from('marketing_forms').update({ published: false }).eq('id', formId);
   });
 
-  it('the first submission makes the lead and one "New lead" email, with her message', async () => {
+  it('the first submission makes the lead in the form’s stage, and one "New lead" email with her message', async () => {
     expect((await submit('We love your barn!')).status).toBe(200);
+    const leads = await herLeads();
+    expect(leads).toHaveLength(1);
+    expect(leads[0].stage_id).toBe(stageId);
     const e = await waitForEmail({ to: FLOW_VENUE.email, since }, (x) => x.subject === `New lead: Rowan Reyes — ${FLOW_VENUE.name}`);
     expect(e.html).toContain('We love your barn!');
-    expect(await herLeads()).toHaveLength(1);
   });
 
   it('a double submit makes no second lead and sends the owner nothing more', async () => {

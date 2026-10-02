@@ -336,9 +336,11 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
 
     // ── Recipients: the owner + every active team member, each with their ──
     // own independent email_<scenario>/sms_<scenario> toggles (see
-    // src/lib/notification-settings.ts).
-    const emailKey = emailKeyFor(args.scenario);
-    const smsKey   = smsKeyFor(args.scenario);
+    // src/lib/notification-settings.ts). "Asked again" has no toggles of its
+    // own: it follows each person's new-lead ones.
+    const toggles  = args.scenario === 'lead_asked_again' ? 'new_lead' : args.scenario;
+    const emailKey = emailKeyFor(toggles);
+    const smsKey   = smsKeyFor(toggles);
     const recipients = await loadNotificationRecipients(args.venueId);
 
     // ── Owner/team email ──────────────────────────────────────────────────
