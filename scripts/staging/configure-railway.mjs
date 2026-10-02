@@ -16,6 +16,10 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 
+// owner/repo from the git remote, so this keeps working when the repo moves.
+const REPO = execFileSync('git', ['remote', 'get-url', 'origin'], { encoding: 'utf8' }).trim()
+  .replace(/^.*github\.com[:/]/, '').replace(/\.git$/, '');
+
 const SERVICE = 'StoryVenue Backend';
 const ENV = 'Dev';
 const LIVE_SUPABASE_REF = 'brnxhsaakmhgwcthcapd';
@@ -101,7 +105,7 @@ console.log('Variables set (no deploy yet).');
 
 if (deploy) {
   const r = spawnSync('railway', ['environment', 'edit', '--environment', ENV,
-    '--service-config', SERVICE, 'source.repo', 'jonathanbodnar/StoryPay',
+    '--service-config', SERVICE, 'source.repo', REPO,
     '--service-config', SERVICE, 'source.branch', 'main',
     '--service-config', SERVICE, 'build.builder', 'RAILPACK',
     '--message', 'Test copy: deploy StoryVenue Backend from main'], { env: railwayEnv, encoding: 'utf8' });

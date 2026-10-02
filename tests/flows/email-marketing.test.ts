@@ -36,7 +36,7 @@ describe('email campaigns and unsubscribing', () => {
           version: 1,
           blocks: [
             { id: 'h', type: 'heading', level: 1, content: 'Our fall open house' },
-            { id: 't', type: 'text', content: '<p>Hi {{lead.first_name}}, come walk the barn with us on October 18.</p>' },
+            { id: 't', type: 'text', content: '<p>Hi {{contact.first_name}}, come walk the barn with us on October 18.</p>' },
           ],
           theme: { pageBg: '#f4f4f5', cardBg: '#ffffff', textColor: '#18181b', mutedColor: '#71717a', buttonBg: '#18181b', buttonText: '#ffffff', maxWidth: '600px', fontFamily: 'Georgia, serif' },
         },

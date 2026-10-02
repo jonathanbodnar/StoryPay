@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Browser, coupleSession, ensureFlowVenue, env, FLOW_VENUE, runId, signedInOwner, signedInSuperAdmin, venueRecordIds } from './helpers';
+import { Browser, coupleSession, db, ensureFlowVenue, env, FLOW_VENUE, runId, signedInOwner, signedInSuperAdmin, venueRecordIds } from './helpers';
 import { ROUTES } from './routes';
 
 // Nothing crashes: every read route answers the right person (the venue owner,
@@ -119,5 +119,40 @@ describe('nothing crashes, and venues can’t see each other', () => {
       if (res.ok && (body.includes(DEMO_VENUE_ID) || named.some((id) => body.includes(id)))) leaks.push(`${url} → ${res.status} ${body.slice(0, 120)}`);
     });
     expect(leaks.sort()).toEqual([]);
+  }, 300_000);
+
+  it('the other venue’s records can’t be changed, added to or deleted', async () => {
+    // What the other venue has, before every write route is tried with its ids.
+    const snapshot = async () => {
+      const [leads, proposals, notes, tasks, payments] = await Promise.all([
+        db.from('leads').select('id, notes, status, stage_id, ai_state, first_name').eq('venue_id', DEMO_VENUE_ID).order('id'),
+        db.from('proposals').select('id, status, price, customer_email').eq('venue_id', DEMO_VENUE_ID).order('id'),
+        db.from('lead_notes').select('id').in('lead_id', [theirs.lead ?? NONE]),
+        db.from('lead_tasks').select('id').in('lead_id', [theirs.lead ?? NONE]),
+        db.from('proposal_payments').select('id').in('proposal_id', [theirs.proposal ?? NONE]),
+      ]);
+      return JSON.stringify([leads.data, proposals.data, notes.data?.length, tasks.data?.length, payments.data?.length]);
+    };
+    const before = await snapshot();
+    const writes = ROUTES.filter((r) => whoFor(r.path) === 'owner' && /\[[^.\]]+\]/.test(r.path) && !SKIP.test(r.path)
+      && !r.path.startsWith('/api/public/') && !/^\/api\/(proposals\/public|invoices|rsvp|card-update|availability|invite|embed|page-seo)\b/.test(r.path));
+    const calls: Array<{ method: string; url: string }> = [];
+    for (const r of writes) {
+      const { url, named } = address(r.path, theirs, { id: DEMO_VENUE_ID, slug: 'maple-hollow-barn-test' });
+      if (!named.length) continue;
+      for (const method of r.methods.filter((m) => m !== 'GET')) calls.push({ method, url });
+    }
+    const accepted: string[] = [];
+    await pool(calls, async ({ method, url }) => {
+      const res = await sessions.owner!.fetch(url, {
+        method, json: method === 'DELETE' ? undefined : { name: 'hijacked', notes: 'hijacked', status: 'hijacked', title: 'hijacked', content: 'hijacked', amount: 1 },
+      });
+      if (res.ok) accepted.push(`${method} ${url} → ${res.status}`);
+    });
+    // Whatever the routes answered, nothing of the other venue's changed.
+    expect(await snapshot()).toBe(before);
+    expect(calls.length).toBeGreaterThan(0);
+    // And none of them claimed success.
+    expect(accepted.sort()).toEqual([]);
   }, 300_000);
 });

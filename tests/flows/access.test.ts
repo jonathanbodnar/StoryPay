@@ -9,9 +9,9 @@ const CRON_JOBS = [
   'installments', 'marketing-email', 'payment-reminders', 'private-client-monthly-reminder', 'reengagement-drip',
   'send-booking-reports', 'tag-sweep', 'trial-sweep',
 ];
-// These email venue owners (in the test copy, the demo owner is a real inbox),
-// so the run only checks that they need their secret.
-const EMAILS_OWNERS = new Set(['reengagement-drip', 'send-booking-reports']);
+// Every job also runs: the test copy is quiet while the tests run, so jobs that
+// email venue owners (the demo owner is a real inbox) keep it in the outbox.
+const EMAILS_OWNERS = new Set<string>();
 const secrets = [process.env.MARKETING_CRON_SECRET, process.env.CRON_SECRET].filter(Boolean) as string[];
 
 async function cron(job: string, secret?: string): Promise<Response> {

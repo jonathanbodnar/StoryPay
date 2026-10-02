@@ -32,13 +32,8 @@ export type VenueSession = {
   ghl_location_id: string | null;
   lunarpay_merchant_id: string | null;
   lunarpay_secret_key: string | null;
-  lunarpay_public_key: string | null;
   brand_color: string | null;
   brand_logo_url: string | null;
-  brand_secondary_color: string | null;
-  resend_from_email: string | null;
-  resend_from_name: string | null;
-  resend_api_key: string | null;
   directory_plan_id: string | null;
   directory_subscription_status: string | null;
 };
@@ -53,9 +48,8 @@ export async function getVenueFromSession(): Promise<VenueSession | null> {
     .select(
       'id, name, email, slug, phone, setup_completed, onboarding_status, ' +
       'ghl_connected, ghl_access_token, ghl_location_id, ' +
-      'lunarpay_merchant_id, lunarpay_secret_key, lunarpay_public_key, ' +
-      'brand_color, brand_logo_url, brand_secondary_color, ' +
-      'resend_from_email, resend_from_name, resend_api_key, ' +
+      'lunarpay_merchant_id, lunarpay_secret_key, ' +
+      'brand_color, brand_logo_url, ' +
       'directory_plan_id, directory_subscription_status',
     )
     .eq('id', venueId)

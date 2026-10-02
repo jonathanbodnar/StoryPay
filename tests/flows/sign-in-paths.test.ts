@@ -158,7 +158,7 @@ describe('the StoryVenue team and couples reset their passwords', () => {
     const newPassword = `Couple-${runId}-New-2027!`;
     const signup = await fetch(`${env.base}/api/couple/signup`, {
       method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' },
-      body: JSON.stringify({ email: coupleEmail, password: oldPassword, first_name: 'Rae', last_name: 'Reset', phone: '(646) 555-0168' }),
+      body: JSON.stringify({ email: coupleEmail, password: oldPassword, first_name: 'Rae', last_name: 'Reset', phone: `(646) 553-${(parseInt(runId.slice(-5), 36) % 9000) + 1000}` }),
     });
     expect(signup.status, await signup.clone().text()).toBe(200);
     const sentAt = new Date().toISOString();

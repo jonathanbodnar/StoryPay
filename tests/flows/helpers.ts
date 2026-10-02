@@ -185,9 +185,16 @@ export async function coupleTexts(from: string, body: string): Promise<void> {
 
 /** Runs one of the app's timed jobs now (the test copy doesn't run them on its own). */
 export async function runJob(name: string): Promise<Response> {
-  return fetch(`${env.base}/api/cron/${name}`, {
-    headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${process.env.MARKETING_CRON_SECRET}` },
-  });
+  // Some jobs take MARKETING_CRON_SECRET, others CRON_SECRET.
+  const secrets = [process.env.MARKETING_CRON_SECRET, process.env.CRON_SECRET].filter(Boolean) as string[];
+  let res: Response | null = null;
+  for (const secret of secrets) {
+    res = await fetch(`${env.base}/api/cron/${name}`, {
+      headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${secret}` },
+    });
+    if (res.status !== 401) return res;
+  }
+  return res!;
 }
 
 /** A StoryVenue team super admin (every admin tab), for admin-side checks. */

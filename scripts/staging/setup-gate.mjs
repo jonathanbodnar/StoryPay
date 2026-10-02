@@ -17,7 +17,9 @@ import { execFileSync } from 'node:child_process';
 
 const PROJECT = 'e427d556-1a30-449c-8ef1-f9d6236bb7cd';
 const PRODUCTION = 'bdd8ebe7-b1e5-402d-868b-fcb15a42bc2e';
-const REPO = 'jonathanbodnar/StoryPay';
+// owner/repo from the git remote, so this keeps working when the repo moves.
+const REPO = execFileSync('git', ['remote', 'get-url', 'origin'], { encoding: 'utf8' }).trim()
+  .replace(/^.*github\.com[:/]/, '').replace(/\.git$/, '');
 const env = { ...process.env, RAILWAY_CALLER: 'skill:use-railway@1.5.5' };
 
 function railwayApi(query, variables) {

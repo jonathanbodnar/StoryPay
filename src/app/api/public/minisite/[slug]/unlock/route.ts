@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyMinisiteSignature } from '@/lib/minisite-webhook';
+import { rateLimit } from '@/lib/rate-limit';
 import {
   getCoupleSitePasswordHash,
   verifySitePassword,
@@ -30,6 +31,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   }
 
   const password = String(body.password ?? '');
+  // The directory calls on every visitor's behalf, so guesses are limited per
+  // site: enough for real guests mistyping, not enough to work through a list.
+  if (!rateLimit(`minisite-unlock:${slug}`, 30, 10 * 60 * 1000).allowed) {
+    return NextResponse.json({ ok: false, error: 'Too many tries. Please wait a few minutes.' }, { status: 429 });
+  }
   const hash = await getCoupleSitePasswordHash(slug);
   // No password set → nothing to unlock (treat as open).
   if (!hash) return NextResponse.json({ ok: true, token: '' });
