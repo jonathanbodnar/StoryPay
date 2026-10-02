@@ -518,10 +518,7 @@ export default function InvoicePage() {
           </div>
         )}
 
-        {/* Powered-by footer — minimal */}
-        <div className="mt-6 flex flex-col items-center gap-1 print:hidden">
-          <p className="text-xs text-gray-300">Powered by StoryVenue</p>
-        </div>
+        {/* No StoryVenue footer: couples only see the venue (owner's decision). */}
       </div>
     </div>
   );

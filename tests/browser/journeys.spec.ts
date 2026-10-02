@@ -34,7 +34,7 @@ test('a couple opens their proposal and signs it', async ({ page }) => {
     },
   });
   expect(res.status()).toBe(201);
-  const { public_token: token } = (await res.json()) as { public_token: string };
+  const { id, public_token: token } = (await res.json()) as { id: string; public_token: string };
   await owner.dispose();
 
   await page.goto(`/proposal/${token}`);
@@ -62,6 +62,13 @@ test('a couple opens their proposal and signs it', async ({ page }) => {
   await expect(page.getByRole('heading', { name: "You're all set" })).toBeVisible();
   await expect(page.getByText(/Signed on /)).toBeVisible();
   await expect(page.getByRole('link', { name: /Download your signed contract/ })).toBeVisible();
+
+  // Couples see the venue only: no StoryVenue name or logo on their pages.
+  await expect(page.getByText(/StoryVenue/)).toHaveCount(0);
+  await expect(page.getByAltText('StoryVenue')).toHaveCount(0);
+  await page.goto(`/invoice/${id}`);
+  await expect(page.getByText(FLOW_VENUE.name).first()).toBeVisible();
+  await expect(page.getByText(/StoryVenue/)).toHaveCount(0);
 });
 
 test.describe('live updates', () => {
