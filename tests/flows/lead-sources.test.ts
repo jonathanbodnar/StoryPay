@@ -106,7 +106,7 @@ describe('other ways leads come in', () => {
   it('someone joins the waitlist', async () => {
     const before = ((await (await fetch(`${env.base}/api/waitlist`, { headers: { 'x-staging-key': env.stagingKey } })).json()) as { count: number }).count;
     const res = await fetch(`${env.base}/api/waitlist`, {
-      method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' }, body: JSON.stringify({ email: `waitlist.${runId}@example.com`, first_name: 'Wendy', last_name: 'Waitlist', venue_name: `Waitlist Barn ${runId}` }),
+      method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' }, body: JSON.stringify({ email: `waitlist.${runId}@example.com`, firstName: 'Wendy', lastName: 'Waitlist', venueName: `Waitlist Barn ${runId}` }),
     });
     expect(res.status, await res.clone().text()).toBeLessThan(300);
     const after = ((await (await fetch(`${env.base}/api/waitlist`, { headers: { 'x-staging-key': env.stagingKey } })).json()) as { count: number }).count;

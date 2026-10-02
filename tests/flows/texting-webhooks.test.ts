@@ -6,7 +6,7 @@ import { db, env, FLOW_VENUE, runId, runJob, submitListingLead, texts, waitForTe
 // reaches the venue's conversation and stops the follow-ups, a duplicate
 // delivery is stored once, STOP turns texting off and START turns it back on.
 const n = (parseInt(runId.slice(-5), 36) % 9000) + 1000;
-const phone = `(646) 557-${n}`;
+const phone = `(646) 551-${n}`;
 const email = `webhook.${runId}@example.com`;
 
 describe('texts arriving through the GoHighLevel webhook', () => {

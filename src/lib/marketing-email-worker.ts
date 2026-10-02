@@ -3027,7 +3027,7 @@ const CLAIM_STALE_MS = 15 * 60 * 1000;
  * They're left as they are, not sent weeks late, until the owner decides
  * whether to send or cancel those campaigns.
  */
-const CAMPAIGN_CLAIM_FIXED_AT = '2026-10-02T20:00:00Z';
+const CAMPAIGN_CLAIM_FIXED_AT = '2026-10-02T19:30:00Z';
 
 export async function processCampaignsCron(): Promise<{ campaigns: number; recipients: number }> {
   const now = new Date().toISOString();

@@ -102,7 +102,7 @@ describe('the AI Concierge', () => {
 // The controls: the emergency stop (StoryVenue team), and per couple, snooze
 // and pause/resume (the venue). If the stop button fails, the AI keeps texting.
 describe('the AI Concierge controls', () => {
-  const phoneE = `(646) 559-${n}`;
+  const phoneE = `(646) 554-${n}`;
   let owner: Browser;
   let leadE = '';
 
