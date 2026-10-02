@@ -261,6 +261,8 @@ async function reserveDueLeads(
            -- Consent gate: only text leads whose number we are allowed to use.
            AND COALESCE(l2.sms_consent, true) = true
            AND COALESCE(v2.ai_concierge_enabled, false) = true
+           -- A suspended venue sends nothing automated; its leads wait for its return.
+           AND COALESCE(v2.is_suspended, false) = false
            -- Super admin force-off beats plan inclusion, addon, everything.
            AND COALESCE(v2.ai_concierge_admin_disabled, false) = false
            -- Concierge access: addon purchased OR plan bundles it OR

@@ -7,6 +7,7 @@ import { fetchTagsForLeadIds, leadRowWithTags, setLeadTagIds } from '@/lib/lead-
 import { fetchOpenDuplicateMatchesForLeads, recordDuplicateCandidatesForNewLead } from '@/lib/lead-duplicates';
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
+import { handOffNewLead } from '@/lib/new-lead-handoffs';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 
 export const dynamic = 'force-dynamic';
@@ -720,6 +721,20 @@ export async function POST(request: NextRequest) {
       created_at: (data as LeadRow).created_at,
     },
   });
+
+  // And on to the venue's Tripleseat / Event Temple, like every other lead.
+  handOffNewLead(venueId, {
+    id: newId,
+    first_name: (data as LeadRow).first_name,
+    last_name: (data as LeadRow).last_name,
+    email: (data as LeadRow).email,
+    phone: (data as LeadRow).phone,
+    source: String((data as LeadRow).source ?? 'manual'),
+    wedding_date: (data as LeadRow).wedding_date,
+    guest_count: (data as LeadRow).guest_count,
+    message: (data as LeadRow).message,
+    booking_timeline: (data as LeadRow).booking_timeline,
+  }, { webhook: false });
 
   const dupMap = await fetchOpenDuplicateMatchesForLeads(venueId, [newId]);
   const withTags = await leadRowWithTags(venueId, data as Record<string, unknown>);

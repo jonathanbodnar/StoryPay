@@ -733,6 +733,8 @@ const SOURCE_LABELS: Record<string, string> = {
   form:         'Web form',
   leadfinder:   'StoryVenue LeadFinder™',
   manual:       'Added manually',
+  calendly:     'Calendly booking',
+  api:          'Zapier / API',
   test_inquiry: 'Test inquiry',
 };
 

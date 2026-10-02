@@ -5,6 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { authenticateApiV1, corsPreflight, CORS_HEADERS } from '@/lib/api-v1-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
+import { handOffNewLead } from '@/lib/new-lead-handoffs';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 
 export async function OPTIONS() { return corsPreflight(); }
@@ -128,6 +129,19 @@ export async function POST(request: NextRequest) {
     createdAt: shaped.created_at,
   });
   void dispatchIntegrationEvent(auth.venueId, 'lead.created', { lead: shaped });
+  // And on to the venue's Tripleseat / Event Temple, like every other lead.
+  handOffNewLead(auth.venueId, {
+    id: shaped.id,
+    first_name: firstName || null,
+    last_name: lastName || null,
+    email,
+    phone: body.phone || null,
+    source: body.source || 'api',
+    wedding_date: body.wedding_date || null,
+    guest_count: body.guest_count ?? null,
+    message: body.message || null,
+    booking_timeline: body.booking_timeline || null,
+  }, { webhook: false });
 
   return NextResponse.json({ lead: shaped }, { headers: CORS_HEADERS });
 }

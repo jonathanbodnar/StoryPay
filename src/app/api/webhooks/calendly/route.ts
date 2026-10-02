@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getDb } from '@/lib/db';
 import { mapEventType, verifyCalendlySignature } from '@/lib/calendly';
+import { ensureDefaultPipeline } from '@/lib/pipelines';
+import { notifyOwnerNewLead } from '@/lib/owner-notifications';
+import { handOffNewLead } from '@/lib/new-lead-handoffs';
 
 // Soft-enforcement rollout: existing subscriptions predate signing-key support
 // and won't have a stored key until /api/admin/resubscribe-calendly-signing-keys
@@ -122,6 +125,22 @@ export async function POST(request: NextRequest) {
             LIMIT 1
           `;
 
+          // Someone new (no lead with this email at all): the booking is a lead.
+          // In Booked Tours, with no follow-ups (they've booked) and no texting
+          // consent assumed. Owner's call, Oct 2: every lead goes on to the
+          // venue's connected systems and gets the one new-lead email.
+          if (!matchingLead) {
+            const [anyLead] = await sql`
+              SELECT id FROM leads WHERE venue_id = ${venueId} AND lower(email) = lower(${inviteeEmail}) LIMIT 1
+            `;
+            if (!anyLead) {
+              await createLeadFromCalendlyBooking({
+                venueId, email: inviteeEmail.toLowerCase(), firstName, lastName,
+                eventName: eventName ?? 'Booking', startTime,
+              }).catch((e) => console.error('[calendly webhook] lead create failed:', e));
+            }
+          }
+
           if (matchingLead) {
             // Find the "Booked Tours" stage in this venue's default pipeline
             const [bookedToursStage] = await sql`
@@ -187,4 +206,61 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ received: true });
+}
+
+/** A Calendly booking from someone who isn't a lead yet becomes one (see above). */
+async function createLeadFromCalendlyBooking(b: {
+  venueId: string; email: string; firstName: string; lastName: string; eventName: string; startTime: string;
+}): Promise<void> {
+  const pipelineId = await ensureDefaultPipeline(b.venueId);
+  const { data: stages } = await supabaseAdmin
+    .from('lead_pipeline_stages')
+    .select('id, name, position')
+    .eq('venue_id', b.venueId)
+    .eq('pipeline_id', pipelineId)
+    .order('position', { ascending: true });
+  const list = (stages ?? []) as Array<{ id: string; name: string }>;
+  const stage = list.find((s) => /booked.*tour|tour.*booked/i.test(s.name)) ?? list[0] ?? null;
+  const name = [b.firstName, b.lastName].filter(Boolean).join(' ').trim() || b.email;
+  const now = new Date().toISOString();
+  const { data: lead, error } = await supabaseAdmin
+    .from('leads')
+    .insert({
+      venue_id: b.venueId,
+      name,
+      first_name: b.firstName || null,
+      last_name: b.lastName || null,
+      email: b.email,
+      source: 'calendly',
+      status: stage && /tour/i.test(stage.name) ? 'tour_booked' : 'new',
+      sms_consent: false,
+      ai_state: 'paused',
+      pipeline_id: pipelineId,
+      stage_id: stage?.id ?? null,
+      position: 0,
+      updated_at: now,
+    })
+    .select('id, created_at')
+    .single();
+  if (error || !lead) throw new Error(error?.message ?? 'no lead');
+  const booked = `${b.eventName} on ${new Date(b.startTime).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' })}`;
+  notifyOwnerNewLead({
+    venueId: b.venueId,
+    leadId: lead.id as string,
+    fullName: name,
+    email: b.email,
+    source: 'calendly',
+    createdAt: lead.created_at as string,
+    details: [{ label: 'Booked', value: booked }],
+  });
+  handOffNewLead(b.venueId, {
+    id: lead.id as string,
+    first_name: b.firstName || null,
+    last_name: b.lastName || null,
+    email: b.email,
+    phone: null,
+    source: 'calendly',
+    created_at: lead.created_at as string,
+    message: `Booked via Calendly: ${booked}`,
+  });
 }

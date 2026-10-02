@@ -10,6 +10,7 @@ import {
   DEFAULT_APPOINTMENT_REMINDER_OFFSETS,
   normalizeReminderOffsets,
 } from '@/lib/reminder-offsets';
+import { suspendedVenueIds } from '@/lib/venue-suspension';
 
 export { type ReminderOffset, DEFAULT_APPOINTMENT_REMINDER_OFFSETS, normalizeReminderOffsets };
 
@@ -321,6 +322,7 @@ export async function processAppointmentRemindersCron(): Promise<{
 
   let sent = 0;
   let errors = 0;
+  const suspended = new Set(await suspendedVenueIds());
 
   for (const raw of dueRows ?? []) {
     const row = raw as {
@@ -334,6 +336,13 @@ export async function processAppointmentRemindersCron(): Promise<{
       notification_type?: string | null;
       channel?: string | null;
     };
+
+    // A suspended venue sends nothing automated: the reminder is passed over
+    // (a reminder sent after its appointment would be worse than none).
+    if (suspended.has(row.venue_id)) {
+      await supabaseAdmin.from('calendar_event_reminders').update({ sent_at: new Date().toISOString() }).eq('id', row.id);
+      continue;
+    }
 
     const notifType = (row.notification_type as NotifType | undefined | null) ?? 'reminder';
     // When channel is set, dispatch only that channel; otherwise fire all (legacy / follow_up)

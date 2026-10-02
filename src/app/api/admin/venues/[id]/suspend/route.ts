@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { verifyMasterAdminOnly } from '@/lib/admin-auth';
 import { getAdminIdentity } from '@/lib/admin-identity';
 import { forgetSessionRow, revokeVenueSessions } from '@/lib/session-revoke';
+import { forgetSuspendedVenues } from '@/lib/venue-suspension';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -14,6 +15,7 @@ export const runtime = 'nodejs';
  * Suspending signs out the venue's owner and team and keeps them out: sign-in
  * refuses them, the proxy treats any session of a suspended venue as signed
  * out (sending the dashboard to /suspended), and its API keys stop working.
+ * Its automated texts and emails to couples pause too (lib/venue-suspension).
  * The admin's signed "View as venue" cookie still gets in. The 100-year
  * Supabase ban on the owner's auth user is kept for older auth paths.
  *
@@ -98,6 +100,8 @@ export async function POST(
     // Force-logout any active StoryPay sessions for this venue (the Supabase ban
     // above only blocks fresh logins, not already-issued session cookies).
     await revokeVenueSessions(venueId);
+    // And its automated texts and emails to couples pause (lib/venue-suspension).
+    forgetSuspendedVenues();
 
     console.log(`[admin/suspend] venue ${venueId} suspended by ${adminEmail}`);
     return NextResponse.json({ ok: true, action: 'suspended', venueName: (venue as { name: string }).name });
@@ -127,6 +131,7 @@ export async function POST(
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
   forgetSessionRow('venues', venueId);
+  forgetSuspendedVenues();
 
   console.log(`[admin/suspend] venue ${venueId} unsuspended by ${adminEmail}`);
   return NextResponse.json({ ok: true, action: 'unsuspended', venueName: (venue as { name: string }).name });

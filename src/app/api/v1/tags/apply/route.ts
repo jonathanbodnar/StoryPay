@@ -6,6 +6,7 @@ import { authenticateApiV1, corsPreflight, CORS_HEADERS } from '@/lib/api-v1-aut
 import { supabaseAdmin } from '@/lib/supabase';
 import { onMarketingTagAdded } from '@/lib/marketing-email-worker';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
+import { handOffNewLead } from '@/lib/new-lead-handoffs';
 
 export async function OPTIONS() { return corsPreflight(); }
 
@@ -92,6 +93,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'lead_create_failed' }, { status: 500, headers: CORS_HEADERS });
     }
     lead = newLead as { id: string };
+    // A lead that's new: on to Tripleseat / Event Temple and the "lead created" event.
+    handOffNewLead(auth.venueId, { id: lead.id, first_name: null, last_name: null, email, phone: null, source: 'api' });
   }
   const leadId = (lead as { id: string }).id;
 

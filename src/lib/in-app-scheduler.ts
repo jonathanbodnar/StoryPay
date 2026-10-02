@@ -47,6 +47,7 @@
  *                                      stripe/installments-cron.ts)
  *   - payment-reminders     daily 9:00 UTC   overdue-payment reminder emails
  *   - private-client-reminder daily 17:00 UTC  Private Client monthly email
+ *   - booking-reports       every 60m  scheduled Bride Booking System™ reports
  *   - tag-sweep             daily 3:00 UTC   date/activity system tags
  *                                      Each claims its work first, so a
  *                                      manual run can't double-send, and a
@@ -317,6 +318,19 @@ const JOBS: ScheduledJob[] = [
     }),
   },
   {
+    // Scheduled Bride Booking System™ reports. Each venue is claimed (its next
+    // date moved forward) before its report is sent, so a restart or a second
+    // server never sends one twice. Nothing ran this before Oct 2.
+    name: 'booking-reports',
+    intervalMs: 60 * 60 * 1000,
+    initialDelayMs: 7 * 60 * 1000,
+    run: async () => {
+      const { runBookingReports } = await import('@/lib/booking-report-cron');
+      const r = await runBookingReports();
+      return r.sent + r.failed > 0 ? `processed=${r.processed} sent=${r.sent} failed=${r.failed} skipped=${r.skipped}` : null;
+    },
+  },
+  {
     name: 'tag-sweep',
     intervalMs: 10 * 60 * 1000,
     initialDelayMs: 8 * 60 * 1000,
@@ -327,6 +341,9 @@ const JOBS: ScheduledJob[] = [
     }),
   },
 ];
+
+/** Every job the app runs on its own (the scheduler's fast check reads this). */
+export const SCHEDULED_JOB_NAMES: readonly string[] = JOBS.map((j) => j.name);
 
 const inFlight = new Set<string>();
 

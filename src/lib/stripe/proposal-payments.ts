@@ -624,12 +624,8 @@ async function cardUpdateLink(p: PaymentProposal): Promise<string> {
     token,
     used: false,
   };
-  let { error } = await supabaseAdmin.from('card_update_tokens').insert(row);
-  // A database without migration 275 still requires the LunarPay-era customer
-  // id; 0 stands for "not LunarPay" (the link works off the proposal).
-  if (error && /customer_lunarpay_id/.test(error.message)) {
-    ({ error } = await supabaseAdmin.from('card_update_tokens').insert({ ...row, customer_lunarpay_id: 0 }));
-  }
+  // (Migration 275, applied live Oct 2, made the LunarPay-era customer id optional.)
+  const { error } = await supabaseAdmin.from('card_update_tokens').insert(row);
   if (error) console.error('[stripe-pay] card update link not saved:', error.message);
   return error ? `${APP_URL}/invoice/${p.id}` : `${APP_URL}/update-card/${token}`;
 }

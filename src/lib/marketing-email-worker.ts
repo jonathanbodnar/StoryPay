@@ -24,6 +24,7 @@ import { PHASE4_STAGE_NAME, PHASE5_STAGE_NAME, QUALIFIED_STAGE_NAME, resolveDefa
 import { STL_NAME } from '@/lib/booking-system-sequences';
 import { ensureSpeedToLeadAutomation } from '@/lib/booking-system-default-sequence';
 import { isSystemTagInert } from '@/lib/system-tag-visibility';
+import { isVenueSuspended, suspendedVenueFilter } from '@/lib/venue-suspension';
 import { loadVenueFeatureAccess } from '@/lib/plan-features';
 import { logError } from '@/lib/error-log';
 import { nextTextingTime, textingZones } from '@/lib/texting-hours';
@@ -1073,6 +1074,8 @@ export async function sendBookingSystemGuide(
     channels?: 'both' | 'email' | 'sms';
   },
 ): Promise<void> {
+  // A suspended venue sends nothing automated to couples.
+  if (await isVenueSuspended(venueId)) return;
   try {
     const { data: vr } = await supabaseAdmin
       .from('venues')
@@ -2346,12 +2349,16 @@ export async function processAutomationEnrollmentsBatch(): Promise<{ processed: 
   // NB: do not filter on locked_until here — an *expired* lease (crashed worker)
   // must still be selectable so claimEnrollment can reclaim it. Dedup + expiry
   // are both handled atomically inside claimEnrollment.
-  const { data: due, error } = await supabaseAdmin
+  // A suspended venue's sequences wait (and resume when it's restored); they're
+  // left out here so they can't fill the batch.
+  const suspended = await suspendedVenueFilter();
+  let dueQuery = supabaseAdmin
     .from('marketing_automation_enrollments')
     .select('id')
     .eq('status', 'active')
-    .lte('next_run_at', now)
-    .limit(BATCH);
+    .lte('next_run_at', now);
+  if (suspended) dueQuery = dueQuery.not('venue_id', 'in', suspended);
+  const { data: due, error } = await dueQuery.limit(BATCH);
   if (error || !due?.length) return { processed: 0 };
 
   let n = 0;
@@ -3003,6 +3010,8 @@ async function processEnrollmentChain(
   en: { id: string; automation_id: string; venue_id: string; lead_id: string; current_step_index: number },
   maxSteps = 50,
 ): Promise<StepResult> {
+  // A suspended venue sends nothing automated; the step waits for its return.
+  if (await isVenueSuspended(en.venue_id)) return 'unknown';
   let state = en;
   for (let i = 0; i < maxSteps; i++) {
     const result = await processOneEnrollment(state);
@@ -3033,12 +3042,15 @@ export async function processCampaignsCron(): Promise<{ campaigns: number; recip
   const now = new Date().toISOString();
   let sent = 0;
 
-  const { data: toStart } = await supabaseAdmin
+  // A suspended venue's campaigns wait (and go out when it's restored).
+  const suspended = await suspendedVenueFilter();
+  let startQuery = supabaseAdmin
     .from('marketing_campaigns')
     .select('id, venue_id, template_id, name')
     .eq('status', 'scheduled')
-    .lte('scheduled_at', now)
-    .limit(5);
+    .lte('scheduled_at', now);
+  if (suspended) startQuery = startQuery.not('venue_id', 'in', suspended);
+  const { data: toStart } = await startQuery.limit(5);
   for (const c of toStart ?? []) {
     await supabaseAdmin
       .from('marketing_campaigns')
@@ -3073,12 +3085,14 @@ export async function processCampaignsCron(): Promise<{ campaigns: number; recip
   // status column only allows queued/sent/failed/skipped_*). A claim older
   // than CLAIM_STALE_MS is a run that died mid-send, so it's taken again.
   const staleClaim = new Date(Date.now() - CLAIM_STALE_MS).toISOString();
-  const { data: queued } = await supabaseAdmin
+  let queuedQuery = supabaseAdmin
     .from('marketing_campaign_recipients')
     .select('id, campaign_id, venue_id, lead_id, email')
     .eq('status', 'queued')
     .gte('created_at', CAMPAIGN_CLAIM_FIXED_AT)
-    .or(`sent_at.is.null,sent_at.lt.${staleClaim}`)
+    .or(`sent_at.is.null,sent_at.lt.${staleClaim}`);
+  if (suspended) queuedQuery = queuedQuery.not('venue_id', 'in', suspended);
+  const { data: queued } = await queuedQuery
     .order('created_at', { ascending: true })
     .limit(BATCH);
   const campaignIds = [...new Set((queued ?? []).map((q: { campaign_id: string }) => q.campaign_id))];

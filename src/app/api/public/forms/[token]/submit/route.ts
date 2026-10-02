@@ -14,6 +14,7 @@ import {
   type AddressFieldKey,
 } from '@/lib/marketing-form-schema';
 import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity, repeatSkipsGuide } from '@/lib/marketing-email-worker';
+import { handOffNewLead } from '@/lib/new-lead-handoffs';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
 import { autoMergeExactDuplicates } from '@/lib/merge-leads';
 import { bucketLeadSource } from '@/lib/lead-source';
@@ -528,6 +529,18 @@ export async function POST(
     void import('@/lib/eventtemple').then(({ maybePushLeadToEventTemple }) =>
       maybePushLeadToEventTemple(formRow.venue_id, crmLead).catch(() => {}),
     ).catch(() => {});
+  }
+
+  // The "lead created" event (Zapier, webhooks) for a lead that's new.
+  if (createdLeadId && !isRepeat) {
+    handOffNewLead(formRow.venue_id, {
+      id: createdLeadId,
+      first_name: firstNameVal || null,
+      last_name: lastNameVal || null,
+      email: emailVal || null,
+      phone: phoneVal || null,
+      source: 'form',
+    }, { crms: false });
   }
 
   // Phase 2 — Enroll in the sequence automation

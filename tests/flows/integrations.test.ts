@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Browser, db, env, integrationCalls, runId, submitListingLead, waitForIntegrationCall } from './helpers';
+import { Browser, db, env, integrationCalls, runId, submitListingLead, waitForEmail, waitForIntegrationCall } from './helpers';
 
 // The services venues connect, against the test copy's stand-ins
 // (lib/staging-integrations): connecting each one, a wrong key refused, and
@@ -145,5 +145,58 @@ describe('connected services', () => {
     await waitForIntegrationCall('google', since, (c) => (c.method === 'PATCH' || c.method === 'PUT') && c.path.includes(`/events/${row!.google_event_id}`));
     expect((await owner.fetch(`/api/calendar/${row!.id}`, { method: 'DELETE' })).status).toBeLessThan(300);
     await waitForIntegrationCall('google', since, (c) => c.method === 'DELETE' && c.path.includes(`/events/${row!.google_event_id}`));
+  });
+
+  it('every new lead goes on to Tripleseat, Event Temple and Zapier, however it came in (owner, Oct 2)', async () => {
+    expect((await owner.fetch('/api/integrations/tripleseat', { method: 'POST', json: { publicKey: `ts2-${runId}` } })).status).toBe(200);
+    expect((await owner.fetch('/api/integrations/eventtemple', { method: 'POST', json: { apiKey: `et2-${runId}`, orgId: '777' } })).status).toBe(200);
+    expect((await owner.fetch('/api/integrations/calendly/connect', { method: 'POST', json: { access_token: `cal2-${runId}` } })).status).toBe(200);
+    const key = (await (await owner.fetch('/api/integrations/api-keys', { method: 'POST', json: { name: `All leads ${runId}` } })).json()) as { plaintext: string };
+    const api = (path: string, json: unknown) => fetch(`${env.base}${path}`, {
+      method: 'POST', headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' }, body: JSON.stringify(json),
+    });
+    const since = new Date().toISOString();
+    const emails = {
+      manual: `hand.${runId}@example.com`,
+      api: `zap.${runId}@example.com`,
+      tag: `tagged.${runId}@example.com`,
+      calendly: `booked.${runId}@example.com`,
+    };
+
+    expect((await owner.fetch('/api/leads', { method: 'POST', json: { firstName: 'Hana', lastName: 'Hand', email: emails.manual, phone: `(646) 568-${n}` } })).status).toBeLessThan(300);
+    expect((await api('/api/v1/leads', { email: emails.api, first_name: 'Zara', last_name: 'Zap' })).status).toBeLessThan(300);
+    expect((await api('/api/v1/tags/apply', { email: emails.tag, tag_name: `Zapier ${runId}` })).status).toBeLessThan(300);
+    const { data: v } = await db.from('venues').select('calendly_webhook_signing_key, calendly_org_uri').eq('id', venueId).single();
+    const start = new Date(Date.now() + 11 * 86_400_000);
+    const raw = JSON.stringify({
+      event: 'invitee.created',
+      payload: {
+        email: emails.calendly, name: 'Bo Booked',
+        scheduled_event: { uri: `https://api.calendly.com/scheduled_events/all-${runId}`, start_time: start.toISOString(), end_time: new Date(start.getTime() + 3_600_000).toISOString(), name: 'Venue Tour', organization: v!.calendly_org_uri },
+      },
+    });
+    const t = Math.floor(Date.now() / 1000);
+    const booked = await fetch(`${env.base}/api/webhooks/calendly`, {
+      method: 'POST',
+      headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json', 'calendly-webhook-signature': `t=${t},v1=${createHmac('sha256', v!.calendly_webhook_signing_key).update(`${t}.${raw}`).digest('hex')}` },
+      body: raw,
+    });
+    expect(booked.status).toBe(200);
+
+    for (const [via, email] of Object.entries(emails)) {
+      await waitForIntegrationCall('tripleseat', since, (c) => (c.body as { lead?: { email_address?: string } }).lead?.email_address === email);
+      await waitForIntegrationCall('eventtemple', since, (c) => c.path === '/v2/bookings' && (c.body as { data: { attributes: { contact: { email: string } } } }).data.attributes.contact.email === email);
+      const { data: events } = await db.from('venue_integration_events').select('payload').eq('venue_id', venueId).eq('event_type', 'lead.created').gte('created_at', since);
+      expect(JSON.stringify(events), `${via}: lead.created event`).toContain(email);
+    }
+
+    // The Calendly booking became a lead in Booked Tours, with no follow-ups and no texting consent assumed.
+    const { data: calLead } = await db.from('leads').select('source, ai_state, sms_consent, stage_id').eq('venue_id', venueId).eq('email', emails.calendly).single();
+    expect(calLead).toMatchObject({ source: 'calendly', ai_state: 'paused', sms_consent: false });
+    const { data: stage } = await db.from('lead_pipeline_stages').select('name').eq('id', calLead!.stage_id).single();
+    expect(stage!.name).toMatch(/tour/i);
+    // The owner hears about it once, like any other lead.
+    const alert = await waitForEmail({ to: email, since }, (e) => e.html.includes(emails.calendly));
+    expect(alert.html).toContain('Calendly booking');
   });
 });

@@ -37,7 +37,7 @@ vi.mock('@/lib/supabase', () => {
   return { supabaseAdmin: { from: () => table() } };
 });
 
-import { onceDailyAfter } from '@/lib/in-app-scheduler';
+import { onceDailyAfter, SCHEDULED_JOB_NAMES } from '@/lib/in-app-scheduler';
 
 beforeEach(() => kv.clear());
 afterEach(() => vi.useRealTimers());
@@ -80,5 +80,13 @@ describe('daily jobs', () => {
     expect(await onceDailyAfter(9, 'reminders', async () => 'a')()).toBe('a');
     expect(await onceDailyAfter(17, 'private-client', async () => 'b')()).toBe('b');
     expect(await onceDailyAfter(3, 'tag-sweep', async () => 'c')()).toBe('c');
+  });
+});
+
+describe('the jobs the app runs on its own', () => {
+  it('include the scheduled booking reports (nothing ran them before Oct 2)', () => {
+    expect(SCHEDULED_JOB_NAMES).toContain('booking-reports');
+    expect(SCHEDULED_JOB_NAMES).toContain('installments');
+    expect(new Set(SCHEDULED_JOB_NAMES).size).toBe(SCHEDULED_JOB_NAMES.length);
   });
 });
