@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
   const secret = process.env.RESEND_WEBHOOK_SECRET?.trim();
   if (!secret) {
     console.error('[webhooks/resend] RESEND_WEBHOOK_SECRET is not set');
-    return new NextResponse('Webhook not configured', { status: 500 });
+    return new NextResponse('Webhook not configured', { status: 503 });
   }
 
   const provided = request.nextUrl.searchParams.get('secret')?.trim();

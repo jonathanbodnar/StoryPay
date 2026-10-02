@@ -30,8 +30,8 @@ function deploymentStatus() {
   return all.find((d) => String(d.meta?.commitHash ?? '').startsWith(short))?.status ?? 'NOT_STARTED';
 }
 
-// 0. The code checks, on a clean checkout of this commit (not the working
-//    tree, which may already hold the next change).
+// 0. A clean checkout of this commit: every check runs from it, never from the
+//    working tree (which may already hold the next change).
 const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 const tree = join(tmpdir(), `storyvenue-check-${short}`);
 rmSync(tree, { recursive: true, force: true });
@@ -48,7 +48,9 @@ for (const [name, cmd] of [
   const r = spawnSync(cmd[0], cmd.slice(1), { cwd: tree, stdio: 'inherit' });
   results.push([name, r.status === 0]);
 }
-execFileSync('git', ['worktree', 'remove', '--force', tree]);
+const dropTree = () => {
+  try { execFileSync('git', ['worktree', 'remove', '--force', tree], { stdio: 'ignore' }); } catch { /* already gone */ }
+};
 
 // 1. Wait for the test copy to run this commit.
 const until = Date.now() + 15 * 60_000;
@@ -57,6 +59,7 @@ process.stdout.write(`Test copy deploy of ${short}: ${status}`);
 while (!['SUCCESS', 'FAILED', 'CRASHED', 'REMOVED'].includes(status)) {
   if (Date.now() > until) {
     console.log('\nGave up waiting after 15 minutes.');
+    dropTree();
     process.exit(1);
   }
   await new Promise((r) => setTimeout(r, 20_000));
@@ -66,20 +69,23 @@ while (!['SUCCESS', 'FAILED', 'CRASHED', 'REMOVED'].includes(status)) {
 console.log('');
 if (status !== 'SUCCESS') {
   console.log(status === 'REMOVED' ? 'A newer push replaced this deploy; check that one instead.' : 'The test copy failed to deploy this commit.');
+  dropTree();
   process.exit(1);
 }
 
-// 2. Every check, against the test copy.
+// 2. Every check, against the test copy, from the clean checkout. (railway
+//    run starts here, where the project is linked; the tests run in the tree.)
 const suites = [
-  ['smoke test', ['node', 'scripts/staging/smoke.mjs']],
-  ['flow tests', ['npm', 'run', 'test:flows']],
-  ['browser tests', ['npx', 'playwright', 'test', '--reporter=line']],
+  ['smoke test', 'node scripts/staging/smoke.mjs'],
+  ['flow tests', 'npm run test:flows'],
+  ['browser tests', 'npx playwright test --reporter=line'],
 ];
 for (const [name, cmd] of suites) {
   console.log(`\n── ${name} ──`);
-  const r = spawnSync('railway', ['run', '--service', SERVICE, '--environment', ENV, '--', ...cmd], { env: railwayEnv, stdio: 'inherit' });
+  const r = spawnSync('railway', ['run', '--service', SERVICE, '--environment', ENV, '--', 'sh', '-c', `cd '${tree}' && ${cmd}`], { env: railwayEnv, stdio: 'inherit' });
   results.push([name, r.status === 0]);
 }
+dropTree();
 
 console.log('\n── Summary ──');
 for (const [name, ok] of results) console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`);

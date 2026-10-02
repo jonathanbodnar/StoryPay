@@ -1,8 +1,13 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getClientIp, rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  // Anyone on a help page can log a search; cap it so nobody can flood the table.
+  if (!rateLimit(`help-log-search:${getClientIp(request)}`, 30, 10 * 60 * 1000).allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
 
@@ -25,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error('[log-search] db error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Could not log the search' }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

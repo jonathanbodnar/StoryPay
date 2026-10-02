@@ -1,4 +1,6 @@
+import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
+import { verifyOAuthState } from '@/lib/oauth-state';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
   exchangeQuickBooksCode,
@@ -16,14 +18,19 @@ export async function GET(request: NextRequest) {
     return safeRedirect('/dashboard/settings/integrations?error=missing_params');
   }
 
-  let parsed: { venueId: string; provider: string };
-  try {
-    parsed = JSON.parse(Buffer.from(state, 'base64url').toString());
-  } catch {
+  // Signed by /api/integrations/connect for the signed-in venue; anything
+  // forged or expired is refused.
+  const signed = verifyOAuthState('accounting', state);
+  if (!signed) {
     return safeRedirect('/dashboard/settings/integrations?error=invalid_state');
   }
+  const { venueId } = signed;
+  const provider = signed.extra.provider;
 
-  const { venueId, provider } = parsed;
+  // Finish only in the browser that started the flow, signed in as that venue.
+  if ((await cookies()).get('venue_id')?.value !== venueId) {
+    return safeRedirect('/login');
+  }
 
   try {
     if (provider === 'quickbooks') {

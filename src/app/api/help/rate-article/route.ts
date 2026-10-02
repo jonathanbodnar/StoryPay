@@ -4,8 +4,14 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getDeepSeekClient, DEEPSEEK_MODEL } from '@/lib/ai-client';
 import { getArticleById } from '@/lib/help-articles';
 import { getCoupleArticleById } from '@/lib/couple-help-articles';
+import { getClientIp, rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  // Ratings are anonymous and two thumbs-down start a paid AI rewrite, so cap
+  // how often one visitor can rate.
+  if (!rateLimit(`help-rate-article:${getClientIp(request)}`, 20, 10 * 60 * 1000).allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
   const cookieStore = await cookies();
   const venueId = cookieStore.get('venue_id')?.value;
 
@@ -24,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   if (insertErr) {
     console.error('[rate-article] insert error:', insertErr);
-    return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    return NextResponse.json({ error: 'Could not save the rating' }, { status: 500 });
   }
 
   // Check if this article has crossed the threshold for an AI rewrite (2+ thumbs-down)

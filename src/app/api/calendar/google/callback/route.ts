@@ -1,5 +1,7 @@
+import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { verifyOAuthState } from '@/lib/oauth-state';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
@@ -8,13 +10,21 @@ const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL}/api/calendar/google/cal
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get('code');
-  const venueId = searchParams.get('state');
+  // Signed by /api/calendar/google/connect for the signed-in venue; a raw
+  // venue ID (or anything forged or expired) is refused.
+  const venueId = verifyOAuthState('google-calendar', searchParams.get('state'))?.venueId;
   const error = searchParams.get('error');
 
   if (error || !code || !venueId) {
     return NextResponse.redirect(
       `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/calendar?tab=connections&error=google_denied`
     );
+  }
+
+  // Finish only in the browser that started the flow, signed in as that
+  // venue, so nobody can attach their Google account to someone else's venue.
+  if ((await cookies()).get('venue_id')?.value !== venueId) {
+    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/login`);
   }
 
   try {

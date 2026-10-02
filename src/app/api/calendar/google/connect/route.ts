@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getVenueId } from '@/lib/auth-helpers';
+import { signOAuthState } from '@/lib/oauth-state';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL}/api/calendar/google/callback`;
@@ -27,7 +28,7 @@ export async function GET() {
     scope: SCOPES,
     access_type: 'offline',
     prompt: 'consent select_account',
-    state: venueId,
+    state: signOAuthState('google-calendar', venueId),
   });
 
   return NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);

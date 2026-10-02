@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getClientCache, setClientCache } from '@/lib/client-cache';
 import { isNativeApp } from '@/lib/platform';
+import { useIsClient } from '@/hooks/useIsClient';
 
 /**
  * "Today" home screen — the default landing screen on mobile / the native app.
@@ -210,6 +211,7 @@ function ReplyCard({
 }
 
 export default function MobileHomePage() {
+  const isClient = useIsClient();
   // Seed everything from the session cache so returning to Home paints the
   // previous data instantly (no skeleton flash / card resize) while the
   // fetches below refresh quietly in the background.
@@ -379,8 +381,10 @@ export default function MobileHomePage() {
 
       {/* Greeting */}
       <div className="pb-1">
-        <h1 className="font-heading text-2xl text-gray-900">{greeting()}</h1>
-        <p className="mt-0.5 text-sm text-gray-500">{todayLabel()}</p>
+        {/* Time of day and date come from the browser's clock, so they're
+            drawn once in the browser (the server would use its own time zone). */}
+        <h1 className="font-heading text-2xl text-gray-900">{isClient ? greeting() : 'Welcome back'}</h1>
+        <p className="mt-0.5 text-sm text-gray-500">{isClient ? todayLabel() : '\u00a0'}</p>
       </div>
 
       {/* Metric cards */}

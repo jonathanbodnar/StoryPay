@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!isStaging()) return new Response('Not found', { status: 404 });
-  const form = await request.formData();
+  const form = await request.formData().catch(() => new FormData());
   const next = safeNextPath(String(form.get('next') ?? '/'));
   const password = process.env.STAGING_PASSWORD?.trim();
   const given = String(form.get('password') ?? '');

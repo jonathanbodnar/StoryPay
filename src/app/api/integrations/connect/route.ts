@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { getQuickBooksAuthUrl, getFreshBooksAuthUrl, isConfigured } from '@/lib/accounting';
+import { signOAuthState } from '@/lib/oauth-state';
 
 async function getVenueId() {
   const c = await cookies();
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     }, { status: 400 });
   }
 
-  const state = Buffer.from(JSON.stringify({ venueId, provider })).toString('base64url');
+  const state = signOAuthState('accounting', venueId, { provider });
 
   if (provider === 'quickbooks') {
     return NextResponse.json({ url: getQuickBooksAuthUrl(state) });

@@ -189,3 +189,71 @@ export async function runJob(name: string): Promise<Response> {
     headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${process.env.MARKETING_CRON_SECRET}` },
   });
 }
+
+/** A StoryVenue team super admin (every admin tab), for admin-side checks. */
+export const SUPER_ADMIN_EMAIL = 'flow-superadmin@example.com';
+
+export async function ensureSuperAdmin(): Promise<void> {
+  const row = {
+    email: SUPER_ADMIN_EMAIL, name: 'Flow Super Admin', first_name: 'Flow', last_name: 'Admin', role: 'support_admin',
+    is_super_admin: true, active: true, password_hash: await bcrypt.hash(env.password, 10),
+  };
+  const { data: existing } = await db.from('support_team_members').select('id').ilike('email', SUPER_ADMIN_EMAIL).maybeSingle();
+  const { error } = existing
+    ? await db.from('support_team_members').update(row).eq('id', existing.id)
+    : await db.from('support_team_members').insert(row);
+  if (error) throw new Error(`super admin: ${error.message}`);
+}
+
+let adminSession: Promise<Browser> | null = null;
+
+/** The super admin, signed in once per run and shared. */
+export function signedInSuperAdmin(): Promise<Browser> {
+  return (adminSession ??= (async () => {
+    await ensureSuperAdmin();
+    const b = new Browser();
+    const res = await b.fetch('/api/admin/login', { method: 'POST', json: { email: SUPER_ADMIN_EMAIL, password: env.password } });
+    if (!res.ok) throw new Error(`super admin sign-in: ${res.status} ${await res.text()}`);
+    return b;
+  })());
+}
+
+/** A couple with a Wedding Planner account, for couple-side checks. */
+export const SWEEP_COUPLE = {
+  email: 'flow-sweep-couple@example.com',
+  get password() { return `Sweep-${env.password.slice(0, 6)}-Planner-2027!`; },
+};
+
+export interface CoupleSession { access_token: string; refresh_token: string; expires_at?: number; expires_in: number; token_type: string; user: unknown }
+
+/** The sweep couple's session (signed up the first time). */
+export async function coupleSession(): Promise<CoupleSession> {
+  const anon = createClient(env.supabaseUrl, String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY), { auth: { persistSession: false } });
+  let auth = await anon.auth.signInWithPassword({ email: SWEEP_COUPLE.email, password: SWEEP_COUPLE.password });
+  if (auth.error) {
+    const res = await fetch(`${env.base}/api/couple/signup`, {
+      method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' },
+      body: JSON.stringify({ email: SWEEP_COUPLE.email, password: SWEEP_COUPLE.password, first_name: 'Sweep', last_name: 'Couple', phone: '(646) 555-0142' }),
+    });
+    if (!res.ok) throw new Error(`couple signup: ${res.status} ${await res.text()}`);
+    auth = await anon.auth.signInWithPassword({ email: SWEEP_COUPLE.email, password: SWEEP_COUPLE.password });
+  }
+  if (auth.error || !auth.data.session) throw new Error(`couple sign-in: ${auth.error?.message}`);
+  return auth.data.session as unknown as CoupleSession;
+}
+
+/** The first record of each kind a venue has (undefined when it has none). */
+export async function venueRecordIds(venueId: string): Promise<Record<string, string | undefined>> {
+  const first = async (table: string, column = 'id') => {
+    const { data } = await db.from(table).select(column).eq('venue_id', venueId).limit(1);
+    return (data?.[0] as Record<string, string> | undefined)?.[column];
+  };
+  const entries = await Promise.all(Object.entries({
+    lead: ['leads'], customer: ['venue_customers'], proposal: ['proposals'], token: ['proposals', 'public_token'],
+    thread: ['conversation_threads'], event: ['calendar_events'], automation: ['marketing_automations'],
+    campaign: ['marketing_campaigns'], form: ['marketing_forms'], formToken: ['marketing_forms', 'embed_token'],
+    segment: ['marketing_segments'], tag: ['marketing_tags'], pipeline: ['lead_pipelines'], template: ['proposal_templates'],
+    pkg: ['venue_packages'], coupon: ['venue_coupons'], space: ['venue_spaces'], member: ['venue_team_members'],
+  }).map(async ([k, [table, column]]) => [k, await first(table, column)] as const));
+  return Object.fromEntries(entries);
+}

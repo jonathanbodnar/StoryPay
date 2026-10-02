@@ -14,6 +14,8 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
   retries: 1,
+  // The page sweep opens ~170 pages per screen size; the test copy handles 6 at a time.
+  workers: 6,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {
     baseURL: base,
