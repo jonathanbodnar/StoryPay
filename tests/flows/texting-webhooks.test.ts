@@ -40,10 +40,12 @@ describe('texts arriving through the GoHighLevel webhook', () => {
     expect(res.status).toBe(201);
     leadId = ((await res.json()) as { lead_id: string }).lead_id;
     await waitForText(phone, since, (b) => /guide/i.test(b)); // the guide went out, so the contact exists
-    const { data: vc } = await db.from('venue_customers').select('id, ghl_contact_id').eq('venue_id', FLOW_VENUE.id).ilike('customer_email', email).single();
-    customerId = vc!.id;
-    contactId = vc!.ghl_contact_id;
+    const res2 = await fetch(`${env.base}/api/staging/sms?phone=${encodeURIComponent(phone)}&since=${encodeURIComponent(since)}`, { headers: { 'x-staging-key': env.stagingKey } });
+    const sent = ((await res2.json()) as { texts: Array<{ contactId?: string }> }).texts;
+    contactId = sent.find((t) => t.contactId)?.contactId ?? '';
     expect(contactId).toBeTruthy();
+    const { data: vc } = await db.from('venue_customers').select('id').eq('venue_id', FLOW_VENUE.id).ilike('customer_email', email).single();
+    customerId = vc!.id;
   });
 
   it('a reply lands in the venue’s conversation at once, and the follow-ups stop', async () => {

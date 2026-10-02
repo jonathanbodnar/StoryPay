@@ -22,10 +22,21 @@ export default function CoupleResetPasswordPage() {
   const [error, setError]           = useState('');
   const [ready, setReady]           = useState(false);
 
-  // Supabase embeds the tokens in the URL fragment (#access_token=...&type=recovery).
-  // We exchange the hash for a live session so updateUser works.
+  // The emailed link carries ?token_hash=…&type=recovery, confirmed here for a
+  // recovery session. (Older links carried the session in the URL fragment,
+  // #access_token=…, which the client picks up on its own.)
   useEffect(() => {
     const supabase = getCoupleSupabase();
+
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get('token_hash');
+    if (tokenHash && params.get('type') === 'recovery') {
+      void supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error: otpErr }) => {
+        window.history.replaceState({}, '', window.location.pathname);
+        if (otpErr) setError('This reset link has expired or was already used. Request a new one.');
+        else setReady(true);
+      });
+    }
 
     // Handle the PKCE / implicit token from the email link
     supabase.auth.onAuthStateChange((event) => {

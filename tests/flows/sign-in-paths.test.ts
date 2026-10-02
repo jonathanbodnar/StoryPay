@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Browser, coupleSession, db, env, FLOW_VENUE, runId, signedInOwner, SWEEP_COUPLE, waitForEmail } from './helpers';
+import { createClient } from '@supabase/supabase-js';
+import { Browser, db, env, FLOW_VENUE, runId, signedInOwner, waitForEmail } from './helpers';
 
 // Every way into an account besides email + password: password resets (venue
 // owner, team member, StoryVenue team, couple), the emailed sign-in link, team
@@ -151,13 +152,31 @@ describe('the StoryVenue team and couples reset their passwords', () => {
     expect(signIn.status).toBe(200);
   });
 
-  it('a couple gets a reset link for their planner', async () => {
-    await coupleSession();
+  it('a couple resets their planner password from the emailed link, which opens this site', async () => {
+    const coupleEmail = `reset.couple.${runId}@example.com`;
+    const oldPassword = `Couple-${runId}-Old-2027!`;
+    const newPassword = `Couple-${runId}-New-2027!`;
+    const signup = await fetch(`${env.base}/api/couple/signup`, {
+      method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' },
+      body: JSON.stringify({ email: coupleEmail, password: oldPassword, first_name: 'Rae', last_name: 'Reset', phone: '(646) 555-0168' }),
+    });
+    expect(signup.status, await signup.clone().text()).toBe(200);
     const sentAt = new Date().toISOString();
-    expect((await new Browser().fetch('/api/auth/couple/forgot', { method: 'POST', json: { email: SWEEP_COUPLE.email } })).status).toBe(200);
-    const mail = await waitForEmail({ to: SWEEP_COUPLE.email, since: sentAt }, (e) => /reset/i.test(e.subject));
-    expect(mail.html.replace(/&amp;/g, '&')).toMatch(/type=recovery/);
-    expect(mail.html).toMatch(/couple(%2F|\/)reset-password/);
+    expect((await new Browser().fetch('/api/auth/couple/forgot', { method: 'POST', json: { email: coupleEmail } })).status).toBe(200);
+    const mail = await waitForEmail({ to: coupleEmail, since: sentAt }, (e) => /reset/i.test(e.subject));
+    const html = mail.html.replace(/&amp;/g, '&');
+    const tokenHash = link(html, new RegExp(`${env.base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/couple/reset-password\\?token_hash=([^&"]+)&type=recovery`));
+    // What the reset page does: confirm the link, then set the new password.
+    const anon = createClient(env.supabaseUrl, String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY), { auth: { persistSession: false } });
+    const verified = await anon.auth.verifyOtp({ token_hash: decodeURIComponent(tokenHash), type: 'recovery' });
+    expect(verified.error).toBeNull();
+    expect((await anon.auth.updateUser({ password: newPassword })).error).toBeNull();
+    const fresh = createClient(env.supabaseUrl, String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY), { auth: { persistSession: false } });
+    expect((await fresh.auth.signInWithPassword({ email: coupleEmail, password: newPassword })).error).toBeNull();
+    expect((await fresh.auth.signInWithPassword({ email: coupleEmail, password: oldPassword })).error).not.toBeNull();
+    // The link worked once.
+    const again = createClient(env.supabaseUrl, String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY), { auth: { persistSession: false } });
+    expect((await again.auth.verifyOtp({ token_hash: decodeURIComponent(tokenHash), type: 'recovery' })).error).not.toBeNull();
   });
 
   it('nobody learns whether an email has an account', async () => {

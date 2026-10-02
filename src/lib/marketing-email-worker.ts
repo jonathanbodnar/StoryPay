@@ -3019,6 +3019,16 @@ async function processEnrollmentChain(
   return 'advanced';
 }
 
+/** A claimed recipient whose send hasn't finished after this long is retried. */
+const CLAIM_STALE_MS = 15 * 60 * 1000;
+
+/**
+ * Recipients queued before the claim fix (Oct 2, 2026) were stuck by it.
+ * They're left as they are, not sent weeks late, until the owner decides
+ * whether to send or cancel those campaigns.
+ */
+const CAMPAIGN_CLAIM_FIXED_AT = '2026-10-02T20:00:00Z';
+
 export async function processCampaignsCron(): Promise<{ campaigns: number; recipients: number }> {
   const now = new Date().toISOString();
   let sent = 0;
@@ -3059,10 +3069,17 @@ export async function processCampaignsCron(): Promise<{ campaigns: number; recip
     await supabaseAdmin.from('marketing_campaign_recipients').insert(rows);
   }
 
+  // A recipient is claimed by stamping sent_at while it's still queued (the
+  // status column only allows queued/sent/failed/skipped_*). A claim older
+  // than CLAIM_STALE_MS is a run that died mid-send, so it's taken again.
+  const staleClaim = new Date(Date.now() - CLAIM_STALE_MS).toISOString();
   const { data: queued } = await supabaseAdmin
     .from('marketing_campaign_recipients')
     .select('id, campaign_id, venue_id, lead_id, email')
     .eq('status', 'queued')
+    .gte('created_at', CAMPAIGN_CLAIM_FIXED_AT)
+    .or(`sent_at.is.null,sent_at.lt.${staleClaim}`)
+    .order('created_at', { ascending: true })
     .limit(BATCH);
   const campaignIds = [...new Set((queued ?? []).map((q: { campaign_id: string }) => q.campaign_id))];
   const { data: tmplCache } =
@@ -3082,15 +3099,25 @@ export async function processCampaignsCron(): Promise<{ campaigns: number; recip
   for (const r of queued ?? []) {
     const row = r as { id: string; campaign_id: string; venue_id: string; lead_id: string; email: string };
     const templateId = templateByCampaign.get(row.campaign_id);
-    if (!templateId) continue;
-    // Atomically claim this recipient (queued → sending) so overlapping cron
-    // invocations / replicas can't both send to the same lead. Only the worker
-    // whose UPDATE matches the still-queued row proceeds.
+    if (!templateId) {
+      // Without this, the row would be picked again every run and could fill the batch.
+      await supabaseAdmin
+        .from('marketing_campaign_recipients')
+        .update({ status: 'failed', error: 'campaign has no template' })
+        .eq('id', row.id);
+      continue;
+    }
+    // Atomically claim this recipient so overlapping cron invocations /
+    // replicas can't both send to the same lead. Only the worker whose UPDATE
+    // matches the still-unclaimed row proceeds. (This used to set status
+    // 'sending', which the table doesn't allow, so every claim failed and no
+    // campaign email went out from Sep 10 to Oct 2, 2026.)
     const { data: claimedRecip } = await supabaseAdmin
       .from('marketing_campaign_recipients')
-      .update({ status: 'sending' })
+      .update({ sent_at: new Date().toISOString() })
       .eq('id', row.id)
       .eq('status', 'queued')
+      .or(`sent_at.is.null,sent_at.lt.${staleClaim}`)
       .select('id');
     if (!claimedRecip?.length) continue; // another worker already took this recipient
     const { data: tmpl } = await supabaseAdmin

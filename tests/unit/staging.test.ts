@@ -153,3 +153,13 @@ describe('installStagingFetchGuard', () => {
     expect(globalThis.fetch).toBe(first);
   });
 });
+
+describe('perVisitorLimit', () => {
+  it('keeps the live site’s per-visitor limits, and raises them only on the test copy', async () => {
+    const { perVisitorLimit } = await import('@/lib/rate-limit');
+    vi.stubEnv('APP_ENV', '');
+    expect(perVisitorLimit(3)).toBe(3);
+    vi.stubEnv('APP_ENV', 'staging');
+    expect(perVisitorLimit(3)).toBe(200);
+  });
+});

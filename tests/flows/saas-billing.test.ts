@@ -123,3 +123,81 @@ describe('a venue pays for the Bride Booking System™', () => {
     expect(Boolean(sub.cancel_at) || sub.cancel_at_period_end).toBe(true);
   });
 });
+
+describe('a paying venue changes its plan', () => {
+  // Runs after the describe above: the same venue, active again via "keep my plan".
+  const owner = new Browser();
+
+  beforeAll(async () => {
+    await owner.signIn(VENUE.email);
+  });
+
+  it('“keep my plan” after cancelling undoes the cancellation', async () => {
+    const res = await owner.fetch('/api/venue-billing/keep-plan', { method: 'POST' });
+    expect(res.status, await res.clone().text()).toBe(200);
+    const v = await venueRow();
+    expect(v.directory_downgrade_at).toBeNull();
+    const sub = await stripe.subscriptions.retrieve(String(v.stripe_subscription_id));
+    expect(Boolean(sub.cancel_at) || sub.cancel_at_period_end).toBe(false);
+  });
+
+  it('adding the AI Concierge add-on bills it on the subscription; removing it stops that', async () => {
+    const prices = (await (await fetch(`${env.base}/api/admin/addon-prices`, { headers: { 'x-staging-key': env.stagingKey } })).json()) as { concierge_cents: number };
+    const total = async () => {
+      const sub = await stripe.subscriptions.retrieve(String((await venueRow()).stripe_subscription_id));
+      return sub.items.data.reduce((s, it) => s + (it.price.unit_amount ?? 0) * (it.quantity ?? 1), 0);
+    };
+    const add = await owner.fetch('/api/venue-billing/addons', { method: 'POST', json: { concierge: true } });
+    expect(add.status, await add.clone().text()).toBe(200);
+    expect(await total()).toBe(9700 + prices.concierge_cents);
+    const remove = await owner.fetch('/api/venue-billing/addons', { method: 'POST', json: { concierge: false } });
+    expect(remove.status, await remove.clone().text()).toBe(200);
+    expect(await total()).toBe(9700);
+  });
+
+  it('a cancelled term ends and the venue moves to Free', async () => {
+    expect((await owner.fetch('/api/venue-billing/cancel', { method: 'POST' })).status).toBe(200);
+    // The term the venue paid for has run out (two days ago, past Stripe's grace).
+    await db.from('venues').update({ directory_downgrade_at: new Date(Date.now() - 2 * DAY).toISOString() }).eq('id', VENUE.id);
+    const job = await fetch(`${env.base}/api/cron/trial-sweep`, { headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${process.env.MARKETING_CRON_SECRET}` } });
+    expect(job.status, await job.clone().text()).toBe(200);
+    const v = await venueRow();
+    expect(v.directory_downgrade_at).toBeNull();
+    expect(v.directory_subscription_status).not.toBe('active');
+  });
+});
+
+describe('a trial without a card', () => {
+  const venue = { id: randomUUID(), email: `nocard.${runId}@example.com` };
+  const run = () => fetch(`${env.base}/api/cron/trial-sweep`, { headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${process.env.MARKETING_CRON_SECRET}` } });
+  const endsIn = (ms: number) => db.from('venues').update({ directory_trial_ends_at: new Date(Date.now() + ms).toISOString() }).eq('id', venue.id);
+
+  beforeAll(async () => {
+    const { data: plan } = await db.from('directory_plans').select('id').eq('slug', 'bride-booking-system').single();
+    const now = Date.now();
+    const { error } = await db.from('venues').insert({
+      id: venue.id, name: `No Card ${runId}`, slug: `no-card-${runId}`, email: venue.email, notification_email: venue.email,
+      password_hash: await bcrypt.hash(env.password, 10), setup_completed: true, onboarding_status: 'registered',
+      onboarding_completed_at: new Date(now).toISOString(), directory_plan_id: plan!.id, directory_subscription_status: 'trialing',
+      directory_trial_started_at: new Date(now - 12 * DAY).toISOString(), directory_trial_ends_at: new Date(now + 2 * DAY).toISOString(),
+      directory_card_on_file: false, timezone: 'America/New_York', is_published: true, is_demo: false,
+    });
+    if (error) throw new Error(error.message);
+  });
+
+  it('gets a heads-up a few days out, a notice when it ends, then moves to Free after the grace period', async () => {
+    let since = new Date().toISOString();
+    expect((await run()).status).toBe(200);
+    await waitForEmail({ to: venue.email, since }, () => true);
+
+    since = new Date().toISOString();
+    await endsIn(-60 * 60_000);
+    expect((await run()).status).toBe(200);
+    await waitForEmail({ to: venue.email, since }, () => true);
+
+    await endsIn(-8 * DAY);
+    expect((await run()).status).toBe(200);
+    const { data } = await db.from('venues').select('directory_subscription_status').eq('id', venue.id).single();
+    expect(data!.directory_subscription_status).not.toBe('trialing');
+  });
+});

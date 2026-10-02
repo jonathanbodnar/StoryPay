@@ -46,19 +46,22 @@ export async function PATCH(
     return NextResponse.json({ error: 'Provide minutes or days' }, { status: 400 });
   }
 
+  // Leads link to venues more than one way, so the venue's time zone is its
+  // own lookup (an embedded venues(...) made this fail as "Lead not found").
   const { data: lead } = await supabaseAdmin
     .from('leads')
-    .select('id, ai_state, venues(timezone)')
+    .select('id, ai_state')
     .eq('id', leadId)
     .eq('venue_id', venueId)
     .maybeSingle();
 
   if (!lead) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+  const { data: venueRow } = await supabaseAdmin.from('venues').select('timezone').eq('id', venueId).maybeSingle();
   if (lead.ai_state !== 'ai_active' && lead.ai_state !== 'paused') {
     return NextResponse.json({ error: 'Lead is not in an active state' }, { status: 409 });
   }
 
-  const rawTz  = (lead.venues as { timezone?: string | null } | null)?.timezone ?? null;
+  const rawTz  = (venueRow as { timezone?: string | null } | null)?.timezone ?? null;
   const tz     = resolveVenueTimezone(rawTz);
   const target = new Date(Date.now() + totalMinutes * 60 * 1000);
 

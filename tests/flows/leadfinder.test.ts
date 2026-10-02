@@ -11,7 +11,7 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
   let address = '';
   let since = '';
 
-  async function deliver(email: { from: string; subject: string; text: string; message_id?: string }): Promise<void> {
+  async function deliver(email: { from: string; subject: string; text: string; message_id?: string; reply_to?: string }): Promise<void> {
     const stored = await fetch(`${env.base}/api/staging/inbound-email`, {
       method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' },
       body: JSON.stringify({ ...email, to: [address] }),
@@ -45,7 +45,7 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
   });
 
   it('a marketplace inquiry becomes a lead, and the owner hears about it', async () => {
-    const email = `lena.lf.${runId}@example.com`;
+    const email = `lena.lf.${runId}@wedmail.test`;
     await deliver({
       from: 'The Knot <noreply@theknot.com>',
       subject: 'You have a new inquiry from Lena Forward',
@@ -67,7 +67,7 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
   });
 
   it('the same inquiry delivered again makes no second lead', async () => {
-    const email = `lena.lf.${runId}@example.com`;
+    const email = `lena.lf.${runId}@wedmail.test`;
     await deliver({
       from: 'The Knot <noreply@theknot.com>',
       subject: 'You have a new inquiry from Lena Forward',
@@ -78,13 +78,14 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
     expect(await leadsWith(email, 0)).toHaveLength(1);
   });
 
-  it('an inquiry it can’t be sure about waits for the owner, and becomes a lead once confirmed', async () => {
-    const subject = `Question about your venue ${runId}`;
+  it('an inquiry that only gives a marketplace reply address waits for the owner, and becomes a lead once confirmed', async () => {
+    const subject = `New message from Nora Review ${runId}`;
     await deliver({
-      from: 'Wedding Wire Messages <messages@weddingwire.example.com>',
+      from: 'WeddingWire <messages@weddingwire.com>',
+      reply_to: `reply-${runId}@messages.weddingwire.com`,
       subject,
       message_id: `<lf-${runId}-2@weddingwire.example.com>`,
-      text: 'Hi there, a couple asked about availability next fall. Reply through your account to see their details.',
+      text: 'You have a new lead!\nName: Nora Review\nWedding Date: October 9, 2027\nGuests: 150\nMessage: Is October 2027 open?\nReply to this email to respond.',
     });
     const until = Date.now() + 30_000;
     let row: { id: string; lead_id: string | null } | null = null;
@@ -97,7 +98,7 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
     const queue = await owner.fetch('/api/venue/leadfinder/review');
     expect(queue.status).toBe(200);
     expect(JSON.stringify(await queue.json())).toContain(row!.id);
-    const email = `nora.lf.${runId}@example.com`;
+    const email = `nora.lf.${runId}@wedmail.test`;
     const confirm = await owner.fetch(`/api/venue/leadfinder/review/${row!.id}`, {
       method: 'POST', json: { action: 'confirm', fields: { name: 'Nora Review', email, phone: '(407) 555-0144' } },
     });
@@ -109,7 +110,7 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
     const forged = address.replace(/\+[0-9a-f]{16}@/, '+0000000000000000@');
     const stored = await fetch(`${env.base}/api/staging/inbound-email`, {
       method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' },
-      body: JSON.stringify({ from: 'x@example.com', to: [forged], subject: 'Forged', text: `Name: Fake Person\nE-mail: forged.${runId}@example.com` }),
+      body: JSON.stringify({ from: 'x@example.com', to: [forged], subject: 'Forged', text: `Name: Fake Person\nE-mail: forged.${runId}@wedmail.test` }),
     });
     const { email_id } = (await stored.json()) as { email_id: string };
     await fetch(`${env.base}/api/webhooks/inbound-email?token=${encodeURIComponent(process.env.INBOUND_EMAIL_WEBHOOK_TOKEN ?? '')}`, {
@@ -117,6 +118,6 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
       body: JSON.stringify({ type: 'email.received', data: { email_id } }),
     });
     await new Promise((r) => setTimeout(r, 3000));
-    expect(await leadsWith(`forged.${runId}@example.com`, 0)).toHaveLength(0);
+    expect(await leadsWith(`forged.${runId}@wedmail.test`, 0)).toHaveLength(0);
   });
 });

@@ -60,10 +60,15 @@ export async function POST(req: NextRequest) {
     });
     if (error) {
       console.error('[couple/forgot] generateLink error:', error.message);
-    } else if (!data?.properties?.action_link) {
-      console.error('[couple/forgot] generateLink returned no action_link');
-    } else {
+    } else if (data?.properties?.hashed_token) {
+      // Our own page confirms the link (verifyOtp), so it never depends on the
+      // login service's list of allowed return addresses, which sent couples
+      // to the wrong place when it didn't include this site.
+      resetUrl = `${redirectTo}?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=recovery`;
+    } else if (data?.properties?.action_link) {
       resetUrl = data.properties.action_link;
+    } else {
+      console.error('[couple/forgot] generateLink returned no link');
     }
   } catch (e) {
     console.error('[couple/forgot] generateLink exception:', e);
