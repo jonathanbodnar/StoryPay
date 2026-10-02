@@ -288,6 +288,8 @@ export async function POST(request: NextRequest) {
       phone:     phone || null,
       source:    payload.source || 'directory',
       createdAt: lr.created_at,
+      // The same couple again (merged into their lead): "asked again" instead.
+      ...(isRepeat ? { repeat: true, message: typeof payload.message === 'string' ? payload.message : null } : {}),
     });
   }
 

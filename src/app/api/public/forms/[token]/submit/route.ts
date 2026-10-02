@@ -15,6 +15,7 @@ import {
 } from '@/lib/marketing-form-schema';
 import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
 import { notifyOwnerNewLead } from '@/lib/owner-notifications';
+import { autoMergeExactDuplicates } from '@/lib/merge-leads';
 import { bucketLeadSource } from '@/lib/lead-source';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 import { recordSmsConsentByEmail, recordSmsConsentEvidence } from '@/lib/sms-consent';
@@ -310,6 +311,8 @@ export async function POST(
   // ── Always upsert to venue_customers (contacts) if we have an email ───────
   let customerId: string | null = null;
   let createdLeadId: string | null = null;
+  // The couple was already a lead: the owner gets "asked again", not "New lead".
+  let isRepeat = false;
   if (emailVal && isEmail(emailVal)) {
     try {
       const { data: vc } = await supabaseAdmin
@@ -359,12 +362,23 @@ export async function POST(
               position:    0,
               first_touch_utm: firstTouchUtm,
             })
-            .select('id')
+            .select('id, created_at')
             .maybeSingle();
           if (leadErr) {
             console.warn('[form submit] lead insert failed:', leadErr.message);
           } else if (leadRow?.id) {
             createdLeadId = leadRow.id as string;
+            // The same couple again (same email and phone) keeps their lead:
+            // fold this row into it now, before anything below uses the id,
+            // as the listing form does. Demo venues keep repeats for testing.
+            const { data: vd } = await supabaseAdmin.from('venues').select('is_demo').eq('id', formRow.venue_id).maybeSingle();
+            if (!(vd as { is_demo?: boolean } | null)?.is_demo) {
+              const merged = await autoMergeExactDuplicates(formRow.venue_id, createdLeadId, emailVal, phoneVal || null, leadRow.created_at as string).catch(() => null);
+              if (merged?.mergedInto && merged.mergedInto !== createdLeadId) {
+                createdLeadId = merged.mergedInto;
+                isRepeat = true;
+              }
+            }
           }
         }
       } catch (e) {
@@ -384,7 +398,10 @@ export async function POST(
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (existingLead?.id) createdLeadId = existingLead.id as string;
+        if (existingLead?.id) {
+          createdLeadId = existingLead.id as string;
+          isRepeat = true;
+        }
       } catch (e) {
         console.warn('[form submit] existing lead lookup failed:', e);
       }
@@ -433,7 +450,10 @@ export async function POST(
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
-          if (dup?.id) createdLeadId = dup.id as string;
+          if (dup?.id) {
+            createdLeadId = dup.id as string;
+            isRepeat = true;
+          }
         } else if (fallbackLead?.id) {
           createdLeadId = fallbackLead.id as string;
         }
@@ -550,6 +570,12 @@ export async function POST(
       .map((e) => e.trim())
       .filter((e) => isEmail(e));
 
+    // A "Message" answer is their message (the details table leaves that label
+    // to it, and a form lead's row has no message of its own).
+    const messageBlock = definition.blocks.find(
+      (b) => (b.label ?? '').trim().toLowerCase() === 'message' && typeof payload[b.id] === 'string',
+    );
+
     notifyOwnerNewLead({
       venueId: formRow.venue_id,
       leadId: createdLeadId,
@@ -559,7 +585,9 @@ export async function POST(
       source: sourceLabel,
       intro: `StoryVenue captured this lead from your ${via === 'meta' ? 'Meta ad ' : ''}form \u201c${formName}\u201d.`,
       details,
+      message: messageBlock ? String(payload[messageBlock.id]) : null,
       extraEmailRecipients,
+      repeat: isRepeat,
     });
   } catch (e) {
     console.warn('[form submit] owner alert failed:', e);

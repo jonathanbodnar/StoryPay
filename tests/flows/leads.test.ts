@@ -5,9 +5,11 @@ const STORYVENUE_LOGO = 'storyvenue-logo-dark.png';
 
 describe('a bride fills in a venue’s listing form', () => {
   const email = `ava.${runId}@example.com`;
+  // Its own test address per run: the form allows 20 submissions per couple an hour.
+  const clientIp = `203.0.113.${1 + (parseInt(runId.slice(-4), 36) % 250)}`;
   const form = {
     venue_id: FLOW_VENUE.id, first_name: 'ava', last_name: 'flow', email, phone: '(212) 555-0188',
-    guest_count: 120, message: 'Hi! Pricing please.', source: 'directory', client_ip: '203.0.113.7',
+    guest_count: 120, message: 'Hi! Pricing please.', source: 'directory', client_ip: clientIp,
   };
   let leadId = '';
   let since = '';
@@ -43,7 +45,7 @@ describe('a bride fills in a venue’s listing form', () => {
   it('saves proof of the texting consent shown on the form', async () => {
     const { data } = await db.from('sms_consent_records').select('source, disclosure_text, ip').eq('lead_id', leadId);
     expect(data?.length).toBe(1);
-    expect(data![0]).toMatchObject({ source: 'form_submit', ip: '203.0.113.7' });
+    expect(data![0]).toMatchObject({ source: 'form_submit', ip: clientIp });
     expect(String(data![0].disclosure_text).length).toBeGreaterThan(20);
   });
 
@@ -62,6 +64,33 @@ describe('a bride fills in a venue’s listing form', () => {
 
   it('a second submission from the same bride makes no duplicate lead', async () => {
     expect((await submitListingLead({ ...form, message: 'Just following up!' })).status).toBe(201);
+    const { count } = await db.from('leads').select('id', { count: 'exact', head: true }).eq('venue_id', FLOW_VENUE.id).eq('email', email);
+    expect(count).toBe(1);
+  });
+
+  it('a double submit sends the owner nothing more', async () => {
+    await new Promise((r) => setTimeout(r, 4000));
+    const toOwner = (await outbox({ to: FLOW_VENUE.email, since })).map((e) => e.subject);
+    expect(toOwner.filter((s) => s.startsWith('New lead: Ava Flow'))).toHaveLength(1);
+    expect(toOwner.filter((s) => s.startsWith('Ava Flow asked again'))).toHaveLength(0);
+  });
+
+  it('when she asks again later, the owner gets one "asked again" email with her new message', async () => {
+    // Her first inquiry was a while ago.
+    await db.from('leads').update({ created_at: new Date(Date.now() - 2 * 3_600_000).toISOString() }).eq('id', leadId);
+    const again = new Date().toISOString();
+    expect((await submitListingLead({ ...form, message: 'Is June 14 still open?' })).status).toBe(201);
+    const e = await waitForEmail({ to: FLOW_VENUE.email, since: again }, (x) => x.subject === `Ava Flow asked again — ${FLOW_VENUE.name}`);
+    expect(e.html).toContain('Is June 14 still open?');
+    expect(e.html).not.toContain('Hi! Pricing please.');
+    expect(e.html).toContain(STORYVENUE_LOGO);
+
+    // At most once a day: asking a third time sends nothing more.
+    expect((await submitListingLead({ ...form, message: 'Hello?' })).status).toBe(201);
+    await new Promise((r) => setTimeout(r, 4000));
+    const toOwner = (await outbox({ to: FLOW_VENUE.email, since })).map((x) => x.subject);
+    expect(toOwner.filter((s) => s.startsWith('Ava Flow asked again'))).toHaveLength(1);
+    expect(toOwner.filter((s) => s.startsWith('New lead: Ava Flow'))).toHaveLength(1);
     const { count } = await db.from('leads').select('id', { count: 'exact', head: true }).eq('venue_id', FLOW_VENUE.id).eq('email', email);
     expect(count).toBe(1);
   });

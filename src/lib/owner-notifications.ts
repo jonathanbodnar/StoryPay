@@ -34,6 +34,7 @@ export type OwnerScenario =
   // Scenarios used only for push (no email template by default). Phase 4
   // will wire these from the lead / conversations / AI-handoff flows.
   | 'new_lead'
+  | 'lead_asked_again'
   | 'new_message'
   | 'ai_handoff';
 // `subscription_cancelled` / `invoice_paid` / `new_customer` were removed
@@ -224,6 +225,21 @@ const SCENARIO_META: Record<OwnerScenario, {
     defaultPushBody:  'New lead: {{customer_name}} just enquired',
     defaultPushUrl:   '/dashboard/leads',
   },
+  // The same couple sent a form again (notifyOwnerNewLead with `repeat`): the
+  // new-lead toggles, since it's the same kind of alert.
+  lead_asked_again: {
+    emailKey: 'email_new_lead',
+    smsKey:   'sms_new_lead',
+    pushKey:  'push_new_lead',
+    templateType: 'owner_lead_asked_again',
+    defaultSmsTemplate: '🔁 {{customer_name}} asked again — {{organization}}',
+    defaultEmailSubject: '{{customer_name}} asked again — {{organization}}',
+    defaultEmailHeading: '{{customer_name}} asked again',
+    defaultEmailBody:    '{{customer_name}} reached out to {{organization}} again.',
+    defaultPushTitle: 'StoryVenue',
+    defaultPushBody:  '{{customer_name}} asked again — already in your leads',
+    defaultPushUrl:   '/dashboard/leads',
+  },
   new_message: {
     emailKey: 'email_new_message',
     smsKey:   'sms_new_message',
@@ -374,9 +390,10 @@ export async function notifyOwner(args: NotifyArgs): Promise<void> {
           }
 
           const subject = fillTemplate(tmpl.subject, vars);
-          // The new-lead alert is a StoryVenue notification: always the
-          // StoryVenue dark logo and #1b1b1b, whatever the venue's branding.
-          const storyVenueLook = args.scenario === 'new_lead';
+          // The new-lead alert (and its "asked again" follow-up) is a StoryVenue
+          // notification: always the StoryVenue dark logo and #1b1b1b,
+          // whatever the venue's branding.
+          const storyVenueLook = args.scenario === 'new_lead' || args.scenario === 'lead_asked_again';
           const html = buildEmailHtml({
             template:   tmpl,
             vars,
@@ -818,6 +835,31 @@ interface OriginalEmail {
 }
 
 /**
+ * Claims the one "asked again" email a lead gets per 24 hours. Two servers (or
+ * two quick submits) can't both claim it: the first insert or conditional
+ * update wins.
+ */
+async function claimLeadAskedAgain(leadId: string): Promise<boolean> {
+  const key = `lead-asked-again:${leadId}`;
+  const now = new Date().toISOString();
+  const { data, error } = await supabaseAdmin.from('admin_kv_cache').select('value').eq('key', key).maybeSingle();
+  if (error) {
+    console.warn('[notifyOwnerNewLead] asked-again claim failed:', error.message);
+    return false;
+  }
+  const last = (data?.value as { at?: string } | null)?.at ?? null;
+  if (last && Date.now() - new Date(last).getTime() < 24 * 3_600_000) return false;
+  if (!data) {
+    const { error: insertError } = await supabaseAdmin.from('admin_kv_cache').insert({ key, value: { at: now } });
+    return !insertError; // a duplicate key: another submit claimed it first
+  }
+  let update = supabaseAdmin.from('admin_kv_cache').update({ value: { at: now }, updated_at: now }).eq('key', key);
+  update = last === null ? update.is('value->>at', null) : update.eq('value->>at', last);
+  const { data: claimed } = await update.select('key');
+  return !!claimed?.length;
+}
+
+/**
  * THE owner email for a new lead — one per lead, whatever the source (StoryVenue
  * listing, Lead Link, website embed, builder forms incl. Meta campaign forms,
  * LeadFinder™, manual add, API). It lists where the lead came from and
@@ -847,12 +889,24 @@ export function notifyOwnerNewLead(input: {
   originalEmail?: OriginalEmail | null;
   /** See NotifyArgs.extraEmailRecipients. */
   extraEmailRecipients?: string[];
+  /**
+   * The same couple sent a form again and landed on their existing lead
+   * (`leadId`): an "asked again" email with this submission's `message`
+   * instead of a second "New lead". At most one a day per lead, and none in
+   * the first 10 minutes after the lead came in (a double submit).
+   */
+  repeat?: boolean;
 }): void {
   void (async () => {
     let lead: LeadRowForAlert | null = null;
     if (input.leadId) {
       const { data } = await supabaseAdmin.from('leads').select('*').eq('id', input.leadId).maybeSingle();
       lead = (data as LeadRowForAlert | null) ?? null;
+    }
+    const repeat = !!input.repeat && !!lead && !!input.leadId;
+    if (repeat) {
+      if (Date.now() - new Date(lead?.created_at ?? 0).getTime() < 10 * 60_000) return;
+      if (!(await claimLeadAskedAgain(input.leadId as string))) return;
     }
     const name = (input.fullName || '').trim()
       || [lead?.first_name, lead?.last_name].filter(Boolean).join(' ').trim()
@@ -862,7 +916,8 @@ export function notifyOwnerNewLead(input: {
     const email = (input.email || lead?.email || '').trim();
     const phone = displayPhone(input.phone || lead?.phone) || 'Not provided';
     const source = describeLeadSource(input.source, lead);
-    const createdAt = await formatInVenueTime(input.venueId, input.createdAt || lead?.created_at);
+    // "Received": this submission's time (a repeat's lead row is the old one).
+    const createdAt = await formatInVenueTime(input.venueId, input.createdAt || (repeat ? new Date().toISOString() : lead?.created_at));
     const campaign = typeof lead?.first_touch_utm?.utm_campaign === 'string' ? lead.first_touch_utm.utm_campaign : null;
 
     const rows: Array<{ label: string; value: string }> = [];
@@ -889,19 +944,22 @@ export function notifyOwnerNewLead(input: {
       if (!standard.has(d.label.trim().toLowerCase())) add(d.label, d.value);
     }
     add('Received', createdAt);
-    const message = (input.message ?? lead?.message ?? '').trim() || null;
+    // A repeat shows only what they sent this time (the lead's message holds every one).
+    const message = (repeat ? input.message ?? '' : input.message ?? lead?.message ?? '').trim() || null;
 
     await notifyOwner({
       venueId:   input.venueId,
-      scenario:  'new_lead',
+      scenario:  repeat ? 'lead_asked_again' : 'new_lead',
       vars: {
         customer_name: name,
         email,
         phone,
         source,
         created_at:    createdAt,
-        lead_intro:    (input.intro?.trim()
-          || defaultLeadIntro((/^[a-z0-9_]+$/.test((input.source ?? '').trim()) ? input.source! : lead?.source ?? '').trim().toLowerCase())),
+        lead_intro:    repeat
+          ? `${name} reached out again. They’re already in your leads, so this didn’t create a new lead. Here’s what they sent this time.`
+          : (input.intro?.trim()
+            || defaultLeadIntro((/^[a-z0-9_]+$/.test((input.source ?? '').trim()) ? input.source! : lead?.source ?? '').trim().toLowerCase())),
       },
       extraHtml: buildLeadDetailsHtml(rows, message, input.note?.trim() || null, input.originalEmail ?? null),
       // "Reply" in the owner's inbox writes straight to the couple.

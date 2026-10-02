@@ -148,6 +148,16 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
     button_text: 'View Lead',
     footer:      null,
   },
+  // Owner-side "a lead asked again": the same couple sent a form again and
+  // landed on their existing lead (notifyOwnerNewLead with `repeat`). One lead
+  // never gets a second "New lead" email.
+  owner_lead_asked_again: {
+    subject:     '{{customer_name}} asked again — {{organization}}',
+    heading:     '{{customer_name}} asked again',
+    body:        '{{lead_intro}}',
+    button_text: 'View Lead',
+    footer:      null,
+  },
   // Owner-side "AI Concierge handed off to you" email. Fires when the AI
   // escalates a conversation (pricing question, urgent/negative intent) and
   // the owner needs to step in. Push-only before this default existed.
