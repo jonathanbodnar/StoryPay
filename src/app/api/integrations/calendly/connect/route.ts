@@ -25,9 +25,9 @@ export async function POST(request: NextRequest) {
   }
 
   // Register a webhook so bookings arrive in real time
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'https://www.storypay.io';
+  // The app's own address (this used to read VERCEL_URL, which Railway doesn't
+  // set, and registered https://undefined/... with Calendly).
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
 
   const callbackUrl = `${appUrl}/api/webhooks/calendly`;
 

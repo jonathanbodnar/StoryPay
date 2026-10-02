@@ -10,7 +10,8 @@
  * subscription and recreates it with a freshly generated signing key, then
  * stores that key so /api/webhooks/calendly can verify future deliveries.
  *
- * Safe to run multiple times — only touches venues missing a signing key.
+ * Safe to run multiple times — only touches venues missing a signing key,
+ * unless the body is { all: true } (every connected venue).
  * Non-fatal per-venue: if a venue's stored access_token is stale/revoked,
  * that venue is skipped (reported in `errors`) and calendar sync falls back
  * to the manual sync button, same as today.
@@ -28,22 +29,27 @@ async function isAdmin(): Promise<boolean> {
   return id.isMasterSuperAdmin || !!id.member;
 }
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: venues } = await supabaseAdmin
+  // { all: true } re-registers every connected venue, not only those missing a
+  // signing key: subscriptions made on Railway before Oct 2 pointed at
+  // https://undefined/api/webhooks/calendly (see connect/route.ts).
+  const { all } = (await request.json().catch(() => ({}))) as { all?: boolean };
+  let query = supabaseAdmin
     .from('venues')
     .select('id, calendly_access_token, calendly_org_uri, calendly_webhook_id')
-    .eq('calendly_connected', true)
-    .is('calendly_webhook_signing_key', null);
+    .eq('calendly_connected', true);
+  if (all !== true) query = query.is('calendly_webhook_signing_key', null);
+  const { data: venues } = await query;
 
   if (!venues || venues.length === 0) {
-    return NextResponse.json({ message: 'No connected venues missing a signing key', resubscribed: 0 });
+    return NextResponse.json({ message: all === true ? 'No connected venues' : 'No connected venues missing a signing key', resubscribed: 0 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'https://www.storypay.io';
+  // The app's own address (this used to read VERCEL_URL, which Railway doesn't
+  // set, and registered https://undefined/... with Calendly).
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com').replace(/\/+$/, '');
   const callbackUrl = `${appUrl}/api/webhooks/calendly`;
 
   const resubscribed: string[] = [];

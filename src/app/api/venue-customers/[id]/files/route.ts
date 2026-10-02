@@ -84,6 +84,15 @@ export async function POST(
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
+  // Only this venue's own contacts take files.
+  const { data: customer } = await supabaseAdmin
+    .from('venue_customers')
+    .select('id')
+    .eq('id', customerId)
+    .eq('venue_id', venueId)
+    .maybeSingle();
+  if (!customer) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+
   if (file.size > PER_FILE_MAX_BYTES) {
     return NextResponse.json({ error: 'File exceeds the 50 MB per-file limit.' }, { status: 413 });
   }

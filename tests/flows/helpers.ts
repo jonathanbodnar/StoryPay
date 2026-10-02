@@ -175,6 +175,29 @@ export async function waitForText(phone: string, since: string, match: (body: st
   }
 }
 
+export interface IntegrationCall { at: string; service: string; method: string; path: string; body: unknown }
+
+/** What the test copy's stand-ins for Tripleseat, Event Temple, Calendly and Google Calendar were sent since a time, newest first. */
+export async function integrationCalls(service: string, since: string): Promise<IntegrationCall[]> {
+  const res = await fetch(`${env.base}/api/staging/integrations?service=${service}&since=${encodeURIComponent(since)}`, { headers: { 'x-staging-key': env.stagingKey } });
+  if (!res.ok) throw new Error(`integrationCalls: ${res.status}`);
+  return ((await res.json()) as { calls: IntegrationCall[] }).calls;
+}
+
+/** The next call a stand-in gets that matches (pushes run in the background). */
+export async function waitForIntegrationCall(service: string, since: string, match: (c: IntegrationCall) => boolean, timeoutMs = 15_000): Promise<IntegrationCall> {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    const hit = (await integrationCalls(service, since)).find(match);
+    if (hit) return hit;
+    if (Date.now() > until) {
+      const seen = (await integrationCalls(service, since)).map((c) => `${c.method} ${c.path}`);
+      throw new Error(`No matching ${service} call within ${timeoutMs / 1000}s. Seen: ${JSON.stringify(seen)}`);
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
 /** A couple texts the venue back (it waits in the stand-in texting service until the app picks it up). */
 export async function coupleTexts(from: string, body: string): Promise<void> {
   const res = await fetch(`${env.base}/api/staging/sms`, {

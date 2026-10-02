@@ -124,6 +124,63 @@ describe.skipIf(!venueReady)('couples pay the venue', () => {
     await waitForEmail({ to: p.email, since }, (e) => e.subject === `Payment receipt from ${FLOW_VENUE.name} — ${usd(60_000)}`, 45_000);
   });
 
+  it('a plan payment that declines: retried in 2 days, the couple gets an update-card link, the venue hears; the last try ends retries', async () => {
+    const since = new Date().toISOString();
+    const p = await signedProposal('Rowan Ellis', 90_000, {
+      paymentType: 'installment',
+      paymentConfig: { installments: [{ amount: 30_000, date: today() }, { amount: 60_000, date: inDays(30) }] },
+    });
+    expect(((await (await pay(p.public_token, 'pm_card_visa', { saveCard: true })).json()) as { status: string }).status).toBe('succeeded');
+    // The saved card now declines: Stripe's test card that attaches but fails every charge.
+    const { data: prop } = await db.from('proposals').select('stripe_customer_id').eq('id', p.id).single();
+    const failing = await stripe.paymentMethods.attach('pm_card_chargeCustomerFail', { customer: String(prop!.stripe_customer_id) }, { stripeAccount: account });
+    await db.from('proposals').update({ stripe_payment_method_id: failing.id }).eq('id', p.id);
+
+    const second = (await db.from('proposal_installments').select('id').eq('proposal_id', p.id).eq('installment_number', 2).single()).data!;
+    await db.from('proposal_installments').update({ due_date: today(), next_attempt_at: new Date().toISOString() }).eq('id', second.id);
+    const job = () => fetch(`${env.base}/api/cron/installments`, {
+      headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${process.env.MARKETING_CRON_SECRET}` },
+    });
+    expect((await job()).status).toBe(200);
+    const { data: first } = await db.from('proposal_installments').select('status, attempts, next_attempt_at, last_error').eq('id', second.id).single();
+    expect(first).toMatchObject({ status: 'scheduled', attempts: 1 });
+    expect(Date.parse(first!.next_attempt_at) - Date.now()).toBeGreaterThan(1.9 * 86_400_000);
+    const toCouple = await waitForEmail({ to: p.email, since }, (e) => e.subject === `Action required: Payment failed — ${FLOW_VENUE.name}`);
+    expect(toCouple.html).toMatch(/\/update-card\/[0-9a-f]{48}/);
+    expect(toCouple.html).not.toContain(STORYVENUE_LOGO);
+    await waitForEmail({ to: FLOW_VENUE.email, since }, (e) => e.subject === `Payment failed: Rowan Ellis — ${usd(60_000)}`);
+    expect((await db.from('proposals').select('status').eq('id', p.id).single()).data!.status).not.toBe('paid');
+
+    // Before the retry date nothing more is tried.
+    expect((await job()).status).toBe(200);
+    expect((await db.from('proposal_installments').select('attempts').eq('id', second.id).single()).data!.attempts).toBe(1);
+
+    // The last retry declines too: the payment is marked failed and the couple is told again.
+    const since2 = new Date().toISOString();
+    await db.from('proposal_installments').update({ attempts: 3, next_attempt_at: new Date().toISOString() }).eq('id', second.id);
+    expect((await job()).status).toBe(200);
+    expect((await db.from('proposal_installments').select('status, next_attempt_at').eq('id', second.id).single()).data).toMatchObject({ status: 'failed', next_attempt_at: null });
+    const last = await waitForEmail({ to: p.email, since: since2 }, (e) => e.subject === `Action required: Payment failed — ${FLOW_VENUE.name}`);
+    expect(last.html).toContain('no more automatic retries');
+
+    // The couple opens the link and saves a card that works: the payment is
+    // tried again at once and the booking is paid.
+    const token = last.html.match(/\/update-card\/([0-9a-f]{48})/)![1];
+    const setup = await couple.fetch(`/api/card-update/${token}/stripe-setup`, { method: 'POST' });
+    expect(setup.status, await setup.clone().text()).toBe(200);
+    const { clientSecret } = (await setup.json()) as { clientSecret: string };
+    const si = await stripe.setupIntents.confirm(clientSecret.split('_secret_')[0], { payment_method: 'pm_card_visa' }, { stripeAccount: account });
+    expect(si.status).toBe('succeeded');
+    const saved = await couple.fetch(`/api/card-update/${token}/stripe-save`, { method: 'POST', json: { setupIntentId: si.id } });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    const since3 = new Date().toISOString();
+    expect((await job()).status).toBe(200);
+    await waitForStatus(p.id, 'paid', 45_000);
+    await waitForEmail({ to: p.email, since: since3 }, (e) => e.subject === `Payment receipt from ${FLOW_VENUE.name} — ${usd(60_000)}`, 45_000);
+    // The link works once.
+    expect((await couple.fetch(`/api/card-update/${token}/stripe-setup`, { method: 'POST' })).status).toBe(404);
+  });
+
   it('the owner refunds a payment', async () => {
     const since = new Date().toISOString();
     const p = await signedProposal('Skyler James', 50_000);

@@ -8,9 +8,12 @@
  *    and the built-in timers (in-app-scheduler.ts) are off
  *  - it refuses to start with live settings (stagingConfigProblems)
  *  - a catch-all blocks web requests to GHL, LunarPay, push services, Slack
- *    and the live site (installStagingFetchGuard)
+ *    and the live site (installStagingFetchGuard); texting, received email,
+ *    Tripleseat, Event Temple, Calendly and Google Calendar are answered by
+ *    stand-ins instead (staging-ghl, staging-inbound, staging-integrations)
  * On the live site none of this does anything.
  */
+import { integrationStandInFor } from './staging-integrations';
 
 export function isStaging(): boolean {
   return process.env.APP_ENV === 'staging';
@@ -114,10 +117,16 @@ export function installStagingFetchGuard(): void {
   const realFetch = globalThis.fetch;
   globalThis.fetch = function stagingFetch(input: RequestInfo | URL, init?: RequestInit) {
     let host = '';
+    let target: URL | null = null;
     try {
-      host = new URL(input instanceof Request ? input.url : String(input)).hostname;
+      target = new URL(input instanceof Request ? input.url : String(input));
+      host = target.hostname;
     } catch {
       // Not an absolute URL: nothing to check.
+    }
+    if (target && integrationStandInFor(target)) {
+      // Tripleseat, Event Temple, Calendly, Google Calendar: answered and recorded by the stand-ins.
+      return import('@/lib/staging-integrations').then(({ fakeIntegrationFetch }) => fakeIntegrationFetch(input, init));
     }
     if (host && GHL_HOSTS.some((b) => host === b || host.endsWith(`.${b}`))) {
       // Texting/CRM: the stand-in records texts and plays couples' replies.
