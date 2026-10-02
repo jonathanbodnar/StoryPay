@@ -8,8 +8,11 @@
  */
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { verifyMasterAdminToken } from '@/lib/admin-token';
+import { supabaseAdmin } from '@/lib/supabase';
+import { resolveAllowedAdminTabs } from '@/lib/admin-tabs-registry';
+import { ADMIN_REQUEST_HEADER, adminRequestAllowed } from '@/lib/admin-route-tabs';
 
 export const SUPPORT_SESSION_COOKIE = 'support_session';
 // Concierge/support team sessions last a full week of inactivity before
@@ -65,12 +68,30 @@ export async function getSupportSession(): Promise<SupportSessionPayload | null>
   return verifySupportSession(token);
 }
 
-/** True if either the master super admin OR a support agent is logged in. */
+/**
+ * True if either the master super admin OR an active support agent is logged
+ * in. A member who was switched off loses access at once (their signed session
+ * lasts 12 hours), and one who isn't a full admin only makes changes behind
+ * their tabs (src/lib/admin-route-tabs.ts), as everywhere in the admin.
+ */
 export async function verifySupportAccess(): Promise<{ isSuperAdmin: boolean; agent: SupportSessionPayload | null }> {
   const c = await cookies();
   const adminToken = c.get('admin_token')?.value;
   const isSuperAdmin = verifyMasterAdminToken(adminToken);
+  if (isSuperAdmin) return { isSuperAdmin, agent: null };
 
-  const agent = isSuperAdmin ? null : await getSupportSession();
-  return { isSuperAdmin, agent };
+  const session = await getSupportSession();
+  if (!session) return { isSuperAdmin, agent: null };
+  const { data: member } = await supabaseAdmin
+    .from('support_team_members')
+    .select('active, is_super_admin, admin_tabs_allowed')
+    .eq('id', session.sub)
+    .maybeSingle();
+  if (!member || member.active === false) return { isSuperAdmin, agent: null };
+  const request = (await headers()).get(ADMIN_REQUEST_HEADER) ?? '';
+  const adminApi = (request.split(' ')[1] ?? '').startsWith('/api/admin/');
+  if (adminApi && member.is_super_admin !== true && !adminRequestAllowed(request, resolveAllowedAdminTabs(false, member.admin_tabs_allowed))) {
+    return { isSuperAdmin, agent: null };
+  }
+  return { isSuperAdmin, agent: session };
 }

@@ -36,6 +36,20 @@ describe('the StoryVenue team', () => {
     expect((await team.fetch('/api/admin/support/inbox-count')).status).toBe(200);
   });
 
+  it('a member switched off while signed in loses access at once', async () => {
+    expect((await team.fetch('/api/admin/support/inbox-count')).status).toBe(200);
+    await setMember(false);
+    try {
+      // The signed session lasts 12 hours; switching them off has to end it now.
+      expect([401, 403]).toContain((await team.fetch('/api/admin/support/inbox-count')).status);
+      expect([401, 403]).toContain((await team.fetch('/api/admin/support/bride-inbox')).status);
+      expect([401, 403]).toContain((await team.fetch('/api/admin/me')).status);
+    } finally {
+      await setMember(true);
+    }
+    expect((await team.fetch('/api/admin/support/inbox-count')).status).toBe(200);
+  });
+
   it('a wrong password, or a deactivated member, is refused', async () => {
     expect((await signIn(new Browser(), `${env.password}-wrong`)).status).toBe(401);
     await setMember(false);

@@ -27,6 +27,7 @@ export const ADMIN_WRITE_TABS: ReadonlyArray<readonly [prefix: string, tabs: rea
   ['contacts', ['contacts']],
   ['couples', ['couples', 'contacts']],
   ['support', ['support']],
+  ['venue-concierge', ['support']],
   ['blog', ['blog']],
   ['page-seo', ['seo-pages']],
   ['suggested-articles', ['suggested-articles']],
