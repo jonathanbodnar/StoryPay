@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { isStaging } from '@/lib/staging';
 import { sendEmail, buildBulkEmailHeaders, htmlToPlainText, injectPreheaderHtml } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
 import { loadVenueEmailBrand } from '@/lib/venue-email-brand';
@@ -1565,6 +1566,8 @@ export async function buildMergeVars(
  * time zone, lib/texting-hours).
  */
 async function textingHoldUntil(venueId: string, leadId: string): Promise<Date | null> {
+  // The test copy texts no one (lib/staging-ghl) and its checks run at any hour.
+  if (isStaging()) return null;
   const [{ data: v }, phone] = await Promise.all([
     supabaseAdmin.from('venues').select('timezone').eq('id', venueId).maybeSingle(),
     resolvePhoneForLead(venueId, leadId),

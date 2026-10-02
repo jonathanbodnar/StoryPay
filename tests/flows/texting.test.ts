@@ -1,0 +1,102 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import { coupleTexts, db, ensureFlowVenue, FLOW_VENUE, runId, runJob, submitListingLead, texts } from './helpers';
+
+// Texting end to end, against the test copy's stand-in texting service
+// (lib/staging-ghl): the guide by text, the follow-ups, a couple texting back,
+// STOP. Nothing reaches a real phone.
+const n = (parseInt(runId.slice(-5), 36) % 9000) + 1000;
+const phoneA = `(646) 555-${n}`;
+const phoneB = `(646) 556-${n}`;
+
+async function waitForText(phone: string, since: string, match: (body: string) => boolean, timeoutMs = 20_000) {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    const hit = (await texts(phone, since)).find((t) => t.direction === 'outbound' && match(t.body));
+    if (hit) return hit;
+    if (Date.now() > until) {
+      const seen = (await texts(phone, since)).map((t) => `${t.direction}: ${t.body.slice(0, 70)}`);
+      throw new Error(`No matching text to ${phone} within ${timeoutMs / 1000}s. Seen: ${JSON.stringify(seen)}`);
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+const textsTo = async (phone: string, since: string) => (await texts(phone, since)).filter((t) => t.direction === 'outbound');
+
+/** The next step of their follow-up sequence comes due, and the sequence job runs. */
+async function nextStepDue(leadId: string) {
+  await db.from('marketing_automation_enrollments').update({ next_run_at: new Date().toISOString() }).eq('lead_id', leadId).eq('status', 'active');
+  expect((await runJob('marketing-email')).status).toBe(200);
+}
+
+async function newLead(first: string, phone: string): Promise<string> {
+  const res = await submitListingLead({
+    venue_id: FLOW_VENUE.id, first_name: first, last_name: 'texting', email: `${first}.${runId}@example.com`, phone,
+    guest_count: 90, message: 'Hi! Pricing please.', source: 'directory', client_ip: `192.0.2.${1 + (n % 250)}`,
+  });
+  expect(res.status).toBe(201);
+  return ((await res.json()) as { lead_id: string }).lead_id;
+}
+
+async function repliesInConversation(email: string): Promise<string[]> {
+  const { data: vc } = await db.from('venue_customers').select('id').eq('venue_id', FLOW_VENUE.id).ilike('customer_email', email).single();
+  const { data: threads } = await db.from('conversation_threads').select('id').eq('venue_customer_id', vc!.id);
+  const { data: msgs } = await db.from('conversation_messages').select('body').in('thread_id', (threads ?? []).map((t) => t.id)).eq('sender_kind', 'contact');
+  return (msgs ?? []).map((m) => String(m.body));
+}
+
+describe('texting a couple', () => {
+  let leadA = '';
+  let since = '';
+
+  beforeAll(async () => {
+    await ensureFlowVenue();
+    since = new Date().toISOString();
+  });
+
+  it('sends the guide by text, with their name and the guide link', async () => {
+    leadA = await newLead('riley', phoneA);
+    const t = await waitForText(phoneA, since, (b) => /guide/i.test(b));
+    expect(t.body).toContain('Riley');
+    expect(t.body).toMatch(/https?:\/\/\S+\/(g|guide)\//);
+  });
+
+  it('texts the first follow-up when it comes due', async () => {
+    const before = new Date().toISOString();
+    await nextStepDue(leadA); // the 1-day wait
+    await nextStepDue(leadA); // Day 1
+    await waitForText(phoneA, before, (b) => /just making sure/i.test(b));
+  });
+
+  it('their text back reaches the venue’s conversation, and the follow-ups stop', async () => {
+    await coupleTexts(phoneA, 'Yes! We are thinking June 14, 2027.');
+    expect((await runJob('ghl-inbound-sync')).status).toBe(200);
+    expect(await repliesInConversation(`riley.${runId}@example.com`)).toContain('Yes! We are thinking June 14, 2027.');
+
+    const before = new Date().toISOString();
+    await nextStepDue(leadA);
+    await nextStepDue(leadA);
+    expect(await textsTo(phoneA, before)).toHaveLength(0);
+    const { data: ens } = await db.from('marketing_automation_enrollments').select('last_error').eq('lead_id', leadA);
+    expect(ens!.some((e) => e.last_error === 'stopped_on_reply')).toBe(true);
+  });
+
+  it('a reply the sync hasn’t picked up yet still stops the next follow-up', async () => {
+    const leadB = await newLead('casey', phoneB);
+    await waitForText(phoneB, since, (b) => /guide/i.test(b));
+    await nextStepDue(leadB); // the 1-day wait
+    await coupleTexts(phoneB, 'We already booked a tour with you!');
+    const before = new Date().toISOString();
+    await nextStepDue(leadB); // Day 1 comes due before any reply sync ran
+    expect(await textsTo(phoneB, before)).toHaveLength(0);
+    const { data: ens } = await db.from('marketing_automation_enrollments').select('last_error').eq('lead_id', leadB);
+    expect(ens!.some((e) => e.last_error === 'stopped_on_reply')).toBe(true);
+    expect(await repliesInConversation(`casey.${runId}@example.com`)).toContain('We already booked a tour with you!');
+  });
+
+  it('STOP turns their texts off', async () => {
+    await coupleTexts(phoneA, 'STOP');
+    expect((await runJob('ghl-inbound-sync')).status).toBe(200);
+    const { data: lead } = await db.from('leads').select('sms_dnd').eq('id', leadA).single();
+    expect(lead!.sms_dnd).toBe(true);
+  });
+});

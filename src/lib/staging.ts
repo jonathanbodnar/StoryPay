@@ -70,8 +70,10 @@ export function stagingEmailFilter(recipients: string[]): { allowed: string[]; b
 
 // Hosts the test copy must never call: real texting/CRM, payments, app
 // notifications, the support Slack, and the live site and directory.
+// Texting/CRM (GHL) calls are answered by a stand-in instead (lib/staging-ghl).
+const GHL_HOSTS = ['leadconnectorhq.com', 'gohighlevel.com', 'msgsndr.com'];
 const BLOCKED_HOSTS = [
-  'leadconnectorhq.com', 'gohighlevel.com', 'msgsndr.com',
+  ...GHL_HOSTS,
   'lunarpay.com',
   'fcm.googleapis.com', 'push.apple.com', 'push.services.mozilla.com', 'notify.windows.com',
   'hooks.slack.com',
@@ -100,6 +102,10 @@ export function installStagingFetchGuard(): void {
       host = new URL(input instanceof Request ? input.url : String(input)).hostname;
     } catch {
       // Not an absolute URL: nothing to check.
+    }
+    if (host && GHL_HOSTS.some((b) => host === b || host.endsWith(`.${b}`))) {
+      // Texting/CRM: the stand-in records texts and plays couples' replies.
+      return import('@/lib/staging-ghl').then(({ fakeGhlFetch }) => fakeGhlFetch(input, init));
     }
     if (host && stagingBlocksHost(host)) {
       console.warn(`[staging] blocked a request to ${host}`);

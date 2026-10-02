@@ -107,12 +107,13 @@ describe('installStagingFetchGuard', () => {
     expect(globalThis.fetch).toBe(fake);
   });
 
-  it('in the test copy, fails requests to blocked hosts and passes the rest through', async () => {
+  it('in the test copy, fails requests to blocked hosts, answers texting with the stand-in, passes the rest through', async () => {
     vi.stubEnv('APP_ENV', 'staging');
     const fake = vi.fn(async () => new Response('ok'));
     vi.stubGlobal('fetch', fake);
     installStagingFetchGuard();
-    await expect(fetch('https://services.leadconnectorhq.com/conversations/messages', { method: 'POST' })).rejects.toThrow('Blocked in the test copy');
+    const text = await fetch('https://services.leadconnectorhq.com/conversations/messages', { method: 'POST', body: JSON.stringify({ contactId: 'nobody', message: 'hi' }) });
+    expect(text.status).toBe(400); // the stand-in's "Contact not found"; nothing reached GHL
     await expect(fetch(new Request('https://app.storyvenue.com/api/x'))).rejects.toThrow('app.storyvenue.com');
     expect(fake).not.toHaveBeenCalled();
     const res = await fetch('https://api.resend.com/emails');

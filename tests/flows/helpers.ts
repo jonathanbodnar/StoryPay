@@ -144,6 +144,34 @@ export async function ensureFlowVenue(): Promise<void> {
     timezone: 'America/New_York',
     is_published: true,
     is_demo: false,
+    // Texting, through the test copy's stand-in texting service (lib/staging-ghl):
+    // the $97 plan texts when an admin turns it on, like a real venue.
+    sms_admin_override: true,
+    ghl_connected: true,
+    ghl_location_id: 'staging-flow-location',
+    ghl_access_token: 'pit-staging-fake',
   }, { onConflict: 'id' });
   if (error) throw new Error(`flow venue: ${error.message}`);
+}
+
+/** Texts the test copy sent to (or got from) a phone since a time, newest first. */
+export async function texts(phone: string, since: string): Promise<Array<{ at: string; direction: 'inbound' | 'outbound'; body: string }>> {
+  const res = await fetch(`${env.base}/api/staging/sms?phone=${encodeURIComponent(phone)}&since=${encodeURIComponent(since)}`, { headers: { 'x-staging-key': env.stagingKey } });
+  if (!res.ok) throw new Error(`texts: ${res.status}`);
+  return ((await res.json()) as { texts: Array<{ at: string; direction: 'inbound' | 'outbound'; body: string }> }).texts;
+}
+
+/** A couple texts the venue back (it waits in the stand-in texting service until the app picks it up). */
+export async function coupleTexts(from: string, body: string): Promise<void> {
+  const res = await fetch(`${env.base}/api/staging/sms`, {
+    method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' }, body: JSON.stringify({ from, body }),
+  });
+  if (!res.ok) throw new Error(`coupleTexts: ${res.status} ${await res.text()}`);
+}
+
+/** Runs one of the app's timed jobs now (the test copy doesn't run them on its own). */
+export async function runJob(name: string): Promise<Response> {
+  return fetch(`${env.base}/api/cron/${name}`, {
+    headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${process.env.MARKETING_CRON_SECRET}` },
+  });
 }
