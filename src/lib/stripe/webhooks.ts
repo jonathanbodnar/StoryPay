@@ -151,14 +151,22 @@ async function onInvoicePaymentFailed(inv: Stripe.Invoice): Promise<void> {
   const sub = await getStripe().subscriptions.retrieve(subId);
   const v = await venueForSubscription(sub);
   if (!v || (v.stripe_subscription_id && v.stripe_subscription_id !== sub.id)) return;
-  const prev = String(v.directory_subscription_status ?? '');
+  // One card-declined email per failed invoice. Not "only when the venue
+  // wasn't past_due yet": Stripe's subscription update (status past_due)
+  // often lands first, and the email was then skipped.
+  const { count: earlierFailures } = await supabaseAdmin
+    .from('platform_billing_events')
+    .select('id', { count: 'exact', head: true })
+    .eq('venue_id', v.id)
+    .eq('event_type', 'payment_failed')
+    .eq('stripe_invoice_id', inv.id);
   await supabaseAdmin.from('venues').update({ directory_subscription_status: 'past_due' }).eq('id', v.id);
   await recordStripeBillingEvent({
     venueId: v.id, planId: v.directory_plan_id, amountCents: 0, eventType: 'payment_failed',
     externalEventId: `stripe_inv_failed:${inv.id}:${inv.attempt_count ?? 0}`, invoiceId: inv.id,
     metadata: { subscription_id: sub.id, attempt_count: inv.attempt_count, amount_due: inv.amount_due },
   });
-  if (prev !== 'past_due') {
+  if (!earlierFailures) {
     const { notifyVenueCardDeclined } = await import('@/lib/saas-billing-notifications');
     void notifyVenueCardDeclined(v.id).catch(() => {});
   }
