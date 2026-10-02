@@ -149,7 +149,6 @@ describe.skipIf(!venueReady)('couples pay the venue', () => {
     expect(toCouple.html).toMatch(/\/update-card\/[0-9a-f]{48}/);
     expect(toCouple.html).not.toContain(STORYVENUE_LOGO);
     await waitForEmail({ to: FLOW_VENUE.email, since }, (e) => e.subject === `Payment failed: Rowan Ellis — ${usd(60_000)}`);
-    expect((await db.from('proposals').select('status').eq('id', p.id).single()).data!.status).not.toBe('paid');
 
     // Before the retry date nothing more is tried.
     expect((await job()).status).toBe(200);
@@ -175,8 +174,9 @@ describe.skipIf(!venueReady)('couples pay the venue', () => {
     expect(saved.status, await saved.clone().text()).toBe(200);
     const since3 = new Date().toISOString();
     expect((await job()).status).toBe(200);
-    await waitForStatus(p.id, 'paid', 45_000);
+    // (The booking reads "paid" from the deposit on; each later payment is tracked on its own.)
     await waitForEmail({ to: p.email, since: since3 }, (e) => e.subject === `Payment receipt from ${FLOW_VENUE.name} — ${usd(60_000)}`, 45_000);
+    expect((await db.from('proposal_installments').select('status').eq('id', second.id).single()).data!.status).toBe('paid');
     // The link works once.
     expect((await couple.fetch(`/api/card-update/${token}/stripe-setup`, { method: 'POST' })).status).toBe(404);
   });
