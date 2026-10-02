@@ -54,7 +54,8 @@ export async function POST(
   void supabaseAdmin
     .from('support_canned_replies')
     .update({ use_count: (t.use_count ?? 0) + 1 })
-    .eq('id', id);
+    .eq('id', id)
+    .then(({ error }) => { if (error) console.warn('[best-effort update] failed:', error.message); });
 
   return NextResponse.json({ body: result.body, unknown: result.unknown });
 }

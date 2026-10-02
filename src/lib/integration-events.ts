@@ -123,9 +123,11 @@ export async function dispatchIntegrationEvent(
     const list = (subs || []) as SubscriptionRow[];
     if (list.length === 0) {
       // Still log to audit so the customer can see "we tried but no Zap is listening"
+      // (A Supabase query only runs once it's awaited or .then is called.)
       void supabaseAdmin
         .from('venue_integration_events')
-        .insert({ venue_id: venueId, event_type: event, payload: payload as object, fanout: 0, delivered: 0 });
+        .insert({ venue_id: venueId, event_type: event, payload: payload as object, fanout: 0, delivered: 0 })
+        .then(({ error }) => { if (error) console.warn('[integration-events] audit insert failed:', error.message); });
       return { fanout: 0, delivered: 0 };
     }
 
@@ -160,7 +162,8 @@ export async function dispatchIntegrationEvent(
         payload: payload as object,
         fanout: list.length,
         delivered,
-      });
+      })
+      .then(({ error }) => { if (error) console.warn('[integration-events] audit insert failed:', error.message); });
 
     return { fanout: list.length, delivered };
   } catch (err) {

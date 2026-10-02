@@ -80,7 +80,8 @@ export async function POST(req: NextRequest) {
   void supabaseAdmin
     .from('support_team_members')
     .update({ last_login_at: new Date().toISOString() })
-    .eq('id', member.id);
+    .eq('id', member.id)
+    .then(({ error }) => { if (error) console.warn('[best-effort update] failed:', error.message); });
 
   return NextResponse.json({
     member: {
