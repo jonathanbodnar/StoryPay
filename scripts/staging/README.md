@@ -13,7 +13,9 @@ All run with the test copy's settings: `railway run --service "StoryVenue Backen
 | `node scripts/staging/seed.mjs` | Product settings from live, the demo venue (Maple Hollow Barn) and fake leads. Safe to rerun. |
 | `npx tsx --tsconfig ./tsconfig.json scripts/staging/stripe-webhooks.ts` | Points Stripe's test-mode webhooks at the test copy; saves their secrets to Railway Dev. |
 | `node scripts/staging/smoke.mjs` | Quick check: password page, sign-in, dashboard, leads. |
-| `node scripts/staging/check-deploy.mjs` | Run plainly after a push: waits for the test copy to deploy the commit, then runs the smoke, flow and browser tests. |
+| `node scripts/staging/check-deploy.mjs` | Run plainly after a push: waits for the test copy to deploy the commit, then runs the smoke, flow and browser tests, and records the result. |
+| `node scripts/staging/release.mjs <sha>` | Puts a commit live (moves `production` to it), only if it passed the checks; waits for the live deploy. |
+| `node scripts/staging/setup-gate.mjs` | One time (done Oct 1, 2026): the live services release from `production`. |
 
 Flow tests: `npm run test:flows`. Browser tests: `npm run test:browser`.
 
@@ -25,3 +27,15 @@ Couple payment tests (`tests/flows/payments.test.ts`) need the **Flow Test Venue
 2. Open `/dashboard/payments/settings` and click **Continue setup** (or **Connect with Stripe**).
 3. Fill in Stripe's form with its test values (a "Use test data" button, where Stripe shows one, does the same): phone `000 000 0000`, code `000000`, date of birth `01/01/1901`, SSN `000-00-0000` (or last four `0000`), address line `address_full_match`, bank routing `110000000`, account `000123456789`.
 4. Finish and return to the app. The tests run from then on.
+
+## Going live
+
+The live site (StoryVenue Backend, the AI Concierge job, the StoryPay.io website) deploys from the `production` branch; the test copy from `main`.
+
+1. Push to `main`: the test copy updates, the live site doesn't.
+2. `node scripts/staging/check-deploy.mjs`: every check against the test copy.
+3. `node scripts/staging/release.mjs <sha>`: if it passed, it goes live.
+
+Emergencies only, when the owner says so: `release.mjs <sha> --skip-checks`. To undo a release, revert the change on `main`, check, and release again (or redeploy the previous version from Railway).
+
+Texting on the test copy goes to a stand-in (`src/lib/staging-ghl.ts`): `GET /api/staging/sms` lists the texts it would have sent, `POST` plays a couple texting back.
