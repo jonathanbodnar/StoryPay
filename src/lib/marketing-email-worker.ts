@@ -2419,15 +2419,14 @@ export async function runEnrollmentsNow(enrollmentIds: string[]): Promise<{ proc
  */
 type StepResult = 'advanced' | 'delayed' | 'completed' | 'failed' | 'unknown';
 
-async function processOneEnrollment(en: {
-  id: string;
-  automation_id: string;
-  venue_id: string;
-  lead_id: string;
-  current_step_index: number;
-}): Promise<StepResult> {
-  // Stop-on-reply: if the lead replied after entering this sequence, stop it.
-  // A reply from before (an old conversation) doesn't count.
+type EnrollmentRef = { id: string; automation_id: string; venue_id: string; lead_id: string; current_step_index: number };
+
+/**
+ * Stop-on-reply: if the lead replied after entering this sequence, the
+ * enrollment is done (no more automated messages). A reply from before (an
+ * old conversation) doesn't count. True when it stopped.
+ */
+async function stopIfReplied(en: EnrollmentRef): Promise<boolean> {
   const [{ data: leadRow }, { data: enrollmentRow }] = await Promise.all([
     supabaseAdmin.from('leads').select('last_inbound_at').eq('id', en.lead_id).maybeSingle(),
     supabaseAdmin.from('marketing_automation_enrollments').select('enrolled_at, started_at').eq('id', en.id).maybeSingle(),
@@ -2438,19 +2437,59 @@ async function processOneEnrollment(en: {
       ?? (enrollmentRow as { started_at?: string | null } | null)?.started_at
       ?? '',
   );
-  if (Number.isFinite(lastReplyAt) && (!Number.isFinite(enteredAt) || lastReplyAt > enteredAt)) {
-    // Mark the enrollment as completed — she replied, no more automated messages needed.
-    await supabaseAdmin
-      .from('marketing_automation_enrollments')
-      .update({ status: 'completed', completed_at: new Date().toISOString(), last_error: 'stopped_on_reply' })
-      .eq('id', en.id);
-    void logStepExecution({
-      automation_id: en.automation_id, enrollment_id: en.id,
-      venue_id: en.venue_id, lead_id: en.lead_id,
-      step_order: en.current_step_index, step_type: 'stop_on_reply', status: 'success',
-    });
-    return 'completed';
+  if (!Number.isFinite(lastReplyAt) || (Number.isFinite(enteredAt) && lastReplyAt <= enteredAt)) return false;
+  await supabaseAdmin
+    .from('marketing_automation_enrollments')
+    .update({ status: 'completed', completed_at: new Date().toISOString(), last_error: 'stopped_on_reply' })
+    .eq('id', en.id);
+  void logStepExecution({
+    automation_id: en.automation_id, enrollment_id: en.id,
+    venue_id: en.venue_id, lead_id: en.lead_id,
+    step_order: en.current_step_index, step_type: 'stop_on_reply', status: 'success',
+  });
+  return true;
+}
+
+/**
+ * Right before an automated message: pull in any text replies the texting
+ * service has that we haven't stored yet. The reply sync can take a while to
+ * reach a quiet conversation, and stop-on-reply only sees stored replies, so a
+ * couple who had already answered got the next "do you have a date?" text.
+ * Best effort: a failed check never blocks the send.
+ */
+async function pullUnseenTextReplies(venueId: string, leadId: string): Promise<void> {
+  try {
+    const threadId = await findOrCreateThreadForLead(venueId, leadId);
+    if (!threadId) return;
+    const { data: th } = await supabaseAdmin.from('conversation_threads').select('venue_customer_id').eq('id', threadId).maybeSingle();
+    const venueCustomerId = (th as { venue_customer_id?: string | null } | null)?.venue_customer_id;
+    if (!venueCustomerId) return;
+    const { syncInboundSmsFromGhlForThread } = await import('@/lib/ghl-sms-conversations');
+    await syncInboundSmsFromGhlForThread({ venueId, threadId, venueCustomerId });
+  } catch (e) {
+    console.warn('[worker] reply check before sending failed (sending anyway):', e instanceof Error ? e.message : e);
   }
+}
+
+/**
+ * The couple has written to the venue in the last `days` days: they're in a
+ * conversation, so a repeat form submission doesn't re-send the guide (its
+ * text asks for their date again). The venue gets the "asked again" email.
+ */
+export async function repliedWithinDays(leadId: string, days = 30): Promise<boolean> {
+  const { data } = await supabaseAdmin.from('leads').select('last_inbound_at').eq('id', leadId).maybeSingle();
+  const at = Date.parse((data as { last_inbound_at?: string | null } | null)?.last_inbound_at ?? '');
+  return Number.isFinite(at) && Date.now() - at < days * 86_400_000;
+}
+
+async function processOneEnrollment(en: {
+  id: string;
+  automation_id: string;
+  venue_id: string;
+  lead_id: string;
+  current_step_index: number;
+}): Promise<StepResult> {
+  if (await stopIfReplied(en)) return 'completed';
 
   const { data: steps, error: se } = await supabaseAdmin
     .from('marketing_automation_steps')
@@ -2499,6 +2538,9 @@ async function processOneEnrollment(en: {
       track_clicks?: boolean;
     };
     const mode = cfg.mode === 'template' ? 'template' : (cfg.mode === 'quick' ? 'quick' : 'template');
+
+    await pullUnseenTextReplies(en.venue_id, en.lead_id);
+    if (await stopIfReplied(en)) return 'completed';
 
     let send: { ok: boolean; error?: string; mergedSubject?: string };
     if (mode === 'quick') {
@@ -2606,6 +2648,8 @@ async function processOneEnrollment(en: {
       console.log(`[worker] SMS step enrollment=${en.id} held until ${holdUntil.toISOString()} (texting hours)`);
       return 'delayed';
     }
+    await pullUnseenTextReplies(en.venue_id, en.lead_id);
+    if (await stopIfReplied(en)) return 'completed';
     const send = await sendAutomationSmsToLead(en.venue_id, en.lead_id, body, cfg.media_urls);
     console.log(`[worker] SMS step enrollment=${en.id} ok=${send.ok} error=${send.error ?? 'none'}`);
     // 'suppressed' (DND/unsubscribed) and 'sms_not_available' (plan has no SMS)

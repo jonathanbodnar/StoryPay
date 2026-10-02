@@ -252,16 +252,44 @@ async function resolveCandidateThreads(
   return out;
 }
 
-/** Threads with the most recent SMS activity first, capped. */
+/** Threads with the most recent SMS activity first (minus `exclude`), capped. */
 async function findActiveSmsThreads(
   venueIds: string[],
   activeDays: number,
-  maxThreads: number
+  maxThreads: number,
+  exclude: Set<string> = new Set()
 ): Promise<CandidateThread[]> {
   const cutoff = new Date(Date.now() - activeDays * 24 * 60 * 60 * 1000).toISOString();
-  const orderedThreadIds = await threadIdsWithSmsActivitySince(cutoff, 3000);
+  const orderedThreadIds = (await threadIdsWithSmsActivitySince(cutoff, 3000)).filter((id) => !exclude.has(id));
   if (orderedThreadIds.length === 0) return [];
   return resolveCandidateThreads(orderedThreadIds, venueIds, maxThreads);
+}
+
+/** Where the baseline sweep's rotation stands (per server process; a restart starts over). */
+let sweepCursor: string | null = null;
+
+/**
+ * One baseline run's threads: the most recently active few (a fresh reply
+ * lands fast) plus the next slice of every other active thread, in a stable
+ * rotation by thread id, so each active conversation is checked every few
+ * minutes. It used to take only the newest N on every run: a conversation that
+ * had gone quiet for a few hours was never checked, so the couple's text reply
+ * only arrived after the next automated text made the thread "hot" again.
+ */
+export function pickSweepThreads<T extends { threadId: string }>(
+  candidates: T[],
+  recentSlots: number,
+  rotateSlots: number,
+  after: string | null
+): { picked: T[]; cursor: string | null } {
+  const recent = candidates.slice(0, Math.max(0, recentSlots));
+  const rest = candidates.slice(recent.length).sort((a, b) => (a.threadId < b.threadId ? -1 : a.threadId > b.threadId ? 1 : 0));
+  if (rest.length === 0 || rotateSlots <= 0) return { picked: recent, cursor: after };
+  let start = after == null ? 0 : rest.findIndex((t) => t.threadId > after);
+  if (start < 0) start = 0; // past the last id: start the next lap
+  const n = Math.min(rotateSlots, rest.length);
+  const slice = Array.from({ length: n }, (_, i) => rest[(start + i) % rest.length]);
+  return { picked: [...recent, ...slice], cursor: slice[slice.length - 1].threadId };
 }
 
 /** Threads belonging to just-backfilled customers — always scanned, since
@@ -415,14 +443,10 @@ export async function runGhlInboundSyncCron(opts: {
   const backfilledCustomerIds = await backfillMissingContactIds(venues, backfillLimit, result);
 
   const recoveryThreads = await threadsForCustomers(backfilledCustomerIds);
-  const activeThreads = await findActiveSmsThreads(
-    venues.map((v) => v.id),
-    activeDays,
-    maxThreads
-  );
 
   // Threads the hot tier is already polling every few seconds — recompute the
-  // exact hot set (same window + cap) so we exclude only what's truly covered.
+  // exact hot set (same window + cap) so we exclude only what's truly covered,
+  // before choosing, so the whole budget goes to the others.
   const hotCovered = new Set<string>();
   if (opts.excludeHotTier) {
     const cutoff = new Date(Date.now() - opts.excludeHotTier.windowMinutes * 60 * 1000).toISOString();
@@ -436,6 +460,13 @@ export async function runGhlInboundSyncCron(opts: {
       for (const t of hotCandidates) hotCovered.add(t.threadId);
     }
   }
+
+  // Every active thread, newest first; this run checks the newest few plus the
+  // next slice of the rest (see pickSweepThreads).
+  const allActive = await findActiveSmsThreads(venues.map((v) => v.id), activeDays, 2000, hotCovered);
+  const recentSlots = Math.ceil(maxThreads * 0.4);
+  const { picked: activeThreads, cursor } = pickSweepThreads(allActive, recentSlots, maxThreads - recentSlots, sweepCursor);
+  sweepCursor = cursor;
 
   const queued = new Set<string>();
   const queue: CandidateThread[] = [];

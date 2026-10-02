@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { autoMergeExactDuplicates } from '@/lib/merge-leads';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
-import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity } from '@/lib/marketing-email-worker';
+import { onMarketingFormSubmitted, sendBookingSystemGuide, logNewLeadOpportunity, repliedWithinDays } from '@/lib/marketing-email-worker';
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 import { applySystemTags, ensureSystemTagsForVenue } from '@/lib/system-tags';
@@ -489,10 +489,15 @@ export async function POST(request: NextRequest) {
 
   // Phase 1 — Booking System guide delivery (email + SMS), fire-and-forget.
   // This sends the pricing guide PDF link immediately after form submission,
-  // independent of the Phase 2 automation sequence below.
-  void sendBookingSystemGuide(venue.id, leadId).catch((e) =>
-    console.error('[public/leads] sendBookingSystemGuide error:', e),
-  );
+  // independent of the Phase 2 automation sequence below. A couple already
+  // talking with the venue who sends the form again doesn't get it again (its
+  // text asks for their date); the venue gets the "asked again" email instead.
+  const inConversation = isRepeat && await repliedWithinDays(leadId).catch(() => false);
+  if (!inConversation) {
+    void sendBookingSystemGuide(venue.id, leadId).catch((e) =>
+      console.error('[public/leads] sendBookingSystemGuide error:', e),
+    );
+  }
 
   // Tripleseat integration — push lead data if the venue has connected their
   // Tripleseat account. Fire-and-forget; never blocks the response.

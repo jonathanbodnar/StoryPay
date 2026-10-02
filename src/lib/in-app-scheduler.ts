@@ -13,8 +13,9 @@
  *   - ghl-inbound-sync-hot  every 7s   inbound SMS poll for HOT threads only
  *                                      (SMS activity within the last hour) so
  *                                      active conversations feel instant
- *   - ghl-inbound-sync      every 60s  baseline sweep for colder threads
- *                                      (excludes what the hot tier covers)
+ *   - ghl-inbound-sync      every 60s  baseline sweep for threads active in
+ *                                      the last 14 days, in rotation (excludes
+ *                                      what the hot tier covers)
  *   - ghl-cold-sweep        every 15m  dormant threads (last activity 14–90d
  *                                      ago) that aged out of the tiers above;
  *                                      round-robin, budget-capped so a fresh
@@ -160,13 +161,14 @@ const JOBS: ScheduledJob[] = [
     initialDelayMs: 20 * 1000,
     run: async () => {
       const { runGhlInboundSyncCron } = await import('@/lib/ghl-inbound-sync-cron');
-      // Light per-run scope: this now ticks every 60s (vs every 5min on GitHub
-      // Actions), so each run scans fewer, more recent threads. Threads the
-      // hot tier already polls every 7s are excluded so the baseline budget
-      // goes to colder threads (catching first inbound messages within ≤60s).
+      // Light per-run scope: this ticks every 60s. Threads the hot tier already
+      // polls every 7s are excluded; each run checks the newest few of the
+      // rest plus the next slice in rotation, so every thread active in the
+      // last 14 days is checked every few minutes (the cold sweep takes over
+      // at 14 days; this used to stop at 7, leaving 7–14 days unchecked).
       const r = await runGhlInboundSyncCron({
         maxThreads: 25,
-        activeDays: 7,
+        activeDays: 14,
         backfillLimit: 10,
         excludeHotTier: { windowMinutes: HOT_WINDOW_MINUTES, cap: HOT_MAX_THREADS },
       });
