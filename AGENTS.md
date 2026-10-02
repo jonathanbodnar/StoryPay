@@ -14,7 +14,7 @@ Production is deployed on **Railway** (not Vercel). Use Railway logs/metrics whe
 
 ## Test copy and checks
 
-A test copy of the app runs on Railway's **Dev** environment (https://storyvenue-backend-dev.up.railway.app) with its own database and fake data. It deploys from `main` on every push. It can never text, email (except approved addresses), charge or notify a real person: see `src/lib/staging.ts`.
+A test copy of the app runs on Railway's **Dev** environment (https://storyvenue-backend-dev.up.railway.app) with its own database and fake data. It deploys from `main` on every push. It can never text, email (except approved addresses), charge or notify a real person: see `src/lib/staging.ts`. Texting, received email, Tripleseat, Event Temple, Calendly and Google Calendar are answered there by stand-ins that record what was sent (`/api/staging/sms`, `/api/staging/outbox`, `/api/staging/integrations`), so their flows can be tested.
 
 - Before pushing: `npx tsc --noEmit`, `npm run lint` (must show 0 errors), `npm test` (fast checks), `npm run build`.
 - After pushing: `node scripts/staging/check-deploy.mjs`. It runs the type check, fast checks and lint on a clean checkout of the commit, waits for the test copy to deploy it, then runs the smoke test, the flow tests (`npm run test:flows`) and the browser tests (`npm run test:browser`) against it, and records the result. Report any failure to the user.
