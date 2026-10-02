@@ -15,7 +15,7 @@ describe('email campaigns and unsubscribing', () => {
   async function lead(first: string, email: string, n: number): Promise<void> {
     const res = await submitListingLead({
       venue_id: FLOW_VENUE.id, first_name: first, last_name: 'Marketing', email,
-      phone: `(212) 555-01${String(40 + n).padStart(2, '0')}`, source: 'directory', client_ip: `203.0.113.${60 + n}`,
+      phone: `(332) 55${n}-${(parseInt(runId.slice(-5), 36) % 9000) + 1000}`, source: 'directory', client_ip: `203.0.113.${60 + n}`,
     });
     expect(res.status, await res.clone().text()).toBe(201);
     leadIds[email] = ((await res.json()) as { lead_id: string }).lead_id;

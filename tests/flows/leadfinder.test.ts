@@ -1,6 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Browser, db, env, FLOW_VENUE, runId, signedInOwner, waitForEmail } from './helpers';
 
+// Each run's couples have their own phones: LeadFinder rightly treats the same
+// phone as the same couple, so a number from an earlier run would match that lead.
+const n = (parseInt(runId.slice(-5), 36) % 9000) + 1000;
+
 // LeadFinder™ end to end: an inquiry forwarded to the venue's LeadFinder
 // address is read and becomes a lead (once, however often it's delivered);
 // one it can't be sure about waits in the review queue until the owner
@@ -54,7 +58,7 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
         'You have a new message!',
         'Name: Lena Forward',
         `E-mail: ${email}`,
-        'Phone: (407) 555-0143',
+        `Phone: (407) 556-${n}`,
         'Wedding Date: Saturday, June 12th, 2027',
         'Guest Count: 120',
         'Message: We love your barn and would like pricing for a June wedding.',
@@ -72,7 +76,7 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
       from: 'The Knot <noreply@theknot.com>',
       subject: 'You have a new inquiry from Lena Forward',
       message_id: `<lf-${runId}-1@theknot.example.com>`,
-      text: ['Name: Lena Forward', `E-mail: ${email}`, 'Phone: (407) 555-0143', 'Wedding Date: Saturday, June 12th, 2027'].join('\n'),
+      text: ['Name: Lena Forward', `E-mail: ${email}`, `Phone: (407) 556-${n}`, 'Wedding Date: Saturday, June 12th, 2027'].join('\n'),
     });
     await new Promise((r) => setTimeout(r, 4000));
     expect(await leadsWith(email, 0)).toHaveLength(1);
@@ -100,7 +104,7 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
     expect(JSON.stringify(await queue.json())).toContain(row!.id);
     const email = `nora.lf.${runId}@wedmail.test`;
     const confirm = await owner.fetch(`/api/venue/leadfinder/review/${row!.id}`, {
-      method: 'POST', json: { action: 'confirm', fields: { name: 'Nora Review', email, phone: '(407) 555-0144' } },
+      method: 'POST', json: { action: 'confirm', fields: { name: 'Nora Review', email, phone: `(407) 557-${n}` } },
     });
     expect(confirm.status, await confirm.clone().text()).toBe(200);
     expect(await leadsWith(email)).toHaveLength(1);

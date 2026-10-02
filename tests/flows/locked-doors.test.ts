@@ -40,7 +40,7 @@ allow('return page from Google, Pinterest, GoHighLevel, accounting or Stripe (si
   'GET /api/messaging/callback', 'GET /api/payments/stripe/connect/refresh', 'GET /api/payments/stripe/connect/return',
   'GET /api/venue-billing/stripe/checkout-return');
 allow('public form (lead forms are signed or token-scoped)',
-  'POST /api/public/forms/[token]/submit', 'GET /api/waitlist', 'POST /api/waitlist');
+  'POST /api/public/forms/[token]/submit', 'POST /api/public/embed-leads', 'GET /api/waitlist', 'POST /api/waitlist');
 allow('anonymous tracking or logging (rate limited where it writes)',
   'GET /api/public/marketing/email-open', 'POST /api/analytics/track', 'POST /api/help/log-search', 'POST /api/help/rate-article',
   'POST /api/listing-track', 'POST /api/log-error', 'POST /api/public/venue/[venueId]/guide-view');

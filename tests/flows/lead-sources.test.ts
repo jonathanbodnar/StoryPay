@@ -21,7 +21,7 @@ describe('other ways leads come in', () => {
       method: 'POST',
       headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' },
       body: JSON.stringify({
-        venue_id: FLOW_VENUE.id, first_name: 'Elle', last_name: 'Embed', email, phone: '(212) 555-0171',
+        venue_id: FLOW_VENUE.id, first_name: 'Elle', last_name: 'Embed', email, phone: `(332) 561-${(parseInt(runId.slice(-5), 36) % 9000) + 1000}`,
         guest_count: 60, message: 'Saw you on your website!', source: 'embed',
       }),
     });
@@ -58,7 +58,7 @@ describe('other ways leads come in', () => {
     expect(me.status).toBe(200);
     expect(JSON.stringify(await me.json())).toContain(FLOW_VENUE.id);
     const email = `zapier.${runId}@example.com`;
-    const lead = await api('/api/v1/leads', { method: 'POST', body: JSON.stringify({ first_name: 'Zoe', last_name: 'Zapier', email, phone: '(212) 555-0172' }) });
+    const lead = await api('/api/v1/leads', { method: 'POST', body: JSON.stringify({ first_name: 'Zoe', last_name: 'Zapier', email, phone: `(332) 562-${(parseInt(runId.slice(-5), 36) % 9000) + 1000}` }) });
     expect(lead.status, await lead.clone().text()).toBeLessThan(300);
     const { data } = await db.from('leads').select('id').eq('venue_id', FLOW_VENUE.id).eq('email', email);
     expect(data).toHaveLength(1);
