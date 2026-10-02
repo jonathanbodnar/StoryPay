@@ -83,6 +83,16 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
     button_text: 'View in Dashboard',
     footer:      null,
   },
+  // Owner-side "you refunded a customer" alert (owner-notifications.ts's
+  // refund_issued scenario). It used the payment_notification template, so
+  // refund alerts arrived titled "Payment received".
+  owner_refund_issued: {
+    subject:     'Refund issued to {{customer_name}}',
+    heading:     'Refund Issued',
+    body:        'A refund was issued for {{organization}}.\n\nCustomer: {{customer_name}}\nAmount: {{amount}}',
+    button_text: 'View in Dashboard',
+    footer:      null,
+  },
   // Customer-facing heads-up 3 days before an automatic payment-plan charge.
   payment_upcoming: {
     subject:     'Upcoming payment: {{amount}} on {{due_date}} — {{organization}}',

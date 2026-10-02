@@ -200,7 +200,8 @@ const SCENARIO_META: Record<OwnerScenario, {
     emailKey: 'email_refund_issued',
     smsKey:   'sms_payment_failed',
     pushKey:  'push_refund_issued',
-    templateType: 'payment_notification',
+    // Its own owner-voice template; payment_notification is "Payment received".
+    templateType: 'owner_refund_issued',
     defaultSmsTemplate: '↩️ Refund issued: {{amount}} to {{customer_name}} — {{organization}}',
     defaultEmailSubject: 'Refund issued to {{customer_name}}',
     defaultEmailHeading: 'Refund Issued',

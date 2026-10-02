@@ -40,8 +40,13 @@ describe.skipIf(!venueReady)('couples pay the venue', () => {
     return { ...p, email };
   }
 
-  async function pay(token: string, paymentMethod: string) {
-    const ct = await stripe.testHelpers.confirmationTokens.create({ payment_method: paymentMethod }, { stripeAccount: account });
+  // A payment plan keeps the card for later payments; the payment form says so
+  // (setupFutureUsage) and Stripe refuses a token that doesn't match.
+  async function pay(token: string, paymentMethod: string, opts: { saveCard?: boolean } = {}) {
+    const ct = await stripe.testHelpers.confirmationTokens.create(
+      { payment_method: paymentMethod, ...(opts.saveCard ? { setup_future_usage: 'off_session' as const } : {}) },
+      { stripeAccount: account },
+    );
     return couple.fetch(`/api/proposals/public/${token}/stripe-pay`, { method: 'POST', json: { confirmationTokenId: ct.id } });
   }
 
@@ -99,7 +104,7 @@ describe.skipIf(!venueReady)('couples pay the venue', () => {
       paymentType: 'installment',
       paymentConfig: { installments: [{ amount: 40_000, date: today() }, { amount: 60_000, date: inDays(30) }] },
     });
-    const res = await pay(p.public_token, 'pm_card_visa');
+    const res = await pay(p.public_token, 'pm_card_visa', { saveCard: true });
     expect(((await res.json()) as { status: string }).status).toBe('succeeded');
     await waitForEmail({ to: p.email, since }, (e) => e.subject === `Payment receipt from ${FLOW_VENUE.name} — ${usd(40_000)}`);
 
@@ -128,6 +133,9 @@ describe.skipIf(!venueReady)('couples pay the venue', () => {
     const refunds = await stripe.refunds.list({ payment_intent: paid.paymentIntentId }, { stripeAccount: account });
     expect(refunds.data[0]?.amount).toBe(50_000);
     await waitForStatus(p.id, 'refunded', 45_000);
-    await waitForEmail({ to: FLOW_VENUE.email, since }, (e) => /Refund issued/.test(e.subject));
+    await waitForEmail({ to: FLOW_VENUE.email, since }, (e) => e.subject === 'Refund issued to Skyler James');
+    // One "Payment received" for the payment; the refund alert isn't another one.
+    const received = (await outbox({ to: FLOW_VENUE.email, since })).filter((e) => /Payment received/.test(e.subject) && e.subject.includes('Skyler James'));
+    expect(received).toHaveLength(1);
   });
 });
