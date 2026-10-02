@@ -807,7 +807,13 @@ export async function onInstallmentIntentUpdate(pi: Stripe.PaymentIntent): Promi
   const row = data as (InstallmentRow & { status: string }) | null;
   if (!row || row.status === 'paid') return;
   if (pi.status === 'succeeded') await markInstallmentPaid(row, pi);
-  else if (pi.status === 'requires_payment_method' || pi.status === 'canceled') {
+  else if (
+    (pi.status === 'requires_payment_method' || pi.status === 'canceled')
+    // Only a payment still in flight (a bank payment): a card that declined was
+    // already counted when it was charged, and counting it again here used to
+    // end the plan's retries after two tries instead of four.
+    && row.status === 'processing' && row.payment_intent_id === pi.id
+  ) {
     await markInstallmentFailed(row, pi.last_payment_error?.message || 'The bank payment didn’t go through', pi.id);
   }
 }
