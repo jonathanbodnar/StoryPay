@@ -7,10 +7,13 @@
  *   node scripts/staging/check-deploy.mjs           # the current commit
  *   node scripts/staging/check-deploy.mjs <sha>
  *
- * Report-only for now: production still deploys from main.
+ * The result is recorded per commit (in .git/storyvenue-checks/), and
+ * scripts/staging/release.mjs only puts a commit live that passed here.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const SERVICE = 'StoryVenue Backend';
 const ENV = 'Dev';
@@ -59,4 +62,10 @@ for (const [name, cmd] of suites) {
 
 console.log('\n── Summary ──');
 for (const [name, ok] of results) console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`);
-process.exit(results.every(([, ok]) => ok) ? 0 : 1);
+const pass = results.every(([, ok]) => ok);
+const fullSha = execFileSync('git', ['rev-parse', sha], { encoding: 'utf8' }).trim();
+const dir = join(execFileSync('git', ['rev-parse', '--git-dir'], { encoding: 'utf8' }).trim(), 'storyvenue-checks');
+mkdirSync(dir, { recursive: true });
+writeFileSync(join(dir, `${fullSha}.json`), JSON.stringify({ sha: fullSha, pass, at: new Date().toISOString(), results }, null, 1));
+console.log(pass ? `\nAll checks passed. To put ${short} live: node scripts/staging/release.mjs ${short}` : '\nNot released: fix the failures, push, and check again.');
+process.exit(pass ? 0 : 1);
