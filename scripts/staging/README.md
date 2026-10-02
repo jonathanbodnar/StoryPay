@@ -22,6 +22,6 @@ Flow tests: `npm run test:flows`. Browser tests: `npm run test:browser`.
 Couple payment tests (`tests/flows/payments.test.ts`) need the **Flow Test Venue** connected to Stripe in test mode. Stripe's sign-up form is behind a CAPTCHA, so a person does it once:
 
 1. Open the test copy and sign in as `flow-owner@example.com` with `STAGING_PASSWORD`.
-2. Go to the payments setup and start the Stripe sign-up.
-3. Use Stripe's test values: phone `000 000 0000`, code `000000`, date of birth `01/01/1901`, SSN `000-00-0000` (or last four `0000`), address line `address_full_match`, bank routing `110000000`, account `000123456789`.
+2. Open `/dashboard/payments/settings` and click **Continue setup** (or **Connect with Stripe**).
+3. Fill in Stripe's form with its test values (a "Use test data" button, where Stripe shows one, does the same): phone `000 000 0000`, code `000000`, date of birth `01/01/1901`, SSN `000-00-0000` (or last four `0000`), address line `address_full_match`, bank routing `110000000`, account `000123456789`.
 4. Finish and return to the app. The tests run from then on.
