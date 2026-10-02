@@ -122,6 +122,17 @@ async function onInvoicePaid(inv: Stripe.Invoice): Promise<void> {
   const amount = inv.amount_paid ?? 0;
   if (amount <= 0) return; // the $0 invoice that opens a trial — status stays trialing
   const prev = String(v.directory_subscription_status ?? '');
+  // The receipt: the first charge after the trial and a payment that clears a
+  // decline, once per invoice. Not only by the status before this event:
+  // Stripe's subscription update (status active) often lands first, and the
+  // receipt was then skipped.
+  const events = (type: string) =>
+    supabaseAdmin.from('platform_billing_events').select('id', { count: 'exact', head: true }).eq('venue_id', v.id).eq('event_type', type);
+  const [{ count: charges }, { count: thisInvoice }, { count: declines }] = await Promise.all([
+    events('charge_success'),
+    events('charge_success').eq('stripe_invoice_id', inv.id),
+    events('payment_failed').eq('stripe_invoice_id', inv.id),
+  ]);
   await supabaseAdmin
     .from('venues')
     .update({
@@ -138,7 +149,7 @@ async function onInvoicePaid(inv: Stripe.Invoice): Promise<void> {
     externalEventId: `stripe_inv:${inv.id}`, invoiceId: inv.id,
     metadata: { subscription_id: sub.id, billing_reason: inv.billing_reason, hosted_invoice_url: inv.hosted_invoice_url },
   });
-  if (prev === 'trialing' || prev === 'past_due') {
+  if (!thisInvoice && (prev === 'trialing' || prev === 'past_due' || !charges || !!declines)) {
     const { notifyVenueSubscriptionCharged } = await import('@/lib/saas-billing-notifications');
     void notifyVenueSubscriptionCharged(v.id, amount).catch(() => {});
   }

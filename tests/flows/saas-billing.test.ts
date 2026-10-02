@@ -77,6 +77,9 @@ describe('a venue pays for the Bride Booking System™', () => {
   it('when the trial ends, the first charge succeeds: active, with a receipt', async () => {
     const since = new Date().toISOString();
     await stripe.subscriptions.update(subId, { trial_end: 'now', proration_behavior: 'none' });
+    // Stripe's "subscription active" notice often lands before "invoice paid";
+    // play that order every time, so the receipt can't depend on it.
+    await db.from('venues').update({ directory_subscription_status: 'active' }).eq('id', VENUE.id);
     await waitForStatus('active');
     await waitForEmail({ to: VENUE.email, since }, (e) => e.subject === 'Payment received — $97 for your Bride Booking System™');
     const { data: events } = await db.from('platform_billing_events').select('event_type, amount_cents').eq('venue_id', VENUE.id);
@@ -92,6 +95,8 @@ describe('a venue pays for the Bride Booking System™', () => {
     const inv = await stripe.invoices.create({ customer, subscription: subId, auto_advance: false });
     await stripe.invoices.finalizeInvoice(inv.id!);
     await stripe.invoices.pay(inv.id!).catch(() => null); // declined
+    // Same for "subscription past_due" before "payment failed": the email must still go.
+    await db.from('venues').update({ directory_subscription_status: 'past_due' }).eq('id', VENUE.id);
     await waitForStatus('past_due');
     await waitForEmail({ to: VENUE.email, since }, (e) => /card was declined/.test(e.subject));
 

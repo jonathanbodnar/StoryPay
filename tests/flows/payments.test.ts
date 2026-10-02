@@ -113,8 +113,9 @@ describe.skipIf(!venueReady)('couples pay the venue', () => {
     expect(second?.status).toBe('scheduled');
     expect(second?.due_date).toBe(inDays(30));
 
-    // It comes due today: the hourly job charges the saved card.
-    await db.from('proposal_installments').update({ due_date: today() }).eq('id', second!.id);
+    // It comes due now (the job goes by next_attempt_at, as the app's own
+    // reschedule sets it): the hourly job charges the saved card.
+    await db.from('proposal_installments').update({ due_date: today(), next_attempt_at: new Date().toISOString() }).eq('id', second!.id);
     const job = await fetch(`${env.base}/api/cron/installments`, {
       headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${process.env.MARKETING_CRON_SECRET}` },
     });
