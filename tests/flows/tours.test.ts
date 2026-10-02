@@ -47,8 +47,13 @@ describe('a venue books a tour for a couple', () => {
     expect(stage!.name).toMatch(/tour booked/i);
 
     const { data: auto } = await db.from('marketing_automations').select('id').eq('venue_id', FLOW_VENUE.id).eq('name', 'Booked Tour Sequence — Booking System').single();
-    const { data: enrolled } = await db.from('marketing_automation_enrollments').select('id').eq('lead_id', leadId).eq('automation_id', auto!.id);
-    expect(enrolled ?? []).toHaveLength(1);
+    // It starts in the background, like moving the card by hand.
+    let enrolled: unknown[] = [];
+    for (let i = 0; i < 15 && enrolled.length === 0; i++) {
+      if (i) await new Promise((r) => setTimeout(r, 1000));
+      enrolled = (await db.from('marketing_automation_enrollments').select('id').eq('lead_id', leadId).eq('automation_id', auto!.id)).data ?? [];
+    }
+    expect(enrolled).toHaveLength(1);
   });
 
   it('the couple’s tour reminder goes out when it comes due', async () => {
