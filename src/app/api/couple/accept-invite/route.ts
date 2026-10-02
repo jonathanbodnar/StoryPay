@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { normalizePhone } from '@/lib/ghl';
 import { getCoupleAuthUser } from '@/lib/couple-server';
 import { checkPassword } from '@/lib/password-policy';
 
@@ -141,7 +142,8 @@ export async function POST(request: NextRequest) {
     email,
     password,
     email_confirm: true,
-    phone: phone || undefined,
+    // As typed in the invite, e.g. (555) 123-4567: the login service takes +15551234567 only.
+    phone: normalizePhone(phone) ?? undefined,
     user_metadata: {
       display_name: fullName,
       first_name: firstName ?? '',

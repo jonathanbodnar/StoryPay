@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { normalizePhone } from '@/lib/ghl';
 import { checkPassword } from '@/lib/password-policy';
 import { rateLimit, getClientIp, formatRetryAfter } from '@/lib/rate-limit';
 
@@ -70,7 +71,9 @@ export async function POST(request: NextRequest) {
     email,
     password,
     email_confirm: true,
-    phone: phone || undefined,
+    // The login service takes +15551234567 only; the form shows (555) 123-4567,
+    // and a typed number used to fail the whole sign-up.
+    phone: normalizePhone(phone) ?? undefined,
     user_metadata: { display_name: display_name ?? '', first_name, last_name, role: 'couple' },
   });
 

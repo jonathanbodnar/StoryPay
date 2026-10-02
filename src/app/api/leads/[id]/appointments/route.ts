@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
+import { onMarketingStageChanged } from '@/lib/marketing-email-worker';
 import { pushEventCreateToGoogle } from '@/lib/google-calendar-push';
 
 export const dynamic = 'force-dynamic';
@@ -193,6 +194,9 @@ export async function POST(
         .update({ stage_id: tourStage.id, status: 'tour_booked' })
         .eq('id', leadId)
         .eq('venue_id', venueId);
+      // The same stage-change automations as moving the card by hand (the
+      // Booking System's "Booked Tour" sequence starts on entering this stage).
+      void onMarketingStageChanged(venueId, leadId, tourStage.id, (lead.stage_id as string | null) ?? null);
     }
   }
 
