@@ -46,15 +46,24 @@ export async function POST(request: NextRequest) {
 
   const calendlyEventId = eventUri.split('/').pop()!;
 
-  // venues table is fine via supabaseAdmin (not a new table)
-  const { data: venue } = await supabaseAdmin
+  // The venue this Calendly organization belongs to. When more than one venue
+  // connected the same Calendly account, each has its own subscription and
+  // signing key, so the signature says which one this delivery is for (this
+  // used to drop the booking for all of them).
+  const { data: matches } = await supabaseAdmin
     .from('venues')
     .select('id, calendly_webhook_signing_key')
     .eq('calendly_org_uri', orgUri)
-    .eq('calendly_connected', true)
-    .maybeSingle();
-
-  if (!venue) return NextResponse.json({ received: true });
+    .eq('calendly_connected', true);
+  const candidates = (matches ?? []) as Array<{ id: string; calendly_webhook_signing_key: string | null }>;
+  const venue = candidates.length <= 1
+    ? candidates[0]
+    : candidates.find((c) => c.calendly_webhook_signing_key
+        && verifyCalendlySignature(rawBody, request.headers.get('calendly-webhook-signature'), c.calendly_webhook_signing_key).valid);
+  if (!venue) {
+    if (candidates.length > 1) console.warn(`[calendly webhook] ${candidates.length} venues share ${orgUri} and none matches this signature`);
+    return NextResponse.json({ received: true });
+  }
   const venueId = venue.id;
 
   const signingKey = venue.calendly_webhook_signing_key as string | null;

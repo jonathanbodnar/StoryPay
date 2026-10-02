@@ -6,6 +6,7 @@
  * have been sent (GET /api/staging/integrations). Nothing reaches the real
  * services. A key, token or code starting with "bad" is treated as wrong.
  */
+import { createHash } from 'node:crypto';
 
 export interface IntegrationCall {
   at: string;
@@ -94,7 +95,9 @@ export async function fakeIntegrationFetch(input: RequestInfo | URL, init?: Requ
     if (isBad(auth)) return json(401, { title: 'Unauthenticated', message: 'The access token is invalid' });
     const base = 'https://api.calendly.com';
     if (m === 'GET' && p === '/users/me') {
-      return json(200, { resource: { uri: `${base}/users/test-copy-user`, name: 'Test Copy Calendly', email: 'calendly@test-copy.example.com', current_organization: `${base}/organizations/test-copy-org` } });
+      // Each token is its own Calendly account, as each venue's is.
+      const account = createHash('sha256').update(String(auth)).digest('hex').slice(0, 12);
+      return json(200, { resource: { uri: `${base}/users/test-copy-${account}`, name: 'Test Copy Calendly', email: 'calendly@test-copy.example.com', current_organization: `${base}/organizations/test-copy-${account}` } });
     }
     if (m === 'POST' && p === '/webhook_subscriptions') {
       const b = (body ?? {}) as { url?: string; organization?: string; events?: string[] };

@@ -101,6 +101,30 @@ describe('connected services', () => {
     const { data: events } = await db.from('calendar_events').select('id').eq('venue_id', venueId).like('notes', `%calendly_event_id:connect-${runId}%`);
     expect(events).toHaveLength(1);
 
+    // A second venue connects the same Calendly account: each booking lands
+    // only on the venue whose subscription it came through (its signature).
+    const other = new Browser();
+    const signup = await other.fetch('/api/auth/signup', {
+      method: 'POST', json: { venue_name: `Sister Barn ${runId}`, first_name: 'Sis', last_name: 'Ter', email: `sister.${runId}@example.com`, phone: '(212) 555-0169', password: `Sister-${runId}-Barn-2027!` },
+    });
+    expect(signup.status, await signup.clone().text()).toBe(200);
+    expect((await other.fetch('/api/integrations/calendly/connect', { method: 'POST', json: { access_token: `cal-${runId}` } })).status).toBe(200);
+    const { data: sister } = await db.from('venues').select('id, calendly_webhook_signing_key, calendly_org_uri').ilike('email', `sister.${runId}@example.com`).single();
+    expect(sister!.calendly_org_uri).toBe(v!.calendly_org_uri);
+    const raw2 = raw.replace(`connect-${runId}`, `sister-${runId}`).replace(`cal.connect.${runId}`, `cal.sister.${runId}`);
+    const t2 = Math.floor(Date.now() / 1000);
+    const res2 = await fetch(`${env.base}/api/webhooks/calendly`, {
+      method: 'POST',
+      headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json', 'calendly-webhook-signature': `t=${t2},v1=${createHmac('sha256', sister!.calendly_webhook_signing_key).update(`${t2}.${raw2}`).digest('hex')}` },
+      body: raw2,
+    });
+    expect(res2.status).toBe(200);
+    const { data: atSister } = await db.from('calendar_events').select('id').eq('venue_id', sister!.id).like('notes', `%calendly_event_id:sister-${runId}%`);
+    const { data: atFirst } = await db.from('calendar_events').select('id').eq('venue_id', venueId).like('notes', `%calendly_event_id:sister-${runId}%`);
+    expect(atSister).toHaveLength(1);
+    expect(atFirst).toHaveLength(0);
+    expect((await other.fetch('/api/integrations/calendly/disconnect', { method: 'POST' })).status).toBeLessThan(300);
+
     const off = new Date().toISOString();
     expect((await owner.fetch('/api/integrations/calendly/disconnect', { method: 'POST' })).status).toBeLessThan(300);
     await waitForIntegrationCall('calendly', off, (c) => c.method === 'DELETE' && c.path.startsWith('/webhook_subscriptions/'));
@@ -198,5 +222,9 @@ describe('connected services', () => {
     // The owner hears about it once, like any other lead.
     const alert = await waitForEmail({ to: email, since }, (e) => e.html.includes(emails.calendly));
     expect(alert.html).toContain('Calendly booking');
+
+    expect((await owner.fetch('/api/integrations/calendly/disconnect', { method: 'POST' })).status).toBeLessThan(300);
+    expect((await owner.fetch('/api/integrations/tripleseat', { method: 'DELETE' })).status).toBe(200);
+    expect((await owner.fetch('/api/integrations/eventtemple', { method: 'DELETE' })).status).toBe(200);
   });
 });
