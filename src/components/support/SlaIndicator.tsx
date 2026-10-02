@@ -38,8 +38,8 @@ export function SlaDot({
   /** 'ticket' uses the tighter Venue Support SLA scale — see lib/support/sla.ts. */
   kind?: SlaKind;
 }) {
-  useNow();
-  const sla: SlaInfo = classifySla(iso, Date.now(), kind);
+  const now = useNow();
+  const sla: SlaInfo = classifySla(iso, now, kind);
 
   return (
     <span
@@ -68,8 +68,8 @@ export function SlaPill({
   /** 'ticket' uses the tighter Venue Support SLA scale — see lib/support/sla.ts. */
   kind?: SlaKind;
 }) {
-  useNow();
-  const sla: SlaInfo = classifySla(iso, Date.now(), kind);
+  const now = useNow();
+  const sla: SlaInfo = classifySla(iso, now, kind);
 
   const sizeCls = size === 'sm'
     ? 'px-1.5 py-0.5 text-[10px]'

@@ -487,7 +487,7 @@ function StateExplainer({ snap }: { snap: AiContactSnapshot }) {
       return (
         <div className={`${cls} border-gray-200 bg-gray-50 text-gray-700`}>
           <strong className="block mb-0.5">Marked not interested</strong>
-          The contact's reply was classified as negative intent. You can re-enable AI if you have
+          The contact&apos;s reply was classified as negative intent. You can re-enable AI if you have
           new context (e.g. they changed their mind), but only do so if appropriate.
         </div>
       );
@@ -511,7 +511,7 @@ function StateExplainer({ snap }: { snap: AiContactSnapshot }) {
       }
       return (
         <div className={`${cls} border-gray-200 bg-gray-50 text-gray-600`}>
-          <strong className="block mb-0.5">AI hasn't started yet</strong>
+          <strong className="block mb-0.5">AI hasn&apos;t started yet</strong>
           AI Concierge activates automatically after 14 days of silence following an outbound message.
           {snap.venueAiEnabled
             ? ' Just keep messaging the contact normally.'

@@ -74,6 +74,7 @@ export default function EmailSettingsPage() {
     setLoading(false);
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- on mount these flags already hold these values; the rest waits for the network
   useEffect(() => { void load(); }, [load]);
 
   async function handleConnect() {
@@ -328,7 +329,7 @@ export default function EmailSettingsPage() {
             className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
           >
             {checking ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            I've added the records — check now
+            I&apos;ve added the records — check now
           </button>
         </div>
       )}

@@ -23,7 +23,7 @@ export async function GET() {
   const baseSelect = 'directory_verified_status, directory_sponsored_status, directory_plan_id';
   const fullSelect = `${baseSelect}, directory_addon_verified, directory_addon_sponsored`;
   let venue: Record<string, unknown> | null = null;
-  let { data: venueWithAddons, error: addonsErr } = await supabaseAdmin
+  const { data: venueWithAddons, error: addonsErr } = await supabaseAdmin
     .from('venues')
     .select(fullSelect)
     .eq('id', venueId)

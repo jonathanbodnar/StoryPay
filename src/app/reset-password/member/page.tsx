@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
 import PasswordStrengthBar from '@/components/PasswordStrengthBar';
 import { checkPassword } from '@/lib/password-policy';
+import Link from 'next/link';
 
 function MemberResetForm() {
   const router = useRouter();
@@ -140,9 +141,9 @@ function MemberResetForm() {
               </form>
 
               <div className="mt-5 text-center">
-                <a href="/login" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
+                <Link href="/login" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
                   ← Back to Sign In
-                </a>
+                </Link>
               </div>
             </>
           )}

@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     }
 
     const vcIds = Array.from(new Set(Array.from(leadToVcId.values())));
-    let vcToThreadId = new Map<string, string>();
+    const vcToThreadId = new Map<string, string>();
     if (vcIds.length > 0) {
       const { data: threadRows } = await supabaseAdmin
         .from('conversation_threads')

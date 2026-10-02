@@ -372,6 +372,7 @@ export default function MarketingAnalyticsPage() {
     setLoading(false);
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- on mount these flags already hold these values; the rest waits for the network
   useEffect(() => { void load(); }, [load]);
 
   const openModal = (type: AnalyticsDetailType, title: string, count: number, accentClass: string) => {

@@ -25,6 +25,13 @@ export default function CoupleInspirationPage() {
   );
 }
 
+/** The message shown after Pinterest's sign-in sends the couple back here. */
+const PINTEREST_RESULT: Record<string, { kind: 'ok' | 'err'; msg: string }> = {
+  connected: { kind: 'ok', msg: 'Pinterest connected. Import your boards below.' },
+  denied: { kind: 'err', msg: 'Pinterest connection was cancelled.' },
+  error: { kind: 'err', msg: 'Could not connect Pinterest. Please try again.' },
+};
+
 function CoupleInspirationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,7 +42,9 @@ function CoupleInspirationContent() {
   const [inspiration, setInspiration] = useState<WeddingInspiration>(EMPTY_INSPIRATION);
   const [pin, setPin] = useState<PinterestStatus>({ connected: false, username: null, configured: false });
   const [importOpen, setImportOpen] = useState(false);
-  const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(
+    () => PINTEREST_RESULT[searchParams.get('pinterest') ?? ''] ?? null,
+  );
 
   const loadPinStatus = useCallback(async () => {
     const res = await coupleAuthedFetch('/api/couple/integrations/pinterest/status');
@@ -67,6 +76,7 @@ function CoupleInspirationContent() {
   }, [router, loadPinStatus]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- it only sets state after awaiting the network
     void load();
   }, [load]);
 
@@ -74,14 +84,8 @@ function CoupleInspirationContent() {
   useEffect(() => {
     const p = searchParams.get('pinterest');
     if (!p) return;
-    if (p === 'connected') {
-      setFlash({ kind: 'ok', msg: 'Pinterest connected. Import your boards below.' });
-      void loadPinStatus();
-    } else if (p === 'denied') {
-      setFlash({ kind: 'err', msg: 'Pinterest connection was cancelled.' });
-    } else if (p === 'error') {
-      setFlash({ kind: 'err', msg: 'Could not connect Pinterest. Please try again.' });
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- it only sets state after awaiting the network
+    if (p === 'connected') void loadPinStatus();
     router.replace('/couple/inspiration');
   }, [searchParams, router, loadPinStatus]);
 

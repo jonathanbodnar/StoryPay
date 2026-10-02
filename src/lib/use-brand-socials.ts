@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 // Per-venue social network links — singleton cache shared across every
 // component that calls useBrandSocials() so a save in one place updates
@@ -30,6 +30,7 @@ const KNOWN = new Set<string>(SOCIAL_PLATFORM_DEFS.map(p => p.id));
 let cached: SocialLink[] | null = null;
 let pending: Promise<SocialLink[]> | null = null;
 const listeners = new Set<(links: SocialLink[]) => void>();
+const NONE: SocialLink[] = [];
 
 function broadcast(next: SocialLink[]) {
   cached = next;
@@ -51,8 +52,8 @@ function normalize(raw: { platform?: unknown; url?: unknown } | null | undefined
   return { platform: p, url: withProto };
 }
 
-async function loadFromServer(): Promise<SocialLink[]> {
-  if (cached) return cached;
+async function loadFromServer(force = false): Promise<SocialLink[]> {
+  if (cached && !force) return cached;
   if (pending) return pending;
   pending = fetch('/api/venues/me', { cache: 'no-store' })
     .then(r => (r.ok ? r.json() : null))
@@ -92,20 +93,14 @@ async function persist(next: SocialLink[]) {
   }
 }
 
-export function useBrandSocials() {
-  const [socials, setSocials] = useState<SocialLink[]>(cached ?? []);
+function subscribe(onChange: () => void): () => void {
+  listeners.add(onChange);
+  if (cached === null) void loadFromServer();
+  return () => { listeners.delete(onChange); };
+}
 
-  useEffect(() => {
-    listeners.add(setSocials);
-    if (cached === null) {
-      void loadFromServer();
-    } else {
-      setSocials(cached);
-    }
-    return () => {
-      listeners.delete(setSocials);
-    };
-  }, []);
+export function useBrandSocials() {
+  const socials = useSyncExternalStore(subscribe, () => cached ?? NONE, () => NONE);
 
   const setUrl = useCallback(async (platform: string, url: string) => {
     const p = platform.trim().toLowerCase();
@@ -135,10 +130,8 @@ export function useBrandSocials() {
   }, []);
 
   const refresh = useCallback(async () => {
-    cached = null;
     pending = null;
-    const next = await loadFromServer();
-    setSocials(next);
+    await loadFromServer(true); // tells every caller
   }, []);
 
   const get = useCallback((platform: string) => {

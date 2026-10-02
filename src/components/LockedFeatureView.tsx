@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useIsClient } from '@/hooks/useIsClient';
 import { createPortal } from 'react-dom';
 import { Lock, X, ArrowRight, Sparkles, CalendarClock } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
@@ -331,8 +332,7 @@ export function LockedFeatureModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useIsClient(); // the modal is portalled into document.body
 
   useEffect(() => {
     if (!open) return;

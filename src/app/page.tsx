@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { CheckCircle2, ChevronDown, X, Loader2, TrendingUp, Bell, CreditCard, FileText } from 'lucide-react';
+import Link from 'next/link';
 
 const BRAND = '#1b1b1b';
 const LAUNCH_DATE = new Date('2026-06-01T00:00:00Z');
@@ -380,9 +381,9 @@ export default function LandingPage() {
         {/* Nav */}
         <nav className="mx-auto max-w-5xl px-5 sm:px-8 py-5 flex items-center justify-between">
           <Image src="/storypay-logo-dark.png" alt="StoryVenue" width={110} height={26} />
-          <a href="/login" className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all">
+          <Link href="/login" className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all">
             Log In
-          </a>
+          </Link>
         </nav>
 
         {/* Hero content */}
@@ -561,7 +562,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-4 text-xs text-gray-400">
             <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy Policy</a>
             <a href="/terms" className="hover:text-gray-600 transition-colors">Terms of Use</a>
-            <a href="/admin" className="hover:text-gray-600 transition-colors">Admin</a>
+            <Link href="/admin" className="hover:text-gray-600 transition-colors">Admin</Link>
           </div>
         </div>
       </footer>

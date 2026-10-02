@@ -849,7 +849,7 @@ function ReportModal({ onClose }: { onClose: () => void }) {
             {tab === 'schedule' && (
               <div className="space-y-4">
                 <p className="text-[12px] text-gray-500">
-                  Turn on auto-send and we'll email the 30-day report to the addresses below every month — no manual work required.
+                  Turn on auto-send and we&apos;ll email the 30-day report to the addresses below every month — no manual work required.
                 </p>
                 <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
                   <div>
@@ -955,6 +955,7 @@ function AiConciergeDigestCard({ dateRange }: { dateRange: DateRange }) {
   useEffect(() => {
     if (locked !== false) return; // only fetch when we know access is granted
     let alive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- shows the spinner while the digest for the new date range loads
     setLoading(true);
     const params = new URLSearchParams({ from: dateRange.from, to: dateRange.to });
     fetch(`/api/dashboard/ai-concierge/digest?${params}`, { cache: 'no-store' })

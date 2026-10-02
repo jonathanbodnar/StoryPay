@@ -37,6 +37,7 @@ export default function CoupleVendorsPage() {
   }, [router]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- it only sets state after awaiting the network
     void load();
   }, [load]);
 

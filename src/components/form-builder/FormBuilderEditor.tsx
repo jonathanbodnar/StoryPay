@@ -1411,11 +1411,10 @@ function FormSettingsPanel({
 }) {
   const s: FormSettings = settings ?? {};
   const [stages, setStages] = useState<StageOption[]>([]);
-  const [stagesLoading, setStagesLoading] = useState(false);
+  const [stagesLoading, setStagesLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    setStagesLoading(true);
     fetch('/api/pipelines')
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { pipelines?: Array<{ name: string; stages?: Array<{ id: string; name: string }> }> } | null) => {

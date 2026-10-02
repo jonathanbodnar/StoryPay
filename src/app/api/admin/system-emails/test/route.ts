@@ -46,11 +46,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .select('subject, heading, body, button_text')
       .eq('key', key)
       .maybeSingle();
-    if (data) {
-      subject     = (data as any).subject     || subject;
-      heading     = (data as any).heading     || heading;
-      bodyText    = (data as any).body        || bodyText;
-      button_text = (data as any).button_text !== undefined ? (data as any).button_text : button_text;
+    const saved = data as { subject: string | null; heading: string | null; body: string | null; button_text: string | null } | null;
+    if (saved) {
+      subject     = saved.subject     || subject;
+      heading     = saved.heading     || heading;
+      bodyText    = saved.body        || bodyText;
+      button_text = saved.button_text !== undefined ? saved.button_text : button_text;
     }
   }
 

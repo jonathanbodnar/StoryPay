@@ -68,7 +68,6 @@ function PreviewModal({ keyId, onClose }: { keyId: string; onClose: () => void }
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/admin/system-emails/preview?key=${encodeURIComponent(keyId)}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -301,7 +300,7 @@ function TemplateCard({
 
   return (
     <>
-      {previewing && <PreviewModal keyId={tpl.key} onClose={() => setPreviewing(false)} />}
+      {previewing && <PreviewModal key={tpl.key} keyId={tpl.key} onClose={() => setPreviewing(false)} />}
       {editing && tpl.editable && (
         <EditDrawer
           tpl={tpl}

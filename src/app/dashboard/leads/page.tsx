@@ -3536,7 +3536,12 @@ function HexColorField({
   const [text, setText] = useState<string>(value || '');
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => { setText(value || ''); }, [value]);
+  // Follow the value when the parent changes it.
+  const [shownValue, setShownValue] = useState(value);
+  if (value !== shownValue) {
+    setShownValue(value);
+    setText(value || '');
+  }
 
   useEffect(() => {
     if (!open) return;

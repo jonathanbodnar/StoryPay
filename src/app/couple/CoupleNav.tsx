@@ -60,20 +60,12 @@ export function CoupleNav() {
   // Determine whether this account is a collaborator (not the owning couple) so
   // we can hide the owner-private Budget tool from the nav.
   useEffect(() => {
-    if (!session) {
-      setIsCollaborator(false);
-      return;
-    }
+    if (!session) return; // signed out: hideBudget below is false anyway
     let cancelled = false;
-    void (async () => {
-      try {
-        const res = await coupleAuthedFetch('/api/couple/wedding');
-        const data = await res.json().catch(() => ({}));
-        if (!cancelled) setIsCollaborator(data.access === 'edit' || data.access === 'view');
-      } catch {
-        if (!cancelled) setIsCollaborator(false);
-      }
-    })();
+    coupleAuthedFetch('/api/couple/wedding')
+      .then((res) => res.json().catch(() => ({})))
+      .then((data) => { if (!cancelled) setIsCollaborator(data.access === 'edit' || data.access === 'view'); })
+      .catch(() => { if (!cancelled) setIsCollaborator(false); });
     return () => {
       cancelled = true;
     };
@@ -187,7 +179,7 @@ export function CoupleNav() {
         </div>
       </nav>
 
-      {hubOpen && <WeddingPlannerModal onClose={() => setHubOpen(false)} hideBudget={isCollaborator} />}
+      {hubOpen && <WeddingPlannerModal onClose={() => setHubOpen(false)} hideBudget={!!session && isCollaborator} />}
     </>
   );
 }

@@ -76,6 +76,9 @@ interface NotifRow {
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+/** Starts Google's sign-in, so it needs a full page load rather than a <Link>. */
+const GOOGLE_CONNECT_PATH = '/api/calendar/google/connect';
+
 const TIMEZONE_LIST = [
   'America/New_York',
   'America/Chicago',
@@ -544,8 +547,12 @@ export default function CalendarSettingsPage() {
 
   const tabParam = searchParams.get('tab') ?? 'general';
   const [activeTab, setActiveTab] = useState(tabParam);
-
-  useEffect(() => { setActiveTab(searchParams.get('tab') ?? 'general'); }, [searchParams]);
+  // Follow ?tab= when it changes (links, back/forward).
+  const [shownTabParam, setShownTabParam] = useState(tabParam);
+  if (tabParam !== shownTabParam) {
+    setShownTabParam(tabParam);
+    setActiveTab(tabParam);
+  }
 
   const setTab = (t: string) => {
     router.replace(`/dashboard/settings/calendar?tab=${t}`, { scroll: false });
@@ -729,6 +736,7 @@ function ConnectionsTab() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- shows the spinner while Google calendars load
     if (settings.google_connected) loadGoogleCals();
   }, [settings.google_connected, loadGoogleCals]);
 
@@ -856,7 +864,7 @@ function ConnectionsTab() {
               Connect Google Calendar for two-way sync to prevent double bookings and conflicts.
             </p>
             <a
-              href="/api/calendar/google/connect"
+              href={GOOGLE_CONNECT_PATH}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:opacity-85"
             >
               <Plus size={14} /> Connect Google Calendar
@@ -1471,7 +1479,7 @@ function CalendarsTab() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
-        Create up to 5 calendars (e.g. "Tour Calendar", "Phone Call", "Tasting") each with its own booking rules and notification templates. All appear on one unified calendar view.
+        Create up to 5 calendars (e.g. &quot;Tour Calendar&quot;, &quot;Phone Call&quot;, &quot;Tasting&quot;) each with its own booking rules and notification templates. All appear on one unified calendar view.
       </p>
 
       {error && (
@@ -1517,7 +1525,7 @@ function CalendarsTab() {
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-semibold text-gray-700">Booking Rules for this calendar</p>
-                    <p className="text-[11px] text-gray-400">Select "— default —" to inherit global settings.</p>
+                    <p className="text-[11px] text-gray-400">Select &quot;— default —&quot; to inherit global settings.</p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <DurationInput
@@ -1986,7 +1994,7 @@ function NotificationsTab() {
 
       {selectedCalendar && (
         <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
-          Editing templates for <strong>{selectedCalendar.name}</strong>. These override the "All Calendars" defaults for events in this calendar. Leave a channel template body empty to inherit the default.
+          Editing templates for <strong>{selectedCalendar.name}</strong>. These override the &quot;All Calendars&quot; defaults for events in this calendar. Leave a channel template body empty to inherit the default.
         </div>
       )}
 

@@ -85,8 +85,8 @@ export default function MobileTabBar({ venueId, hasConciergeAddon = false }: { v
   const refreshLeads = useCallback(() => {
     if (typeof window === 'undefined') return;
     if (window.location.pathname.startsWith('/dashboard/leads')) {
+      // The inbox is open, so everything is seen (the badge already shows 0).
       try { localStorage.setItem(LEADS_SEEN_KEY, new Date().toISOString()); } catch {}
-      setUnreadLeads(0);
       return;
     }
     let since: string | null = null;
@@ -125,10 +125,14 @@ export default function MobileTabBar({ venueId, hasConciergeAddon = false }: { v
   );
 
   // Opening the Lead Inbox acknowledges everything so far.
+  const [badgePath, setBadgePath] = useState(pathname);
+  if (pathname !== badgePath) {
+    setBadgePath(pathname);
+    if (pathname.startsWith('/dashboard/leads')) setUnreadLeads(0);
+  }
   useEffect(() => {
     if (pathname.startsWith('/dashboard/leads')) {
       try { localStorage.setItem(LEADS_SEEN_KEY, new Date().toISOString()); } catch {}
-      setUnreadLeads(0);
     }
   }, [pathname]);
 

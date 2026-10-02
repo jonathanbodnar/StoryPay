@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -796,7 +796,15 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const panStartRef             = useRef({ clientX: 0, clientY: 0, px: 0, py: 0 });
   const canvasContainerRef      = useRef<HTMLDivElement>(null);
   const containerInitialized    = useRef(false);
-  const triggerRowRef           = useRef<HTMLDivElement>(null);
+  // The trigger row's height places the connector line below it; measured as
+  // it changes rather than read while drawing.
+  const [triggerRowH, setTriggerRowH] = useState(100);
+  const triggerRowRef = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const ro = new ResizeObserver(() => setTriggerRowH(el.offsetHeight || 100));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const autoSaveTimerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipAutoSaveRef         = useRef(true); // becomes false after first load completes
 
@@ -808,10 +816,6 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const [logRows, setLogRows]             = useState<LogRow[]>([]);
   const [logLoading, setLogLoading]       = useState(false);
   const [logFilter, setLogFilter]         = useState('all');
-
-  // sync refs
-  zoomRef.current = zoom;
-  panRef.current  = pan;
 
   // ── DnD ───────────────────────────────────────────────────────────────────
   const [activePaletteType, setActivePaletteType] = useState<StepKind | null>(null);
@@ -851,14 +855,12 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   const [emailExtra, setEmailExtra] = useState<Record<string, { cc?: boolean; bcc?: boolean }>>({});
   // The button element that opened the popover, used to position it via portal.
   const [mergeAnchor, setMergeAnchor]       = useState<HTMLElement | null>(null);
-  const mergeAnchorRef                      = useRef<HTMLElement | null>(null);
-  mergeAnchorRef.current                    = mergeAnchor;
+  const mergeAnchorRef = useMemo(() => ({ current: mergeAnchor }), [mergeAnchor]);
   // Ref to the right panel aside; popovers clamp themselves inside its bounds.
   const rightPaneRef                        = useRef<HTMLElement | null>(null);
   // Anchor for the trigger-link dropdown (separate from merge-var anchor).
   const [triggerLinkAnchor, setTriggerLinkAnchor] = useState<HTMLElement | null>(null);
-  const triggerLinkAnchorRef                      = useRef<HTMLElement | null>(null);
-  triggerLinkAnchorRef.current                    = triggerLinkAnchor;
+  const triggerLinkAnchorRef = useMemo(() => ({ current: triggerLinkAnchor }), [triggerLinkAnchor]);
   const [triggerLinkOpen, setTriggerLinkOpen] = useState(false);
   const smsTextareaRef                      = useRef<HTMLTextAreaElement>(null);
 
@@ -1189,6 +1191,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
     if (res.ok) { const d = await res.json(); setEnrollCounts(d.counts ?? {}); }
   }, [id]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- it only sets state after awaiting the network
   useEffect(() => { if (!loading) void refreshCounts(); }, [loading, refreshCounts]);
 
   // Poll every 30 s so pills move automatically once delays expire and the cron fires.
@@ -1394,7 +1397,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
   }
 
   function addStepAt(kind: StepKind, insertIdx: number) {
-    const localId = `s-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const localId = `s-${crypto.randomUUID()}`;
     const step: LocalStep =
       kind === 'delay'               ? { localId, step_type: 'delay',               delay_minutes: 60 }
       : kind === 'send_sms'          ? { localId, step_type: 'send_sms',            body: DEFAULT_SMS }
@@ -2069,7 +2072,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
                      transparent "Add New Trigger" dashed button. */}
                 {(() => {
                   const hasTriggers = !!auto.trigger_type || extraTriggers.length > 0;
-                  const rowH = triggerRowRef.current?.offsetHeight ?? 100;
+                  const rowH = triggerRowH;
                   return (
                     <div
                       aria-hidden
@@ -3645,7 +3648,7 @@ export default function WorkflowBuilderView({ workflowId }: { workflowId: string
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
               <div>
                 <h3 className="text-base font-semibold text-gray-900">Contacts at Step {enrollModal.stepIndex + 1}</h3>
-                <p className="mt-0.5 text-xs text-gray-500">Select contacts and click "Retry / Advance" to execute the step immediately. Failed contacts will be reset and retried.</p>
+                <p className="mt-0.5 text-xs text-gray-500">Select contacts and click &quot;Retry / Advance&quot; to execute the step immediately. Failed contacts will be reset and retried.</p>
               </div>
               <button type="button" onClick={() => setEnrollModal(null)} className="text-gray-400 hover:text-gray-700"><Minus size={18} /></button>
             </div>

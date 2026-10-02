@@ -888,7 +888,7 @@ NOTIFY pgrst, 'reload schema';`}</pre>
                         onChange={(e) => setEditMeta({ ...editMeta, contact_sales: e.target.checked })}
                       />
                       <span className="text-indigo-600">📞</span>
-                      <span className="text-indigo-800">Contact sales — hide price and replace upgrade CTA with "Book a Strategy Call" for venues not yet on this plan</span>
+                      <span className="text-indigo-800">Contact sales — hide price and replace upgrade CTA with &quot;Book a Strategy Call&quot; for venues not yet on this plan</span>
                     </label>
                   </div>
                   {/* Highlight badge */}

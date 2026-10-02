@@ -237,7 +237,7 @@ export default function ListingDirectoryStatusPage() {
           Add a blue verified badge or sponsored placement to your public listing on
           storyvenue.com. These optional add-ons are billed monthly and can be cancelled
           at any time. Pricing is subject to change — current subscribers will receive
-          at least 30 days' notice before any price increase takes effect.
+          at least 30 days&apos; notice before any price increase takes effect.
         </p>
       </div>
 

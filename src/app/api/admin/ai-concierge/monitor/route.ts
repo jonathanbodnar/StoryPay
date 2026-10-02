@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
     const { data: leadsRaw, error: leadsErr } = await leadsQuery;
     if (leadsErr) throw new Error(`leads query: ${leadsErr.message}`);
 
-    let leads = (leadsRaw ?? []) as Array<{
+    const leads = (leadsRaw ?? []) as Array<{
       id: string; venue_id: string;
       first_name: string | null; last_name: string | null; name: string | null;
       email: string | null; phone: string | null;

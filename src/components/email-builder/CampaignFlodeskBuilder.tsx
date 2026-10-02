@@ -425,8 +425,9 @@ function FlodeskColorPicker({ value, onChange }: { value: string; onChange: (v: 
   async function eyeDrop() {
     if (!('EyeDropper' in window)) return;
     try {
-      // @ts-ignore
-      const { sRGBHex } = await new window.EyeDropper().open();
+      // EyeDropper isn't in TypeScript's DOM types yet (Chromium only).
+      const { EyeDropper } = window as unknown as { EyeDropper: new () => { open(): Promise<{ sRGBHex: string }> } };
+      const { sRGBHex } = await new EyeDropper().open();
       applyHex(sRGBHex);
       setOpen(false);
     } catch {}
@@ -1917,6 +1918,7 @@ function ButtonInspector({
   useEffect(() => {
     try {
       const raw = localStorage.getItem('sp_saved_button_styles');
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- saved styles live in browser storage, which only exists after mount
       if (raw) setSavedStyles(JSON.parse(raw) as SavedButtonStyle[]);
     } catch { /* ignore */ }
   }, []);
@@ -2423,7 +2425,7 @@ function SavedStylesModal({
         ) : (
           <div className="mb-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
             <p className="text-xs text-gray-400 leading-snug">
-              No saved styles yet. Click the button below to save the current button's look.
+              No saved styles yet. Click the button below to save the current button&apos;s look.
             </p>
           </div>
         )}
@@ -3605,7 +3607,7 @@ function BlockInspectorPanel({
     // All three swatches share identical chip + glyph dimensions so the user
     // sees a uniform row of equal-sized icons that differ only in chip
     // styling (none / filled / outlined).
-    const StyleSwatch = ({ kind, label }: { kind: NonNullable<EmailBlock['socialIconStyle']>; label: string }) => {
+    const styleSwatch = (kind: NonNullable<EmailBlock['socialIconStyle']>, label: string) => {
       const active = iconStyle === kind;
       const chip: React.CSSProperties = {
         width: 32,
@@ -3634,7 +3636,7 @@ function BlockInspectorPanel({
       );
     };
 
-    const SizeChip = ({ k, label }: { k: NonNullable<EmailBlock['socialIconSize']>; label: string }) => {
+    const sizeChip = (k: NonNullable<EmailBlock['socialIconSize']>, label: string) => {
       const active = sizeKey === k;
       return (
         <button
@@ -3662,9 +3664,9 @@ function BlockInspectorPanel({
             <div>
               <p className={LABEL}>Style</p>
               <div className="flex items-center gap-2">
-                <StyleSwatch kind="outline" label="Outline" />
-                <StyleSwatch kind="filled-circle" label="Filled" />
-                <StyleSwatch kind="circle-outline" label="Solid" />
+                {styleSwatch('outline', 'Outline')}
+                {styleSwatch('filled-circle', 'Filled')}
+                {styleSwatch('circle-outline', 'Solid')}
               </div>
             </div>
 
@@ -3679,9 +3681,9 @@ function BlockInspectorPanel({
             <div>
               <p className={LABEL}>Size</p>
               <div className="flex items-center gap-2">
-                <SizeChip k="sm" label="S" />
-                <SizeChip k="md" label="M" />
-                <SizeChip k="lg" label="L" />
+                {sizeChip('sm', 'S')}
+                {sizeChip('md', 'M')}
+                {sizeChip('lg', 'L')}
               </div>
             </div>
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * After a push: wait for the test copy to finish deploying this commit, then
- * run every check against it: the smoke test, the flow tests and the browser
+ * After a push: run the code checks on this exact commit (type check, fast
+ * checks, lint), wait for the test copy to finish deploying it, then run every
+ * check against the test copy: the smoke test, the flow tests and the browser
  * tests. Exits non-zero when anything fails.
  *
  *   node scripts/staging/check-deploy.mjs           # the current commit
@@ -12,7 +13,8 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const SERVICE = 'StoryVenue Backend';
@@ -27,6 +29,26 @@ function deploymentStatus() {
   const all = Array.isArray(list) ? list : list.deployments ?? [];
   return all.find((d) => String(d.meta?.commitHash ?? '').startsWith(short))?.status ?? 'NOT_STARTED';
 }
+
+// 0. The code checks, on a clean checkout of this commit (not the working
+//    tree, which may already hold the next change).
+const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+const tree = join(tmpdir(), `storyvenue-check-${short}`);
+rmSync(tree, { recursive: true, force: true });
+execFileSync('git', ['worktree', 'prune']);
+execFileSync('git', ['worktree', 'add', '--detach', '--force', tree, sha], { stdio: 'ignore' });
+symlinkSync(join(repo, 'node_modules'), join(tree, 'node_modules'));
+const results = [];
+for (const [name, cmd] of [
+  ['type check', ['npx', 'tsc', '--noEmit']],
+  ['fast checks', ['npx', 'vitest', 'run']],
+  ['lint', ['npx', 'eslint', '.']],
+]) {
+  console.log(`\n── ${name} ──`);
+  const r = spawnSync(cmd[0], cmd.slice(1), { cwd: tree, stdio: 'inherit' });
+  results.push([name, r.status === 0]);
+}
+execFileSync('git', ['worktree', 'remove', '--force', tree]);
 
 // 1. Wait for the test copy to run this commit.
 const until = Date.now() + 15 * 60_000;
@@ -53,7 +75,6 @@ const suites = [
   ['flow tests', ['npm', 'run', 'test:flows']],
   ['browser tests', ['npx', 'playwright', 'test', '--reporter=line']],
 ];
-const results = [];
 for (const [name, cmd] of suites) {
   console.log(`\n── ${name} ──`);
   const r = spawnSync('railway', ['run', '--service', SERVICE, '--environment', ENV, '--', ...cmd], { env: railwayEnv, stdio: 'inherit' });

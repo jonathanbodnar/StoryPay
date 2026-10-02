@@ -1,7 +1,7 @@
 # Automated checks on every push to main and every pull request: the type
-# check and the fast checks (npm test, which includes LeadFinder's fixtures).
-# Report-only for now: Railway deploys main either way. This becomes the
-# release gate once the test copy is in place.
+# check, the fast checks (npm test, which includes LeadFinder's fixtures) and
+# lint. The release gate (scripts/staging/check-deploy.mjs) runs the same
+# checks plus the test-copy suites before anything goes live.
 name: Checks
 
 on:
@@ -24,3 +24,5 @@ jobs:
         run: npx tsc --noEmit
       - name: Fast checks
         run: npm test
+      - name: Lint
+        run: npm run lint

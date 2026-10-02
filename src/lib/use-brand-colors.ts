@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 // Per-venue brand color palette — singleton cache shared across every
 // component that calls useBrandColors() so a save in one place updates
@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 let cached: string[] | null = null;
 let pending: Promise<string[]> | null = null;
 const listeners = new Set<(colors: string[]) => void>();
+const NONE: string[] = [];
 
 function broadcast(next: string[]) {
   cached = next;
@@ -25,8 +26,8 @@ function normalizeHex(raw: string): string | null {
   return /^#[0-9a-f]{6}$/.test(hex) ? hex : null;
 }
 
-async function loadFromServer(): Promise<string[]> {
-  if (cached) return cached;
+async function loadFromServer(force = false): Promise<string[]> {
+  if (cached && !force) return cached;
   if (pending) return pending;
   pending = fetch('/api/venues/me', { cache: 'no-store' })
     .then(r => (r.ok ? r.json() : null))
@@ -60,20 +61,14 @@ async function persist(next: string[]) {
   }
 }
 
-export function useBrandColors() {
-  const [colors, setColors] = useState<string[]>(cached ?? []);
+function subscribe(onChange: () => void): () => void {
+  listeners.add(onChange);
+  if (cached === null) void loadFromServer();
+  return () => { listeners.delete(onChange); };
+}
 
-  useEffect(() => {
-    listeners.add(setColors);
-    if (cached === null) {
-      void loadFromServer();
-    } else {
-      setColors(cached);
-    }
-    return () => {
-      listeners.delete(setColors);
-    };
-  }, []);
+export function useBrandColors() {
+  const colors = useSyncExternalStore(subscribe, () => cached ?? NONE, () => NONE);
 
   const addColor = useCallback(async (raw: string) => {
     const hex = normalizeHex(raw);
@@ -109,10 +104,8 @@ export function useBrandColors() {
   }, []);
 
   const refresh = useCallback(async () => {
-    cached = null;
     pending = null;
-    const next = await loadFromServer();
-    setColors(next);
+    await loadFromServer(true); // tells every caller
   }, []);
 
   return { colors, addColor, removeColor, setAll, refresh };

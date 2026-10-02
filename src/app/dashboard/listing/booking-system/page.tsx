@@ -614,7 +614,7 @@ function StepLeadsModal({ stepLabel, leads, onClose, kicker = 'Waiting at step' 
 
         <div className="border-t border-gray-100 px-4 py-3 text-center">
           <p className="text-[11px] text-gray-400">
-            "Next" skips the current wait and queues up the following step immediately.
+            &quot;Next&quot; skips the current wait and queues up the following step immediately.
           </p>
         </div>
       </div>
@@ -747,11 +747,11 @@ function SequenceEditor({
   aiLocked?: boolean;
   onAiLocked?: () => void;
 }) {
-  const dragSrc = useRef<number | null>(null);
+  const [dragSrc, setDragSrc] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
 
   function handleDragStart(e: React.DragEvent, i: number) {
-    dragSrc.current = i;
+    setDragSrc(i);
     e.dataTransfer.effectAllowed = 'move';
   }
   function handleDragOver(e: React.DragEvent, i: number) {
@@ -760,14 +760,14 @@ function SequenceEditor({
     setOverIdx(i);
   }
   function handleDrop(i: number) {
-    if (dragSrc.current === null || dragSrc.current === i) { reset(); return; }
+    if (dragSrc === null || dragSrc === i) { reset(); return; }
     const next = [...steps];
-    const [moved] = next.splice(dragSrc.current, 1);
+    const [moved] = next.splice(dragSrc, 1);
     next.splice(i, 0, moved);
     onStepsChange(next.map((s, idx) => ({ ...s, step_order: idx })));
     reset();
   }
-  function reset() { dragSrc.current = null; setOverIdx(null); }
+  function reset() { setDragSrc(null); setOverIdx(null); }
 
   function updateStep(i: number, s: StepConfig) {
     const next = [...steps]; next[i] = s; onStepsChange(next);
@@ -802,7 +802,7 @@ function SequenceEditor({
       )}
 
       {steps.map((step, i) => {
-        const isOver    = overIdx === i && dragSrc.current !== null && dragSrc.current !== i;
+        const isOver    = overIdx === i && dragSrc !== null && dragSrc !== i;
         const leadsHere = leadsData?.byStep?.[i] ?? [];
         return (
           <div
@@ -1248,7 +1248,7 @@ export default function BookingSystemPage() {
       )}
       {!cfg.masterEnabled && (
         <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-          The Booking System is off. New leads won't receive any automated follow-up until you turn it back on.
+          The Booking System is off. New leads won&apos;t receive any automated follow-up until you turn it back on.
         </div>
       )}
 

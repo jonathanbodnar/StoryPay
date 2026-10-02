@@ -55,6 +55,7 @@ export function AdminProfilePanel() {
     setLoading(false);
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- on mount these flags already hold these values; the rest waits for the network
   useEffect(() => { void load(); }, [load]);
 
   function flash(message: string) {

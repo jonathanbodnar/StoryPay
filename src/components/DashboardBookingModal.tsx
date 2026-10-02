@@ -23,7 +23,9 @@ export default function DashboardBookingModal({
   onClose: () => void;
 }) {
   const scriptLoaded = useRef(false);
-  const [mounted, setMounted] = useState(false);
+  // Once opened, the widget stays rendered (hidden) so it keeps its state.
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
 
   // Load the GHL embed script once on first open.
   useEffect(() => {
@@ -36,7 +38,6 @@ export default function DashboardBookingModal({
       s.async = true;
       document.body.appendChild(s);
     }
-    setMounted(true);
   }, [open]);
 
   // Prevent body scroll while open.

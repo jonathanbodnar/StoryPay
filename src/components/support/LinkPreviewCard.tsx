@@ -36,10 +36,10 @@ function proxyImageUrl(src: string): string {
  */
 export function LinkPreviewCard({ url }: { url: string }) {
   const [data, setData] = useState<PreviewData | null>(() => cache.get(url) ?? null);
-  const [imgFailed, setImgFailed] = useState(false);
+  const [failedImageFor, setFailedImageFor] = useState<string | null>(null);
+  const imgFailed = failedImageFor === url;
 
   useEffect(() => {
-    setImgFailed(false);
     let cancelled = false;
     const cached = cache.get(url);
     if (cached) {
@@ -91,7 +91,7 @@ export function LinkPreviewCard({ url }: { url: string }) {
           src={proxyImageUrl(data.image)}
           alt=""
           className="h-16 w-16 shrink-0 object-cover"
-          onError={() => setImgFailed(true)}
+          onError={() => setFailedImageFor(url)}
         />
       )}
       {data.image && imgFailed && (

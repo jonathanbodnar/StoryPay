@@ -663,7 +663,7 @@ function ActionBar({ lead, onMutated }: { lead: MonitorLead; onMutated: () => vo
           <div className="rounded-xl border-2 border-dashed border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 leading-relaxed">
             {previewText}
           </div>
-          <p className="mt-1 text-xs text-gray-400">This is a live DeepSeek preview — not sent. Hit "Send Now" to actually send.</p>
+          <p className="mt-1 text-xs text-gray-400">This is a live DeepSeek preview — not sent. Hit &quot;Send Now&quot; to actually send.</p>
         </div>
       )}
     </div>

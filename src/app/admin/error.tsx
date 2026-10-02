@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { reportClientError } from '@/components/ClientErrorLogger';
+import Link from 'next/link';
 
 /**
  * Admin-scoped error boundary. Catches render crashes anywhere in the super
@@ -48,12 +49,12 @@ export default function AdminError({
           >
             Try again
           </button>
-          <a
+          <Link
             href="/admin"
             className="rounded-xl border border-gray-200 px-3.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
             Admin dashboard
-          </a>
+          </Link>
         </div>
       </div>
     </div>

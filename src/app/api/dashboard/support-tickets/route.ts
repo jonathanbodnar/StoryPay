@@ -39,7 +39,7 @@ export async function GET() {
 
   // Fetch the last message sender_type per thread so the client can determine
   // which tickets have an unread support reply.
-  let lastSenderByThread: Record<string, 'venue' | 'support'> = {};
+  const lastSenderByThread: Record<string, 'venue' | 'support'> = {};
   if (threadIds.length > 0) {
     const { data: msgRows } = await supabaseAdmin
       .from('support_thread_messages')

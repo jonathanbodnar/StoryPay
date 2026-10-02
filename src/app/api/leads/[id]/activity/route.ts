@@ -31,7 +31,7 @@ export async function GET(
 
   const rows = await fetchLeadActivity(venueId, leadId);
   const memberIds = [...new Set(rows.map((r) => (r as { actor_member_id?: string }).actor_member_id).filter(Boolean))] as string[];
-  let names: Record<string, string> = {};
+  const names: Record<string, string> = {};
   if (memberIds.length > 0) {
     const { data: members } = await supabaseAdmin
       .from('venue_team_members')

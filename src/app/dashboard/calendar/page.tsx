@@ -235,7 +235,7 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
   const [deleting,      setDeleting]      = useState(false);
   const [statusChanging, setStatusChanging] = useState(false);
-  const [selectedEventContactId, setSelectedEventContactId] = useState<string | null>(null);
+  const [eventContact, setEventContact] = useState<{ email: string; id: string } | null>(null);
 
   // Team members for the "assigned to" selector — kept here so the detail
   // modal can also resolve a member name; the editor modal fetches its own.
@@ -270,6 +270,7 @@ export default function CalendarPage() {
     const y = Number(formatInTimeZone(now, tz, 'yyyy'));
     const m = Number(formatInTimeZone(now, tz, 'M')) - 1;
     const d = Number(formatInTimeZone(now, tz, 'd'));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time setup once the venue's time zone is known
     setYear(y);
     setMonth(m);
     setAnchorDate(new Date(y, m, d));
@@ -350,6 +351,7 @@ export default function CalendarPage() {
     setLoading(false);
   }, [year, month, view, anchorDate, venueTz]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- paints the month's cached events at once, then refreshes
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // Deep-link: /dashboard/calendar?new=1&email=...&name=... opens the new
@@ -362,6 +364,7 @@ export default function CalendarPage() {
     const name  = params.get('name') ?? '';
     // Strip the query string so refreshing doesn't re-open the modal.
     window.history.replaceState({}, '', '/dashboard/calendar');
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads a deep link from the URL once, in the browser
     setEditorEvent(null);
     setEditorPrefill({ customerEmail: email, customerName: name });
     setShowModal(true);
@@ -384,19 +387,21 @@ export default function CalendarPage() {
 
   // ── Resolve contact ID for the event detail modal ─────────────────────────
   useEffect(() => {
-    setSelectedEventContactId(null);
-    if (!selectedEvent?.customer_email) return;
+    const email = selectedEvent?.customer_email;
+    if (!email) return;
     let cancelled = false;
     fetch('/api/venue-customers/lookup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: selectedEvent.customer_email }),
+      body: JSON.stringify({ email }),
     })
       .then((r) => r.ok ? r.json() : null)
-      .then((contact) => { if (!cancelled && contact?.id) setSelectedEventContactId(contact.id); })
+      .then((contact) => { if (!cancelled && contact?.id) setEventContact({ email, id: contact.id }); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [selectedEvent?.customer_email]);
+  const selectedEventContactId =
+    eventContact && eventContact.email === selectedEvent?.customer_email ? eventContact.id : null;
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   function prev() {
@@ -640,7 +645,9 @@ export default function CalendarPage() {
   }
 
   // ── Shared hour grid (week + day) ─────────────────────────────────────────
-  function HourGrid({ cols }: { cols: { dateStr: string; dow: number; dom: number; events: CalEvent[] }[] }) {
+  // A render helper, not a component: as a component defined inside this page
+  // it remounted on every render and lost its scroll position.
+  function hourGrid(cols: { dateStr: string; dow: number; dom: number; events: CalEvent[] }[]) {
     const SLOT_H = 60; // px per hour
     const tz = tzResolved;
     const todayYmd = formatInTimeZone(new Date(), tz, 'yyyy-MM-dd');
@@ -983,7 +990,7 @@ export default function CalendarPage() {
             {loading ? (
               <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-gray-300" size={28} /></div>
             ) : (
-              <HourGrid cols={weekDaysYmd.map((ymd) => {
+              hourGrid(weekDaysYmd.map((ymd) => {
                 const noon = toDate(`${ymd}T12:00:00`, { timeZone: tzResolved });
                 return {
                   dateStr: ymd,
@@ -991,7 +998,7 @@ export default function CalendarPage() {
                   dom: parseInt(formatInTimeZone(noon, tzResolved, 'd'), 10),
                   events: eventsForDayYmd(ymd),
                 };
-              })} />
+              }))
             )}
           </div>
         )}
@@ -1002,7 +1009,7 @@ export default function CalendarPage() {
             {loading ? (
               <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-gray-300" size={28} /></div>
             ) : (
-              <HourGrid cols={(() => {
+              hourGrid((() => {
                 const ymd = formatInTimeZone(anchorDate, tzResolved, 'yyyy-MM-dd');
                 const noon = toDate(`${ymd}T12:00:00`, { timeZone: tzResolved });
                 return [{
@@ -1011,7 +1018,7 @@ export default function CalendarPage() {
                   dom: parseInt(formatInTimeZone(noon, tzResolved, 'd'), 10),
                   events: eventsForDayYmd(ymd),
                 }];
-              })()} />
+              })())
             )}
           </div>
         )}

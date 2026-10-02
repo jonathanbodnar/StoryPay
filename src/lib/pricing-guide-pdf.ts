@@ -109,8 +109,8 @@ async function loadPlayfairDisplay(doc: import('jspdf').jsPDF): Promise<string> 
       binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
     }
     const b64 = btoa(binary);
-    (doc as any).addFileToVFS('PlayfairDisplay-Regular.woff2', b64);
-    (doc as any).addFont('PlayfairDisplay-Regular.woff2', 'PlayfairDisplay', 'normal');
+    doc.addFileToVFS('PlayfairDisplay-Regular.woff2', b64);
+    doc.addFont('PlayfairDisplay-Regular.woff2', 'PlayfairDisplay', 'normal');
     return 'PlayfairDisplay';
   } catch {
     return 'times';
@@ -209,9 +209,9 @@ export async function generatePricingGuidePdf(
 
   // Uniform semi-transparent overlay inside the border (matches frontend bg-black/25).
   doc.setFillColor(0, 0, 0);
-  (doc as any).setGState?.(new (doc as any).GState({ opacity: 0.28 }));
+  doc.setGState(doc.GState({ opacity: 0.28 }));
   doc.rect(imgX, imgY, imgAreaW, imgAreaH, 'F');
-  (doc as any).setGState?.(new (doc as any).GState({ opacity: 1 }));
+  doc.setGState(doc.GState({ opacity: 1 }));
 
   // Redraw the white border on top so it's crisp over any image bleed.
   doc.setFillColor(255, 255, 255);

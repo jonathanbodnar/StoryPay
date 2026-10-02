@@ -105,6 +105,8 @@ function ReplyCard({
   const startX = useRef(0);
   const startY = useRef(0);
   const swiping = useRef(false);
+  // The same as `swiping`, for drawing: refs can't be read during render.
+  const [dragging, setDragging] = useState(false);
 
   const rawName = `${t.contact_first_name || ''} ${t.contact_last_name || ''}`.trim() || t.contact_email || 'Contact';
   const name = rawName.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -136,7 +138,7 @@ function ReplyCard({
         style={{
           transform: leaving ? 'translateX(-110%)' : `translateX(${dx}px)`,
           opacity: leaving ? 0 : 1,
-          transition: swiping.current ? 'none' : 'transform 200ms ease, opacity 200ms ease',
+          transition: dragging ? 'none' : 'transform 200ms ease, opacity 200ms ease',
         }}
         onTouchStart={(e) => {
           startX.current = e.touches[0].clientX;
@@ -149,10 +151,12 @@ function ReplyCard({
           // Only hijack clear horizontal left-swipes; let vertical scrolling win.
           if (!swiping.current && (Math.abs(moveX) < 10 || Math.abs(moveY) > Math.abs(moveX))) return;
           swiping.current = true;
+          setDragging(true);
           setDx(Math.min(0, moveX));
         }}
         onTouchEnd={(e) => {
           if (!swiping.current) return;
+          setDragging(false); // so the slide-out (or snap-back) animates
           const width = (e.currentTarget as HTMLElement).offsetWidth || 320;
           if (dx < -width * 0.4) {
             dismiss();
