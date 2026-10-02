@@ -15,7 +15,7 @@ describe('connected services', () => {
   const lead = async (first: string, i: number) => {
     const res = await submitListingLead({
       venue_id: venueId, first_name: first, last_name: 'Connected', email: `${first.toLowerCase()}.connect.${runId}@example.com`,
-      phone: `(646) 56${4 + i}-${n}`, wedding_date: '2027-09-18', guest_count: 120, source: 'directory', client_ip: `198.51.100.${10 + i}`,
+      phone: `(646) 56${4 + i}-${n}`, guest_count: 120, message: `Fall wedding ${runId}`, source: 'directory', client_ip: `198.51.100.${10 + i}`,
     });
     expect(res.status, await res.clone().text()).toBe(201);
   };
@@ -60,9 +60,13 @@ describe('connected services', () => {
     await lead('Etta', 2);
     const booking = await waitForIntegrationCall('eventtemple', since, (c) => c.method === 'POST' && c.path === '/v2/bookings');
     expect((booking.body as { data: { attributes: Record<string, unknown> } }).data.attributes).toMatchObject({
-      status: 'lead', start_date: '2027-09-18', contact: { first_name: 'Etta', last_name: 'Connected', email: `etta.connect.${runId}@example.com` },
+      status: 'lead', contact: { first_name: 'Etta', last_name: 'Connected', email: `etta.connect.${runId}@example.com` },
     });
-    await waitForIntegrationCall('eventtemple', since, (c) => c.method === 'POST' && c.path === '/v2/notes');
+    // The rest of the form rides along in a note on the booking.
+    const note = await waitForIntegrationCall('eventtemple', since, (c) => c.method === 'POST' && c.path === '/v2/notes');
+    const content = (note.body as { data: { attributes: { content: string } } }).data.attributes.content;
+    expect(content).toContain('Guest count: 120');
+    expect(content).toContain(`Message: Fall wedding ${runId}`);
     expect((await owner.fetch('/api/integrations/eventtemple', { method: 'DELETE' })).status).toBe(200);
   });
 
