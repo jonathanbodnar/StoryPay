@@ -188,7 +188,7 @@ export function AiConciergeConfigEditor() {
       const j   = await res.json().catch(() => ({})) as ListPayload & { error?: string; schemaMissing?: boolean };
       if (!res.ok) {
         if (j.schemaMissing) {
-          setBootError('ai_config table missing. Run /api/admin/run-migration-098 then reload.');
+          setBootError('ai_config table missing. Apply migration 098_ai_concierge.sql, then reload.');
           return;
         }
         setError(j.error ?? 'Failed to load versions');

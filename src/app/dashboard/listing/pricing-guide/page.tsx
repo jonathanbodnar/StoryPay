@@ -705,13 +705,8 @@ export default function PricingGuidePage() {
         <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
           <div>
-            <strong>One-time setup needed.</strong> This page&apos;s database tables haven&apos;t been
-            created yet. An admin needs to run the migration once: open
-            {' '}
-            <code className="rounded bg-amber-100 px-1.5 py-0.5">/api/admin/run-migration-091</code>
-            {' '}
-            in your browser while logged into the admin panel, then refresh this page. Edits below
-            will not save until that&apos;s done.
+            <strong>This page isn&apos;t set up yet.</strong> Please contact StoryVenue support. Edits
+            below won&apos;t save until it&apos;s fixed.
           </div>
         </div>
       )}

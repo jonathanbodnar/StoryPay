@@ -16,25 +16,15 @@ Railway’s cron feature runs the service **start command** on a schedule and ex
 
 ---
 
-## Option A — GitHub Actions (recommended, already in the repo)
+## How it runs today
 
-The workflow `.github/workflows/marketing-email-cron.yml` runs every **5 minutes** and `curl`s your live app.
+A small Railway service, **Marketing Cron** (image `curlimages/curl`), calls the route every 60 seconds in a loop:
 
-### You do this once
+```sh
+while true; do curl -s "https://app.storyvenue.com/api/cron/marketing-email?secret=$CRON_SECRET"; curl -s "https://app.storyvenue.com/api/cron/reengagement-drip?secret=$CRON_SECRET"; sleep 60; done
+```
 
-1. Open your repo on **GitHub** → **Settings** → **Secrets and variables** → **Actions**.
-2. Under **Repository secrets**, click **New repository secret** and add:
-
-| Name | Value |
-|------|--------|
-| `MARKETING_CRON_URL` | Your public app origin only, e.g. `https://something.up.railway.app` (no path, no trailing slash required). |
-| `MARKETING_CRON_SECRET` | The **same** string as `MARKETING_CRON_SECRET` or `CRON_SECRET` on Railway. |
-
-3. Commit and push the workflow file if it is not already on `main` (it lives in `.github/workflows/`).
-
-4. Confirm: **Actions** tab → **Marketing email cron** → open a run → it should succeed (green). Use **Run workflow** to test immediately.
-
-No extra Railway service or cost beyond GitHub’s free tier limits.
+The marketing-email run also sends due appointment reminders and LeadFinder guide invites. The GitHub Actions timers that used to do this were removed on Oct 2, 2026.
 
 ---
 
@@ -65,7 +55,7 @@ Use a **second** service in the **same** Railway project, same GitHub repo, whos
 
 3. **Deploy** the cron service. Each scheduled run should log one HTTP response and exit.
 
-**Note:** Nixpacks may still run `npm run build` for this service (full Next build). If that is too slow or expensive, prefer **Option A** (GitHub Actions) or a minimal external ping (Option C).
+**Note:** Nixpacks may still run `npm run build` for this service (full Next build). If that is too slow or expensive, use a curl loop like the one above.
 
 ---
 

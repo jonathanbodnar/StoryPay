@@ -157,7 +157,7 @@ export function AiConciergeHandoffRulesEditor() {
       const j   = await res.json().catch(() => ({})) as RulesPayload & { error?: string; schemaMissing?: boolean };
       if (!res.ok) {
         if (j.schemaMissing) {
-          setBootError('handoff_rules table is missing. Run /api/admin/run-migration-098 then reload.');
+          setBootError('handoff_rules table is missing. Apply migration 098_ai_concierge.sql, then reload.');
           return;
         }
         setError(j.error ?? 'Failed to load rules');

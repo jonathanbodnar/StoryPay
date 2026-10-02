@@ -243,7 +243,7 @@ export function AiConciergeAdminPanel() {
       const j = await res.json().catch(() => ({})) as KillSwitch & { error?: string; schemaMissing?: boolean };
       if (!res.ok) {
         if (j.schemaMissing) {
-          setBootError('AI runtime settings table is missing. Run /api/admin/run-migration-099 then reload.');
+          setBootError('AI runtime settings table is missing. Apply migration 099_ai_runtime_settings.sql, then reload.');
           return;
         }
         setError(j.error ?? 'Failed to load kill switch');

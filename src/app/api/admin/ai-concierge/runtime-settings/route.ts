@@ -64,7 +64,7 @@ export async function PATCH(request: NextRequest) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('does not exist') || msg.includes('42P01') || msg.includes('42703')) {
         return NextResponse.json({
-          error: 'ai_runtime_settings.default_daily_send_cap missing — run /api/admin/run-migration-100 first',
+          error: 'ai_runtime_settings.default_daily_send_cap missing — apply migration 100_ai_a2p_and_spend_caps.sql first',
           schemaMissing: true,
         }, { status: 503 });
       }

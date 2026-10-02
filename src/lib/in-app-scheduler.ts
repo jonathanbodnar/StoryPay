@@ -5,9 +5,12 @@
  * (observed: every-5-minute schedules firing every 1.5–2 hours, some never).
  * Production runs on Railway as a persistent Node server, so time-sensitive
  * jobs run here as plain interval timers started from `src/instrumentation.ts`
- * at server boot. The GitHub Actions workflows remain in place as a redundant
- * backup layer — every job wired here is concurrency-safe, so an occasional
- * double trigger is harmless.
+ * at server boot. Every job wired here is concurrency-safe, so an occasional
+ * double trigger (a manual run, or two servers overlapping during a deploy) is
+ * harmless. The GitHub Actions timers were removed on Oct 2, 2026; the jobs
+ * not listed here run from Railway's cron services (Marketing Cron: marketing
+ * email, appointment reminders and the re-engagement drip; Contacts Cron: GHL
+ * contact sync; AI Concierge Cron: ai-send and ai-activate).
  *
  * Jobs:
  *   - ghl-inbound-sync-hot  every 7s   inbound SMS poll for HOT threads only
@@ -45,9 +48,8 @@
  *   - payment-reminders     daily 9:00 UTC   overdue-payment reminder emails
  *   - private-client-reminder daily 17:00 UTC  Private Client monthly email
  *   - tag-sweep             daily 3:00 UTC   date/activity system tags
- *                                      These four ran only on GitHub before;
- *                                      each claims its work first, so the
- *                                      GitHub backup can't double-send, and a
+ *                                      Each claims its work first, so a
+ *                                      manual run can't double-send, and a
  *                                      daily job claims its day in
  *                                      admin_kv_cache (one run per day).
  *
@@ -275,7 +277,7 @@ const JOBS: ScheduledJob[] = [
   },
   {
     // Payment plans: each due payment is claimed before it's charged, so this
-    // and the GitHub backup can never charge it twice.
+    // and a manual run of /api/cron/installments can never charge it twice.
     name: 'installments',
     intervalMs: 60 * 60 * 1000,
     initialDelayMs: 5 * 60 * 1000,

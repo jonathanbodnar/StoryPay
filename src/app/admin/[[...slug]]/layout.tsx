@@ -582,7 +582,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'search-analytics', label: 'Search Analytics', icon: BarChart2 },
   { key: 'article-ratings', label: 'Article Ratings', icon: Star },
   { key: 'errors', label: 'Error Log', icon: AlertTriangle },
-  { key: 'system', label: 'System / Migrations', icon: Settings },
+  { key: 'system', label: 'System Tools', icon: Settings },
   { key: 'ghl-migration', label: 'GHL Migration', icon: ArrowRightLeft },
   { key: 'team', label: 'Team', icon: Users },
   { key: 'profile', label: 'My profile', icon: Settings },
@@ -2986,7 +2986,7 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
 
         {activeTab === 'errors' && <ErrorLogPanel />}
 
-        {/* ── System / Migrations Tab ── */}
+        {/* ── System Tools Tab ── */}
         {activeTab === 'system' && <SystemTab />}
 
         {/* ── GHL Migration Tab ── */}
@@ -3028,27 +3028,9 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
   );
 }
 
-// ─── System / Migrations Tab ─────────────────────────────────────────────────
+// ─── System Tools Tab ────────────────────────────────────────────────────────
 
 const MIGRATIONS = [
-  {
-    id: '076',
-    name: 'Calendar Settings Tables (076)',
-    description: 'Creates venue_calendar_settings, venue_availability, venue_date_overrides, venue_conflict_calendars, and venue_calendar_notifications tables. Required for Google Calendar sync and Calendar Settings.',
-    endpoint: '/api/admin/run-migration-076',
-  },
-  {
-    id: '077',
-    name: 'Couple First/Last Name (077)',
-    description: 'Adds first_name and last_name columns to couple_profiles and backfills from display_name where possible. Required for the new couple signup form.',
-    endpoint: '/api/admin/run-migration-077',
-  },
-  {
-    id: '142',
-    name: 'Error Log table (142)',
-    description: 'Creates the platform-wide error_logs table that powers the new Error Log tab. Captures failures across API, SMS, email, payments, webhooks and cron for all sub-accounts. Run this once before using the Error Log.',
-    endpoint: '/api/admin/run-migration-142',
-  },
   {
     id: 'seo-backfill',
     name: 'Backfill Venue SEO (173)',
@@ -3060,12 +3042,6 @@ const MIGRATIONS = [
     name: 'Regenerate All Venue SEO with AI (force)',
     description: 'Re-runs AI SEO generation on ALL published listings, even ones that already have templated values. Use this to upgrade template-only entries to full AI copy. Processes 25 per click — keep clicking until remaining = 0.',
     endpoint: '/api/admin/backfill-venue-seo?force=1',
-  },
-  {
-    id: 'listing-live-backfill',
-    name: 'Backfill Listing Go-Live',
-    description: 'Sets is_published = true for every venue that sent a test inquiry but whose listing is not yet live. Safe to run multiple times.',
-    endpoint: '/api/admin/backfill-listing-live',
   },
 ];
 
@@ -3101,8 +3077,8 @@ function SystemTab() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h2 className="font-heading text-xl text-gray-900">System / Migrations</h2>
-        <p className="text-sm text-gray-500 mt-0.5">Run database migrations that haven&apos;t been applied to production yet. Each migration is idempotent — safe to run multiple times.</p>
+        <h2 className="font-heading text-xl text-gray-900">System Tools</h2>
+        <p className="text-sm text-gray-500 mt-0.5">Maintenance jobs for listings. Each one is safe to run more than once.</p>
       </div>
 
       <div className="space-y-3">

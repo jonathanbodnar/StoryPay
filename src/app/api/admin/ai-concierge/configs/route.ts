@@ -111,7 +111,7 @@ export async function GET() {
   if (error) {
     if (error.code === '42P01') {
       return NextResponse.json({
-        error: 'ai_config table missing — run /api/admin/run-migration-098 first',
+        error: 'ai_config table missing — apply migration 098_ai_concierge.sql first',
         schemaMissing: true,
       }, { status: 503 });
     }

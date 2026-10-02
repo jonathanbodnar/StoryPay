@@ -60,7 +60,7 @@ export async function PATCH(request: NextRequest) {
     const msg = e instanceof Error ? e.message : 'Failed to update kill switch';
     if (msg.includes('does not exist') || msg.includes('42P01')) {
       return NextResponse.json({
-        error: 'ai_runtime_settings table missing — run /api/admin/run-migration-099 first',
+        error: 'ai_runtime_settings table missing — apply migration 099_ai_runtime_settings.sql first',
         schemaMissing: true,
       }, { status: 503 });
     }

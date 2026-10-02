@@ -351,7 +351,7 @@ export function AdminProjectsBoard() {
         <p className="text-sm text-red-700 font-medium">{error}</p>
         {/schema/i.test(error) && (
           <p className="mt-2 text-xs text-red-600">
-            Open <code className="font-mono">/api/admin/run-migration-207</code> once to create the tables.
+            Apply migration <code className="font-mono">207_admin_projects_and_ad_creatives.sql</code> to create the tables.
           </p>
         )}
         <button onClick={load} className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50">

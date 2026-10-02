@@ -130,6 +130,16 @@ describe('the login gate', () => {
     expect(out).not.toContain('member_id=');
   });
 
+  it('on a live server with no signing secret, trusts no session (it never waves one through)', async () => {
+    vi.stubEnv('SESSION_SECRET', '');
+    vi.stubEnv('NODE_ENV', 'production');
+    const v = randomUUID();
+    const { forwarded } = await gate(`venue_id=${v}; member_id=${randomUUID()}; theme=dark`);
+    expect(forwarded).not.toContain('venue_id=');
+    expect(forwarded).not.toContain('member_id=');
+    expect(forwarded).toContain('theme=dark');
+  });
+
   it('accepts the old shared secret until Oct 8, 2026 12:00 UTC, then not', async () => {
     vi.stubEnv('NEXTAUTH_SECRET', 'old-shared-secret');
     vi.useFakeTimers({ toFake: ['Date'] });

@@ -1,9 +1,9 @@
 /**
  * Cron entry point for the periodic inbound GHL SMS sync.
  *
- * Schedule: every 5 minutes (GitHub Actions — .github/workflows/
- * ghl-inbound-sync-cron.yml). Reuses MARKETING_CRON_SECRET / CRON_SECRET for
- * auth like the other cron routes.
+ * Schedule: the in-app scheduler runs the same sync every 60 seconds
+ * (lib/in-app-scheduler.ts); this route runs it on demand. Reuses
+ * MARKETING_CRON_SECRET / CRON_SECRET for auth like the other cron routes.
  *
  * Example invocation:
  *   curl -H "Authorization: Bearer $MARKETING_CRON_SECRET" \

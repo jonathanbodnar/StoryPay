@@ -21,6 +21,14 @@ export async function register(): Promise<void> {
     const { prepareStaging } = await import('@/lib/staging-startup');
     prepareStaging();
 
+    // Venue sessions can't be verified without a signing secret; the proxy
+    // then treats everyone as signed out. Make that impossible to miss.
+    if (process.env.NODE_ENV === 'production' && !(process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || process.env.ADMIN_SECRET || process.env.LEAD_WEBHOOK_SECRET)) {
+      console.error('[startup] CRITICAL: no session signing secret (SESSION_SECRET). Venue sign-in is off until it is set.');
+      const { logError } = await import('@/lib/error-log');
+      void logError({ level: 'critical', source: 'api', category: 'startup', message: 'No session signing secret: venue sign-in is off until SESSION_SECRET is set' });
+    }
+
     const { startInAppScheduler } = await import('@/lib/in-app-scheduler');
     startInAppScheduler();
   }

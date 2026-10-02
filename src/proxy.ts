@@ -217,9 +217,18 @@ async function sessionProxy(request: NextRequest) {
 
   const secrets = getSecrets();
   const secret = secrets[0];
-  // Without a signing secret we cannot verify. Fail OPEN so a misconfiguration
-  // can't lock every tenant out — the signing side fails loudly on its own.
-  if (!secret) return NextResponse.next();
+  if (!secret) {
+    // Without a signing secret nothing can be verified. Locally that's fine;
+    // on a live server every venue session counts as signed out rather than
+    // trusting an unsigned id (instrumentation.ts logs it as critical).
+    if (process.env.NODE_ENV !== 'production') return NextResponse.next();
+    const unsigned = new Set(SIGNED_COOKIES.flatMap(({ id }) => [id, `${id}_sig`, `${id}_meta`]));
+    const kept = request.cookies.getAll().filter((c) => !unsigned.has(c.name));
+    const headers = new Headers(request.headers);
+    if (kept.length > 0) headers.set('cookie', kept.map((c) => `${c.name}=${c.value}`).join('; '));
+    else headers.delete('cookie');
+    return NextResponse.next({ request: { headers } });
+  }
 
   const nowSecs = Math.floor(Date.now() / 1000);
   const toStrip = new Set<string>();

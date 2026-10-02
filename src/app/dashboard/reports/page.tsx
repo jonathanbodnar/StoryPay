@@ -116,25 +116,17 @@ async function downloadCSV(data: ReportData, label: string) {
 
 async function downloadExcel(data: ReportData, label: string) {
  if (!data.rows.length) return;
- const XLSX = await import('xlsx');
- const ws = XLSX.utils.json_to_sheet(data.rows);
-
- // Bold header row
- const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
- for (let c = range.s.c; c <= range.e.c; c++) {
- const addr = XLSX.utils.encode_cell({ r: 0, c });
- if (ws[addr]) ws[addr].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E2E8F0' } } };
- }
-
- // Summary sheet
- const summaryRows = Object.entries(data.summary).map(([k, v]) => ({ Metric: k, Value: v }));
- const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
-
- const wb = XLSX.utils.book_new();
- XLSX.utils.book_append_sheet(wb, ws, 'Report');
- if (summaryRows.length) XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
-
- XLSX.writeFile(wb, `${label.replace(/\s+/g, '_')}.xlsx`);
+ const { default: writeExcelFile } = await import('write-excel-file/browser');
+ const headers = Object.keys(data.rows[0]);
+ const bold = (value: string) => ({ value, fontWeight: 'bold' as const });
+ const sheets = [{
+ sheet: 'Report',
+ data: [headers.map(bold), ...data.rows.map(row => headers.map(h => row[h] ?? null))],
+ }];
+ const summary = Object.entries(data.summary);
+ if (summary.length) sheets.push({ sheet: 'Summary', data: [[bold('Metric'), bold('Value')], ...summary] });
+ const blob = await writeExcelFile(sheets).toBlob();
+ triggerDownload(blob, `${label.replace(/\s+/g, '_')}.xlsx`);
 }
 
 async function downloadPDF(data: ReportData, label: string, dateRange: DateRange) {
@@ -202,7 +194,8 @@ function triggerDownload(blob: Blob, filename: string) {
  const url = URL.createObjectURL(blob);
  const a = document.createElement('a');
  a.href = url; a.download = filename; a.click();
- URL.revokeObjectURL(url);
+ // Safari can cancel a download whose link is revoked right away.
+ setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 // ─── Preview table ────────────────────────────────────────────────────────────
