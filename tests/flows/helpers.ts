@@ -36,6 +36,22 @@ export const db = createClient(env.supabaseUrl, env.serviceKey, { auth: { persis
 /** A short id for this run, so each run's leads and emails are its own. */
 export const runId = Date.now().toString(36);
 
+/**
+ * fetch that retries a dropped connection or failed name lookup (a network
+ * blip on this machine, not an answer from the app) a couple of times. An
+ * HTTP answer of any status is returned as-is.
+ */
+export async function steadyFetch(url: string, init?: RequestInit): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url, init);
+    } catch (e) {
+      if (attempt >= 3) throw e;
+      await new Promise((r) => setTimeout(r, 700 * attempt));
+    }
+  }
+}
+
 /** An HTTP client that keeps cookies, like a browser tab, past the test copy's password page. */
 export class Browser {
   private jar = new Map<string, string>();
@@ -49,7 +65,7 @@ export class Browser {
       headers.set('content-type', 'application/json');
       body = JSON.stringify(init.json);
     }
-    const res = await fetch(env.base + path, { ...init, headers, body, redirect: 'manual' });
+    const res = await steadyFetch(env.base + path, { ...init, headers, body, redirect: 'manual' });
     for (const c of res.headers.getSetCookie?.() ?? []) {
       const [pair] = c.split(';');
       const i = pair.indexOf('=');

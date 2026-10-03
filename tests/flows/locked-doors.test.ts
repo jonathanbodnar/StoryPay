@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { env } from './helpers';
+import { env, steadyFetch } from './helpers';
 import { fill, ROUTES } from './routes';
 
 // Locked doors: every route in the app refuses a stranger (no session, no
@@ -73,7 +73,7 @@ describe('locked doors', () => {
         const key = todo[next++];
         const [method, path] = key.split(' ');
         const hasBody = method !== 'GET' && method !== 'DELETE';
-        const res = await fetch(env.base + fill(path), {
+        const res = await steadyFetch(env.base + fill(path), {
           method,
           headers: { 'x-staging-key': env.stagingKey, ...(hasBody ? { 'content-type': 'application/json' } : {}) },
           body: hasBody ? '{}' : undefined,
