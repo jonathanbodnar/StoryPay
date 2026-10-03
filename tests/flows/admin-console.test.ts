@@ -66,8 +66,9 @@ describe('the admin console', () => {
       urls.push(url);
     }
     // The link really signs in as this couple: confirming its token the way
-    // the page does yields the couple's own session.
-    const tokenHash = new URL(urls[0]).searchParams.get('token_hash')!;
+    // the page does yields the couple's own session. Only the newest link is
+    // checked — issuing a fresh sign-in link voids the ones before it.
+    const tokenHash = new URL(urls[urls.length - 1]).searchParams.get('token_hash')!;
     const anon = createClient(env.supabaseUrl, String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY), { auth: { persistSession: false } });
     const confirmed = await anon.auth.verifyOtp({ token_hash: tokenHash, type: 'magiclink' });
     expect(confirmed.error?.message ?? null).toBeNull();
