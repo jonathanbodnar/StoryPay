@@ -11,7 +11,7 @@
  * names to reshoot only those. Test copy only, like every staging script.
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 import { DEVICES, SHOTS, SHOWCASE_OWNER_EMAIL, urlFor } from './pages.mjs';
 
@@ -52,7 +52,8 @@ if (!res.ok()) throw new Error(`owner sign-in: ${res.status()} ${await res.text(
 const ownerState = await signin.storageState();
 await signin.close();
 
-const meta = {};
+// Reshooting a few names keeps the rest of the run's records.
+const meta = existsSync('shots-out/meta.json') ? JSON.parse(readFileSync('shots-out/meta.json', 'utf8')) : {};
 let taken = 0;
 
 for (const [deviceName, device] of Object.entries(DEVICES)) {

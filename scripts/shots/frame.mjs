@@ -51,11 +51,12 @@ async function shadow(w, h, radius, blur, canvasW, canvasH, x, y) {
 }
 
 /** Assemble margin + shadow + body + screenshot (+ overlay) and write both files. */
-async function compose({ out, bodyW, bodyH, margin, bodySvgAt, shotBuf, shotX, shotY, overlaySvg, shadowRadius, s }) {
+async function compose({ out, bodyW, bodyH, margin, bodySvgAt, shotBuf, shotX, shotY, overlaySvg, shadowRadius, s, shadowBox }) {
   const canvasW = bodyW + margin * 2;
   const canvasH = bodyH + margin * 2;
+  const sb = shadowBox ?? { x: 0, y: 16 * s, w: bodyW, h: bodyH, r: shadowRadius };
   const layers = [
-    { input: await shadow(bodyW, bodyH, shadowRadius, 22 * s, canvasW, canvasH, margin, margin + 16 * s), left: 0, top: 0 },
+    { input: await shadow(sb.w, sb.h, sb.r, 22 * s, canvasW, canvasH, margin + sb.x, margin + sb.y), left: 0, top: 0 },
     { input: await sharp(bodySvgAt).png().toBuffer(), left: margin, top: margin },
     { input: shotBuf, left: margin + shotX, top: margin + shotY },
   ];
@@ -109,7 +110,12 @@ const FRAMES = {
       <rect x="0" y="${lidH}" width="${deckW}" height="${deckH}" rx="${14 * s}" fill="url(#deck)"/>
       <rect x="${(bodyW - 170 * s) / 2}" y="${lidH}" width="${170 * s}" height="${11 * s}" rx="${6 * s}" fill="#c6c8cc"/>
     `);
-    await compose({ out: file.replace('.png', ''), bodyW, bodyH, margin: 80 * s, bodySvgAt: body, shotBuf: buf, shotX: lidX + bez, shotY: bez, shadowRadius: 20 * s, s });
+    await compose({
+      out: file.replace('.png', ''), bodyW, bodyH, margin: 80 * s, bodySvgAt: body, shotBuf: buf,
+      shotX: lidX + bez, shotY: bez, shadowRadius: 20 * s, s,
+      // A laptop's shadow pools under its base, not around the lid.
+      shadowBox: { x: -10 * s, y: lidH - 2 * s, w: deckW + 20 * s, h: deckH + 14 * s, r: 16 * s },
+    });
   },
 
   /** A tablet: slim dark bezel, camera on the top edge. */
