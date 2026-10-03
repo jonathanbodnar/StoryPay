@@ -43,6 +43,8 @@ for (const [name, cmd] of [
   ['type check', ['npx', 'tsc', '--noEmit']],
   ['fast checks', ['npx', 'vitest', 'run']],
   ['lint', ['npx', 'eslint', '.']],
+  // A package we ship with a known security problem (moderate or worse) stops the release.
+  ['security advisories', ['npm', 'audit', '--omit=dev', '--audit-level=moderate']],
 ]) {
   console.log(`\n── ${name} ──`);
   const r = spawnSync(cmd[0], cmd.slice(1), { cwd: tree, stdio: 'inherit' });

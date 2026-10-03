@@ -1,7 +1,8 @@
 # Automated checks on every push to main and every pull request: the type
-# check, the fast checks (npm test, which includes LeadFinder's fixtures) and
-# lint. The release gate (scripts/staging/check-deploy.mjs) runs the same
-# checks plus the test-copy suites before anything goes live.
+# check, the fast checks (npm test, which includes LeadFinder's fixtures), lint
+# and known security problems in the packages we ship (npm audit). The
+# release gate (scripts/staging/check-deploy.mjs) runs the same checks plus
+# the test-copy suites before anything goes live.
 name: Checks
 
 on:
@@ -26,3 +27,5 @@ jobs:
         run: npm test
       - name: Lint
         run: npm run lint
+      - name: Security advisories
+        run: npm audit --omit=dev --audit-level=moderate
