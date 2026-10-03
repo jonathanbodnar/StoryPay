@@ -13,7 +13,7 @@ All run with the test copy's settings: `railway run --service "StoryVenue Backen
 | `node scripts/staging/seed.mjs` | Product settings from live, the demo venue (Maple Hollow Barn) and fake leads. Safe to rerun. |
 | `npx tsx --tsconfig ./tsconfig.json scripts/staging/stripe-webhooks.ts` | Points Stripe's test-mode webhooks at the test copy; saves their secrets to Railway Dev. |
 | `node scripts/staging/smoke.mjs` | Quick check: password page, sign-in, dashboard, leads. |
-| `node scripts/staging/check-deploy.mjs` | Run plainly after a push: waits for the test copy to deploy the commit, then runs the smoke, flow and browser tests, and records the result. |
+| `node scripts/staging/check-deploy.mjs` | Run plainly after a push: code checks first (a failure stops everything), then waits for the test copy to deploy the commit and runs the changed area's flow tests, the smoke, flow and browser tests — stopping at the first failure — and records the result. A commit that ships nothing (scripts/tests/docs only) runs the smoke lane (`scripts/staging/lanes.mjs` holds the rules). |
 | `node scripts/staging/release.mjs <sha>` | Puts a commit live (moves `production` to it), only if it passed the checks; waits for the live deploy. |
 | `node scripts/staging/setup-gate.mjs` | One time (done Oct 1, 2026): the live services release from `production`. |
 
