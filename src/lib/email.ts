@@ -350,6 +350,8 @@ export async function sendEmail({
         headers: {
           Authorization: `Bearer ${resendKey}`,
           'Content-Type': 'application/json',
+          // The test copy's fetch guard only lets sends through lib/email's filters (src/lib/staging.ts).
+          ...(process.env.APP_ENV === 'staging' ? { 'X-Staging-Filtered': '1' } : {}),
         },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(30_000),
@@ -407,6 +409,8 @@ export async function sendEmail({
           headers: {
             Authorization: `Bearer ${resendKey}`,
             'Content-Type': 'application/json',
+            // The test copy's fetch guard only lets sends through lib/email's filters (src/lib/staging.ts).
+            ...(process.env.APP_ENV === 'staging' ? { 'X-Staging-Filtered': '1' } : {}),
           },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(30_000),

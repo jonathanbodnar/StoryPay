@@ -163,3 +163,27 @@ describe('perVisitorLimit', () => {
     expect(perVisitorLimit(3)).toBe(200);
   });
 });
+
+describe('the test copy blocks raw email sends', () => {
+  it('rejects api.resend.com/emails without lib/email’s filter mark, passes it with one', async () => {
+    const g = globalThis as typeof globalThis & { __stagingFetchGuard?: boolean };
+    const realFetch = globalThis.fetch;
+    const seen: string[] = [];
+    vi.stubEnv('APP_ENV', 'staging');
+    g.__stagingFetchGuard = false;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      seen.push(input instanceof Request ? input.url : String(input));
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+    try {
+      installStagingFetchGuard();
+      await expect(fetch('https://api.resend.com/emails', { method: 'POST', body: '{}' })).rejects.toThrow(/lib\/email/);
+      await expect(fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'X-Staging-Filtered': '1' }, body: '{}' })).resolves.toBeTruthy();
+      expect(seen).toHaveLength(1);
+    } finally {
+      globalThis.fetch = realFetch;
+      g.__stagingFetchGuard = false;
+      vi.unstubAllEnvs();
+    }
+  });
+});

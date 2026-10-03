@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Browser, db, env, FLOW_VENUE, runId, signedInOwner, waitForEmail } from './helpers';
+import { Browser, db, env, FLOW_VENUE, outbox, runId, signedInOwner, waitForEmail } from './helpers';
 
 // Every other door a couple (or a venue's other tools) comes in through:
 // the embeddable form on a venue's own website, trigger links in emails,
@@ -103,13 +103,15 @@ describe('other ways leads come in', () => {
     expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(5_000);
   });
 
-  it('someone joins the waitlist', async () => {
-    const before = ((await (await fetch(`${env.base}/api/waitlist`, { headers: { 'x-staging-key': env.stagingKey } })).json()) as { count: number }).count;
+  it('the waitlist is closed: a submission is refused, saves nothing and emails nobody (owner, Oct 3)', async () => {
+    const since = new Date().toISOString();
     const res = await fetch(`${env.base}/api/waitlist`, {
-      method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' }, body: JSON.stringify({ email: `waitlist.${runId}@example.com`, firstName: 'Wendy', lastName: 'Waitlist', venueName: `Waitlist Barn ${runId}` }),
+      method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' },
+      body: JSON.stringify({ email: `waitlist.${runId}@example.com`, firstName: 'Wendy', lastName: 'Waitlist', venueName: `Waitlist Barn ${runId}` }),
     });
-    expect(res.status, await res.clone().text()).toBeLessThan(300);
-    const after = ((await (await fetch(`${env.base}/api/waitlist`, { headers: { 'x-staging-key': env.stagingKey } })).json()) as { count: number }).count;
-    expect(after).toBe(before + 1);
+    expect(res.status).toBe(410);
+    expect((await db.from('waitlist').select('id').ilike('email', `waitlist.${runId}@example.com`)).data).toEqual([]);
+    await new Promise((r) => setTimeout(r, 1500));
+    expect((await outbox({ since })).filter((e) => /wendy|waitlist/i.test(e.subject + e.html))).toHaveLength(0);
   });
 });

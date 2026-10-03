@@ -133,8 +133,20 @@ export function installStagingFetchGuard(): void {
       return import('@/lib/staging-ghl').then(({ fakeGhlFetch }) => fakeGhlFetch(input, init));
     }
     if (host === 'api.resend.com') {
-      // Received email (LeadFinder, replies): answered by the stand-in. Sending stays real.
+      // Received email (LeadFinder, replies): answered by the stand-in. Sending stays real —
+      // but only through lib/email, whose filters mark their requests; a raw send would
+      // skip the allowlist and quiet mode and reach a real inbox (the waitlist's did).
       const url = input instanceof Request ? input.url : String(input);
+      const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+      if (method === 'POST' && new URL(url).pathname === '/emails') {
+        const filtered = input instanceof Request
+          ? input.headers.get('x-staging-filtered')
+          : new Headers(init?.headers).get('x-staging-filtered');
+        if (filtered !== '1') {
+          console.error('[staging] blocked a raw email send that skipped lib/email’s filters');
+          return Promise.reject(new Error('Blocked in the test copy: send email through lib/email, never api.resend.com directly'));
+        }
+      }
       return import('@/lib/staging-inbound').then(({ fakeResendReceivingFetch }) => fakeResendReceivingFetch(url) ?? realFetch(input, init));
     }
     if (host && stagingBlocksHost(host)) {

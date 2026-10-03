@@ -49,7 +49,7 @@ const FAQS = [
   },
   {
     q: 'How do I get started?',
-    a: "Simply request your early access invite using the button above. We will send you your invite within 24 to 48 hours with everything you need to get set up.",
+    a: 'StoryPay\u2122 is currently invite-only and the early access waitlist is closed. If you already have an account, log in above; otherwise reach us at clients@storyvenuemarketing.com.',
   },
   {
     q: 'Is support available?',
@@ -57,7 +57,7 @@ const FAQS = [
   },
   {
     q: 'How much will this cost?',
-    a: 'Pricing will be announced at launch. Early access members will receive special founding member rates, significantly lower than standard pricing. Plus 0% processing fees.',
+    a: 'Pricing will be announced at launch. Early access members will receive special founding member rates, significantly lower than standard pricing.',
   },
 ];
 
@@ -80,152 +80,6 @@ function FAQItem({ q, a }: { q: string; a: string }) {
           {a}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Request Modal ─────────────────────────────────────────────────────────────
-function RequestModal({ onClose }: { onClose: () => void }) {
-  const [form, setForm]     = useState({ firstName: '', lastName: '', email: '', phone: '', venueName: '', referralSource: '' });
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'duplicate'>('idle');
-  const [msg, setMsg]       = useState('');
-
-  const upd = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(p => ({ ...p, [k]: e.target.value }));
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setStatus('loading');
-    try {
-      const res  = await fetch('/api/waitlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (res.status === 201)      setStatus('success');
-      else if (res.status === 200) { setStatus('duplicate'); setMsg(data.message); }
-      else                         { setStatus('error');     setMsg(data.error || 'Something went wrong.'); }
-    } catch {
-      setStatus('error');
-      setMsg('Network error. Please try again.');
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="relative w-full max-w-md rounded-3xl bg-white overflow-hidden max-h-[90vh] overflow-y-auto">
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors z-10"
-        >
-          <X size={14} />
-        </button>
-
-        {status === 'success' ? (
-          <div className="flex flex-col items-center justify-center gap-4 px-8 py-14 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
-              <CheckCircle2 size={30} className="text-emerald-500" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900">You are on the list!</h3>
-            <p className="text-gray-500 text-sm leading-relaxed max-w-xs">
-              Look out for your invite via email in the next 24 to 48 hours. We are excited to have you on board.
-            </p>
-            <button
-              onClick={onClose}
-              className="mt-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-white"
-              style={{ backgroundColor: BRAND }}
-            >
-              Done
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="px-6 sm:px-8 pt-8 pb-5">
-              <h3 className="text-xl font-bold text-gray-900 mb-1">Request Early Access Invite</h3>
-              <p className="text-sm text-gray-400">We will send your invite within 24 to 48 hours.</p>
-            </div>
-            <form onSubmit={submit} className="px-6 sm:px-8 pb-8 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1.5">
-                    First Name <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text" required value={form.firstName} onChange={upd('firstName')} placeholder="Jane"
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1.5">Last Name</label>
-                  <input
-                    type="text" value={form.lastName} onChange={upd('lastName')} placeholder="Smith"
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">
-                  Email <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="email" required value={form.email} onChange={upd('email')} placeholder="jane@yourvenue.com"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Phone</label>
-                <input
-                  type="tel" value={form.phone} onChange={upd('phone')} placeholder="(555) 000-0000"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Venue Name</label>
-                <input
-                  type="text" value={form.venueName} onChange={upd('venueName')} placeholder="The Grand Estate"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">How did you hear about us?</label>
-                <select
-                  value={form.referralSource}
-                  onChange={upd('referralSource')}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:bg-white transition-colors appearance-none"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center' }}
-                >
-                  <option value="" disabled>Select an option...</option>
-                  <option value="A Friend">A Friend</option>
-                  <option value="Facebook">Facebook</option>
-                  <option value="Instagram">Instagram</option>
-                  <option value="Instagram Ad">Instagram Ad</option>
-                  <option value="Facebook Ad">Facebook Ad</option>
-                  <option value="Google Search">Google Search</option>
-                  <option value="Email">Email</option>
-                  <option value="Current Client">Current Client</option>
-                  <option value="StoryVenue">StoryVenue</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              {(status === 'error' || status === 'duplicate') && (
-                <p className="text-xs text-center text-red-500 bg-red-50 rounded-xl py-2 px-3">{msg}</p>
-              )}
-              <button
-                type="submit"
-                disabled={status === 'loading'}
-                className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 mt-1"
-                style={{ backgroundColor: BRAND }}
-              >
-                {status === 'loading'
-                  ? <><Loader2 size={14} className="animate-spin" /> Submitting...</>
-                  : 'Request My Invite'}
-              </button>
-              <p className="text-center text-xs text-gray-400">No spam, ever. Invite arrives within 24 to 48 hours.</p>
-            </form>
-          </>
-        )}
-      </div>
     </div>
   );
 }
@@ -355,15 +209,7 @@ const AVATARS = [
 ];
 
 export default function LandingPage() {
-  const [showModal, setShowModal] = useState(false);
-  const [, setCount]              = useState(247);
-  const countdown                 = useCountdown(LAUNCH_DATE);
-
-  useEffect(() => {
-    fetch('/api/waitlist').then(r => r.json()).then(d => {
-      if (d.count > 0) setCount(d.count + 242);
-    }).catch(() => {});
-  }, []);
+  const countdown = useCountdown(LAUNCH_DATE);
 
   return (
     <div className="text-gray-900" style={{ fontFamily: "'Open Sans', Arial, sans-serif", background: 'linear-gradient(180deg, #e4e9ec 0%, #eef1f3 8%, #f4f6f7 18%, #f8f9fa 30%, #ffffff 48%)' }}>
@@ -398,13 +244,13 @@ export default function LandingPage() {
           </p>
 
           {/* CTA */}
-          <button
-            onClick={() => setShowModal(true)}
+          <a
+            href={`${DASHBOARD_URL}/login`}
             className="inline-flex items-center justify-center rounded-md px-8 sm:px-12 py-4 text-base font-bold text-white hover:opacity-90 hover:-translate-y-0.5 transition-all mb-8 sm:mb-10"
             style={{ backgroundColor: BRAND }}
           >
-            Request Early Access Invite
-          </button>
+            Log In to StoryPay™
+          </a>
 
           {/* Social proof */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-10">
@@ -434,11 +280,6 @@ export default function LandingPage() {
             <CDUnit v={countdown.minutes} label="Minutes" />
             <span className="text-2xl sm:text-3xl font-light text-gray-300 pb-5">:</span>
             <CDUnit v={countdown.seconds} label="Seconds" />
-          </div>
-
-          {/* 0% fee badge — single line on all devices */}
-          <div className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 mb-10 sm:mb-14 whitespace-nowrap">
-            <span className="text-xs sm:text-sm font-semibold text-emerald-700">0% processing fees. You keep 100% of every payment.</span>
           </div>
 
           {/* iPhone mockup */}
@@ -557,7 +398,6 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {showModal && <RequestModal onClose={() => setShowModal(false)} />}
     </div>
   );
 }
