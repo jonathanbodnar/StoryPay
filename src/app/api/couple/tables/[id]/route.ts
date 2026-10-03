@@ -81,12 +81,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const weddingId = gate.ctx.wedding.id;
 
   const { id } = await params;
-  const { error } = await supabaseAdmin
+  const { data: deleted, error } = await supabaseAdmin
     .from('wedding_tables')
     .delete()
     .eq('id', id)
-    .eq('couple_wedding_id', weddingId);
+    .eq('couple_wedding_id', weddingId)
+    .select('id');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!deleted?.length) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({ ok: true });
 }
