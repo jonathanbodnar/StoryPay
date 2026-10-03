@@ -26,6 +26,7 @@ export const SHOWCASE = {
   name: 'Willow Creek Estate',
   slug: 'willow-creek-estate',
   ownerEmail: 'showcase-owner@example.com',
+  coupleEmail: 'showcase-couple@example.com',
 };
 const V = SHOWCASE.venueId;
 const id = (block, n) => `ca110000-0000-4000-8000-00000000${block}${String(n).padStart(2, '0')}`;
@@ -428,6 +429,125 @@ async function main() {
     }
   }
   console.log(`listing traffic: ${ev} events across ${SESSIONS.length} sessions`);
+
+  // ── The showcase couple: Emma & Ryan's Wedding Planner, filled the way a
+  //    real couple's looks three months in. Everything goes through the
+  //    app's own APIs so the screens read it back exactly as saved. ──
+  const base = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '');
+  if (base) {
+    const couplePassword = `Showcase-${password.slice(0, 6)}-Planner-2027!`;
+    await fetch(`${base}/api/couple/signup`, {
+      method: 'POST', headers: { 'x-staging-key': password, 'content-type': 'application/json' },
+      body: JSON.stringify({ email: SHOWCASE.coupleEmail, password: couplePassword, first_name: 'Emma', last_name: 'Sinclair', phone: '(828) 555-0300' }),
+    }); // already signed up on a rerun: fine, we sign in next
+    const anon = createClient(supabaseUrl, (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim(), { auth: { persistSession: false } });
+    const auth = await anon.auth.signInWithPassword({ email: SHOWCASE.coupleEmail, password: couplePassword });
+    if (auth.error) throw new Error(`showcase couple sign-in: ${auth.error.message}`);
+    const api = async (path, init = {}) => {
+      const res = await fetch(`${base}${path}`, {
+        method: init.method ?? 'GET',
+        headers: {
+          'x-staging-key': password, authorization: `Bearer ${auth.data.session.access_token}`,
+          ...(init.json !== undefined ? { 'content-type': 'application/json' } : {}),
+        },
+        body: init.json !== undefined ? JSON.stringify(init.json) : undefined,
+      });
+      if (!res.ok) throw new Error(`${init.method ?? 'GET'} ${path}: ${res.status} ${await res.text()}`);
+      return res.json().catch(() => ({}));
+    };
+
+    await api('/api/couple/profile', { method: 'PATCH', json: { first_name: 'Emma', last_name: 'Sinclair', phone: '(828) 555-0300', partner_first_name: 'Ryan', wedding_date: '2027-06-12', guest_count: 180 } });
+
+    // The cover photo themes the planner and the wedding website.
+    try {
+      await api('/api/couple/site', { method: 'PUT', json: { cover_url: photo('photo-1465495976277-4387d4b0b4c6', 1800), headline: 'Emma & Ryan' } });
+    } catch { /* site not set up yet on a fresh copy: the hub still shows */ }
+    const docRev = async (path, key) => ((await api(path))[key]?.rev ?? 0);
+    const money = (lines) => lines.map(([category, label, estimated, actual, paid], i2) => ({ id: `s${i2 + 1}`, category, label, estimated, actual, paid }));
+    await api('/api/couple/budget', { method: 'PUT', json: { budget: { rev: await docRev('/api/couple/budget', 'budget'), target: 40000, lines: money([
+      ['Venue', 'Willow Creek Estate — all-in', 15000, 14800, true],
+      ['Photography', 'Light & Lens Co.', 4200, 4500, true],
+      ['Videography', '', 2500, 0, false],
+      ['Flowers & Decor', 'Wildstem Floral', 3500, 0, false],
+      ['Attire', 'Dress + suit + alterations', 2800, 2650, true],
+      ['Music & Entertainment', 'DJ + ceremony strings', 2400, 0, false],
+      ['Hair & Makeup', '', 900, 0, false],
+      ['Invitations & Stationery', '', 750, 720, true],
+      ['Rings', '', 3000, 2890, true],
+      ['Transportation', 'Guest shuttle', 800, 0, false],
+      ['Favors & Gifts', '', 600, 0, false],
+      ['Officiant', '', 500, 0, false],
+    ]) } } });
+
+    const task = (title, dueDate, done) => ({ id: `t-${title.toLowerCase().replace(/[^a-z]+/g, '-')}`, title, dueDate, done });
+    await api('/api/couple/checklist', { method: 'PUT', json: { checklist: { rev: await docRev('/api/couple/checklist', 'checklist'), items: [
+      task('Tour venues', '2026-08-15', true), task('Book Willow Creek Estate', '2026-08-24', true),
+      task('Set the budget', '2026-09-01', true), task('Build the guest list', '2026-10-01', true),
+      task('Book photographer', '2026-10-10', true), task('Order save-the-dates', '2026-11-01', true),
+      task('Book florist', '2027-01-15', true), task('Choose the menu at the tasting', '2027-02-04', true),
+      task('Order invitations', '2027-02-15', false), task('Book hair & makeup trial', '2027-03-01', false),
+      task('Plan the honeymoon', '2027-03-15', false), task('Final dress fitting', '2027-05-10', false),
+      task('Finish the seating chart', '2027-05-25', false), task('Confirm final guest count with venue', '2027-05-29', false),
+    ] } } });
+
+    await api('/api/couple/timeline', { method: 'PUT', json: { timeline: { rev: await docRev('/api/couple/timeline', 'timeline'), events: [
+      { id: 'e1', time: '13:00', title: 'Hair & makeup in the Vine Loft' },
+      { id: 'e2', time: '15:00', title: 'First look in the garden' },
+      { id: 'e3', time: '16:00', title: 'Ceremony under the willow arbor' },
+      { id: 'e4', time: '16:45', title: 'Cocktail hour on the veranda' },
+      { id: 'e5', time: '18:00', title: 'Dinner in the Grand Hall', note: 'Toasts after the first course' },
+      { id: 'e6', time: '20:00', title: 'First dance' },
+      { id: 'e7', time: '22:45', title: 'Sparkler send-off' },
+    ] } } });
+
+    await api('/api/couple/vendors', { method: 'PUT', json: { vendors: { rev: await docRev('/api/couple/vendors', 'vendors'), items: [
+      { id: 'v1', category: 'Photographer', businessName: 'Light & Lens Co.', contactName: 'Sam Porter', phone: '(828) 555-0401', email: 'sam@example.com' },
+      { id: 'v2', category: 'Florist', businessName: 'Wildstem Floral', contactName: 'Iris Bloom', phone: '(828) 555-0402', email: 'iris@example.com' },
+      { id: 'v3', category: 'DJ / Band', businessName: 'Blue Ridge Beats', contactName: 'Marcus', phone: '(828) 555-0403', email: 'dj@example.com' },
+      { id: 'v4', category: 'Baker', businessName: 'Sweet Laurel Cakes', contactName: 'Daphne', phone: '(828) 555-0404', email: 'cake@example.com' },
+      { id: 'v5', category: 'Hair & Makeup', businessName: 'Golden Hour Beauty', contactName: 'Tess', phone: '(828) 555-0405', email: 'beauty@example.com' },
+      { id: 'v6', category: 'Officiant', businessName: 'Rev. Jordan Miles', contactName: 'Jordan', phone: '(828) 555-0406', email: 'officiant@example.com' },
+    ] } } });
+
+    // Guests and seating are rows (not one saved document), so a rerun
+    // clears this couple's old ones through the same doors the screens use.
+    const existing = (await api('/api/couple/guests')).guests ?? [];
+    for (const g of existing) await api(`/api/couple/guests/${g.id}`, { method: 'DELETE' });
+    const oldTables = await api('/api/couple/tables');
+    for (const t of (Array.isArray(oldTables) ? oldTables : oldTables.tables ?? [])) await api(`/api/couple/tables/${t.id}`, { method: 'DELETE' });
+
+    const tableIds = [];
+    for (const [name, capacity] of [['Head Table', 8], ['Table 1', 10], ['Table 2', 10], ['Table 3', 10], ['Table 4', 10], ['Table 5', 10]]) {
+      const made = await api('/api/couple/tables', { method: 'POST', json: { name, capacity } });
+      tableIds.push(made.table?.id ?? made.id);
+    }
+    const GUESTS = [
+      ['Margaret & Tom Sinclair', 2, 'Her family', 'attending', 0], ['Carol Reyes', 1, 'Her family', 'attending', 0],
+      ['The Whitfields', 2, 'Her family', 'attending', 1], ['Grandma June', 1, 'Her family', 'attending', 0],
+      ['David & Anne Park', 2, 'His family', 'attending', 1], ['Uncle Joe Park', 1, 'His family', 'declined', null],
+      ['The Castellanos Family', 2, 'His family', 'attending', 1], ['Nina Park', 1, 'His family', 'attending', 2],
+      ['Priya & Dev Shah', 2, 'Friends', 'attending', 2], ['Jasmine Cole', 1, 'Friends', 'attending', 2],
+      ['Marcus & Lena Webb', 2, 'Friends', 'attending', 3], ['Chloe Bennett', 1, 'Friends', 'pending', null],
+      ['The Harringtons', 2, 'Friends', 'attending', 3], ['Zoe Ramirez', 1, 'Friends', 'attending', 3],
+      ['Sam & Riley Porter', 2, 'Friends', 'attending', 4], ['Tessa Nguyen', 1, 'Friends', 'pending', null],
+      ['Nora & Felix Grant', 2, 'Work', 'attending', 4], ['Camille Rousseau', 1, 'Work', 'attending', 4],
+      ['Hannah Kim', 1, 'Work', 'declined', null], ['Olivia & Pete Marsh', 2, 'Work', 'attending', 5],
+      ['Grace & Will Caldwell', 2, 'Friends', 'attending', 5], ['Maya Donovan', 1, 'Friends', 'pending', null],
+    ];
+    let seated = 0;
+    for (const [i2, [full_name, party_size, guest_group, rsvp_status, tableIndex]] of GUESTS.entries()) {
+      const made = await api('/api/couple/guests', { method: 'POST', json: {
+        full_name, party_size, guest_group, rsvp_status,
+        email: `guest.${i2 + 1}.showcase@example.com`,
+      } });
+      const guestId = made.guest?.id ?? made.id;
+      if (tableIndex !== null && tableIds[tableIndex]) {
+        await api(`/api/couple/guests/${guestId}`, { method: 'PATCH', json: { table_id: tableIds[tableIndex] } });
+        seated++;
+      }
+    }
+    console.log(`showcase couple: ${SHOWCASE.coupleEmail} — ${GUESTS.length} guest parties (${seated} seated), budget, checklist, timeline, vendors`);
+  }
 
   const counts = {};
   for (const t of ['leads', 'conversation_threads', 'calendar_events', 'proposals', 'proposal_payments', 'proposal_installments']) {

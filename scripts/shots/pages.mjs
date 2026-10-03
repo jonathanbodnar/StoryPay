@@ -7,6 +7,7 @@
 
 export const SHOWCASE_VENUE_ID = 'ca110000-0000-4000-8000-000000000001';
 export const SHOWCASE_OWNER_EMAIL = 'showcase-owner@example.com';
+export const SHOWCASE_COUPLE_EMAIL = 'showcase-couple@example.com';
 const PLAN_PROPOSAL_ID = 'ca110000-0000-4000-8000-000000008020';
 const SENT_PROPOSAL_TOKEN = 'showcase-proposal-token-0001';
 const LISTING_SLUG = 'willow-creek-estate';
@@ -28,7 +29,7 @@ const ALL = ['desktop', 'laptop', 'tablet', 'phone'];
  * name          file names start with it
  * path          the page, as written under src/app
  * fill          values for the path's [segments]
- * who           'owner' (signed in as the showcase venue) or 'visitor'
+ * who           'owner' (the showcase venue), 'couple' (the showcase couple) or 'visitor'
  * devices       which of DEVICES to shoot (default: desktop + phone)
  * alsoFullPage  also save an unframed full-length capture (long public pages)
  * settleMs      extra wait for screens that load in stages (default 2500)
@@ -46,6 +47,13 @@ export const SHOTS = [
   { name: 'installments', path: '/dashboard/payments/installments', who: 'owner', devices: ['desktop'] },
   { name: 'proposal-couple', path: '/proposal/[token]', fill: { token: SENT_PROPOSAL_TOKEN }, who: 'visitor', devices: ALL, alsoFullPage: true },
   { name: 'listing', path: '/venue/[slug]', fill: { slug: LISTING_SLUG }, who: 'visitor', alsoFullPage: true },
+  // The couple's Wedding Planner (Emma & Ryan, seeded by seed-showcase.mjs).
+  { name: 'planner-hub', path: '/couple/wedding', who: 'couple', devices: ALL, settleMs: 3500 },
+  { name: 'planner-budget', path: '/couple/budget', who: 'couple' },
+  { name: 'planner-guests', path: '/couple/guests', who: 'couple', settleMs: 3500 },
+  { name: 'planner-seating', path: '/couple/seating', who: 'couple', devices: ['desktop', 'tablet'] },
+  { name: 'planner-checklist', path: '/couple/checklist', who: 'couple', devices: ['phone'] },
+  { name: 'planner-timeline', path: '/couple/timeline', who: 'couple', devices: ['phone'] },
 ];
 
 /** The page's address with its [segments] filled in. */

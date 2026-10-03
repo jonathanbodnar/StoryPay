@@ -19,7 +19,7 @@ describe('screenshot kit', () => {
     for (const shot of SHOTS as Shot[]) {
       expect(() => urlFor(shot), shot.name).not.toThrow();
       for (const d of shot.devices ?? []) expect(DEVICES, `${shot.name}: ${d}`).toHaveProperty(d);
-      expect(['owner', 'visitor'], shot.name).toContain(shot.who);
+      expect(['owner', 'couple', 'visitor'], shot.name).toContain(shot.who);
     }
   });
 });

@@ -13,7 +13,8 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { chromium } from '@playwright/test';
-import { DEVICES, SHOTS, SHOWCASE_OWNER_EMAIL, urlFor } from './pages.mjs';
+import { createClient } from '@supabase/supabase-js';
+import { DEVICES, SHOTS, SHOWCASE_COUPLE_EMAIL, SHOWCASE_OWNER_EMAIL, urlFor } from './pages.mjs';
 
 const base = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '');
 const password = process.env.STAGING_PASSWORD || '';
@@ -52,6 +53,21 @@ if (!res.ok()) throw new Error(`owner sign-in: ${res.status()} ${await res.text(
 const ownerState = await signin.storageState();
 await signin.close();
 
+// The showcase couple's session lives in the browser's storage (like the
+// planner does it), seeded into couple contexts before any page runs.
+let coupleStorage = null;
+if (shots.some((s) => s.who === 'couple')) {
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  const anon = createClient(supabaseUrl, String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY), { auth: { persistSession: false } });
+  const auth = await anon.auth.signInWithPassword({
+    email: SHOWCASE_COUPLE_EMAIL,
+    password: `Showcase-${password.slice(0, 6)}-Planner-2027!`,
+  });
+  if (auth.error) throw new Error(`couple sign-in: ${auth.error.message} — run seed-showcase.mjs first`);
+  const ref = new URL(supabaseUrl).hostname.split('.')[0];
+  coupleStorage = { key: `sb-${ref}-auth-token`, value: JSON.stringify(auth.data.session) };
+}
+
 // Reshooting a few names keeps the rest of the run's records.
 const meta = existsSync('shots-out/meta.json') ? JSON.parse(readFileSync('shots-out/meta.json', 'utf8')) : {};
 let taken = 0;
@@ -60,20 +76,30 @@ for (const [deviceName, device] of Object.entries(DEVICES)) {
   const wanted = shots.filter((s) => (s.devices ?? ['desktop', 'phone']).includes(deviceName));
   if (!wanted.length) continue;
   const { frame, ...viewportConfig } = device;
-  const context = await browser.newContext({
-    baseURL: base,
-    viewport: { width: device.width, height: device.height },
-    deviceScaleFactor: device.deviceScaleFactor,
-    isMobile: viewportConfig.isMobile ?? false,
-    hasTouch: viewportConfig.hasTouch ?? false,
-    locale: 'en-US',
-    timezoneId: 'America/New_York',
-    reducedMotion: 'reduce',
-    extraHTTPHeaders: gate,
-  });
+  // One context per kind of visitor, so sessions never bleed between shots.
+  const contexts = {};
+  const contextFor = async (who) => {
+    if (contexts[who]) return contexts[who];
+    const context = await browser.newContext({
+      baseURL: base,
+      viewport: { width: device.width, height: device.height },
+      deviceScaleFactor: device.deviceScaleFactor,
+      isMobile: viewportConfig.isMobile ?? false,
+      hasTouch: viewportConfig.hasTouch ?? false,
+      locale: 'en-US',
+      timezoneId: 'America/New_York',
+      reducedMotion: 'reduce',
+      extraHTTPHeaders: gate,
+    });
+    if (who === 'owner') await context.addCookies(ownerState.cookies);
+    if (who === 'couple') {
+      await context.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* storage off */ } },
+        [coupleStorage.key, coupleStorage.value]);
+    }
+    return (contexts[who] = context);
+  };
   for (const shot of wanted) {
-    const page = await context.newPage();
-    if (shot.who === 'owner') await context.addCookies(ownerState.cookies);
+    const page = await (await contextFor(shot.who)).newPage();
     await page.goto(urlFor(shot), { waitUntil: 'load', timeout: 60_000 });
     await page.addStyleTag({ content: CALM_CSS });
     await page.evaluate(() => document.fonts.ready);
@@ -100,7 +126,7 @@ for (const [deviceName, device] of Object.entries(DEVICES)) {
     console.log(`shot ${shot.name} on ${deviceName}`);
     await page.close();
   }
-  await context.close();
+  for (const c of Object.values(contexts)) await c.close();
 }
 
 await browser.close();
