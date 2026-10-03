@@ -2358,7 +2358,8 @@ export async function processAutomationEnrollmentsBatch(): Promise<{ processed: 
     .eq('status', 'active')
     .lte('next_run_at', now);
   if (suspended) dueQuery = dueQuery.not('venue_id', 'in', suspended);
-  const { data: due, error } = await dueQuery.limit(BATCH);
+  // Most overdue first, so a busy moment never leaves the same ones waiting.
+  const { data: due, error } = await dueQuery.order('next_run_at', { ascending: true }).limit(BATCH);
   if (error || !due?.length) return { processed: 0 };
 
   let n = 0;
