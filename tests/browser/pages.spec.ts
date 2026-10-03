@@ -91,3 +91,25 @@ for (const who of Object.keys(groups) as Who[]) {
     }
   });
 }
+
+// Pages that show dates, opened with the browser in two far-off time zones:
+// one is a day ahead of the server's clock (UTC) and the other a day behind
+// for most of every day, so a date worked out on the server and again in the
+// browser shows up as a mismatch at any hour, not just in the US evening (the
+// Reports page, Oct 2).
+const DATED: Array<[Who, string]> = [
+  ['owner', '/dashboard'], ['owner', '/dashboard/reports'], ['owner', '/dashboard/calendar'], ['owner', '/dashboard/listing'],
+  ['couple', '/couple/wedding'], ['couple', '/couple/dashboard'], ['couple', '/couple/timeline'],
+  ['admin', '/admin/dashboard'],
+];
+for (const timezoneId of ['Pacific/Kiritimati', 'Pacific/Pago_Pago']) {
+  test.describe(`dated pages in ${timezoneId}`, () => {
+    test.describe.configure({ mode: 'parallel' });
+    for (const [who, path] of DATED) {
+      test.describe(who, () => {
+        test.use({ storageState: STATE[who], timezoneId });
+        test(`${path} opens`, async ({ page }) => opens(page, path, false));
+      });
+    }
+  });
+}

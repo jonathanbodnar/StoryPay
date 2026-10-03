@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import DateRangePicker, { DateRange, PRESETS } from '@/components/DateRangePicker';
 import { classNames } from '@/lib/utils';
+import { useIsClient } from '@/hooks/useIsClient';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -405,6 +406,9 @@ function AccountingExportCard({ dateRange }: { dateRange: DateRange }) {
 
 export default function ReportsPage() {
  const [dateRange, setDateRange] = useState<DateRange>(getDefaultRange);
+ // The dates come from the browser's clock: the server (UTC) is already on
+ // tomorrow in the US evening, so they're shown once the page is in the browser.
+ const isClient = useIsClient();
 
  return (
  <div className="min-h-full bg-white space-y-12">
@@ -422,7 +426,7 @@ export default function ReportsPage() {
      <span className="text-xs font-semibold text-brand-900 uppercase tracking-wider">Period:</span>
      <span className="text-sm text-gray-700 font-medium">{dateRange.label}</span>
      <span className="text-gray-400 text-sm">·</span>
-     <span className="text-xs text-gray-500">{dateRange.from} to {dateRange.to}</span>
+     <span className="text-xs text-gray-500">{isClient ? `${dateRange.from} to ${dateRange.to}` : ''}</span>
      </div>
 
      <div className="space-y-4">
