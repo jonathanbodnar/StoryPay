@@ -104,12 +104,19 @@ export async function POST(
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email,
-      options: { redirectTo: `${appUrl}/couple/wedding` }, // the couple's main hub
+      options: { redirectTo: `${appUrl}/couple/wedding` },
     });
-    if (error || !data?.properties?.action_link) {
+    // Our own page confirms the link and opens the couple's wedding hub
+    // (see /couple/signin-link), independent of the login service's
+    // allowed-address list.
+    const hashed = data?.properties?.hashed_token;
+    const url = hashed
+      ? `${appUrl}/couple/signin-link?token_hash=${encodeURIComponent(hashed)}&type=magiclink`
+      : data?.properties?.action_link;
+    if (error || !url) {
       return NextResponse.json({ error: error?.message ?? 'Could not generate link' }, { status: 500 });
     }
-    return NextResponse.json({ mode: 'link', url: data.properties.action_link, email });
+    return NextResponse.json({ mode: 'link', url, email });
   }
 
   // ── admin team — sign them in using their own login flow ────────────────

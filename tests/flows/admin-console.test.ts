@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Browser, coupleSession, db, env, FLOW_VENUE, runId, signedInMasterAdmin, signedInOwner, signedInSuperAdmin, waitForEmail } from './helpers';
 
@@ -49,17 +50,28 @@ describe('the admin console', () => {
     expect((await db.from('directory_plans').select('id').eq('id', plan!.id).maybeSingle()).data).toBeNull();
   });
 
-  it('"Login as bride" opens the couple’s wedding hub, from both admin screens', async () => {
+  it('"Login as bride" signs in as the couple and opens their wedding hub, from both admin screens', async () => {
     const session = await coupleSession();
     const coupleId = (session.user as { id: string }).id;
-    // The Couples tab and the Contacts tab each have their own route; both
-    // links must land the admin on /couple/wedding (the couple's main hub).
+    // The Couples tab and the Contacts tab each have their own route. Both
+    // must hand back OUR sign-in page (which opens /couple/wedding), never
+    // the login service's own link — that one silently rewrites addresses
+    // it doesn't know and stranded admins away from the hub.
+    const urls: string[] = [];
     for (const path of [`/api/admin/couples/${coupleId}/impersonate`, `/api/admin/contacts/couple/${coupleId}/impersonate`]) {
       const res = await team.fetch(path, { method: 'POST', json: {} });
       expect(res.status, `${path}: ${await res.clone().text()}`).toBe(200);
       const { url } = (await res.json()) as { url: string };
-      expect(decodeURIComponent(url), path).toContain('/couple/wedding');
+      expect(url, path).toContain('/couple/signin-link?token_hash=');
+      urls.push(url);
     }
+    // The link really signs in as this couple: confirming its token the way
+    // the page does yields the couple's own session.
+    const tokenHash = new URL(urls[0]).searchParams.get('token_hash')!;
+    const anon = createClient(env.supabaseUrl, String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY), { auth: { persistSession: false } });
+    const confirmed = await anon.auth.verifyOtp({ token_hash: tokenHash, type: 'magiclink' });
+    expect(confirmed.error?.message ?? null).toBeNull();
+    expect(confirmed.data.user?.id).toBe(coupleId);
   });
 
   it('inviting a team member emails them, and switching them off ends their access', async () => {

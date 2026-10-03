@@ -34,22 +34,24 @@ export async function POST(
   const email = userResp.user.email;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.storyvenue.com';
-  // The couple's main hub — "Login as bride" always opens their dashboard.
-  const redirectTo = `${appUrl}/couple/wedding`;
 
   const { data, error } = await supabaseAdmin.auth.admin.generateLink({
     type: 'magiclink',
     email,
-    options: { redirectTo },
+    options: { redirectTo: `${appUrl}/couple/wedding` },
   });
 
-  if (error || !data?.properties?.action_link) {
+  // Our own page confirms the link and opens the couple's wedding hub, so
+  // "Login as bride" never depends on the login service's list of allowed
+  // return addresses (which silently rewrites unknown ones).
+  const hashed = data?.properties?.hashed_token;
+  const url = hashed
+    ? `${appUrl}/couple/signin-link?token_hash=${encodeURIComponent(hashed)}&type=magiclink`
+    : data?.properties?.action_link;
+  if (error || !url) {
     console.error('[admin/couples/impersonate] generateLink:', error);
     return NextResponse.json({ error: error?.message ?? 'Could not generate link' }, { status: 500 });
   }
 
-  return NextResponse.json({
-    url: data.properties.action_link,
-    email,
-  });
+  return NextResponse.json({ url, email });
 }
