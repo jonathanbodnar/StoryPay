@@ -13,6 +13,39 @@
 /** Paths that never ship with the app. */
 const NOT_SHIPPED = [/^scripts\//, /^tests\//, /^docs\//, /^\.claude\//, /^\.gitignore$/, /\.md$/i];
 
+/**
+ * The areas the owner keeps behind the full gate no matter what (decided
+ * 2026-10-03): money, messages to real people, sign-in, and the database.
+ * A hot release refuses a commit touching any of these — a wrong charge or
+ * text can't be rolled back, and a migration can't be un-run.
+ */
+const SENSITIVE = [
+  // Database
+  /^migrations\//,
+  // Dependencies change everything at once
+  /^package(-lock)?\.json$/,
+  // Payments and billing
+  /^src\/lib\/stripe\//, /^src\/lib\/(payment|proposal-payments|service-fee|platform-billing|platform-directory-billing|saas-billing|venue-billing|lunarpay)/,
+  /^src\/app\/api\/(payments|venue-billing|transactions|invoices|card-update|lunarpay)\//,
+  /^src\/app\/api\/webhooks\/(stripe|stripe-connect|lunarpay)\//,
+  /^src\/app\/api\/proposals\/public\//, // couples pay and sign here
+  /^src\/app\/api\/cron\/(installments|payment-reminders)\//,
+  // Texting and automated messages to real people
+  /^src\/lib\/(ghl|sms|texting-hours|concierge-sms|marketing-email-worker|reengagement-drip|appointment-reminders|guide-invite)/,
+  /^src\/lib\/ai-concierge\//,
+  /^src\/app\/api\/webhooks\/(ghl|ghl-workflow-inbound|inbound-email|calendly)\//,
+  // Sign-in and sessions
+  /^src\/proxy\.ts$/, /^src\/instrumentation\.ts$/,
+  /^src\/lib\/(session|venue-session|auth-helpers|admin-auth|admin-token|admin-identity|admin-impersonation|couple-server|password-policy|crypto-tokens|oauth-state|totp|twofa|staging-access|secure-compare|api-keys|api-v1-auth)/,
+  /^src\/lib\/support\/auth\.ts$/,
+  /^src\/app\/api\/auth\//, /^src\/app\/api\/admin\/(login|auth|support)\//,
+];
+
+/** The changed files a hot release must refuse (empty = safe to ship hot). */
+export function sensitiveFiles(changedFiles) {
+  return (changedFiles ?? []).filter((f) => SENSITIVE.some((r) => r.test(f)));
+}
+
 /** 'smoke' when nothing that ships changed; 'full' otherwise or when unknown. */
 export function laneFor(changedFiles) {
   if (!changedFiles || changedFiles.length === 0) return 'full';

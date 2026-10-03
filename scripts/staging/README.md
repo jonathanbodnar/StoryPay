@@ -14,7 +14,10 @@ All run with the test copy's settings: `railway run --service "StoryVenue Backen
 | `npx tsx --tsconfig ./tsconfig.json scripts/staging/stripe-webhooks.ts` | Points Stripe's test-mode webhooks at the test copy; saves their secrets to Railway Dev. |
 | `node scripts/staging/smoke.mjs` | Quick check: password page, sign-in, dashboard, leads. |
 | `node scripts/staging/check-deploy.mjs` | Run plainly after a push: code checks first (a failure stops everything), then waits for the test copy to deploy the commit and runs the changed area's flow tests, the smoke, flow and browser tests — stopping at the first failure — and records the result. A commit that ships nothing (scripts/tests/docs only) runs the smoke lane (`scripts/staging/lanes.mjs` holds the rules). |
-| `node scripts/staging/release.mjs <sha>` | Puts a commit live (moves `production` to it), only if it passed the checks; waits for the live deploy. |
+| `node scripts/staging/release.mjs <sha> --hot` | The everyday lane: puts a commit live right away (~the build time) and arms a rollback point. Refuses the sensitive areas (payments, texting, sign-in, migrations — `lanes.mjs`). Follow with the trailing check. |
+| `node scripts/staging/trailing-check.mjs <sha>` | After a hot release: runs the full check and records the verdict. On a failure, fix forward (release the fix hot) or roll back. |
+| `node scripts/staging/rollback.mjs <sha>` | Puts the previous version back live in ~1 minute (no rebuild; the newer code stays on `main`). |
+| `node scripts/staging/release.mjs <sha>` | The full-gate release (sensitive areas, or when the owner wants certainty): only a commit that passed `check-deploy.mjs`. |
 | `node scripts/staging/setup-gate.mjs` | One time (done Oct 1, 2026): the live services release from `production`. |
 
 Flow tests: `npm run test:flows`. Browser tests: `npm run test:browser`.
