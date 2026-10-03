@@ -34,7 +34,8 @@ export async function POST(
   const email = userResp.user.email;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.storyvenue.com';
-  const redirectTo = `${appUrl}/couple/favorites`;
+  // The couple's main hub — "Login as bride" always opens their dashboard.
+  const redirectTo = `${appUrl}/couple/wedding`;
 
   const { data, error } = await supabaseAdmin.auth.admin.generateLink({
     type: 'magiclink',

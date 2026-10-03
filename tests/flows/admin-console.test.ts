@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Browser, db, env, FLOW_VENUE, runId, signedInMasterAdmin, signedInOwner, signedInSuperAdmin, waitForEmail } from './helpers';
+import { Browser, coupleSession, db, env, FLOW_VENUE, runId, signedInMasterAdmin, signedInOwner, signedInSuperAdmin, waitForEmail } from './helpers';
 
 // The StoryVenue admin console's own actions: directory badges, the plan
 // catalog, inviting team members, announcements venues actually see, and
@@ -47,6 +47,19 @@ describe('the admin console', () => {
     expect((await db.from('directory_plans').select('name').eq('id', plan!.id).single()).data!.name).toBe(`Test Plan ${runId} v2`);
     expect((await team.fetch(`/api/admin/directory-plans/${plan!.id}`, { method: 'DELETE' })).status).toBeLessThan(300);
     expect((await db.from('directory_plans').select('id').eq('id', plan!.id).maybeSingle()).data).toBeNull();
+  });
+
+  it('"Login as bride" opens the couple’s wedding hub, from both admin screens', async () => {
+    const session = await coupleSession();
+    const coupleId = (session.user as { id: string }).id;
+    // The Couples tab and the Contacts tab each have their own route; both
+    // links must land the admin on /couple/wedding (the couple's main hub).
+    for (const path of [`/api/admin/couples/${coupleId}/impersonate`, `/api/admin/contacts/couple/${coupleId}/impersonate`]) {
+      const res = await team.fetch(path, { method: 'POST', json: {} });
+      expect(res.status, `${path}: ${await res.clone().text()}`).toBe(200);
+      const { url } = (await res.json()) as { url: string };
+      expect(decodeURIComponent(url), path).toContain('/couple/wedding');
+    }
   });
 
   it('inviting a team member emails them, and switching them off ends their access', async () => {
