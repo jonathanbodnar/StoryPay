@@ -108,6 +108,13 @@ for (const [deviceName, device] of Object.entries(DEVICES)) {
       await page.locator(shot.click).first().click();
       await page.waitForTimeout(shot.settleMs ?? SETTLE_DEFAULT);
     }
+    if (shot.scrollTo) {
+      // Bring a section lower on the page to the top of the picture.
+      await page.locator(shot.scrollTo).first().evaluate((el) => {
+        window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - 90), behavior: 'instant' });
+      });
+      await page.waitForTimeout(600);
+    }
     // The "Add to Home Screen" nudge is real product UI, but it covers the
     // screen being photographed.
     await page.evaluate(() => {

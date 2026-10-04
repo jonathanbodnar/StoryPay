@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic';
 import {
   DollarSign, Users, FileText, Clock, XCircle, Building2,
   TrendingUp, LogOut, Home,
-  Megaphone, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
+  Megaphone, GraduationCap, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
   Check, BarChart2, ExternalLink, ChevronRight, Search, RefreshCw,
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
   Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays, Eye, EyeOff,
@@ -41,6 +41,7 @@ import AnalyticsPanel from '@/components/admin/AnalyticsPanel';
 import SmsSequenceAnalyticsPanel from '@/components/admin/SmsSequenceAnalyticsPanel';
 import SystemEmailsPanel from '@/components/admin/SystemEmailsPanel';
 import { FunnelAbPanel } from '@/components/admin/FunnelAbPanel';
+import SetupGuideAdminPanel from '@/components/admin/SetupGuideAdminPanel';
 import GhlMigrationPanel from '@/components/admin/GhlMigrationPanel';
 import { AdminProjectsBoard } from '@/components/admin/AdminProjectsBoard';
 import { useBroadcastChannel } from '@/lib/realtime/use-broadcast-channel';
@@ -85,6 +86,7 @@ type AdminTabKey =
   | 'sms-analytics'
   | 'system-emails'
   | 'funnel-ab'
+  | 'setup-guide'
   | 'errors'
   | 'system'
   | 'ghl-migration'
@@ -117,6 +119,7 @@ const ADMIN_TAB_KEYS: ReadonlySet<string> = new Set<AdminTabKey>([
   'sms-analytics',
   'system-emails',
   'funnel-ab',
+  'setup-guide',
   'errors',
   'system',
   'ghl-migration',
@@ -576,6 +579,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'seo-pages', label: 'SEO / Pages', icon: Globe },
   { key: 'trends', label: 'Google Trends', icon: TrendingUp },
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
+  { key: 'setup-guide', label: 'Setup guide', icon: GraduationCap },
   { key: 'feature-requests', label: 'Feature Requests', icon: Lightbulb },
   { key: 'changelog', label: 'Changelog', icon: Sparkles },
   { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },
@@ -2208,6 +2212,8 @@ export default function AdminSlugLayout({ children }: { children: React.ReactNod
         )}
 
         {activeTab === 'funnel-ab' && <FunnelAbPanel />}
+
+        {activeTab === 'setup-guide' && <SetupGuideAdminPanel />}
 
         {/* ── Announcements Tab ── */}
         {activeTab === 'announcements' && (

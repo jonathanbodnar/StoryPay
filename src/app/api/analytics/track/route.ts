@@ -45,6 +45,10 @@ const ALLOWED_CLIENT_EVENTS = new Set([
   'onboarding_details_done',
   'card_shown',
   'card_entered',
+  // Setup Guide: opened (by itself or by hand), a step's button pressed, the call asked for.
+  'setup_guide_opened',
+  'setup_guide_step_started',
+  'setup_guide_call_requested',
 ]);
 
 export async function POST(req: NextRequest) {

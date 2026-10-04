@@ -34,6 +34,7 @@ const ALL = ['desktop', 'laptop', 'tablet', 'phone'];
  * alsoFullPage  also save an unframed full-length capture (long public pages)
  * settleMs      extra wait for screens that load in stages (default 2500)
  * click         a Playwright locator clicked after load (e.g. open a thread)
+ * scrollTo      a Playwright locator scrolled to the top of the picture
  */
 export const SHOTS = [
   { name: 'home', path: '/dashboard', who: 'owner', devices: ALL },
@@ -47,6 +48,14 @@ export const SHOTS = [
   { name: 'installments', path: '/dashboard/payments/installments', who: 'owner', devices: ['desktop'] },
   { name: 'proposal-couple', path: '/proposal/[token]', fill: { token: SENT_PROPOSAL_TOKEN }, who: 'visitor', devices: ALL, alsoFullPage: true },
   { name: 'listing', path: '/venue/[slug]', fill: { slug: LISTING_SLUG }, who: 'visitor', alsoFullPage: true },
+  // The Setup Guide's lesson covers (src/lib/setup-guide.ts; exported to
+  // public/setup-guide by scripts/shots/export-guide-covers.mjs).
+  { name: 'guide-pricing', path: '/dashboard/listing/pricing-guide', who: 'owner', devices: ['desktop'], settleMs: 4000 },
+  { name: 'guide-lead-link', path: '/dashboard/listing/lead-link', who: 'owner', devices: ['desktop'], settleMs: 4000 },
+  { name: 'guide-web-form', path: '/dashboard/listing/pricing-guide', who: 'owner', devices: ['desktop'], settleMs: 4000, click: 'text=Get Embed Code' },
+  { name: 'guide-leadfinder', path: '/dashboard/settings/integrations', who: 'owner', devices: ['desktop'], settleMs: 4500, scrollTo: 'text=Your LeadFinder address' },
+  { name: 'guide-follow-up', path: '/dashboard/listing/booking-system', who: 'owner', devices: ['desktop'], settleMs: 4000 },
+  { name: 'guide-payments', path: '/dashboard/payments/settings', who: 'owner', devices: ['desktop'], settleMs: 4000 },
   // The couple's Wedding Planner (Emma & Ryan, seeded by seed-showcase.mjs).
   { name: 'planner-hub', path: '/couple/wedding', who: 'couple', devices: ALL, settleMs: 3500 },
   { name: 'planner-budget', path: '/couple/budget', who: 'couple' },

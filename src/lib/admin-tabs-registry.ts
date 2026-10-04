@@ -35,6 +35,7 @@ export type AdminTabKey =
   | 'sms-analytics'
   | 'system-emails'
   | 'funnel-ab'
+  | 'setup-guide'
   | 'errors'
   | 'system'
   | 'ghl-migration';
@@ -71,6 +72,7 @@ export const ADMIN_TABS: AdminTabDef[] = [
   { key: 'sms-analytics',      label: 'SMS Reply Analytics', category: 'tools' },
   { key: 'system-emails',      label: 'System Email Templates', category: 'tools' },
   { key: 'funnel-ab',          label: 'Funnel A/B',          category: 'tools' },
+  { key: 'setup-guide',        label: 'Setup guide',         category: 'content' },
   { key: 'errors',             label: 'Error Log',           category: 'tools' },
   { key: 'system',             label: 'System / Migrations', category: 'tools' },
   { key: 'ghl-migration',      label: 'GHL Migration',        category: 'tools' },

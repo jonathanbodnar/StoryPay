@@ -32,6 +32,7 @@ export const ADMIN_WRITE_TABS: ReadonlyArray<readonly [prefix: string, tabs: rea
   ['page-seo', ['seo-pages']],
   ['suggested-articles', ['suggested-articles']],
   ['funnel-ab', ['funnel-ab']],
+  ['setup-guide', ['setup-guide']],
 ];
 
 const READS = new Set(['GET', 'HEAD', 'OPTIONS']);

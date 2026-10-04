@@ -226,6 +226,32 @@ async function main() {
       photo(GALLERY[0], 2000), JSON.stringify(GALLERY.slice(1).map((p) => photo(p, 1600)))],
   );
 
+  // ── Lead Link + pricing guide, set up the way a finished venue has them
+  //    (the Setup Guide's lesson covers are photographed from these screens) ──
+  await q(
+    `update public.venues set lead_link_slug = $2, lead_link_links = $3, social_links = $4 where id = $1`,
+    [V, 'willowcreek',
+      JSON.stringify([
+        { label: 'Book a Tour', url: 'https://example.com/willow-creek/tour', icon: 'calendar' },
+        { label: 'See Real Weddings', url: 'https://example.com/willow-creek/gallery', icon: 'camera' },
+      ]),
+      JSON.stringify({ instagram: 'https://instagram.com/willowcreekestate', facebook: 'https://facebook.com/willowcreekestate' })],
+  );
+  await q(`delete from public.venue_pricing_guides where venue_id = $1`, [V]);
+  await q(
+    `insert into public.venue_pricing_guides (venue_id, enabled, cover_image_url, congratulatory_message, about_venue,
+       pricing_intro, gallery, availability_text, cta_headline, cta_body)
+     values ($1, true, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [V, `https://images.unsplash.com/${GALLERY[3]}?w=1100&h=1424&q=80&auto=format&fit=crop`,
+      'Congratulations on your engagement! We would love to show you around Willow Creek.',
+      'A restored 1920s estate on forty acres of gardens and mountain light, with one wedding per day and an in-house kitchen.',
+      'Every package includes exclusive use of the estate, tables, chairs and linens, day-of coordination and our parking team.',
+      JSON.stringify(GALLERY.slice(0, 4).map((pid) => photo(pid, 1400))),
+      'Saturdays from May to October book first. Fridays and Sundays have more openings and lower pricing.',
+      'Come see it in person',
+      'Tours run Tuesday to Saturday. Pick a time and we will have the gates open and the coffee on.'],
+  );
+
   // ── Spaces ──
   const SPACES = [['The Grand Hall', '#6366f1', 220], ['Garden Pavilion', '#10b981', 150], ['The Vine Loft', '#f59e0b', 60]];
   for (const [i, [name, color, cap]] of SPACES.entries()) {

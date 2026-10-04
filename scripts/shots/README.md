@@ -27,5 +27,10 @@ node scripts/shots/frame.mjs                                                    
   `.webp`, choosing the frame per device; the phone gets a drawn status bar
   and dynamic island, so phone shots read as the mobile app.
 
+- **export-guide-covers.mjs** cuts the Setup Guide's lesson covers
+  (`public/setup-guide/*.webp`, used by `src/lib/setup-guide.ts`) from the
+  `guide-*` captures. Rerun it after reshooting those screens and commit the
+  covers.
+
 `shots-out/` is not committed. When a landing page needs imagery, copy the
 framed files it uses into that page's `public/` assets.

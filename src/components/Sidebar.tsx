@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import SetupGuideNavItem from '@/components/setup-guide/SetupGuideNavItem';
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
@@ -1089,6 +1090,8 @@ export default function Sidebar({
       </nav>
 
       <div className={`px-3 py-4 border-t border-gray-200 space-y-0.5 ${rail ? 'flex flex-col items-center' : ''}`}>
+        {/* Setup Guide — the way back into the onboarding lessons, with progress. */}
+        <SetupGuideNavItem rail={rail} className={classNames(navItem(false, rail), 'w-full')} onNavigate={onCloseMobile} />
         {/* App store download badges — web only, not in rail/collapsed mode */}
         {!isNativeApp() && !rail && (
           <div className="grid grid-cols-2 gap-2 px-1 py-2">

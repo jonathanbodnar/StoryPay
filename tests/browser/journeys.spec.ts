@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import { expect, request, test, type Page } from '@playwright/test';
-import { env, FLOW_VENUE, runId, submitListingLead } from '../flows/helpers';
+import { db, env, FLOW_VENUE, runId, submitListingLead } from '../flows/helpers';
 
 /** On a phone, nothing should scroll sideways. */
 async function expectNoSidewaysScroll(page: Page): Promise<void> {
@@ -94,3 +96,48 @@ test.describe('live updates', () => {
     await expect(inbox).toHaveText(/Lead Inbox\s*1\b/, { timeout: 20_000 });
   });
 });
+
+// A venue that just signed up is walked through the Setup Guide: it opens by
+// itself a few seconds after they sign in, the X closes it for that sign-in
+// only, and the dashboard card and sidebar entry bring it back.
+test('a new venue is met by the Setup Guide after signing in', async ({ page }, testInfo) => {
+  const email = `guide.${testInfo.project.name}.${runId}.${Date.now().toString(36)}@example.com`;
+  const { data: plan } = await db.from('directory_plans').select('id').eq('slug', 'bride-booking-system').single();
+  const { error } = await db.from('venues').insert({
+    id: randomUUID(), name: `Guide Journey ${runId}`, slug: `guide-journey-${testInfo.project.name}-${Date.now().toString(36)}`, email,
+    notification_email: email, brand_email: email, password_hash: await bcrypt.hash(env.password, 10),
+    setup_completed: true, onboarding_status: 'registered', onboarding_completed_at: new Date().toISOString(),
+    directory_plan_id: plan?.id ?? null, directory_subscription_status: 'active', email_verified_at: new Date().toISOString(),
+    owner_first_name: 'Gia', owner_last_name: 'Guide', timezone: 'America/New_York', is_published: true, is_demo: false,
+  });
+  expect(error?.message ?? null).toBeNull();
+
+  await page.goto('/login');
+  await page.getByPlaceholder('you@yourvenue.com').first().fill(email);
+  await page.getByPlaceholder('••••••••').fill(env.password);
+  await page.locator('form').filter({ has: page.getByPlaceholder('••••••••') }).locator('button[type="submit"]').click();
+  await page.waitForURL(/\/dashboard/);
+
+  // It isn't there the moment the dashboard appears; it opens by itself shortly after.
+  const guide = page.getByTestId('setup-guide');
+  await expect(guide).toBeVisible({ timeout: 20_000 });
+  await expect(guide.getByRole('heading', { name: 'Setup guide' })).toBeVisible();
+  await expect(guide.getByText(/\d of \d done/)).toBeVisible();
+  // Its listing is live, so that step arrives already done; the rest are still to do.
+  await expect(guide.getByRole('button', { name: /Your listing is live/ }).getByLabel('Done')).toBeVisible();
+  await expectNoSidewaysScroll(page);
+
+  // The X closes it, and it stays closed for the rest of this sign-in.
+  await guide.getByRole('button', { name: 'Close the setup guide' }).click();
+  await expect(guide).toBeHidden();
+  await page.reload();
+  const card = page.getByTestId('setup-guide-card');
+  await expect(card).toBeVisible();
+  await page.waitForTimeout(5000);
+  await expect(guide).toBeHidden();
+
+  // The dashboard card brings it back.
+  await card.getByRole('button', { name: 'Continue setup' }).click();
+  await expect(guide).toBeVisible();
+});
+

@@ -113,6 +113,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     /** The venue's public listing hides the directory chrome (landing page
      *  mode). Switched on automatically whenever is_private_client is set. */
     landing_page_mode?: boolean;
+    /** Stop the Setup Guide opening by itself for this venue (it stays in their
+     *  sidebar). The venue itself can only close it, never switch it off. */
+    setup_guide_popup_off?: boolean;
     /** Feature enablement: enables full concierge routing (bride replies →
      *  support inbox, concierge team can manage/handoff). Requires BOTH
      *  is_private_client AND venue_concierge to be true to activate. */
@@ -278,6 +281,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   // ── Private Client watch-list tag ─────────────────────────────────────────
   if (typeof body.landing_page_mode === 'boolean') {
     updates.landing_page_mode = body.landing_page_mode;
+  }
+  if (typeof body.setup_guide_popup_off === 'boolean') {
+    updates.onboarding_checklist_dismissed = body.setup_guide_popup_off;
   }
   if (typeof body.is_private_client === 'boolean') {
     updates.is_private_client = body.is_private_client;
