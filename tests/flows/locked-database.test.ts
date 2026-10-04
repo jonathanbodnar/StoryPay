@@ -92,7 +92,7 @@ describe('the database refuses the public keys on every table', () => {
     // checking that repo's queries (its db/020-024 define the original list).
     const GRANTED: Record<string, string[]> = {
       venues: [
-        'availability_notes', 'brand_website', 'capacity_max', 'capacity_min', 'cover_image_url',
+        'announcement', 'availability_notes', 'brand_website', 'capacity_max', 'capacity_min', 'cover_image_url',
         'created_at', 'demo_preview_token', 'description', 'directory_plan_id', 'directory_sponsored_status',
         'directory_verified_status', 'email', 'faq', 'features', 'gallery_images', 'google_place_id',
         'google_reviews_cache', 'google_reviews_fetched_at', 'id', 'indoor_outdoor', 'is_demo', 'is_published',
