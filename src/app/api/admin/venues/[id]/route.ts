@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { withSetupPromptsOff } from '@/lib/setup-guide';
 import { verifyAdminCookie, verifyMasterAdminOnly } from '@/lib/admin-auth';
 import { getAdminIdentity } from '@/lib/admin-identity';
 import { getLunarPayAdminSummary } from '@/lib/lunarpay-venue-admin';
@@ -113,8 +114,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     /** The venue's public listing hides the directory chrome (landing page
      *  mode). Switched on automatically whenever is_private_client is set. */
     landing_page_mode?: boolean;
-    /** Stop the Setup Guide opening by itself for this venue (it stays in their
-     *  sidebar). The venue itself can only close it, never switch it off. */
+    /** Stop the Setup Guide's pop-up and reminder pill for this venue (it stays
+     *  in their sidebar). Support's switch; the venue has no such switch. */
     setup_guide_popup_off?: boolean;
     /** Feature enablement: enables full concierge routing (bride replies →
      *  support inbox, concierge team can manage/handoff). Requires BOTH
@@ -283,7 +284,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     updates.landing_page_mode = body.landing_page_mode;
   }
   if (typeof body.setup_guide_popup_off === 'boolean') {
-    updates.onboarding_checklist_dismissed = body.setup_guide_popup_off;
+    // Kept with the venue's guide steps (not the old checklist's "dismissed"
+    // flag, which venues set themselves years ago and would wrongly silence them).
+    const { data: guideRow } = await supabaseAdmin
+      .from('venues')
+      .select('onboarding_steps_completed')
+      .eq('id', venueId)
+      .maybeSingle();
+    updates.onboarding_steps_completed = withSetupPromptsOff(guideRow?.onboarding_steps_completed, body.setup_guide_popup_off);
   }
   if (typeof body.is_private_client === 'boolean') {
     updates.is_private_client = body.is_private_client;

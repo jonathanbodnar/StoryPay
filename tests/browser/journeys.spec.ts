@@ -97,14 +97,17 @@ test.describe('live updates', () => {
   });
 });
 
-// A venue that just signed up is walked through the Setup Guide: it opens by
-// itself a few seconds after they sign in, the X closes it for that sign-in
-// only, and the dashboard card and sidebar entry bring it back.
-test('a new venue is met by the Setup Guide after signing in', async ({ page }, testInfo) => {
-  const email = `guide.${testInfo.project.name}.${runId}.${Date.now().toString(36)}@example.com`;
+// The Setup Guide (owner's rules, Oct 4 2026): it opens by itself a few
+// seconds after a venue signs in, the X always closes it, the venue can tick
+// steps off itself, and once every step is ticked it stops opening but a
+// closed pill stays until each step is really set up.
+test('the Setup Guide meets a venue after signing in, and steps aside once its steps are ticked', async ({ page }, testInfo) => {
+  const stamp = `${testInfo.project.name}-${Date.now().toString(36)}`;
+  const email = `guide.${stamp}.${runId}@example.com`;
+  const venueId = randomUUID();
   const { data: plan } = await db.from('directory_plans').select('id').eq('slug', 'bride-booking-system').single();
   const { error } = await db.from('venues').insert({
-    id: randomUUID(), name: `Guide Journey ${runId}`, slug: `guide-journey-${testInfo.project.name}-${Date.now().toString(36)}`, email,
+    id: venueId, name: `Guide Journey ${runId}`, slug: `guide-journey-${stamp}`, email,
     notification_email: email, brand_email: email, password_hash: await bcrypt.hash(env.password, 10),
     setup_completed: true, onboarding_status: 'registered', onboarding_completed_at: new Date().toISOString(),
     directory_plan_id: plan?.id ?? null, directory_subscription_status: 'active', email_verified_at: new Date().toISOString(),
@@ -112,20 +115,27 @@ test('a new venue is met by the Setup Guide after signing in', async ({ page }, 
   });
   expect(error?.message ?? null).toBeNull();
 
-  await page.goto('/login');
-  await page.getByPlaceholder('you@yourvenue.com').first().fill(email);
-  await page.getByPlaceholder('••••••••').fill(env.password);
-  await page.locator('form').filter({ has: page.getByPlaceholder('••••••••') }).locator('button[type="submit"]').click();
-  await page.waitForURL(/\/dashboard/);
+  const signIn = async () => {
+    await page.goto('/login');
+    await page.getByPlaceholder('you@yourvenue.com').first().fill(email);
+    await page.getByPlaceholder('••••••••').fill(env.password);
+    await page.locator('form').filter({ has: page.getByPlaceholder('••••••••') }).locator('button[type="submit"]').click();
+    await page.waitForURL(/\/dashboard/);
+  };
+  await signIn();
 
   // It isn't there the moment the dashboard appears; it opens by itself shortly after.
   const guide = page.getByTestId('setup-guide');
   await expect(guide).toBeVisible({ timeout: 20_000 });
   await expect(guide.getByRole('heading', { name: 'Setup guide' })).toBeVisible();
   await expect(guide.getByText(/\d of \d done/)).toBeVisible();
-  // Its listing is live, so that step arrives already done; the rest are still to do.
-  await expect(guide.getByRole('button', { name: /Your listing is live/ }).getByLabel('Done')).toBeVisible();
+  // Its listing is live, so that step is already really done.
+  await expect(guide.getByRole('button', { name: /^Done: Your listing is live/ })).toBeVisible();
   await expectNoSidewaysScroll(page);
+
+  // The venue ticks a step off itself; the guide says it isn't set up yet.
+  await guide.getByRole('button', { name: /^Mark as done: Put your Lead Link/ }).click();
+  await expect(guide.getByRole('button', { name: /^Marked done, not set up yet: Put your Lead Link/ })).toBeVisible();
 
   // The X closes it, and it stays closed for the rest of this sign-in.
   await guide.getByRole('button', { name: 'Close the setup guide' }).click();
@@ -139,5 +149,27 @@ test('a new venue is met by the Setup Guide after signing in', async ({ page }, 
   // The dashboard card brings it back.
   await card.getByRole('button', { name: 'Continue setup' }).click();
   await expect(guide).toBeVisible();
-});
 
+  // Every step ticked (none of the rest really set up): at the next sign-in it
+  // doesn't open, and the closed pill is there instead.
+  const { error: ticked } = await db.from('venues').update({
+    onboarding_steps_completed: ['listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'].map((s) => `guide:${s}`),
+  }).eq('id', venueId);
+  expect(ticked?.message ?? null).toBeNull();
+  // Sign out (drop the venue session, keep the test copy's own gate cookie).
+  for (const name of ['venue_id', 'venue_id_sig', 'venue_id_meta', 'member_id', 'member_id_sig', 'member_id_meta']) {
+    await page.context().clearCookies({ name });
+  }
+  await signIn();
+  const pill = page.getByTestId('setup-guide-pill');
+  await expect(pill).toBeVisible({ timeout: 20_000 });
+  await expect(pill).toContainText('left to set up');
+  await page.waitForTimeout(5000);
+  await expect(guide).toBeHidden();
+  await expect(card).toHaveCount(0);
+
+  // The pill opens it again, and it says why the reminder is still there.
+  await pill.click();
+  await expect(guide).toBeVisible();
+  await expect(guide.getByText(/ticked every step/)).toBeVisible();
+});

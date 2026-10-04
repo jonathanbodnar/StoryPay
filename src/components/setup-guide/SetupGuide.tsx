@@ -5,24 +5,27 @@
  * set) and how-to on the left, the list of steps on the right. Mounted once in
  * the dashboard shell.
  *
- * It opens by itself a few seconds after each sign-in until every step is
- * done (owner's call, Oct 4 2026: "it should force them to onboard"). The X
- * closes it for this sign-in only. It also opens from the sidebar entry and
- * the dashboard card (openSetupGuide in lib/setup-guide-client.ts).
+ * Owner's rules (Oct 4 2026): it opens by itself a few seconds after each
+ * sign-in, for every venue but Private Clients, until every step is ticked.
+ * The X always closes it (nothing is gated behind it), and the venue can tick
+ * any step off itself, set up or not. A step that's ticked but isn't really
+ * set up says so, and keeps the reminder pill up (SetupGuidePrompt).
+ * It also opens from the pill, the dashboard card and the sidebar entry
+ * (openSetupGuide in lib/setup-guide-client.ts).
  */
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowRight, CalendarCheck, Check, CheckCircle2, Circle, Copy, GraduationCap, X } from 'lucide-react';
+import { ArrowRight, CalendarCheck, Check, Copy, GraduationCap, Undo2, X } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
 import { trackClient } from '@/lib/analytics-client';
 import { isNativeApp } from '@/lib/platform';
-import { setupLesson, type SetupLessonId } from '@/lib/setup-guide';
+import { setupLesson, type SetupLessonId, type SetupLessonState } from '@/lib/setup-guide';
 import {
-  getSetupGuideStatus, OPEN_SETUP_GUIDE_EVENT, refreshSetupGuide, tickSetupStep, useSetupGuideStatus,
+  getSetupGuideStatus, OPEN_SETUP_GUIDE_EVENT, refreshSetupGuide, setupStepLabels, tickSetupStep, useSetupGuideStatus,
 } from '@/lib/setup-guide-client';
-import { LessonCover, LessonThumb } from './LessonCover';
+import { LessonCover, LessonThumb, StepTick } from './LessonCover';
 
 /** Remembers which sign-in the guide last opened itself for. */
 const OPENED_FOR_KEY = 'storyvenue.setupGuide.openedFor';
@@ -38,6 +41,12 @@ function withAutoplay(embedUrl: string): string {
   return `${embedUrl}${embedUrl.includes('?') ? '&' : '?'}${param}`;
 }
 
+/** The step to land on: the first still to tick, else the first not really set up. */
+function firstToDo(lessons: readonly SetupLessonState[]): SetupLessonId | null {
+  const counted = lessons.filter((l) => !l.optional);
+  return (counted.find((l) => !l.checked) ?? counted.find((l) => !l.verified) ?? lessons[0])?.id ?? null;
+}
+
 export default function SetupGuide({ venueId }: { venueId: string }) {
   const status = useSetupGuideStatus();
   const pathname = usePathname();
@@ -47,11 +56,11 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
   const [copied, setCopied] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
 
-  // Load on arrival, and again on each page change while steps remain, so a
-  // step ticks itself off as soon as the venue has done it.
+  // Load on arrival, and again as the venue moves around while something is
+  // still not set up, so a step turns green soon after they've done it.
   useEffect(() => {
     const current = getSetupGuideStatus();
-    if (!current || (current.eligible && !current.complete)) void refreshSetupGuide();
+    if (!current || (current.eligible && !current.fulfilled)) void refreshSetupGuide(15_000);
   }, [pathname]);
 
   // Open by itself once per sign-in, a few seconds after the dashboard loads.
@@ -89,7 +98,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
     };
   }, []);
 
-  // Opened from the sidebar entry or the dashboard card.
+  // Opened from the pill, the dashboard card or the sidebar entry.
   useEffect(() => {
     const onOpen = (e: Event) => {
       setPicked((e as CustomEvent<{ lessonId?: SetupLessonId }>).detail?.lessonId ?? null);
@@ -117,26 +126,24 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
 
   const lessons = status?.lessons ?? [];
   const currentId: SetupLessonId | null =
-    (picked && lessons.some((l) => l.id === picked) ? picked : null) ??
-    lessons.find((l) => !l.done)?.id ??
-    lessons[0]?.id ??
-    null;
-  const currentState = lessons.find((l) => l.id === currentId) ?? null;
+    (picked && lessons.some((l) => l.id === picked) ? picked : null) ?? firstToDo(lessons);
+  const current = lessons.find((l) => l.id === currentId) ?? null;
 
   // The strategy-call step has nothing to set up: it's done once it's been shown.
-  const tickGrow = open && currentId === 'grow' && currentState?.done === false;
+  const tickGrow = open && currentId === 'grow' && current?.ticked === false;
   useEffect(() => {
     if (tickGrow) void tickSetupStep('grow');
   }, [tickGrow]);
 
-  if (!status?.eligible || !currentId || !currentState) return null;
+  if (!status?.eligible || !currentId || !current) return null;
   const lesson = setupLesson(currentId);
   if (!lesson) return null;
 
-  const index = lessons.findIndex((l) => l.id === currentId);
-  const next = lessons[index + 1] ?? null;
+  const labels = setupStepLabels(lessons);
+  const next = lessons[lessons.findIndex((l) => l.id === currentId) + 1] ?? null;
   const video = status.videos[currentId] ?? null;
   const pct = status.total ? Math.round((status.done / status.total) * 100) : 0;
+  const one = status.left === 1;
 
   const pick = (id: SetupLessonId) => {
     setPicked(id);
@@ -174,9 +181,11 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                 <div className="min-w-0 flex-1">
                   <h2 className="font-heading text-lg font-semibold text-gray-900">Setup guide</h2>
                   <p className="text-[13px] text-gray-500">
-                    {status.complete
-                      ? 'Every step is done. Come back any time to rewatch a lesson.'
-                      : `Get your first leads in ${status.total} short steps.`}
+                    {status.fulfilled
+                      ? 'Everything here is set up. Come back any time to rewatch a lesson.'
+                      : status.checkedAll
+                        ? `You’ve ticked every step. ${status.left} still ${one ? 'isn’t' : 'aren’t'} set up, so the reminder stays until ${one ? 'it is' : 'they are'}.`
+                        : 'Suggested steps to your first leads. Tick each one off as you go.'}
                   </p>
                 </div>
                 <button
@@ -215,7 +224,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                   ) : (
                     <LessonCover
                       lesson={lesson}
-                      step={index + 1}
+                      label={labels.get(currentId)?.short ?? ''}
                       hasVideo={Boolean(video)}
                       onPlay={() => setPlaying(currentId)}
                       priority
@@ -223,19 +232,26 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                   )}
 
                   <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="font-semibold uppercase tracking-wider text-gray-400">
-                      Step {index + 1} of {status.total}
-                    </span>
-                    {currentState.done ? (
+                    <span className="font-semibold uppercase tracking-wider text-gray-400">{labels.get(currentId)?.long}</span>
+                    {current.verified ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
                         <Check size={12} /> Done
                       </span>
-                    ) : (
+                    ) : current.ticked ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-600">
+                        <Check size={12} /> Marked done
+                      </span>
+                    ) : current.optional ? null : (
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">To do</span>
                     )}
                   </div>
                   <h3 className="font-heading mt-2 text-xl font-semibold tracking-tight text-gray-900">{lesson.title}</h3>
                   <p className="mt-1.5 text-[15px] leading-relaxed text-gray-600">{lesson.summary}</p>
+                  {current.ticked && !current.verified && (
+                    <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-amber-900">
+                      You marked this done, but it isn’t set up yet. The reminder stays until it is.
+                    </p>
+                  )}
 
                   <ol className="mt-4 space-y-2.5">
                     {lesson.steps.map((step, i) => (
@@ -284,13 +300,23 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                       {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied' : 'Copy my link'}
                     </button>
                   )}
-                  {lesson.manual && lesson.cta && !currentState.done && (
+                  {/* Their call to make: any step can be ticked off, set up or not. */}
+                  {!current.checked && lesson.cta && (
                     <button
                       type="button"
-                      onClick={() => void tickSetupStep(lesson.id)}
+                      onClick={() => void tickSetupStep(lesson.id, true)}
                       className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
                     >
                       <Check size={15} /> Mark as done
+                    </button>
+                  )}
+                  {current.ticked && !current.verified && (
+                    <button
+                      type="button"
+                      onClick={() => void tickSetupStep(lesson.id, false)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
+                    >
+                      <Undo2 size={15} /> Not done yet
                     </button>
                   )}
                   {next && (
@@ -305,33 +331,43 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                 </div>
               </div>
 
-              {/* The steps */}
+              {/* The steps: pick one to read it, tick its circle to mark it done. */}
               <div className="shrink-0 border-t border-gray-100 px-3 py-3 lg:w-[330px] lg:overflow-y-auto lg:border-l lg:border-t-0">
                 <ul className="space-y-1">
-                  {lessons.map((l, i) => {
+                  {lessons.map((l) => {
                     const item = setupLesson(l.id);
                     if (!item) return null;
                     const selected = l.id === currentId;
                     return (
-                      <li key={l.id}>
+                      <li
+                        key={l.id}
+                        className={`flex items-center rounded-xl pr-1.5 transition ${selected ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                      >
                         <button
                           type="button"
                           onClick={() => pick(l.id)}
                           aria-current={selected ? 'step' : undefined}
-                          className={`flex w-full items-center gap-3 rounded-xl p-2 text-left transition ${selected ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                          className="flex min-w-0 flex-1 items-center gap-3 p-2 text-left"
                         >
                           <LessonThumb lesson={item} className="w-[84px] shrink-0" />
                           <span className="min-w-0 flex-1">
                             <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                              Step {String(i + 1).padStart(2, '0')}
+                              {labels.get(l.id)?.short}
                             </span>
                             <span className="line-clamp-2 text-[13px] font-medium leading-snug text-gray-900">{item.title}</span>
                           </span>
-                          {l.done ? (
-                            <CheckCircle2 size={18} className="shrink-0 text-emerald-600" aria-label="Done" />
-                          ) : (
-                            <Circle size={18} className="shrink-0 text-gray-300" aria-label="To do" />
-                          )}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={l.verified}
+                          onClick={() => void tickSetupStep(l.id, !l.ticked)}
+                          aria-label={
+                            l.verified ? `Done: ${item.title}` : l.ticked ? `Marked done, not set up yet: ${item.title}` : `Mark as done: ${item.title}`
+                          }
+                          title={l.verified ? 'Done' : l.ticked ? 'Marked done, not set up yet. Click to untick.' : 'Mark as done'}
+                          className="shrink-0 rounded-full p-2 enabled:hover:bg-gray-200/70"
+                        >
+                          <StepTick ticked={l.ticked} verified={l.verified} />
                         </button>
                       </li>
                     );

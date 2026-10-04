@@ -3,22 +3,31 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PAGES } from '../flows/routes';
 import {
-  SETUP_LESSONS, setupGuideIsGuided, setupGuideVideos, setupLessonsFor, videoEmbedUrl,
+  GUIDE_PROMPTS_OFF, SETUP_LESSONS, setupGuideProgress, setupGuidePrompts, setupGuideVideos, setupLessonsFor,
+  setupPromptsOff, videoEmbedUrl, withSetupPromptsOff, withSetupStep,
   type SetupContext, type SetupFacts,
 } from '@/lib/setup-guide';
 
-// The Setup Guide walks a new venue through the steps that get it its first
-// leads. These are its rules: which steps a venue sees, what makes one done,
-// who gets walked through it, and which video links it will play.
+// The Setup Guide: suggested steps to a venue's first leads. These are its
+// rules (owner's, Oct 4 2026): every step can be ticked off by the venue, the
+// pop-up stops once they all are, a reminder stays until each is really set
+// up, StoryPay is optional, and everyone but Private Clients is prompted.
 
 const NOTHING: SetupFacts = {
   published: false, guideEnabled: false, leadLinkSet: false, webFormLive: false, leadFinderMail: false, stripeReady: false,
+};
+const EVERYTHING: SetupFacts = {
+  published: true, guideEnabled: true, leadLinkSet: true, webFormLive: true, leadFinderMail: true, stripeReady: true,
 };
 const ctx = (over: Partial<SetupContext> = {}): SetupContext => ({
   facts: NOTHING, stepsCompleted: [], allowedNavIds: null, leadFinderAvailable: true, privateClient: false, ...over,
 });
 const ids = (c: SetupContext) => setupLessonsFor(c).map((l) => l.id);
-const done = (c: SetupContext) => setupLessonsFor(c).filter((l) => l.done).map((l) => l.id);
+const checked = (c: SetupContext) => setupLessonsFor(c).filter((l) => l.checked).map((l) => l.id);
+const verified = (c: SetupContext) => setupLessonsFor(c).filter((l) => l.verified).map((l) => l.id);
+const progress = (c: SetupContext) => setupGuideProgress(setupLessonsFor(c));
+const tickAll = (...steps: string[]) => steps.map((s) => `guide:${s}`);
+const COUNTED = ['listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'];
 
 describe('the Setup Guide lessons', () => {
   it('each has its cover in the app and a real screen to send the venue to', () => {
@@ -28,23 +37,6 @@ describe('the Setup Guide lessons', () => {
       expect(lesson.steps.length, lesson.id).toBeGreaterThan(0);
     }
     expect(new Set(SETUP_LESSONS.map((l) => l.id)).size).toBe(SETUP_LESSONS.length);
-  });
-
-  it('a step is done when the thing exists, not when a video was watched', () => {
-    expect(done(ctx())).toEqual([]);
-    expect(done(ctx({ facts: { ...NOTHING, published: true, leadFinderMail: true, stripeReady: true } })))
-      .toEqual(['listing', 'leadfinder', 'payments']);
-    // The pricing guide and the website form live on the same screen but are separate steps.
-    expect(done(ctx({ facts: { ...NOTHING, guideEnabled: true } }))).toEqual(['pricing_guide']);
-    expect(done(ctx({ facts: { ...NOTHING, webFormLive: true } }))).toEqual(['web_form']);
-  });
-
-  it('only the two steps with nothing to detect are ticked by hand', () => {
-    // Ticking a detected step (or an old checklist's step) changes nothing.
-    expect(done(ctx({ stepsCompleted: ['guide:listing', 'guide:payments', 'profile_branding', 7, null] }))).toEqual([]);
-    expect(done(ctx({ stepsCompleted: ['guide:follow_up', 'guide:grow'] }))).toEqual(['follow_up', 'grow']);
-    // …and whatever is stored there, the guide never breaks.
-    expect(done(ctx({ stepsCompleted: 'not a list' }))).toEqual([]);
   });
 
   it('a venue only sees the steps it can act on', () => {
@@ -62,26 +54,97 @@ describe('the Setup Guide lessons', () => {
   });
 });
 
-describe('who is walked through the guide (the pop-up after each sign-in)', () => {
-  const newVenue = {
-    complete: false, wizardDone: true, createdAt: '2026-10-05T12:00:00Z', popupOff: false, privateClient: false, canManage: true,
-  };
-
-  it('a venue that signed up since the guide shipped, until it finishes', () => {
-    expect(setupGuideIsGuided(newVenue)).toBe(true);
-    expect(setupGuideIsGuided({ ...newVenue, complete: true })).toBe(false);
+describe('ticked versus really set up', () => {
+  it('the venue can tick any step off itself, and that counts as done for them', () => {
+    expect(checked(ctx())).toEqual([]);
+    expect(checked(ctx({ stepsCompleted: tickAll('listing', 'leadfinder') }))).toEqual(['listing', 'leadfinder']);
+    // …but ticking isn't setting up: nothing is verified.
+    expect(verified(ctx({ stepsCompleted: tickAll('listing', 'leadfinder') }))).toEqual([]);
   });
 
-  it('never a venue from before it, one still in the setup wizard, a Private Client or a team member', () => {
-    expect(setupGuideIsGuided({ ...newVenue, createdAt: '2026-09-01T00:00:00Z' })).toBe(false);
-    expect(setupGuideIsGuided({ ...newVenue, createdAt: null })).toBe(false);
-    expect(setupGuideIsGuided({ ...newVenue, wizardDone: false })).toBe(false);
-    expect(setupGuideIsGuided({ ...newVenue, privateClient: true })).toBe(false);
-    expect(setupGuideIsGuided({ ...newVenue, canManage: false })).toBe(false);
+  it('a step is really set up when the thing exists, ticked or not', () => {
+    const real = ctx({ facts: { ...NOTHING, published: true, leadFinderMail: true } });
+    expect(verified(real)).toEqual(['listing', 'leadfinder']);
+    expect(checked(real)).toEqual(['listing', 'leadfinder']);
+    // The pricing guide and the website form share a screen but are separate steps.
+    expect(verified(ctx({ facts: { ...NOTHING, guideEnabled: true } }))).toEqual(['pricing_guide']);
+    expect(verified(ctx({ facts: { ...NOTHING, webFormLive: true } }))).toEqual(['web_form']);
   });
 
-  it('and not once support has switched the pop-up off for that venue', () => {
-    expect(setupGuideIsGuided({ ...newVenue, popupOff: true })).toBe(false);
+  it('the two steps with nothing to detect are set up once they’re ticked', () => {
+    expect(verified(ctx({ stepsCompleted: tickAll('follow_up', 'grow') }))).toEqual(['follow_up', 'grow']);
+  });
+
+  it('whatever is stored for the venue, the guide never breaks', () => {
+    for (const junk of ['not a list', null, 7, [7, null, 'profile_branding', { a: 1 }]]) {
+      expect(checked(ctx({ stepsCompleted: junk })), String(junk)).toEqual([]);
+    }
+  });
+
+  it('ticking and unticking keeps the venue’s other steps and support’s switch', () => {
+    const saved = ['guide:listing', GUIDE_PROMPTS_OFF, 'profile_branding'];
+    expect(withSetupStep(saved, 'lead_link', true)).toEqual([...saved, 'guide:lead_link']);
+    expect(withSetupStep(saved, 'listing', true)).toEqual(['guide:prompts-off', 'profile_branding', 'guide:listing']);
+    expect(withSetupStep(saved, 'listing', false)).toEqual([GUIDE_PROMPTS_OFF, 'profile_branding']);
+    expect(withSetupStep('junk', 'listing', true)).toEqual(['guide:listing']);
+  });
+});
+
+describe('when the pop-up stops and when the reminder goes', () => {
+  it('nothing done: everything is left', () => {
+    expect(progress(ctx())).toEqual({ done: 0, total: 7, left: 7, checkedAll: false, fulfilled: false });
+  });
+
+  it('StoryPay is optional: it counts toward neither, ticked, set up or not', () => {
+    // Every counted step ticked, StoryPay untouched: the pop-up is finished with.
+    expect(progress(ctx({ stepsCompleted: tickAll(...COUNTED) })).checkedAll).toBe(true);
+    // Only StoryPay done: nothing has moved.
+    expect(progress(ctx({ stepsCompleted: tickAll('payments') }))).toMatchObject({ done: 0, total: 7, left: 7 });
+    expect(progress(ctx({ facts: { ...NOTHING, stripeReady: true } }))).toMatchObject({ done: 0, total: 7, left: 7 });
+    expect(setupLessonsFor(ctx()).filter((l) => l.optional).map((l) => l.id)).toEqual(['payments']);
+  });
+
+  it('every step ticked stops the pop-up, but the reminder stays until each is really set up', () => {
+    const allTicked = progress(ctx({ stepsCompleted: tickAll(...COUNTED) }));
+    // Five need something to exist; follow-up and the strategy call are set up by being ticked.
+    expect(allTicked).toEqual({ done: 7, total: 7, left: 5, checkedAll: true, fulfilled: false });
+
+    // They then really do four of the five…
+    const nearly = progress(ctx({ stepsCompleted: tickAll(...COUNTED), facts: { ...EVERYTHING, leadFinderMail: false } }));
+    expect(nearly).toMatchObject({ checkedAll: true, fulfilled: false, left: 1 });
+    // …and the last one.
+    expect(progress(ctx({ stepsCompleted: tickAll(...COUNTED), facts: EVERYTHING }))).toMatchObject({ checkedAll: true, fulfilled: true, left: 0 });
+  });
+
+  it('really setting everything up finishes it without a single tick, bar the two hand-ticked steps', () => {
+    expect(progress(ctx({ facts: EVERYTHING }))).toMatchObject({ done: 5, checkedAll: false, fulfilled: false, left: 2 });
+    expect(progress(ctx({ facts: EVERYTHING, stepsCompleted: tickAll('follow_up', 'grow') }))).toMatchObject({ checkedAll: true, fulfilled: true });
+  });
+});
+
+describe('who is prompted (the pop-up after each sign-in, and the pill)', () => {
+  const venue = { wizardDone: true, promptsOff: false, privateClient: false, canManage: true };
+
+  it('every venue that has finished the setup wizard, old or new, on any plan', () => {
+    expect(setupGuidePrompts(venue)).toBe(true);
+  });
+
+  it('never a Private Client, a venue still in the setup wizard, or a team member', () => {
+    expect(setupGuidePrompts({ ...venue, privateClient: true })).toBe(false);
+    expect(setupGuidePrompts({ ...venue, wizardDone: false })).toBe(false);
+    expect(setupGuidePrompts({ ...venue, canManage: false })).toBe(false);
+  });
+
+  it('and not once support has switched them off for that venue (its ticks are kept)', () => {
+    expect(setupGuidePrompts({ ...venue, promptsOff: true })).toBe(false);
+    const saved = ['guide:listing'];
+    expect(setupPromptsOff(saved)).toBe(false);
+    const off = withSetupPromptsOff(saved, true);
+    expect(off).toEqual(['guide:listing', GUIDE_PROMPTS_OFF]);
+    expect(setupPromptsOff(off)).toBe(true);
+    expect(withSetupPromptsOff(off, false)).toEqual(['guide:listing']);
+    // The switch isn't a step: it ticks nothing.
+    expect(checked(ctx({ stepsCompleted: off }))).toEqual(['listing']);
   });
 });
 

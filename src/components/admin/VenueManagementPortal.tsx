@@ -1,5 +1,6 @@
 'use client';
 
+import { setupPromptsOff } from '@/lib/setup-guide';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Loader2,
@@ -69,9 +70,9 @@ export type AdminVenueRow = Record<string, unknown> & {
   /** Flags this venue as a white-glove private client — surfaces the venue +
    *  owner + team roster in Support Inbox → Private Clients. */
   is_private_client?: boolean | null;
-  /** Support has switched this venue's Setup Guide pop-up off (it still sits in
-   *  their sidebar). DB col: onboarding_checklist_dismissed. */
-  onboarding_checklist_dismissed?: boolean | null;
+  /** The venue's Setup Guide steps; holds "guide:prompts-off" when support has
+   *  switched its pop-up and reminder pill off. */
+  onboarding_steps_completed?: unknown;
   /** Feature flag: enables full concierge routing (bride replies → support
    *  inbox). Requires BOTH is_private_client AND venue_concierge = true. */
   venue_concierge?: boolean | null;
@@ -264,7 +265,7 @@ export function AddonCheckboxes({
   const adminDisabled = venue.ai_concierge_admin_disabled === true;
   const smsOverrideOn = venue.sms_admin_override === true;
   const privateClientOn = venue.is_private_client === true;
-  const setupPopupOff = venue.onboarding_checklist_dismissed === true;
+  const setupPopupOff = setupPromptsOff(venue.onboarding_steps_completed);
   const venueConciergeOn = venue.venue_concierge === true;
   // Bride Portal: legacy + All-Inclusive plans get it automatically; the $97 /
   // Free plans need the admin override flag. The checkbox is the single source
@@ -379,12 +380,13 @@ export function AddonCheckboxes({
         )}
       </label>
 
-      {/* Setup Guide pop-up — new venues get the guide opening by itself after
-          every sign-in until they finish it. They can only close it; this is
-          the one switch that stops it (it stays in their sidebar). */}
+      {/* Setup Guide prompts — every venue but Private Clients gets the guide
+          opening by itself after each sign-in until it ticks every step, and a
+          reminder pill until each is really set up. This switches both off
+          for one venue (the guide stays in its sidebar). */}
       <label
         className={`inline-flex items-center gap-1 text-[11px] ${busy ? 'opacity-50' : 'cursor-pointer'}`}
-        title="Stop the Setup Guide opening by itself when this venue signs in. It stays in their sidebar."
+        title="Stop the Setup Guide's pop-up and reminder pill for this venue. It stays in their sidebar."
       >
         <input
           type="checkbox"
@@ -393,7 +395,7 @@ export function AddonCheckboxes({
           onChange={(e) => void onPatch(venue.id, { setup_guide_popup_off: e.target.checked })}
           className="h-3.5 w-3.5 rounded border-gray-300 accent-gray-900"
         />
-        <span className="font-medium text-gray-600">Setup pop-up off</span>
+        <span className="font-medium text-gray-600">Setup prompts off</span>
       </label>
 
       {/* Venue Concierge — feature flag that enables full concierge routing.

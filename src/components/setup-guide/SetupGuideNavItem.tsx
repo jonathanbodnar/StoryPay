@@ -38,7 +38,7 @@ export default function SetupGuideNavItem({
         <>
           <span className="min-w-0 flex-1 truncate text-left">Setup guide</span>
           <span className="shrink-0 text-[11px] font-medium tabular-nums text-gray-400">
-            {status.complete ? <Check size={14} aria-label="All done" /> : `${status.done}/${status.total}`}
+            {status.fulfilled ? <Check size={14} aria-label="All set up" /> : `${status.done}/${status.total}`}
           </span>
         </>
       )}

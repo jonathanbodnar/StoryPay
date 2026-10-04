@@ -18,7 +18,7 @@ import { isPaymentsNavPath } from '@/lib/directory-nav-registry';
 import UsageTracker from '@/components/analytics/UsageTracker';
 import OnboardingLauncher from '@/components/onboarding/OnboardingLauncher';
 import SetupGuide from '@/components/setup-guide/SetupGuide';
-import SetupGuideCard from '@/components/setup-guide/SetupGuideCard';
+import SetupGuidePrompt from '@/components/setup-guide/SetupGuideCard';
 import { trackClient } from '@/lib/analytics-client';
 import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
@@ -228,8 +228,9 @@ export default function DashboardShell({
         <MobileDashboardRedirect />
         <main className={`mx-auto flex w-full flex-1 flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
           {role !== 'member' && <OnboardingLauncher />}
-          {/* The Setup Guide's card, on the dashboard home only. */}
-          {role !== 'member' && pathname === '/dashboard/listing' && <SetupGuideCard />}
+          {/* The Setup Guide when closed: its card on the dashboard home, its
+              pill everywhere else, until each step is really set up. */}
+          {role !== 'member' && <SetupGuidePrompt home={pathname === '/dashboard/listing'} />}
           {planEndsAt ? (
             <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex-1">
@@ -345,7 +346,7 @@ export default function DashboardShell({
       </div>
 
       {/* The Setup Guide: opens by itself after each sign-in until every step is
-          done, and from its sidebar entry and dashboard card. Owner and admins only. */}
+          ticked, and from its pill, card and sidebar entry. Owner and admins only. */}
       {role !== 'member' && <SetupGuide venueId={venue.id} />}
 
       {/* Mobile-only chrome (hidden ≥ lg) */}

@@ -1,12 +1,16 @@
 /**
- * The Setup Guide: the short course a venue sees on its dashboard until every
- * step is done. It opens by itself a few seconds after each sign-in (owner's
- * call, Oct 4 2026) and closes with the X; nothing switches it off except
- * finishing, or support switching the pop-up off for that venue.
+ * The Setup Guide: the short course every venue sees on its dashboard, the
+ * suggested steps to its first leads. Owner's rules (Oct 4 2026):
  *
- * A step counts when the thing EXISTS (the listing is live, mail has reached
- * the LeadFinder address, Stripe takes charges…), not when a video was
- * watched. Two steps have nothing to detect and are ticked by hand.
+ *  - It opens by itself a few seconds after each sign-in, for every venue
+ *    except Private Clients (our team sets those up). The X closes it; the
+ *    product is never gated behind it.
+ *  - Every step is a suggestion the venue can tick off itself, done or not.
+ *    Once every step is ticked the pop-up stops ("that's on them").
+ *  - A small closed pill stays on the dashboard until each step is REALLY set
+ *    up (the listing is live, mail has reached the LeadFinder address…), so a
+ *    step that was only ticked keeps its reminder.
+ *  - StoryPay is optional: shown, but it counts toward neither.
  *
  * Pure rules only, shared by the API, the dashboard and the fast checks.
  * The database reads live in setup-guide-server.ts.
@@ -28,8 +32,11 @@ export interface SetupLesson {
   cta: { label: string; href: string } | null;
   /** The plan permission the screen needs; a venue whose plan lacks it never sees the step. */
   navId: string | null;
-  /** Nothing to detect: the venue ticks it (follow_up) or it ticks when opened (grow). */
+  /** Nothing to detect, so ticking it is all there is: the venue ticks it
+   *  (follow_up) or it ticks when shown (grow). */
   manual: boolean;
+  /** Shown as a suggestion that doesn't count toward finishing the guide. */
+  optional?: boolean;
   /** The screenshot behind the cover, replaced by the video's play button once a link is set. */
   cover: string;
 }
@@ -131,6 +138,7 @@ export const SETUP_LESSONS: readonly SetupLesson[] = [
     cta: { label: 'Open Payment settings', href: '/dashboard/payments/settings' },
     navId: 'nav_payments_settings',
     manual: false,
+    optional: true,
     cover: '/setup-guide/payments.webp',
   },
   {
@@ -164,7 +172,7 @@ export interface SetupFacts {
 
 export interface SetupContext {
   facts: SetupFacts;
-  /** venues.onboarding_steps_completed (hand-ticked steps are stored as "guide:<id>"). */
+  /** venues.onboarding_steps_completed: the venue's own ticks, stored as "guide:<id>". */
   stepsCompleted: unknown;
   /** The plan's allowed screens; null = everything. */
   allowedNavIds: readonly string[] | null;
@@ -172,7 +180,10 @@ export interface SetupContext {
   privateClient: boolean;
 }
 
-export const MANUAL_STEP_PREFIX = 'guide:';
+/** What's kept in venues.onboarding_steps_completed for the guide. */
+export const GUIDE_STEP_PREFIX = 'guide:';
+/** Support switched this venue's pop-up and pill off (Venue Management). Not a step. */
+export const GUIDE_PROMPTS_OFF = 'guide:prompts-off';
 
 const DETECTED: Record<Exclude<SetupLessonId, 'follow_up' | 'grow'>, keyof SetupFacts> = {
   listing: 'published',
@@ -183,50 +194,106 @@ const DETECTED: Record<Exclude<SetupLessonId, 'follow_up' | 'grow'>, keyof Setup
   payments: 'stripeReady',
 };
 
+const savedSteps = (stored: unknown): string[] =>
+  (Array.isArray(stored) ? stored : []).filter((s): s is string => typeof s === 'string');
+
+export interface SetupLessonState {
+  id: SetupLessonId;
+  /** The venue ticked it off itself. */
+  ticked: boolean;
+  /** It really is set up (for a step with nothing to detect: it was ticked). */
+  verified: boolean;
+  /** Ticked or really set up: what the venue sees as done. */
+  checked: boolean;
+  optional: boolean;
+}
+
 /**
- * The steps this venue sees, in order, each with whether it's done. A step is
- * left out when the venue can't act on it: its plan doesn't include the
- * screen, LeadFinder isn't switched on for it, or (the strategy-call step) it
- * is already a Private Client.
+ * The steps this venue sees, in order. A step is left out when the venue can't
+ * act on it: its plan doesn't include the screen, LeadFinder isn't switched on
+ * for it, or (the strategy-call step) it is already a Private Client.
  */
-export function setupLessonsFor(ctx: SetupContext): Array<{ id: SetupLessonId; done: boolean }> {
-  const ticked = new Set(
-    (Array.isArray(ctx.stepsCompleted) ? ctx.stepsCompleted : []).filter((s): s is string => typeof s === 'string'),
-  );
-  const out: Array<{ id: SetupLessonId; done: boolean }> = [];
+export function setupLessonsFor(ctx: SetupContext): SetupLessonState[] {
+  const saved = new Set(savedSteps(ctx.stepsCompleted));
+  const out: SetupLessonState[] = [];
   for (const lesson of SETUP_LESSONS) {
     if (lesson.navId && ctx.allowedNavIds && !ctx.allowedNavIds.includes(lesson.navId)) continue;
     if (lesson.id === 'leadfinder' && !ctx.leadFinderAvailable) continue;
     if (lesson.id === 'grow' && ctx.privateClient) continue;
-    const done = lesson.manual
-      ? ticked.has(`${MANUAL_STEP_PREFIX}${lesson.id}`)
-      : ctx.facts[DETECTED[lesson.id as keyof typeof DETECTED]] === true;
-    out.push({ id: lesson.id, done });
+    const ticked = saved.has(`${GUIDE_STEP_PREFIX}${lesson.id}`);
+    const verified = lesson.manual ? ticked : ctx.facts[DETECTED[lesson.id as keyof typeof DETECTED]] === true;
+    out.push({ id: lesson.id, ticked, verified, checked: ticked || verified, optional: lesson.optional === true });
   }
   return out;
 }
 
-/** Venues that signed up from this day on are walked through the guide. */
-export const SETUP_GUIDE_GUIDED_SINCE = '2026-10-04T00:00:00Z';
+/**
+ * Where the venue stands. Optional steps count toward none of it.
+ *  - checkedAll: every step is ticked or set up → the pop-up stops.
+ *  - fulfilled:  every step is really set up     → the pill goes too.
+ */
+export function setupGuideProgress(lessons: readonly SetupLessonState[]): {
+  done: number; total: number; left: number; checkedAll: boolean; fulfilled: boolean;
+} {
+  const counted = lessons.filter((l) => !l.optional);
+  const done = counted.filter((l) => l.checked).length;
+  const left = counted.filter((l) => !l.verified).length;
+  return { done, total: counted.length, left, checkedAll: counted.length > 0 && done === counted.length, fulfilled: left === 0 };
+}
+
+/** The guide as the API hands it to the dashboard. */
+export interface SetupGuideState {
+  /** Wizard finished and the viewer runs the venue: the guide is in their sidebar. */
+  eligible: boolean;
+  /** This venue gets the prompts at all (everyone but Private Clients). */
+  prompted: boolean;
+  /** Open by itself after this sign-in (the dashboard still waits a few seconds). */
+  autoOpen: boolean;
+  /** The closed pill stays on the dashboard: something isn't really set up yet. */
+  showPill: boolean;
+  /** Every step is ticked or set up (optional ones aside): the pop-up has stopped. */
+  checkedAll: boolean;
+  /** Every step is really set up: nothing left to remind them of. */
+  fulfilled: boolean;
+  /** Steps ticked or set up, of the steps that count. */
+  done: number;
+  total: number;
+  /** Steps that still aren't really set up. */
+  left: number;
+  lessons: SetupLessonState[];
+  /** Player addresses by lesson, for the lessons that have a video. */
+  videos: Partial<Record<SetupLessonId, string>>;
+  listingUrl: string | null;
+}
+
+/** The venue's saved steps with one step ticked or unticked. */
+export function withSetupStep(stored: unknown, id: SetupLessonId, done: boolean): string[] {
+  const key = `${GUIDE_STEP_PREFIX}${id}`;
+  const rest = savedSteps(stored).filter((s) => s !== key);
+  return done ? [...rest, key] : rest;
+}
+
+export const setupPromptsOff = (stored: unknown): boolean => savedSteps(stored).includes(GUIDE_PROMPTS_OFF);
+
+/** The venue's saved steps with support's "prompts off" switch set or cleared. */
+export function withSetupPromptsOff(stored: unknown, off: boolean): string[] {
+  const rest = savedSteps(stored).filter((s) => s !== GUIDE_PROMPTS_OFF);
+  return off ? [...rest, GUIDE_PROMPTS_OFF] : rest;
+}
 
 /**
- * Is this venue being walked through the guide (the pop-up after each sign-in
- * and the card on its dashboard)? Only a venue that signed up since the guide
- * shipped, has finished the setup wizard, still has steps left, and whose
- * pop-up support hasn't switched off. Private Clients are set up by our team.
- * Every other venue just has the guide in its sidebar.
+ * Does this venue get the guide's prompts (the pop-up after each sign-in and
+ * the pill)? Every venue that has finished the setup wizard, old or new, on any
+ * plan — except Private Clients, and one support has switched them off for.
+ * Only the people who run the venue (owner, admins) are prompted.
  */
-export function setupGuideIsGuided(v: {
-  complete: boolean;
+export function setupGuidePrompts(v: {
   wizardDone: boolean;
-  createdAt: string | null | undefined;
-  popupOff: boolean;
+  promptsOff: boolean;
   privateClient: boolean;
   canManage: boolean;
 }): boolean {
-  if (v.complete || !v.wizardDone || v.popupOff || v.privateClient || !v.canManage) return false;
-  const created = v.createdAt ? Date.parse(v.createdAt) : NaN;
-  return Number.isFinite(created) && created >= Date.parse(SETUP_GUIDE_GUIDED_SINCE);
+  return v.wizardDone && v.canManage && !v.privateClient && !v.promptsOff;
 }
 
 /** Videos that ship with the guide; the admin's links (Admin → Setup guide) replace them. */
