@@ -110,6 +110,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     /** Concierge-team watch-list tag. Surfaces the venue in Support Inbox →
      *  Private Clients; has no effect on plan/billing/entitlements. */
     is_private_client?: boolean;
+    /** The venue's public listing hides the directory chrome (landing page
+     *  mode). Switched on automatically whenever is_private_client is set. */
+    landing_page_mode?: boolean;
     /** Feature enablement: enables full concierge routing (bride replies →
      *  support inbox, concierge team can manage/handoff). Requires BOTH
      *  is_private_client AND venue_concierge to be true to activate. */
@@ -273,8 +276,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   // ── Private Client watch-list tag ─────────────────────────────────────────
+  if (typeof body.landing_page_mode === 'boolean') {
+    updates.landing_page_mode = body.landing_page_mode;
+  }
   if (typeof body.is_private_client === 'boolean') {
     updates.is_private_client = body.is_private_client;
+    // Private Client always means landing page mode (owner's rule, Oct 4
+    // 2026) — enforced here so every caller gets it, not just the checkbox.
+    if (body.is_private_client) updates.landing_page_mode = true;
   }
 
   // ── Venue Concierge feature flag ──────────────────────────────────────────

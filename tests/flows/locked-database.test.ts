@@ -96,7 +96,7 @@ describe('the database refuses the public keys on every table', () => {
         'created_at', 'demo_preview_token', 'description', 'directory_plan_id', 'directory_sponsored_status',
         'directory_verified_status', 'email', 'faq', 'features', 'gallery_images', 'google_place_id',
         'google_reviews_cache', 'google_reviews_fetched_at', 'id', 'indoor_outdoor', 'is_demo', 'is_published',
-        'lat', 'lead_link_links', 'lng', 'location_city', 'location_full', 'location_state', 'meta_pixel_id',
+        'landing_page_mode', 'lat', 'lead_link_links', 'lng', 'location_city', 'location_full', 'location_state', 'meta_pixel_id',
         'name', 'phone', 'price_max', 'price_min', 'seo_description', 'seo_keywords', 'seo_title',
         'show_map', 'slug', 'social_links', 'updated_at', 'venue_type',
       ],

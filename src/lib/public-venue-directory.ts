@@ -196,6 +196,7 @@ export async function getPublicVenueBySlug(
         'directory_sponsored_status',
         'brand_website',
         'directory_plan_id',
+        'landing_page_mode',
       ].join(','),
     )
     .eq('slug', slug)
@@ -344,6 +345,10 @@ export async function getPublicVenueBySlug(
       pricing_guide_enabled = false;
     }
   }
+
+  // Landing page mode is also a per-venue switch: the Venue Management
+  // "Private Client" checkbox turns it on (migration 279).
+  if ((v as Record<string, unknown>).landing_page_mode === true) hide_header = true;
 
   // Owner-level toggle: even when the plan allows the guide, the venue owner
   // can disable it from the Pricing Guide dashboard page.

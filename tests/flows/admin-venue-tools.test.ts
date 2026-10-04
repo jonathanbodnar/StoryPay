@@ -135,3 +135,33 @@ describe('a team member’s tabs limit what they can change', () => {
     expect((await limited.fetch('/api/admin/impersonate/exit', { method: 'POST' })).status).toBe(200);
   });
 });
+
+// The Venue Management "Private Client" checkbox always brings landing page
+// mode with it (the public listing drops the directory chrome). The checkbox
+// sent that field for months while no column existed, so it silently did
+// nothing — migration 279 made it real; this holds the rule.
+describe('Private Client implies landing page mode', () => {
+  it('checking it switches the mode on; unchecking leaves the mode its own switch', async () => {
+    const master = await signedInMasterAdmin();
+    const read = async () =>
+      (await db.from('venues').select('is_private_client, landing_page_mode').eq('id', FLOW_VENUE.id).single()).data!;
+    const before = await read();
+    const patch = (json: Record<string, boolean>) =>
+      master.fetch(`/api/admin/venues/${FLOW_VENUE.id}`, { method: 'PATCH', json });
+    try {
+      const on = await patch({ is_private_client: true });
+      expect(on.status, await on.clone().text()).toBeLessThan(300);
+      expect(await read()).toMatchObject({ is_private_client: true, landing_page_mode: true });
+
+      // Unchecking Private Client doesn't yank the landing page away…
+      expect((await patch({ is_private_client: false })).status).toBeLessThan(300);
+      expect(await read()).toMatchObject({ is_private_client: false, landing_page_mode: true });
+
+      // …the mode has its own off switch.
+      expect((await patch({ landing_page_mode: false })).status).toBeLessThan(300);
+      expect((await read()).landing_page_mode).toBe(false);
+    } finally {
+      await db.from('venues').update(before).eq('id', FLOW_VENUE.id);
+    }
+  });
+});
