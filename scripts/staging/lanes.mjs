@@ -11,11 +11,13 @@
  *  - trailingBase: what a hot release's trailing check compares against. A
  *    fix released over a version whose own check never came back clean
  *    answers for that version's changes too (fix-forward).
- *  - flowFilesToRerun: when a flow-test stage fails in only a few files,
- *    those files get one more run before the stage is called failed. The
- *    checks run from a laptop over the internet: a dropped connection or a
- *    failed name lookup fails a test whatever the code does. A real bug
- *    fails twice; a blip doesn't. What was rerun is recorded and reported.
+ *  - flowFilesToRerun: when a flow-test stage fails in only a few files, and
+ *    every failure in them looks like the connection (a dropped request, a
+ *    failed name lookup, a timeout), those files get one more run before the
+ *    stage is called failed. A failed ASSERTION never gets a second run: on
+ *    Oct 5 2026 a test that failed only inside the full run (two tests shared
+ *    a phone number) passed alone, and the second run hid it. What was rerun
+ *    is recorded and reported.
  *  - sleepsDuring: how often this computer went to sleep while the checks
  *    ran. A run that slept isn't a verdict (its tests time out and drop
  *    their connections whatever the code does), so it's run again.
@@ -141,11 +143,34 @@ export function trailingBase(prevSha, hotRecord) {
 export const RERUN_AT_MOST = 3;
 
 /**
+ * What a failure that is the connection's doing looks like in vitest's
+ * report: a request that never completed, a name that didn't resolve, or a
+ * timeout (reported as STACK_TRACE_ERROR). Anything else, above all an
+ * AssertionError or a "No matching email" from the test kit, is the test
+ * saying the app did the wrong thing.
+ */
+const BLIP = /^(TypeError: fetch failed|Error: STACK_TRACE_ERROR|.*\b(ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EPIPE|UND_ERR_[A-Z_]+|socket hang up|timed out in \d+ ?ms)\b)/;
+
+/** Is every failure in this file's report the connection's doing? (A file that failed with no failed test, a hook that timed out, counts.) */
+export function looksLikeABlip(fileResult) {
+  const failed = (Array.isArray(fileResult?.assertionResults) ? fileResult.assertionResults : []).filter((a) => a?.status === 'failed');
+  return failed.every((a) => {
+    const messages = Array.isArray(a.failureMessages) ? a.failureMessages : [];
+    return messages.length > 0 && messages.every((m) => {
+      const first = String(m).split('\n')[0].trim();
+      return !first.startsWith('AssertionError') && BLIP.test(first);
+    });
+  });
+}
+
+/**
  * The flow-test files worth one more run after a failed stage, from vitest's
- * JSON report ({ testResults: [{ name: '/abs/file', status }] }): the failed
- * files, as paths inside the checkout, when there are only a few of them.
+ * JSON report ({ testResults: [{ name: '/abs/file', status, assertionResults }] }):
+ * the failed files, as paths inside the checkout, when there are only a few
+ * of them and every failure in every one of them looks like a blip.
  * [] when nothing failed in a file (the run itself broke), when too many did,
- * or when the report can't be read.
+ * when any failure is a real one (the stage has failed whatever a second run
+ * says), or when the report can't be read.
  */
 export function flowFilesToRerun(report, treeRoot) {
   const results = Array.isArray(report?.testResults) ? report.testResults : [];
@@ -153,6 +178,7 @@ export function flowFilesToRerun(report, treeRoot) {
   const failed = [];
   for (const r of results) {
     if (r?.status !== 'failed' || typeof r.name !== 'string') continue;
+    if (!looksLikeABlip(r)) return [];
     const at = r.name.indexOf('tests/flows/');
     if (at < 0 || (root && !r.name.startsWith(`${root}/`))) continue;
     const file = r.name.slice(at);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — plain logic module shared with the release gate scripts
-import { flowFilesToRerun, laneFor, RERUN_AT_MOST, routeToken, sensitiveFiles, sleepsDuring, targetedFlowFiles, trailingBase } from '../../scripts/staging/lanes.mjs';
+import { flowFilesToRerun, laneFor, looksLikeABlip, RERUN_AT_MOST, routeToken, sensitiveFiles, sleepsDuring, targetedFlowFiles, trailingBase } from '../../scripts/staging/lanes.mjs';
 
 // The release gate's lanes: a commit that ships nothing runs the smoke lane;
 // anything shipped runs the full suite, with the changed area's flow tests
@@ -64,25 +64,58 @@ describe('release lanes', () => {
 
   // Oct 5 2026: four of six full runs went red from the laptop they run on (a
   // failed name lookup, a stalled answer), never from the code. A stage that
-  // fails in a few files gets those files run once more; a real bug fails twice.
-  it('a stage that failed in a few files reruns just those; a broad failure does not get a second chance', () => {
-    const tree = '/tmp/storyvenue-check-abc12345';
-    const file = (name: string, status: string) => ({ name: `${tree}/tests/flows/${name}`, status });
-    const report = (...files: Array<{ name: string; status: string }>) => ({ testResults: files });
-    expect(flowFilesToRerun(report(file('leads.test.ts', 'passed'), file('lead-sources.test.ts', 'failed'), file('locked-database.test.ts', 'failed')), tree))
+  // fails in a few files, all of it the connection's doing, gets those files
+  // run once more.
+  const tree = '/tmp/storyvenue-check-abc12345';
+  const failedTest = (...messages: string[]) => ({ status: 'failed', failureMessages: messages });
+  const DROPPED = failedTest('TypeError: fetch failed\n    at node:internal/deps/undici/undici:15141:13');
+  const TIMED_OUT = failedTest('Error: STACK_TRACE_ERROR\n    at task (chunk-artifact.js:1784:27)');
+  const WRONG = failedTest("AssertionError: expected [ 'handoff', 'paused' ] to include 'ai_active'\n    at Proxy.<anonymous>");
+  const file = (name: string, status: string, ...tests: Array<{ status: string; failureMessages?: string[] }>) =>
+    ({ name: `${tree}/tests/flows/${name}`, status, assertionResults: [{ status: 'passed' }, ...tests] });
+  const report = (...files: unknown[]) => ({ testResults: files });
+
+  it('a stage that failed in a few files, on the connection, reruns just those', () => {
+    expect(flowFilesToRerun(report(file('leads.test.ts', 'passed'), file('lead-sources.test.ts', 'failed', TIMED_OUT), file('locked-database.test.ts', 'failed', DROPPED)), tree))
       .toEqual(['tests/flows/lead-sources.test.ts', 'tests/flows/locked-database.test.ts']);
+    // A hook that timed out fails the file with no failed test of its own.
+    expect(flowFilesToRerun(report(file('texting-webhooks.test.ts', 'failed')), tree)).toEqual(['tests/flows/texting-webhooks.test.ts']);
     // Nothing failed, or the run broke before any file reported: nothing to rerun.
     expect(flowFilesToRerun(report(file('leads.test.ts', 'passed')), tree)).toEqual([]);
     expect(flowFilesToRerun(report(), tree)).toEqual([]);
     for (const junk of [null, undefined, 'not a report', { testResults: 'nope' }]) expect(flowFilesToRerun(junk, tree)).toEqual([]);
     // More than a few files failing is not a blip.
-    const many = Array.from({ length: RERUN_AT_MOST + 1 }, (_, i) => file(`f${i}.test.ts`, 'failed'));
+    const many = Array.from({ length: RERUN_AT_MOST + 1 }, (_, i) => file(`f${i}.test.ts`, 'failed', DROPPED));
     expect(flowFilesToRerun(report(...many), tree)).toEqual([]);
     expect(flowFilesToRerun(report(...many.slice(0, RERUN_AT_MOST)), tree)).toHaveLength(RERUN_AT_MOST);
     // Only files inside this checkout's flow tests are ever passed to a command.
-    expect(flowFilesToRerun(report({ name: '/somewhere/else/tests/flows/x.test.ts', status: 'failed' }), tree)).toEqual([]);
-    expect(flowFilesToRerun(report({ name: `${tree}/tests/flows/x.test.ts; rm -rf ~`, status: 'failed' }), tree)).toEqual([]);
-    expect(flowFilesToRerun(report({ name: `${tree}/tests/unit/x.test.ts`, status: 'failed' }), tree)).toEqual([]);
+    expect(flowFilesToRerun(report({ name: '/somewhere/else/tests/flows/x.test.ts', status: 'failed', assertionResults: [DROPPED] }), tree)).toEqual([]);
+    expect(flowFilesToRerun(report({ name: `${tree}/tests/flows/x.test.ts; rm -rf ~`, status: 'failed', assertionResults: [DROPPED] }), tree)).toEqual([]);
+    expect(flowFilesToRerun(report({ name: `${tree}/tests/unit/x.test.ts`, status: 'failed', assertionResults: [DROPPED] }), tree)).toEqual([]);
+  });
+
+  // The same day: the AI hand-off test failed only inside the full run (a new
+  // test had given its couple the same phone number), passed alone, and the
+  // second run reported the stage as passed. A failed assertion is the test
+  // saying the app did the wrong thing: it never gets a second run.
+  it('a failed assertion never gets a second run, alone or beside a blip', () => {
+    expect(flowFilesToRerun(report(file('ai-concierge.test.ts', 'failed', WRONG)), tree)).toEqual([]);
+    expect(flowFilesToRerun(report(file('ai-concierge.test.ts', 'failed', WRONG), file('locked-database.test.ts', 'failed', DROPPED)), tree)).toEqual([]);
+    expect(flowFilesToRerun(report(file('mixed.test.ts', 'failed', DROPPED, WRONG)), tree)).toEqual([]);
+    // The test kit's own "it never arrived" errors are real failures too.
+    expect(flowFilesToRerun(report(file('timed-jobs.test.ts', 'failed', failedTest('Error: No matching email within 25s. Seen: none'))), tree)).toEqual([]);
+    expect(flowFilesToRerun(report(file('odd.test.ts', 'failed', { status: 'failed', failureMessages: [] })), tree)).toEqual([]);
+  });
+
+  it('what counts as the connection: a request that never completed, a name that didn’t resolve, a timeout', () => {
+    for (const blip of [
+      'TypeError: fetch failed', 'Error: STACK_TRACE_ERROR', 'Error: getaddrinfo ENOTFOUND cvbpyyxveapppnzraovf.supabase.co',
+      'Error: read ECONNRESET', 'Error: connect ETIMEDOUT 1.2.3.4:443', 'Error: socket hang up', 'Error: Test timed out in 60000ms.',
+    ]) expect(looksLikeABlip({ assertionResults: [failedTest(`${blip}\n    at x`)] }), blip).toBe(true);
+    for (const real of [
+      'AssertionError: expected 401 to be 200', 'Error: No matching text to (646) 557-1234 within 20s', 'TypeError: Cannot read properties of undefined',
+      'AssertionError: {"error":"fetch failed"}: expected 500 to be 200',
+    ]) expect(looksLikeABlip({ assertionResults: [failedTest(real)] }), real).toBe(false);
   });
 
   // Fix-forward: the fix goes live over the red release. Its own check has to
