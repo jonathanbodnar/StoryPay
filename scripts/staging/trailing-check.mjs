@@ -55,6 +55,13 @@ try {
 const startedAt = Date.now();
 const check = spawnSync('node', ['scripts/staging/check-deploy.mjs', sha, ...since], { stdio: 'inherit' });
 
+// A newer push took over the Checks service: that release's trailing check
+// compares against the last version that passed, so it answers for this one.
+if (check.status === 4) {
+  writeFileSync(hotFile, JSON.stringify({ ...hot, trailing: 'superseded', trailingAt: new Date().toISOString(), since: base }, null, 1));
+  console.log(`\nTrailing check for ${short}: replaced by a newer push. Run the newest release's trailing check; it covers this one.`);
+  process.exit(0);
+}
 const pass = check.status === 0;
 // The check's own record of this run (not an older one) says whether the computer slept through it.
 let slept = 0;

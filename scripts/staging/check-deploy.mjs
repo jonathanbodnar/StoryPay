@@ -76,6 +76,8 @@ if (!args.includes('--local')) {
     if (again.status === 0) waitArgs.push('--after', new Date(startedAt).toISOString());
   }
   const waited = spawnSync('railway', waitArgs, { env: railwayEnv, stdio: 'inherit' });
+  // Replaced by a newer push: that commit's check answers for this one. Nothing to run here.
+  if (waited.status === 4) process.exit(4);
   if (waited.status === 0 || waited.status === 1) {
     let remote = null;
     try { remote = JSON.parse(readFileSync(out, 'utf8')); } catch { /* fall through to a run here */ }

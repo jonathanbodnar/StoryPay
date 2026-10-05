@@ -32,7 +32,7 @@ import { readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { flowFilesToRerun, laneFor, targetedFlowFiles } from '../staging/lanes.mjs';
-import { CHECKS_LAST_GREEN, checksKey, summarize } from './verdict-shape.mjs';
+import { CHECKS_CURRENT, CHECKS_LAST_GREEN, checksKey, summarize } from './verdict-shape.mjs';
 
 const e = process.env;
 const LIVE_SUPABASE_REF = 'brnxhsaakmhgwcthcapd';
@@ -178,6 +178,8 @@ async function flowStage(name, files, label) {
 
 async function run() {
   console.log(`Checks for ${short} against ${appUrl}`);
+  // This is now the run: an older one still waiting on its verdict is told it was replaced.
+  await db().from('admin_kv_cache').upsert({ key: CHECKS_CURRENT, value: { sha, at: record.startedAt }, updated_at: record.startedAt }, { onConflict: 'key' });
   const { base, changed } = await whatChanged();
   const lane = laneFor(changed);
   await save({ base, changed: changed?.length ?? null, lane });

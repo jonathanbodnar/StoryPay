@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — plain logic module shared with the checks runner and the release scripts
-import { CHECKS_LAST_GREEN, checksKey, localRecord, STALLED_AFTER_MS, summarize, verdictOf } from '../../scripts/checks/verdict-shape.mjs';
+import { CHECKS_CURRENT, CHECKS_LAST_GREEN, checksKey, localRecord, replacedBy, STALLED_AFTER_MS, summarize, verdictOf } from '../../scripts/checks/verdict-shape.mjs';
 
 // The full check runs on Railway (the "Checks" service), not on a laptop, and
 // leaves its verdict in the test copy's database. These are the rules for
@@ -30,6 +30,20 @@ describe('reading the Checks service’s verdict', () => {
 
   it('no run, or something that isn’t one, is "missing": the caller runs the checks itself', () => {
     for (const nothing of [null, undefined, {}, { value: null }, { value: 'pass' }]) expect(verdictOf(nothing, NOW)).toBe('missing');
+  });
+
+  it('a run replaced by a newer push is not waited for, and not run again here: the newer run covers it', () => {
+    const newer = 'c'.repeat(40);
+    const current = { value: { sha: newer } };
+    const running = row({ sha: SHA, status: 'running', stage: 'flow tests', startedAt: new Date(NOW).toISOString(), results: [] });
+    expect(replacedBy(running, current, SHA)).toBe(newer);
+    expect(replacedBy(null, current, SHA)).toBe(newer); // it never even started
+    // Its own run is the current one, or it finished: nothing replaced it.
+    expect(replacedBy(running, { value: { sha: SHA } }, SHA)).toBeNull();
+    expect(replacedBy(row(passed), current, SHA)).toBeNull();
+    expect(replacedBy(row({ ...passed, status: 'fail' }), current, SHA)).toBeNull();
+    expect(replacedBy(running, null, SHA)).toBeNull();
+    expect(CHECKS_CURRENT).not.toBe(CHECKS_LAST_GREEN);
   });
 
   it('each commit has its own record, apart from the last one that passed', () => {

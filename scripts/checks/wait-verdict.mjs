@@ -6,7 +6,8 @@
  *   railway run --service "StoryVenue Backend" --environment Dev -- node scripts/checks/wait-verdict.mjs <full sha> [--out file] [--after ISO]
  *
  * Exit: 0 passed, 1 failed, 3 no usable run (none appeared, or it went
- * silent): the caller then runs the checks itself. --after only accepts a
+ * silent): the caller then runs the checks itself. 4 replaced: a newer push
+ * took over the Checks service, and its run answers for this commit too. --after only accepts a
  * run started after that moment (a fresh run of a commit checked before).
  *
  * Only reads. A dropped connection here costs nothing: it asks again.
@@ -14,7 +15,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
-import { checksKey, summarize, verdictOf } from './verdict-shape.mjs';
+import { CHECKS_CURRENT, checksKey, replacedBy, summarize, verdictOf } from './verdict-shape.mjs';
 
 const e = process.env;
 const args = process.argv.slice(2);
@@ -78,6 +79,15 @@ for (;;) {
     if (verdict === 'fail' && record.failure) console.log(`\n── What failed: ${record.failure.stage} ──\n${record.failure.tail}`);
     if (record.error) console.log(`\nThe runner itself broke: ${record.error}`);
     process.exit(verdict === 'pass' ? 0 : 1);
+  }
+  if (verdict !== 'pass' && verdict !== 'fail' && !unreachable) {
+    const current = await db.from('admin_kv_cache').select('value').eq('key', CHECKS_CURRENT).maybeSingle();
+    const newer = current.error ? null : replacedBy(fresh ? row : null, current.data, sha);
+    // (A run asked for again keeps waiting for its own fresh record.)
+    if (newer && !after) {
+      console.log(`A newer push (${newer.slice(0, 8)}) replaced the run of ${short}. Its check covers this commit too: wait on that one.`);
+      process.exit(4);
+    }
   }
   if (verdict === 'stalled') {
     console.log(`The Checks service’s run of ${short} went silent (replaced by a newer push, or it died).`);

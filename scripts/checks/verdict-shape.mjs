@@ -8,6 +8,20 @@
 export const checksKey = (sha) => `checks:${sha}`;
 /** The last commit that passed: the next run's "since". */
 export const CHECKS_LAST_GREEN = 'checks:last-green';
+/** The commit the Checks service is running (or last ran): a newer push replaces a run in progress. */
+export const CHECKS_CURRENT = 'checks:current';
+
+/**
+ * A run that will never finish because a newer push replaced it: its record
+ * is unfinished (or was never written) and the service has moved on to
+ * another commit, whose run answers for this one too.
+ */
+export function replacedBy(row, current, sha) {
+  const other = current?.value?.sha;
+  if (!other || other === sha) return null;
+  const status = row?.value?.status;
+  return status === 'pass' || status === 'fail' ? null : other;
+}
 
 /** A run that hasn't moved for this long is not coming back (its container was replaced or died). */
 export const STALLED_AFTER_MS = 20 * 60_000;
