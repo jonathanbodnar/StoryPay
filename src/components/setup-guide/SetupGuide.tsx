@@ -373,7 +373,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                           aria-current={selected ? 'step' : undefined}
                           className="flex min-w-0 flex-1 items-center gap-3 p-2 text-left"
                         >
-                          <LessonThumb lesson={item} className="w-[84px] shrink-0" />
+                          <LessonThumb lesson={item} className="w-[84px] shrink-0" label={labels.get(l.id)?.short ?? ''} hasVideo={Boolean(status.videos[l.id])} />
                           <span className="min-w-0 flex-1">
                             <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                               {labels.get(l.id)?.short}

@@ -140,7 +140,7 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
                   <li key={l.id} className="w-[168px] shrink-0">
                     <button type="button" onClick={() => openSetupGuide(l.id)} className="group block w-full text-left">
                       <span className="relative block">
-                        <LessonThumb lesson={lesson} className="transition group-hover:opacity-90" />
+                        <LessonThumb lesson={lesson} className="transition group-hover:opacity-90" label={labels.get(l.id)?.short ?? ''} hasVideo={Boolean(status.videos[l.id])} />
                         {l.checked && (
                           <span className="absolute right-1.5 top-1.5 rounded-full ring-2 ring-white">
                             <StepTick ticked={l.ticked} verified={l.verified} />

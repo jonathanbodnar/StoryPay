@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PAGES } from '../flows/routes';
@@ -38,6 +38,24 @@ describe('the Setup Guide lessons', () => {
       expect(lesson.steps.length, lesson.id).toBeGreaterThan(0);
     }
     expect(new Set(SETUP_LESSONS.map((l) => l.id)).size).toBe(SETUP_LESSONS.length);
+  });
+
+  // Owner's ask (Oct 5 2026): a step with a video gets a YouTube-style cover in
+  // the brand's black and white, with the owner cut out on it; the strategy-call
+  // step first, the others as their videos are recorded.
+  it('a step with a video wears the video cover, big and small; the others keep their screenshot', () => {
+    const root = join(__dirname, '..', '..');
+    expect(existsSync(join(root, 'public', 'setup-guide', 'presenter.webp'))).toBe(true);
+    expect(existsSync(join(root, 'public', 'storyvenue-light-logo.png'))).toBe(true);
+    const cover = readFileSync(join(root, 'src/components/setup-guide/LessonCover.tsx'), 'utf8');
+    expect(cover).toContain("const art = hasVideo ? <VideoCoverArt lesson={lesson} label={label} play /> : (");
+    expect(cover).toContain('<VideoCoverArt lesson={lesson} label={label} play={false} />');
+    // The lists tell the small picture which steps have a video.
+    for (const file of ['src/components/setup-guide/SetupGuide.tsx', 'src/components/setup-guide/SetupGuideCard.tsx']) {
+      expect(readFileSync(join(root, file), 'utf8'), file).toContain('hasVideo={Boolean(status.videos[l.id])}');
+    }
+    // Only the strategy-call step ships with a video today.
+    expect(Object.keys(setupGuideVideos({}))).toEqual(['grow']);
   });
 
   it('a venue only sees the steps it can act on', () => {

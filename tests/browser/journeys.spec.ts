@@ -460,6 +460,11 @@ test('watching the walkthrough ticks its step; a Private Client finds the last s
   // The last step's button asks if the venue qualifies, and opens the survey.
   await guide.getByRole('button', { name: /Want us to bring you qualified brides\?/ }).first().click();
   await expect(guide.getByRole('button', { name: 'See if your venue qualifies' })).toBeVisible();
+  // It has a video, so its cover is the video's own (the owner's black-and-white
+  // title card), and so is its small picture in the list.
+  await expect(guide.getByTestId('setup-guide-video-cover')).toBeVisible();
+  await expect(guide.getByTestId('setup-guide-video-cover').locator('img[src*="presenter"]')).toBeVisible();
+  await expect(guide.getByTestId('setup-guide-video-thumb').first()).toBeVisible();
   await expect(guide.getByRole('button', { name: 'Book a strategy call' })).toHaveCount(0);
   await expectNoSidewaysScroll(page);
 
