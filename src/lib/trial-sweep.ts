@@ -5,7 +5,7 @@
  * means the venue is charged at trial end unless THEY explicitly chose to
  * downgrade. This sweep therefore does only two things:
  *
- *   1. Reminders — email/SMS a few days before the trial ends so the upcoming
+ *   1. Reminders — an email (never a text) a few days before the trial ends so the upcoming
  *      $97 charge is never a surprise (the chargeback shield). We skip venues
  *      that already chose to downgrade.
  *

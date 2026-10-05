@@ -11,6 +11,11 @@
  *
  * Transparency here is what keeps dispute rates low (and the platform merchant
  * account alive). Every send is best-effort and never throws.
+ *
+ * EMAIL ONLY. Billing never texts a venue (owner's rule, Oct 5 2026: "Only
+ * send them an email, no text ever for billing"). Until then the trial-ending
+ * heads-up and the card-declined notice also went out as texts. Don't add one
+ * back: tests/unit/billing-notices.test.ts holds this file to it.
  */
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
@@ -22,9 +27,6 @@ const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL?.trim() || 'support@storypay.io'
 type OwnerRecipient = {
   venueName: string;
   email: string | null;
-  phone: string | null;
-  ghlToken: string | null;
-  ghlLocationId: string | null;
 };
 
 function dollars(cents: number): string {
@@ -41,7 +43,7 @@ function fmtDate(iso: string | null | undefined): string {
 async function loadOwner(venueId: string): Promise<OwnerRecipient | null> {
   const { data } = await supabaseAdmin
     .from('venues')
-    .select('name, email, notification_email, notification_phone, ghl_access_token, ghl_location_id')
+    .select('name, email, notification_email')
     .eq('id', venueId)
     .maybeSingle();
   if (!data) return null;
@@ -49,9 +51,6 @@ async function loadOwner(venueId: string): Promise<OwnerRecipient | null> {
   return {
     venueName: String(v.name ?? 'your venue'),
     email: (v.notification_email as string | null) || (v.email as string | null) || null,
-    phone: (v.notification_phone as string | null) || null,
-    ghlToken: (v.ghl_access_token as string | null) || null,
-    ghlLocationId: (v.ghl_location_id as string | null) || null,
   };
 }
 
@@ -68,19 +67,7 @@ function wrapHtml(heading: string, bodyHtml: string, cta?: { label: string; url:
   </div>`;
 }
 
-async function sendOwnerSms(owner: OwnerRecipient, body: string): Promise<void> {
-  if (!owner.phone || !owner.ghlToken || !owner.ghlLocationId) return;
-  try {
-    const { findOrCreateContact, normalizePhone, sendSms } = await import('@/lib/ghl');
-    const phone = normalizePhone(owner.phone);
-    if (!phone) return;
-    const contactId = await findOrCreateContact(owner.ghlToken, owner.ghlLocationId, { phone });
-    if (!contactId) return;
-    await sendSms(owner.ghlToken, owner.ghlLocationId, String(contactId), body, undefined, phone);
-  } catch { /* best-effort */ }
-}
-
-/** Day ~11/13: trial ends on `trialEndsAt`, card will be charged `amountCents`. */
+/** Day ~11/13: trial ends on `trialEndsAt`, card will be charged `amountCents`. Email only. */
 export async function notifyVenueTrialEndingSoon(
   venueId: string,
   opts: { trialEndsAt: string | null; amountCents: number; daysLeft: number },
@@ -98,10 +85,6 @@ export async function notifyVenueTrialEndingSoon(
     { label: 'Manage subscription', url: BILLING_URL },
   );
   await sendEmail({ to: owner.email, subject, html }).catch(() => {});
-  await sendOwnerSms(
-    owner,
-    `${owner.venueName}: your StoryVenue free trial ends ${when}. We'll charge ${amt}/mo to keep your Bride Booking System™ on. Manage or switch to Free: ${BILLING_URL}`,
-  );
 }
 
 const PLANS_URL = `${APP_URL}/dashboard/directory-billing`;
@@ -157,7 +140,7 @@ export async function notifyVenueSubscriptionCharged(venueId: string, amountCent
   await sendEmail({ to: owner.email, subject, html }).catch(() => {});
 }
 
-/** Card declined at renewal — recoverable, prompt a fix before downgrade. */
+/** Card declined at renewal — recoverable, prompt a fix before downgrade. Email only. */
 export async function notifyVenueCardDeclined(venueId: string): Promise<void> {
   const owner = await loadOwner(venueId);
   if (!owner?.email) return;
@@ -169,10 +152,6 @@ export async function notifyVenueCardDeclined(venueId: string): Promise<void> {
     { label: 'Update card', url: BILLING_URL },
   );
   await sendEmail({ to: owner.email, subject, html }).catch(() => {});
-  await sendOwnerSms(
-    owner,
-    `${owner.venueName}: your card was declined and your Bride Booking System™ didn't renew. Update it to keep it on: ${BILLING_URL}`,
-  );
 }
 
 const WINBACK_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;

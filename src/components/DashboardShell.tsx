@@ -292,7 +292,7 @@ export default function DashboardShell({
             </div>
           ) : planNotice.kind === 'trial-charge-soon' ? (
             // A card is on file: nothing all trial, then this heads-up in the
-            // last days (the heads-up email and text go out in the same window).
+            // last days (the heads-up email goes out in the same window).
             <div data-testid="plan-notice" className={NOTICE}>
               <div className="flex-1">
                 <span className="font-semibold">Your trial ends {inDays(planNotice.daysLeft)}</span>{' '}

@@ -6,7 +6,7 @@
  *
  *  - Trial, card on file: nothing until the last days, then a one-line
  *    heads-up with the charge date (the same window as the heads-up email
- *    and text from lib/trial-sweep.ts). The date is always on the plan page.
+ *    from lib/trial-sweep.ts). The date is always on the plan page.
  *  - Trial, chose Free: nothing. They won't be charged, and the locked
  *    screens are where an upgrade is offered.
  *  - Cancelled, plan still on: shown once after cancelling, then as a small

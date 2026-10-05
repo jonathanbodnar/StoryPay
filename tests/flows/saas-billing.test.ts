@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import Stripe from 'stripe';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { Browser, db, env, runId, waitForEmail } from './helpers';
+import { Browser, db, env, outbox, runId, texts, waitForEmail } from './helpers';
 
 // Venues paying StoryVenue for the Bride Booking System™, on the platform's
 // own Stripe account in TEST mode (test cards only).
@@ -10,8 +10,21 @@ const key = (process.env.STRIPE_SECRET_KEY || '').trim();
 if (!key.startsWith('sk_test_')) throw new Error('Billing flow tests need the test copy’s Stripe TEST key (sk_test_).');
 const stripe = new Stripe(key);
 
-const VENUE = { id: randomUUID(), email: `billing.${runId}@example.com` };
+const VENUE = { id: randomUUID(), email: `billing.${runId}@example.com`, phone: '+12125550142' };
 const DAY = 86_400_000;
+
+// Billing never texts a venue (owner's rule, Oct 5 2026). These venues are set
+// up so a text COULD reach their owner (a phone on file, texting connected
+// through the test copy's stand-in), the way the old trial-ending and
+// card-declined texts did.
+const CAN_BE_TEXTED = (phone: string, location: string) => ({
+  notification_phone: phone, sms_admin_override: true, ghl_connected: true, ghl_location_id: location, ghl_access_token: 'pit-staging-fake',
+});
+/** Texts the app sent to a phone, after giving a text sent alongside an email time to land. */
+async function textsSentTo(phone: string, since: string): Promise<string[]> {
+  await new Promise((r) => setTimeout(r, 3000));
+  return (await texts(phone, since)).filter((t) => t.direction === 'outbound').map((t) => t.body);
+}
 
 async function venueRow() {
   const { data } = await db.from('venues')
@@ -46,6 +59,7 @@ describe('a venue pays for the Bride Booking System™', () => {
       directory_plan_id: plan!.id, directory_subscription_status: 'trialing',
       directory_trial_started_at: new Date(now).toISOString(), directory_trial_ends_at: new Date(now + 14 * DAY).toISOString(),
       timezone: 'America/New_York', is_published: true, is_demo: false,
+      ...CAN_BE_TEXTED(VENUE.phone, `staging-billing-${runId}`),
     });
     if (error) throw new Error(error.message);
     await owner.signIn(VENUE.email);
@@ -99,6 +113,8 @@ describe('a venue pays for the Bride Booking System™', () => {
     await db.from('venues').update({ directory_subscription_status: 'past_due' }).eq('id', VENUE.id);
     await waitForStatus('past_due');
     await waitForEmail({ to: VENUE.email, since }, (e) => /card was declined/.test(e.subject));
+    // By email only: the declined-card notice used to text the owner too.
+    expect(await textsSentTo(VENUE.phone, since)).toEqual([]);
 
     const good = await stripe.paymentMethods.attach('pm_card_visa', { customer });
     await stripe.subscriptions.update(subId, { default_payment_method: good.id });
@@ -164,6 +180,41 @@ describe('a paying venue changes its plan', () => {
     const v = await venueRow();
     expect(v.directory_downgrade_at).toBeNull();
     expect(v.directory_subscription_status).not.toBe('active');
+  });
+});
+
+describe('a trial with a card on file, about to be charged', () => {
+  const venue = { id: randomUUID(), email: `carded.${runId}@example.com`, phone: '+12125550143' };
+
+  beforeAll(async () => {
+    const { data: plan } = await db.from('directory_plans').select('id').eq('slug', 'bride-booking-system').single();
+    const now = Date.now();
+    const { error } = await db.from('venues').insert({
+      id: venue.id, name: `Carded Trial ${runId}`, slug: `carded-trial-${runId}`, email: venue.email, notification_email: venue.email,
+      password_hash: await bcrypt.hash(env.password, 10), setup_completed: true, onboarding_status: 'registered',
+      onboarding_completed_at: new Date(now).toISOString(), directory_plan_id: plan!.id, directory_subscription_status: 'trialing',
+      directory_subscription_external_id: `sub_carded_${runId}`, directory_card_on_file: true,
+      directory_trial_started_at: new Date(now - 12 * DAY).toISOString(), directory_trial_ends_at: new Date(now + 2 * DAY).toISOString(),
+      timezone: 'America/New_York', is_published: true, is_demo: false,
+      ...CAN_BE_TEXTED(venue.phone, `staging-carded-${runId}`),
+    });
+    if (error) throw new Error(error.message);
+  });
+
+  it('gets its heads-up by email, once, and never by text', async () => {
+    const since = new Date().toISOString();
+    const sweep = () => fetch(`${env.base}/api/cron/trial-sweep`, { headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${process.env.MARKETING_CRON_SECRET}` } });
+    expect((await sweep()).status).toBe(200);
+    const email = await waitForEmail({ to: venue.email, since }, (e) => e.subject.startsWith('Your free trial ends '));
+    // It names the charge, so the statement line is no surprise.
+    expect(email.subject).toContain('$97/mo after');
+    expect(email.html).toContain('your card will be charged');
+    expect(await textsSentTo(venue.phone, since)).toEqual([]);
+
+    // The next run doesn't send it again.
+    expect((await sweep()).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 2000));
+    expect((await outbox({ to: venue.email, since })).filter((e) => e.subject.startsWith('Your free trial ends '))).toHaveLength(1);
   });
 });
 
