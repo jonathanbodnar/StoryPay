@@ -124,7 +124,12 @@ describe('the admin console', () => {
       const body = JSON.stringify(await rendered.json());
       expect(body).toContain(FLOW_VENUE.name);
       expect(body).not.toContain('{{venue_name}}');
-      expect((await db.from('support_canned_replies').select('use_count').eq('id', reply!.id).single()).data!.use_count).toBe((reply!.use_count ?? 0) + 1);
+      // The count is saved in the background, after the reply is returned:
+      // give it a moment. (Reading it straight away failed a check on Oct 5.)
+      await expect.poll(
+        async () => (await db.from('support_canned_replies').select('use_count').eq('id', reply!.id).single()).data!.use_count,
+        { timeout: 10_000, interval: 300 },
+      ).toBe((reply!.use_count ?? 0) + 1);
     } finally {
       await db.from('support_canned_replies').delete().eq('id', reply!.id);
     }

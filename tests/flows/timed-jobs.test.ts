@@ -101,6 +101,9 @@ describe('what the timed jobs do', () => {
     const after = await reminders();
     expect(after.filter((r) => r.sent_at).map((r) => r.id)).toEqual([scheduled[0].id]);
     expect(after).toHaveLength(scheduled.length);
+    // Leave nothing waiting: every reminder comes due at noon, so leftovers
+    // from many runs would all land on one later run of the job and slow it.
+    expect((await db.from('proposal_payment_reminders').delete().eq('proposal_id', proposalId)).error).toBeNull();
   });
 
   it('the re-engagement drip and the other daily jobs run cleanly', async () => {
