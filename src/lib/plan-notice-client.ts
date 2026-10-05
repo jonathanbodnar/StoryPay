@@ -3,7 +3,7 @@
 /**
  * "Your plan ends October 27" is shown once after a venue cancels: on the
  * first dashboard visit after it, on each device, and for that visit only
- * (or until they close it). After that it's a chip on the Setup guide bar
+ * (or until they close it). After that it's a chip on the Setup Guide bar
  * until the last days (lib/plan-notice.ts).
  *
  * Which end date has been seen is kept in this browser. With storage blocked

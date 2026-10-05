@@ -32,7 +32,7 @@
 export type LeadSourceBucket = 'meta' | 'google' | 'webform' | 'lead_link' | 'leadfinder' | 'direct' | 'other';
 
 // Named acquisition channels first (Meta / Google / Web Form / Lead Link /
-// LeadFinder™), then
+// Lead Finder), then
 // the two "unknown-origin" buckets (Direct / Other) last so Other stays the
 // catch-all.
 export const LEAD_SOURCE_ORDER: LeadSourceBucket[] = ['meta', 'google', 'webform', 'lead_link', 'leadfinder', 'direct', 'other'];
@@ -42,13 +42,13 @@ export const LEAD_SOURCE_LABELS: Record<LeadSourceBucket, string> = {
   google: 'Google',
   webform: 'Web Form',
   lead_link: 'Lead Link',
-  leadfinder: 'LeadFinder™',
+  leadfinder: 'Lead Finder',
   direct: 'Direct',
   other: 'Other',
 };
 
 /**
- * The ingest `source` value LeadFinder™ writes for every lead it captures from
+ * The ingest `source` value Lead Finder writes for every lead it captures from
  * an inbound email. Deliberately distinct from `directory` (the StoryVenue
  * listing) and from the web-form / manual-entry values.
  */
@@ -58,7 +58,7 @@ export const LEADFINDER_SOURCE = 'leadfinder';
  * Human label for a RAW `leads.source` value — for breakdowns that tally that
  * column directly rather than the coarse funnel buckets above. Mirrors the
  * labelling the leads list already applies (Directory / Manual Entry / Contact
- * Form / Test) and names LeadFinder™ properly; everything else is humanized
+ * Form / Test) and names Lead Finder properly; everything else is humanized
  * from its actual value, so a new entry point is labelled correctly the moment
  * it writes its first lead without us maintaining a list.
  *
@@ -68,7 +68,7 @@ export const LEADFINDER_SOURCE = 'leadfinder';
 export function leadSourceLabel(source: string | null | undefined): string {
   const src = typeof source === 'string' ? source.trim().toLowerCase() : '';
   if (!src) return 'Other';
-  if (src === LEADFINDER_SOURCE) return 'LeadFinder™';
+  if (src === LEADFINDER_SOURCE) return 'Lead Finder';
   if (src === 'directory') return 'Directory';
   if (src === 'manual') return 'Manual Entry';
   if (src === 'form') return 'Contact Form';
@@ -226,9 +226,9 @@ export function bucketLeadSource(input: LeadSourceInput): LeadSourceBucket {
   // ingest `source`/utm_source markers the Lead Link modal sets.
   if (LEAD_LINK_TOKENS.has(srcNorm) || LEAD_LINK_TOKENS.has(utmSource)) return 'lead_link';
 
-  // ── LeadFinder™ (inquiries captured from the venue's own inbox) ────────
+  // ── Lead Finder (inquiries captured from the venue's own inbox) ────────
   // A definitive ingest marker, like the two above. Checked BEFORE the generic
-  // tag signal below: LeadFinder records the marketplace it came through
+  // tag signal below: Lead Finder records the marketplace it came through
   // ("The Knot") in referral_source, which would otherwise read as Other —
   // and without this check a capture with no tag at all fell into Direct.
   if (srcNorm === LEADFINDER_SOURCE) return 'leadfinder';

@@ -228,7 +228,7 @@ export async function GET(
       <p>It's on the way to your inbox. We'll personally follow up to answer any questions you have and check your date.</p>
     </div>
 
-    <div class="poweredby">Powered by <a href="https://storyvenue.com" target="_blank" rel="noopener">StoryVenue™</a></div>
+    <div class="poweredby">Powered by <a href="https://storyvenue.com" target="_blank" rel="noopener">StoryVenue</a></div>
   </div>
 
   <script>

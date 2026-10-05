@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase';
  * form that lead-capture pathways fire their `form submitted` trigger against.
  *
  * Shared deliberately: two different entry points now capture leads (the venue
- * listing page and LeadFinder's forwarded-email path) and both must hand the
+ * listing page and Lead Finder's forwarded-email path) and both must hand the
  * workflow engine the SAME form id. Two copies of this lookup would eventually
  * diverge and put captured leads down a different automation path than form
  * leads, which is exactly the inconsistency we are trying to avoid.

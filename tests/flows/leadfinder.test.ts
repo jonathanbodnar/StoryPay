@@ -1,16 +1,16 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Browser, db, env, FLOW_VENUE, runId, signedInOwner, waitForEmail } from './helpers';
 
-// Each run's couples have their own phones: LeadFinder rightly treats the same
+// Each run's couples have their own phones: Lead Finder rightly treats the same
 // phone as the same couple, so a number from an earlier run would match that lead.
 const n = (parseInt(runId.slice(-5), 36) % 9000) + 1000;
 
-// LeadFinder™ end to end: an inquiry forwarded to the venue's LeadFinder
+// Lead Finder end to end: an inquiry forwarded to the venue's Lead Finder
 // address is read and becomes a lead (once, however often it's delivered);
 // one it can't be sure about waits in the review queue until the owner
 // confirms it. The email arrives through the test copy's stand-in for
 // Resend's received-email API (lib/staging-inbound.ts).
-describe('LeadFinder™: forwarded inquiries become leads', () => {
+describe('Lead Finder: forwarded inquiries become leads', () => {
   let owner: Browser;
   let address = '';
   let since = '';
@@ -110,7 +110,7 @@ describe('LeadFinder™: forwarded inquiries become leads', () => {
     expect(await leadsWith(email)).toHaveLength(1);
   });
 
-  it('mail to a forged LeadFinder address is ignored', async () => {
+  it('mail to a forged Lead Finder address is ignored', async () => {
     const forged = address.replace(/\+[0-9a-f]{16}@/, '+0000000000000000@');
     const stored = await fetch(`${env.base}/api/staging/inbound-email`, {
       method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' },

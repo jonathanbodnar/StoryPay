@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic';
 import {
   DollarSign, Users, FileText, Clock, XCircle, Building2,
   TrendingUp, LogOut, Home,
-  Megaphone, GraduationCap, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
+  Megaphone, ListChecks, Plus, Trash2, Pencil, X, Loader2, ThumbsUp, ThumbsDown,
   Check, BarChart2, ExternalLink, ChevronRight, Search, RefreshCw,
   LayoutDashboard, Menu, Lightbulb, BookOpen, Star, Globe, Layers,
   Repeat, Wallet, BadgeCheck, Sparkles, CalendarDays, Eye, EyeOff,
@@ -579,7 +579,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'seo-pages', label: 'SEO / Pages', icon: Globe },
   { key: 'trends', label: 'Google Trends', icon: TrendingUp },
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
-  { key: 'setup-guide', label: 'Setup guide', icon: GraduationCap },
+  { key: 'setup-guide', label: 'Setup Guide', icon: ListChecks },
   { key: 'feature-requests', label: 'Feature Requests', icon: Lightbulb },
   { key: 'changelog', label: 'Changelog', icon: Sparkles },
   { key: 'suggested-articles', label: 'Suggested Articles', icon: BookOpen },

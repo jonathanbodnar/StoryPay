@@ -1,9 +1,9 @@
 import { execFileSync } from 'child_process';
 import { describe, expect, it } from 'vitest';
 
-// LeadFinder's own fixture checks (scripts/leadfinder-extract-check.mjs): every
+// Lead Finder's own fixture checks (scripts/leadfinder-extract-check.mjs): every
 // sample inquiry email must extract the right couple, date, guests and source.
-describe('LeadFinder extraction', () => {
+describe('Lead Finder extraction', () => {
   it('passes every fixture', () => {
     const out = execFileSync('node', ['scripts/leadfinder-extract-check.mjs'], { encoding: 'utf8', timeout: 120_000 });
     const m = /(\d+)\/(\d+) checks passed/.exec(out);

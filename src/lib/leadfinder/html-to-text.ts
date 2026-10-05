@@ -1,5 +1,5 @@
 /**
- * StoryVenue LeadFinder™ — HTML email body to readable, LINE-STRUCTURED text.
+ * StoryVenue Lead Finder — HTML email body to readable, LINE-STRUCTURED text.
  *
  * The extractor is label-driven ("Name: …", "Guests: …"), so it needs one field
  * per line. The generic stripper the conversation paths use collapses every
@@ -109,7 +109,7 @@ export function htmlToStructuredText(html: string): string {
 }
 
 /**
- * The body LeadFinder should read. A text part that already has line structure
+ * The body Lead Finder should read. A text part that already has line structure
  * is the sender's own plain-text rendering and is preferred; an HTML-only
  * message (or a text part squashed onto one line) is rebuilt from the HTML.
  */

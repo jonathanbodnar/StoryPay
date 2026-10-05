@@ -1,7 +1,7 @@
 /**
- * StoryVenue LeadFinder™ — the email mirror.
+ * StoryVenue Lead Finder — the email mirror.
  *
- * LeadFinder reads a venue's inbox on their behalf, which is only trustworthy if
+ * Lead Finder reads a venue's inbox on their behalf, which is only trustworthy if
  * the venue can see, in their OWN inbox, that mail arrived and what we did with
  * it. This sends them a faithful copy of every processed arrival — the original
  * subject, sender, received time and full body, unedited — with a short banner on
@@ -30,13 +30,13 @@ import { leadFinderReasonLabel } from '@/lib/leadfinder/reasons';
 /**
  * Loop protection. Every copy carries this header AND this footer sentence, and
  * ingest refuses any arrival that has either — so a venue that forwards all its
- * mail to LeadFinder cannot bounce a copy back in and start an endless loop.
+ * mail to Lead Finder cannot bounce a copy back in and start an endless loop.
  * The header survives Gmail forwarding; the sentence survives anything that
  * forwards the body. Change neither without updating `isOwnMessage` in ingest.
  */
 export const LEADFINDER_MIRROR_HEADER = 'X-StoryVenue-LeadFinder';
 export const LEADFINDER_MIRROR_FOOTER_MARKER =
-  'Sent by LeadFinder because a message arrived at your LeadFinder address';
+  'Sent by Lead Finder because a message arrived at your Lead Finder address';
 
 export interface MirrorContext {
   venueId: string;
@@ -79,7 +79,7 @@ export type MirrorOutcome =
         phone: string | null;
         weddingDate: string | null;
         guestCount: number | null;
-        /** e.g. "The Knot (via LeadFinder™)". */
+        /** e.g. "The Knot (via Lead Finder)". */
         source: string | null;
       };
     }
@@ -92,7 +92,7 @@ export type MirrorOutcome =
       requestedBy: string | null;
     }
   | {
-      /** A test the venue sent from the LeadFinder card: read, never a lead. */
+      /** A test the venue sent from the Lead Finder card: read, never a lead. */
       kind: 'test';
       wouldCreateLead: boolean;
       reason: string | null;
@@ -165,7 +165,7 @@ function buildBanner(outcome: MirrorOutcome): Banner {
     ].filter(Boolean);
     return {
       tone: 'ok',
-      headline: 'Test received — your LeadFinder address is working',
+      headline: 'Test received — your Lead Finder address is working',
       detail:
         'This is the test you sent from Settings → Integrations. ' +
         (readBits.length ? `We read: ${readBits.join(', ')}. ` : '') +
@@ -173,7 +173,7 @@ function buildBanner(outcome: MirrorOutcome): Banner {
           ? 'A real inquiry like this would have become a lead. Because it was a test, nothing was added to your leads and nobody was emailed.'
           : `A real inquiry like this would NOT have become a lead: ${humanizeReason(outcome.reason)}. Nothing was added to your leads.`),
       ctaUrl: `${APP_URL}/dashboard/settings/integrations`,
-      ctaLabel: 'Open LeadFinder',
+      ctaLabel: 'Open Lead Finder',
     };
   }
 
@@ -185,9 +185,9 @@ function buildBanner(outcome: MirrorOutcome): Banner {
         ? `Your Gmail forwarding code is ${outcome.code}`
         : 'Gmail is asking you to confirm forwarding',
       detail:
-        `Gmail sent this to your LeadFinder address to confirm forwarding${who}. ` +
+        `Gmail sent this to your Lead Finder address to confirm forwarding${who}. ` +
         (outcome.code
-          ? `In Gmail, open Settings → Forwarding and POP/IMAP, click "Verify" next to your LeadFinder address and enter ${outcome.code} — or use Gmail's own confirmation link below. `
+          ? `In Gmail, open Settings → Forwarding and POP/IMAP, click "Verify" next to your Lead Finder address and enter ${outcome.code} — or use Gmail's own confirmation link below. `
           : 'Use Gmail\'s own confirmation link below. ') +
         'Then add the filter that forwards your directory emails. This message is not a lead.',
       ctaUrl: outcome.confirmUrl,
@@ -224,7 +224,7 @@ function buildBanner(outcome: MirrorOutcome): Banner {
       return {
         tone: 'ok',
         headline: `New lead: ${outcome.leadName}`,
-        detail: 'A new inquiry came in through LeadFinder™. We saved it as a lead and started your normal follow-up.',
+        detail: 'A new inquiry came in through Lead Finder. We saved it as a lead and started your normal follow-up.',
         ctaUrl: leadUrl,
         ctaLabel: 'View Lead',
       };
@@ -243,7 +243,7 @@ function buildBanner(outcome: MirrorOutcome): Banner {
     return {
       tone: 'warn',
       headline: 'Not turned into a lead',
-      detail: `We kept this message in your LeadFinder record but did not create a lead: ${humanizeReason(outcome.reason)}.`,
+      detail: `We kept this message in your Lead Finder record but did not create a lead: ${humanizeReason(outcome.reason)}.`,
       ctaUrl: null,
       ctaLabel: null,
     };
@@ -252,7 +252,7 @@ function buildBanner(outcome: MirrorOutcome): Banner {
   return {
     tone: 'warn',
     headline: 'We could not finish with this message',
-    detail: `Something went wrong while processing this message: ${humanizeReason(outcome.reason)}. It is kept in your LeadFinder record so nothing is lost.`,
+    detail: `Something went wrong while processing this message: ${humanizeReason(outcome.reason)}. It is kept in your Lead Finder record so nothing is lost.`,
     ctaUrl: null,
     ctaLabel: null,
   };
@@ -260,9 +260,9 @@ function buildBanner(outcome: MirrorOutcome): Banner {
 
 /** A small status label above the explanation, in the tone of the outcome. */
 const TONE_LABEL: Record<Banner['tone'], { text: string; color: string }> = {
-  ok: { text: 'LeadFinder™', color: '#047857' },
-  review: { text: 'LeadFinder™ · needs a quick check', color: '#b45309' },
-  warn: { text: 'LeadFinder™', color: '#6b7280' },
+  ok: { text: 'Lead Finder', color: '#047857' },
+  review: { text: 'Lead Finder · needs a quick check', color: '#b45309' },
+  warn: { text: 'Lead Finder', color: '#6b7280' },
 };
 
 /**
@@ -299,7 +299,7 @@ function buildMirrorHtml(ctx: MirrorContext, outcome: MirrorOutcome): string {
       line('Email', d?.email),
       d?.weddingDate ? line('Wedding date', d.weddingDate) : '',
       d?.guestCount != null ? line('Guests', String(d.guestCount)) : '',
-      line('Source', d?.source ?? 'LeadFinder™'),
+      line('Source', d?.source ?? 'Lead Finder'),
       line('Created', received),
       '<div style="height:18px"></div>',
     ].join('');
@@ -347,11 +347,11 @@ function mirrorSubject(ctx: MirrorContext, outcome: MirrorOutcome): string {
         ? `New lead (needs a quick check): ${outcome.leadName} — ${venue}`
         : `New lead: ${outcome.leadName} — ${venue}`;
     case 'gmail_confirmation':
-      return outcome.code ? `Your Gmail forwarding code: ${outcome.code}` : 'Confirm Gmail forwarding for LeadFinder';
+      return outcome.code ? `Your Gmail forwarding code: ${outcome.code}` : 'Confirm Gmail forwarding for Lead Finder';
     case 'test':
-      return `LeadFinder test received — ${venue}`;
+      return `Lead Finder test received — ${venue}`;
     default:
-      return `LeadFinder: ${original}`;
+      return `Lead Finder: ${original}`;
   }
 }
 

@@ -40,8 +40,8 @@ function CDUnit({ v, label }: { v: number; label: string }) {
 // ── FAQ — all closed by default ───────────────────────────────────────────────
 const FAQS = [
   {
-    q: 'What is StoryVenue\u2122?',
-    a: 'StoryVenue\u2122 is a proposal and payment platform built specifically for wedding venues. Send beautiful contracts, collect e-signatures, and get paid with StoryPay\u2122, powered by Stripe, all from one dashboard.',
+    q: 'What is StoryVenue?',
+    a: 'StoryVenue is a proposal and payment platform built specifically for wedding venues. Send beautiful contracts, collect e-signatures, and get paid with StoryPay\u2122, powered by Stripe, all from one dashboard.',
   },
   {
     q: "What's included in early access?",
@@ -57,7 +57,7 @@ const FAQS = [
   },
   {
     q: 'How much will this cost?',
-    a: 'StoryVenue\u2122 has a free plan, and the Bride Booking System\u2122 is $97/month with a 14-day free trial. Payments run on StoryPay\u2122, powered by Stripe: no setup or monthly fees, just a small fee on each payment, and an automatic service fee on your invoices helps cover it.',
+    a: 'StoryVenue has a free plan, and the Bride Booking System\u2122 is $97/month with a 14-day free trial. Payments run on StoryPay\u2122, powered by Stripe: no setup or monthly fees, just a small fee on each payment, and an automatic service fee on your invoices helps cover it.',
   },
 ];
 
@@ -394,7 +394,7 @@ export default function LandingPage() {
             className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-5 sm:mb-6 leading-tight"
             style={{ fontFamily: "'Open Sans', -apple-system, sans-serif", fontWeight: 400 }}
           >
-            Introducing StoryVenue<sup className="text-[0.2em] align-super font-normal tracking-normal">TM</sup>
+            Introducing StoryVenue
           </h1>
 
           {/* Subheadline */}
@@ -546,7 +546,7 @@ export default function LandingPage() {
               Frequently asked questions
             </h2>
             <p className="text-sm text-gray-400 max-w-md mx-auto">
-              Everything you need to know about StoryVenue&#8482;. Find answers to the most common questions below.
+              Everything you need to know about StoryVenue. Find answers to the most common questions below.
             </p>
           </div>
           <div className="space-y-2">
@@ -558,7 +558,7 @@ export default function LandingPage() {
       {/* ── Footer ── */}
       <footer className="py-8 px-4 border-t border-gray-100">
         <div className="mx-auto max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-gray-400">&copy; {new Date().getFullYear()} StoryVenue&#8482; by <a href="https://storyvenue.com" target="_blank" rel="noreferrer" className="hover:text-gray-600 transition-colors underline">StoryVenue</a></p>
+          <p className="text-xs text-gray-400">&copy; {new Date().getFullYear()} StoryVenue by <a href="https://storyvenue.com" target="_blank" rel="noreferrer" className="hover:text-gray-600 transition-colors underline">StoryVenue</a></p>
           <div className="flex items-center gap-4 text-xs text-gray-400">
             <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy Policy</a>
             <a href="/terms" className="hover:text-gray-600 transition-colors">Terms of Use</a>

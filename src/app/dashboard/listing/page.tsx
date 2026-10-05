@@ -304,7 +304,7 @@ type FunnelLeadItem = {
 };
 
 const SOURCE_LABEL: Record<LeadSourceBucket, string> = {
-  meta: 'Meta', google: 'Google', webform: 'Web Form', lead_link: 'Lead Link', leadfinder: 'LeadFinder™', direct: 'Direct', other: 'Other',
+  meta: 'Meta', google: 'Google', webform: 'Web Form', lead_link: 'Lead Link', leadfinder: 'Lead Finder', direct: 'Direct', other: 'Other',
 };
 
 /**
@@ -1697,7 +1697,7 @@ export default function ListingAnalyticsPage() {
               <div className="space-y-4">
                 <div className="flex items-center gap-2 pt-2">
                   <Link2 size={16} className="text-gray-400" />
-                  <h2 className="text-base font-semibold text-gray-900">Lead Link™</h2>
+                  <h2 className="text-base font-semibold text-gray-900">Lead Link</h2>
                   {d.venue_slug && (
                     <a
                       href={`${DIRECTORY_SITE.replace(/\/$/, '')}/venue/${d.venue_slug}/links`}

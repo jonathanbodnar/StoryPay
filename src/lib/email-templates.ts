@@ -143,7 +143,7 @@ const DEFAULTS: Record<string, Omit<EmailTemplateRow, 'type' | 'enabled'>> = {
     // Everything the couple submitted (source first) is added below this line
     // as a table by notifyOwnerNewLead — the same for every entry point.
     // {{lead_intro}} credits StoryVenue with the lead, by source ("StoryVenue's
-    // LeadFinder™ found this lead on The Knot…").
+    // Lead Finder found this lead on The Knot…").
     body:        '{{lead_intro}}',
     button_text: 'View Lead',
     footer:      null,

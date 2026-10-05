@@ -107,7 +107,7 @@ Check off each step manually as you complete it. When all steps are checked, cli
 
 To restart the checklist at any time, go to Settings → General → Restart Setup Guide. This only clears the checkmarks — it does not delete any data.
 
-Note: The setup guide is only visible to account owners. Admins and Members do not see it.`,
+Note: The Setup Guide is only visible to account owners. Admins and Members do not see it.`,
       },
       {
         id: 'gs-login',
@@ -1216,12 +1216,12 @@ If you're convinced data should be there but isn't
       },
       {
         id: 'listing-lead-link',
-        title: 'Lead Link™ — your link-in-bio landing page',
+        title: 'Lead Link — your link-in-bio landing page',
         tags: ['lead link', 'link in bio', 'link tree', 'linktree', 'instagram', 'tiktok', 'facebook', 'social', 'bio link', 'social media', 'landing page', 'links page'],
-        body: `Lead Link™ is a ready-made "link in bio" landing page that turns your social media followers into leads. Instead of posting your website in your Instagram, TikTok, or Facebook bio, you post one Lead Link — a clean landing page that guides brides straight to booking.
+        body: `Lead Link is a ready-made "link in bio" landing page that turns your social media followers into leads. Instead of posting your website in your Instagram, TikTok, or Facebook bio, you post one Lead Link — a clean landing page that guides brides straight to booking.
 
 Where to find it
-Path: Venue listing → Lead Link™ (sidebar).
+Path: Venue listing → Lead Link (sidebar).
 
 Your Lead Link address
 Your page lives at your venue's storyvenue.com address ending in /links. Copy it from the Lead Link page and paste it into your social profiles' "link in bio" field.
@@ -1245,9 +1245,9 @@ Why it helps
       },
       {
         id: 'listing-lead-link-custom',
-        title: 'Lead Link™ — custom buttons, QR code, and click tracking',
+        title: 'Lead Link — custom buttons, QR code, and click tracking',
         tags: ['lead link', 'custom links', 'buttons', 'icons', 'icon pack', 'qr code', 'print', 'table card', 'tracking', 'clicks', 'booking funnel', 'source', 'analytics'],
-        body: `Beyond the two built-in buttons, your Lead Link™ page can be customized and fully tracked.
+        body: `Beyond the two built-in buttons, your Lead Link page can be customized and fully tracked.
 
 Add your own buttons (up to 3)
 On the Lead Link page, use "Your own links" to add up to 3 custom buttons — for example Book a Tour, Video Tour, Menu, or a Google review link. For each one:
@@ -1545,9 +1545,9 @@ If AI gives a stale answer, refresh the page to reset the context.`,
         id: 'leads-notifications',
         title: 'Lead notification emails',
         tags: ['notification', 'email', 'lead email', 'alert', 'inquiry email', 'not receiving'],
-        body: `Every new lead sends you ONE email, whatever it came from: your StoryVenue listing, your Lead Link, your website form, a form you built (including forms behind Meta ads), LeadFinder™, the API, or a lead you add yourself.
+        body: `Every new lead sends you ONE email, whatever it came from: your StoryVenue listing, your Lead Link, your website form, a form you built (including forms behind Meta ads), Lead Finder, the API, or a lead you add yourself.
 
-The email lists where the lead came from first, then everything they gave you: name, email, phone, wedding date, guest count, every form answer and their message. Hit Reply to write back to them, or View Lead to open them in StoryVenue. LeadFinder™ leads also include the original directory email (unless you've turned LeadFinder's inbox copies off).
+The email lists where the lead came from first, then everything they gave you: name, email, phone, wedding date, guest count, every form answer and their message. Hit Reply to write back to them, or View Lead to open them in StoryVenue. Lead Finder leads also include the original directory email (unless you've turned Lead Finder's inbox copies off).
 
 Who gets it:
 - You and each team member, with your own New lead switches (email, text, push) in Settings → Notifications
@@ -3076,23 +3076,23 @@ If replies still don't appear after the panel shows Configured
       },
       {
         id: 'int-leadfinder',
-        title: 'LeadFinder™ — turn directory emails into leads',
+        title: 'Lead Finder — turn directory emails into leads',
         tags: ['leadfinder', 'lead finder', 'the knot', 'weddingwire', 'zola', 'directory', 'marketplace', 'inquiry email', 'email leads', 'forward', 'forwarding', 'gmail filter', 'gmail confirmation code', 'capture leads', 'review queue', 'relay address'],
-        body: `LeadFinder gives your venue its own private email address. Any wedding inquiry emailed to it — from The Knot, WeddingWire, Zola, Here Comes The Guide, your website form, or a couple writing to you directly — becomes a lead in StoryVenue automatically, with the same alerts, pricing guide and follow-up as every other lead.
+        body: `Lead Finder gives your venue its own private email address. Any wedding inquiry emailed to it — from The Knot, WeddingWire, Zola, Here Comes The Guide, your website form, or a couple writing to you directly — becomes a lead in StoryVenue automatically, with the same alerts, pricing guide and follow-up as every other lead.
 
 Where to find your address
-Settings → Integrations → LeadFinder™ card → Copy. The address is unique to your venue, so keep it private.
+Settings → Integrations → Lead Finder card → Copy. The address is unique to your venue, so keep it private.
 
 Two ways to connect it
 1. Easiest: paste the address into a directory's lead-notification email field (The Knot, WeddingWire, Zola and so on). One paste per site.
 2. If a site won't let you change that email, use Gmail forwarding:
-- Gmail → Settings → See all settings → Forwarding and POP/IMAP → Add a forwarding address → paste your LeadFinder address.
-- Gmail sends a confirmation code to that address. Within a minute it appears on the LeadFinder card (and in your inbox copy). Enter it in Gmail under Verify.
-- Create a filter (for example from:theknot.com OR from:weddingwire.com) and choose "Forward it to" your LeadFinder address.
+- Gmail → Settings → See all settings → Forwarding and POP/IMAP → Add a forwarding address → paste your Lead Finder address.
+- Gmail sends a confirmation code to that address. Within a minute it appears on the Lead Finder card (and in your inbox copy). Enter it in Gmail under Verify.
+- Create a filter (for example from:theknot.com OR from:weddingwire.com) and choose "Forward it to" your Lead Finder address.
 Tip: forward only directory emails with a filter rather than your whole inbox.
 
 Test your address
-On the card, click Send a test inquiry. We email a sample inquiry to your LeadFinder address and, within a minute, show you what we read from it. It's a dry run: no lead is created and nobody is emailed (a copy still lands in your inbox, marked as a test).
+On the card, click Send a test inquiry. We email a sample inquiry to your Lead Finder address and, within a minute, show you what we read from it. It's a dry run: no lead is created and nobody is emailed (a copy still lands in your inbox, marked as a test).
 
 What happens when an inquiry arrives
 - A lead is created with the couple's name, email, phone, wedding date, guest count and message — whatever the email includes. If the couple is already a lead, that record is updated instead: only empty fields are filled, so your own edits are never overwritten.
@@ -3100,17 +3100,17 @@ What happens when an inquiry arrives
 - The couple gets an email from you with one button: Send me my guide. Tapping it confirms their mobile number and email, sends your guide by text and email, and counts as their permission to text — so they join your full Bride Booking System (guide, 14-day follow-up, then AI outreach if you have it on), exactly like a couple who filled in your listing form.
 - A phone number read from a directory email isn't permission to text, so nothing is texted until they tap. If they haven't tapped within an hour, the guide goes to them by email anyway and your follow-up starts without texts; tapping the button later still turns texts on. Replying by email doesn't count as permission to text.
 - Venues without texting get the guide by email straight away, as before.
-- For a new lead you get one email: the standard new-lead email, with the original directory email included. For anything else LeadFinder handles (an update to a couple you already have, or a message it skipped) you get a copy in your inbox with a short note on what it did. Times are in your venue's local time, based on your venue's ZIP code. Turn the copies off on the card.
+- For a new lead you get one email: the standard new-lead email, with the original directory email included. For anything else Lead Finder handles (an update to a couple you already have, or a message it skipped) you get a copy in your inbox with a short note on what it did. Times are in your venue's local time, based on your venue's ZIP code. Turn the copies off on the card.
 
 The review queue
-When we can't read an inquiry confidently — or the only address is a directory's relay, which routes replies through the directory's own inbox — the lead is still created and you're still alerted, but the automatic guide is held. The card shows how many arrivals need review. Open Review, compare what we read with the original email, correct anything we got wrong, then Confirm & send guide. If it isn't a real inquiry, choose Dismiss to keep the lead, or Dismiss & delete lead to remove the junk lead (and the contact LeadFinder created for it).
+When we can't read an inquiry confidently — or the only address is a directory's relay, which routes replies through the directory's own inbox — the lead is still created and you're still alerted, but the automatic guide is held. The card shows how many arrivals need review. Open Review, compare what we read with the original email, correct anything we got wrong, then Confirm & send guide. If it isn't a real inquiry, choose Dismiss to keep the lead, or Dismiss & delete lead to remove the junk lead (and the contact Lead Finder created for it).
 
 Activity and sources
 The card lists recent messages and whether each became a lead or was skipped, and why. Sources compares each directory with its own previous 30 days, so you'll notice if a directory changes its email format.
 
 Not seeing leads?
 - Check Activity on the card. If nothing has arrived, the directory or your Gmail filter isn't sending to the address yet.
-- "Not enabled yet" means LeadFinder hasn't been switched on for your account. Contact StoryVenue support.
+- "Not enabled yet" means Lead Finder hasn't been switched on for your account. Contact StoryVenue support.
 - Skipped messages show the reason — for example an account notice, an automatic reply, or no email address for the couple.`,
       },
       {

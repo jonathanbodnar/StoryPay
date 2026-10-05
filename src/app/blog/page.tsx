@@ -151,7 +151,7 @@ export default async function BlogPage() {
       {/* Footer */}
       <footer className="border-t border-gray-100 py-8 mt-16">
         <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
-          <span>© {new Date().getFullYear()} StoryVenue™</span>
+          <span>© {new Date().getFullYear()} StoryVenue</span>
           <div className="flex items-center gap-4">
             <Link href="/privacy" className="hover:text-gray-600">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-gray-600">Terms of Use</Link>

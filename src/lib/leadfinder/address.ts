@@ -1,5 +1,5 @@
 /**
- * StoryVenue LeadFinder™ — the per-venue inbound address.
+ * StoryVenue Lead Finder — the per-venue inbound address.
  *
  * Mirrors the signed-address scheme in conversations-inbound-email.ts, for the
  * same reason: the local part carries the venue id plus an HMAC of it, so an
@@ -11,7 +11,7 @@
  *   leadfinder+{venueId}+{sig16}@{CONVERSATIONS_INBOUND_DOMAIN}
  *
  * The signature is purpose-separated (`lf|{venueId}`) exactly like the existing
- * `vc|{venueId}` concierge signature, so a LeadFinder signature can never be
+ * `vc|{venueId}` concierge signature, so a Lead Finder signature can never be
  * replayed as a conversation reply signature or vice versa.
  *
  * One address per venue serves BOTH onboarding paths — pasting it into a
@@ -22,7 +22,7 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 
 /** The test copy (lib/staging.ts isStaging); spelled out here because the
- *  LeadFinder fixture script loads this file without the app's import paths. */
+ *  Lead Finder fixture script loads this file without the app's import paths. */
 const isStaging = () => process.env.APP_ENV === 'staging';
 
 /** Domain the address is built on. Shares the conversations inbound domain. */
@@ -38,7 +38,7 @@ function inboundSecret(): string | null {
 }
 
 /**
- * Master switch. LeadFinder is NEW INGEST PATHS (inbound email becoming leads),
+ * Master switch. Lead Finder is NEW INGEST PATHS (inbound email becoming leads),
  * so it fails closed: off unless explicitly enabled, and even then optionally
  * limited to a list of venue slugs so it can be trialled on one account.
  *
@@ -56,7 +56,7 @@ export function leadFinderEnabledForSlug(slug: string | null | undefined): boole
   return allow.includes(slug.toLowerCase());
 }
 
-/** HMAC hex (16 chars) over the venue id, namespaced to LeadFinder. */
+/** HMAC hex (16 chars) over the venue id, namespaced to Lead Finder. */
 export function leadFinderSignature(venueId: string, secret: string): string {
   return createHmac('sha256', secret).update(`lf|${venueId}`).digest('hex').slice(0, 16);
 }
@@ -92,11 +92,11 @@ export function parseLeadFinderLocalPart(
 const LEADFINDER_ADDRESS_RE = /leadfinder\+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\+[0-9a-f]{16}@[a-z0-9.-]+\.[a-z]{2,}/i;
 
 /**
- * Find a LeadFinder address anywhere in an inbound payload — To, Cc, or any
+ * Find a Lead Finder address anywhere in an inbound payload — To, Cc, or any
  * header value (Delivered-To, X-Forwarded-To, X-Original-To, Received "for <…>").
  *
  * This matters for forwarded mail: a Gmail forwarding rule keeps the ORIGINAL
- * To header (the venue's own address), so the LeadFinder address only appears
+ * To header (the venue's own address), so the Lead Finder address only appears
  * in the envelope/forwarding headers. Looking at To alone silently dropped it.
  * Safe to search broadly because the signature is still verified afterwards.
  */

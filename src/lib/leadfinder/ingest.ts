@@ -1,5 +1,5 @@
 /**
- * StoryVenue LeadFinder™ — from an inbound message to a lead.
+ * StoryVenue Lead Finder — from an inbound message to a lead.
  *
  * Flow: dedupe → record the arrival → guards (loop, rate, Gmail confirmation,
  * flag, auto-reply) → extract → classify → dedupe against leads → create or
@@ -15,7 +15,7 @@
  *      marked `skipped` WITH a reason, so it can be inspected rather than
  *      vanishing — and the venue gets a copy of it in their own inbox.
  *   3. Nothing we send may come back and be processed again. A venue that
- *      forwards ALL its mail to LeadFinder would otherwise receive the inbox
+ *      forwards ALL its mail to Lead Finder would otherwise receive the inbox
  *      copy, forward it back, get another copy, and so on forever.
  */
 
@@ -361,7 +361,7 @@ function emailConfidence(e: ExtractedLead): number {
 
 /**
  * The new-lead fan-out that every other entry point fires (public web form,
- * StoryVenue directory, manual entry). Kept in one function so the LeadFinder
+ * StoryVenue directory, manual entry). Kept in one function so the Lead Finder
  * entry point can never quietly drift from the others.
  *
  * Covers:
@@ -370,7 +370,7 @@ function emailConfidence(e: ExtractedLead): number {
  *   3. External integrations subscribed to `lead.created`    (dispatchIntegrationEvent)
  *   4. The connected CRM connectors (Tripleseat, Event Temple)
  *
- * NOTE ON THE ONE DELIBERATE DIFFERENCE: LeadFinder leads are never auto-texted
+ * NOTE ON THE ONE DELIBERATE DIFFERENCE: Lead Finder leads are never auto-texted
  * because a phone number read out of a forwarded email is not TCPA consent. That
  * restriction is about outbound SMS to the COUPLE. It does not affect anything in
  * here — the venue owner is notified on every channel they have enabled, exactly
@@ -383,7 +383,7 @@ function notifyNewLeadLikeEveryOtherEntryPoint(input: {
   email: string;
   phone: string | null;
   createdAt: string;
-  /** Human label for the owner alert, e.g. "StoryVenue LeadFinder™ — found on The Knot". */
+  /** Human label for the owner alert, e.g. "StoryVenue Lead Finder — found on The Knot". */
   sourceLabel: string;
   /** The alert's opening sentence (credits StoryVenue). */
   intro: string;
@@ -628,7 +628,7 @@ async function processArrival(p: {
   // Everything the mirror needs, captured once. The mirror is built from the
   // SAME stored arrival so its copy is faithful, and it is fired on terminal
   // outcomes — updated, skipped and failed — because the point is that the
-  // owner can see what LeadFinder did or did not take. A CREATED lead gets the
+  // owner can see what Lead Finder did or did not take. A CREATED lead gets the
   // standard new-lead email instead (one email per lead, with the original
   // email in it), not this copy. Idempotency lives in
   // the mirror itself (an atomic claim on `mirrored_at`).
@@ -673,7 +673,7 @@ async function processArrival(p: {
   // is exactly the step that would keep a forwarding loop spinning.
   if (isMirrorCopy(arrival, p.headers)) return skip('own_message_loop', { mirror: false });
 
-  // A test the venue sent from the LeadFinder card (it comes from our own
+  // A test the venue sent from the Lead Finder card (it comes from our own
   // address, so it must be recognised before the platform-mail guard below).
   // A dry run: read and reported back, never a lead, nothing sent to a couple.
   const testRef = findLeadFinderTestRef(arrival.text, venueId);
@@ -721,7 +721,7 @@ async function processArrival(p: {
   if (p.overLimit) return skip('rate_limited', { mirror: false });
 
   // Gmail's forwarding confirmation: not an inquiry, but the venue needs the
-  // code in it to finish connecting. Surfaced whether or not LeadFinder is on,
+  // code in it to finish connecting. Surfaced whether or not Lead Finder is on,
   // because setting up forwarding is the first step either way.
   const gmail = parseGmailForwardingConfirmation({
     senderEmail: arrival.senderEmail,
@@ -927,16 +927,16 @@ async function processArrival(p: {
     email,
     phone: extracted.phone,
     createdAt,
-    // StoryVenue gets the credit: the directory is where LeadFinder found it.
-    sourceLabel: detectedSource ? `StoryVenue LeadFinder™ — found on ${detectedSource}` : 'StoryVenue LeadFinder™',
+    // StoryVenue gets the credit: the directory is where Lead Finder found it.
+    sourceLabel: detectedSource ? `StoryVenue Lead Finder — found on ${detectedSource}` : 'StoryVenue Lead Finder',
     intro: detectedSource
-      ? `StoryVenue\u2019s LeadFinder\u2122 found this lead on ${detectedSource} and added it to your Lead Inbox.`
-      : 'StoryVenue\u2019s LeadFinder\u2122 found this lead in your email and added it to your Lead Inbox.',
+      ? `StoryVenue\u2019s Lead Finder found this lead on ${detectedSource} and added it to your Lead Inbox.`
+      : 'StoryVenue\u2019s Lead Finder found this lead in your email and added it to your Lead Inbox.',
     // The standard new-lead email is the owner's ONE email for this lead (the
     // inbox copy is not sent for a created lead). With the inbox copy on, it
     // carries the original email too, so the owner still has it.
     note: needsReview
-      ? 'Needs a quick check: nothing goes to the couple until you confirm this lead in LeadFinder.'
+      ? 'Needs a quick check: nothing goes to the couple until you confirm this lead in Lead Finder.'
       : null,
     originalEmail: venue.leadfinder_mirror_enabled !== false
       ? { from: arrival.fromRaw, subject: arrival.subject, text: arrival.text }

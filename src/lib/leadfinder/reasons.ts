@@ -1,5 +1,5 @@
 /**
- * StoryVenue LeadFinder™ — why an arrival did not become a lead, in words a
+ * StoryVenue Lead Finder — why an arrival did not become a lead, in words a
  * venue owner understands.
  *
  * One table shared by the inbox copy (mirror), the Settings activity list and
@@ -14,7 +14,7 @@ export const LEADFINDER_REASON_LABELS: Record<string, string> = {
   only_venue_email: "the only email address in it is your venue's own (your account, notification or team email), so we couldn't tell it was a couple — it needs the couple's own email",
   bounce_or_system_message: 'it was an automated system message',
   auto_reply: 'it was an automatic reply',
-  leadfinder_disabled_for_venue: 'LeadFinder is not switched on for your account yet',
+  leadfinder_disabled_for_venue: 'Lead Finder is not switched on for your account yet',
   extract_threw: 'we could not read the message',
   lead_insert_failed: 'we could not save the lead',
   import_row_failed: 'we could not record the message',

@@ -731,7 +731,7 @@ const SOURCE_LABELS: Record<string, string> = {
   web_form:     'Website form',
   lead_link:    'Lead Link',
   form:         'Web form',
-  leadfinder:   'StoryVenue LeadFinder™',
+  leadfinder:   'StoryVenue Lead Finder',
   manual:       'Added manually',
   calendly:     'Calendly booking',
   api:          'Zapier / API',
@@ -768,7 +768,7 @@ function displayDate(raw: string | null | undefined): string {
 
 /**
  * The source line: the caller's label when it wrote one ("The Knot (via
- * LeadFinder™)", "Web form: Spring Open House"), else the lead's own `source`
+ * Lead Finder)", "Web form: Spring Open House"), else the lead's own `source`
  * in words — plus "via Meta" / "via Google" when the first-touch data shows the
  * click came from there.
  */
@@ -797,7 +797,7 @@ function describeLeadSource(callerSource: string | null | undefined, lead: LeadR
  */
 function defaultLeadIntro(rawSource: string): string {
   switch (rawSource) {
-    case 'leadfinder':   return 'StoryVenue\u2019s LeadFinder\u2122 found this lead and added it to your Lead Inbox.';
+    case 'leadfinder':   return 'StoryVenue\u2019s Lead Finder found this lead and added it to your Lead Inbox.';
     case 'directory':    return 'StoryVenue sent you this lead from your StoryVenue listing.';
     case 'lead_link':    return 'StoryVenue captured this lead from your Lead Link.';
     case 'embed':
@@ -866,7 +866,7 @@ async function claimLeadAskedAgain(leadId: string): Promise<boolean> {
 /**
  * THE owner email for a new lead — one per lead, whatever the source (StoryVenue
  * listing, Lead Link, website embed, builder forms incl. Meta campaign forms,
- * LeadFinder™, manual add, API). It lists where the lead came from and
+ * Lead Finder, manual add, API). It lists where the lead came from and
  * everything they submitted: the lead row's own fields (read here, so every
  * caller gets them) plus any extra answers the caller passes. Push and SMS go
  * out with it per each person's toggles.
@@ -887,9 +887,9 @@ export function notifyOwnerNewLead(input: {
   message?: string | null;
   /** The opening sentence; defaults to one that credits StoryVenue, by source. */
   intro?: string | null;
-  /** A line above the table, e.g. that LeadFinder is holding the lead for a check. */
+  /** A line above the table, e.g. that Lead Finder is holding the lead for a check. */
   note?: string | null;
-  /** LeadFinder: the email the lead was read from, so the owner still has it. */
+  /** Lead Finder: the email the lead was read from, so the owner still has it. */
   originalEmail?: OriginalEmail | null;
   /** See NotifyArgs.extraEmailRecipients. */
   extraEmailRecipients?: string[];

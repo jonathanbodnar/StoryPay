@@ -11,7 +11,7 @@ import {
   type SetupGuideState,
 } from '@/lib/setup-guide';
 
-/** Where Admin → Setup guide keeps its video links ({ lessonId: url }). */
+/** Where Admin → Setup Guide keeps its video links ({ lessonId: url }). */
 export const SETUP_GUIDE_VIDEOS_KEY = 'setup-guide:videos';
 
 /** Lead sources that mean the venue's own website form produced the lead. */

@@ -180,8 +180,8 @@ describe('the Setup Guide', () => {
     expect(where(nearly, 'verified')).toEqual(['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'follow_up', 'grow']);
     expect(nearly).toMatchObject({ left: 1, fulfilled: false, showPill: true, autoOpen: false });
 
-    // …and mail reaches the LeadFinder address. StoryPay was never connected.
-    expect((await db.from('leadfinder_imports').insert({ venue_id: venueId, subject: `Setup guide check ${runId}` })).error?.message ?? null).toBeNull();
+    // …and mail reaches the Lead Finder address. StoryPay was never connected.
+    expect((await db.from('leadfinder_imports').insert({ venue_id: venueId, subject: `Setup Guide check ${runId}` })).error?.message ?? null).toBeNull();
     const g = await guide();
     expect(g).toMatchObject({ left: 0, fulfilled: true, showPill: false, autoOpen: false, checkedAll: true, eligible: true });
     expect(g.lessons.find((l) => l.id === 'payments')).toMatchObject({ verified: false, optional: true });

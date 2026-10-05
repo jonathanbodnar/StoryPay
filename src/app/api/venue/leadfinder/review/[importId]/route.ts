@@ -1,7 +1,7 @@
 /**
  * POST /api/venue/leadfinder/review/[importId]
  *
- * A human's verdict on a low-confidence LeadFinder™ arrival.
+ * A human's verdict on a low-confidence Lead Finder arrival.
  *
  *   confirm → the record is right (optionally after correcting the core
  *             fields in `fields`), so release the follow-up that was held at
@@ -10,10 +10,10 @@
  *             in the same booking workflow every other lead gets.
  *   dismiss → a human says this is not a real inquiry. The lead is kept; only
  *             the arrival's review state changes, which removes it from the queue.
- *   dismiss_delete → the same, and the junk lead LeadFinder created is deleted
+ *   dismiss_delete → the same, and the junk lead Lead Finder created is deleted
  *             too — with the contact it created for it, when nothing else uses
  *             that contact. Never a protected demo lead, never a lead that did
- *             not come from LeadFinder, never a contact that existed before.
+ *             not come from Lead Finder, never a contact that existed before.
  *
  * Idempotent and venue-scoped: the update is claimed with
  * `review_state = 'needs_review'`, so confirming twice (or two people clicking
@@ -36,10 +36,10 @@ function escapeLike(s: string): string {
 }
 
 /**
- * Delete a junk lead LeadFinder created, and the contact it created for it.
+ * Delete a junk lead Lead Finder created, and the contact it created for it.
  *
  * Guarded on every side: the lead must belong to this venue, have come from
- * LeadFinder and not be a protected demo lead. The contact goes only when no
+ * Lead Finder and not be a protected demo lead. The contact goes only when no
  * other lead at the venue uses that email AND it was created alongside this
  * lead — a contact that already existed (a real person the venue knows) is
  * never removed. Deleting the contact cascades its conversation thread.

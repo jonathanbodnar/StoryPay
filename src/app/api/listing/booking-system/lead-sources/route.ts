@@ -1,11 +1,11 @@
 /**
  * GET /api/listing/booking-system/lead-sources
  *
- * The lead-source slice + LeadFinder™ summary for the Speed-to-Lead page.
+ * The lead-source slice + Lead Finder summary for the Speed-to-Lead page.
  *
  * The breakdown is tallied straight off `leads.source` — the column every
  * capture path writes (the StoryVenue directory, the embedded web form, manual
- * entry, LeadFinder's forwarded email, imports, …). Reading the actual values
+ * entry, Lead Finder's forwarded email, imports, …). Reading the actual values
  * present, rather than a hard-coded enum, means a new entry point shows up as
  * its own slice the moment it writes its first lead. Labels come from
  * `leadSourceLabel` (shared with the leads list), and rows with no source land
@@ -34,11 +34,11 @@ export interface LeadSourceSlice {
 }
 
 export interface LeadFinderSummary {
-  /** Leads LeadFinder has captured for this venue (`leads.source='leadfinder'`). */
+  /** Leads Lead Finder has captured for this venue (`leads.source='leadfinder'`). */
   captured:       number;
   /** When it last captured one, or null when it never has. */
   lastCapturedAt: string | null;
-  /** Whether LeadFinder is switched on for this venue at all. */
+  /** Whether Lead Finder is switched on for this venue at all. */
   enabled:        boolean;
 }
 

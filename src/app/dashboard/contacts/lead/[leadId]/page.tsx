@@ -6,7 +6,7 @@ import { getVenueId } from '@/lib/auth-helpers';
  * /dashboard/contacts/lead/{leadId} — open a LEAD's contact profile.
  *
  * The contact page is keyed by the venue_customers id, but the places that only
- * know a lead — the new-lead and AI-handoff notifications, LeadFinder's inbox
+ * know a lead — the new-lead and AI-handoff notifications, Lead Finder's inbox
  * copy, the marketing analytics rows — linked straight to
  * /dashboard/contacts/{leadId}, which landed on "Contact not found". This
  * resolves the lead's contact by email (creating it when the lead never got

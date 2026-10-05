@@ -1,7 +1,7 @@
 /**
  * GET /api/venue/leadfinder/review
  *
- * The venue's LeadFinder™ arrivals that were created but NOT auto-contacted,
+ * The venue's Lead Finder arrivals that were created but NOT auto-contacted,
  * because the extraction confidence was below the routing threshold. Newest
  * first, so the queue reads like an inbox.
  *

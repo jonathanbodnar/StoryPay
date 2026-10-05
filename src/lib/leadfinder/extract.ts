@@ -1,5 +1,5 @@
 /**
- * StoryVenue LeadFinder™ — turning an inbound email into lead fields.
+ * StoryVenue Lead Finder — turning an inbound email into lead fields.
  *
  * SECURITY: the input is untrusted. This module is deliberately pure and
  * powerless: it reads text and returns a fixed set of typed fields. It cannot

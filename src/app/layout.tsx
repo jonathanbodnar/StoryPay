@@ -36,7 +36,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://storypay.io';
 
 export async function generateMetadata(): Promise<Metadata> {
   const seo = await getPageSeo('home');
-  const title       = seo?.title        || 'StoryVenue™ — Wedding Venue Proposal & Payment Platform';
+  const title       = seo?.title        || 'StoryVenue — Wedding Venue Proposal & Payment Platform';
   const description = seo?.description  || 'StoryVenue is the all-in-one proposal and payment platform built for wedding venues. Send branded contracts, collect e-signatures, and get paid — all from one dashboard.';
   const ogImage     = seo?.og_image     || '/og-default.png';
   const ogTitle     = seo?.og_title     || title;
@@ -44,7 +44,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: new URL(APP_URL),
-    title: { default: title, template: '%s | StoryVenue™' },
+    title: { default: title, template: '%s | StoryVenue' },
     description,
     keywords: ['wedding venue software', 'venue payment platform', 'wedding proposal software', 'venue management', 'wedding contracts', 'e-signature', 'venue billing'],
     authors: [{ name: 'StoryVenue', url: APP_URL }],
@@ -54,7 +54,7 @@ export async function generateMetadata(): Promise<Metadata> {
       ? { index: false, follow: false }
       : { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 } },
     openGraph: {
-      type: 'website', locale: 'en_US', url: seo?.canonical || APP_URL, siteName: 'StoryVenue™',
+      type: 'website', locale: 'en_US', url: seo?.canonical || APP_URL, siteName: 'StoryVenue',
       title: ogTitle, description: ogDesc,
       images: [{ url: ogImage, width: 1200, height: 630, alt: 'StoryVenue — Wedding Venue Payment Platform' }],
     },

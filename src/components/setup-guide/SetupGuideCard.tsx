@@ -57,16 +57,21 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
   const shown = setupGuideDisplay(status);
   const next = shown.nextId ? setupLesson(shown.nextId) : undefined;
   const signIn = status.loginId;
-  // Only ever rendered in the browser (the guide's status is loaded there), so
-  // reading what they chose this sign-in can't disagree with the server's paint.
-  const [open, setOpen] = useState(() => setupDrawerOpen({ saved: savedDrawerChoice(signIn), signIn, stepsToTick: !status.checkedAll }));
+  // What they chose by hand since this page loaded; before that, what the
+  // browser kept. Open or closed is worked out from the guide as it is NOW,
+  // every time: decided once at first paint, an out-of-date first answer (the
+  // sign-in before, steps not yet ticked) left it open after a sign-in with
+  // every step ticked. Only ever rendered in the browser, so reading the
+  // browser's storage here can't disagree with the server's paint.
+  const [byHand, setByHand] = useState<string | null>(null);
+  const open = setupDrawerOpen({ saved: byHand ?? savedDrawerChoice(signIn), signIn, stepsToTick: !status.checkedAll });
   const toggle = () => {
-    const now = !open;
-    setOpen(now);
+    const choice = setupDrawerChoice(signIn, !open);
+    setByHand(choice);
     try {
-      drawerStore(signIn).setItem(DRAWER_KEY, setupDrawerChoice(signIn, now));
+      drawerStore(signIn).setItem(DRAWER_KEY, choice);
     } catch {
-      /* storage blocked: it's open again on the next page load */
+      /* storage blocked: the choice lasts until the page is loaded again */
     }
   };
 

@@ -84,7 +84,7 @@ const SOURCE_LABELS: Record<string, string> = {
   google: 'Google',
   webform: 'Web Form',
   lead_link: 'Lead Link',
-  leadfinder: 'LeadFinder™',
+  leadfinder: 'Lead Finder',
   direct: 'Direct',
   other: 'Other',
 };

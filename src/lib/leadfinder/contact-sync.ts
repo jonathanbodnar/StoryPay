@@ -1,7 +1,7 @@
 /**
  * Put a lead's answers where the Contact profile reads them (`venue_customers`).
  *
- * Shared by LeadFinder ingest, the LeadFinder review queue and the gated guide
+ * Shared by Lead Finder ingest, the Lead Finder review queue and the gated guide
  * invite, so every path that learns something about a couple writes it to the
  * contact the same way. Lives in its own module so none of those callers has to
  * import another (ingest ↔ guide-invite would otherwise be circular).

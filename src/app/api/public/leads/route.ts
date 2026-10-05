@@ -466,7 +466,7 @@ export async function POST(request: NextRequest) {
 
   // A form that collected a phone number is an explicit opt-in — they typed their
   // number into our own form asking to be contacted. This is what lifts the
-  // sms_consent gate for a contact who first arrived through LeadFinder (whose
+  // sms_consent gate for a contact who first arrived through Lead Finder (whose
   // captured lead was created with sms_consent = false). No-op otherwise.
   if (phone) {
     void recordSmsConsentByEmail({ venueId: venue.id, email: lr.email, source: 'form_submit' });

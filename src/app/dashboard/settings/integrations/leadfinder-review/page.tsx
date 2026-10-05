@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * LeadFinder™ review queue.
+ * Lead Finder review queue.
  *
  * The arrivals the pipeline created but did NOT contact the couple about,
  * because it was not confident enough in what it extracted (or the only address
@@ -9,7 +9,7 @@
  * extraction, corrects the core fields if needed, and either confirms (release
  * the guide) or dismisses (leave the lead alone; nothing is deleted).
  *
- * Styling deliberately mirrors the Integrations page's LeadFinder card.
+ * Styling deliberately mirrors the Integrations page's Lead Finder card.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -143,7 +143,7 @@ export default function LeadFinderReviewPage() {
   async function resolve(id: string, action: 'confirm' | 'dismiss' | 'dismiss_delete') {
     if (
       action === 'dismiss_delete' &&
-      !window.confirm('Delete this lead? It will be removed from your leads, along with the contact LeadFinder created for it. This cannot be undone.')
+      !window.confirm('Delete this lead? It will be removed from your leads, along with the contact Lead Finder created for it. This cannot be undone.')
     ) {
       return;
     }
@@ -186,7 +186,7 @@ export default function LeadFinderReviewPage() {
           >
             <ArrowLeft size={13} /> Back to Integrations
           </Link>
-          <h1 className="font-heading text-2xl text-gray-900">LeadFinder review</h1>
+          <h1 className="font-heading text-2xl text-gray-900">Lead Finder review</h1>
           <p className="mt-1 text-sm text-gray-500">
             Inquiries we captured but did not email the couple about yet. Check the details against
             the original — fix anything we misread — then confirm to send them the guide. If it

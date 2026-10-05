@@ -2,7 +2,7 @@
  * /api/venue/leadfinder
  *
  * GET  — everything the Settings → Integrations card needs to show a venue their
- *        LeadFinder™ address, whether it is working, and whether any source has
+ *        Lead Finder address, whether it is working, and whether any source has
  *        started to drift.
  * PATCH — flip the email-mirror toggle, scoped to the authenticated venue.
  *
@@ -48,7 +48,7 @@ export async function GET() {
 
   const address = buildLeadFinderAddress(venueId);
 
-  // Recent activity. Small, bounded queries: a venue's LeadFinder traffic is
+  // Recent activity. Small, bounded queries: a venue's Lead Finder traffic is
   // low-volume by nature, and the card only needs the latest few facts.
   const [importsRes, leadsRes, recentRes, skippedRes, reviewRes, mirrorFailRes, sources] = await Promise.all([
     supabaseAdmin
@@ -181,7 +181,7 @@ export async function GET() {
 }
 
 /**
- * PATCH — update the venue's LeadFinder settings. Currently just the email
+ * PATCH — update the venue's Lead Finder settings. Currently just the email
  * mirror toggle. Scoped to the session venue; nothing about the venue id comes
  * from the request.
  */

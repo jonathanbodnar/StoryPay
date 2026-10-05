@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Admin → Setup guide: the video for each lesson of the venues' Setup Guide.
+ * Admin → Setup Guide: the video for each lesson of the venues' Setup Guide.
  * A lesson with no link shows its cover and written steps; paste a link and
  * the cover gets a play button. No release needed.
  */
@@ -51,7 +51,7 @@ export default function SetupGuideAdminPanel() {
 
   return (
     <div className="max-w-3xl">
-      <h2 className="font-heading text-xl font-semibold text-gray-900">Setup guide</h2>
+      <h2 className="font-heading text-xl font-semibold text-gray-900">Setup Guide</h2>
       <p className="mt-1 text-sm leading-relaxed text-gray-500">
         New venues see this guide a few seconds after every sign-in until each step is done. Paste a YouTube, Vimeo,
         Loom, Wistia or Cloudflare Stream link to give a lesson its video. A lesson with no link shows its cover and

@@ -102,9 +102,9 @@ describe('the steps, as the owner wrote them', () => {
       'Start here: watch the 3-minute walkthrough',
       'Share your listing link',
       'Check your pricing guide',
-      'Put your Lead Link™ in your Instagram bio',
+      'Put your Lead Link in your Instagram bio',
       'Add the inquiry form to your website',
-      'Forward your directory leads to LeadFinder™',
+      'Forward your directory leads to Lead Finder',
       'Make your follow-up sound like you',
       'Set up proposals and payments',
       'Want us to bring you qualified brides?',
@@ -116,9 +116,9 @@ describe('the steps, as the owner wrote them', () => {
       walkthrough: 'Watch the walkthrough',
       listing: 'Open my listing', // second to "Copy my link" in the guide
       pricing_guide: 'Open my pricing guide',
-      lead_link: 'Set up my Lead Link™',
+      lead_link: 'Set up my Lead Link',
       web_form: 'Get my embed code',
-      leadfinder: 'Get my LeadFinder™ address',
+      leadfinder: 'Get my Lead Finder address',
       follow_up: 'Review my messages',
       payments: 'Connect StoryPay™',
       grow: 'See if your venue qualifies',
@@ -133,6 +133,47 @@ describe('the steps, as the owner wrote them', () => {
       expect(l.steps, l.id).toHaveLength(3);
     }
     expect(SETUP_LESSONS.filter((l) => l.optional).map((l) => l.id)).toEqual(['payments']);
+  });
+
+  // Owner's polish (Oct 5 2026, evening): headings and subheadings stay; the
+  // 1-2-3 lines under them must each make sense on their own ("Add up to three
+  // buttons, like Book a Tour" didn't), so each now names the button to press
+  // or the thing to check. Names: "Lead Finder" is two words, and only
+  // StoryPay™ and the Bride Booking System™ keep a ™.
+  it('only StoryPay and the Bride Booking System carry a ™, and Lead Finder is two words', () => {
+    for (const l of SETUP_LESSONS) {
+      for (const text of [l.title, l.summary, l.cta.label, ...l.steps, ...(l.stepsNoVideo ?? [])]) {
+        expect(text.replace(/StoryPay™|Bride Booking System™/g, ''), `${l.id}: ${text}`).not.toMatch(/™/);
+        expect(text, `${l.id}: ${text}`).not.toMatch(/LeadFinder/);
+      }
+    }
+    expect(SETUP_LESSONS.find((l) => l.id === 'leadfinder')!.title).toBe('Forward your directory leads to Lead Finder');
+    expect(SETUP_LESSONS.find((l) => l.id === 'lead_link')!.title).toBe('Put your Lead Link in your Instagram bio');
+  });
+
+  it('a how-to line that sends them to a button names a button the step really has', () => {
+    const byId = Object.fromEntries(SETUP_LESSONS.map((l) => [l.id, l]));
+    // Each step's own main button, by its exact label.
+    for (const id of ['pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'payments', 'grow'] as const) {
+      expect(byId[id].steps.join(' '), id).toContain(`Press ${byId[id].cta.label}`);
+    }
+    // The listing step has two: Copy my link first, Open my listing second.
+    expect(byId.listing.steps.join(' ')).toContain('Press Open my listing');
+    expect(byId.listing.steps.join(' ')).toContain('Press Copy my link');
+    // The line the owner pointed at is gone.
+    expect(SETUP_LESSONS.flatMap((l) => l.steps).join(' ')).not.toMatch(/three buttons/i);
+  });
+
+  it('the walkthrough never says "press play" while there is no video to play', () => {
+    const walkthrough = SETUP_LESSONS[0];
+    expect(walkthrough.steps[0]).toMatch(/^Press play/);
+    expect(walkthrough.stepsNoVideo).toHaveLength(3);
+    for (const line of walkthrough.stepsNoVideo!) {
+      expect(line).not.toMatch(/play|[—–]/i);
+    }
+    expect(walkthrough.stepsNoVideo!.join(' ')).toContain('Mark as done');
+    // Only a step whose button plays a video needs the second set.
+    expect(SETUP_LESSONS.filter((l) => l.stepsNoVideo).map((l) => l.id)).toEqual(['walkthrough']);
   });
 
   it('the walkthrough is for every venue on every plan, is ticked by hand, and ships with no video of its own', () => {

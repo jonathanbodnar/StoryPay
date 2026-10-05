@@ -144,7 +144,7 @@ export default function DashboardShell({
   }, [searchParams, router]);
 
   // The plan or trial ending (lib/plan-notice.ts). A cancelled plan is said
-  // once after cancelling, then it's a chip on the Setup guide bar until its
+  // once after cancelling, then it's a chip on the Setup Guide bar until its
   // last days.
   const planEnding = planNotice.kind === 'plan-ending' ? planNotice : null;
   const [planEndingJustNow, closePlanEnding] = usePlanEndingOnce(planEnding && !planEnding.final ? planEnding.endsAt : null);

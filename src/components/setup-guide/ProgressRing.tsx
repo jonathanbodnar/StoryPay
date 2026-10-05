@@ -1,4 +1,4 @@
-import { GraduationCap } from 'lucide-react';
+import { ListChecks } from 'lucide-react';
 
 /**
  * Setup progress as a green ring around the guide's icon: on the guide's bar
@@ -29,7 +29,7 @@ export default function ProgressRing({ done, total, size = 32 }: { done: number;
         />
       </svg>
       <span className="flex items-center justify-center rounded-full bg-[#1b1b1b] text-white" style={{ width: disc, height: disc }}>
-        <GraduationCap size={Math.round(size * 0.375)} />
+        <ListChecks size={Math.round(size * 0.375)} />
       </span>
     </span>
   );

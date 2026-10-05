@@ -133,7 +133,7 @@ export function installStagingFetchGuard(): void {
       return import('@/lib/staging-ghl').then(({ fakeGhlFetch }) => fakeGhlFetch(input, init));
     }
     if (host === 'api.resend.com') {
-      // Received email (LeadFinder, replies): answered by the stand-in. Sending stays real —
+      // Received email (Lead Finder, replies): answered by the stand-in. Sending stays real —
       // but only through lib/email, whose filters mark their requests; a raw send would
       // skip the allowlist and quiet mode and reach a real inbox (the waitlist's did).
       const url = input instanceof Request ? input.url : String(input);

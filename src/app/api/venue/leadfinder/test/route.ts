@@ -1,8 +1,8 @@
 /**
- * /api/venue/leadfinder/test — "Send a test inquiry" for the LeadFinder™ card.
+ * /api/venue/leadfinder/test — "Send a test inquiry" for the Lead Finder card.
  *
  * POST sends a realistic sample inquiry — a real email, through the real
- * inbound path — to the venue's own LeadFinder address, so the venue can see
+ * inbound path — to the venue's own Lead Finder address, so the venue can see
  * for themselves that mail sent there arrives and is read correctly.
  *
  * It is a DRY RUN end to end. The email carries a signed test token (see
@@ -56,7 +56,7 @@ export async function POST() {
 
   const address = buildLeadFinderAddress(venueId);
   if (!address) {
-    return NextResponse.json({ error: 'LeadFinder is not set up on this server yet.' }, { status: 503 });
+    return NextResponse.json({ error: 'Lead Finder is not set up on this server yet.' }, { status: 503 });
   }
 
   const { count } = await supabaseAdmin
@@ -75,7 +75,7 @@ export async function POST() {
   const ref = newRef();
   const token = buildLeadFinderTestToken(venueId, ref);
   if (!token) {
-    return NextResponse.json({ error: 'LeadFinder is not set up on this server yet.' }, { status: 503 });
+    return NextResponse.json({ error: 'Lead Finder is not set up on this server yet.' }, { status: 503 });
   }
 
   const fields: Array<[string, string]> = [
@@ -87,8 +87,8 @@ export async function POST() {
     ['Message', 'Hi! We love your venue and would like to know about availability and pricing.'],
   ];
   const intro =
-    'This is a test inquiry from the "Send a test inquiry" button on your LeadFinder card in StoryVenue ' +
-    '(Settings → Integrations). It checks that mail sent to your LeadFinder address arrives and is read ' +
+    'This is a test inquiry from the "Send a test inquiry" button on your Lead Finder card in StoryVenue ' +
+    '(Settings → Integrations). It checks that mail sent to your Lead Finder address arrives and is read ' +
     'correctly. It will not create a lead.';
 
   const text = [intro, '', ...fields.map(([k, v]) => `${k}: ${v}`), '', `Test reference: ${token}`].join('\n');
@@ -102,12 +102,12 @@ export async function POST() {
 
   const result = await sendEmail({
     to: address,
-    subject: `LeadFinder test inquiry (${ref})`,
+    subject: `Lead Finder test inquiry (${ref})`,
     html,
     text,
     from: {
       email: process.env.NOTIFICATION_FROM_EMAIL?.trim() || 'notifications@send.storyvenue.com',
-      name: 'StoryVenue LeadFinder test',
+      name: 'StoryVenue Lead Finder test',
     },
   });
   if (!result.success) {

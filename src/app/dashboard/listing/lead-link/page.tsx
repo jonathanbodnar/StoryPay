@@ -302,7 +302,7 @@ export default function LeadLinkPage() {
             <ArrowLeft size={14} /> Back to listing
           </Link>
           <h1 className="font-heading text-2xl text-gray-900 flex items-center gap-2">
-            <Link2 size={22} /> Lead Link&trade;
+            <Link2 size={22} /> Lead Link
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
             One link for your Instagram, TikTok, and Facebook bios. It turns your organic social

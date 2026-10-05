@@ -1,7 +1,7 @@
 /**
  * A venue's local time zone, from its ZIP code.
  *
- * Anything we email a venue with a time on it (LeadFinder's inbox copy, for
+ * Anything we email a venue with a time on it (Lead Finder's inbox copy, for
  * one) should read in the venue's own local time — never the server's UTC.
  * The ZIP is the most reliable signal we have: every venue has an address, and
  * the saved `venues.timezone` is often unset or left at a default.

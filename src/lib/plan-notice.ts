@@ -10,7 +10,7 @@
  *  - Trial, chose Free: nothing. They won't be charged, and the locked
  *    screens are where an upgrade is offered.
  *  - Cancelled, plan still on: shown once after cancelling, then as a small
- *    chip on the Setup guide bar, then again in the last days with a way
+ *    chip on the Setup Guide bar, then again in the last days with a way
  *    to keep the plan.
  *  - Trial, no card: the countdown stays. It's a real deadline, and the only
  *    prompt to add a card.
@@ -48,7 +48,7 @@ export type PlanNotice =
   /**
    * Cancelled, plan still on. `final` = the last days: always shown, with the
    * way to keep the plan. Before that it's shown once after cancelling
-   * (lib/plan-notice-client.ts) and as a chip on the Setup guide bar.
+   * (lib/plan-notice-client.ts) and as a chip on the Setup Guide bar.
    */
   | { kind: 'plan-ending'; endsAt: string; endsOn: string; endsOnShort: string; daysLeft: number; final: boolean; canKeep: boolean }
   /** Trial with no card: the countdown and "add a card" prompt, always shown. */

@@ -26,7 +26,7 @@ export function StepTitle({ text }: { text: string }) {
 /**
  * A lesson's cover: its label ("Step 03", or "Optional") and title beside a
  * real screenshot of the screen it teaches. It stands where the lesson's video
- * goes; once a video link is set (Admin → Setup guide) the same cover carries
+ * goes; once a video link is set (Admin → Setup Guide) the same cover carries
  * the play button. Sizes itself to its container.
  */
 export function LessonCover({

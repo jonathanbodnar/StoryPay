@@ -168,13 +168,13 @@ You have been invited to join {{venue_name}} on StoryVenue. Click below to accep
     description:
       'Sent to the venue owner when a new lead is captured on their active listing. This template is also editable per venue in their Settings → Email Templates page.',
     trigger:
-      'The ONE owner email for a new lead from any source — StoryVenue listing, Lead Link, website embed, builder forms (incl. Meta campaign forms), LeadFinder™, manual add and the API.',
+      'The ONE owner email for a new lead from any source — StoryVenue listing, Lead Link, website embed, builder forms (incl. Meta campaign forms), Lead Finder, manual add and the API.',
     category: 'leads',
     editable: false,
     defaults: {
       subject: 'New lead: {{lead_first_name}} {{lead_last_name}} — {{venue_name}}',
       heading: 'New Lead',
-      body: `{{lead_intro}}  (e.g. "StoryVenue's LeadFinder™ found this lead on The Knot and added it to your Lead Inbox.")
+      body: `{{lead_intro}}  (e.g. "StoryVenue's Lead Finder found this lead on The Knot and added it to your Lead Inbox.")
 
 (Below this: a table of where the lead came from and everything they submitted — name, email, phone, wedding date, guests, every form answer and their message.)`,
       button_text: 'View Lead',
@@ -182,17 +182,17 @@ You have been invited to join {{venue_name}} on StoryVenue. Click below to accep
   },
   {
     key: 'leadfinder_mirror',
-    label: 'LeadFinder™: Arrival Copy',
+    label: 'Lead Finder: Arrival Copy',
     description:
-      "A faithful copy of every message LeadFinder™ processes, sent to the venue's OWN inbox (venue.notification_email || venue.email) with a short banner on top saying what LeadFinder did with it — that a lead was updated, or that the message was skipped and why. Not sent for a CREATED lead: that gets the standard new-lead email (with the original email in it), so the owner gets one email per lead. The original subject is kept unchanged and the sender, received time and full body are preserved unedited. Not editable: the copy must stay a verbatim record, so copy lives in src/lib/leadfinder/mirror.ts.",
+      "A faithful copy of every message Lead Finder processes, sent to the venue's OWN inbox (venue.notification_email || venue.email) with a short banner on top saying what Lead Finder did with it — that a lead was updated, or that the message was skipped and why. Not sent for a CREATED lead: that gets the standard new-lead email (with the original email in it), so the owner gets one email per lead. The original subject is kept unchanged and the sender, received time and full body are preserved unedited. Not editable: the copy must stay a verbatim record, so copy lives in src/lib/leadfinder/mirror.ts.",
     trigger:
-      'Fires once per processed LeadFinder™ arrival that did not create a lead (updated, skipped or failed) — from the inbound-email webhook. A venue switches it off in Settings → Integrations → LeadFinder.',
+      'Fires once per processed Lead Finder arrival that did not create a lead (updated, skipped or failed) — from the inbound-email webhook. A venue switches it off in Settings → Integrations → Lead Finder.',
     category: 'leads',
     editable: false,
     defaults: {
       subject: '<the original message subject, unchanged>',
-      heading: 'LeadFinder™',
-      body: `LeadFinder created a lead for {{lead_name}}.
+      heading: 'Lead Finder',
+      body: `Lead Finder created a lead for {{lead_name}}.
 
 The original message is included below, exactly as it arrived.`,
       button_text: 'View the lead',

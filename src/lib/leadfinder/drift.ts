@@ -1,5 +1,5 @@
 /**
- * StoryVenue LeadFinder™ — per-source drift detection.
+ * StoryVenue Lead Finder — per-source drift detection.
  *
  * A marketplace can change its notification template overnight. When it does,
  * the deterministic parser quietly stops reading fields, the AI fallback may
@@ -296,7 +296,7 @@ export function computeSourceDrift(rows: DriftRow[], now: Date = new Date()): So
 
 /**
  * Fetch the venue's arrivals over both windows and compute the drift breakdown.
- * Bounded and small: a venue's LeadFinder traffic is low-volume by nature.
+ * Bounded and small: a venue's Lead Finder traffic is low-volume by nature.
  */
 export async function loadSourceDrift(venueId: string): Promise<SourceDriftBucket[]> {
   const since = new Date(

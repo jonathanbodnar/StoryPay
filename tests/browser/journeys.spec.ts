@@ -178,7 +178,7 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   // It isn't there the moment the dashboard appears; it opens by itself shortly after.
   const guide = page.getByTestId('setup-guide');
   await expect(guide).toBeVisible({ timeout: 20_000 });
-  await expect(guide.getByRole('heading', { name: 'Setup guide' })).toBeVisible();
+  await expect(guide.getByRole('heading', { name: 'Setup Guide' })).toBeVisible();
   await expect(guide.getByText(/\d of \d done/)).toBeVisible();
   // Its listing is live, so that step is already really done.
   await expect(guide.getByRole('button', { name: /^Done: Share your listing link/ })).toBeVisible();
@@ -200,7 +200,7 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await expect(guide.getByRole('button', { name: /^Marked done, not set up yet: Put your Lead Link/ })).toBeVisible();
 
   // The X closes it, and it stays closed for the rest of this sign-in.
-  await guide.getByRole('button', { name: 'Close the setup guide' }).click();
+  await guide.getByRole('button', { name: 'Close the Setup Guide' }).click();
   await expect(guide).toBeHidden();
   await page.reload();
   const card = page.getByTestId('setup-guide-card');
@@ -208,8 +208,8 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await page.waitForTimeout(5000);
   await expect(guide).toBeHidden();
 
-  // The Setup guide is the first thing in the menu, above the Bride Booking System™.
-  await expect(page.locator('aside:visible nav > :first-child')).toContainText('Setup guide');
+  // The Setup Guide is the first thing in the menu, above the Bride Booking System™.
+  await expect(page.locator('aside:visible nav > :first-child')).toContainText('Setup Guide');
   // On a wide screen the card shows every step's cover in a row that scrolls
   // sideways. It has no scrollbar of its own (it was a thick grey bar under
   // the covers): a thin marker appears while scrolling and fades once it stops.
@@ -313,7 +313,7 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
 // What the dashboard says about a plan or trial ending (owner's rules, Oct 5
 // 2026). One of four bars used to sit on every page for the whole trial or
 // notice period. Now: nothing during a carded trial until its last days; a
-// cancelled plan is said once, then it's a chip on the Setup guide bar, then
+// cancelled plan is said once, then it's a chip on the Setup Guide bar, then
 // it's back in the last days with the way to keep the plan.
 test('the dashboard says little about a plan or trial ending until it matters', async ({ page }, testInfo) => {
   const stamp = `${testInfo.project.name}-${Date.now().toString(36)}`;
@@ -348,7 +348,7 @@ test('the dashboard says little about a plan or trial ending until it matters', 
   // The Setup Guide opens by itself after sign-in; close it to see the page.
   const guide = page.getByTestId('setup-guide');
   await expect(guide).toBeVisible({ timeout: 20_000 });
-  await guide.getByRole('button', { name: 'Close the setup guide' }).click();
+  await guide.getByRole('button', { name: 'Close the Setup Guide' }).click();
 
   const notice = page.getByTestId('plan-notice');
   const chip = page.getByTestId('plan-chip');
@@ -374,7 +374,7 @@ test('the dashboard says little about a plan or trial ending until it matters', 
   await expect(notice).toContainText(`Your plan ends ${day(planEnds, 'long')}`);
   await expect(notice).toContainText("won't be charged again");
   await expect(chip).toBeHidden();
-  // The next visit: no notice, just a chip on the Setup guide bar (wide screens).
+  // The next visit: no notice, just a chip on the Setup Guide bar (wide screens).
   await page.goto('/dashboard/listing');
   await expect(page.getByTestId('setup-guide-card')).toBeVisible({ timeout: 20_000 });
   await expect(notice).toBeHidden();
@@ -401,7 +401,7 @@ test('the dashboard says little about a plan or trial ending until it matters', 
 // The Setup Guide's first step (owner's rewrite, Oct 5 2026): a 3-minute
 // walkthrough. Its button plays the video right in the guide, and starting
 // the video is what ticks the step. The video is a link the team pastes in
-// Admin → Setup guide; here the guide is told there is one.
+// Admin → Setup Guide; here the guide is told there is one.
 // The journey ends with the venue labelled a Private Client: it keeps the
 // guide, and the last step is done for it.
 test('watching the walkthrough ticks its step; a Private Client finds the last step already done', async ({ page }, testInfo) => {
@@ -418,7 +418,7 @@ test('watching the walkthrough ticks its step; a Private Client finds the last s
   });
   expect(error?.message ?? null).toBeNull();
 
-  // A walkthrough video link has been pasted (as Admin → Setup guide would store it).
+  // A walkthrough video link has been pasted (as Admin → Setup Guide would store it).
   await page.route('**/api/onboarding/setup-guide', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     const res = await route.fetch();
@@ -477,7 +477,7 @@ test('watching the walkthrough ticks its step; a Private Client finds the last s
     return (data?.onboarding_steps_completed as string[] | null) ?? [];
   }).toContain('guide:grow');
   await expect(guide.getByRole('button', { name: /^Done: Want us to bring you qualified brides\?/ })).toBeVisible();
-  await guide.getByRole('button', { name: 'Close the setup guide' }).click();
+  await guide.getByRole('button', { name: 'Close the Setup Guide' }).click();
   await expect(guide).toBeHidden();
   const labelled = await db.from('venues').update({ is_private_client: true, onboarding_steps_completed: [] }).eq('id', venueId);
   expect(labelled.error?.message ?? null).toBeNull();

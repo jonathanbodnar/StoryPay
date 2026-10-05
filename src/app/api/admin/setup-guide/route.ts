@@ -1,5 +1,5 @@
 /**
- * /api/admin/setup-guide — the Setup Guide's lesson videos (Admin → Setup guide).
+ * /api/admin/setup-guide — the Setup Guide's lesson videos (Admin → Setup Guide).
  *
  * GET — the saved link for each lesson, plus the ones that ship by default.
  * PUT { videos: { lessonId: url } } — save them. A link has to be a YouTube,

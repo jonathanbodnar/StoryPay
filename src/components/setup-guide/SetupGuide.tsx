@@ -18,7 +18,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowRight, Check, Copy, GraduationCap, Play, Undo2, X } from 'lucide-react';
+import { ArrowRight, Check, Copy, ListChecks, Play, Undo2, X } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
 import { trackClient } from '@/lib/analytics-client';
 import { isNativeApp } from '@/lib/platform';
@@ -186,7 +186,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Setup guide"
+            aria-label="Setup Guide"
             data-testid="setup-guide"
             className="flex max-h-full w-full max-w-[1080px] flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[min(92vh,820px)] sm:rounded-3xl"
           >
@@ -194,10 +194,10 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
             <div className="shrink-0 border-b border-gray-100 px-5 pb-4 pt-5 sm:px-7">
               <div className="flex items-start gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f3efe8] text-[#8a7448]">
-                  <GraduationCap size={20} />
+                  <ListChecks size={20} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h2 className="font-heading text-lg font-semibold text-gray-900">Setup guide</h2>
+                  <h2 className="font-heading text-lg font-semibold text-gray-900">Setup Guide</h2>
                   <p className="text-[13px] text-gray-500">
                     {status.fulfilled
                       ? 'Everything here is set up. Come back any time to rewatch a lesson.'
@@ -209,7 +209,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  aria-label="Close the setup guide"
+                  aria-label="Close the Setup Guide"
                   className="-mr-1.5 -mt-1 rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
                 >
                   <X size={18} />
@@ -276,8 +276,9 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                     </p>
                   )}
 
-                  <ol className="mt-4 space-y-2.5">
-                    {lesson.steps.map((step, i) => (
+                  {/* A Private Client's done step has nothing left to do in it. */}
+                  {!current.alreadyTheirs && <ol className="mt-4 space-y-2.5">
+                    {(cantPlay && lesson.stepsNoVideo ? lesson.stepsNoVideo : lesson.steps).map((step, i) => (
                       <li key={step} className="flex items-start gap-3 text-[14px] leading-relaxed text-gray-700">
                         <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[11px] font-semibold text-gray-600">
                           {i + 1}
@@ -285,7 +286,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                         {step}
                       </li>
                     ))}
-                  </ol>
+                  </ol>}
                 </div>
 
                 {!nothingToPress && <div className="flex flex-wrap items-center gap-2.5 px-5 py-4 sm:px-7 lg:shrink-0 lg:border-t lg:border-gray-100">

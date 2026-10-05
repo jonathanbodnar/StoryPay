@@ -708,7 +708,7 @@ function EventTempleCard() {
   );
 }
 
-// ── LeadFinder™ ──────────────────────────────────────────────────────────────
+// ── Lead Finder ──────────────────────────────────────────────────────────────
 
 interface LeadFinderSourceDrift {
   source: string;
@@ -806,7 +806,7 @@ const DRIFT_REASON_LABELS: Record<string, string> = {
 };
 
 /**
- * StoryVenue LeadFinder™ — the venue's inbound lead address, with the two ways
+ * StoryVenue Lead Finder — the venue's inbound lead address, with the two ways
  * to point mail at it and a short record of what has actually arrived.
  *
  * The address is fetched rather than computed here: its signature is an HMAC
@@ -935,7 +935,7 @@ function LeadFinderCard() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-gray-900">LeadFinder™</h2>
+            <h2 className="text-base font-semibold text-gray-900">Lead Finder</h2>
             {status && (
               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${status.cls}`}>
                 {status.label}
@@ -956,7 +956,7 @@ function LeadFinderCard() {
 
           {!loading && data && !data.configured && (
             <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3.5 text-sm text-gray-600">
-              Inbound email is not configured for this account yet, so LeadFinder has no address to
+              Inbound email is not configured for this account yet, so Lead Finder has no address to
               give you. Contact StoryVenue support to have it switched on.
             </div>
           )}
@@ -965,7 +965,7 @@ function LeadFinderCard() {
             <>
               <div className="mt-3">
                 <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                  Your LeadFinder address
+                  Your Lead Finder address
                 </span>
                 <div className="flex flex-wrap items-center gap-2">
                   <code className="min-w-0 flex-1 break-all rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] font-medium text-gray-800">
@@ -1011,7 +1011,7 @@ function LeadFinderCard() {
                       </code>
                       {data.gmailConfirmation.requestedBy ? <> for <strong>{data.gmailConfirmation.requestedBy}</strong></> : null}.
                       In Gmail, open Settings → Forwarding and POP/IMAP, click <em>Verify</em> next to
-                      your LeadFinder address and enter it.
+                      your Lead Finder address and enter it.
                     </p>
                   ) : (
                     <p className="leading-relaxed">Gmail sent a confirmation for your forwarding request.</p>
@@ -1037,7 +1037,7 @@ function LeadFinderCard() {
                       Test your address
                     </span>
                     <p className="text-sm leading-relaxed text-gray-600">
-                      Send a sample inquiry to your LeadFinder address and see what we read from it. It&apos;s
+                      Send a sample inquiry to your Lead Finder address and see what we read from it. It&apos;s
                       a dry run — no lead is created and nobody is emailed.
                     </p>
                   </div>
@@ -1064,7 +1064,7 @@ function LeadFinderCard() {
                 {test.phase === 'done' && test.result.recognizedAsTest && (
                   <div className="mt-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800">
                     <p className="flex items-center gap-1.5 font-semibold">
-                      <CheckCircle2 size={13} /> Received{when(test.result.receivedAt) ? ` ${when(test.result.receivedAt)}` : ''} — LeadFinder is working.
+                      <CheckCircle2 size={13} /> Received{when(test.result.receivedAt) ? ` ${when(test.result.receivedAt)}` : ''} — Lead Finder is working.
                     </p>
                     <p className="mt-1 leading-relaxed">
                       We read:{' '}
@@ -1109,7 +1109,7 @@ function LeadFinderCard() {
                     Keep a copy in your inbox
                   </span>
                   <p className="text-sm leading-relaxed text-gray-600">
-                    We&apos;ll email you a copy of every message LeadFinder sees — whether it becomes
+                    We&apos;ll email you a copy of every message Lead Finder sees — whether it becomes
                     a lead or not — with a short note on what we did with it, so nothing is captured
                     silently.{' '}
                     {data.forwardedCopyTo
@@ -1121,7 +1121,7 @@ function LeadFinderCard() {
                   type="button"
                   role="switch"
                   aria-checked={mirrorEnabled}
-                  aria-label="Email me a copy of every LeadFinder message"
+                  aria-label="Email me a copy of every Lead Finder message"
                   disabled={savingMirror}
                   onClick={() => toggleMirror(!mirrorEnabled)}
                   className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${
@@ -1140,7 +1140,7 @@ function LeadFinderCard() {
                 <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
                   <AlertCircle size={13} className="mt-0.5 shrink-0" />
                   <span>
-                    LeadFinder is built but not switched on for your account yet, so mail sent here is
+                    Lead Finder is built but not switched on for your account yet, so mail sent here is
                     not being turned into leads. Contact StoryVenue support to enable it.
                   </span>
                 </div>
@@ -1720,7 +1720,7 @@ export default function IntegrationsPage() {
         </div>
       </div>
 
-      {/* ── LeadFinder™ card ─────────────────────────────────────────── */}
+      {/* ── Lead Finder card ─────────────────────────────────────────── */}
       <LeadFinderCard />
 
       {/* ── Tripleseat card ──────────────────────────────────────────── */}

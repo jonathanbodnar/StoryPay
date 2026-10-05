@@ -29,7 +29,7 @@ Vocabulary:
 - Account = a venue: a StoryVenue customer (table venues). Owners and team members log in to it.
 - Paying = subscription status "active". Not paying = every other status: trialing (signed up; may have no card yet), past_due (a payment failed), canceled, or none.
 - MRR = plan price + add-ons for paying accounts. Money in the database is in cents (*_cents); tools report dollars (usd).
-- Lead = a couple's wedding inquiry to a venue (table leads). Sources: directory (StoryVenue listing), lead_link, embed (venue website form), form (a form the venue built, incl. Meta ad forms), leadfinder (read from a wedding-directory email by LeadFinder), manual, api.
+- Lead = a couple's wedding inquiry to a venue (table leads). Sources: directory (StoryVenue listing), lead_link, embed (venue website form), form (a form the venue built, incl. Meta ad forms), leadfinder (read from a wedding-directory email by Lead Finder), manual, api.
 - Demo venues are test accounts and are excluded unless you ask for them.
 
 How to answer:

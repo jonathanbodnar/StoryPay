@@ -1,8 +1,8 @@
 /**
- * StoryVenue LeadFinder™ — Gmail's forwarding confirmation.
+ * StoryVenue Lead Finder — Gmail's forwarding confirmation.
  *
  * The Gmail onboarding path ("add the address under Forwarding, confirm, then a
- * filter") starts with Gmail sending a confirmation email TO the LeadFinder
+ * filter") starts with Gmail sending a confirmation email TO the Lead Finder
  * address. It contains a code the venue must type back into Gmail. Treated as an
  * ordinary arrival it would either become a junk lead or be skipped out of
  * sight — and the venue would be stuck at step one with no way to see the code.

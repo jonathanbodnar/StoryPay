@@ -1,5 +1,5 @@
 /**
- * StoryVenue LeadFinder™ — the AI extraction fallback.
+ * StoryVenue Lead Finder — the AI extraction fallback.
  *
  * The deterministic parser in `./extract` is the primary reader: it knows the
  * labelled shapes the marketplaces actually send and it is exact and free. This

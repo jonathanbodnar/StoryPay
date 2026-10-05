@@ -473,7 +473,7 @@ export async function POST(
 
   // A submitted form that collected a phone number is an explicit opt-in. This
   // lifts the sms_consent gate for a contact who first reached the venue through
-  // a captured forward (LeadFinder). Recorded BEFORE the guide and workflow steps
+  // a captured forward (Lead Finder). Recorded BEFORE the guide and workflow steps
   // below so anything that wants to text them already sees the consent.
   if (phoneVal && emailVal) {
     void recordSmsConsentByEmail({ venueId: formRow.venue_id, email: emailVal, source: 'form_submit' });
