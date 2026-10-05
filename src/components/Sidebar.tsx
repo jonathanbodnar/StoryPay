@@ -866,6 +866,9 @@ export default function Sidebar({
       </div>
 
       <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Setup Guide — first in the menu (owner's call, Oct 5 2026): the way
+            into the onboarding lessons, with progress. */}
+        <SetupGuideNavItem rail={rail} className={classNames(navItem(false, rail), 'w-full')} onNavigate={onCloseMobile} />
         {(isMobile ? mobileListing : listingFiltered).length > 0 ? (
         <div>
           {rail ? (
@@ -1090,8 +1093,6 @@ export default function Sidebar({
       </nav>
 
       <div className={`px-3 py-4 border-t border-gray-200 space-y-0.5 ${rail ? 'flex flex-col items-center' : ''}`}>
-        {/* Setup Guide — the way back into the onboarding lessons, with progress. */}
-        <SetupGuideNavItem rail={rail} className={classNames(navItem(false, rail), 'w-full')} onNavigate={onCloseMobile} />
         {/* App store download badges — web only, not in rail/collapsed mode */}
         {!isNativeApp() && !rail && (
           <div className="grid grid-cols-2 gap-2 px-1 py-2">

@@ -12,6 +12,7 @@
  * Neither is shown to Private Clients, or once everything is set up.
  */
 
+import { useEffect, useRef, type ReactNode, type UIEvent } from 'react';
 import { GraduationCap } from 'lucide-react';
 import { isNativeApp } from '@/lib/platform';
 import { setupLesson } from '@/lib/setup-guide';
@@ -74,7 +75,7 @@ function SetupGuideCard({ status }: { status: SetupGuideStatus }) {
         <div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500" style={{ width: `${pct}%` }} />
       </div>
 
-      <ul className="mt-4 hidden gap-3 overflow-x-auto pb-1 sm:flex">
+      <LessonStrip>
         {status.lessons.map((l) => {
           const lesson = setupLesson(l.id);
           if (!lesson) return null;
@@ -97,7 +98,54 @@ function SetupGuideCard({ status }: { status: SetupGuideStatus }) {
             </li>
           );
         })}
-      </ul>
+      </LessonStrip>
     </section>
+  );
+}
+
+/**
+ * The row of step covers. It scrolls sideways with no scrollbar of its own
+ * (on a Mac set to always show scrollbars that was a thick grey bar under
+ * the covers): a thin marker shows where you are while you scroll, and
+ * fades away a moment after you stop.
+ */
+function LessonStrip({ children }: { children: ReactNode }) {
+  const track = useRef<HTMLDivElement>(null);
+  const marker = useRef<HTMLSpanElement>(null);
+  const fade = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (fade.current) window.clearTimeout(fade.current);
+  }, []);
+
+  const onScroll = (e: UIEvent<HTMLUListElement>) => {
+    const strip = e.currentTarget;
+    if (!track.current || !marker.current || strip.scrollWidth <= strip.clientWidth) return;
+    marker.current.style.width = `${(strip.clientWidth / strip.scrollWidth) * 100}%`;
+    marker.current.style.left = `${(strip.scrollLeft / strip.scrollWidth) * 100}%`;
+    track.current.style.opacity = '1';
+    if (fade.current) window.clearTimeout(fade.current);
+    fade.current = window.setTimeout(() => {
+      if (track.current) track.current.style.opacity = '0';
+    }, 900);
+  };
+
+  return (
+    <div className="mt-4 hidden sm:block">
+      <ul
+        data-testid="setup-guide-strip"
+        onScroll={onScroll}
+        className="flex gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {children}
+      </ul>
+      <div
+        ref={track}
+        aria-hidden
+        data-testid="setup-guide-strip-marker"
+        className="pointer-events-none relative mt-2 h-1 rounded-full bg-gray-100 opacity-0 transition-opacity duration-300"
+      >
+        <span ref={marker} className="absolute inset-y-0 rounded-full bg-gray-400" />
+      </div>
+    </div>
   );
 }

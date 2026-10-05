@@ -146,6 +146,25 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await page.waitForTimeout(5000);
   await expect(guide).toBeHidden();
 
+  // The Setup guide is the first thing in the menu, above the Bride Booking System™.
+  await expect(page.locator('aside:visible nav > :first-child')).toContainText('Setup guide');
+  // On a wide screen the card shows every step's cover in a row that scrolls
+  // sideways. It has no scrollbar of its own (it was a thick grey bar under
+  // the covers): a thin marker appears while scrolling and fades once it stops.
+  if (testInfo.project.name === 'desktop') {
+    const strip = card.getByTestId('setup-guide-strip');
+    const marker = card.getByTestId('setup-guide-strip-marker');
+    const box = await strip.evaluate((el) => ({
+      scrolls: el.scrollWidth > el.clientWidth, bar: (el as HTMLElement).offsetHeight - el.clientHeight, style: getComputedStyle(el).scrollbarWidth,
+    }));
+    expect(box).toEqual({ scrolls: true, bar: 0, style: 'none' });
+    await expect(marker).toHaveCSS('opacity', '0');
+    await strip.evaluate((el) => { el.scrollLeft = 240; });
+    await expect(marker).toHaveCSS('opacity', '1');
+    await expect(marker).toHaveCSS('opacity', '0', { timeout: 5000 });
+    await expectNoSidewaysScroll(page);
+  }
+
   // The dashboard card brings it back.
   await card.getByRole('button', { name: 'Continue setup' }).click();
   await expect(guide).toBeVisible();
