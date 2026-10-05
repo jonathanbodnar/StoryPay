@@ -13,6 +13,15 @@
  *  - a commit that ships nothing (only scripts/, tests/, docs/, *.md
  *    against what's live) runs the smoke lane: code checks + smoke test.
  *
+ * WHERE IT RUNS (since Oct 5 2026): on Railway, not here. The "Checks"
+ * service in the test copy's environment runs all of this for every push to
+ * main (scripts/checks/runner.mjs); this script waits for its verdict and
+ * writes it down for release.mjs. Only when that service has no run for the
+ * commit does this computer run the checks itself, as it always did.
+ *
+ *   node scripts/staging/check-deploy.mjs <sha> --again   # a fresh run on the Checks service
+ *   node scripts/staging/check-deploy.mjs <sha> --local   # run it all from this computer
+ *
  *   node scripts/staging/check-deploy.mjs           # the current commit
  *   node scripts/staging/check-deploy.mjs <sha>
  *   node scripts/staging/check-deploy.mjs <sha> --since <sha>   # "the change" is everything after that commit
@@ -37,8 +46,11 @@ import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { flowFilesToRerun, laneFor, sleepsDuring, targetedFlowFiles } from './lanes.mjs';
+import { localRecord } from '../checks/verdict-shape.mjs';
 
 const SERVICE = 'StoryVenue Backend';
+/** The Railway service that runs these checks for every push (scripts/checks/runner.mjs). */
+const CHECKS_SERVICE = 'Checks';
 const ENV = 'Dev';
 /** Where a flow stage leaves vitest's report, inside the checkout. */
 const FLOW_REPORT = '.flow-report.json';
@@ -48,6 +60,39 @@ const since = sinceAt >= 0 ? args[sinceAt + 1] : null;
 const sha = args.find((a, i) => !a.startsWith('--') && (sinceAt < 0 || i !== sinceAt + 1))
   || execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const startedAt = Date.now();
+const railwayEnv = { ...process.env, RAILWAY_CALLER: 'skill:use-railway@1.5.5' };
+
+// The Checks service's verdict first. It runs on Railway for every push to
+// main, so a closed lid or a dropped connection here costs nothing.
+if (!args.includes('--local')) {
+  const full = execFileSync('git', ['rev-parse', sha], { encoding: 'utf8' }).trim();
+  const out = join(tmpdir(), `storyvenue-verdict-${full.slice(0, 8)}.json`);
+  rmSync(out, { force: true });
+  const waitArgs = ['run', '--service', SERVICE, '--environment', ENV, '--', 'node', 'scripts/checks/wait-verdict.mjs', full, '--out', out];
+  if (args.includes('--again')) {
+    // A fresh run of the same commit: restart the Checks service's container.
+    console.log('Asking the Checks service for a fresh run…');
+    const again = spawnSync('railway', ['redeploy', '--service', CHECKS_SERVICE, '--environment', ENV, '--yes'], { env: railwayEnv, stdio: 'inherit' });
+    if (again.status === 0) waitArgs.push('--after', new Date(startedAt).toISOString());
+  }
+  const waited = spawnSync('railway', waitArgs, { env: railwayEnv, stdio: 'inherit' });
+  if (waited.status === 0 || waited.status === 1) {
+    let remote = null;
+    try { remote = JSON.parse(readFileSync(out, 'utf8')); } catch { /* fall through to a run here */ }
+    if (remote?.sha === full) {
+      const mine = localRecord(remote);
+      const dir = join(execFileSync('git', ['rev-parse', '--git-dir'], { encoding: 'utf8' }).trim(), 'storyvenue-checks');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, `${full}.json`), JSON.stringify(mine, null, 1));
+      console.log(mine.pass
+        ? `\nAll checks passed${mine.lane === 'smoke' ? ' (smoke lane)' : ''}. To put ${full.slice(0, 8)} live: node scripts/staging/release.mjs ${full.slice(0, 8)}`
+        : '\nNot released: fix the failure, push, and check again.');
+      process.exit(mine.pass ? 0 : 1);
+    }
+  }
+  console.log('\nNo verdict from the Checks service for this commit: running the checks from this computer instead.\n');
+}
+
 // Keep this computer from dozing off mid-run (macOS; gone when the run ends).
 if (process.platform === 'darwin') {
   try {
@@ -63,7 +108,6 @@ function sleptCount() {
     return sleepsDuring(execFileSync('pmset', ['-g', 'log'], { encoding: 'utf8', maxBuffer: 512 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }), startedAt, Date.now());
   } catch { return 0; }
 }
-const railwayEnv = { ...process.env, RAILWAY_CALLER: 'skill:use-railway@1.5.5' };
 const short = sha.slice(0, 8);
 
 function deploymentStatus() {

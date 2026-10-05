@@ -1,0 +1,17 @@
+# The checks runner (Railway service "Checks", test copy environment only).
+# It runs the full check for the commit it was built from, against the test
+# copy, so a release never depends on a laptop staying awake and online.
+# See scripts/checks/runner.mjs. Not used by the app itself: Railway only
+# builds this for the service whose RAILWAY_DOCKERFILE_PATH names it.
+FROM mcr.microsoft.com/playwright:v1.63.0-noble
+
+WORKDIR /app
+ENV CI=1 NEXT_TELEMETRY_DISABLED=1
+
+# Dependencies first: this layer is reused until package-lock.json changes.
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY . .
+
+CMD ["node", "scripts/checks/runner.mjs"]
