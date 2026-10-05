@@ -13,17 +13,26 @@
  * A run this computer slept through (a closed lid) fails for that reason
  * alone; it is recorded as 'interrupted', not 'fail', and has to be run again.
  *
+ * A fix released hot over a red release is checked for both: the check
+ * compares against the last version whose own check passed, and a pass
+ * marks the red one resolved.
+ *
  *   node scripts/staging/trailing-check.mjs <sha>
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { trailingBase } from './lanes.mjs';
 
 const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim();
 const sha = git('rev-parse', process.argv[2] || 'HEAD');
 const short = sha.slice(0, 8);
-const hotFile = join(git('rev-parse', '--git-dir'), 'storyvenue-checks', `hot-${sha}.json`);
+const checksDir = join(git('rev-parse', '--git-dir'), 'storyvenue-checks');
+const hotFile = join(checksDir, `hot-${sha}.json`);
+const hotRecord = (s) => {
+  try { return JSON.parse(readFileSync(join(checksDir, `hot-${s}.json`), 'utf8')); } catch { return null; }
+};
 if (!existsSync(hotFile)) {
   console.error(`${short} wasn't released hot (no ${hotFile}). Nothing to trail.`);
   process.exit(1);
@@ -32,11 +41,16 @@ const hot = JSON.parse(readFileSync(hotFile, 'utf8'));
 
 console.log(`Trailing check for hot release ${short} (previous version on standby: ${String(hot.prevSha).slice(0, 8)})…`);
 // The commit is already live, so "what changed" is everything since the
-// version it replaced: that's what picks the changed area's tests to run first.
+// version it replaced (or since the last one that passed, when this is a fix
+// over a red release): that decides the lane and the tests that run first.
+const { base, superseded } = trailingBase(hot.prevSha, hotRecord);
+if (superseded.length) {
+  console.log(`It went out over ${superseded.map((s) => s.slice(0, 8)).join(', ')}, whose own check didn't pass: checking everything since ${String(base).slice(0, 8)}.`);
+}
 let since = [];
 try {
-  git('cat-file', '-e', `${hot.prevSha}^{commit}`);
-  since = ['--since', hot.prevSha];
+  git('cat-file', '-e', `${base}^{commit}`);
+  since = ['--since', base];
 } catch { /* unknown previous version: the full suite, nothing singled out */ }
 const startedAt = Date.now();
 const check = spawnSync('node', ['scripts/staging/check-deploy.mjs', sha, ...since], { stdio: 'inherit' });
@@ -49,9 +63,13 @@ try {
   if (Date.parse(record.at) >= startedAt) slept = Number(record.slept) || 0;
 } catch { /* no record: the check was cut short */ }
 const trailing = pass ? 'pass' : slept ? 'interrupted' : 'fail';
-writeFileSync(hotFile, JSON.stringify({ ...hot, trailing, trailingAt: new Date().toISOString() }, null, 1));
+writeFileSync(hotFile, JSON.stringify({ ...hot, trailing, trailingAt: new Date().toISOString(), since: base }, null, 1));
 if (pass) {
-  console.log(`\nTrailing check PASSED — the hot release ${short} stands.`);
+  // The red releases this one went out over are answered for.
+  for (const s of superseded) {
+    writeFileSync(join(checksDir, `hot-${s}.json`), JSON.stringify({ ...hotRecord(s), resolvedBy: sha }, null, 1));
+  }
+  console.log(`\nTrailing check PASSED — the hot release ${short} stands${superseded.length ? `, and it resolves ${superseded.map((s) => s.slice(0, 8)).join(', ')}` : ''}.`);
   process.exit(0);
 }
 if (trailing === 'interrupted') {

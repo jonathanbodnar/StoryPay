@@ -8,6 +8,9 @@
  *  - targetedFlowFiles: the flow tests that cover the changed area, run
  *    FIRST so a broken change fails in the first minutes, not after the
  *    whole suite.
+ *  - trailingBase: what a hot release's trailing check compares against. A
+ *    fix released over a version whose own check never came back clean
+ *    answers for that version's changes too (fix-forward).
  *  - sleepsDuring: how often this computer went to sleep while the checks
  *    ran. A run that slept isn't a verdict (its tests time out and drop
  *    their connections whatever the code does), so it's run again.
@@ -106,4 +109,25 @@ export function sleepsDuring(pmsetLog, fromMs, toMs) {
     if (at >= fromMs && at <= toMs) count += 1;
   }
   return count;
+}
+
+/**
+ * What a hot release's trailing check counts as "the change": everything
+ * since the version it replaced, or, when that version's own trailing check
+ * never came back clean, since the last one before it that did. Fix-forward
+ * puts a fix live over a red release; the fix's check has to cover both, or a
+ * fix that only touches a test would close the red with a smoke run.
+ * hotRecord(sha): that release's hot record, or null if it took the full gate.
+ * Returns { base, superseded } (superseded: the not-clean releases covered).
+ */
+export function trailingBase(prevSha, hotRecord) {
+  let base = prevSha;
+  const superseded = [];
+  for (let i = 0; base && i < 50; i += 1) {
+    const record = hotRecord(base);
+    if (!record || record.trailing === 'pass' || !record.prevSha) break;
+    superseded.push(base);
+    base = record.prevSha;
+  }
+  return { base, superseded };
 }

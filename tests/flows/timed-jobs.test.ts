@@ -35,34 +35,72 @@ describe('what the timed jobs do', () => {
     }
   });
 
-  it('a payment reminder reaches the couple when it comes due, once', async () => {
+  // Until Oct 4 2026 this made a proposal with no due date, which has nothing
+  // to remind about: its reminder was (rightly) dropped, and the test passed
+  // on the "signed contract" email that happened to arrive in time. It now
+  // follows a real reminder, and only a reminder counts.
+  it('signing schedules the payment reminders; one reaches the couple when it comes due, once', async () => {
     const couple = `reminder.${runId}@example.com`;
+    const isReminder = (e: { subject: string }) => e.subject.startsWith('Payment overdue');
+    const reminders = async () => {
+      const { data, error } = await db.from('proposal_payment_reminders')
+        .select('id, send_at, sent_at, due_at, installment_index, installment_amount_cents').eq('proposal_id', proposalId).order('send_at');
+      expect(error).toBeNull();
+      return data ?? [];
+    };
+    // $3,000 due in three days.
+    const dueDate = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
     const made = await owner.fetch('/api/proposals', {
       method: 'POST',
       json: {
-        overrideContent: '<p>Wedding at Flow Test Venue. Payment plan.</p>', customerName: 'Remy Reminder', customerEmail: couple,
-        price: 300000, paymentType: 'full', paymentConfig: {}, collectManually: true, requireSignature: true,
+        overrideContent: '<p>Wedding at Flow Test Venue. Payment due soon.</p>', customerName: 'Remy Reminder', customerEmail: couple,
+        price: 300000, paymentType: 'full', paymentConfig: { due_date: dueDate }, collectManually: true, requireSignature: true,
       },
     });
     expect(made.status, await made.clone().text()).toBe(201);
     const { id: proposalId, public_token: token } = (await made.json()) as { id: string; public_token: string };
-    // Reminders are only for signed proposals.
+    // Nothing is scheduled for a proposal nobody has signed.
+    expect(await reminders()).toEqual([]);
     const signed = await fetch(`${env.base}/api/proposals/public/${token}/sign`, {
       method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' },
       body: JSON.stringify({ signatureData: { signature_0: SIGNATURE }, consentAccepted: true }),
     });
     expect(signed.status, await signed.clone().text()).toBe(200);
-    const { error } = await db.from('proposal_payment_reminders').insert({
-      proposal_id: proposalId, venue_id: FLOW_VENUE.id, installment_index: 0, reminder_index: 0, due_at: new Date(Date.now() + 3 * 86_400_000).toISOString(),
-      send_at: new Date(Date.now() - 60_000).toISOString(), offset_days: 3, offset_hours: 0, offset_minutes: 0, installment_amount_cents: 100000,
-    });
-    expect(error).toBeNull();
+
+    // Signing schedules them (in the background): each for after the due date.
+    let scheduled = await reminders();
+    for (const until = Date.now() + 20_000; !scheduled.length && Date.now() < until;) {
+      await new Promise((r) => setTimeout(r, 500));
+      scheduled = await reminders();
+    }
+    expect(scheduled.length, 'signing scheduled no payment reminders').toBeGreaterThan(0);
+    for (const r of scheduled) {
+      expect(r).toMatchObject({ installment_index: 0, installment_amount_cents: 300000, sent_at: null });
+      expect(r.due_at.slice(0, 10) >= dueDate, r.due_at).toBe(true);
+      expect(Date.parse(r.send_at)).toBeGreaterThan(Date.parse(r.due_at));
+    }
+
+    // Not due yet: the job sends nothing.
     const since = new Date().toISOString();
     expect((await runJob('payment-reminders')).status).toBe(200);
-    await waitForEmail({ to: couple, since }, () => true);
+    await new Promise((r) => setTimeout(r, 2000));
+    expect((await outbox({ to: couple, since })).filter(isReminder)).toEqual([]);
+
+    // The first one comes due.
+    expect((await db.from('proposal_payment_reminders').update({ send_at: new Date(Date.now() - 60_000).toISOString() }).eq('id', scheduled[0].id)).error).toBeNull();
+    expect((await runJob('payment-reminders')).status).toBe(200);
+    const email = await waitForEmail({ to: couple, since }, isReminder);
+    expect(email.subject).toContain('$3,000.00');
+    expect(email.subject).toContain(FLOW_VENUE.name);
+    expect(email.html).toContain(`/proposal/${token}`); // where they pay
+
+    // Running again doesn't send it twice, and the later ones wait their turn.
     expect((await runJob('payment-reminders')).status).toBe(200);
     await new Promise((r) => setTimeout(r, 2000));
-    expect((await outbox({ to: couple, since })).length).toBe(1);
+    expect((await outbox({ to: couple, since })).filter(isReminder)).toHaveLength(1);
+    const after = await reminders();
+    expect(after.filter((r) => r.sent_at).map((r) => r.id)).toEqual([scheduled[0].id]);
+    expect(after).toHaveLength(scheduled.length);
   });
 
   it('the re-engagement drip and the other daily jobs run cleanly', async () => {

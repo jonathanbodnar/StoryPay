@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — plain logic module shared with the release gate scripts
-import { laneFor, routeToken, sensitiveFiles, sleepsDuring, targetedFlowFiles } from '../../scripts/staging/lanes.mjs';
+import { laneFor, routeToken, sensitiveFiles, sleepsDuring, targetedFlowFiles, trailingBase } from '../../scripts/staging/lanes.mjs';
 
 // The release gate's lanes: a commit that ships nothing runs the smoke lane;
 // anything shipped runs the full suite, with the changed area's flow tests
@@ -60,6 +60,30 @@ describe('release lanes', () => {
     expect(targetedFlowFiles(['src/lib/email.ts'], flowTests)).toEqual([]);
     // The shared test kit affects every flow: nothing to single out.
     expect(targetedFlowFiles(['tests/flows/helpers.ts', 'tests/flows/leads.test.ts'], flowTests)).toEqual([]);
+  });
+
+  // Fix-forward: the fix goes live over the red release. Its own check has to
+  // cover that release too, or a fix that only touches a test would close the
+  // red with a smoke run (Oct 4 2026: exactly that case).
+  it('a fix over a red release is checked for everything since the last version that passed', () => {
+    type Hot = { prevSha: string; trailing?: string };
+    const hot: Record<string, Hot> = {
+      b: { prevSha: 'a', trailing: 'pass' },
+      c: { prevSha: 'b', trailing: 'fail' },
+      d: { prevSha: 'c', trailing: 'interrupted' },
+      e: { prevSha: 'd' }, // its check never ran
+    };
+    const record = (sha: string) => hot[sha] ?? null;
+    // Over a clean release (hot and passed, or through the full gate): just the usual.
+    expect(trailingBase('b', record)).toEqual({ base: 'b', superseded: [] });
+    expect(trailingBase('a', record)).toEqual({ base: 'a', superseded: [] });
+    // Over a red one: back to the last clean version.
+    expect(trailingBase('c', record)).toEqual({ base: 'b', superseded: ['c'] });
+    // Over a chain of them (failed, slept through, never checked): all the way back.
+    expect(trailingBase('e', record)).toEqual({ base: 'b', superseded: ['e', 'd', 'c'] });
+    // A loop in the records can't hang the check.
+    const loop = (sha: string) => ({ prevSha: sha === 'x' ? 'y' : 'x', trailing: 'fail' });
+    expect(trailingBase('x', loop).superseded).toHaveLength(50);
   });
 
   // Oct 4 2026: the laptop lid was closed four minutes into a trailing check.
