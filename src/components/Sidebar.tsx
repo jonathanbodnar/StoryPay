@@ -27,6 +27,8 @@ import {
   Diamond,
   Gem,
   Target,
+  Code2,
+  MailSearch,
   ConciergeBell,
   Heart,
 } from 'lucide-react';
@@ -126,12 +128,18 @@ const settingsItems: NavItem[] = [
 ];
 
 const listingItems: NavItem[] = [
+  // The owner's order (Oct 5 2026). Web Form and Lead Finder are pages of
+  // their own; each shares the permission of the screen it grew out of (the
+  // Pricing Guide's embed code; the Lead Finder card in Integrations), so no
+  // plan had to change to show them (lib/directory-nav-registry.ts).
   { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard, navId: 'nav_listing_analytics' },
   { label: 'Venue Listing', href: '/dashboard/listing/venue-listing', icon: Store, navId: 'nav_listing_dashboard' },
-  { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
-  { label: 'Lead Link', href: '/dashboard/listing/lead-link', icon: Link2, navId: 'nav_listing_lead_link' },
   { label: 'Pricing Guide', href: '/dashboard/listing/pricing-guide', icon: CircleDollarSign, navId: 'nav_listing_pricing_guide' },
+  { label: 'Reviews', href: '/dashboard/listing/reviews', icon: Star, navId: 'nav_listing_reviews' },
   { label: 'Speed to Lead System', href: '/dashboard/listing/booking-system', icon: Zap, navId: 'nav_listing_booking_system' },
+  { label: 'Web Form', href: '/dashboard/listing/web-form', icon: Code2, navId: 'nav_listing_pricing_guide' },
+  { label: 'Lead Link', href: '/dashboard/listing/lead-link', icon: Link2, navId: 'nav_listing_lead_link' },
+  { label: 'Lead Finder', href: '/dashboard/listing/lead-finder', icon: MailSearch, navId: 'nav_settings_integrations' },
   // Verified & Sponsored is managed internally — not shown in venue sidebar.
   { label: 'Ad Tracking', href: '/dashboard/listing/ad-tracking', icon: Target, navId: 'nav_listing_ad_tracking' },
 ];

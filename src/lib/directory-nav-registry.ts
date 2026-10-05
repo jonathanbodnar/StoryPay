@@ -89,6 +89,17 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
   { id: 'nav_settings_billing', label: 'Settings — Plans & billing', pathPrefix: '/dashboard/directory-billing', group: 'settings' },
 ];
 
+/**
+ * Pages that have no permission of their own: each is let in by the screen
+ * it grew out of, so adding it changed no plan. (Oct 5 2026: the Web Form
+ * page shows the Pricing Guide's embed code; the Lead Finder page shows the
+ * card that lives in Settings → Integrations.)
+ */
+export const DIRECTORY_NAV_PATH_ALIASES: ReadonlyArray<{ pathPrefix: string; id: string }> = [
+  { pathPrefix: '/dashboard/listing/web-form', id: 'nav_listing_pricing_guide' },
+  { pathPrefix: '/dashboard/listing/lead-finder', id: 'nav_settings_integrations' },
+];
+
 const NAV_IDS = DIRECTORY_NAV_REGISTRY.map((e) => e.id);
 
 /**
@@ -129,7 +140,7 @@ export function resolveNavIdForPath(pathname: string): string | null {
   const n = normalizePath(pathname);
   let best: { id: string; len: number } | null = null;
 
-  for (const e of DIRECTORY_NAV_REGISTRY) {
+  for (const e of [...DIRECTORY_NAV_REGISTRY, ...DIRECTORY_NAV_PATH_ALIASES]) {
     const p = e.pathPrefix.replace(/\/$/, '') || e.pathPrefix;
     let ok = false;
     if (p === '/dashboard') {

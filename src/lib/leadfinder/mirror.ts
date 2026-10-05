@@ -172,7 +172,7 @@ function buildBanner(outcome: MirrorOutcome): Banner {
         (outcome.wouldCreateLead
           ? 'A real inquiry like this would have become a lead. Because it was a test, nothing was added to your leads and nobody was emailed.'
           : `A real inquiry like this would NOT have become a lead: ${humanizeReason(outcome.reason)}. Nothing was added to your leads.`),
-      ctaUrl: `${APP_URL}/dashboard/settings/integrations`,
+      ctaUrl: `${APP_URL}/dashboard/listing/lead-finder`,
       ctaLabel: 'Open Lead Finder',
     };
   }

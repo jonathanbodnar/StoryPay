@@ -12,6 +12,7 @@ import {
 import { AIField } from '@/components/pricing-guide/AIField';
 import PreviewGuideModal from '@/components/pricing-guide/PreviewGuideModal';
 import { VenueMediaPickerModal } from '@/components/venue-media/VenueMediaPickerModal';
+import { webFormEmbedCode, webFormSrc } from '@/lib/web-form-embed';
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -168,8 +169,8 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.storyvenue.com';
 
 function EmbedCodeModal({ venueSlug, onClose }: { venueSlug: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const embedSrc = `${APP_URL}/api/embed/${encodeURIComponent(venueSlug)}`;
-  const snippet  = `<iframe\n  id="storyvenue-guide"\n  src="${embedSrc}"\n  width="100%"\n  height="720"\n  frameborder="0"\n  scrolling="auto"\n  style="border:none;max-width:520px;"\n  aria-label="Pricing Guide Request"\n></iframe>\n<script>\n  /* Forwards Meta/UTM ad params from this page into the form so paid Meta leads are attributed correctly (the cross-origin iframe cannot read this page's URL on its own). */\n  (function(){try{var f=document.getElementById('storyvenue-guide');if(!f)return;var keys=['utm_source','utm_medium','utm_campaign','utm_term','utm_content','fbclid'];var p=new URLSearchParams(location.search);var add=false;keys.forEach(function(k){if(p.get(k))add=true;});if(!add)return;var s=new URL(f.src);keys.forEach(function(k){var v=p.get(k);if(v)s.searchParams.set(k,v);});f.src=s.toString();}catch(e){}})();\n<\\/script>`;
+  const embedSrc = webFormSrc(APP_URL, venueSlug);
+  const snippet  = webFormEmbedCode(embedSrc);
 
   function copySnippet() {
     void navigator.clipboard.writeText(snippet).then(() => {
