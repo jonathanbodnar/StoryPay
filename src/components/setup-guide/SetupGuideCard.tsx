@@ -53,6 +53,33 @@ function SetupGuidePill({ left }: { left: number }) {
 }
 
 /**
+ * Progress, as a ring around the guide's icon. (It was a green line along the
+ * bottom of the bar: the bar's rounded corners clipped its ends, and the grey
+ * remainder read as a second, broken line.)
+ */
+function ProgressRing({ done, total }: { done: number; total: number }) {
+  const r = 14;
+  const round = 2 * Math.PI * r;
+  const part = total ? Math.min(1, Math.max(0, done / total)) : 0;
+  return (
+    <span aria-hidden data-testid="setup-guide-progress" data-progress={`${done}/${total}`} className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+      <svg viewBox="0 0 32 32" className="absolute inset-0 h-full w-full -rotate-90">
+        <circle cx="16" cy="16" r={r} fill="none" strokeWidth="2.5" className="stroke-gray-200" />
+        <circle
+          cx="16" cy="16" r={r} fill="none" strokeWidth="2.5" strokeLinecap="round"
+          className="stroke-emerald-500 transition-[stroke-dashoffset] duration-500"
+          strokeDasharray={round}
+          strokeDashoffset={round * (1 - part)}
+        />
+      </svg>
+      <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#1b1b1b] text-white">
+        <GraduationCap size={12} />
+      </span>
+    </span>
+  );
+}
+
+/**
  * How the venue left the drawer on this device. Until they've chosen, it's
  * open on a wide screen; on a phone, where the open drawer is a long list
  * that would push the dashboard off the screen, it starts as the bar.
@@ -73,7 +100,6 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
   const labels = setupStepLabels(status.lessons);
   const nextId = status.lessons.find((l) => !l.optional && !l.checked)?.id;
   const next = nextId ? setupLesson(nextId) : undefined;
-  const pct = status.total ? Math.round((status.done / status.total) * 100) : 0;
   // Only ever rendered in the browser (the guide's status is loaded there), so
   // reading what they chose last time can't disagree with the server's paint.
   const [open, setOpen] = useState(drawerStartsOpen);
@@ -91,7 +117,7 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
     <section
       data-testid="setup-guide-card"
       data-open={open ? 'true' : 'false'}
-      className="mb-5 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:-mt-[68px] lg:rounded-t-none lg:border-t-0"
+      className="mb-5 overflow-hidden rounded-2xl border border-gray-200 bg-white lg:-mt-[68px] lg:rounded-t-none lg:border-t-0"
     >
       {/* The bar: all there is when the drawer is closed. */}
       <div className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4">
@@ -102,9 +128,7 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
           aria-controls="setup-guide-steps"
           className="flex min-w-0 flex-1 items-center gap-2.5 py-1 text-left"
         >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1b1b1b] text-white">
-            <GraduationCap size={15} />
-          </span>
+          <ProgressRing done={status.done} total={status.total} />
           <span className="min-w-0 truncate text-[13px] text-gray-500">
             <span className="mr-2 hidden font-heading text-sm font-semibold text-gray-900 sm:inline">Finish setting up</span>
             {/* On a phone the count is the label: there's no room for both. */}
@@ -128,13 +152,10 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
           aria-expanded={open}
           aria-controls="setup-guide-steps"
           aria-label={open ? 'Close the setup steps' : 'Show the setup steps'}
-          className="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+          className="shrink-0 rounded-lg p-1.5 text-gray-400 outline-none transition hover:bg-gray-100 hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-gray-300"
         >
           {open ? <X size={16} /> : <ChevronDown size={16} />}
         </button>
-      </div>
-      <div className="h-1 bg-gray-100">
-        <div className="h-full rounded-r-full bg-emerald-500 transition-[width] duration-500" style={{ width: `${pct}%` }} />
       </div>
 
       {/* The steps: slide down when open. Hidden from keyboard and screen
@@ -146,7 +167,8 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
         }`}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="px-4 pb-3 pt-4 sm:px-5 sm:pb-4">
+          {/* One straight hairline between the bar and the steps, edge to edge. */}
+          <div className="border-t border-gray-100 px-4 pb-3 pt-4 sm:px-5 sm:pb-4">
             <LessonStrip>
               {status.lessons.map((l) => {
                 const lesson = setupLesson(l.id);

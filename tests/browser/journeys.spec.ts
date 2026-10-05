@@ -184,6 +184,11 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await expect(card).toContainText(/\d of \d done/);
   await expect(card.getByRole('button', { name: 'Continue setup' })).toBeVisible();
   await expect.poll(async () => (await card.boundingBox())!.height).toBeLessThan(70);
+  // The bar is one hairline border, no shadow, and progress is a ring around
+  // its icon (a line along the bottom was clipped by the rounded corners).
+  await expect(card).toHaveCSS('box-shadow', 'none');
+  await expect(card).toHaveCSS('border-bottom-width', '1px');
+  await expect(card.getByTestId('setup-guide-progress')).toHaveAttribute('data-progress', /^\d\/\d$/);
   expect(openHeight).toBeGreaterThan(120);
   await page.reload();
   await expect(card).toHaveAttribute('data-open', 'false');
