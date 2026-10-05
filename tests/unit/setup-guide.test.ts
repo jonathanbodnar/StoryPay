@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PAGES } from '../flows/routes';
 import {
-  GUIDE_PROMPTS_OFF, SETUP_LESSONS, setupGuideDisplay, setupGuideProgress, setupGuidePrompts, setupGuideVideos, setupLessonsFor,
-  setupPromptsOff, videoEmbedUrl, withSetupPromptsOff, withSetupStep,
+  GUIDE_PROMPTS_OFF, SETUP_LESSONS, setupDrawerChoice, setupDrawerOpen, setupGuideDisplay, setupGuideProgress, setupGuidePrompts,
+  setupGuideVideos, setupLessonsFor, setupPromptsOff, videoEmbedUrl, withSetupPromptsOff, withSetupStep,
   type SetupContext, type SetupFacts,
 } from '@/lib/setup-guide';
 
@@ -242,6 +242,50 @@ describe('what the bar on every page and the sidebar ring say', () => {
   it('StoryPay, being optional, is never the next step and never moves the ring', () => {
     const onlyPaymentsLeft = ctx({ stepsCompleted: tickAll(...COUNTED), facts: { ...EVERYTHING, stripeReady: false } });
     expect(shown(onlyPaymentsLeft)).toMatchObject({ done: 8, total: 8, nextId: null });
+  });
+});
+
+// Owner's rule (Oct 5 2026): "open when logging in, closed only if they
+// manually close it once logged in." Until then the drawer stayed however it
+// was left on that device, for good: a venue that closed it once never saw it
+// open again, sign-in after sign-in. (It also started as the bar on every page
+// but the dashboard home, and on every phone.)
+describe('the checklist drawer: open at every sign-in, closed only by hand until the next one', () => {
+  const MONDAY = '1791230000';
+  const TUESDAY = '1791316400';
+  const open = (saved: string | null, signIn: string | null = MONDAY, stepsToTick = true) => setupDrawerOpen({ saved, signIn, stepsToTick });
+
+  it('after signing in it is open, with nothing chosen yet', () => {
+    expect(open(null)).toBe(true);
+    expect(open('')).toBe(true);
+  });
+
+  it('closed by hand, it stays closed for the rest of that sign-in', () => {
+    const closed = setupDrawerChoice(MONDAY, false);
+    expect(open(closed, MONDAY)).toBe(false);
+    // Opened again by hand: open.
+    expect(open(setupDrawerChoice(MONDAY, true), MONDAY)).toBe(true);
+  });
+
+  it('signing in again opens it again, whatever was chosen the time before', () => {
+    expect(open(setupDrawerChoice(MONDAY, false), TUESDAY)).toBe(true);
+    // And a choice kept from before this rule ("closed", no sign-in) no longer holds it shut.
+    expect(open('closed', TUESDAY)).toBe(true);
+    expect(open('open', TUESDAY)).toBe(true);
+    expect(open('nonsense|maybe', TUESDAY)).toBe(true);
+  });
+
+  it('once every step is ticked it rests as the bar, at each sign-in, and still opens by hand', () => {
+    expect(open(null, TUESDAY, false)).toBe(false);
+    // Left open the time before: that was another sign-in.
+    expect(open(setupDrawerChoice(MONDAY, true), TUESDAY, false)).toBe(false);
+    expect(open(setupDrawerChoice(TUESDAY, true), TUESDAY, false)).toBe(true);
+  });
+
+  it('with no sign-in time to go by, a choice still holds (for as long as the browser keeps it)', () => {
+    expect(open(setupDrawerChoice(null, false), null)).toBe(false);
+    // …and is never mistaken for a real sign-in's.
+    expect(open(setupDrawerChoice(null, false), MONDAY)).toBe(true);
   });
 });
 

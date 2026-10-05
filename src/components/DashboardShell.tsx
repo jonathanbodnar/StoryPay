@@ -232,7 +232,6 @@ export default function DashboardShell({
               (carrying the plan chip), until each step is really set up. */}
           {role !== 'member' && (
             <SetupGuidePrompt
-              home={pathname === '/dashboard/listing'}
               planChip={planEnding && !planEnding.final && !planEndingJustNow ? (
                 <Link
                   href="/dashboard/directory-billing"

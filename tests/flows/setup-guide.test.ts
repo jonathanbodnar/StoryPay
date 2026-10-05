@@ -69,6 +69,27 @@ describe('the Setup Guide', () => {
     expect((await new Browser().fetch('/api/onboarding/setup-guide', { method: 'POST', json: { step: 'grow' } })).status).toBe(401);
   });
 
+  // The checklist drawer is open at every sign-in and stays closed only until
+  // the next one (owner's rule, Oct 5 2026). The dashboard tells sign-ins
+  // apart by this id: the same for as long as they stay signed in, another the
+  // next time. (What the drawer does with it: tests/unit/setup-guide.test.ts.)
+  it('each sign-in has its own id, and keeps it for as long as it lasts', async () => {
+    const first = (await guide()).loginId;
+    expect(first).toMatch(/^\d+$/);
+    await new Promise((r) => setTimeout(r, 1500));
+    expect((await guide()).loginId).toBe(first);
+
+    const again = new Browser();
+    await again.signIn(email);
+    const res = await again.fetch('/api/onboarding/setup-guide');
+    expect(res.status, await res.clone().text()).toBe(200);
+    const second = ((await res.json()) as Guide).loginId;
+    expect(second).toMatch(/^\d+$/);
+    expect(Number(second)).toBeGreaterThan(Number(first));
+    // The first browser is still on its own sign-in.
+    expect((await guide()).loginId).toBe(first);
+  });
+
   // Owner's rule (Oct 5 2026): "Private clients also get the setup guide
   // because that's what we will use to set up their account", and the last
   // step is green-checked for them: "they already signed up for that service".

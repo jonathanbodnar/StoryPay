@@ -227,13 +227,14 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
     await expectNoSidewaysScroll(page);
   }
 
-  // The same bar is on every page, so wherever they go they see there's setup
-  // left (owner's call, Oct 5 2026; it replaced a dark pill on inner pages).
-  // Away from the dashboard home it starts as the bar: it never pushes a
-  // working page down by itself.
+  // The same drawer is on every page, so wherever they go they see there's
+  // setup left (owner's call, Oct 5 2026; it replaced a dark pill on inner
+  // pages). It is OPEN after signing in, on every page and on a phone too,
+  // until they close it themselves (owner's rule, later the same day: "open
+  // when logging in, closed only if they manually close it once logged in").
   await page.goto('/dashboard/leads');
   await expect(card).toBeVisible({ timeout: 20_000 });
-  await expect(card).toHaveAttribute('data-open', 'false');
+  await expect(card).toHaveAttribute('data-open', 'true');
   await expect(card).toContainText(/\d of \d done/);
   await expect(page.getByTestId('setup-guide-pill')).toHaveCount(0);
   // The sidebar's entry carries the same green progress ring.
@@ -242,17 +243,10 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await page.goto('/dashboard/listing');
   await expect(card).toBeVisible({ timeout: 20_000 });
 
-  // The card is a drawer hanging from the top of the page: open at first on
-  // the dashboard home (on a wide screen), and one slim bar once they close
-  // it (progress, Continue). It stays how they left it on this device; the
-  // bar opens it again.
+  // The card is a drawer hanging from the top of the page: open, and one slim
+  // bar once they close it (progress, Continue). Closed by hand it stays
+  // closed, on every page, until they sign in again; the bar opens it again.
   const steps = page.locator('#setup-guide-steps');
-  // (A phone starts with the bar: its open drawer is a long list of steps.)
-  if (testInfo.project.name !== 'desktop') {
-    await expect(card).toHaveAttribute('data-open', 'false');
-    await expect(card).toContainText(/\d of \d done/);
-    await card.getByRole('button', { name: 'Show the setup steps' }).click();
-  }
   await expect(card).toHaveAttribute('data-open', 'true');
   await expect(steps).toBeVisible();
   const openHeight = (await card.boundingBox())!.height;
@@ -271,6 +265,9 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await page.reload();
   await expect(card).toHaveAttribute('data-open', 'false');
   await expect(steps).toBeHidden();
+  await page.goto('/dashboard/leads');
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card).toHaveAttribute('data-open', 'false');
   await card.getByRole('button', { name: 'Show the setup steps' }).click();
   await expect(steps).toBeVisible();
   await expectNoSidewaysScroll(page);
@@ -297,6 +294,9 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card).toContainText(/\d left to set up/);
   await expect(card).not.toContainText(/of \d done/);
+  // Every step ticked: it rests as the bar. (It was left open by hand before
+  // signing out; that was the last sign-in's choice, not this one's.)
+  await expect(card).toHaveAttribute('data-open', 'false');
   await page.waitForTimeout(5000);
   await expect(guide).toBeHidden();
   await expect(page.getByTestId('setup-guide-pill')).toHaveCount(0);

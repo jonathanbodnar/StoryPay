@@ -306,6 +306,35 @@ export function setupGuideDisplay(guide: Pick<SetupGuideState, 'lessons' | 'done
   };
 }
 
+/**
+ * The checklist drawer at the top of every dashboard page: open, or the slim
+ * bar? Owner's rule (Oct 5 2026): "open when logging in, closed only if they
+ * manually close it once logged in." After every sign-in it is open, on every
+ * page and every screen, while there are steps still to tick. Closing it by
+ * hand makes it the bar for the rest of THAT sign-in; signing in again opens
+ * it again. (Until then it stayed however it was left on that device, for
+ * good: a venue that closed it once never saw it open again.)
+ *
+ * Once every step is ticked it rests as the bar, the reminder that something
+ * isn't really set up yet, and opens by hand.
+ *
+ * `saved` is what the browser kept the last time it was opened or closed by
+ * hand: "<sign-in>|open" or "<sign-in>|closed" (setupDrawerChoice).
+ */
+export function setupDrawerOpen(v: { saved: string | null | undefined; signIn: string | null; stepsToTick: boolean }): boolean {
+  const [forSignIn, choice] = String(v.saved ?? '').split('|');
+  if (forSignIn === (v.signIn ?? NO_SIGN_IN) && (choice === 'open' || choice === 'closed')) return choice === 'open';
+  return v.stepsToTick;
+}
+
+/** What the browser keeps when the venue opens or closes the drawer by hand. */
+export function setupDrawerChoice(signIn: string | null, open: boolean): string {
+  return `${signIn ?? NO_SIGN_IN}|${open ? 'open' : 'closed'}`;
+}
+
+/** No sign-in time to go by (no session signing, as when run locally). */
+const NO_SIGN_IN = 'this-visit';
+
 /** The guide as the API hands it to the dashboard. */
 export interface SetupGuideState {
   /** Wizard finished and the viewer runs the venue: the guide is in their sidebar. */

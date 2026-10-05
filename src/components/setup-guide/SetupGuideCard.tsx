@@ -7,10 +7,11 @@
  * dashboard home plus a dark pill on the other pages).
  *
  * Closed, it's one slim bar: progress as a ring, the next step, Continue.
- * Open, it also shows every step's cover to jump to. It stays how the venue
- * left it, on that device; until they've chosen, it's open on the dashboard
- * home (on a wide screen) and the bar everywhere else, so it never pushes a
- * working page down by itself. The plan chip ("Plan ends Oct 27") sits on it.
+ * Open, it also shows every step's cover to jump to. It is open after every
+ * sign-in while there are steps still to tick; closing it by hand makes it
+ * the bar until they sign in again (owner's rule, Oct 5 2026; the rule itself
+ * is setupDrawerOpen in lib/setup-guide.ts). The plan chip ("Plan ends
+ * Oct 27") sits on it.
  *
  * It stays until each step is REALLY set up: once every step is ticked it
  * counts what's left to set up, so a step the venue ticked without doing
@@ -23,52 +24,49 @@
 import { useEffect, useRef, useState, type ReactNode, type UIEvent } from 'react';
 import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import { isNativeApp } from '@/lib/platform';
-import { setupGuideDisplay, setupLesson } from '@/lib/setup-guide';
+import { setupDrawerChoice, setupDrawerOpen, setupGuideDisplay, setupLesson } from '@/lib/setup-guide';
 import { openSetupGuide, setupStepLabels, useSetupGuideStatus, type SetupGuideStatus } from '@/lib/setup-guide-client';
 import { LessonThumb, StepTick, StepTitle } from './LessonCover';
 import ProgressRing from './ProgressRing';
 
-export default function SetupGuidePrompt({ home, planChip }: { home: boolean; planChip?: ReactNode }) {
+export default function SetupGuidePrompt({ planChip }: { planChip?: ReactNode }) {
   const status = useSetupGuideStatus();
   if (!status?.prompted || isNativeApp()) return null;
   // Until every step is really set up (showPill: the name is from the pill this replaced).
   if (!status.showPill) return null;
-  return <SetupGuideDrawer status={status} home={home} planChip={planChip} />;
+  return <SetupGuideDrawer status={status} planChip={planChip} />;
 }
 
 /**
- * How the venue left the drawer on this device. Until they've chosen, it's
- * open only where it helps and can't get in the way: on the dashboard home,
- * on a wide screen, while there are steps still to tick. Everywhere else it
- * starts as the bar (an open drawer would push a working page down, and on a
- * phone it is a long list).
+ * Where the browser keeps the venue's own opening or closing of the drawer,
+ * with the sign-in it was made in: it lasts until they sign in again. (With
+ * no sign-in time to go by, as when run locally, it lasts for the tab.)
  */
 const DRAWER_KEY = 'storyvenue.setupGuide.drawer';
-function drawerStartsOpen(byDefault: boolean): boolean {
+const drawerStore = (signIn: string | null): Storage => (signIn ? window.localStorage : window.sessionStorage);
+function savedDrawerChoice(signIn: string | null): string | null {
   try {
-    const left = window.localStorage.getItem(DRAWER_KEY);
-    if (left === 'closed') return false;
-    if (left === 'open') return true;
-    return byDefault && window.matchMedia('(min-width: 640px)').matches;
+    return drawerStore(signIn).getItem(DRAWER_KEY);
   } catch {
-    return byDefault;
+    return null;
   }
 }
 
-function SetupGuideDrawer({ status, home, planChip }: { status: SetupGuideStatus; home: boolean; planChip?: ReactNode }) {
+function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; planChip?: ReactNode }) {
   const labels = setupStepLabels(status.lessons);
   const shown = setupGuideDisplay(status);
   const next = shown.nextId ? setupLesson(shown.nextId) : undefined;
+  const signIn = status.loginId;
   // Only ever rendered in the browser (the guide's status is loaded there), so
-  // reading what they chose last time can't disagree with the server's paint.
-  const [open, setOpen] = useState(() => drawerStartsOpen(home && !shown.settingUp));
+  // reading what they chose this sign-in can't disagree with the server's paint.
+  const [open, setOpen] = useState(() => setupDrawerOpen({ saved: savedDrawerChoice(signIn), signIn, stepsToTick: !status.checkedAll }));
   const toggle = () => {
     const now = !open;
     setOpen(now);
     try {
-      window.localStorage.setItem(DRAWER_KEY, now ? 'open' : 'closed');
+      drawerStore(signIn).setItem(DRAWER_KEY, setupDrawerChoice(signIn, now));
     } catch {
-      /* storage blocked: it starts open next time */
+      /* storage blocked: it's open again on the next page load */
     }
   };
 
