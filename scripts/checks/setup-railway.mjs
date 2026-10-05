@@ -109,7 +109,8 @@ if (checks) {
   if (apply) {
     railwayApi('mutation u($s: String!, $e: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $s, environmentId: $e, input: $input) }', {
       s: checks.id, e: dev,
-      input: { source: { repo: REPO }, builder: 'DOCKERFILE', dockerfilePath: 'Dockerfile.checks', restartPolicyType: 'NEVER', sleepApplication: true },
+      // (Naming a Dockerfile is what makes Railway build with it; there is no "Dockerfile" builder to pick.)
+      input: { source: { repo: REPO }, dockerfilePath: 'Dockerfile.checks', restartPolicyType: 'NEVER', sleepApplication: true },
     });
   }
 
