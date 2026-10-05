@@ -145,6 +145,11 @@ export interface BrideMessageEvent {
    *  side channel, invisible to the bride). The bride inbox list MUST NOT drop
    *  or bump the thread on this event — the bride still needs a reply. */
   venueDirectMessage?:   boolean;
+  /** True for an outbound message that answers nobody: an automated text the
+   *  venue's CRM sent by itself (brought into the thread by the text sync).
+   *  The bride inbox list MUST NOT drop the thread on it, and an open thread
+   *  must not be marked read by it: she is still waiting for a person. */
+  notAReply?:            boolean;
   /** Optional list of support_team_members.id mentioned in a note. */
   mentionedSupportUserIds?: string[];
   /** Attachments on the message, so live-appended bubbles render them without

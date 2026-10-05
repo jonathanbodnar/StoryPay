@@ -10,7 +10,7 @@ import {
 import { notifyOwnerNewMessage } from '@/lib/owner-notifications';
 import { isFreshInboundForAlert } from '@/lib/inbound-notification-gate';
 import { logError } from '@/lib/error-log';
-import { ownRecordOf, venueSideTextOrigin, wasNotDelivered, type StoredText } from '@/lib/venue-side-texts';
+import { countsAsSpeaking, isNewsToTheThread, ownRecordOf, venueSideTextOrigin, wasNotDelivered, type StoredText } from '@/lib/venue-side-texts';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-sms.storypay.placeholder';
 
@@ -924,6 +924,25 @@ async function importVenueSideTexts(params: {
   const stored = (rows ?? []) as StoredText[];
   const known = new Set(stored.map((r) => r.ghl_message_id).filter(Boolean) as string[]);
 
+  // The thread's latest message of any kind (looked up when the first text is
+  // about to be stored): a text older than it is history being filled in.
+  let newestInThread: string | null | undefined;
+  const newestMessageAt = async (): Promise<string | null> => {
+    if (newestInThread === undefined) {
+      const { data } = await supabaseAdmin
+        .from('conversation_messages')
+        .select('created_at')
+        .eq('thread_id', threadId)
+        .eq('support_only', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      newestInThread = (data as { created_at?: string } | null)?.created_at ?? null;
+    }
+    return newestInThread;
+  };
+  let filledInHistory = false;
+
   let imported = 0;
   const oldestFirst = [...texts].sort((a, b) => String(a.dateAdded ?? '').localeCompare(String(b.dateAdded ?? '')));
   for (const msg of oldestFirst) {
@@ -961,6 +980,7 @@ async function importVenueSideTexts(params: {
       sent_by_name: origin.userId ? await crmUserName(token, locationId, origin.userId) : null,
     };
     if (sentAt && String(sentAt).trim()) row.created_at = String(sentAt).trim();
+    const news = isNewsToTheThread(row.created_at as string | undefined, await newestMessageAt());
     const { data: inserted, error: insErr } = await supabaseAdmin.from('conversation_messages').insert(row).select('id, created_at').single();
     if (insErr) {
       if (insErr.code === '23505') continue; // another run stored it first
@@ -974,7 +994,16 @@ async function importVenueSideTexts(params: {
     stored.push({ id: (inserted as { id: string }).id, body: body.trim(), created_at: (inserted as { created_at: string }).created_at, sender_kind: origin.senderKind, ghl_message_id: ghlMessageId });
 
     const createdAt = (inserted as { created_at?: string }).created_at || new Date().toISOString();
-    // Open inboxes show it at once.
+    if (!news) {
+      // History being filled in: open inboxes aren't told. Told, they'd show
+      // an old text as the last thing said, and drop a bride whose reply came
+      // after it from "needs a reply".
+      filledInHistory = true;
+      continue;
+    }
+    newestInThread = createdAt;
+    // Just sent: open inboxes show it at once. A person's text answers the
+    // bride; an automated one from the venue's CRM doesn't.
     void (async () => {
       try {
         const { broadcastBrideMessage } = await import('@/lib/realtime/broadcast');
@@ -990,6 +1019,7 @@ async function importVenueSideTexts(params: {
           sentByVenueSupport: false,
           supportAgentId: null,
           createdAt,
+          ...(countsAsSpeaking({ sent_via: origin.sentVia }) ? {} : { notAReply: true }),
         });
       } catch (e) {
         console.warn('[ghl-sms] venue-side broadcast failed', e);
@@ -997,5 +1027,70 @@ async function importVenueSideTexts(params: {
     })();
 
   }
+  if (filledInHistory) await settleAfterFillingInHistory(venueId, threadId, venueCustomerId);
   return imported;
+}
+
+/**
+ * After older texts are brought into a thread, put back what the database
+ * moved. It sets a thread's "last message" (time, preview) and a lead's "last
+ * outbound" from whatever was stored LAST, so storing a text sent days ago
+ * made the thread read as if that text were its latest: a stale preview, the
+ * wrong place in the inbox. Both are put back to the true latest, and only
+ * ever forwards, so a message arriving meanwhile is never undone.
+ */
+async function settleAfterFillingInHistory(venueId: string, threadId: string, venueCustomerId: string): Promise<void> {
+  try {
+    // (Support-only notes never set a thread's summary: the database's own rule.)
+    const { data: newest } = await supabaseAdmin
+      .from('conversation_messages')
+      .select('created_at, body, visibility')
+      .eq('thread_id', threadId)
+      .eq('support_only', false)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const latest = newest as { created_at: string; body: string | null; visibility: string } | null;
+    if (latest) {
+      await supabaseAdmin
+        .from('conversation_threads')
+        .update({
+          last_message_at: latest.created_at,
+          last_message_preview: String(latest.body ?? '').slice(0, 240),
+          last_message_visibility: latest.visibility,
+        })
+        .eq('id', threadId)
+        .lt('last_message_at', latest.created_at);
+    }
+
+    // The lead's "last outbound": the latest thing the venue side sent in any
+    // of this couple's threads.
+    const [{ data: threads }, { data: customer }] = await Promise.all([
+      supabaseAdmin.from('conversation_threads').select('id').eq('venue_id', venueId).eq('venue_customer_id', venueCustomerId),
+      supabaseAdmin.from('venue_customers').select('customer_email').eq('id', venueCustomerId).maybeSingle(),
+    ]);
+    const threadIds = ((threads ?? []) as Array<{ id: string }>).map((t) => t.id);
+    const email = String((customer as { customer_email?: string | null } | null)?.customer_email ?? '').trim().toLowerCase();
+    if (!threadIds.length || !email) return;
+    const { data: lastOut } = await supabaseAdmin
+      .from('conversation_messages')
+      .select('created_at')
+      .in('thread_id', threadIds)
+      .in('sender_kind', ['owner', 'team', 'system', 'ai', 'concierge'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const lastOutAt = (lastOut as { created_at?: string } | null)?.created_at;
+    if (!lastOutAt) return;
+    const { data: leads } = await supabaseAdmin.from('leads').select('id, email').eq('venue_id', venueId).ilike('email', email).limit(20);
+    // (ilike reads _ and % as wildcards: keep only this couple's own address.)
+    const leadIds = ((leads ?? []) as Array<{ id: string; email: string | null }>)
+      .filter((l) => String(l.email ?? '').trim().toLowerCase() === email)
+      .map((l) => l.id);
+    if (leadIds.length) {
+      await supabaseAdmin.from('leads').update({ last_outbound_at: lastOutAt }).in('id', leadIds).lt('last_outbound_at', lastOutAt);
+    }
+  } catch (e) {
+    console.warn('[ghl-sms sync] could not settle the thread after filling in history', { threadId, error: e instanceof Error ? e.message : String(e) });
+  }
 }

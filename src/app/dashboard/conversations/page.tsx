@@ -60,7 +60,7 @@ import { bookingTimelineLabel } from '@/lib/booking-timeline';
 import FeatureLockModal, { type LockFeature } from '@/components/FeatureLockModal';
 import StageMoveLine, { stageMovesAmong } from '@/components/conversations/StageMoveLine';
 import type { StageMove } from '@/lib/lead-stage-log';
-import { sentViaLabel } from '@/lib/venue-side-texts';
+import { countsAsSpeaking, sentViaLabel } from '@/lib/venue-side-texts';
 
 interface ThreadRow {
   thread_id: string;
@@ -718,7 +718,7 @@ export default function ConversationsPage() {
         setSendError(typeof err?.error === 'string' ? err.error : 'Could not load conversation');
       }
       // Load messages before deciding whether to mark read.
-      let loadedMsgs: { sender_kind?: string; visibility?: string; audience?: string }[] = [];
+      let loadedMsgs: { sender_kind?: string; visibility?: string; audience?: string; sent_via?: string | null }[] = [];
       if (mRes.ok) {
         loadedMsgs = await mRes.json();
         setMessages(loadedMsgs as Parameters<typeof setMessages>[0]);
@@ -733,9 +733,10 @@ export default function ConversationsPage() {
         // If the bride (contact) sent the last message, keep the thread unread so
         // the owner knows it still needs a reply. Manual mark-read + sending a reply
         // are the only ways to clear the unread state for inbound messages.
+        // (An automated text from the venue's own CRM isn't an answer to her.)
         const lastExternal = [...loadedMsgs]
           .reverse()
-          .find((m) => m.visibility !== 'internal' && m.audience !== 'venue_direct');
+          .find((m) => m.visibility !== 'internal' && m.audience !== 'venue_direct' && countsAsSpeaking(m));
         const lastSenderIsBride = lastExternal?.sender_kind === 'contact';
         if (!lastSenderIsBride) {
           await fetch(`/api/conversations/threads/${id}/read`, { method: 'POST' });

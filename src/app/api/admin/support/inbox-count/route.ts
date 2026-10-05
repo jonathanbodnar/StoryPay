@@ -19,6 +19,7 @@ import { NextResponse } from 'next/server';
 import { verifyAdminCookie } from '@/lib/admin-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { filterConciergeManagedVenueIds } from '@/lib/plan-features';
+import { lastSpeakerByThread } from '@/lib/venue-side-texts';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -33,19 +34,24 @@ export async function GET() {
     // the bride was the last to speak. Then filter out any thread that's
     // been manually closed (status='closed') so the close button truly
     // clears the badge.
-    const { data: recentExtRows } = await supabaseAdmin
+    // (An automated text brought in from the venue's own CRM is nobody
+    // speaking, so it never counts as the bride having been answered:
+    // lastSpeakerByThread, lib/venue-side-texts.ts. sent_via comes with
+    // migration 280; a database without it has no such texts.)
+    const loadRecentExternal = (columns: string) => supabaseAdmin
       .from('conversation_messages')
-      .select('thread_id, sender_kind, created_at')
+      .select(columns)
       .eq('visibility', 'external')
       .order('created_at', { ascending: false })
       .limit(400);
+    let { data: recentExtRows, error: recentExtErr } = await loadRecentExternal('thread_id, sender_kind, created_at, sent_via');
+    if (recentExtErr) ({ data: recentExtRows, error: recentExtErr } = await loadRecentExternal('thread_id, sender_kind, created_at'));
 
-    const latestByThread = new Map<string, string>();
-    for (const r of (recentExtRows ?? []) as Array<{ thread_id: string; sender_kind: string; created_at: string }>) {
-      if (!latestByThread.has(r.thread_id)) latestByThread.set(r.thread_id, r.sender_kind);
-    }
+    const latestByThread = lastSpeakerByThread(
+      (recentExtRows ?? []) as unknown as Array<{ thread_id: string; sender_kind: string; created_at: string; sent_via?: string | null }>,
+    );
     const brideReplyThreadIds = Array.from(latestByThread.entries())
-      .filter(([, kind]) => kind === 'contact')
+      .filter(([, last]) => last.sender_kind === 'contact')
       .map(([tid]) => tid);
 
     let brideReplies = brideReplyThreadIds.length;

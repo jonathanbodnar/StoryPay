@@ -117,4 +117,36 @@ describe('bride replies reach the Support Inbox', () => {
     expect((await db.from('venues').update({ directory_addon_concierge: true }).eq('id', venueId)).error).toBeNull();
     expect((await inbox()).map((t) => t.thread_id)).toEqual([threadId]);
   });
+
+  // Texts the venue side sends from its own CRM are brought into the thread
+  // (Oct 5 2026). An automated one answers nobody, so it must not take a
+  // bride's reply out of this inbox: before they were brought in, it couldn't.
+  // A text a person sent from the CRM's app is the venue answering her.
+  const later = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
+  const brought = async (row: Record<string, unknown>) => {
+    const { error } = await db.from('conversation_messages').insert({ thread_id: threadId, visibility: 'external', channel: 'sms', ...row });
+    expect(error?.message ?? null).toBeNull();
+  };
+  const answered = async (): Promise<string[]> => {
+    const res = await admin.fetch(`/api/admin/support/bride-inbox?venue_id=${venueId}&filter=closed`);
+    expect(res.status, await res.clone().text()).toBe(200);
+    return ((await res.json()) as { threads: Row[] }).threads.map((t) => t.thread_id);
+  };
+
+  it('an automated text from the venue’s own CRM after her reply: she is still waiting, and still counted', async () => {
+    const before = await badge();
+    await brought({ body: 'Thanks for your message! We will be in touch soon.', sender_kind: 'system', sent_via: 'crm_workflow', created_at: later(1) });
+    await brought({ body: 'Reminder: tours run Saturdays at 2.', sender_kind: 'system', sent_via: 'crm_api', created_at: later(2) });
+    expect((await inbox()).map((t) => t.thread_id)).toEqual([threadId]);
+    expect(await answered()).toEqual([]);
+    expect(await badge()).toBe(before);
+  });
+
+  it('the owner answering from her phone is an answer: the thread moves to Replied and off the badge', async () => {
+    const before = await badge();
+    await brought({ body: 'Hi Bree! June 2027 is open. Want to come see it?', sender_kind: 'owner', sent_via: 'crm_user', sent_by_name: 'Eve Evans', created_at: later(3) });
+    expect(await inbox()).toEqual([]);
+    expect(await answered()).toEqual([threadId]);
+    expect(await badge()).toBe(before - 1);
+  });
 });

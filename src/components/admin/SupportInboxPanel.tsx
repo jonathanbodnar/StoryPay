@@ -15,7 +15,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import StageMoveLine, { stageMovesAmong } from '@/components/conversations/StageMoveLine';
 import type { StageMove } from '@/lib/lead-stage-log';
-import { sentViaLabel } from '@/lib/venue-side-texts';
+import { countsAsSpeaking, sentViaLabel } from '@/lib/venue-side-texts';
 import { capitalizeName } from '@/lib/format-name';
 import { formatMessageTimestamp } from '@/lib/format-message-timestamp';
 import { fetchWithGatewayRetry } from '@/lib/fetch-retry';
@@ -611,7 +611,8 @@ export function SupportInboxPanel() {
       // needing a reply. A reply or explicit "mark unread" toggle are the only
       // ways to clear the badge for inbound messages.
       const visibleMsgs = d.messages.filter(m => !m.support_only && m.audience !== 'venue_direct');
-      const lastExternal = [...visibleMsgs].reverse().find(m => m.visibility !== 'internal');
+      // (An automated text from the venue's own CRM isn't an answer to her.)
+      const lastExternal = [...visibleMsgs].reverse().find(m => m.visibility !== 'internal' && countsAsSpeaking(m));
       const lastSenderIsBride = lastExternal?.sender_kind === 'contact';
       if (!lastSenderIsBride) {
         markThreadRead(threadId, visibleMsgs.length);
@@ -728,6 +729,10 @@ export function SupportInboxPanel() {
       // venue — they are NOT a reply to the bride. The bride alert must stay
       // active until the bride actually receives a direct reply via email or SMS.
       if (evt.venueDirectMessage) return;
+
+      // An automated text from the venue's own CRM answers nobody: the bride
+      // is still waiting for a person, so her thread stays where it is.
+      if (evt.notAReply) return;
 
       if (evt.inbound) {
         // Bride replied — bump existing row to top with new preview, or fetch
@@ -853,7 +858,7 @@ export function SupportInboxPanel() {
       // When a new message arrives in the active thread, only mark read if the
       // sender is NOT the bride. Inbound (bride) messages should stay unread
       // so the concierge knows a reply is needed.
-      if (evt.threadId === activeThreadId && activeThreadId && evt.senderKind !== 'contact') {
+      if (evt.threadId === activeThreadId && activeThreadId && evt.senderKind !== 'contact' && !evt.notAReply) {
         markThreadRead(activeThreadId);
         setThreadLastReadAt(new Date().toISOString());
       }

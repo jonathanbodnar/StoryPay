@@ -24,7 +24,7 @@ let admin: Browser;
 let leadId = '';
 let threadId = '';
 
-type Text = { id: string; body: string; sender_kind: string; sent_via: string | null; sent_by_name: string | null; ghl_message_id: string | null };
+type Text = { id: string; body: string; sender_kind: string; sent_via: string | null; sent_by_name: string | null; ghl_message_id: string | null; created_at: string };
 const textsInThread = async (): Promise<Text[]> => {
   const { data, error } = await db.from('conversation_messages')
     .select('id, body, sender_kind, sent_via, sent_by_name, ghl_message_id, created_at')
@@ -105,6 +105,40 @@ describe('texts the venue side sends from outside StoryVenue', () => {
     await sync();
     const row = (await textsInThread()).find((t) => t.body === reminder);
     expect(row).toMatchObject({ sender_kind: 'system', sent_via: 'crm_workflow', sent_by_name: null });
+  });
+
+  // Found before the import was switched on for live venues: the database sets
+  // a thread's "last message", and a lead's "last outbound", from whatever is
+  // stored LAST. A text the owner sent from her phone, brought in after the
+  // venue had since written again, made the thread read as if that older text
+  // were the latest thing said: a stale preview, the wrong place in the inbox.
+  it('a text brought in late takes its place in the thread, and is not shown as the last thing said', async () => {
+    const fromHerPhone = `We can do 4pm on Friday if that is easier. ${runId}`;
+    const laterFromInbox = `Friday at 4 is booked for you. See you then! ${runId}`;
+    await venueTextsFromCrm(phone, fromHerPhone, { person: 'Jo Ann Wilkerson' });
+    await new Promise((r) => setTimeout(r, 1200));
+    // Before the sync has seen that text, the venue writes again from StoryVenue.
+    const sent = await owner.fetch(`/api/conversations/threads/${threadId}/messages`, {
+      method: 'POST', json: { visibility: 'external', external_channel: 'sms', body: laterFromInbox },
+    });
+    expect(sent.status, await sent.clone().text()).toBeLessThan(300);
+    await sync();
+
+    // Both are there, in the order they were really sent.
+    const texts = await textsInThread();
+    const earlier = texts.find((t) => t.body === fromHerPhone)!;
+    const later = texts.find((t) => t.body === laterFromInbox)!;
+    expect(earlier).toMatchObject({ sender_kind: 'owner', sent_via: 'crm_user' });
+    expect(Date.parse(earlier.created_at)).toBeLessThan(Date.parse(later.created_at));
+    expect(texts.indexOf(earlier)).toBeLessThan(texts.indexOf(later));
+
+    // The thread still says its last message is the later one…
+    const { data: thread } = await db.from('conversation_threads').select('last_message_at, last_message_preview').eq('id', threadId).single();
+    expect(thread!.last_message_preview).toBe(laterFromInbox);
+    expect(Date.parse(thread!.last_message_at as string)).toBe(Date.parse(later.created_at));
+    // …and the lead's "last outbound" hasn't gone back to the older text either.
+    const { data: lead } = await db.from('leads').select('last_outbound_at').eq('id', leadId).single();
+    expect(Date.parse(lead!.last_outbound_at as string)).toBeGreaterThanOrEqual(Date.parse(later.created_at));
   });
 
   it('the venue and support both see who sent each one', async () => {

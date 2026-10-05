@@ -25,6 +25,7 @@ import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { filterConciergeManagedVenueIds } from '@/lib/plan-features';
 import { capitalizeName } from '@/lib/format-name';
+import { lastSpeakerByThread } from '@/lib/venue-side-texts';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -234,21 +235,24 @@ export async function GET(req: NextRequest) {
       let candidateThreadIds = Array.from(latestInboundByThread.keys());
       if (candidateThreadIds.length === 0) return NextResponse.json({ threads: [], nextCursor: null });
 
-      // Keep only threads where the filter matches who last spoke
-      const { data: latestExternalRows, error: latestExtErr } = await supabaseAdmin
+      // Keep only threads where the filter matches who last spoke. An automated
+      // text brought in from the venue's own CRM is nobody speaking: it answers
+      // no bride, so it can't take her reply out of this inbox
+      // (lastSpeakerByThread, lib/venue-side-texts.ts).
+      const loadLatestExternal = (columns: string) => supabaseAdmin
         .from('conversation_messages')
-        .select('thread_id, sender_kind, created_at')
+        .select(columns)
         .eq('visibility', 'external')
         .in('thread_id', candidateThreadIds)
         .order('created_at', { ascending: false });
+      // (sent_via comes with migration 280; a database without it has no such texts.)
+      let { data: latestExternalRows, error: latestExtErr } = await loadLatestExternal('thread_id, sender_kind, created_at, sent_via');
+      if (latestExtErr) ({ data: latestExternalRows, error: latestExtErr } = await loadLatestExternal('thread_id, sender_kind, created_at'));
       if (latestExtErr) throw new Error(`latest-external query: ${latestExtErr.message}`);
 
-      const latestExtByThread = new Map<string, { sender_kind: string; created_at: string }>();
-      for (const r of (latestExternalRows ?? []) as Array<{ thread_id: string; sender_kind: string; created_at: string }>) {
-        if (!latestExtByThread.has(r.thread_id)) {
-          latestExtByThread.set(r.thread_id, { sender_kind: r.sender_kind, created_at: r.created_at });
-        }
-      }
+      const latestExtByThread = lastSpeakerByThread(
+        (latestExternalRows ?? []) as unknown as Array<{ thread_id: string; sender_kind: string; created_at: string; sent_via?: string | null }>,
+      );
       if (filter === 'open') {
         candidateThreadIds = candidateThreadIds.filter(id => {
           const last = latestExtByThread.get(id);

@@ -39,6 +39,52 @@ export function venueSideTextOrigin(msg: Record<string, unknown>): TextOrigin {
   return { sentVia: 'crm_api', senderKind: 'system', userId: null };
 }
 
+/** Texts the venue's CRM sent by itself: a workflow, or another app going through it. */
+const AUTOMATED_VIA: ReadonlySet<string> = new Set<SentVia>(['crm_workflow', 'crm_api']);
+
+/**
+ * Does this message count when working out who spoke last in a thread (is
+ * the bride still waiting for an answer)? An automated text brought in from
+ * the venue's CRM doesn't: nobody answered her by it. Before these texts were
+ * brought in they couldn't take a bride's reply out of the Support Inbox's
+ * "Bride replies", and they still can't. A person's text from the CRM app
+ * does count: the venue answered.
+ */
+export function countsAsSpeaking(m: { sent_via?: string | null }): boolean {
+  return !AUTOMATED_VIA.has(String(m.sent_via ?? ''));
+}
+
+/**
+ * The latest message that counts, per thread: who spoke last. Rows in any order.
+ */
+export function lastSpeakerByThread<T extends { thread_id: string; created_at: string; sent_via?: string | null }>(
+  rows: readonly T[],
+): Map<string, T> {
+  const latest = new Map<string, T>();
+  for (const row of rows) {
+    if (!countsAsSpeaking(row)) continue;
+    const seen = latest.get(row.thread_id);
+    if (!seen || Date.parse(row.created_at) > Date.parse(seen.created_at)) latest.set(row.thread_id, row);
+  }
+  return latest;
+}
+
+/**
+ * A venue-side text being brought in: is it news, or history? It's news only
+ * when nothing in the thread is newer (the owner texted from her phone a
+ * moment ago). A text older than the thread's latest message is history being
+ * filled in: open inboxes aren't told, so it can't be shown as the last thing
+ * said or clear a bride's later reply from "needs a reply". The next time the
+ * thread is opened it's there, in its place.
+ */
+export function isNewsToTheThread(sentAt: string | null | undefined, newestInThread: string | null | undefined): boolean {
+  const at = Date.parse(String(sentAt ?? ''));
+  const newest = Date.parse(String(newestInThread ?? ''));
+  if (!Number.isFinite(newest)) return true;
+  // No time on it: it was stored as "now", so it is the newest.
+  return !Number.isFinite(at) || at >= newest;
+}
+
 /** A text that never reached the couple isn't part of the conversation. */
 export function wasNotDelivered(msg: Record<string, unknown>): boolean {
   const status = String(msg.status ?? '').trim().toLowerCase();
