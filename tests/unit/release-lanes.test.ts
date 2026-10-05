@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — plain logic module shared with the release gate scripts
-import { laneFor, routeToken, sensitiveFiles, targetedFlowFiles } from '../../scripts/staging/lanes.mjs';
+import { laneFor, routeToken, sensitiveFiles, sleepsDuring, targetedFlowFiles } from '../../scripts/staging/lanes.mjs';
 
 // The release gate's lanes: a commit that ships nothing runs the smoke lane;
 // anything shipped runs the full suite, with the changed area's flow tests
@@ -60,5 +60,28 @@ describe('release lanes', () => {
     expect(targetedFlowFiles(['src/lib/email.ts'], flowTests)).toEqual([]);
     // The shared test kit affects every flow: nothing to single out.
     expect(targetedFlowFiles(['tests/flows/helpers.ts', 'tests/flows/leads.test.ts'], flowTests)).toEqual([]);
+  });
+
+  // Oct 4 2026: the laptop lid was closed four minutes into a trailing check.
+  // Twelve tests "failed" on timeouts and dropped connections, none of it the
+  // code. A run that slept is recorded as interrupted and run again.
+  it('a run this computer slept through is noticed, from the Mac power log', () => {
+    const log = [
+      "2026-10-04 17:20:01 -0400 Sleep               \tEntering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using Batt (Charge:63%) 2 secs",
+      '2026-10-04 17:24:00 -0400 Assertions          \tPID 501(caffeinate) Created PreventUserIdleSystemSleep "caffeinate command-line tool"',
+      "2026-10-04 17:28:09 -0400 Sleep               \tEntering Sleep state due to 'Clamshell Sleep':TCPKeepAlive=active Using Batt (Charge:63%) 13 secs",
+      '2026-10-04 17:28:22 -0400 DarkWake            \tDarkWake from Deep Idle [CDNP] : due to smc.sysState.Wake(0x70070000) wifibt Using BATT (Charge:63%) 121 secs',
+      "2026-10-04 17:30:23 -0400 Sleep               \tEntering Sleep state due to 'Maintenance Sleep':TCPKeepAlive=active Using Batt (Charge:63%) 462 secs",
+      '2026-10-04 19:01:01 -0400 Wake                \tWake from Deep Idle [CDNVA] : due to smc.sysState.Wake(0x70070000) lid HID Activity Using BATT (Charge:63%)',
+      "2026-10-04 19:11:03 -0400 Sleep               \tEntering Sleep state due to 'Clamshell Sleep':TCPKeepAlive=active Using Batt (Charge:60%) 3 secs",
+    ].join('\n');
+    const at = (t: string) => Date.parse(`2026-10-04T${t}-04:00`);
+    // The run: 17:24 to 19:10. Two sleeps inside it; the ones before and after don't count.
+    expect(sleepsDuring(log, at('17:24:00'), at('19:10:49'))).toBe(2);
+    // The log's own time zone is read, so the same moments in UTC give the same answer.
+    expect(sleepsDuring(log, Date.parse('2026-10-04T21:24:00Z'), Date.parse('2026-10-04T23:10:49Z'))).toBe(2);
+    // An awake run, and a computer with no such log, read as no sleep.
+    expect(sleepsDuring(log, at('18:00:00'), at('19:00:00'))).toBe(0);
+    for (const nothing of ['', null, undefined, 'pmset: command not found']) expect(sleepsDuring(nothing, 0, Date.now())).toBe(0);
   });
 });

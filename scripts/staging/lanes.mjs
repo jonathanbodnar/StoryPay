@@ -8,6 +8,9 @@
  *  - targetedFlowFiles: the flow tests that cover the changed area, run
  *    FIRST so a broken change fails in the first minutes, not after the
  *    whole suite.
+ *  - sleepsDuring: how often this computer went to sleep while the checks
+ *    ran. A run that slept isn't a verdict (its tests time out and drop
+ *    their connections whatever the code does), so it's run again.
  */
 
 /** Paths that never ship with the app. */
@@ -87,4 +90,20 @@ export function targetedFlowFiles(changedFiles, flowTests) {
     if ([...tokens].some((t) => source.includes(t))) picked.add(name);
   }
   return [...picked].sort();
+}
+
+/**
+ * How many times the computer went to sleep between two moments, read from
+ * macOS's power log (`pmset -g log`). Lines look like:
+ *   2026-10-04 17:28:09 -0400 Sleep   Entering Sleep state due to 'Clamshell Sleep':…
+ */
+export function sleepsDuring(pmsetLog, fromMs, toMs) {
+  let count = 0;
+  for (const line of String(pmsetLog ?? '').split('\n')) {
+    const m = line.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2})\s+Sleep\s+Entering Sleep/);
+    if (!m) continue;
+    const at = Date.parse(`${m[1]}T${m[2]}${m[3]}:${m[4]}`);
+    if (at >= fromMs && at <= toMs) count += 1;
+  }
+  return count;
 }

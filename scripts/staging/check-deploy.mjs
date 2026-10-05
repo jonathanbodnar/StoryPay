@@ -15,20 +15,46 @@
  *
  *   node scripts/staging/check-deploy.mjs           # the current commit
  *   node scripts/staging/check-deploy.mjs <sha>
+ *   node scripts/staging/check-deploy.mjs <sha> --since <sha>   # "the change" is everything after that commit
+ *                                                               # (the trailing check: the commit is already live)
+ *
+ * The run needs this computer awake for its half hour. It holds off idle
+ * sleep itself, but nothing stops a closed lid on battery: a failed run
+ * that slept says so and is recorded as such, to be run again.
  *
  * The result is recorded per commit (in .git/storyvenue-checks/), and
  * scripts/staging/release.mjs only puts a commit live that passed here.
  */
 
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { laneFor, targetedFlowFiles } from './lanes.mjs';
+import { laneFor, sleepsDuring, targetedFlowFiles } from './lanes.mjs';
 
 const SERVICE = 'StoryVenue Backend';
 const ENV = 'Dev';
-const sha = process.argv[2] || execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+const args = process.argv.slice(2);
+const sinceAt = args.indexOf('--since');
+const since = sinceAt >= 0 ? args[sinceAt + 1] : null;
+const sha = args.find((a, i) => !a.startsWith('--') && (sinceAt < 0 || i !== sinceAt + 1))
+  || execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+const startedAt = Date.now();
+// Keep this computer from dozing off mid-run (macOS; gone when the run ends).
+if (process.platform === 'darwin') {
+  try {
+    const awake = spawn('caffeinate', ['-ims', '-w', String(process.pid)], { stdio: 'ignore', detached: true });
+    awake.on('error', () => { /* no caffeinate: the sleep check below still reports it */ });
+    awake.unref();
+  } catch { /* same */ }
+}
+/** How often this computer slept since the run began (macOS power log; 0 when unknown). */
+function sleptCount() {
+  if (process.platform !== 'darwin') return 0;
+  try {
+    return sleepsDuring(execFileSync('pmset', ['-g', 'log'], { encoding: 'utf8', maxBuffer: 512 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }), startedAt, Date.now());
+  } catch { return 0; }
+}
 const railwayEnv = { ...process.env, RAILWAY_CALLER: 'skill:use-railway@1.5.5' };
 const short = sha.slice(0, 8);
 
@@ -52,11 +78,13 @@ const dropTree = () => {
 };
 
 // What this release would change on the live site (everything between what's
-// live and this commit). Unknown (offline, no production branch) = test everything.
+// live and this commit; after a hot release the commit IS what's live, so the
+// trailing check names the version it replaced with --since). Unknown
+// (offline, no production branch) = test everything.
 let changed = null;
 try {
-  execFileSync('git', ['fetch', '-q', 'origin', 'production'], { stdio: 'ignore' });
-  changed = execFileSync('git', ['diff', '--name-only', 'origin/production', sha], { encoding: 'utf8' }).split('\n').filter(Boolean);
+  if (!since) execFileSync('git', ['fetch', '-q', 'origin', 'production'], { stdio: 'ignore' });
+  changed = execFileSync('git', ['diff', '--name-only', since || 'origin/production', sha], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean);
 } catch { /* full lane */ }
 const lane = laneFor(changed);
 if (lane === 'smoke') {
@@ -71,12 +99,14 @@ function finish() {
   console.log('\n── Summary ──');
   for (const [name, ok] of results) console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`);
   const pass = results.every(([, ok]) => ok);
+  // A failure on a run this computer slept through says nothing about the code.
+  const slept = pass ? 0 : sleptCount();
   const dir = join(execFileSync('git', ['rev-parse', '--git-dir'], { encoding: 'utf8' }).trim(), 'storyvenue-checks');
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${fullSha}.json`), JSON.stringify({ sha: fullSha, pass, lane, changed: changed?.length ?? null, at: new Date().toISOString(), results }, null, 1));
-  console.log(pass
-    ? `\nAll checks passed${lane === 'smoke' ? ' (smoke lane)' : ''}. To put ${short} live: node scripts/staging/release.mjs ${short}`
-    : '\nNot released: fix the failure, push, and check again.');
+  writeFileSync(join(dir, `${fullSha}.json`), JSON.stringify({ sha: fullSha, pass, lane, changed: changed?.length ?? null, slept, at: new Date().toISOString(), results }, null, 1));
+  if (pass) console.log(`\nAll checks passed${lane === 'smoke' ? ' (smoke lane)' : ''}. To put ${short} live: node scripts/staging/release.mjs ${short}`);
+  else if (slept) console.log(`\nThis computer went to sleep ${slept} time${slept === 1 ? '' : 's'} during the run, so this failure isn't a verdict on the code. Keep it awake (lid open, or plugged in) and check again.`);
+  else console.log('\nNot released: fix the failure, push, and check again.');
   process.exit(pass ? 0 : 1);
 }
 
