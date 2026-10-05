@@ -11,6 +11,9 @@
  *    up (the listing is live, mail has reached the LeadFinder address…), so a
  *    step that was only ticked keeps its reminder.
  *  - StoryPay is optional: shown, but it counts toward neither.
+ *  - The first step is a 3-minute walkthrough video (added Oct 5 2026 with the
+ *    owner's rewrite of every step's wording): it ticks when the venue starts
+ *    the video.
  *
  * Pure rules only, shared by the API, the dashboard and the fast checks.
  * The database reads live in setup-guide-server.ts.
@@ -19,7 +22,7 @@
 import { parseVideoUrl } from '@/lib/video-providers';
 
 export const SETUP_LESSON_IDS = [
-  'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'payments', 'grow',
+  'walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'payments', 'grow',
 ] as const;
 export type SetupLessonId = (typeof SETUP_LESSON_IDS)[number];
 
@@ -28,12 +31,18 @@ export interface SetupLesson {
   title: string;
   summary: string;
   steps: string[];
-  /** Where the venue goes to do it. `grow` opens the strategy-call survey instead. */
-  cta: { label: string; href: string } | null;
+  /**
+   * The step's main button. With `href` it takes the venue to the screen where
+   * the step is done. Without one it does something in the guide itself:
+   * `play` starts the step's video where it is (walkthrough), `call` opens the
+   * strategy-call survey (grow).
+   */
+  cta: { label: string; href: string; does?: undefined } | { label: string; does: 'play' | 'call'; href?: undefined };
   /** The plan permission the screen needs; a venue whose plan lacks it never sees the step. */
   navId: string | null;
   /** Nothing to detect, so ticking it is all there is: the venue ticks it
-   *  (follow_up) or it ticks when shown (grow). */
+   *  (follow_up), it ticks when its video is started (walkthrough), or it
+   *  ticks when shown (grow). */
   manual: boolean;
   /** Shown as a suggestion that doesn't count toward finishing the guide. */
   optional?: boolean;
@@ -43,13 +52,29 @@ export interface SetupLesson {
 
 export const SETUP_LESSONS: readonly SetupLesson[] = [
   {
-    id: 'listing',
-    title: 'Your listing is live. Share it',
-    summary: 'Couples can find your venue on StoryVenue right now. The more places your link lives, the more inquiries you get.',
+    id: 'walkthrough',
+    title: 'Start here: watch the 3-minute walkthrough',
+    summary: 'How the Bride Booking System™ works and what to set up first.',
     steps: [
-      'Open your listing and check your photos, pricing and details.',
-      'Copy your link and add it to your website and email signature.',
-      'Post it on Facebook and Instagram so engaged couples can find you.',
+      'Press play above. The walkthrough takes about 3 minutes.',
+      'See how every inquiry gets captured, answered and followed up for you.',
+      'Then work down this list in order, starting with your listing link.',
+    ],
+    // Plays the step's video where it is. The link is pasted in Admin → Setup
+    // guide; until one is, the step offers "Mark as done" so it can't get stuck.
+    cta: { label: 'Watch the walkthrough', does: 'play' },
+    navId: null,
+    manual: true,
+    cover: '/setup-guide/walkthrough.webp',
+  },
+  {
+    id: 'listing',
+    title: 'Share your listing link',
+    summary: 'Your listing is already live. Every place you post the link is another way brides find you.',
+    steps: [
+      'Open your listing and make sure your photos, pricing and details look right.',
+      'Copy your link and add it to your email signature.',
+      'Share it on your Facebook page and in your social posts.',
     ],
     cta: { label: 'Open my listing', href: '/dashboard/listing/venue-listing' },
     navId: 'nav_listing_dashboard',
@@ -58,12 +83,12 @@ export const SETUP_LESSONS: readonly SetupLesson[] = [
   },
   {
     id: 'pricing_guide',
-    title: 'Send couples your pricing guide',
-    summary: 'When a couple asks for pricing they get your guide in seconds, and you get their name, email and phone.',
+    title: 'Check your pricing guide',
+    summary: 'It’s what brides ask for first. They get it in seconds, and you get their name, email and phone.',
     steps: [
       'Open your pricing guide and check every price.',
       'Add your best photos and a short welcome note.',
-      'Keep the guide switched on so it goes out the moment someone asks.',
+      'Keep it switched on so it goes out the moment a bride asks.',
     ],
     cta: { label: 'Open my pricing guide', href: '/dashboard/listing/pricing-guide' },
     navId: 'nav_listing_pricing_guide',
@@ -73,11 +98,11 @@ export const SETUP_LESSONS: readonly SetupLesson[] = [
   {
     id: 'lead_link',
     title: 'Put your Lead Link™ in your Instagram bio',
-    summary: 'One link for your bio that sends followers to your pricing guide, your tour booking and anything else you choose.',
+    summary: 'One link where followers get your pricing guide or book a tour.',
     steps: [
       'Pick a short name for your link.',
       'Add up to three buttons, like Book a Tour.',
-      'Paste the link into your Instagram and Facebook bio.',
+      'Paste the link into your Instagram bio and your Facebook page.',
     ],
     cta: { label: 'Set up my Lead Link™', href: '/dashboard/listing/lead-link' },
     navId: 'nav_listing_lead_link',
@@ -87,10 +112,10 @@ export const SETUP_LESSONS: readonly SetupLesson[] = [
   {
     id: 'web_form',
     title: 'Add the inquiry form to your website',
-    summary: 'Turn visitors on your own website into leads. Every inquiry lands in your Lead Inbox and gets followed up for you.',
+    summary: 'Every inquiry from your website lands in your Lead Inbox and gets followed up for you.',
     steps: [
       'Open your pricing guide and choose Get Embed Code.',
-      'Paste the code on your website’s contact or pricing page.',
+      'Paste the code on your website’s contact or pricing page, or send it to whoever runs your site.',
       'Send yourself a test inquiry and watch it arrive.',
     ],
     cta: { label: 'Get my embed code', href: '/dashboard/listing/pricing-guide' },
@@ -100,42 +125,42 @@ export const SETUP_LESSONS: readonly SetupLesson[] = [
   },
   {
     id: 'leadfinder',
-    title: 'Catch every inquiry with LeadFinder™',
-    summary: 'Inquiries that arrive by email from other directories become leads in your Lead Inbox automatically.',
+    title: 'Forward your directory leads to LeadFinder™',
+    summary: 'Inquiries from The Knot, WeddingWire and other directories land in your Lead Inbox, so none slip through.',
     steps: [
-      'Open Integrations and copy your LeadFinder™ address.',
-      'Give that address to your directories, or forward their emails to it.',
-      'Send a test inquiry to see a lead appear.',
+      'Copy your LeadFinder™ address from Integrations.',
+      'Give that address to your directories, or forward their inquiry emails to it.',
+      'Send a test inquiry and watch it land in your Lead Inbox.',
     ],
-    cta: { label: 'Set up LeadFinder™', href: '/dashboard/settings/integrations' },
+    cta: { label: 'Get my LeadFinder™ address', href: '/dashboard/settings/integrations' },
     navId: 'nav_settings_integrations',
     manual: false,
     cover: '/setup-guide/leadfinder.webp',
   },
   {
     id: 'follow_up',
-    title: 'See how every lead gets followed up',
-    summary: 'The Speed to Lead System™ follows up with every new lead for you, from first inquiry to booked tour.',
+    title: 'Make your follow-up sound like you',
+    summary: 'The Speed to Lead System™ responds to every new bride right away, so she never waits on you.',
     steps: [
       'Open the Speed to Lead System™ and read each message it sends.',
-      'Change any wording so it sounds like you.',
-      'Leave the system switched on so no lead goes cold.',
+      'Change any wording so it sounds like you, and leave it switched on.',
+      'Download the StoryVenue app from the App Store or Google Play so new leads and replies reach your phone.',
     ],
-    cta: { label: 'Open Speed to Lead', href: '/dashboard/listing/booking-system' },
+    cta: { label: 'Review my messages', href: '/dashboard/listing/booking-system' },
     navId: 'nav_listing_booking_system',
     manual: true,
     cover: '/setup-guide/follow_up.webp',
   },
   {
     id: 'payments',
-    title: 'Get paid with StoryPay™',
-    summary: 'Connect StoryPay™, powered by Stripe, so couples can sign their contract and pay from one link.',
+    title: 'Set up proposals and payments',
+    summary: 'With StoryPay™, brides sign your proposal and pay the deposit from one link on their phone.',
     steps: [
       'Open Payment settings and choose Connect with Stripe.',
       'Answer Stripe’s questions about your business and bank account.',
-      'Send your first proposal or invoice when a couple is ready to book.',
+      'Send your first proposal when a bride is ready to book.',
     ],
-    cta: { label: 'Open Payment settings', href: '/dashboard/payments/settings' },
+    cta: { label: 'Connect StoryPay™', href: '/dashboard/payments/settings' },
     navId: 'nav_payments_settings',
     manual: false,
     optional: true,
@@ -143,14 +168,15 @@ export const SETUP_LESSONS: readonly SetupLesson[] = [
   },
   {
     id: 'grow',
-    title: 'Want us to fill your calendar?',
-    summary: 'See how our team runs the Bride Booking System™ for venues, then pick a time to talk about yours.',
+    title: 'Want us to bring you qualified brides?',
+    summary: 'Watch how our team does it for venues like yours.',
     steps: [
-      'Watch the short video.',
-      'Answer a few questions about your venue.',
-      'Pick a time for your strategy call.',
+      'Watch the short video above.',
+      'Answer a few quick questions about your venue.',
+      'If it’s a fit, pick a time for your strategy call.',
     ],
-    cta: null,
+    // Opens the survey and booking modal.
+    cta: { label: 'See if your venue qualifies', does: 'call' },
     navId: null,
     manual: true,
     cover: '/setup-guide/grow.webp',
@@ -185,7 +211,7 @@ export const GUIDE_STEP_PREFIX = 'guide:';
 /** Support switched this venue's pop-up and pill off (Venue Management). Not a step. */
 export const GUIDE_PROMPTS_OFF = 'guide:prompts-off';
 
-const DETECTED: Record<Exclude<SetupLessonId, 'follow_up' | 'grow'>, keyof SetupFacts> = {
+const DETECTED: Record<Exclude<SetupLessonId, 'walkthrough' | 'follow_up' | 'grow'>, keyof SetupFacts> = {
   listing: 'published',
   pricing_guide: 'guideEnabled',
   lead_link: 'leadLinkSet',

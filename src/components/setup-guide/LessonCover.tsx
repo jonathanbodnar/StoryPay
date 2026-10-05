@@ -1,8 +1,27 @@
 'use client';
 
+import { Fragment } from 'react';
 import Image from 'next/image';
 import { Play } from 'lucide-react';
 import type { SetupLesson } from '@/lib/setup-guide';
+
+/**
+ * A step's title where it may wrap onto a second line. The words are the
+ * owner's, unchanged; a hyphenated one ("3-minute", "follow-up") is kept
+ * whole, so a line never ends on "…the 3-".
+ */
+export function StepTitle({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(' ').map((word, i) => (
+        <Fragment key={`${i}-${word}`}>
+          {i > 0 && ' '}
+          {word.includes('-') ? <span className="whitespace-nowrap">{word}</span> : word}
+        </Fragment>
+      ))}
+    </>
+  );
+}
 
 /**
  * A lesson's cover: its label ("Step 03", or "Optional") and title beside a
@@ -28,7 +47,7 @@ export function LessonCover({
       <div className="absolute inset-y-0 left-0 flex w-[46%] flex-col justify-center gap-[3cqw] pl-[6cqw]">
         <span className="text-[1.9cqw] font-semibold uppercase tracking-[0.2em] text-[#8a7448]">{label}</span>
         <span className="font-heading text-[4.4cqw] leading-[1.12] tracking-tight text-[#1b1b1b]">
-          {lesson.title}
+          <StepTitle text={lesson.title} />
         </span>
       </div>
       <div className="absolute bottom-[-9%] right-[-5%] w-[57%] overflow-hidden rounded-[1.6cqw] border border-black/10 bg-white shadow-[0_3cqw_6cqw_-2cqw_rgba(27,27,27,0.35)]">

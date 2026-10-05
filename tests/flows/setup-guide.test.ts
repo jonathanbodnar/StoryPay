@@ -27,7 +27,7 @@ describe('the Setup Guide', () => {
   };
   const where = (g: Guide, key: 'checked' | 'verified' | 'ticked') => g.lessons.filter((l) => l[key]).map((l) => l.id);
   const tick = (step: string, done = true) => owner.fetch('/api/onboarding/setup-guide', { method: 'POST', json: { step, done } });
-  const COUNTED = ['listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'];
+  const COUNTED = ['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'];
 
   beforeAll(async () => {
     // A venue that has been around for two years (the guide is for existing
@@ -49,12 +49,15 @@ describe('the Setup Guide', () => {
   it('every venue gets it after signing in, old or new; a stranger gets nothing', async () => {
     const g = await guide();
     expect(g).toMatchObject({ eligible: true, prompted: true, autoOpen: true, showPill: true, checkedAll: false, fulfilled: false });
+    // The 3-minute walkthrough comes first (Oct 5 2026), then the steps as before.
     expect(g.lessons.map((l) => l.id)).toEqual(
-      ['listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'payments', 'grow'],
+      ['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'payments', 'grow'],
     );
-    // StoryPay is shown but doesn't count: seven steps to do.
+    // StoryPay is shown but doesn't count: eight steps to do.
     expect(g.lessons.filter((l) => l.optional).map((l) => l.id)).toEqual(['payments']);
-    expect(g).toMatchObject({ done: 0, total: 7, left: 7 });
+    expect(g).toMatchObject({ done: 0, total: 8, left: 8 });
+    // The walkthrough's video is a link the team pastes: none is built in.
+    expect(g.videos.walkthrough).toBeUndefined();
     // The sign-in it opens for, and the link the first step tells them to share.
     expect(g.loginId).toMatch(/^\d+$/);
     expect(g.listingUrl).toContain(`/venue/guide-barn-${runId}`);
@@ -103,24 +106,25 @@ describe('the Setup Guide', () => {
 
     // StoryPay is optional: ticking it moves nothing.
     expect((await tick('payments')).status).toBe(200);
-    expect(await guide()).toMatchObject({ done: 0, total: 7, autoOpen: true });
+    expect(await guide()).toMatchObject({ done: 0, total: 8, autoOpen: true });
 
-    for (const step of COUNTED.slice(0, 6)) expect((await tick(step)).status, step).toBe(200);
-    expect(await guide()).toMatchObject({ done: 6, checkedAll: false, autoOpen: true });
+    for (const step of COUNTED.slice(0, 7)) expect((await tick(step)).status, step).toBe(200);
+    expect(await guide()).toMatchObject({ done: 7, checkedAll: false, autoOpen: true });
     expect((await tick('grow')).status).toBe(200);
     expect((await tick('grow')).status).toBe(200); // ticking twice changes nothing
 
     const g = await guide();
     // Everything ticked, nothing actually set up: no more pop-up, but the pill
     // stays for the five steps that need something to exist.
-    expect(g).toMatchObject({ done: 7, total: 7, checkedAll: true, autoOpen: false, fulfilled: false, showPill: true, left: 5 });
-    expect(where(g, 'verified')).toEqual(['follow_up', 'grow']);
+    expect(g).toMatchObject({ done: 8, total: 8, checkedAll: true, autoOpen: false, fulfilled: false, showPill: true, left: 5 });
+    // (The walkthrough, follow-up and strategy-call steps have nothing to detect: ticked is done.)
+    expect(where(g, 'verified')).toEqual(['walkthrough', 'follow_up', 'grow']);
     const { data } = await db.from('venues').select('onboarding_steps_completed').eq('id', venueId).single();
     expect([...(data!.onboarding_steps_completed as string[])].sort()).toEqual(['payments', ...COUNTED].map((s) => `guide:${s}`).sort());
 
     // Unticking one brings the pop-up back.
     expect((await tick('leadfinder', false)).status).toBe(200);
-    expect(await guide()).toMatchObject({ done: 6, checkedAll: false, autoOpen: true });
+    expect(await guide()).toMatchObject({ done: 7, checkedAll: false, autoOpen: true });
     expect((await tick('leadfinder')).status).toBe(200);
   });
 
@@ -135,7 +139,7 @@ describe('the Setup Guide', () => {
     ]);
     expect(made.map((r) => r.error?.message ?? null)).toEqual([null, null]);
     const nearly = await guide();
-    expect(where(nearly, 'verified')).toEqual(['listing', 'pricing_guide', 'lead_link', 'web_form', 'follow_up', 'grow']);
+    expect(where(nearly, 'verified')).toEqual(['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'follow_up', 'grow']);
     expect(nearly).toMatchObject({ left: 1, fulfilled: false, showPill: true, autoOpen: false });
 
     // …and mail reaches the LeadFinder address. StoryPay was never connected.
