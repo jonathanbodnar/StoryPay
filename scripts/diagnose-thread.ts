@@ -71,7 +71,11 @@ async function compare(threadId: string, venue: Record<string, unknown>, contact
   const stored = ((data ?? []) as Stored[]).filter((s) => s.channel === 'sms');
   const texts = await ghlTexts(venue, contactId);
 
-  const tally = { ghlTexts: texts.length, storedTexts: stored.length, venueSentMissing: 0, coupleSentMissing: 0, wrongSender: 0, missingBy: {} as Record<string, number> };
+  const tally = {
+    ghlTexts: texts.length, storedTexts: stored.length, venueSentMissing: 0, coupleSentMissing: 0, wrongSender: 0, missingBy: {} as Record<string, number>,
+    // What can be said about each of the couple's texts that isn't in StoryVenue, without its words.
+    coupleMissing: [] as string[],
+  };
   if (print) {
     console.log(`\nIn StoryVenue (${stored.length} texts):`);
     for (const s of stored) console.log(`  ${when(s.created_at)}  ${s.sender_kind.padEnd(9)}  ${s.ghl_message_id ? 'has CRM id' : 'no CRM id '}  ${clip(s.body)}`);
@@ -84,7 +88,17 @@ async function compare(threadId: string, venue: Record<string, unknown>, contact
     const sentBy = m.userId ? 'a person' : source;
     let note = hit ? `in StoryVenue as ${hit.row.sender_kind} (matched by ${hit.by})` : 'NOT in StoryVenue';
     if (!hit) {
-      if (direction === 'outbound') { tally.venueSentMissing += 1; tally.missingBy[sentBy] = (tally.missingBy[sentBy] ?? 0) + 1; } else tally.coupleSentMissing += 1;
+      if (direction === 'outbound') { tally.venueSentMissing += 1; tally.missingBy[sentBy] = (tally.missingBy[sentBy] ?? 0) + 1; } else {
+        tally.coupleSentMissing += 1;
+        const body = String(bodyFromGhlApiMessage(m) ?? '');
+        const attachments = Array.isArray(m.attachments) ? m.attachments.length : 0;
+        const sameWordsAnyTime = body.trim() ? stored.some((s) => norm(s.body) === norm(body)) : false;
+        tally.coupleMissing.push(
+          `${when(m.dateAdded)}  direction=${direction}  type=${String(m.messageType ?? m.type)}  status=${String(m.status ?? '')}  ` +
+          `${body.trim() ? `${body.trim().length} characters` : 'no words'}  attachments=${attachments}  has a CRM id=${ghlApiMessageId(m) ? 'yes' : 'no'}  ` +
+          `same words stored at another time=${sameWordsAnyTime ? 'yes' : 'no'}  thread's texts in StoryVenue=${stored.length}`,
+        );
+      }
     } else if ((direction === 'outbound') === (hit.row.sender_kind === 'contact')) {
       tally.wrongSender += 1;
       note += '  ← WRONG SENDER';
@@ -108,6 +122,7 @@ async function one() {
       console.log(`\nThread ${t.id.slice(0, 8)}`);
       const tally = await compare(t.id, venue as Record<string, unknown>, c.ghl_contact_id, true);
       console.log(`\nSUMMARY: texts the VENUE side sent that StoryVenue doesn't have: ${tally.venueSentMissing} (sent by: ${JSON.stringify(tally.missingBy)}) · couple's texts missing: ${tally.coupleSentMissing} · stored under the wrong sender: ${tally.wrongSender}`);
+      for (const line of tally.coupleMissing) console.log(`    couple's text not in StoryVenue: ${line}`);
     }
   }
 }
@@ -123,6 +138,7 @@ async function everyVenue() {
       .order('last_message_at', { ascending: false }).limit(perVenue);
     if (!threads?.length) continue;
     const row = { threads: 0, venueSentMissing: 0, coupleSentMissing: 0, wrongSender: 0, failed: 0 };
+    const missingLines: string[] = [];
     for (const t of threads as Array<{ id: string; venue_customer_id: string }>) {
       const { data: c } = await supabaseAdmin.from('venue_customers').select('ghl_contact_id').eq('id', t.venue_customer_id).maybeSingle();
       const contactId = (c as { ghl_contact_id?: string | null } | null)?.ghl_contact_id;
@@ -134,6 +150,7 @@ async function everyVenue() {
         row.coupleSentMissing += tally.coupleSentMissing;
         row.wrongSender += tally.wrongSender;
         for (const [k, n] of Object.entries(tally.missingBy)) total.missingBy[k] = (total.missingBy[k] ?? 0) + n;
+        for (const line of tally.coupleMissing) missingLines.push(`thread ${t.id.slice(0, 8)}  ${line}`);
       } catch {
         row.failed += 1;
       }
@@ -145,6 +162,8 @@ async function everyVenue() {
     total.coupleSentMissing += row.coupleSentMissing;
     total.wrongSender += row.wrongSender;
     console.log(`${String(v.name).slice(0, 34).padEnd(34)}  threads ${String(row.threads).padStart(2)}  venue-side texts missing ${String(row.venueSentMissing).padStart(3)}  couple's texts missing ${String(row.coupleSentMissing).padStart(3)}  wrong sender ${String(row.wrongSender).padStart(2)}${row.failed ? `  (${row.failed} couldn't be read)` : ''}`);
+    // Each of the couple's texts that isn't in StoryVenue: when, what kind, never its words.
+    for (const line of missingLines) console.log(`    couple's text not in StoryVenue: ${line}`);
   }
   console.log(`\nTOTAL across ${total.venues} venues, ${total.threads} threads: venue-side texts missing ${total.venueSentMissing} (sent by: ${JSON.stringify(total.missingBy)}) · couple's texts missing ${total.coupleSentMissing} · stored under the wrong sender ${total.wrongSender}`);
 }
