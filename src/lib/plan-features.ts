@@ -12,11 +12,20 @@
  *                          have no A2P carrier registration, so SMS can't be
  *                          sent unless an admin force-enables it.
  *
- *   hasConcierge — can this venue use the AI Venue Concierge, and should their
- *                  bride replies be routed to the super-admin concierge inbox?
+ *   hasConcierge — can this venue use the AI Venue Concierge?
  *                  true  → concierge add-on purchased (directory_addon_concierge),
  *                          OR plan bundles it (feature_flags.addon_concierge_included),
  *                          OR legacy plan / no plan (all add-ons included).
+ *
+ * A third answers a different question, who handles the venue's couples:
+ *
+ *   supportHandlesBrideReplies — do this venue's bride replies go to the
+ *                  super-admin Support Inbox (Bride replies)?
+ *                  true  → a Private Client with the Venue Concierge box
+ *                          checked (Venue Management): our concierges handle
+ *                          those conversations for the owner, ALWAYS, whatever
+ *                          the plan and even with the AI switched off;
+ *                          OR hasConcierge (as before).
  *
  * IMPORTANT: legacy plans and no-plan (grandfathered) venues get everything —
  * some legacy customers paid for SMS + Concierge and must keep working.
@@ -40,6 +49,10 @@ export interface VenueFeatureRow {
    *  regardless of plan tier — it is the single source of truth for granting
    *  concierge messaging to a venue that isn't on an All-Inclusive plan. */
   venue_concierge?: boolean | null;
+  /** Admin "Private Client" flag (Venue Management → Private Client). With
+   *  Venue Concierge also on, our concierges handle this venue's couples:
+   *  its bride replies always go to the Support Inbox. */
+  is_private_client?: boolean | null;
   /** Admin "Wedding Planner" override flag (Venue Management / Project Management →
    *  Wedding Planner). Legacy + All-Inclusive plans get the Wedding Planner from their
    *  plan; for $97 / Free plans this flag (default FALSE) is the single source of
@@ -57,9 +70,13 @@ export interface PlanFeatureRow {
 export interface VenueFeatureAccess {
   /** Can send / receive SMS (plan includes it). */
   hasSms: boolean;
-  /** AI Concierge feature available (add-on purchased/bundled or legacy) +
-   *  bride replies routed to the super-admin concierge inbox. */
+  /** AI Concierge feature available (add-on purchased/bundled or legacy). */
   hasConcierge: boolean;
+  /** This venue's bride replies go to the super-admin Support Inbox: a Private
+   *  Client with Venue Concierge checked (always), or a venue with the AI
+   *  Concierge. Until Oct 5 2026 only the second was looked at, so a Private
+   *  Client on a plan without the AI add-on never appeared there. */
+  supportHandlesBrideReplies: boolean;
   /** Can message the StoryVenue Concierge team from Conversations. Granted by
    *  any All-Inclusive plan, a legacy plan, OR the admin "Venue Concierge" flag
    *  (Venue Management → Venue Concierge). $97 / free plans without that flag
@@ -75,7 +92,7 @@ export interface VenueFeatureAccess {
 }
 
 export const VENUE_FEATURE_COLUMNS =
-  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override, venue_concierge, wedding_planner';
+  'directory_plan_id, directory_addon_concierge, ai_concierge_admin_disabled, sms_admin_override, venue_concierge, is_private_client, wedding_planner';
 export const PLAN_FEATURE_COLUMNS  = 'slug, name, is_legacy, feature_flags';
 
 function isLegacyPlan(plan: PlanFeatureRow | null): boolean {
@@ -118,9 +135,16 @@ export function resolveVenueFeatureAccess(
   // checkbox is the single source of truth for granting it off-plan.
   const bridePortalEnabled = legacy || isAllInclusive || venue?.wedding_planner === true;
 
+  const hasConcierge = !conciergeAdminDisabled && (legacy || conciergeBundled || conciergePurchased);
+  // Our concierges handle a Private Client's couples when Venue Concierge is
+  // checked. That is about people, not the AI: switching the AI off for the
+  // venue doesn't take its conversations away from the team.
+  const conciergeTeamHandles = venue?.is_private_client === true && venueConciergeGranted;
+
   return {
     hasSms:              legacy || isAllInclusive || smsAdminOverride,
-    hasConcierge:        !conciergeAdminDisabled && (legacy || conciergeBundled || conciergePurchased),
+    hasConcierge,
+    supportHandlesBrideReplies: conciergeTeamHandles || hasConcierge,
     canMessageConcierge: legacy || isAllInclusive || venueConciergeGranted,
     hasBridePortal:      bridePortalEnabled,
     isLegacy:            legacy,
@@ -141,7 +165,7 @@ export async function loadVenueFeatureAccess(venueId: string): Promise<VenueFeat
 
   if (!venue) {
     // Unknown venue — safest default is no access to gated features.
-    return { hasSms: false, hasConcierge: false, canMessageConcierge: false, hasBridePortal: false, isLegacy: false, planSlug: null };
+    return { hasSms: false, hasConcierge: false, supportHandlesBrideReplies: false, canMessageConcierge: false, hasBridePortal: false, isLegacy: false, planSlug: null };
   }
 
   const v = venue as VenueFeatureRow;
@@ -160,9 +184,10 @@ export async function loadVenueFeatureAccess(venueId: string): Promise<VenueFeat
 }
 
 /**
- * Given a set of venue IDs, return the subset whose bride replies should be
- * routed to the super-admin concierge inbox (i.e. hasConcierge === true).
- * Used to filter the global bride inbox down to concierge-managed venues.
+ * Given a set of venue IDs, return the subset whose bride replies go to the
+ * super-admin Support Inbox (supportHandlesBrideReplies): Private Clients
+ * with Venue Concierge checked, and venues with the AI Concierge. Used to
+ * filter the global bride inbox, and its badge count, down to those venues.
  */
 export async function filterConciergeManagedVenueIds(venueIds: string[]): Promise<Set<string>> {
   const managed = new Set<string>();
@@ -193,7 +218,7 @@ export async function filterConciergeManagedVenueIds(venueIds: string[]): Promis
 
   for (const v of venueRows) {
     const plan = v.directory_plan_id ? plansById.get(v.directory_plan_id) ?? null : null;
-    if (resolveVenueFeatureAccess(v, plan).hasConcierge) managed.add(v.id);
+    if (resolveVenueFeatureAccess(v, plan).supportHandlesBrideReplies) managed.add(v.id);
   }
   return managed;
 }
