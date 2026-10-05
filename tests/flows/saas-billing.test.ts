@@ -88,6 +88,39 @@ describe('a venue pays for the Bride Booking System™', () => {
     expect(sub.items.data.reduce((s, it) => s + (it.price.unit_amount ?? 0), 0)).toBe(9700);
   });
 
+  it('before the first charge it gets a heads-up: by email, once, and never by text', async () => {
+    // Stripe tells the app three days out that a trial is about to end. This is
+    // that notice, for this venue's real subscription, signed the way Stripe signs it.
+    const sub = await stripe.subscriptions.retrieve(subId);
+    const trialEnd = Math.floor((Date.now() + 3 * DAY) / 1000);
+    const notice = (n: number) => {
+      const payload = JSON.stringify({
+        id: `evt_test_trial_will_end_${runId}_${n}`, object: 'event', api_version: '2024-06-20', created: Math.floor(Date.now() / 1000),
+        type: 'customer.subscription.trial_will_end', livemode: false, pending_webhooks: 1, request: { id: null, idempotency_key: null },
+        data: { object: { ...sub, trial_end: trialEnd } },
+      });
+      const signature = stripe.webhooks.generateTestHeaderString({ payload, secret: String(process.env.STRIPE_WEBHOOK_SECRET).trim() });
+      return fetch(`${env.base}/api/webhooks/stripe`, {
+        method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json', 'stripe-signature': signature }, body: payload,
+      });
+    };
+    const isHeadsUp = (e: { subject: string }) => e.subject.startsWith('Your free trial ends ');
+    const since = new Date().toISOString();
+    const sent = await notice(1);
+    expect(sent.status, await sent.clone().text()).toBe(200);
+    const email = await waitForEmail({ to: VENUE.email, since }, isHeadsUp);
+    // It names the charge, so the statement line is no surprise.
+    expect(email.subject).toContain('$97/mo after');
+    expect(email.html).toContain('your card will be charged');
+    // By email only: this notice used to text the owner too.
+    expect(await textsSentTo(VENUE.phone, since)).toEqual([]);
+
+    // Stripe saying it again (a second notice) doesn't send it again.
+    expect((await notice(2)).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 2000));
+    expect((await outbox({ to: VENUE.email, since })).filter(isHeadsUp)).toHaveLength(1);
+  });
+
   it('when the trial ends, the first charge succeeds: active, with a receipt', async () => {
     const since = new Date().toISOString();
     await stripe.subscriptions.update(subId, { trial_end: 'now', proration_behavior: 'none' });
@@ -180,41 +213,6 @@ describe('a paying venue changes its plan', () => {
     const v = await venueRow();
     expect(v.directory_downgrade_at).toBeNull();
     expect(v.directory_subscription_status).not.toBe('active');
-  });
-});
-
-describe('a trial with a card on file, about to be charged', () => {
-  const venue = { id: randomUUID(), email: `carded.${runId}@example.com`, phone: '+12125550143' };
-
-  beforeAll(async () => {
-    const { data: plan } = await db.from('directory_plans').select('id').eq('slug', 'bride-booking-system').single();
-    const now = Date.now();
-    const { error } = await db.from('venues').insert({
-      id: venue.id, name: `Carded Trial ${runId}`, slug: `carded-trial-${runId}`, email: venue.email, notification_email: venue.email,
-      password_hash: await bcrypt.hash(env.password, 10), setup_completed: true, onboarding_status: 'registered',
-      onboarding_completed_at: new Date(now).toISOString(), directory_plan_id: plan!.id, directory_subscription_status: 'trialing',
-      directory_subscription_external_id: `sub_carded_${runId}`, directory_card_on_file: true,
-      directory_trial_started_at: new Date(now - 12 * DAY).toISOString(), directory_trial_ends_at: new Date(now + 2 * DAY).toISOString(),
-      timezone: 'America/New_York', is_published: true, is_demo: false,
-      ...CAN_BE_TEXTED(venue.phone, `staging-carded-${runId}`),
-    });
-    if (error) throw new Error(error.message);
-  });
-
-  it('gets its heads-up by email, once, and never by text', async () => {
-    const since = new Date().toISOString();
-    const sweep = () => fetch(`${env.base}/api/cron/trial-sweep`, { headers: { 'x-staging-key': env.stagingKey, authorization: `Bearer ${process.env.MARKETING_CRON_SECRET}` } });
-    expect((await sweep()).status).toBe(200);
-    const email = await waitForEmail({ to: venue.email, since }, (e) => e.subject.startsWith('Your free trial ends '));
-    // It names the charge, so the statement line is no surprise.
-    expect(email.subject).toContain('$97/mo after');
-    expect(email.html).toContain('your card will be charged');
-    expect(await textsSentTo(venue.phone, since)).toEqual([]);
-
-    // The next run doesn't send it again.
-    expect((await sweep()).status).toBe(200);
-    await new Promise((r) => setTimeout(r, 2000));
-    expect((await outbox({ to: venue.email, since })).filter((e) => e.subject.startsWith('Your free trial ends '))).toHaveLength(1);
   });
 });
 

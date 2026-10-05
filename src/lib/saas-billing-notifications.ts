@@ -67,7 +67,11 @@ function wrapHtml(heading: string, bodyHtml: string, cta?: { label: string; url:
   </div>`;
 }
 
-/** Day ~11/13: trial ends on `trialEndsAt`, card will be charged `amountCents`. Email only. */
+/**
+ * Three days out: the trial ends on `trialEndsAt` and the card will be charged
+ * `amountCents`. Sent when Stripe says the trial is about to end
+ * (lib/stripe/webhooks.ts, customer.subscription.trial_will_end). Email only.
+ */
 export async function notifyVenueTrialEndingSoon(
   venueId: string,
   opts: { trialEndsAt: string | null; amountCents: number; daysLeft: number },
