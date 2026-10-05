@@ -149,7 +149,18 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await expect(guide.getByRole('heading', { name: 'Setup guide' })).toBeVisible();
   await expect(guide.getByText(/\d of \d done/)).toBeVisible();
   // Its listing is live, so that step is already really done.
-  await expect(guide.getByRole('button', { name: /^Done: Your listing is live/ })).toBeVisible();
+  await expect(guide.getByRole('button', { name: /^Done: Share your listing link/ })).toBeVisible();
+  // It opens on the first step: the 3-minute walkthrough. No video link has
+  // been pasted for it here, so there is no Watch button and it can be ticked.
+  await expect(guide.getByRole('heading', { name: 'Start here: watch the 3-minute walkthrough' })).toBeVisible();
+  await expect(guide.getByText(/\d of 8 done/)).toBeVisible();
+  await expect(guide.getByRole('button', { name: 'Watch the walkthrough' })).toHaveCount(0);
+  await expect(guide.getByRole('button', { name: 'Mark as done', exact: true })).toBeVisible();
+  // The listing step leads with copying the link; opening the listing is second.
+  await guide.getByRole('button', { name: /^Done: Share your listing link/ }).locator('xpath=ancestor::li[1]').getByRole('button').first().click();
+  await expect(guide.getByRole('heading', { name: 'Share your listing link' })).toBeVisible();
+  await expect(guide.getByRole('button', { name: 'Copy my link' })).toBeVisible();
+  await expect(guide.getByRole('link', { name: 'Open my listing' })).toHaveAttribute('href', '/dashboard/listing/venue-listing');
   await expectNoSidewaysScroll(page);
 
   // The venue ticks a step off itself; the guide says it isn't set up yet.
@@ -240,7 +251,7 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   // the guide doesn't open by itself, and the bar stays, now counting what's
   // left to really set up, on every page.
   const { error: ticked } = await db.from('venues').update({
-    onboarding_steps_completed: ['listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'].map((s) => `guide:${s}`),
+    onboarding_steps_completed: ['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'].map((s) => `guide:${s}`),
   }).eq('id', venueId);
   expect(ticked?.message ?? null).toBeNull();
   // Sign out (drop the venue session, keep the test copy's own gate cookie).
@@ -350,4 +361,68 @@ test('the dashboard says little about a plan or trial ending until it matters', 
   await set({ directory_downgrade_at: null, directory_subscription_external_id: null, directory_trial_ends_at: inDays(6) });
   await expect(notice).toContainText('Bride Booking System™ trial · 6 days left');
   await expect(notice.getByRole('button', { name: 'Start my plan early' })).toBeVisible();
+});
+
+// The Setup Guide's first step (owner's rewrite, Oct 5 2026): a 3-minute
+// walkthrough. Its button plays the video right in the guide, and starting
+// the video is what ticks the step. The video is a link the team pastes in
+// Admin → Setup guide; here the guide is told there is one.
+test('watching the walkthrough plays it in the guide and ticks the step', async ({ page }, testInfo) => {
+  const stamp = `${testInfo.project.name}-${Date.now().toString(36)}`;
+  const email = `watch.${stamp}.${runId}@example.com`;
+  const venueId = randomUUID();
+  const { data: plan } = await db.from('directory_plans').select('id').eq('slug', 'bride-booking-system').single();
+  const { error } = await db.from('venues').insert({
+    id: venueId, name: `Watch Journey ${runId}`, slug: `watch-journey-${stamp}`, email,
+    notification_email: email, brand_email: email, password_hash: await bcrypt.hash(env.password, 10),
+    setup_completed: true, onboarding_status: 'registered', onboarding_completed_at: new Date().toISOString(),
+    directory_plan_id: plan?.id ?? null, directory_subscription_status: 'active', email_verified_at: new Date().toISOString(),
+    owner_first_name: 'Wes', owner_last_name: 'Watch', timezone: 'America/New_York', is_published: false, is_demo: false,
+  });
+  expect(error?.message ?? null).toBeNull();
+
+  // A walkthrough video link has been pasted (as Admin → Setup guide would store it).
+  await page.route('**/api/onboarding/setup-guide', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const res = await route.fetch();
+    const body = await res.json();
+    body.videos = { ...body.videos, walkthrough: 'https://player.vimeo.com/video/123456789' };
+    await route.fulfill({ response: res, json: body });
+  });
+
+  await page.goto('/login');
+  await page.getByPlaceholder('you@yourvenue.com').first().fill(email);
+  await page.getByPlaceholder('••••••••').fill(env.password);
+  await page.locator('form').filter({ has: page.getByPlaceholder('••••••••') }).locator('button[type="submit"]').click();
+  await page.waitForURL(/\/dashboard/);
+
+  const guide = page.getByTestId('setup-guide');
+  await expect(guide).toBeVisible({ timeout: 20_000 });
+  await expect(guide.getByRole('heading', { name: 'Start here: watch the 3-minute walkthrough' })).toBeVisible();
+  // The steps read STEP 01 to STEP 08, with StoryPay as OPTIONAL, and the count is out of 8.
+  await expect(guide.getByText(/0 of 8 done/)).toBeVisible();
+  for (const label of ['Step 01', 'Step 08', 'Optional']) await expect(guide.getByText(label, { exact: true }).first()).toBeVisible();
+  await expect(guide.getByText('Step 09', { exact: true })).toHaveCount(0);
+
+  // With a video, the step's button is Watch, and there's no "Mark as done".
+  const watch = guide.getByRole('button', { name: 'Watch the walkthrough' });
+  await expect(watch).toBeVisible();
+  await expect(guide.getByRole('button', { name: 'Mark as done', exact: true })).toHaveCount(0);
+  await expect(guide.getByRole('button', { name: /^Mark as done: Start here/ })).toBeVisible();
+
+  // Watch: the video plays where it is (same page), and the step is done.
+  const url = page.url();
+  await watch.click();
+  await expect(guide.locator('iframe[src*="player.vimeo.com/video/123456789"]')).toBeVisible();
+  expect(page.url()).toBe(url);
+  await expect(guide.getByRole('button', { name: /^Done: Start here/ })).toBeVisible();
+  await expect(guide.getByText(/1 of 8 done/)).toBeVisible();
+  const { data: saved } = await db.from('venues').select('onboarding_steps_completed').eq('id', venueId).single();
+  expect(saved!.onboarding_steps_completed).toContain('guide:walkthrough');
+
+  // The last step's button asks if the venue qualifies, and opens the survey.
+  await guide.getByRole('button', { name: /Want us to bring you qualified brides\?/ }).first().click();
+  await expect(guide.getByRole('button', { name: 'See if your venue qualifies' })).toBeVisible();
+  await expect(guide.getByRole('button', { name: 'Book a strategy call' })).toHaveCount(0);
+  await expectNoSidewaysScroll(page);
 });

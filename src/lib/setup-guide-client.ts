@@ -77,7 +77,7 @@ export async function tickSetupStep(step: SetupLessonId, done = true): Promise<v
 export interface SetupStepLabel {
   /** "Step 03", or "Optional". */
   short: string;
-  /** "Step 3 of 7", or "Optional". */
+  /** "Step 3 of 8", or "Optional". */
   long: string;
 }
 

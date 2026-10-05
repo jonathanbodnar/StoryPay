@@ -24,7 +24,7 @@ import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import { isNativeApp } from '@/lib/platform';
 import { setupGuideDisplay, setupLesson } from '@/lib/setup-guide';
 import { openSetupGuide, setupStepLabels, useSetupGuideStatus, type SetupGuideStatus } from '@/lib/setup-guide-client';
-import { LessonThumb, StepTick } from './LessonCover';
+import { LessonThumb, StepTick, StepTitle } from './LessonCover';
 import ProgressRing from './ProgressRing';
 
 export default function SetupGuidePrompt({ home, planChip }: { home: boolean; planChip?: ReactNode }) {
@@ -146,7 +146,7 @@ function SetupGuideDrawer({ status, home, planChip }: { status: SetupGuideStatus
                       <span className="mt-2 block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                         {labels.get(l.id)?.short}
                       </span>
-                      <span className="line-clamp-2 text-[13px] font-medium leading-snug text-gray-900">{lesson.title}</span>
+                      <span className="line-clamp-2 text-balance text-[13px] font-medium leading-snug text-gray-900"><StepTitle text={lesson.title} /></span>
                     </button>
                   </li>
                 );

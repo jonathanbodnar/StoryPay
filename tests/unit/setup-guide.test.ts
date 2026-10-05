@@ -27,13 +27,13 @@ const checked = (c: SetupContext) => setupLessonsFor(c).filter((l) => l.checked)
 const verified = (c: SetupContext) => setupLessonsFor(c).filter((l) => l.verified).map((l) => l.id);
 const progress = (c: SetupContext) => setupGuideProgress(setupLessonsFor(c));
 const tickAll = (...steps: string[]) => steps.map((s) => `guide:${s}`);
-const COUNTED = ['listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'];
+const COUNTED = ['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'];
 
 describe('the Setup Guide lessons', () => {
   it('each has its cover in the app and a real screen to send the venue to', () => {
     for (const lesson of SETUP_LESSONS) {
       expect(existsSync(join(__dirname, '..', '..', 'public', lesson.cover)), `${lesson.id} cover`).toBe(true);
-      if (lesson.cta) expect(PAGES, `${lesson.id} → ${lesson.cta.href}`).toContain(lesson.cta.href);
+      if (lesson.cta.href !== undefined) expect(PAGES, `${lesson.id} → ${lesson.cta.href}`).toContain(lesson.cta.href);
       expect(lesson.steps.length, lesson.id).toBeGreaterThan(0);
     }
     expect(new Set(SETUP_LESSONS.map((l) => l.id)).size).toBe(SETUP_LESSONS.length);
@@ -54,6 +54,63 @@ describe('the Setup Guide lessons', () => {
   });
 });
 
+// The owner's rewrite of every step (Oct 5 2026): a 3-minute walkthrough
+// first, then the same eight steps under new titles and buttons. Venues'
+// ticks are saved by step id, so the ids must never change.
+describe('the steps, as the owner wrote them', () => {
+  it('nine steps in this order; the eight that were there keep their ids', () => {
+    expect(SETUP_LESSONS.map((l) => l.id)).toEqual([
+      'walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'payments', 'grow',
+    ]);
+    expect(SETUP_LESSONS.map((l) => l.title)).toEqual([
+      'Start here: watch the 3-minute walkthrough',
+      'Share your listing link',
+      'Check your pricing guide',
+      'Put your Lead Link™ in your Instagram bio',
+      'Add the inquiry form to your website',
+      'Forward your directory leads to LeadFinder™',
+      'Make your follow-up sound like you',
+      'Set up proposals and payments',
+      'Want us to bring you qualified brides?',
+    ]);
+  });
+
+  it('each main button says what it does', () => {
+    expect(Object.fromEntries(SETUP_LESSONS.map((l) => [l.id, l.cta.label]))).toEqual({
+      walkthrough: 'Watch the walkthrough',
+      listing: 'Open my listing', // second to "Copy my link" in the guide
+      pricing_guide: 'Open my pricing guide',
+      lead_link: 'Set up my Lead Link™',
+      web_form: 'Get my embed code',
+      leadfinder: 'Get my LeadFinder™ address',
+      follow_up: 'Review my messages',
+      payments: 'Connect StoryPay™',
+      grow: 'See if your venue qualifies',
+    });
+    // Two buttons act inside the guide; the rest go to a screen.
+    expect(SETUP_LESSONS.filter((l) => l.cta.href === undefined).map((l) => [l.id, l.cta.does])).toEqual([['walkthrough', 'play'], ['grow', 'call']]);
+  });
+
+  it('no em dashes anywhere, every step has three how-to lines, and StoryPay stays optional', () => {
+    for (const l of SETUP_LESSONS) {
+      for (const text of [l.title, l.summary, l.cta.label, ...l.steps]) expect(text, `${l.id}: ${text}`).not.toMatch(/[—–]/);
+      expect(l.steps, l.id).toHaveLength(3);
+    }
+    expect(SETUP_LESSONS.filter((l) => l.optional).map((l) => l.id)).toEqual(['payments']);
+  });
+
+  it('the walkthrough is for every venue on every plan, is ticked by hand, and ships with no video of its own', () => {
+    const walkthrough = SETUP_LESSONS[0];
+    expect(walkthrough).toMatchObject({ id: 'walkthrough', navId: null, manual: true, cover: '/setup-guide/walkthrough.webp' });
+    // A plan with next to nothing still has it, first; so does a Private Client.
+    expect(ids(ctx({ allowedNavIds: ['nav_listing_dashboard'] }))[0]).toBe('walkthrough');
+    expect(ids(ctx({ privateClient: true }))[0]).toBe('walkthrough');
+    // Its video is a link the team pastes: nothing is built in.
+    expect(setupGuideVideos({}).walkthrough).toBeUndefined();
+    expect(setupGuideVideos({ walkthrough: 'https://vimeo.com/123456789' }).walkthrough).toBe('https://player.vimeo.com/video/123456789');
+  });
+});
+
 describe('ticked versus really set up', () => {
   it('the venue can tick any step off itself, and that counts as done for them', () => {
     expect(checked(ctx())).toEqual([]);
@@ -71,8 +128,8 @@ describe('ticked versus really set up', () => {
     expect(verified(ctx({ facts: { ...NOTHING, webFormLive: true } }))).toEqual(['web_form']);
   });
 
-  it('the two steps with nothing to detect are set up once they’re ticked', () => {
-    expect(verified(ctx({ stepsCompleted: tickAll('follow_up', 'grow') }))).toEqual(['follow_up', 'grow']);
+  it('the three steps with nothing to detect are set up once they’re ticked', () => {
+    expect(verified(ctx({ stepsCompleted: tickAll('walkthrough', 'follow_up', 'grow') }))).toEqual(['walkthrough', 'follow_up', 'grow']);
   });
 
   it('whatever is stored for the venue, the guide never breaks', () => {
@@ -92,22 +149,22 @@ describe('ticked versus really set up', () => {
 
 describe('when the pop-up stops and when the reminder goes', () => {
   it('nothing done: everything is left', () => {
-    expect(progress(ctx())).toEqual({ done: 0, total: 7, left: 7, checkedAll: false, fulfilled: false });
+    expect(progress(ctx())).toEqual({ done: 0, total: 8, left: 8, checkedAll: false, fulfilled: false });
   });
 
   it('StoryPay is optional: it counts toward neither, ticked, set up or not', () => {
     // Every counted step ticked, StoryPay untouched: the pop-up is finished with.
     expect(progress(ctx({ stepsCompleted: tickAll(...COUNTED) })).checkedAll).toBe(true);
     // Only StoryPay done: nothing has moved.
-    expect(progress(ctx({ stepsCompleted: tickAll('payments') }))).toMatchObject({ done: 0, total: 7, left: 7 });
-    expect(progress(ctx({ facts: { ...NOTHING, stripeReady: true } }))).toMatchObject({ done: 0, total: 7, left: 7 });
+    expect(progress(ctx({ stepsCompleted: tickAll('payments') }))).toMatchObject({ done: 0, total: 8, left: 8 });
+    expect(progress(ctx({ facts: { ...NOTHING, stripeReady: true } }))).toMatchObject({ done: 0, total: 8, left: 8 });
     expect(setupLessonsFor(ctx()).filter((l) => l.optional).map((l) => l.id)).toEqual(['payments']);
   });
 
   it('every step ticked stops the pop-up, but the reminder stays until each is really set up', () => {
     const allTicked = progress(ctx({ stepsCompleted: tickAll(...COUNTED) }));
-    // Five need something to exist; follow-up and the strategy call are set up by being ticked.
-    expect(allTicked).toEqual({ done: 7, total: 7, left: 5, checkedAll: true, fulfilled: false });
+    // Five need something to exist; the walkthrough, follow-up and the strategy call are set up by being ticked.
+    expect(allTicked).toEqual({ done: 8, total: 8, left: 5, checkedAll: true, fulfilled: false });
 
     // They then really do four of the five…
     const nearly = progress(ctx({ stepsCompleted: tickAll(...COUNTED), facts: { ...EVERYTHING, leadFinderMail: false } }));
@@ -116,9 +173,9 @@ describe('when the pop-up stops and when the reminder goes', () => {
     expect(progress(ctx({ stepsCompleted: tickAll(...COUNTED), facts: EVERYTHING }))).toMatchObject({ checkedAll: true, fulfilled: true, left: 0 });
   });
 
-  it('really setting everything up finishes it without a single tick, bar the two hand-ticked steps', () => {
-    expect(progress(ctx({ facts: EVERYTHING }))).toMatchObject({ done: 5, checkedAll: false, fulfilled: false, left: 2 });
-    expect(progress(ctx({ facts: EVERYTHING, stepsCompleted: tickAll('follow_up', 'grow') }))).toMatchObject({ checkedAll: true, fulfilled: true });
+  it('really setting everything up finishes it without a single tick, bar the three hand-ticked steps', () => {
+    expect(progress(ctx({ facts: EVERYTHING }))).toMatchObject({ done: 5, checkedAll: false, fulfilled: false, left: 3 });
+    expect(progress(ctx({ facts: EVERYTHING, stepsCompleted: tickAll('walkthrough', 'follow_up', 'grow') }))).toMatchObject({ checkedAll: true, fulfilled: true });
   });
 });
 
@@ -129,26 +186,26 @@ describe('what the bar on every page and the sidebar ring say', () => {
   };
 
   it('while steps are still to tick: how many are done, and the next one to do', () => {
-    expect(shown(ctx())).toEqual({ done: 0, total: 7, label: '0 of 7 done', nextId: 'listing', settingUp: false });
+    expect(shown(ctx())).toEqual({ done: 0, total: 8, label: '0 of 8 done', nextId: 'walkthrough', settingUp: false });
     // Done by their own word or for real, it counts the same here.
-    const some = ctx({ stepsCompleted: tickAll('listing'), facts: { ...NOTHING, guideEnabled: true } });
-    expect(shown(some)).toEqual({ done: 2, total: 7, label: '2 of 7 done', nextId: 'lead_link', settingUp: false });
+    const some = ctx({ stepsCompleted: tickAll('walkthrough', 'listing'), facts: { ...NOTHING, guideEnabled: true } });
+    expect(shown(some)).toEqual({ done: 3, total: 8, label: '3 of 8 done', nextId: 'lead_link', settingUp: false });
   });
 
   it('once every step is ticked: only what is really set up counts, so the reminder is honest', () => {
-    // All seven ticked, nothing built: two are "set up by being ticked", five are owed.
-    expect(shown(ctx({ stepsCompleted: tickAll(...COUNTED) }))).toEqual({ done: 2, total: 7, label: '5 left to set up', nextId: 'listing', settingUp: true });
+    // All eight ticked, nothing built: three are "set up by being ticked", five are owed.
+    expect(shown(ctx({ stepsCompleted: tickAll(...COUNTED) }))).toEqual({ done: 3, total: 8, label: '5 left to set up', nextId: 'listing', settingUp: true });
     const nearly = ctx({ stepsCompleted: tickAll(...COUNTED), facts: { ...EVERYTHING, leadFinderMail: false } });
-    expect(shown(nearly)).toEqual({ done: 6, total: 7, label: '1 left to set up', nextId: 'leadfinder', settingUp: true });
+    expect(shown(nearly)).toEqual({ done: 7, total: 8, label: '1 left to set up', nextId: 'leadfinder', settingUp: true });
   });
 
   it('everything really set up: a full ring and nothing next', () => {
-    expect(shown(ctx({ stepsCompleted: tickAll(...COUNTED), facts: EVERYTHING }))).toEqual({ done: 7, total: 7, label: 'All set up', nextId: null, settingUp: false });
+    expect(shown(ctx({ stepsCompleted: tickAll(...COUNTED), facts: EVERYTHING }))).toEqual({ done: 8, total: 8, label: 'All set up', nextId: null, settingUp: false });
   });
 
   it('StoryPay, being optional, is never the next step and never moves the ring', () => {
     const onlyPaymentsLeft = ctx({ stepsCompleted: tickAll(...COUNTED), facts: { ...EVERYTHING, stripeReady: false } });
-    expect(shown(onlyPaymentsLeft)).toMatchObject({ done: 7, total: 7, nextId: null });
+    expect(shown(onlyPaymentsLeft)).toMatchObject({ done: 8, total: 8, nextId: null });
   });
 });
 

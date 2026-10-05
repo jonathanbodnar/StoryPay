@@ -15,6 +15,8 @@ import sharp from 'sharp';
 
 /** lesson id (src/lib/setup-guide.ts) → capture and the region to keep. */
 const COVERS = {
+  // The dashboard's booking funnel: the whole system on one screen.
+  walkthrough: ['home__desktop.png', { left: 560, top: 0, width: 2560 }],
   listing: ['listing__desktop.png', { left: 320, top: 0, width: 2560 }],
   pricing_guide: ['guide-pricing__desktop.png', { left: 540, top: 150, width: 2560 }],
   // Without the phone preview: it frames the live directory, which has never heard of the test venue.

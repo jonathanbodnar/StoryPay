@@ -17,7 +17,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowRight, CalendarCheck, Check, Copy, GraduationCap, Undo2, X } from 'lucide-react';
+import { ArrowRight, Check, Copy, GraduationCap, Play, Undo2, X } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
 import { trackClient } from '@/lib/analytics-client';
 import { isNativeApp } from '@/lib/platform';
@@ -25,7 +25,7 @@ import { setupLesson, type SetupLessonId, type SetupLessonState } from '@/lib/se
 import {
   getSetupGuideStatus, OPEN_SETUP_GUIDE_EVENT, refreshSetupGuide, setupStepLabels, tickSetupStep, useSetupGuideStatus,
 } from '@/lib/setup-guide-client';
-import { LessonCover, LessonThumb, StepTick } from './LessonCover';
+import { LessonCover, LessonThumb, StepTick, StepTitle } from './LessonCover';
 
 /** Remembers which sign-in the guide last opened itself for. */
 const OPENED_FOR_KEY = 'storyvenue.setupGuide.openedFor';
@@ -157,6 +157,20 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
       window.setTimeout(() => setCopied(false), 2500);
     });
   };
+  // Start the step's video where it is: from its cover, or from the
+  // walkthrough's "Watch" button. Starting the walkthrough is what ticks it.
+  const startVideo = (from: 'cover' | 'button') => {
+    setPlaying(currentId);
+    if (currentId === 'walkthrough' && !current.ticked) void tickSetupStep('walkthrough');
+    if (from === 'button') trackClient('setup_guide_step_started', { label: currentId });
+  };
+  const primaryButton = 'inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black';
+  const secondaryButton = 'inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50';
+  const cta = lesson.cta;
+  // The listing step leads with copying the link; opening the listing comes second.
+  const copyFirst = lesson.id === 'listing' && Boolean(status.listingUrl);
+  // A step whose button plays a video needs a video: without one it can only be ticked.
+  const cantPlay = cta.does === 'play' && !video;
 
   return (
     <>
@@ -226,7 +240,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                       lesson={lesson}
                       label={labels.get(currentId)?.short ?? ''}
                       hasVideo={Boolean(video)}
-                      onPlay={() => setPlaying(currentId)}
+                      onPlay={() => startVideo('cover')}
                       priority
                     />
                   )}
@@ -266,17 +280,28 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5 px-5 py-4 sm:px-7 lg:shrink-0 lg:border-t lg:border-gray-100">
-                  {lesson.cta ? (
+                  {copyFirst && (
+                    <button type="button" onClick={copyListing} className={primaryButton}>
+                      {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied' : 'Copy my link'}
+                    </button>
+                  )}
+                  {cta.href !== undefined ? (
                     <Link
-                      href={lesson.cta.href}
+                      href={cta.href}
                       onClick={() => {
                         setOpen(false);
                         trackClient('setup_guide_step_started', { label: lesson.id });
                       }}
-                      className="inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black"
+                      className={copyFirst ? secondaryButton : primaryButton}
                     >
-                      {lesson.cta.label} <ArrowRight size={15} />
+                      {cta.label} {!copyFirst && <ArrowRight size={15} />}
                     </Link>
+                  ) : cta.does === 'play' ? (
+                    !cantPlay && (
+                      <button type="button" onClick={() => startVideo('button')} className={primaryButton}>
+                        <Play size={15} /> {cta.label}
+                      </button>
+                    )
                   ) : (
                     <button
                       type="button"
@@ -286,27 +311,16 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                         setCallOpen(true);
                         trackClient('setup_guide_call_requested');
                       }}
-                      className="inline-flex items-center gap-2 rounded-xl bg-[#1b1b1b] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black"
+                      className={primaryButton}
                     >
-                      <CalendarCheck size={15} /> Book a strategy call
+                      {cta.label} <ArrowRight size={15} />
                     </button>
                   )}
-                  {lesson.id === 'listing' && status.listingUrl && (
-                    <button
-                      type="button"
-                      onClick={copyListing}
-                      className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
-                    >
-                      {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied' : 'Copy my link'}
-                    </button>
-                  )}
-                  {/* Their call to make: any step can be ticked off, set up or not. */}
-                  {!current.checked && lesson.cta && (
-                    <button
-                      type="button"
-                      onClick={() => void tickSetupStep(lesson.id, true)}
-                      className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
-                    >
+                  {/* Their call to make: any step can be ticked off, set up or not.
+                      (The walkthrough ticks when its video starts; with no video
+                      yet, this is how it's ticked, so it can't get stuck.) */}
+                  {!current.checked && (cta.href !== undefined || cantPlay) && (
+                    <button type="button" onClick={() => void tickSetupStep(lesson.id, true)} className={secondaryButton}>
                       <Check size={15} /> Mark as done
                     </button>
                   )}
@@ -354,7 +368,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                             <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                               {labels.get(l.id)?.short}
                             </span>
-                            <span className="line-clamp-2 text-[13px] font-medium leading-snug text-gray-900">{item.title}</span>
+                            <span className="line-clamp-2 text-balance text-[13px] font-medium leading-snug text-gray-900"><StepTitle text={item.title} /></span>
                           </span>
                         </button>
                         <button
