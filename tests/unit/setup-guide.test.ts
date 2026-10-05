@@ -11,7 +11,8 @@ import {
 // The Setup Guide: suggested steps to a venue's first leads. These are its
 // rules (owner's, Oct 4 2026): every step can be ticked off by the venue, the
 // pop-up stops once they all are, a reminder stays until each is really set
-// up, StoryPay is optional, and everyone but Private Clients is prompted.
+// up, and StoryPay is optional. Since Oct 5 2026 Private Clients are prompted
+// like every other venue, with the strategy-call step already done for them.
 
 const NOTHING: SetupFacts = {
   published: false, guideEnabled: false, leadLinkSet: false, webFormLive: false, leadFinderMail: false, stripeReady: false,
@@ -49,8 +50,43 @@ describe('the Setup Guide lessons', () => {
     expect(noGuide).not.toContain('pricing_guide');
     expect(noGuide).not.toContain('web_form');
     expect(ids(ctx({ leadFinderAvailable: false }))).not.toContain('leadfinder');
-    // A Private Client already works with our team: no strategy-call step.
-    expect(ids(ctx({ privateClient: true }))).not.toContain('grow');
+    // A Private Client sees every step, the strategy call included (done for them, below).
+    expect(ids(ctx({ privateClient: true }))).toEqual(SETUP_LESSONS.map((l) => l.id));
+  });
+});
+
+// Owner's rule (Oct 5 2026): "Private clients also get the setup guide because
+// that's what we will use to set up their account… If we label them as a
+// private client, go ahead and complete step number 9… because they already
+// signed up for that service. We just need to green-check-mark that one
+// completely." Until then they got no prompts and no strategy-call step.
+describe('a Private Client’s guide', () => {
+  const theirs = (over: Partial<SetupContext> = {}) => ctx({ privateClient: true, ...over });
+  const grow = (c: SetupContext) => setupLessonsFor(c).find((l) => l.id === 'grow');
+
+  it('the strategy-call step is there, already done, without them ticking anything', () => {
+    expect(grow(theirs())).toEqual({ id: 'grow', ticked: true, verified: true, checked: true, optional: false, alreadyTheirs: true });
+    // Whatever was or wasn't saved for the venue.
+    expect(grow(theirs({ stepsCompleted: 'junk' }))).toMatchObject({ verified: true, checked: true, alreadyTheirs: true });
+    expect(grow(theirs({ stepsCompleted: tickAll('grow') }))).toMatchObject({ verified: true, checked: true, alreadyTheirs: true });
+  });
+
+  it('it is their only head start: every other step is theirs to do, like any venue', () => {
+    expect(checked(theirs())).toEqual(['grow']);
+    expect(progress(theirs())).toEqual({ done: 1, total: 8, left: 7, checkedAll: false, fulfilled: false });
+    const lessons = setupLessonsFor(theirs());
+    expect(setupGuideDisplay({ lessons, ...setupGuideProgress(lessons) })).toEqual({ done: 1, total: 8, label: '1 of 8 done', nextId: 'walkthrough', settingUp: false });
+    // They finish without ever being shown the survey: seven ticks, not eight.
+    const rest = COUNTED.filter((id) => id !== 'grow');
+    expect(progress(theirs({ stepsCompleted: tickAll(...rest) }))).toMatchObject({ done: 8, checkedAll: true });
+    expect(progress(theirs({ stepsCompleted: tickAll('walkthrough', 'follow_up'), facts: EVERYTHING }))).toMatchObject({ checkedAll: true, fulfilled: true, left: 0 });
+  });
+
+  it('for every other venue the step is an ordinary one, done only once it has been shown', () => {
+    expect(grow(ctx())).toEqual({ id: 'grow', ticked: false, verified: false, checked: false, optional: false, alreadyTheirs: false });
+    expect(setupLessonsFor(ctx({ facts: EVERYTHING, stepsCompleted: tickAll(...COUNTED) })).filter((l) => l.alreadyTheirs)).toEqual([]);
+    // The label comes off: the step goes back to what the venue itself ticked.
+    expect(grow(ctx({ privateClient: false, stepsCompleted: tickAll('grow') }))).toMatchObject({ ticked: true, verified: true, alreadyTheirs: false });
   });
 });
 
@@ -210,14 +246,15 @@ describe('what the bar on every page and the sidebar ring say', () => {
 });
 
 describe('who is prompted (the pop-up after each sign-in, and the bar on every page)', () => {
-  const venue = { wizardDone: true, promptsOff: false, privateClient: false, canManage: true };
+  const venue = { wizardDone: true, promptsOff: false, canManage: true };
 
-  it('every venue that has finished the setup wizard, old or new, on any plan', () => {
+  it('every venue that has finished the setup wizard, old or new, on any plan, Private Clients included', () => {
     expect(setupGuidePrompts(venue)).toBe(true);
+    // Being a Private Client isn't something the rule can even be told any more.
+    expect(setupGuidePrompts.toString()).not.toMatch(/privateClient/);
   });
 
-  it('never a Private Client, a venue still in the setup wizard, or a team member', () => {
-    expect(setupGuidePrompts({ ...venue, privateClient: true })).toBe(false);
+  it('never a venue still in the setup wizard, or a team member', () => {
     expect(setupGuidePrompts({ ...venue, wizardDone: false })).toBe(false);
     expect(setupGuidePrompts({ ...venue, canManage: false })).toBe(false);
   });

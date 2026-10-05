@@ -255,6 +255,9 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   }).eq('id', venueId);
   expect(ticked?.message ?? null).toBeNull();
   // Sign out (drop the venue session, keep the test copy's own gate cookie).
+  // Leave the dashboard first: every answer to a signed-in request renews the
+  // session cookie, so one still on its way would sign the venue back in.
+  await page.goto('about:blank');
   for (const name of ['venue_id', 'venue_id_sig', 'venue_id_meta', 'member_id', 'member_id_sig', 'member_id_meta']) {
     await page.context().clearCookies({ name });
   }
@@ -367,7 +370,9 @@ test('the dashboard says little about a plan or trial ending until it matters', 
 // walkthrough. Its button plays the video right in the guide, and starting
 // the video is what ticks the step. The video is a link the team pastes in
 // Admin → Setup guide; here the guide is told there is one.
-test('watching the walkthrough plays it in the guide and ticks the step', async ({ page }, testInfo) => {
+// The journey ends with the venue labelled a Private Client: it keeps the
+// guide, and the last step is done for it.
+test('watching the walkthrough ticks its step; a Private Client finds the last step already done', async ({ page }, testInfo) => {
   const stamp = `${testInfo.project.name}-${Date.now().toString(36)}`;
   const email = `watch.${stamp}.${runId}@example.com`;
   const venueId = randomUUID();
@@ -425,4 +430,51 @@ test('watching the walkthrough plays it in the guide and ticks the step', async 
   await expect(guide.getByRole('button', { name: 'See if your venue qualifies' })).toBeVisible();
   await expect(guide.getByRole('button', { name: 'Book a strategy call' })).toHaveCount(0);
   await expectNoSidewaysScroll(page);
+
+  // The same venue, labelled a Private Client (owner's rule, Oct 5 2026):
+  // "Private clients also get the setup guide because that's what we will use
+  // to set up their account", and its last step is green-checked for them:
+  // "they already signed up for that service". Until then a Private Client
+  // was shown neither the guide's bar nor that step. (Its ticks are cleared
+  // too, so what's done below is done by the label alone. Same sign-in: the
+  // checks share one address, and sign-in allows it ten a minute.)
+  // (For an ordinary venue the step is done once it has been shown: wait for
+  // that tick to be saved, so clearing the ticks below can't cross it.)
+  await expect.poll(async () => {
+    const { data } = await db.from('venues').select('onboarding_steps_completed').eq('id', venueId).single();
+    return (data?.onboarding_steps_completed as string[] | null) ?? [];
+  }).toContain('guide:grow');
+  await expect(guide.getByRole('button', { name: /^Done: Want us to bring you qualified brides\?/ })).toBeVisible();
+  await guide.getByRole('button', { name: 'Close the setup guide' }).click();
+  await expect(guide).toBeHidden();
+  const labelled = await db.from('venues').update({ is_private_client: true, onboarding_steps_completed: [] }).eq('id', venueId);
+  expect(labelled.error?.message ?? null).toBeNull();
+  await page.reload();
+  // The bar is on their pages like anyone's, with one of eight done.
+  const card = page.getByTestId('setup-guide-card');
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card).toContainText('1 of 8 done');
+  if (testInfo.project.name === 'desktop') {
+    await expect(page.locator('aside:visible nav > :first-child').getByTestId('setup-guide-progress')).toHaveAttribute('data-progress', '1/8');
+  }
+  if ((await card.getAttribute('data-open')) === 'true') await card.getByRole('button', { name: 'Close the setup steps' }).click();
+  await card.getByRole('button', { name: 'Continue setup' }).click();
+  await expect(guide).toBeVisible();
+  await expect(guide.getByText(/1 of 8 done/)).toBeVisible();
+  // The last step is done, and can't be unticked.
+  const done = guide.getByRole('button', { name: /^Done: Want us to bring you qualified brides\?/ });
+  await expect(done).toBeVisible();
+  await expect(done).toBeDisabled();
+  // Opening it says why, and there is no survey to fill in for a service they already have.
+  await guide.getByRole('button', { name: /Want us to bring you qualified brides\?/ }).first().click();
+  await expect(guide.getByRole('heading', { name: 'Want us to bring you qualified brides?' })).toBeVisible();
+  await expect(guide.getByTestId('setup-guide-already-theirs')).toHaveText('You’ve already signed up for this, so it’s done.');
+  await expect(guide.getByRole('button', { name: 'See if your venue qualifies' })).toHaveCount(0);
+  await expect(guide.getByText(/1 of 8 done/)).toBeVisible();
+  await expectNoSidewaysScroll(page);
+  // Nothing was saved as a tick of theirs: it comes from the label.
+  const { data: theirs } = await db.from('venues').select('onboarding_steps_completed').eq('id', venueId).single();
+  expect((theirs!.onboarding_steps_completed as string[] | null) ?? []).not.toContain('guide:grow');
+  // The guide may be mid-reload through the stand-in above: let that go quietly.
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
 });

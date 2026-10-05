@@ -380,10 +380,10 @@ export function AddonCheckboxes({
         )}
       </label>
 
-      {/* Setup Guide prompts — every venue but Private Clients gets the guide
-          opening by itself after each sign-in until it ticks every step, and a
-          reminder pill until each is really set up. This switches both off
-          for one venue (the guide stays in its sidebar). */}
+      {/* Setup Guide prompts — every venue, Private Clients included, gets the
+          guide opening by itself after each sign-in until it ticks every step,
+          and its bar on every page until each is really set up. This switches
+          both off for one venue (the guide stays in its sidebar). */}
       <label
         className={`inline-flex items-center gap-1 text-[11px] ${busy ? 'opacity-50' : 'cursor-pointer'}`}
         title="Stop the Setup Guide's pop-up and reminder pill for this venue. It stays in their sidebar."

@@ -4,17 +4,18 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { Browser, db, env, runId, signedInSuperAdmin } from './helpers';
 
 // The Setup Guide: suggested steps to a venue's first leads (owner's rules,
-// Oct 4 2026). Every venue but Private Clients gets it opening after each
-// sign-in; the venue can tick any step off itself and the pop-up stops once
-// all are ticked; a reminder pill stays until each step is really set up;
-// StoryPay is optional.
+// Oct 4 2026). Every venue gets it opening after each sign-in; the venue can
+// tick any step off itself and the pop-up stops once all are ticked; a
+// reminder stays until each step is really set up; StoryPay is optional.
+// Private Clients get it like everyone else (Oct 5 2026), with the
+// strategy-call step already done for them.
 describe('the Setup Guide', () => {
   const venueId = randomUUID();
   const email = `guide.${runId}@example.com`;
   const owner = new Browser();
   let admin: Browser;
 
-  type Lesson = { id: string; ticked: boolean; verified: boolean; checked: boolean; optional: boolean };
+  type Lesson = { id: string; ticked: boolean; verified: boolean; checked: boolean; optional: boolean; alreadyTheirs: boolean };
   type Guide = {
     eligible: boolean; prompted: boolean; autoOpen: boolean; showPill: boolean; checkedAll: boolean; fulfilled: boolean;
     done: number; total: number; left: number; loginId: string | null; listingUrl: string | null;
@@ -68,16 +69,32 @@ describe('the Setup Guide', () => {
     expect((await new Browser().fetch('/api/onboarding/setup-guide', { method: 'POST', json: { step: 'grow' } })).status).toBe(401);
   });
 
-  it('a Private Client is never prompted: our team sets those up', async () => {
+  // Owner's rule (Oct 5 2026): "Private clients also get the setup guide
+  // because that's what we will use to set up their account", and the last
+  // step is green-checked for them: "they already signed up for that service".
+  // Until then a Private Client got no prompts and no strategy-call step.
+  it('a Private Client gets it like every venue, with the strategy-call step already done for them', async () => {
     try {
       expect((await db.from('venues').update({ is_private_client: true }).eq('id', venueId)).error?.message ?? null).toBeNull();
       const g = await guide();
-      expect(g).toMatchObject({ eligible: true, prompted: false, autoOpen: false, showPill: false });
-      expect(g.lessons.map((l) => l.id)).not.toContain('grow'); // nor pitched a strategy call
+      expect(g).toMatchObject({ eligible: true, prompted: true, autoOpen: true, showPill: true, checkedAll: false });
+      // Every step, in the same order; the last one is done and the rest are theirs to do.
+      expect(g.lessons.map((l) => l.id)).toEqual(
+        ['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'payments', 'grow'],
+      );
+      expect(g.lessons.find((l) => l.id === 'grow')).toEqual({ id: 'grow', ticked: true, verified: true, checked: true, optional: false, alreadyTheirs: true });
+      expect(where(g, 'checked')).toEqual(['grow']);
+      expect(g).toMatchObject({ done: 1, total: 8, left: 7 });
+      // It is worked out from the label, not saved as a tick of theirs.
+      const { data } = await db.from('venues').select('onboarding_steps_completed').eq('id', venueId).single();
+      expect((data!.onboarding_steps_completed as string[] | null) ?? []).not.toContain('guide:grow');
     } finally {
       await db.from('venues').update({ is_private_client: false }).eq('id', venueId);
     }
-    expect(await guide()).toMatchObject({ prompted: true, autoOpen: true });
+    // The label comes off: the step is an ordinary one again.
+    const after = await guide();
+    expect(after).toMatchObject({ prompted: true, autoOpen: true, done: 0, total: 8 });
+    expect(after.lessons.find((l) => l.id === 'grow')).toMatchObject({ checked: false, alreadyTheirs: false });
   });
 
   it('support can switch a venue’s prompts off; the guide stays in its sidebar and its ticks are kept', async () => {

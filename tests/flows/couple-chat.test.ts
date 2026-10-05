@@ -61,6 +61,7 @@ const crmReminder = `Reminder: your tour at Flow Test Venue is tomorrow at 2. ${
 const ownersNote = `Note to self: she wants peonies ${runId}`;
 const supportsNote = `Support note: called her mom ${runId}`;
 const sideChannel = `To the venue: she asked about Sunday rates ${runId}`;
+const ownersSideReply = `To the concierge: Sundays are 20% less ${runId}`;
 
 beforeAll(async () => {
   await ensureFlowVenue();
@@ -118,10 +119,20 @@ describe('the couple’s chat with her venue', () => {
     await stored({ visibility: 'external', sender_kind: 'system', body: guideNote });
     await stored({ visibility: 'external', sender_kind: 'ai', body: aiFollowUp });
     await stored({ visibility: 'external', sender_kind: 'system', sent_via: 'crm_workflow', body: crmReminder });
-    await stored({ visibility: 'internal', sender_kind: 'concierge', channel: 'email', support_only: true, external_email_sent: false, body: supportsNote });
-    await stored({ visibility: 'internal', sender_kind: 'concierge', channel: 'email', audience: 'venue_direct', body: sideChannel });
+    // Support's own note on her, and the concierge writing to the venue about her.
+    const supportNote = await admin.fetch('/api/admin/support/bride-note', { method: 'POST', json: { threadId, body: supportsNote } });
+    expect(supportNote.status, await supportNote.clone().text()).toBeLessThan(300);
+    const toVenue = await admin.fetch('/api/admin/support/venue-direct', { method: 'POST', json: { threadId, body: sideChannel } });
+    expect(toVenue.status, await toVenue.clone().text()).toBeLessThan(300);
+    // The venue answering the concierge there, and its own note on her: written by
+    // the owner, and still not for her.
+    await stored({ visibility: 'internal', sender_kind: 'owner', channel: 'email', audience: 'venue_direct', external_email_sent: false, body: ownersSideReply });
     const note = await owner.fetch(`/api/conversations/threads/${threadId}/messages`, { method: 'POST', json: { visibility: 'internal', body: ownersNote } });
     expect(note.status, await note.clone().text()).toBeLessThan(300);
+    // Every one of them is in the thread.
+    const { data: rows } = await db.from('conversation_messages').select('body').eq('thread_id', threadId);
+    const inThread = (rows ?? []).map((r) => r.body as string);
+    for (const body of [guideNote, aiFollowUp, crmReminder, supportsNote, sideChannel, ownersSideReply, ownersNote]) expect(inThread, body).toContain(body);
 
     expect((await chat()).map((m) => m.body)).toEqual([hers, ownersReply, conciergesReply]);
 

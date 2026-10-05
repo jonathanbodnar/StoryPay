@@ -2,9 +2,12 @@
  * The Setup Guide: the short course every venue sees on its dashboard, the
  * suggested steps to its first leads. Owner's rules (Oct 4 2026):
  *
- *  - It opens by itself a few seconds after each sign-in, for every venue
- *    except Private Clients (our team sets those up). The X closes it; the
- *    product is never gated behind it.
+ *  - It opens by itself a few seconds after each sign-in, for every venue.
+ *    The X closes it; the product is never gated behind it.
+ *  - Private Clients get it like everyone else (Oct 5 2026: "that's what we
+ *    will use to set up their account"; until then they were left out). Their
+ *    last step, the strategy call, is shown already done: they have signed up
+ *    for that service.
  *  - Every step is a suggestion the venue can tick off itself, done or not.
  *    Once every step is ticked the pop-up stops ("that's on them").
  *  - A small closed pill stays on the dashboard until each step is REALLY set
@@ -232,12 +235,19 @@ export interface SetupLessonState {
   /** Ticked or really set up: what the venue sees as done. */
   checked: boolean;
   optional: boolean;
+  /** Done because the venue already has what the step offers (a Private Client
+   *  and the strategy call): green-checked, with nothing to press. */
+  alreadyTheirs: boolean;
 }
 
 /**
  * The steps this venue sees, in order. A step is left out when the venue can't
- * act on it: its plan doesn't include the screen, LeadFinder isn't switched on
- * for it, or (the strategy-call step) it is already a Private Client.
+ * act on it: its plan doesn't include the screen, or LeadFinder isn't switched
+ * on for it.
+ *
+ * A Private Client sees the strategy-call step already done, whatever it has
+ * ticked: it has signed up for that service (owner's rule, Oct 5 2026: "we
+ * just need to green-check-mark that one completely").
  */
 export function setupLessonsFor(ctx: SetupContext): SetupLessonState[] {
   const saved = new Set(savedSteps(ctx.stepsCompleted));
@@ -245,10 +255,13 @@ export function setupLessonsFor(ctx: SetupContext): SetupLessonState[] {
   for (const lesson of SETUP_LESSONS) {
     if (lesson.navId && ctx.allowedNavIds && !ctx.allowedNavIds.includes(lesson.navId)) continue;
     if (lesson.id === 'leadfinder' && !ctx.leadFinderAvailable) continue;
-    if (lesson.id === 'grow' && ctx.privateClient) continue;
+    if (lesson.id === 'grow' && ctx.privateClient) {
+      out.push({ id: lesson.id, ticked: true, verified: true, checked: true, optional: false, alreadyTheirs: true });
+      continue;
+    }
     const ticked = saved.has(`${GUIDE_STEP_PREFIX}${lesson.id}`);
     const verified = lesson.manual ? ticked : ctx.facts[DETECTED[lesson.id as keyof typeof DETECTED]] === true;
-    out.push({ id: lesson.id, ticked, verified, checked: ticked || verified, optional: lesson.optional === true });
+    out.push({ id: lesson.id, ticked, verified, checked: ticked || verified, optional: lesson.optional === true, alreadyTheirs: false });
   }
   return out;
 }
@@ -297,7 +310,7 @@ export function setupGuideDisplay(guide: Pick<SetupGuideState, 'lessons' | 'done
 export interface SetupGuideState {
   /** Wizard finished and the viewer runs the venue: the guide is in their sidebar. */
   eligible: boolean;
-  /** This venue gets the prompts at all (everyone but Private Clients). */
+  /** This venue gets the prompts at all (every venue, unless support switched them off). */
   prompted: boolean;
   /** Open by itself after this sign-in (the dashboard still waits a few seconds). */
   autoOpen: boolean;
@@ -336,17 +349,17 @@ export function withSetupPromptsOff(stored: unknown, off: boolean): string[] {
 
 /**
  * Does this venue get the guide's prompts (the pop-up after each sign-in and
- * the pill)? Every venue that has finished the setup wizard, old or new, on any
- * plan — except Private Clients, and one support has switched them off for.
- * Only the people who run the venue (owner, admins) are prompted.
+ * the bar on every page)? Every venue that has finished the setup wizard, old
+ * or new, on any plan, Private Clients included: all but one support has
+ * switched them off for. Only the people who run the venue (owner, admins)
+ * are prompted.
  */
 export function setupGuidePrompts(v: {
   wizardDone: boolean;
   promptsOff: boolean;
-  privateClient: boolean;
   canManage: boolean;
 }): boolean {
-  return v.wizardDone && v.canManage && !v.privateClient && !v.promptsOff;
+  return v.wizardDone && v.canManage && !v.promptsOff;
 }
 
 /** Videos that ship with the guide; the admin's links (Admin → Setup guide) replace them. */

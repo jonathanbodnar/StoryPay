@@ -16,7 +16,8 @@
  * counts what's left to set up, so a step the venue ticked without doing
  * keeps its reminder (owner's rule, Oct 4 2026).
  *
- * Not shown to Private Clients, to team members, or in the phone app.
+ * Not shown to team members or in the phone app. (Private Clients see it like
+ * every other venue, since Oct 5 2026.)
  */
 
 import { useEffect, useRef, useState, type ReactNode, type UIEvent } from 'react';

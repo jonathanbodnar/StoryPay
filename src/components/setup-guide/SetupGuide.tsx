@@ -6,7 +6,8 @@
  * the dashboard shell.
  *
  * Owner's rules (Oct 4 2026): it opens by itself a few seconds after each
- * sign-in, for every venue but Private Clients, until every step is ticked.
+ * sign-in, for every venue (Private Clients too, since Oct 5), until every
+ * step is ticked.
  * The X always closes it (nothing is gated behind it), and the venue can tick
  * any step off itself, set up or not. A step that's ticked but isn't really
  * set up says so, and keeps the reminder pill up (SetupGuidePrompt).
@@ -171,6 +172,9 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
   const copyFirst = lesson.id === 'listing' && Boolean(status.listingUrl);
   // A step whose button plays a video needs a video: without one it can only be ticked.
   const cantPlay = cta.does === 'play' && !video;
+  // A Private Client has already signed up for what the last step offers: it
+  // is shown done, with no survey to fill in (and so, as the last step, no buttons).
+  const nothingToPress = current.alreadyTheirs && !next;
 
   return (
     <>
@@ -266,6 +270,11 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                       You marked this done, but it isn’t set up yet. The reminder stays until it is.
                     </p>
                   )}
+                  {current.alreadyTheirs && (
+                    <p data-testid="setup-guide-already-theirs" className="mt-3 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-emerald-900">
+                      You’ve already signed up for this, so it’s done.
+                    </p>
+                  )}
 
                   <ol className="mt-4 space-y-2.5">
                     {lesson.steps.map((step, i) => (
@@ -279,7 +288,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                   </ol>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5 px-5 py-4 sm:px-7 lg:shrink-0 lg:border-t lg:border-gray-100">
+                {!nothingToPress && <div className="flex flex-wrap items-center gap-2.5 px-5 py-4 sm:px-7 lg:shrink-0 lg:border-t lg:border-gray-100">
                   {copyFirst && (
                     <button type="button" onClick={copyListing} className={primaryButton}>
                       {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied' : 'Copy my link'}
@@ -302,7 +311,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                         <Play size={15} /> {cta.label}
                       </button>
                     )
-                  ) : (
+                  ) : !current.alreadyTheirs && (
                     <button
                       type="button"
                       onClick={() => {
@@ -342,7 +351,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                       Next step
                     </button>
                   )}
-                </div>
+                </div>}
               </div>
 
               {/* The steps: pick one to read it, tick its circle to mark it done. */}

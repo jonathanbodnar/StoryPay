@@ -88,7 +88,6 @@ export async function loadSetupGuide(
   const prompted = setupGuidePrompts({
     wizardDone,
     promptsOff: setupPromptsOff(venue.onboarding_steps_completed),
-    privateClient,
     canManage: viewer.canManage,
   });
 
