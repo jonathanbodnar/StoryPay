@@ -83,7 +83,8 @@ test('a couple opens their proposal and signs it', async ({ page }) => {
 // gate for a change that had nothing to do with it.)
 test('live updates: a new lead lights up the Lead Inbox badge without a refresh', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'The phone tab bar has its own badge.');
-  const stamp = Date.now().toString(36);
+  // (Unique even when the journey is run several times at once.)
+  const stamp = `${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
   const email = `live.${stamp}.${runId}@example.com`;
   const venueId = randomUUID();
   const { data: plan } = await db.from('directory_plans').select('id').eq('slug', 'bride-booking-system').single();
@@ -98,6 +99,30 @@ test('live updates: a new lead lights up the Lead Inbox badge without a refresh'
   });
   expect(error?.message ?? null).toBeNull();
 
+  // Before a new lead can light the badge, the dashboard must have done two
+  // things, and neither is instant:
+  //  1. taken its baseline ("every lead so far is seen"): a lead that arrives
+  //     before that is part of the baseline, and never counted;
+  //  2. joined its live channel: a lead announced before that is never heard.
+  // Oct 5 2026: with the flow tests running alongside, the lead got there
+  // first and the badge never lit, twice over. So the journey watches for both.
+  const leadsChannel = `venue:${venueId}:leads`;
+  // (The channel's real name is a secret the page asks the app for.)
+  const topic: Promise<string | null> = page
+    .waitForResponse((r) => r.url().includes('/api/realtime/topics') && (r.request().postData() ?? '').includes(leadsChannel), { timeout: 45_000 })
+    .then(async (r) => ((await r.json()) as { topics?: Record<string, string> }).topics?.[leadsChannel] ?? null)
+    .catch(() => null);
+  const joined = new Promise<void>((resolve) => {
+    page.on('websocket', (ws) => {
+      ws.on('framereceived', ({ payload }) => {
+        const frame = String(payload);
+        // The live service's "you're in" for a channel.
+        if (!frame.includes('phx_reply') || !/"status"\s*:\s*"ok"/.test(frame)) return;
+        void topic.then((name) => { if (name && frame.includes(name)) resolve(); });
+      });
+    });
+  });
+
   await page.goto('/login');
   await page.getByPlaceholder('you@yourvenue.com').first().fill(email);
   await page.getByPlaceholder('••••••••').fill(env.password);
@@ -106,6 +131,13 @@ test('live updates: a new lead lights up the Lead Inbox badge without a refresh'
 
   const inbox = page.getByRole('link', { name: /Lead Inbox/ }).first();
   await expect(inbox).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('sv_leads_seen_at')), { timeout: 30_000 }).toBeTruthy();
+  expect(await topic, 'the dashboard asked for its live leads channel').toBeTruthy();
+  let giveUp: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    joined,
+    new Promise<never>((_, reject) => { giveUp = setTimeout(() => reject(new Error('The dashboard never joined its live leads channel.')), 30_000); }),
+  ]).finally(() => clearTimeout(giveUp));
   await expect(inbox).not.toHaveText(/\d/);
   const last = `Live${runId}`;
   const res = await submitListingLead({
