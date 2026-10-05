@@ -14,7 +14,9 @@ import {
 //    thread: when, where to, and who moved her. For the venue and support
 //    only; the couple never sees it.
 const n = (parseInt(runId.slice(-5), 36) % 9000) + 1000;
-const phone = `(646) 557-${n}`;
+// A number no other flow test uses: every test in a run shares `n`, and the
+// texting stand-in knows a couple by her number (tests/unit/flow-test-phones.test.ts).
+const phone = `(646) 550-${n}`;
 const email = `summer.${runId}@example.com`;
 
 let owner: Browser;
