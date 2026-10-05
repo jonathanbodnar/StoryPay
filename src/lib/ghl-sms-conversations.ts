@@ -899,9 +899,9 @@ async function crmUserName(token: string, locationId: string, userId: string): P
  *    only given the CRM's id, so it is never shown twice.
  *  - What's imported says where it came from (sent_via) and, for a person,
  *    who (sent_by_name), and keeps the time it was really sent.
- *  - Nothing is sent to anyone: no alerts, no AI reply. One thing follows a
- *    person's FRESH text: the AI Concierge's follow-ups pause, exactly as
- *    when the venue replies from the inbox, so it never talks over them.
+ *  - Nothing is sent to anyone and nothing else changes: no alerts, no AI
+ *    reply, and the AI Concierge is NOT paused (only the bride's own reply
+ *    stops it: owner's rule, Oct 5 2026).
  * Returns how many were imported.
  */
 async function importVenueSideTexts(params: {
@@ -996,15 +996,6 @@ async function importVenueSideTexts(params: {
       }
     })();
 
-    // A person just answered the couple themselves: the AI stops following up.
-    if (origin.sentVia === 'crm_user' && isFreshInboundForAlert(createdAt)) {
-      try {
-        const { pauseAiOnHumanTakeover } = await import('@/lib/ai-concierge/state-control');
-        await pauseAiOnHumanTakeover({ venueId, venueCustomerId, reason: 'human_reply_crm_app', triggeredBy: 'venue:crm_app_reply' });
-      } catch (e) {
-        console.warn('[ghl-sms] pause after a CRM reply failed', e);
-      }
-    }
   }
   return imported;
 }

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Browser, coupleTexts, db, ensureFlowVenue, FLOW_VENUE, runId, runJob, signedInOwner, signedInSuperAdmin, submitListingLead, texts, waitForText } from './helpers';
+import { Browser, coupleTexts, db, ensureFlowVenue, FLOW_VENUE, runId, runJob, signedInOwner, signedInSuperAdmin, submitListingLead, texts, waitForText, venueTextsFromCrm } from './helpers';
 
 // The AI Concierge, on the test copy (real AI, stand-in texting service): it
 // writes follow-up texts; a couple's reply hands them to the venue and quiets
@@ -83,19 +83,43 @@ describe('the AI Concierge', () => {
     expect((await texts(phoneC, before)).filter((x) => x.direction === 'outbound')).toHaveLength(0);
   });
 
-  it('when the venue replies from the inbox, the AI steps back', async () => {
+  // Owner's rule (Oct 5 2026): "The AI should never pause unless the bride
+  // replies. If the venue owner does outward lead generation questions in AI,
+  // they're on the same team." (Until then a reply from the venue's inbox, by
+  // email, or from support paused it.)
+  it('the venue writing to a couple does not stop the AI; her own reply does, and she moves to Conversations Started', async () => {
     const leadD = await newLead('avery', phoneD);
     await waitForText(phoneD, since, (b) => /guide/i.test(b));
     await aiOnFor(owner, leadD);
     expect(await aiState(leadD)).toBe('ai_active');
 
+    // The owner writes to her from the StoryVenue inbox…
     const { data: vc } = await db.from('venue_customers').select('id').eq('venue_id', FLOW_VENUE.id).ilike('customer_email', `avery.${runId}@example.com`).single();
     const { data: thread } = await db.from('conversation_threads').select('id').eq('venue_customer_id', vc!.id).limit(1).single();
     const reply = await owner.fetch(`/api/conversations/threads/${thread!.id}/messages`, {
       method: 'POST', json: { visibility: 'external', external_channel: 'sms', body: 'Hi Avery! This is the owner. Happy to help with dates.' },
     });
     expect(reply.status, await reply.clone().text()).toBeLessThan(300);
-    expect(await waitForAiState(leadD, (s) => s !== 'ai_active', 15_000)).toBe('paused');
+    // …and again from her phone, through the venue's texting app.
+    await venueTextsFromCrm(phoneD, `One more thing, Avery: we just opened two Saturdays in June. ${runId}`, { person: 'Jo Ann Wilkerson' });
+    expect((await runJob('ghl-inbound-sync')).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 3000));
+    // Same team: the AI is still on, and still follows up.
+    expect(await aiState(leadD)).toBe('ai_active');
+    const before = new Date().toISOString();
+    const send = await owner.fetch(`/api/listing/ai-concierge/leads/${leadD}/force-send`, { method: 'POST' });
+    expect(send.status, await send.clone().text()).toBe(200);
+    await waitForText(phoneD, before, () => true, 60_000);
+
+    // Her reply is what stops it, and it moves her to Conversations Started.
+    await coupleTexts(phoneD, 'Thank you so much!');
+    expect((await runJob('ghl-inbound-sync')).status).toBe(200);
+    expect(await waitForAiState(leadD, (s) => s !== 'ai_active')).toBe('paused');
+    const { data: lead } = await db.from('leads').select('stage_id').eq('id', leadD).single();
+    const { data: stage } = await db.from('lead_pipeline_stages').select('name').eq('id', lead!.stage_id as string).single();
+    expect(stage!.name).toMatch(/conversation/i);
+    const quiet = await owner.fetch(`/api/listing/ai-concierge/leads/${leadD}/force-send`, { method: 'POST' });
+    expect(quiet.status).toBe(409);
   });
 });
 

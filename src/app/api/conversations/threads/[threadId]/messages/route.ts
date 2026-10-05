@@ -773,18 +773,9 @@ ${triggerBlock}
       createdAt:          (row as { created_at?: string }).created_at || new Date().toISOString(),
     });
 
-    // The venue answered the couple itself: pause the AI Concierge's
-    // follow-ups so it never talks over a person, as a reply by email
-    // already did (the inbox, the app's main way to reply, didn't).
-    if (sender_kind === 'owner' || sender_kind === 'team') {
-      const { pauseAiOnHumanTakeover } = await import('@/lib/ai-concierge/state-control');
-      await pauseAiOnHumanTakeover({
-        venueId,
-        venueCustomerId,
-        reason:      'human_reply_inbox',
-        triggeredBy: sender_kind === 'team' ? 'venue_team:inbox_reply' : 'venue_owner:inbox_reply',
-      });
-    }
+    // The venue writing to the couple does NOT pause the AI Concierge (owner's
+    // rule, Oct 5 2026: "they're on the same team"). Only the bride's own reply
+    // stops it (lib/ai-concierge/inbound-handler.ts).
 
     // Slack alert for the support team when the VENUE side (owner or team
     // member) replies to a bride — fire-and-forget, never blocks the send.
