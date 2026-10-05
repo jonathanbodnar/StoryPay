@@ -25,6 +25,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getAdminIdentity } from '@/lib/admin-identity';
+import { inBatches } from '@/lib/in-batches';
 import {
   buildStageById,
   computeLeadFunnel,
@@ -149,16 +150,26 @@ export async function GET(req: NextRequest) {
       new Set([...cohortVenues.private_client, ...cohortVenues.all_inclusive, ...cohortVenues.saas_97].map((v) => v.id)),
     );
 
+    // The venues' leads, asked for a batch of venues at a time: every venue's
+    // id in one request stopped fitting once there were a few hundred of them
+    // (lib/in-batches.ts), and the page then showed nothing at all.
+    const loadLeads = async (): Promise<LeadRow[]> => {
+      const all: LeadRow[] = [];
+      for (const venueIds of inBatches(allCohortVenueIds)) {
+        all.push(...await fetchAll<LeadRow>((from, to) => {
+          let q = supabaseAdmin
+            .from('leads')
+            .select('id, venue_id, status, stage_id, opportunity_value, source, is_ghl_migration, last_inbound_at, created_at')
+            .in('venue_id', venueIds);
+          if (sinceIso) q = q.gte('created_at', sinceIso);
+          if (untilIso) q = q.lte('created_at', untilIso);
+          return q.range(from, to);
+        }));
+      }
+      return all;
+    };
     const [leads, stageRows] = await Promise.all([
-      fetchAll<LeadRow>((from, to) => {
-        let q = supabaseAdmin
-          .from('leads')
-          .select('id, venue_id, status, stage_id, opportunity_value, source, is_ghl_migration, last_inbound_at, created_at')
-          .in('venue_id', allCohortVenueIds.length ? allCohortVenueIds : ['00000000-0000-0000-0000-000000000000']);
-        if (sinceIso) q = q.gte('created_at', sinceIso);
-        if (untilIso) q = q.lte('created_at', untilIso);
-        return q.range(from, to);
-      }),
+      loadLeads(),
       fetchAll<VenueStageRow>((from, to) =>
         supabaseAdmin.from('lead_pipeline_stages').select('id, venue_id, name, kind, position').range(from, to),
       ),
