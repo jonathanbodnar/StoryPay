@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — plain logic module shared with the release gate scripts
-import { laneFor, routeToken, sensitiveFiles, sleepsDuring, targetedFlowFiles, trailingBase } from '../../scripts/staging/lanes.mjs';
+import { flowFilesToRerun, laneFor, RERUN_AT_MOST, routeToken, sensitiveFiles, sleepsDuring, targetedFlowFiles, trailingBase } from '../../scripts/staging/lanes.mjs';
 
 // The release gate's lanes: a commit that ships nothing runs the smoke lane;
 // anything shipped runs the full suite, with the changed area's flow tests
@@ -60,6 +60,29 @@ describe('release lanes', () => {
     expect(targetedFlowFiles(['src/lib/email.ts'], flowTests)).toEqual([]);
     // The shared test kit affects every flow: nothing to single out.
     expect(targetedFlowFiles(['tests/flows/helpers.ts', 'tests/flows/leads.test.ts'], flowTests)).toEqual([]);
+  });
+
+  // Oct 5 2026: four of six full runs went red from the laptop they run on (a
+  // failed name lookup, a stalled answer), never from the code. A stage that
+  // fails in a few files gets those files run once more; a real bug fails twice.
+  it('a stage that failed in a few files reruns just those; a broad failure does not get a second chance', () => {
+    const tree = '/tmp/storyvenue-check-abc12345';
+    const file = (name: string, status: string) => ({ name: `${tree}/tests/flows/${name}`, status });
+    const report = (...files: Array<{ name: string; status: string }>) => ({ testResults: files });
+    expect(flowFilesToRerun(report(file('leads.test.ts', 'passed'), file('lead-sources.test.ts', 'failed'), file('locked-database.test.ts', 'failed')), tree))
+      .toEqual(['tests/flows/lead-sources.test.ts', 'tests/flows/locked-database.test.ts']);
+    // Nothing failed, or the run broke before any file reported: nothing to rerun.
+    expect(flowFilesToRerun(report(file('leads.test.ts', 'passed')), tree)).toEqual([]);
+    expect(flowFilesToRerun(report(), tree)).toEqual([]);
+    for (const junk of [null, undefined, 'not a report', { testResults: 'nope' }]) expect(flowFilesToRerun(junk, tree)).toEqual([]);
+    // More than a few files failing is not a blip.
+    const many = Array.from({ length: RERUN_AT_MOST + 1 }, (_, i) => file(`f${i}.test.ts`, 'failed'));
+    expect(flowFilesToRerun(report(...many), tree)).toEqual([]);
+    expect(flowFilesToRerun(report(...many.slice(0, RERUN_AT_MOST)), tree)).toHaveLength(RERUN_AT_MOST);
+    // Only files inside this checkout's flow tests are ever passed to a command.
+    expect(flowFilesToRerun(report({ name: '/somewhere/else/tests/flows/x.test.ts', status: 'failed' }), tree)).toEqual([]);
+    expect(flowFilesToRerun(report({ name: `${tree}/tests/flows/x.test.ts; rm -rf ~`, status: 'failed' }), tree)).toEqual([]);
+    expect(flowFilesToRerun(report({ name: `${tree}/tests/unit/x.test.ts`, status: 'failed' }), tree)).toEqual([]);
   });
 
   // Fix-forward: the fix goes live over the red release. Its own check has to

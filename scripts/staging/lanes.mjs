@@ -11,6 +11,11 @@
  *  - trailingBase: what a hot release's trailing check compares against. A
  *    fix released over a version whose own check never came back clean
  *    answers for that version's changes too (fix-forward).
+ *  - flowFilesToRerun: when a flow-test stage fails in only a few files,
+ *    those files get one more run before the stage is called failed. The
+ *    checks run from a laptop over the internet: a dropped connection or a
+ *    failed name lookup fails a test whatever the code does. A real bug
+ *    fails twice; a blip doesn't. What was rerun is recorded and reported.
  *  - sleepsDuring: how often this computer went to sleep while the checks
  *    ran. A run that slept isn't a verdict (its tests time out and drop
  *    their connections whatever the code does), so it's run again.
@@ -130,4 +135,28 @@ export function trailingBase(prevSha, hotRecord) {
     base = record.prevSha;
   }
   return { base, superseded };
+}
+
+/** More failed files than this is not a blip: no second run. */
+export const RERUN_AT_MOST = 3;
+
+/**
+ * The flow-test files worth one more run after a failed stage, from vitest's
+ * JSON report ({ testResults: [{ name: '/abs/file', status }] }): the failed
+ * files, as paths inside the checkout, when there are only a few of them.
+ * [] when nothing failed in a file (the run itself broke), when too many did,
+ * or when the report can't be read.
+ */
+export function flowFilesToRerun(report, treeRoot) {
+  const results = Array.isArray(report?.testResults) ? report.testResults : [];
+  const root = String(treeRoot ?? '').replace(/\/+$/, '');
+  const failed = [];
+  for (const r of results) {
+    if (r?.status !== 'failed' || typeof r.name !== 'string') continue;
+    const at = r.name.indexOf('tests/flows/');
+    if (at < 0 || (root && !r.name.startsWith(`${root}/`))) continue;
+    const file = r.name.slice(at);
+    if (/^tests\/flows\/[\w.-]+\.test\.ts$/.test(file) && !failed.includes(file)) failed.push(file);
+  }
+  return failed.length > 0 && failed.length <= RERUN_AT_MOST ? failed : [];
 }

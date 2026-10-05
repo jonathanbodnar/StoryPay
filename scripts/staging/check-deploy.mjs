@@ -18,6 +18,12 @@
  *   node scripts/staging/check-deploy.mjs <sha> --since <sha>   # "the change" is everything after that commit
  *                                                               # (the trailing check: the commit is already live)
  *
+ * A flow-test stage that fails in only a few files gets those files run once
+ * more before it counts as failed (a dropped connection from this computer
+ * fails a test whatever the code does; a real bug fails twice). The browser
+ * tests retry a failed journey once the same way. What needed a second run
+ * is printed and recorded, never hidden.
+ *
  * The run needs this computer awake for its half hour. It holds off idle
  * sleep itself, but nothing stops a closed lid on battery: a failed run
  * that slept says so and is recorded as such, to be run again.
@@ -27,13 +33,15 @@
  */
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { laneFor, sleepsDuring, targetedFlowFiles } from './lanes.mjs';
+import { flowFilesToRerun, laneFor, sleepsDuring, targetedFlowFiles } from './lanes.mjs';
 
 const SERVICE = 'StoryVenue Backend';
 const ENV = 'Dev';
+/** Where a flow stage leaves vitest's report, inside the checkout. */
+const FLOW_REPORT = '.flow-report.json';
 const args = process.argv.slice(2);
 const sinceAt = args.indexOf('--since');
 const since = sinceAt >= 0 ? args[sinceAt + 1] : null;
@@ -92,18 +100,23 @@ if (lane === 'smoke') {
 }
 
 const results = [];
+/** Stages that only passed on a second run of some files: [{ stage, files }]. */
+const reruns = [];
 const fullSha = execFileSync('git', ['rev-parse', sha], { encoding: 'utf8' }).trim();
 
 function finish() {
   dropTree();
   console.log('\n── Summary ──');
-  for (const [name, ok] of results) console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`);
+  for (const [name, ok] of results) {
+    const again = reruns.find((r) => r.stage === name);
+    console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${again ? `  (needed a second run: ${again.files.join(', ')})` : ''}`);
+  }
   const pass = results.every(([, ok]) => ok);
   // A failure on a run this computer slept through says nothing about the code.
   const slept = pass ? 0 : sleptCount();
   const dir = join(execFileSync('git', ['rev-parse', '--git-dir'], { encoding: 'utf8' }).trim(), 'storyvenue-checks');
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${fullSha}.json`), JSON.stringify({ sha: fullSha, pass, lane, changed: changed?.length ?? null, slept, at: new Date().toISOString(), results }, null, 1));
+  writeFileSync(join(dir, `${fullSha}.json`), JSON.stringify({ sha: fullSha, pass, lane, changed: changed?.length ?? null, slept, reruns, at: new Date().toISOString(), results }, null, 1));
   if (pass) console.log(`\nAll checks passed${lane === 'smoke' ? ' (smoke lane)' : ''}. To put ${short} live: node scripts/staging/release.mjs ${short}`);
   else if (slept) console.log(`\nThis computer went to sleep ${slept} time${slept === 1 ? '' : 's'} during the run, so this failure isn't a verdict on the code. Keep it awake (lid open, or plugged in) and check again.`);
   else console.log('\nNot released: fix the failure, push, and check again.');
@@ -154,15 +167,33 @@ if (lane === 'full') {
   const flowDir = join(tree, 'tests', 'flows');
   const flowTests = readdirSync(flowDir).filter((f) => f.endsWith('.test.ts')).map((name) => ({ name, source: readFileSync(join(flowDir, name), 'utf8') }));
   const targeted = targetedFlowFiles(changed, flowTests);
+  // Flow stages also write vitest's report, so a failed stage knows which files failed.
+  const flows = (files) => `npx vitest run --config vitest.flows.config.mts --reporter=default --reporter=json --outputFile.json=${FLOW_REPORT} ${files}`.trim();
   if (targeted.length) {
-    suites.push([`changed-area flow tests (${targeted.join(', ')})`,
-      `npx vitest run --config vitest.flows.config.mts ${targeted.map((f) => `tests/flows/${f}`).join(' ')}`]);
+    suites.push([`changed-area flow tests (${targeted.join(', ')})`, flows(targeted.map((f) => `tests/flows/${f}`).join(' ')), 'flows']);
   }
-  suites.push(['flow tests', 'npm run test:flows'], ['browser tests', 'npx playwright test --reporter=line']);
+  // A failed browser journey is tried once more by Playwright itself (it reports it as flaky).
+  suites.push(['flow tests', flows(''), 'flows'], ['browser tests', 'npx playwright test --reporter=line --retries=1']);
 }
-for (const [name, cmd] of suites) {
+const onTestCopy = (cmd) => spawnSync('railway', ['run', '--service', SERVICE, '--environment', ENV, '--', 'sh', '-c', `cd '${tree}' && ${cmd}`], { env: railwayEnv, stdio: 'inherit' });
+for (const [name, cmd, kind] of suites) {
   console.log(`\n── ${name} ──`);
-  const r = spawnSync('railway', ['run', '--service', SERVICE, '--environment', ENV, '--', 'sh', '-c', `cd '${tree}' && ${cmd}`], { env: railwayEnv, stdio: 'inherit' });
+  if (kind === 'flows') rmSync(join(tree, FLOW_REPORT), { force: true });
+  let r = onTestCopy(cmd);
+  if (r.status !== 0 && kind === 'flows') {
+    // Only a few files failed: one more run of just those before calling it.
+    let again = [];
+    // (The report names files by their real path: on a Mac the temp folder is a link.)
+    try { again = flowFilesToRerun(JSON.parse(readFileSync(join(tree, FLOW_REPORT), 'utf8')), realpathSync(tree)); } catch { /* no report: the run itself broke */ }
+    if (again.length) {
+      console.log(`\n── ${name}: a second run of ${again.join(', ')} ──`);
+      r = onTestCopy(`npx vitest run --config vitest.flows.config.mts ${again.join(' ')}`);
+      if (r.status === 0) {
+        reruns.push({ stage: name, files: again });
+        console.log(`Passed on the second run. Recorded as needing one: ${again.join(', ')}`);
+      }
+    }
+  }
   results.push([name, r.status === 0]);
   if (r.status !== 0) {
     console.log('\nStopping here — the stages after this one were not run.');
