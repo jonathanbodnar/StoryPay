@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PAGES } from '../flows/routes';
 import {
-  GUIDE_PROMPTS_OFF, SETUP_LESSONS, setupGuideProgress, setupGuidePrompts, setupGuideVideos, setupLessonsFor,
+  GUIDE_PROMPTS_OFF, SETUP_LESSONS, setupGuideDisplay, setupGuideProgress, setupGuidePrompts, setupGuideVideos, setupLessonsFor,
   setupPromptsOff, videoEmbedUrl, withSetupPromptsOff, withSetupStep,
   type SetupContext, type SetupFacts,
 } from '@/lib/setup-guide';
@@ -122,7 +122,37 @@ describe('when the pop-up stops and when the reminder goes', () => {
   });
 });
 
-describe('who is prompted (the pop-up after each sign-in, and the pill)', () => {
+describe('what the bar on every page and the sidebar ring say', () => {
+  const shown = (c: SetupContext) => {
+    const lessons = setupLessonsFor(c);
+    return setupGuideDisplay({ lessons, ...setupGuideProgress(lessons) });
+  };
+
+  it('while steps are still to tick: how many are done, and the next one to do', () => {
+    expect(shown(ctx())).toEqual({ done: 0, total: 7, label: '0 of 7 done', nextId: 'listing', settingUp: false });
+    // Done by their own word or for real, it counts the same here.
+    const some = ctx({ stepsCompleted: tickAll('listing'), facts: { ...NOTHING, guideEnabled: true } });
+    expect(shown(some)).toEqual({ done: 2, total: 7, label: '2 of 7 done', nextId: 'lead_link', settingUp: false });
+  });
+
+  it('once every step is ticked: only what is really set up counts, so the reminder is honest', () => {
+    // All seven ticked, nothing built: two are "set up by being ticked", five are owed.
+    expect(shown(ctx({ stepsCompleted: tickAll(...COUNTED) }))).toEqual({ done: 2, total: 7, label: '5 left to set up', nextId: 'listing', settingUp: true });
+    const nearly = ctx({ stepsCompleted: tickAll(...COUNTED), facts: { ...EVERYTHING, leadFinderMail: false } });
+    expect(shown(nearly)).toEqual({ done: 6, total: 7, label: '1 left to set up', nextId: 'leadfinder', settingUp: true });
+  });
+
+  it('everything really set up: a full ring and nothing next', () => {
+    expect(shown(ctx({ stepsCompleted: tickAll(...COUNTED), facts: EVERYTHING }))).toEqual({ done: 7, total: 7, label: 'All set up', nextId: null, settingUp: false });
+  });
+
+  it('StoryPay, being optional, is never the next step and never moves the ring', () => {
+    const onlyPaymentsLeft = ctx({ stepsCompleted: tickAll(...COUNTED), facts: { ...EVERYTHING, stripeReady: false } });
+    expect(shown(onlyPaymentsLeft)).toMatchObject({ done: 7, total: 7, nextId: null });
+  });
+});
+
+describe('who is prompted (the pop-up after each sign-in, and the bar on every page)', () => {
   const venue = { wizardDone: true, promptsOff: false, privateClient: false, canManage: true };
 
   it('every venue that has finished the setup wizard, old or new, on any plan', () => {

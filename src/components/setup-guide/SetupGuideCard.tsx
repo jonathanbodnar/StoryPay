@@ -1,108 +1,66 @@
 'use client';
 
 /**
- * The Setup Guide when it's closed, at the top of the dashboard:
+ * The Setup Guide when it's closed: a drawer hanging from the top of EVERY
+ * dashboard page (owner's call, Oct 5 2026: one presentation everywhere, so
+ * wherever a venue goes it sees there's setup left; it replaced a card on the
+ * dashboard home plus a dark pill on the other pages).
  *
- *  - the drawer, on the dashboard home, while there are steps still to tick.
- *    It hangs from the top of the page. Open, it shows every step's cover to
- *    jump to; closed, it's one slim bar: progress, the next step, Continue.
- *    It starts open and stays how the venue left it, on that device (the
- *    pop-up already comes back at each sign-in). The plan chip ("Plan ends
- *    Oct 27") sits on its bar, so the page has one thing at the top, not two.
- *  - the pill, everywhere else, and everywhere once every step is ticked. It
- *    stays until each step is REALLY set up, so a step the venue ticked
- *    without doing keeps its reminder (owner's rule, Oct 4 2026).
+ * Closed, it's one slim bar: progress as a ring, the next step, Continue.
+ * Open, it also shows every step's cover to jump to. It stays how the venue
+ * left it, on that device; until they've chosen, it's open on the dashboard
+ * home (on a wide screen) and the bar everywhere else, so it never pushes a
+ * working page down by itself. The plan chip ("Plan ends Oct 27") sits on it.
  *
- * Neither is shown to Private Clients, or once everything is set up.
+ * It stays until each step is REALLY set up: once every step is ticked it
+ * counts what's left to set up, so a step the venue ticked without doing
+ * keeps its reminder (owner's rule, Oct 4 2026).
+ *
+ * Not shown to Private Clients, to team members, or in the phone app.
  */
 
 import { useEffect, useRef, useState, type ReactNode, type UIEvent } from 'react';
-import { ChevronDown, ChevronRight, GraduationCap, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import { isNativeApp } from '@/lib/platform';
-import { setupLesson } from '@/lib/setup-guide';
+import { setupGuideDisplay, setupLesson } from '@/lib/setup-guide';
 import { openSetupGuide, setupStepLabels, useSetupGuideStatus, type SetupGuideStatus } from '@/lib/setup-guide-client';
 import { LessonThumb, StepTick } from './LessonCover';
+import ProgressRing from './ProgressRing';
 
 export default function SetupGuidePrompt({ home, planChip }: { home: boolean; planChip?: ReactNode }) {
   const status = useSetupGuideStatus();
   if (!status?.prompted || isNativeApp()) return null;
-  if (home && !status.checkedAll) return <SetupGuideDrawer status={status} planChip={planChip} />;
-  if (status.showPill) return <SetupGuidePill left={status.left} />;
-  return null;
-}
-
-function SetupGuidePill({ left }: { left: number }) {
-  return (
-    <div className="mb-4 self-start">
-      <button
-        type="button"
-        data-testid="setup-guide-pill"
-        onClick={() => openSetupGuide()}
-        className="flex items-center gap-2 rounded-full bg-[#1b1b1b] py-2 pl-2.5 pr-3 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-[1.03]"
-      >
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15">
-          <GraduationCap size={14} />
-        </span>
-        Setup guide
-        <span className="rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-medium tabular-nums">
-          {left} left to set up
-        </span>
-      </button>
-    </div>
-  );
-}
-
-/**
- * Progress, as a ring around the guide's icon. (It was a green line along the
- * bottom of the bar: the bar's rounded corners clipped its ends, and the grey
- * remainder read as a second, broken line.)
- */
-function ProgressRing({ done, total }: { done: number; total: number }) {
-  const r = 14;
-  const round = 2 * Math.PI * r;
-  const part = total ? Math.min(1, Math.max(0, done / total)) : 0;
-  return (
-    <span aria-hidden data-testid="setup-guide-progress" data-progress={`${done}/${total}`} className="relative flex h-8 w-8 shrink-0 items-center justify-center">
-      <svg viewBox="0 0 32 32" className="absolute inset-0 h-full w-full -rotate-90">
-        <circle cx="16" cy="16" r={r} fill="none" strokeWidth="2.5" className="stroke-gray-200" />
-        <circle
-          cx="16" cy="16" r={r} fill="none" strokeWidth="2.5" strokeLinecap="round"
-          className="stroke-emerald-500 transition-[stroke-dashoffset] duration-500"
-          strokeDasharray={round}
-          strokeDashoffset={round * (1 - part)}
-        />
-      </svg>
-      <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#1b1b1b] text-white">
-        <GraduationCap size={12} />
-      </span>
-    </span>
-  );
+  // Until every step is really set up (showPill: the name is from the pill this replaced).
+  if (!status.showPill) return null;
+  return <SetupGuideDrawer status={status} home={home} planChip={planChip} />;
 }
 
 /**
  * How the venue left the drawer on this device. Until they've chosen, it's
- * open on a wide screen; on a phone, where the open drawer is a long list
- * that would push the dashboard off the screen, it starts as the bar.
+ * open only where it helps and can't get in the way: on the dashboard home,
+ * on a wide screen, while there are steps still to tick. Everywhere else it
+ * starts as the bar (an open drawer would push a working page down, and on a
+ * phone it is a long list).
  */
 const DRAWER_KEY = 'storyvenue.setupGuide.drawer';
-function drawerStartsOpen(): boolean {
+function drawerStartsOpen(byDefault: boolean): boolean {
   try {
     const left = window.localStorage.getItem(DRAWER_KEY);
     if (left === 'closed') return false;
     if (left === 'open') return true;
-    return window.matchMedia('(min-width: 640px)').matches;
+    return byDefault && window.matchMedia('(min-width: 640px)').matches;
   } catch {
-    return true;
+    return byDefault;
   }
 }
 
-function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; planChip?: ReactNode }) {
+function SetupGuideDrawer({ status, home, planChip }: { status: SetupGuideStatus; home: boolean; planChip?: ReactNode }) {
   const labels = setupStepLabels(status.lessons);
-  const nextId = status.lessons.find((l) => !l.optional && !l.checked)?.id;
-  const next = nextId ? setupLesson(nextId) : undefined;
+  const shown = setupGuideDisplay(status);
+  const next = shown.nextId ? setupLesson(shown.nextId) : undefined;
   // Only ever rendered in the browser (the guide's status is loaded there), so
   // reading what they chose last time can't disagree with the server's paint.
-  const [open, setOpen] = useState(drawerStartsOpen);
+  const [open, setOpen] = useState(() => drawerStartsOpen(home && !shown.settingUp));
   const toggle = () => {
     const now = !open;
     setOpen(now);
@@ -126,22 +84,23 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
           onClick={toggle}
           aria-expanded={open}
           aria-controls="setup-guide-steps"
-          className="flex min-w-0 flex-1 items-center gap-2.5 py-1 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         >
-          <ProgressRing done={status.done} total={status.total} />
+          {/* 30px ring + the bar's padding and border = 47px: with its margin the
+              closed bar takes exactly the room the page already leaves at the
+              top on a wide screen, so it pushes no page down. */}
+          <ProgressRing done={shown.done} total={shown.total} size={30} />
           <span className="min-w-0 truncate text-[13px] text-gray-500">
             <span className="mr-2 hidden font-heading text-sm font-semibold text-gray-900 sm:inline">Finish setting up</span>
             {/* On a phone the count is the label: there's no room for both. */}
-            <span className="font-semibold tabular-nums text-gray-900 sm:font-normal sm:text-gray-500">
-              {status.done} of {status.total} done
-            </span>
+            <span className="font-semibold tabular-nums text-gray-900 sm:font-normal sm:text-gray-500">{shown.label}</span>
             {next && <span className="hidden md:inline"> · Next: {next.title}</span>}
           </span>
         </button>
         {planChip}
         <button
           type="button"
-          onClick={() => openSetupGuide()}
+          onClick={() => openSetupGuide(shown.nextId ?? undefined)}
           className="whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
         >
           Continue setup

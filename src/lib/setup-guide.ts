@@ -241,6 +241,32 @@ export function setupGuideProgress(lessons: readonly SetupLessonState[]): {
   return { done, total: counted.length, left, checkedAll: counted.length > 0 && done === counted.length, fulfilled: left === 0 };
 }
 
+/**
+ * What the guide's bar (on every dashboard page) and its sidebar entry say.
+ * While there are steps still to tick it counts what's been done, by the
+ * venue's own word or for real. Once every step is ticked it counts only
+ * what's really set up, so a step ticked without doing it still shows as
+ * owed (the owner's rule: the reminder stays until each step is fulfilled).
+ * `nextId` is the step to send them to.
+ */
+export function setupGuideDisplay(guide: Pick<SetupGuideState, 'lessons' | 'done' | 'total' | 'left' | 'checkedAll' | 'fulfilled'>): {
+  done: number; total: number; label: string; nextId: SetupLessonId | null; settingUp: boolean;
+} {
+  const counted = guide.lessons.filter((l) => !l.optional);
+  if (!guide.checkedAll) {
+    return {
+      done: guide.done, total: guide.total, label: `${guide.done} of ${guide.total} done`,
+      nextId: counted.find((l) => !l.checked)?.id ?? null, settingUp: false,
+    };
+  }
+  const real = Math.max(0, guide.total - guide.left);
+  return {
+    done: real, total: guide.total,
+    label: guide.fulfilled ? 'All set up' : `${guide.left} left to set up`,
+    nextId: counted.find((l) => !l.verified)?.id ?? null, settingUp: !guide.fulfilled,
+  };
+}
+
 /** The guide as the API hands it to the dashboard. */
 export interface SetupGuideState {
   /** Wizard finished and the viewer runs the venue: the guide is in their sidebar. */
@@ -249,7 +275,8 @@ export interface SetupGuideState {
   prompted: boolean;
   /** Open by itself after this sign-in (the dashboard still waits a few seconds). */
   autoOpen: boolean;
-  /** The closed pill stays on the dashboard: something isn't really set up yet. */
+  /** The guide's bar stays at the top of every dashboard page: something isn't
+   *  really set up yet. (Named for the dark pill it used to be on inner pages.) */
   showPill: boolean;
   /** Every step is ticked or set up (optional ones aside): the pop-up has stopped. */
   checkedAll: boolean;

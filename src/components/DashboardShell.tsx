@@ -228,9 +228,8 @@ export default function DashboardShell({
         <MobileDashboardRedirect />
         <main className={`mx-auto flex w-full flex-1 flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
           {role !== 'member' && <OnboardingLauncher />}
-          {/* The Setup Guide when closed: its drawer at the top of the dashboard
-              home (carrying the plan chip), its pill everywhere else, until
-              each step is really set up. */}
+          {/* The Setup Guide when closed: its drawer at the top of every page
+              (carrying the plan chip), until each step is really set up. */}
           {role !== 'member' && (
             <SetupGuidePrompt
               home={pathname === '/dashboard/listing'}

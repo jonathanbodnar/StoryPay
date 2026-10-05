@@ -165,9 +165,25 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
     await expectNoSidewaysScroll(page);
   }
 
-  // The card is a drawer hanging from the top of the dashboard: open at first
-  // on a wide screen, and one slim bar once they close it (progress,
-  // Continue). It stays how they left it on this device; the bar opens it again.
+  // The same bar is on every page, so wherever they go they see there's setup
+  // left (owner's call, Oct 5 2026; it replaced a dark pill on inner pages).
+  // Away from the dashboard home it starts as the bar: it never pushes a
+  // working page down by itself.
+  await page.goto('/dashboard/leads');
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card).toHaveAttribute('data-open', 'false');
+  await expect(card).toContainText(/\d of \d done/);
+  await expect(page.getByTestId('setup-guide-pill')).toHaveCount(0);
+  // The sidebar's entry carries the same green progress ring.
+  await expect(page.locator('aside:visible nav > :first-child').getByTestId('setup-guide-progress')).toHaveAttribute('data-progress', /^\d\/\d$/);
+  await expectNoSidewaysScroll(page);
+  await page.goto('/dashboard/listing');
+  await expect(card).toBeVisible({ timeout: 20_000 });
+
+  // The card is a drawer hanging from the top of the page: open at first on
+  // the dashboard home (on a wide screen), and one slim bar once they close
+  // it (progress, Continue). It stays how they left it on this device; the
+  // bar opens it again.
   const steps = page.locator('#setup-guide-steps');
   // (A phone starts with the bar: its open drawer is a long list of steps.)
   if (testInfo.project.name !== 'desktop') {
@@ -201,8 +217,9 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await card.getByRole('button', { name: 'Continue setup' }).click();
   await expect(guide).toBeVisible();
 
-  // Every step ticked (none of the rest really set up): at the next sign-in it
-  // doesn't open, and the closed pill is there instead.
+  // Every step ticked (none of the rest really set up): at the next sign-in
+  // the guide doesn't open by itself, and the bar stays, now counting what's
+  // left to really set up, on every page.
   const { error: ticked } = await db.from('venues').update({
     onboarding_steps_completed: ['listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'].map((s) => `guide:${s}`),
   }).eq('id', venueId);
@@ -212,15 +229,18 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
     await page.context().clearCookies({ name });
   }
   await signIn();
-  const pill = page.getByTestId('setup-guide-pill');
-  await expect(pill).toBeVisible({ timeout: 20_000 });
-  await expect(pill).toContainText('left to set up');
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card).toContainText(/\d left to set up/);
+  await expect(card).not.toContainText(/of \d done/);
   await page.waitForTimeout(5000);
   await expect(guide).toBeHidden();
-  await expect(card).toHaveCount(0);
+  await expect(page.getByTestId('setup-guide-pill')).toHaveCount(0);
+  await page.goto('/dashboard/leads');
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card).toContainText(/\d left to set up/);
 
-  // The pill opens it again, and it says why the reminder is still there.
-  await pill.click();
+  // Its button opens the guide again, and it says why the reminder is still there.
+  await card.getByRole('button', { name: 'Continue setup' }).click();
   await expect(guide).toBeVisible();
   await expect(guide.getByText(/ticked every step/)).toBeVisible();
 });

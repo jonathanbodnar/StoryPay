@@ -1,12 +1,15 @@
 'use client';
 
-import { Check, GraduationCap } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { isNativeApp } from '@/lib/platform';
+import { setupGuideDisplay } from '@/lib/setup-guide';
 import { openSetupGuide, useSetupGuideStatus } from '@/lib/setup-guide-client';
+import ProgressRing from './ProgressRing';
 
 /**
  * The sidebar's way back into the Setup Guide, with how far along the venue
- * is. Every venue owner has it, finished or not, to rewatch a lesson.
+ * is: the same green ring as the guide's bar, on every page, and the count.
+ * Every venue owner has it, finished or not, to rewatch a lesson.
  */
 export default function SetupGuideNavItem({
   rail,
@@ -20,6 +23,7 @@ export default function SetupGuideNavItem({
 }) {
   const status = useSetupGuideStatus();
   if (!status?.eligible || isNativeApp()) return null;
+  const shown = setupGuideDisplay(status);
 
   return (
     <button
@@ -31,14 +35,15 @@ export default function SetupGuideNavItem({
       }}
       className={className}
     >
-      <span className="relative flex items-center justify-center">
-        <GraduationCap size={16} className="shrink-0" />
+      {/* Sized to sit on the 16px icon column of the rows around it. */}
+      <span className="relative -m-[3px] flex items-center justify-center">
+        <ProgressRing done={shown.done} total={shown.total} size={22} />
       </span>
       {!rail && (
         <>
           <span className="min-w-0 flex-1 truncate text-left">Setup guide</span>
           <span className="shrink-0 text-[11px] font-medium tabular-nums text-gray-400">
-            {status.fulfilled ? <Check size={14} aria-label="All set up" /> : `${status.done}/${status.total}`}
+            {status.fulfilled ? <Check size={14} aria-label="All set up" /> : `${shown.done}/${shown.total}`}
           </span>
         </>
       )}
