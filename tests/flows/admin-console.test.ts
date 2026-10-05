@@ -82,7 +82,7 @@ describe('the admin console', () => {
       method: 'POST', json: { first_name: 'Ivy', last_name: 'Invited', email, password: `Invited-${runId}-Aa1!`, role: 'support_agent', admin_tabs_allowed: { support: true } },
     });
     expect(made.status, await made.clone().text()).toBeLessThan(300);
-    await waitForEmail({ to: email, since }, () => true);
+    await waitForEmail({ to: email, since }, (e) => e.subject === 'Welcome to the StoryVenue admin panel');
     const { data: member } = await db.from('support_team_members').select('id, active, is_super_admin').ilike('email', email).single();
     expect(member!.is_super_admin).toBeFalsy();
     expect((await team.fetch(`/api/admin/team-members/${member!.id}`, { method: 'PATCH', json: { active: false } })).status).toBeLessThan(300);

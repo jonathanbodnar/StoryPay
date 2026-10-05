@@ -65,6 +65,7 @@ describe('a venue books a tour for a couple', () => {
     expect((await runJob('appointment-reminders')).status).toBe(200);
     const { data: row } = await db.from('calendar_event_reminders').select('sent_at').eq('id', byEmail!.id).single();
     expect(row!.sent_at).toBeTruthy();
-    expect((await outbox({ to: email, since })).length).toBeGreaterThan(0);
+    // The reminder itself, once: no other email to the couple counts.
+    expect((await outbox({ to: email, since })).filter((e) => e.subject.startsWith('Reminder: '))).toHaveLength(1);
   });
 });

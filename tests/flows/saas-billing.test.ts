@@ -186,14 +186,15 @@ describe('a trial without a card', () => {
   });
 
   it('gets a heads-up a few days out, a notice when it ends, then moves to Free after the grace period', async () => {
+    // Each wait takes only its own email: the heads-up can't stand in for the notice.
     let since = new Date().toISOString();
     expect((await run()).status).toBe(200);
-    await waitForEmail({ to: venue.email, since }, () => true);
+    await waitForEmail({ to: venue.email, since }, (e) => e.subject.startsWith('Your free trial ends '));
 
     since = new Date().toISOString();
     await endsIn(-60 * 60_000);
     expect((await run()).status).toBe(200);
-    await waitForEmail({ to: venue.email, since }, () => true);
+    await waitForEmail({ to: venue.email, since }, (e) => e.subject === 'Your free trial ended');
 
     await endsIn(-8 * DAY);
     expect((await run()).status).toBe(200);
