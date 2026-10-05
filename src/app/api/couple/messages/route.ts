@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { COUPLE_CHAT_SENDER_KINDS, showsInCoupleChat, type ThreadMessageForCouple } from '@/lib/couple-chat';
 import { supabaseAdmin } from '@/lib/supabase';
 import { resolveCoupleWeddingContext } from '@/lib/couple-server';
 import {
@@ -77,12 +78,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: ctx.error, messages: [], venueName: null, linked: false });
   }
 
+  // Only messages between her and a person on the venue's side (lib/couple-chat.ts):
+  // no automated texts, AI follow-ups, notes or anything else from the venue's record.
   const { data: rows, error } = await supabaseAdmin
     .from('conversation_messages')
-    .select('id, body, created_at, sender_kind, visibility, support_only, channel, external_email_sent')
+    .select('id, body, created_at, sender_kind, visibility, support_only, audience, channel, external_email_sent')
     .eq('thread_id', ctx.threadId)
     .eq('visibility', 'external')
     .eq('support_only', false)
+    .in('sender_kind', [...COUPLE_CHAT_SENDER_KINDS])
     .order('created_at', { ascending: true });
 
   if (error) {
@@ -90,7 +94,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const messages: SerializedMessage[] = (rows ?? []).map((m) => {
+  const messages: SerializedMessage[] = (rows ?? []).filter((m) => showsInCoupleChat(m as ThreadMessageForCouple)).map((m) => {
     const row = m as {
       id: string;
       body: string;

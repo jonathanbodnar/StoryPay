@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { COUPLE_CHAT_VENUE_SENDER_KINDS } from '@/lib/couple-chat';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getCoupleAuthUser } from '@/lib/couple-server';
 import {
@@ -89,7 +90,9 @@ async function unreadForBride(threadId: string, coupleId: string): Promise<numbe
     .eq('thread_id', threadId)
     .eq('visibility', 'external')
     .eq('support_only', false)
-    .neq('sender_kind', 'contact'); // only venue -> bride messages count as unread for the bride
+    // Only what her chat shows her from the venue: a person's reply, never an
+    // automated text or the AI's (lib/couple-chat.ts).
+    .in('sender_kind', [...COUPLE_CHAT_VENUE_SENDER_KINDS]);
   if (since) q = q.gt('created_at', since);
   const { count } = await q;
   return count ?? 0;
