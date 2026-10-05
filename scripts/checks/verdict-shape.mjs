@@ -12,15 +12,22 @@ export const CHECKS_LAST_GREEN = 'checks:last-green';
 export const CHECKS_CURRENT = 'checks:current';
 
 /**
- * A run that will never finish because a newer push replaced it: its record
- * is unfinished (or was never written) and the service has moved on to
- * another commit, whose run answers for this one too.
+ * A run that will never finish because a newer push replaced it: the service
+ * has moved on to another commit, whose run answers for this one too.
+ * "Moved on" means the other commit's run began AFTER this one's did, or, when
+ * this commit has no run yet, after we started waiting for it. (Right after a
+ * push the service is still on the commit BEFORE it: that is not a
+ * replacement, the new run just hasn't started. Oct 5 2026: mistaking the two
+ * sent a whole gate back to the laptop.)
  */
-export function replacedBy(row, current, sha) {
+export function replacedBy(row, current, sha, waitingSince = 0) {
   const other = current?.value?.sha;
   if (!other || other === sha) return null;
   const status = row?.value?.status;
-  return status === 'pass' || status === 'fail' ? null : other;
+  if (status === 'pass' || status === 'fail') return null;
+  const otherBegan = Date.parse(current?.value?.at ?? '');
+  const mineBegan = row?.value ? Date.parse(row.value.startedAt ?? '') : waitingSince;
+  return Number.isFinite(otherBegan) && Number.isFinite(mineBegan) && otherBegan > mineBegan ? other : null;
 }
 
 /** A run that hasn't moved for this long is not coming back (its container was replaced or died). */

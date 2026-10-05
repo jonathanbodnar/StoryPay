@@ -5,9 +5,14 @@
  *
  *   railway run --service "StoryVenue Backend" --environment Dev -- node scripts/checks/wait-verdict.mjs <full sha> [--out file] [--after ISO]
  *
- * Exit: 0 passed, 1 failed, 3 no usable run (none appeared, or it went
- * silent): the caller then runs the checks itself. 4 replaced: a newer push
- * took over the Checks service, and its run answers for this commit too. --after only accepts a
+ * The answer is written to --out as { outcome, record?, by? }:
+ *   pass | fail   the run finished (record: its record)
+ *   replaced      a newer push took over the Checks service (by: its commit);
+ *                 that run answers for this commit too
+ *   none          no usable run (none appeared, or it went silent): the
+ *                 caller runs the checks itself
+ * (Exit codes say the same, 0/1/4/3, but `railway run` doesn't pass them all
+ * through, so callers read the file.) --after only accepts a
  * run started after that moment (a fresh run of a commit checked before).
  *
  * Only reads. A dropped connection here costs nothing: it asks again.
@@ -27,6 +32,11 @@ if (e.APP_ENV !== 'staging' || !e.NEXT_PUBLIC_SUPABASE_URL || !e.SUPABASE_SERVIC
 }
 const after = opt('--after') ? Date.parse(opt('--after')) : 0;
 const out = opt('--out');
+/** Leave the answer for the caller, then stop. */
+const finish = (code, answer) => {
+  if (out) writeFileSync(out, JSON.stringify(answer));
+  process.exit(code);
+};
 const db = createClient(e.NEXT_PUBLIC_SUPABASE_URL, e.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const short = sha.slice(0, 8);
 
@@ -56,7 +66,7 @@ for (;;) {
     const any = await db.from('admin_kv_cache').select('key').like('key', 'checks:%').limit(1);
     if (!any.error && !(any.data ?? []).length) {
       console.log('The Checks service has never reported: it isn’t set up yet.');
-      process.exit(3);
+      finish(3, { outcome: 'none' });
     }
   }
   const record = row?.value;
@@ -74,32 +84,31 @@ for (;;) {
   }
 
   if (verdict === 'pass' || verdict === 'fail') {
-    if (out) writeFileSync(out, JSON.stringify(record));
     console.log(`\n── Summary (Checks service) ──\n${summarize(record)}`);
     if (verdict === 'fail' && record.failure) console.log(`\n── What failed: ${record.failure.stage} ──\n${record.failure.tail}`);
     if (record.error) console.log(`\nThe runner itself broke: ${record.error}`);
-    process.exit(verdict === 'pass' ? 0 : 1);
+    finish(verdict === 'pass' ? 0 : 1, { outcome: verdict, record });
   }
   if (verdict !== 'pass' && verdict !== 'fail' && !unreachable) {
     const current = await db.from('admin_kv_cache').select('value').eq('key', CHECKS_CURRENT).maybeSingle();
-    const newer = current.error ? null : replacedBy(fresh ? row : null, current.data, sha);
+    const newer = current.error ? null : replacedBy(fresh ? row : null, current.data, sha, began);
     // (A run asked for again keeps waiting for its own fresh record.)
     if (newer && !after) {
       console.log(`A newer push (${newer.slice(0, 8)}) replaced the run of ${short}. Its check covers this commit too: wait on that one.`);
-      process.exit(4);
+      finish(4, { outcome: 'replaced', by: newer });
     }
   }
   if (verdict === 'stalled') {
     console.log(`The Checks service’s run of ${short} went silent (replaced by a newer push, or it died).`);
-    process.exit(3);
+    finish(3, { outcome: 'none' });
   }
   if (verdict === 'missing' && Date.now() - began > APPEAR_WITHIN_MS) {
     console.log(`The Checks service has no run of ${short} after ${Math.round(APPEAR_WITHIN_MS / 60_000)} minutes.`);
-    process.exit(3);
+    finish(3, { outcome: 'none' });
   }
   if (Date.now() - began > GIVE_UP_AFTER_MS) {
     console.log(`Still no verdict on ${short} after ${Math.round(GIVE_UP_AFTER_MS / 60_000)} minutes.`);
-    process.exit(3);
+    finish(3, { outcome: 'none' });
   }
   await new Promise((r) => setTimeout(r, 15_000));
 }

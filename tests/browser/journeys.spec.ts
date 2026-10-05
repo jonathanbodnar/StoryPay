@@ -77,24 +77,43 @@ test('a couple opens their proposal and signs it', async ({ page }) => {
   await expect(page).toHaveTitle(`Invoice from ${FLOW_VENUE.name}`);
 });
 
-test.describe('live updates', () => {
-  test.use({ storageState: 'tests/browser/.auth/owner.json' });
-
-  test('a new lead lights up the Lead Inbox badge without a refresh', async ({ page }) => {
-    test.skip(test.info().project.name !== 'desktop', 'The phone tab bar has its own badge.');
-    await page.goto('/dashboard/leads'); // opening the inbox marks everything seen
-    await page.goto('/dashboard');
-    const inbox = page.getByRole('link', { name: /Lead Inbox/ }).first();
-    await expect(inbox).toBeVisible();
-    await expect(inbox).not.toHaveText(/\d/);
-    const last = `Live${runId}`;
-    const res = await submitListingLead({
-      venue_id: FLOW_VENUE.id, first_name: 'Morgan', last_name: last, email: `morgan.${last.toLowerCase()}@example.com`,
-      phone: '(212) 555-0177', source: 'directory', client_ip: '203.0.113.8',
-    });
-    expect(res.status).toBe(201);
-    await expect(inbox).toHaveText(/Lead Inbox\s*1\b/, { timeout: 20_000 });
+// A venue of its own, not the shared test venue: the flow tests run alongside
+// the browser tests and send the shared venue leads of their own, and this
+// badge counts every unseen lead. (Oct 5 2026: it read 2, not 1, and failed a
+// gate for a change that had nothing to do with it.)
+test('live updates: a new lead lights up the Lead Inbox badge without a refresh', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'The phone tab bar has its own badge.');
+  const stamp = Date.now().toString(36);
+  const email = `live.${stamp}.${runId}@example.com`;
+  const venueId = randomUUID();
+  const { data: plan } = await db.from('directory_plans').select('id').eq('slug', 'bride-booking-system').single();
+  const { error } = await db.from('venues').insert({
+    id: venueId, name: `Live Journey ${runId}`, slug: `live-journey-${stamp}`, email,
+    notification_email: email, brand_email: email, password_hash: await bcrypt.hash(env.password, 10),
+    setup_completed: true, onboarding_status: 'registered', onboarding_completed_at: new Date().toISOString(),
+    directory_plan_id: plan?.id ?? null, directory_subscription_status: 'active', email_verified_at: new Date().toISOString(),
+    owner_first_name: 'Liv', owner_last_name: 'Live', timezone: 'America/New_York', is_published: true, is_demo: false,
+    // Support's switch: no Setup Guide pop-up over this journey.
+    onboarding_steps_completed: ['guide:prompts-off'],
   });
+  expect(error?.message ?? null).toBeNull();
+
+  await page.goto('/login');
+  await page.getByPlaceholder('you@yourvenue.com').first().fill(email);
+  await page.getByPlaceholder('••••••••').fill(env.password);
+  await page.locator('form').filter({ has: page.getByPlaceholder('••••••••') }).locator('button[type="submit"]').click();
+  await page.waitForURL(/\/dashboard/);
+
+  const inbox = page.getByRole('link', { name: /Lead Inbox/ }).first();
+  await expect(inbox).toBeVisible();
+  await expect(inbox).not.toHaveText(/\d/);
+  const last = `Live${runId}`;
+  const res = await submitListingLead({
+    venue_id: venueId, first_name: 'Morgan', last_name: last, email: `morgan.${last.toLowerCase()}.${stamp}@example.com`,
+    phone: '(212) 555-0177', source: 'directory', client_ip: '203.0.113.8',
+  });
+  expect(res.status, await res.clone().text()).toBe(201);
+  await expect(inbox).toHaveText(/Lead Inbox\s*1\b/, { timeout: 20_000 });
 });
 
 // The Setup Guide (owner's rules, Oct 4 2026): it opens by itself a few

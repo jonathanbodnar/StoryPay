@@ -75,12 +75,14 @@ if (!args.includes('--local')) {
     const again = spawnSync('railway', ['redeploy', '--service', CHECKS_SERVICE, '--environment', ENV, '--yes'], { env: railwayEnv, stdio: 'inherit' });
     if (again.status === 0) waitArgs.push('--after', new Date(startedAt).toISOString());
   }
-  const waited = spawnSync('railway', waitArgs, { env: railwayEnv, stdio: 'inherit' });
+  spawnSync('railway', waitArgs, { env: railwayEnv, stdio: 'inherit' });
+  // The answer is in the file (`railway run` doesn't pass every exit code through).
+  let answer = null;
+  try { answer = JSON.parse(readFileSync(out, 'utf8')); } catch { /* no answer: a run here */ }
   // Replaced by a newer push: that commit's check answers for this one. Nothing to run here.
-  if (waited.status === 4) process.exit(4);
-  if (waited.status === 0 || waited.status === 1) {
-    let remote = null;
-    try { remote = JSON.parse(readFileSync(out, 'utf8')); } catch { /* fall through to a run here */ }
+  if (answer?.outcome === 'replaced') process.exit(4);
+  if (answer?.outcome === 'pass' || answer?.outcome === 'fail') {
+    const remote = answer.record ?? null;
     if (remote?.sha === full) {
       const mine = localRecord(remote);
       const dir = join(execFileSync('git', ['rev-parse', '--git-dir'], { encoding: 'utf8' }).trim(), 'storyvenue-checks');

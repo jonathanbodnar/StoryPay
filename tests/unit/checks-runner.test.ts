@@ -34,16 +34,29 @@ describe('reading the Checks service’s verdict', () => {
 
   it('a run replaced by a newer push is not waited for, and not run again here: the newer run covers it', () => {
     const newer = 'c'.repeat(40);
-    const current = { value: { sha: newer } };
-    const running = row({ sha: SHA, status: 'running', stage: 'flow tests', startedAt: new Date(NOW).toISOString(), results: [] });
-    expect(replacedBy(running, current, SHA)).toBe(newer);
-    expect(replacedBy(null, current, SHA)).toBe(newer); // it never even started
+    const began = new Date(NOW - 5 * 60_000).toISOString();
+    const running = row({ sha: SHA, status: 'running', stage: 'flow tests', startedAt: began, results: [] });
+    // The service started on another commit AFTER this one's run began: replaced.
+    const movedOn = { value: { sha: newer, at: new Date(NOW - 60_000).toISOString() } };
+    expect(replacedBy(running, movedOn, SHA)).toBe(newer);
+    // No run of this commit at all, and the service started another after we began waiting: replaced too.
+    expect(replacedBy(null, movedOn, SHA, NOW - 2 * 60_000)).toBe(newer);
     // Its own run is the current one, or it finished: nothing replaced it.
-    expect(replacedBy(running, { value: { sha: SHA } }, SHA)).toBeNull();
-    expect(replacedBy(row(passed), current, SHA)).toBeNull();
-    expect(replacedBy(row({ ...passed, status: 'fail' }), current, SHA)).toBeNull();
+    expect(replacedBy(running, { value: { sha: SHA, at: began } }, SHA)).toBeNull();
+    expect(replacedBy(row(passed), movedOn, SHA)).toBeNull();
+    expect(replacedBy(row({ ...passed, status: 'fail' }), movedOn, SHA)).toBeNull();
     expect(replacedBy(running, null, SHA)).toBeNull();
     expect(CHECKS_CURRENT).not.toBe(CHECKS_LAST_GREEN);
+  });
+
+  it('right after a push the service is still on the commit before it: that is waiting, not being replaced', () => {
+    // Oct 5 2026: this was read as "replaced by a newer push", and the whole
+    // gate went back to the laptop while the service ran it too.
+    const previous = { value: { sha: 'b'.repeat(40), at: new Date(NOW - 30 * 60_000).toISOString() } };
+    expect(replacedBy(null, previous, SHA, NOW - 10_000)).toBeNull();
+    // An older run still marked current can't replace a run that began after it either.
+    const mine = row({ sha: SHA, status: 'running', startedAt: new Date(NOW - 60_000).toISOString(), results: [] });
+    expect(replacedBy(mine, previous, SHA)).toBeNull();
   });
 
   it('each commit has its own record, apart from the last one that passed', () => {
