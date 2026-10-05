@@ -58,6 +58,9 @@ import { trackClient } from '@/lib/analytics-client';
 import { useFeatureAccess } from '@/lib/use-feature-access';
 import { bookingTimelineLabel } from '@/lib/booking-timeline';
 import FeatureLockModal, { type LockFeature } from '@/components/FeatureLockModal';
+import StageMoveLine, { stageMovesAmong } from '@/components/conversations/StageMoveLine';
+import type { StageMove } from '@/lib/lead-stage-log';
+import { sentViaLabel } from '@/lib/venue-side-texts';
 
 interface ThreadRow {
   thread_id: string;
@@ -134,6 +137,10 @@ interface Msg {
   contact_from_email?: string | null;
   trigger_link?: { short_code: string; name: string | null } | null;
   trigger_link_id?: string | null;
+  /** A text sent from outside StoryVenue (your texting app, a CRM workflow):
+   *  where it came from and, for a person, who sent it. */
+  sent_via?: string | null;
+  sent_by_name?: string | null;
   /** Set when a StoryVenue support agent replied on behalf of the venue. */
   sent_on_behalf_of_venue?: boolean | null;
   sent_by_support_user_id?: string | null;
@@ -257,6 +264,9 @@ export default function ConversationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [threadDetail, setThreadDetail] = useState<ThreadDetail | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
+  // Each move of this bride to another pipeline stage: one line in the thread,
+  // with when and who. (Not messages: the couple never sees them.)
+  const [stageMoves, setStageMoves] = useState<{ threadId: string; moves: StageMove[] }>({ threadId: '', moves: [] });
   const [loadingThread, setLoadingThread] = useState(false);
   const [composerTab, setComposerTab] = useState<ComposerTab>('sms');
   // Collapsed by default — the composer starts as a single-line input and
@@ -851,6 +861,30 @@ export default function ConversationsPage() {
   // without needing to be in its dependency list (avoids re-subscribing on every
   // selection change while still reading the freshest value).
   const selectedIdRef = useRef(selectedId);
+
+  // The open thread's stage moves. Loaded when a thread opens and again a
+  // moment after its stage changes (from this page, the contact drawer, the
+  // AI or an automation), so the new line shows without a reload.
+  const openStageId = threadDetail?.id === selectedId ? threadDetail?.contact_stage_id ?? null : null;
+  useEffect(() => {
+    if (!selectedId) return;
+    const threadId = selectedId;
+    let stale = false;
+    const load = () => {
+      fetch(`/api/conversations/threads/${threadId}/stage-moves`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { moves?: StageMove[] } | null) => {
+          if (!stale && d && Array.isArray(d.moves)) setStageMoves({ threadId, moves: d.moves });
+        })
+        .catch(() => {});
+    };
+    // (A stage change is shown here before it is saved: give the save a moment.)
+    const timer = window.setTimeout(load, 1200);
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
+  }, [selectedId, openStageId]);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
   // ── Venue-wide realtime: sidebar updates for ALL threads ───────────────────
@@ -2690,7 +2724,13 @@ export default function ConversationsPage() {
                   <p className="py-12 text-center text-sm text-gray-500">No messages yet. Say hello below.</p>
                 ) : (
                   <div className="mx-auto flex w-full max-w-2xl flex-col gap-2">
-                    {messages.map((m) => {
+                    {(() => {
+                      // Stage moves sit between the messages, in time order.
+                      const moves = stageMovesAmong(
+                        stageMoves.threadId === selectedId ? stageMoves.moves : [],
+                        messages.map((x) => x.created_at),
+                      );
+                      const renderMessage = (m: Msg) => {
                       // Venue Direct (concierge ↔ venue side-channel) renders
                       // as a full-width violet card that's visually distinct
                       // from bride conversation bubbles. The contact never
@@ -3092,6 +3132,15 @@ export default function ConversationsPage() {
                                       <Zap size={9} /> Automated
                                     </span>
                                   )}
+                                  {sentViaLabel(m.sent_via, m.sent_by_name, 'venue') && (
+                                    <span
+                                      data-testid="sent-outside"
+                                      className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[9px] font-semibold text-gray-600"
+                                      title="This text wasn't sent from StoryVenue. It was brought in from your texting account so the conversation is complete."
+                                    >
+                                      {sentViaLabel(m.sent_via, m.sent_by_name, 'venue')}
+                                    </span>
+                                  )}
                                   {fromVenue && (
                                     <span
                                       className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-indigo-700"
@@ -3141,7 +3190,15 @@ export default function ConversationsPage() {
                           </div>
                         </div>
                       );
-                    })}
+                      };
+                      return [
+                        ...messages.flatMap((m, idx) => [
+                          ...moves.before(idx).map((move) => <StageMoveLine key={move.id} move={move} />),
+                          renderMessage(m),
+                        ]),
+                        ...moves.rest().map((move) => <StageMoveLine key={move.id} move={move} />),
+                      ];
+                    })()}
                     <div ref={bottomRef} />
                   </div>
                 )}

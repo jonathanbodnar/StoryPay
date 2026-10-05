@@ -10,6 +10,7 @@ import {
 import { notifyOwnerNewMessage } from '@/lib/owner-notifications';
 import { isFreshInboundForAlert } from '@/lib/inbound-notification-gate';
 import { logError } from '@/lib/error-log';
+import { ownRecordOf, venueSideTextOrigin, wasNotDelivered, type StoredText } from '@/lib/venue-side-texts';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-sms.storypay.placeholder';
 
@@ -525,7 +526,11 @@ export function ghlApiMessagesFromResponse(raw: unknown): Record<string, unknown
 export function isGhlApiInboundSmsMessage(msg: Record<string, unknown>): boolean {
   const dir = String(msg.direction ?? '').toLowerCase();
   if (dir === 'outbound') return false;
+  return isGhlApiSmsMessage(msg);
+}
 
+/** A text (not an email, call or activity entry), whichever way it went. */
+export function isGhlApiSmsMessage(msg: Record<string, unknown>): boolean {
   // GHL's /conversations/{id}/messages endpoint returns SMS as
   //   { type: 2, ... }
   // where `type` is a numeric enum (1=email, 2=sms, 3=call, ...). The same
@@ -726,6 +731,7 @@ export async function syncInboundSmsFromGhlForThread(params: {
     let outboundCount = 0;
     const seenTypes: Record<string, number> = {};
     let firstNonInboundSample: Record<string, unknown> | null = null;
+    const venueSideTexts: Record<string, unknown>[] = [];
     for (const ghlConversationId of convIds.slice(0, maxConv)) {
       let rawList: unknown;
       try {
@@ -756,6 +762,9 @@ export async function syncInboundSmsFromGhlForThread(params: {
         seenTypes[t] = (seenTypes[t] ?? 0) + 1;
         if (dir === 'outbound') {
           outboundCount++;
+          // The venue side's own texts. Ones StoryVenue didn't send (a person
+          // replying from the CRM's app, a CRM workflow) belong in the thread too.
+          if (isGhlApiSmsMessage(msg)) venueSideTexts.push(msg);
           continue;
         }
         if (dir === 'inbound') inboundCount++;
@@ -814,7 +823,16 @@ export async function syncInboundSmsFromGhlForThread(params: {
       }
     }
 
-    if (debug || imported > 0) {
+    let venueSideImported = 0;
+    if (venueSideTexts.length) {
+      try {
+        venueSideImported = await importVenueSideTexts({ venueId, threadId, venueCustomerId, texts: venueSideTexts, token, locationId });
+      } catch (e) {
+        console.warn('[ghl-sms sync] venue-side texts not imported', { threadId, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
+    if (debug || imported > 0 || venueSideImported > 0) {
       console.log('[ghl-sms sync] done', {
         threadId,
         contactId,
@@ -825,6 +843,7 @@ export async function syncInboundSmsFromGhlForThread(params: {
         seenTypes,
         inboundCandidates,
         imported,
+        venueSideImported,
       });
     }
     if (params.runSideEffects !== false && insertedMessages.length) {
@@ -849,4 +868,143 @@ export async function syncInboundSmsFromGhlForThread(params: {
     console.error('[ghl-sms] syncInboundSmsFromGhlForThread', e);
     return { imported: 0, insertedMessages: [] };
   }
+}
+
+// ─── Texts the venue side sent from outside StoryVenue ──────────────────────
+
+/** CRM user id → name, so a text can say who sent it. Best-effort, remembered for an hour. */
+const crmUserNames = new Map<string, { name: string | null; at: number }>();
+async function crmUserName(token: string, locationId: string, userId: string): Promise<string | null> {
+  const known = crmUserNames.get(userId);
+  if (known && Date.now() - known.at < 60 * 60_000) return known.name;
+  let name: string | null = null;
+  try {
+    const { ghlRequest, resolveLocationToken } = await import('@/lib/ghl');
+    const res = (await ghlRequest(`/users/${encodeURIComponent(userId)}`, await resolveLocationToken(token, locationId), { locationId })) as Record<string, unknown> | null;
+    const u = (res?.user && typeof res.user === 'object' ? res.user : res) as Record<string, unknown> | null;
+    name = String(u?.name ?? [u?.firstName, u?.lastName].filter(Boolean).join(' ') ?? '').trim() || null;
+  } catch {
+    name = null; // the token may not be allowed to read users: the text is still imported
+  }
+  crmUserNames.set(userId, { name, at: Date.now() });
+  return name;
+}
+
+/**
+ * Bring the venue side's outbound texts into the thread when StoryVenue has
+ * no record of them: a person at the venue replying from the CRM's app, a
+ * CRM workflow, another app. (lib/venue-side-texts.ts has the rules and why.)
+ *
+ *  - A text StoryVenue sent itself is recognised by its words and time and is
+ *    only given the CRM's id, so it is never shown twice.
+ *  - What's imported says where it came from (sent_via) and, for a person,
+ *    who (sent_by_name), and keeps the time it was really sent.
+ *  - Nothing is sent to anyone: no alerts, no AI reply. One thing follows a
+ *    person's FRESH text: the AI Concierge's follow-ups pause, exactly as
+ *    when the venue replies from the inbox, so it never talks over them.
+ * Returns how many were imported.
+ */
+async function importVenueSideTexts(params: {
+  venueId: string;
+  threadId: string;
+  venueCustomerId: string;
+  texts: Record<string, unknown>[];
+  token: string;
+  locationId: string;
+}): Promise<number> {
+  const { venueId, threadId, venueCustomerId, texts, token, locationId } = params;
+  const { data: rows, error } = await supabaseAdmin
+    .from('conversation_messages')
+    .select('id, body, created_at, sender_kind, ghl_message_id')
+    .eq('thread_id', threadId)
+    .eq('channel', 'sms')
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) return 0;
+  const stored = (rows ?? []) as StoredText[];
+  const known = new Set(stored.map((r) => r.ghl_message_id).filter(Boolean) as string[]);
+
+  let imported = 0;
+  const oldestFirst = [...texts].sort((a, b) => String(a.dateAdded ?? '').localeCompare(String(b.dateAdded ?? '')));
+  for (const msg of oldestFirst) {
+    // Without the CRM's id there's no telling this text from itself next time.
+    const ghlMessageId = ghlApiMessageId(msg);
+    if (!ghlMessageId || known.has(ghlMessageId) || wasNotDelivered(msg)) continue;
+    const body = bodyFromGhlApiMessage(msg);
+    if (!body) continue;
+    const sentAt = (msg.dateAdded as string | undefined) || (msg.createdAt as string | undefined) || null;
+
+    // StoryVenue's own send: it's already in the thread. Give it the CRM's id.
+    const own = ownRecordOf(body, sentAt, stored);
+    if (own) {
+      own.ghl_message_id = ghlMessageId;
+      known.add(ghlMessageId);
+      await supabaseAdmin.from('conversation_messages').update({ ghl_message_id: ghlMessageId }).eq('id', own.id).is('ghl_message_id', null)
+        .then(() => undefined, () => undefined);
+      continue;
+    }
+
+    // Already stored under another thread of this contact? (the id is unique)
+    const { data: elsewhere } = await supabaseAdmin.from('conversation_messages').select('id').eq('ghl_message_id', ghlMessageId).maybeSingle();
+    known.add(ghlMessageId);
+    if (elsewhere) continue;
+
+    const origin = venueSideTextOrigin(msg);
+    const row: Record<string, unknown> = {
+      thread_id: threadId,
+      visibility: 'external',
+      channel: 'sms',
+      body: body.trim(),
+      sender_kind: origin.senderKind,
+      ghl_message_id: ghlMessageId,
+      sent_via: origin.sentVia,
+      sent_by_name: origin.userId ? await crmUserName(token, locationId, origin.userId) : null,
+    };
+    if (sentAt && String(sentAt).trim()) row.created_at = String(sentAt).trim();
+    const { data: inserted, error: insErr } = await supabaseAdmin.from('conversation_messages').insert(row).select('id, created_at').single();
+    if (insErr) {
+      if (insErr.code === '23505') continue; // another run stored it first
+      // The columns come with migration 280: until it's applied, import nothing
+      // rather than a text with no word on where it came from.
+      if (insErr.code === '42703' || insErr.code === 'PGRST204') return imported;
+      console.warn('[ghl-sms sync] venue-side text not stored', { threadId, error: insErr.message });
+      continue;
+    }
+    imported++;
+    stored.push({ id: (inserted as { id: string }).id, body: body.trim(), created_at: (inserted as { created_at: string }).created_at, sender_kind: origin.senderKind, ghl_message_id: ghlMessageId });
+
+    const createdAt = (inserted as { created_at?: string }).created_at || new Date().toISOString();
+    // Open inboxes show it at once.
+    void (async () => {
+      try {
+        const { broadcastBrideMessage } = await import('@/lib/realtime/broadcast');
+        await broadcastBrideMessage({
+          inbound: false,
+          threadId,
+          venueId,
+          venueCustomerId,
+          messageId: (inserted as { id: string }).id,
+          body: body.trim(),
+          channel: 'sms',
+          senderKind: origin.senderKind,
+          sentByVenueSupport: false,
+          supportAgentId: null,
+          createdAt,
+        });
+      } catch (e) {
+        console.warn('[ghl-sms] venue-side broadcast failed', e);
+      }
+    })();
+
+    // A person just answered the couple themselves: the AI stops following up.
+    if (origin.sentVia === 'crm_user' && isFreshInboundForAlert(createdAt)) {
+      try {
+        const { pauseAiOnHumanTakeover } = await import('@/lib/ai-concierge/state-control');
+        await pauseAiOnHumanTakeover({ venueId, venueCustomerId, reason: 'human_reply_crm_app', triggeredBy: 'venue:crm_app_reply' });
+      } catch (e) {
+        console.warn('[ghl-sms] pause after a CRM reply failed', e);
+      }
+    }
+  }
+  return imported;
 }

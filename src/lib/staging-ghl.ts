@@ -28,9 +28,15 @@ interface FakeMessage {
   direction: 'inbound' | 'outbound';
   body: string;
   dateAdded: string;
+  /** How GHL says an outbound text was sent: 'app' (through the API, or a person in the CRM's app), 'workflow'. */
+  source?: string;
+  /** Set when a person sent it from the CRM's app. */
+  userId?: string;
 }
 
 interface FakeGhl {
+  /** CRM users (people at the venue who can text from the CRM's app): id → name. */
+  users?: Map<string, string>;
   contacts: Map<string, FakeContact>;
   conversations: Map<string, { id: string; contactId: string; locationId: string; dateUpdated: string }>;
   messages: FakeMessage[];
@@ -66,6 +72,9 @@ function apiMessage(m: FakeMessage) {
   return {
     id: m.id, conversationId: m.conversationId, contactId: m.contactId, locationId: m.locationId,
     direction: m.direction, type: 2, messageType: 'TYPE_SMS', body: m.body, dateAdded: m.dateAdded,
+    status: 'delivered',
+    ...(m.direction === 'outbound' ? { source: m.source ?? 'app' } : {}),
+    ...(m.userId ? { userId: m.userId } : {}),
   };
 }
 
@@ -101,11 +110,11 @@ function conversationFor(contact: FakeContact) {
   return conv;
 }
 
-function addMessage(contact: FakeContact, direction: FakeMessage['direction'], body: string): FakeMessage {
+function addMessage(contact: FakeContact, direction: FakeMessage['direction'], body: string, sent: { source?: string; userId?: string } = {}): FakeMessage {
   const conv = conversationFor(contact);
   const m: FakeMessage = {
     id: newId('ms'), conversationId: conv.id, contactId: contact.id, locationId: contact.locationId,
-    direction, body, dateAdded: new Date().toISOString(),
+    direction, body, dateAdded: new Date().toISOString(), ...sent,
   };
   conv.dateUpdated = m.dateAdded;
   const box = ghl().messages;
@@ -200,6 +209,14 @@ export async function fakeGhlFetch(input: RequestInfo | URL, init?: RequestInit)
     return json({ messages: { messages: list, nextPage: false, lastMessageId: list[list.length - 1]?.id ?? null } });
   }
 
+  // People at the venue who text from the CRM's app
+  if (parts[0] === 'users' && parts[1] && method === 'GET') {
+    const name = ghl().users?.get(decodeURIComponent(parts[1]));
+    if (!name) return json({ statusCode: 404, message: 'User not found' }, 404);
+    const [firstName, ...rest] = name.split(' ');
+    return json({ id: parts[1], name, firstName, lastName: rest.join(' ') });
+  }
+
   // Pipelines, tokens: harmless defaults
   if (path === '/opportunities/pipelines') return json({ pipelines: [] });
   if (path.startsWith('/opportunities')) return json({ opportunity: { id: newId('op') } });
@@ -225,6 +242,28 @@ export function receiveFakeText(fromPhone: string, body: string): { contactId: s
   if (!c) return null;
   const m = addMessage(c, 'inbound', body);
   return { contactId: c.id, conversationId: m.conversationId };
+}
+
+/**
+ * The VENUE side texts a couple from outside StoryVenue, as it can in GHL:
+ * a person from the CRM's app (named), or one of the venue's CRM workflows.
+ * StoryVenue didn't send it and only learns of it from the text sync.
+ */
+export function sendFakeVenueText(
+  toPhone: string,
+  body: string,
+  by: { person?: string; workflow?: boolean } = {},
+): { contactId: string; conversationId: string; messageId: string } | null {
+  const c = findContact(null, { phone: toPhone });
+  if (!c) return null;
+  let userId: string | undefined;
+  if (by.person) {
+    const users = (ghl().users ??= new Map());
+    userId = [...users.entries()].find(([, name]) => name === by.person)?.[0] ?? newId('us');
+    users.set(userId, by.person);
+  }
+  const m = addMessage(c, 'outbound', body, { source: by.workflow ? 'workflow' : 'app', ...(userId ? { userId } : {}) });
+  return { contactId: c.id, conversationId: m.conversationId, messageId: m.id };
 }
 
 export function clearFakeGhl(): void {

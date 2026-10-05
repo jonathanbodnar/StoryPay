@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { venueRequestMover } from '@/lib/lead-stage-log';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSessionUser } from '@/lib/session';
@@ -38,7 +39,7 @@ export async function POST(
 
   const { id } = await context.params;
 
-  const result = await toggleLeadQualified(venueId, id);
+  const result = await toggleLeadQualified(venueId, id, await venueRequestMover());
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }

@@ -18,6 +18,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
+import { stageMovedBy, withStageMover } from '@/lib/lead-stage-log';
 import {
   syncVenueCustomerFromLeadRow,
   fetchStageRow,
@@ -107,12 +108,12 @@ export async function moveLeadToAiStage(
 
     const { error: updErr } = await supabaseAdmin
       .from('leads')
-      .update({
+      .update(await withStageMover({
         pipeline_id: newPipelineId,
         stage_id:    stageId,
         status,
         updated_at:  new Date().toISOString(),
-      })
+      }, stageMovedBy('ai', 'AI Concierge')))
       .eq('id', leadId)
       .eq('venue_id', venueId);
 

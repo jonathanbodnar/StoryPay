@@ -7,6 +7,7 @@ import { onMarketingStageChanged, onMarketingTagAdded } from '@/lib/marketing-em
 import { dispatchIntegrationEvent } from '@/lib/integration-events';
 import { syncVenueCustomerFromLeadRow } from '@/lib/venue-customer-pipeline-sync';
 import { getSessionUser } from '@/lib/session';
+import { venueRequestMover, withStageMover } from '@/lib/lead-stage-log';
 import { insertLeadActivity } from '@/lib/lead-activity';
 import { fetchOpenDuplicateMatchesForLeads, refreshDuplicateCandidatesForLead } from '@/lib/lead-duplicates';
 import { broadcastStageChanged, broadcastTagsChanged } from '@/lib/realtime/broadcast';
@@ -251,9 +252,10 @@ export async function PATCH(
   }
 
   if (Object.keys(updates).length > 0) {
+    // A stage move says who made it (lib/lead-stage-log.ts): the thread shows it.
     const { data, error } = await supabaseAdmin
       .from('leads')
-      .update(updates)
+      .update(await withStageMover(updates, await venueRequestMover()))
       .eq('id', id)
       .eq('venue_id', venueId)
       .select('*')

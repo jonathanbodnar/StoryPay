@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { stageMovedBy, withStageMover } from '@/lib/lead-stage-log';
 import { isStaging } from '@/lib/staging';
 import { sendEmail, buildBulkEmailHeaders, htmlToPlainText, injectPreheaderHtml } from '@/lib/email';
 import { buildSystemEmail } from '@/lib/email-templates';
@@ -936,7 +937,7 @@ export async function processFollowupStageMover(): Promise<{ scanned: number; mo
 
         const { error: upErr } = await supabaseAdmin
           .from('leads')
-          .update({ stage_id: followupStageId, followup_moved_at: nowIso })
+          .update(await withStageMover({ stage_id: followupStageId, followup_moved_at: nowIso }, stageMovedBy('automation', 'Automation (no reply to the follow-ups)')))
           .eq('id', lead.id)
           .is('followup_moved_at', null); // idempotency vs concurrent ticks
         if (upErr) continue;
@@ -2770,7 +2771,9 @@ async function processOneEnrollment(en: {
     const cfg = step.config_json as { stage_id?: string };
     const stageId = String(cfg.stage_id || '').trim();
     if (stageId) {
-      await supabaseAdmin.from('leads').update({ stage_id: stageId }).eq('id', en.lead_id);
+      await supabaseAdmin.from('leads')
+        .update(await withStageMover({ stage_id: stageId }, stageMovedBy('automation', 'Automation (a sequence step)')))
+        .eq('id', en.lead_id);
     }
     const nextIdx = idx + 1;
     const done = nextIdx >= sorted.length;

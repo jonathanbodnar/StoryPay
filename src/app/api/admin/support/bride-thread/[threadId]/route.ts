@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySupportAccess } from '@/lib/support/auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { loadStageMovesForCustomer } from '@/lib/lead-stage-log';
 
 /**
  * PATCH /api/admin/support/bride-thread/[threadId]
@@ -167,21 +168,25 @@ export async function GET(
   // join missed it (data integrity safety net).
   if (!allThreadIds.includes(threadId)) allThreadIds.push(threadId);
 
-  const { data: msgs } = await supabaseAdmin
-    .from('conversation_messages')
-    .select(`
+  const MESSAGE_COLUMNS = `
       id, thread_id, visibility, channel, body, sender_kind, venue_team_member_id,
       contact_from_name, contact_from_email, external_email_sent, send_error,
       sent_by_support_user_id, sent_on_behalf_of_venue, support_internal_note,
       support_only, audience, mentioned_support_user_ids, created_at,
-      attachments, delivery_status, delivered_at, opened_at, bounced_at
-    `)
+      attachments, delivery_status, delivered_at, opened_at, bounced_at`;
+  const loadMessages = (columns: string) => supabaseAdmin
+    .from('conversation_messages')
+    .select(columns)
     .in('thread_id', allThreadIds)
     .order('created_at', { ascending: true });
+  // sent_via / sent_by_name (migration 280) say where a venue-side text sent
+  // outside StoryVenue came from. A database without them still loads the thread.
+  let { data: msgs, error: msgsError } = await loadMessages(`${MESSAGE_COLUMNS}, sent_via, sent_by_name`);
+  if (msgsError) ({ data: msgs, error: msgsError } = await loadMessages(MESSAGE_COLUMNS));
 
   const venue    = venueRow as VenueRow | null;
   const customer = vcRow as CustomerRow | null;
-  const messages = (msgs as MessageRow[]) || [];
+  const messages = (msgs as unknown as MessageRow[]) || [];
 
   const siblings = ((siblingThreads ?? []) as Array<{ id: string; subject: string | null; last_message_at: string; external_reply_channel: string | null }>)
     .filter(s => s.id !== threadId)
@@ -222,12 +227,17 @@ export async function GET(
     supportUsers = Object.fromEntries((stm || []).map(r => [r.id as string, r as never]));
   }
 
+  // Every move of this bride to another pipeline stage: when, where to, by
+  // whom. Shown as one-line entries between the messages; never to the couple.
+  const stageMoves = await loadStageMovesForCustomer(thread.venue_id, thread.venue_customer_id);
+
   return NextResponse.json({
     thread,
     venue,
     customer,
     lead,
     messages,
+    stageMoves,
     supportUsers,
     /** Other conversation_threads belonging to the same bride (different
      *  channels). UI uses this to render a "merged from N channels" banner

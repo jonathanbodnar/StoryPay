@@ -16,6 +16,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
+import { stageMovedBy, withStageMover, type StageMover } from '@/lib/lead-stage-log';
 import { legacyStatusForStageName } from '@/lib/pipelines';
 import { leadRank, type LeadFunnelStageInfo } from '@/lib/lead-funnel';
 
@@ -30,7 +31,12 @@ export type ToggleQualifiedResult =
     }
   | { ok: false; status: number; error: string };
 
-export async function toggleLeadQualified(venueId: string, leadId: string): Promise<ToggleQualifiedResult> {
+export async function toggleLeadQualified(
+  venueId: string,
+  leadId: string,
+  /** Who pressed it: shown in the thread next to the move. */
+  movedBy: StageMover = stageMovedBy('automation'),
+): Promise<ToggleQualifiedResult> {
   const { data: leadRow, error: leadErr } = await supabaseAdmin
     .from('leads')
     .select('id, status, stage_id, pipeline_id, email')
@@ -96,12 +102,12 @@ export async function toggleLeadQualified(venueId: string, leadId: string): Prom
 
   const { error: updErr } = await supabaseAdmin
     .from('leads')
-    .update({
+    .update(await withStageMover({
       stage_id: targetStage.id,
       pipeline_id: defaultPipelineId,
       status: legacyStatusForStageName(targetStage.name),
       updated_at: new Date().toISOString(),
-    })
+    }, movedBy))
     .eq('id', leadId)
     .eq('venue_id', venueId);
   if (updErr) return { ok: false, status: 500, error: updErr.message };

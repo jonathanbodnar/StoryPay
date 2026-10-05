@@ -30,6 +30,7 @@ import { findMatchingLeadIds } from '@/lib/find-matching-leads';
 import { toggleLeadQualified } from '@/lib/lead-qualified-toggle';
 import { onMarketingStageChanged } from '@/lib/marketing-email-worker';
 import type { AiState } from '@/lib/ai-concierge/types';
+import { stageMovedBy, withStageMover } from '@/lib/lead-stage-log';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -260,6 +261,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
   const triggeredBy = auth.agent
     ? `support:${auth.agent.sub}`
     : 'support:super_admin';
+  // Who is moving the bride, for the line the thread shows (lib/lead-stage-log.ts).
+  const movedBy = stageMovedBy('support', auth.agent?.name ? `${auth.agent.name} (StoryVenue Support)` : 'StoryVenue Support');
 
   switch (body.action) {
     case 'set_stage': {
@@ -346,11 +349,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
 
         const { error: leadsErr } = await supabaseAdmin
           .from('leads')
-          .update({
+          .update(await withStageMover({
             stage_id:    s.id,
             pipeline_id: s.pipeline_id,
             updated_at:  new Date().toISOString(),
-          })
+          }, movedBy))
           .in('id', ids)
           .eq('venue_id', venueId);
         if (leadsErr) {
@@ -406,7 +409,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ threadId: 
         leadId = created;
       }
 
-      const result = await toggleLeadQualified(venueId, leadId);
+      const result = await toggleLeadQualified(venueId, leadId, movedBy);
       if (!result.ok) {
         return NextResponse.json({ error: result.error }, { status: result.status });
       }

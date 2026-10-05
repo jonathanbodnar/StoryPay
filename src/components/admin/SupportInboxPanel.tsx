@@ -13,6 +13,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import StageMoveLine, { stageMovesAmong } from '@/components/conversations/StageMoveLine';
+import type { StageMove } from '@/lib/lead-stage-log';
+import { sentViaLabel } from '@/lib/venue-side-texts';
 import { capitalizeName } from '@/lib/format-name';
 import { formatMessageTimestamp } from '@/lib/format-message-timestamp';
 import { fetchWithGatewayRetry } from '@/lib/fetch-retry';
@@ -93,6 +96,10 @@ interface ThreadMessage {
   channel:                     'sms' | 'email';
   body:                        string;
   sender_kind:                 'owner' | 'team' | 'contact' | 'system' | 'ai' | 'concierge';
+  /** A venue-side text sent outside StoryVenue: where it came from (crm_user,
+   *  crm_workflow, crm_api) and, for a person, who. */
+  sent_via?:                   string | null;
+  sent_by_name?:               string | null;
   venue_team_member_id:        string | null;
   contact_from_name:           string | null;
   contact_from_email:          string | null;
@@ -127,6 +134,8 @@ interface ThreadDetail {
   } | null;
   lead: { id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null; status: string | null } | null;
   messages: ThreadMessage[];
+  /** Each move of this bride to another pipeline stage (never shown to the couple). */
+  stageMoves?: StageMove[];
   supportUsers: Record<string, { id: string; name: string; email: string }>;
   /** Other conversation_threads for the same bride (different channels). */
   siblings: Array<{
@@ -1802,10 +1811,13 @@ function ThreadDetailView({
               break;
             }
           }
-          return detail.messages.map((m, idx) => {
+          // Stage moves sit between the messages, in time order.
+          const moves = stageMovesAmong(detail.stageMoves, detail.messages.map((mm) => mm.created_at));
+          return [...detail.messages.map((m, idx) => {
           const isFirstUnread = idx === firstUnreadIdx;
           return (
             <div key={m.id} data-msg-id={m.id}>
+              {moves.before(idx).map((move) => <StageMoveLine key={move.id} move={move} />)}
               {isFirstUnread && (
                 <div
                   ref={unreadDividerRef}
@@ -1830,7 +1842,7 @@ function ThreadDetailView({
               />
             </div>
           );
-          });
+          }), ...moves.rest().map((move) => <StageMoveLine key={move.id} move={move} />)];
         })()}
         <div ref={messagesEndRef} />
       </div>
@@ -2690,6 +2702,10 @@ function MessageBubble({
   else if (isConcierge) label = supportName ? `Support — ${supportName}` : 'Support';
   else if (msg.sender_kind === 'team') label = 'Team member';
   else if (msg.sender_kind === 'owner') label = 'Owner';
+  // A venue-side text sent outside StoryVenue says where it came from, and who
+  // sent it when the texting account names them.
+  const sentOutside = sentViaLabel(msg.sent_via, msg.sent_by_name, 'support');
+  if (sentOutside && !isInbound) label = sentOutside;
 
   // Emails render as the shared full-width Gmail-style card (single source of
   // truth SaaS-wide) instead of a chat bubble. Sender/direction lives in the

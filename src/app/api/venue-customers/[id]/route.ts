@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { venueRequestMover } from '@/lib/lead-stage-log';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getVenueId } from '@/lib/auth-helpers';
 import {
@@ -270,7 +271,7 @@ export async function PATCH(
         customer_email: String(r.customer_email ?? ''),
         pipeline_id: (r.pipeline_id as string | null) ?? null,
         stage_id: (r.stage_id as string | null) ?? null,
-      });
+      }, await venueRequestMover());
     }
     const refreshed = await fetchById(venueId, id);
     if (!refreshed) return NextResponse.json({ error: 'Not found' }, { status: 404 });

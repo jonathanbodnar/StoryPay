@@ -222,6 +222,18 @@ export async function coupleTexts(from: string, body: string): Promise<void> {
   if (!res.ok) throw new Error(`coupleTexts: ${res.status} ${await res.text()}`);
 }
 
+/**
+ * The VENUE side texts a couple from outside StoryVenue (it waits in the
+ * stand-in texting service until the app's text sync finds it): a named
+ * person from the CRM's phone app, or one of the venue's CRM workflows.
+ */
+export async function venueTextsFromCrm(to: string, body: string, by: { person?: string; workflow?: boolean }): Promise<void> {
+  const res = await fetch(`${env.base}/api/staging/sms`, {
+    method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' }, body: JSON.stringify({ to, body, ...by }),
+  });
+  if (!res.ok) throw new Error(`venueTextsFromCrm: ${res.status} ${await res.text()}`);
+}
+
 /** Runs one of the app's timed jobs now (the test copy doesn't run them on its own). */
 export async function runJob(name: string): Promise<Response> {
   // Some jobs take MARKETING_CRON_SECRET, others CRON_SECRET.

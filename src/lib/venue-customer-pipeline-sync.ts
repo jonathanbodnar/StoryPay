@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { withStageMover, type StageMover } from '@/lib/lead-stage-log';
 import { ensureDefaultPipeline, legacyStatusForStageName, loadPipelinesWithStages } from '@/lib/pipelines';
 import { onMarketingStageChanged } from '@/lib/marketing-email-worker';
 import { slugifyStageLabel } from '@/lib/pipeline-stage-slug';
@@ -51,6 +52,8 @@ export async function syncVenueCustomerFromLeadRow(
 export async function syncLeadFromVenueCustomerRow(
   venueId: string,
   vc: { customer_email: string; pipeline_id: string | null; stage_id: string | null },
+  /** Who changed the contact's stage: shown in the thread next to the move. */
+  movedBy?: StageMover,
 ) {
   const email = (vc.customer_email || '').trim().toLowerCase();
   if (!email || !vc.pipeline_id || !vc.stage_id) return;
@@ -81,26 +84,27 @@ export async function syncLeadFromVenueCustomerRow(
 
     // Clear the contact-only flag when the contact is moved into a real
     // pipeline/stage so the lead re-appears on the kanban.
+    const withMover = async <T extends Record<string, unknown>>(update: T) => (movedBy ? withStageMover(update, movedBy) : update);
     const { error: updErr } = await supabaseAdmin
       .from('leads')
-      .update({
+      .update(await withMover({
         pipeline_id: vc.pipeline_id,
         stage_id: vc.stage_id,
         status,
         excluded_from_pipeline: false,
         updated_at: updatedAt,
-      })
+      }))
       .eq('id', leadId)
       .eq('venue_id', venueId);
     if (updErr && /column .*excluded_from_pipeline/i.test(updErr.message)) {
       await supabaseAdmin
         .from('leads')
-        .update({
+        .update(await withMover({
           pipeline_id: vc.pipeline_id,
           stage_id: vc.stage_id,
           status,
           updated_at: updatedAt,
-        })
+        }))
         .eq('id', leadId)
         .eq('venue_id', venueId);
     }

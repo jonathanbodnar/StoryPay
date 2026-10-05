@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { venueRequestMover, withStageMover } from '@/lib/lead-stage-log';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { syncAppointmentRemindersForEvent } from '@/lib/appointment-reminders';
@@ -191,7 +192,7 @@ export async function POST(
     if (tourStage && tourStage.id !== lead.stage_id) {
       await supabaseAdmin
         .from('leads')
-        .update({ stage_id: tourStage.id, status: 'tour_booked' })
+        .update(await withStageMover({ stage_id: tourStage.id, status: 'tour_booked' }, await venueRequestMover()))
         .eq('id', leadId)
         .eq('venue_id', venueId);
       // The same stage-change automations as moving the card by hand (the
