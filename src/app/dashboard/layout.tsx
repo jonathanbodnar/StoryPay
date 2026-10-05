@@ -7,6 +7,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { deriveTrialStatus, daysRemainingInTrial, type VenueTrialState } from '@/lib/directory-trial';
 import { checkAndSyncSubscriptionStatus } from '@/lib/venue-billing';
 import { isStripeConfigured, stripeBillingEnabledFor } from '@/lib/stripe/client';
+import { planNoticeFor } from '@/lib/plan-notice';
+import { resolveVenueTimezone } from '@/lib/venue-timezone';
 import DashboardShell from '@/components/DashboardShell';
 import AskAIWidget from '@/components/AskAIWidget';
 import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
@@ -32,7 +34,7 @@ export default async function DashboardLayout({
  // don't hit the venues table 3 times per page render.
  const { data: venueRow } = await supabaseAdmin
    .from('venues')
-   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge, wedding_planner, billing_provider, slug, email, notification_email, directory_downgrade_at')
+   .select('directory_plan_id, directory_subscription_status, directory_subscription_external_id, directory_trial_started_at, directory_trial_ends_at, directory_trial_is_forever, directory_trial_consumed, is_suspended, subscription_last_checked_at, platform_lunarpay_customer_id, directory_addon_concierge, wedding_planner, billing_provider, slug, email, notification_email, directory_downgrade_at, stripe_subscription_id, timezone')
    .eq('id', user.venueId)
    .maybeSingle();
 
@@ -152,6 +154,21 @@ export default async function DashboardLayout({
  const trialExpiredWall = inTrial && !hasExternalSub && trialStatus === 'expired' && !planEndsAt;
  const trialDaysRemaining = showTrialCountdown ? daysRemainingInTrial(trialState) : 0;
  const trialEndsAt = (vr.directory_trial_ends_at as string | null) ?? null;
+ // What the dashboard says about the plan or trial ending (lib/plan-notice.ts):
+ // little, until it matters. Worked out here so the dates and day counts are
+ // the same on the server's paint and in the browser.
+ const planNotice = planNoticeFor({
+   now: new Date(),
+   timeZone: resolveVenueTimezone((vr.timezone as string | null) ?? null),
+   planEndsAt,
+   // The plan page decides for real (it asks Stripe); this only words the button.
+   canKeepPlan: Boolean(planEndsAt) && (vr.stripe_subscription_id ? true : subStatus === 'trialing'),
+   trialActive: showTrialCountdown,
+   trialEndsAt,
+   trialDaysRemaining,
+   trialHasCard: hasExternalSub,
+   trialFreePlan: onFreeDuringTrialWindow,
+ });
 
  // Venues can access the dashboard (directory listing, leads, etc.) without
  // having finished LunarPay payment onboarding. If they want to take payments
@@ -205,12 +222,7 @@ export default async function DashboardLayout({
  hasConciergeAddon={hasConciergeAddon}
  hasBridePortal={hasBridePortal}
 directoryBillingPending={directoryBillingPending}
-trialCountdown={showTrialCountdown}
- trialDaysRemaining={trialDaysRemaining}
- trialEndsAt={trialEndsAt}
- trialHasCard={hasExternalSub}
- trialFreePlan={onFreeDuringTrialWindow}
- planEndsAt={planEndsAt}
+ planNotice={planNotice}
  >
  {children}
  </DashboardShell>

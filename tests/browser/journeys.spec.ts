@@ -165,7 +165,34 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
     await expectNoSidewaysScroll(page);
   }
 
-  // The dashboard card brings it back.
+  // The card is a drawer hanging from the top of the dashboard: open at first
+  // on a wide screen, and one slim bar once they close it (progress,
+  // Continue). It stays how they left it on this device; the bar opens it again.
+  const steps = page.locator('#setup-guide-steps');
+  // (A phone starts with the bar: its open drawer is a long list of steps.)
+  if (testInfo.project.name !== 'desktop') {
+    await expect(card).toHaveAttribute('data-open', 'false');
+    await expect(card).toContainText(/\d of \d done/);
+    await card.getByRole('button', { name: 'Show the setup steps' }).click();
+  }
+  await expect(card).toHaveAttribute('data-open', 'true');
+  await expect(steps).toBeVisible();
+  const openHeight = (await card.boundingBox())!.height;
+  await card.getByRole('button', { name: 'Close the setup steps' }).click();
+  await expect(card).toHaveAttribute('data-open', 'false');
+  await expect(steps).toBeHidden();
+  await expect(card).toContainText(/\d of \d done/);
+  await expect(card.getByRole('button', { name: 'Continue setup' })).toBeVisible();
+  await expect.poll(async () => (await card.boundingBox())!.height).toBeLessThan(70);
+  expect(openHeight).toBeGreaterThan(120);
+  await page.reload();
+  await expect(card).toHaveAttribute('data-open', 'false');
+  await expect(steps).toBeHidden();
+  await card.getByRole('button', { name: 'Show the setup steps' }).click();
+  await expect(steps).toBeVisible();
+  await expectNoSidewaysScroll(page);
+
+  // The bar brings the guide itself back.
   await card.getByRole('button', { name: 'Continue setup' }).click();
   await expect(guide).toBeVisible();
 
@@ -191,4 +218,92 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await pill.click();
   await expect(guide).toBeVisible();
   await expect(guide.getByText(/ticked every step/)).toBeVisible();
+});
+
+// What the dashboard says about a plan or trial ending (owner's rules, Oct 5
+// 2026). One of four bars used to sit on every page for the whole trial or
+// notice period. Now: nothing during a carded trial until its last days; a
+// cancelled plan is said once, then it's a chip on the Setup guide bar, then
+// it's back in the last days with the way to keep the plan.
+test('the dashboard says little about a plan or trial ending until it matters', async ({ page }, testInfo) => {
+  const stamp = `${testInfo.project.name}-${Date.now().toString(36)}`;
+  const email = `plan.${stamp}.${runId}@example.com`;
+  const venueId = randomUUID();
+  const DAY = 86_400_000;
+  const inDays = (d: number) => new Date(Date.now() + d * DAY - 60_000).toISOString();
+  const day = (iso: string, month: 'long' | 'short') => new Intl.DateTimeFormat('en-US', { month, day: 'numeric', timeZone: 'America/New_York' }).format(new Date(iso));
+  const { data: plan } = await db.from('directory_plans').select('id').eq('slug', 'bride-booking-system').single();
+  // A trial with a card on file, nine days left.
+  const { error } = await db.from('venues').insert({
+    id: venueId, name: `Plan Journey ${runId}`, slug: `plan-journey-${stamp}`, email,
+    notification_email: email, brand_email: email, password_hash: await bcrypt.hash(env.password, 10),
+    setup_completed: true, onboarding_status: 'registered', onboarding_completed_at: new Date().toISOString(),
+    directory_plan_id: plan!.id, directory_subscription_status: 'trialing', directory_subscription_external_id: `sub_browser_${stamp}`,
+    directory_trial_started_at: new Date(Date.now() - 5 * DAY).toISOString(), directory_trial_ends_at: inDays(9), directory_trial_consumed: true,
+    email_verified_at: new Date().toISOString(), owner_first_name: 'Pia', owner_last_name: 'Plan', timezone: 'America/New_York',
+    is_published: true, is_demo: false,
+  });
+  expect(error?.message ?? null).toBeNull();
+  const set = async (row: Record<string, unknown>) => {
+    expect((await db.from('venues').update(row).eq('id', venueId)).error?.message ?? null).toBeNull();
+    await page.goto('/dashboard/listing');
+    await expect(page.getByTestId('setup-guide-card')).toBeVisible({ timeout: 20_000 });
+  };
+
+  await page.goto('/login');
+  await page.getByPlaceholder('you@yourvenue.com').first().fill(email);
+  await page.getByPlaceholder('••••••••').fill(env.password);
+  await page.locator('form').filter({ has: page.getByPlaceholder('••••••••') }).locator('button[type="submit"]').click();
+  await page.waitForURL(/\/dashboard/);
+  // The Setup Guide opens by itself after sign-in; close it to see the page.
+  const guide = page.getByTestId('setup-guide');
+  await expect(guide).toBeVisible({ timeout: 20_000 });
+  await guide.getByRole('button', { name: 'Close the setup guide' }).click();
+
+  const notice = page.getByTestId('plan-notice');
+  const chip = page.getByTestId('plan-chip');
+  const wide = testInfo.project.name === 'desktop';
+
+  // Card on file, nine days left: no countdown, no "switch to Free".
+  await expect(page.getByTestId('setup-guide-card')).toBeVisible();
+  await expect(notice).toBeHidden();
+  await expect(page.locator('main')).not.toContainText(/days? left|Switch to Free/);
+
+  // Its last days: the heads-up, with the charge date and where to manage it.
+  const trialEnds = inDays(2);
+  await set({ directory_trial_ends_at: trialEnds });
+  await expect(notice).toContainText('Your trial ends in 2 days');
+  await expect(notice).toContainText(`Your card will be charged $97/mo on ${day(trialEnds, 'long')}.`);
+  await expect(notice.getByRole('link', { name: 'Manage subscription' })).toHaveAttribute('href', '/dashboard/directory-billing');
+  await expect(notice).not.toContainText('Switch to Free');
+  await expectNoSidewaysScroll(page);
+
+  // They cancel, twenty days out: it's said once, and can be closed.
+  const planEnds = inDays(20);
+  await set({ directory_trial_ends_at: planEnds, directory_downgrade_at: planEnds });
+  await expect(notice).toContainText(`Your plan ends ${day(planEnds, 'long')}`);
+  await expect(notice).toContainText("won't be charged again");
+  await expect(chip).toBeHidden();
+  // The next visit: no notice, just a chip on the Setup guide bar (wide screens).
+  await page.goto('/dashboard/listing');
+  await expect(page.getByTestId('setup-guide-card')).toBeVisible({ timeout: 20_000 });
+  await expect(notice).toBeHidden();
+  if (wide) {
+    await expect(chip).toHaveText(`Plan ends ${day(planEnds, 'short')}`);
+    await expect(chip).toHaveAttribute('href', '/dashboard/directory-billing');
+  }
+  await expectNoSidewaysScroll(page);
+
+  // The last days of that plan: it's back, with the way to keep the plan.
+  const soon = inDays(2);
+  await set({ directory_trial_ends_at: soon, directory_downgrade_at: soon });
+  await expect(notice).toContainText('Your plan ends in 2 days');
+  await expect(notice).toContainText(`(${day(soon, 'long')})`);
+  await expect(notice.getByRole('link', { name: 'Keep my plan' })).toHaveAttribute('href', '/dashboard/directory-billing');
+  await expect(chip).toBeHidden();
+
+  // A trial with no card keeps its countdown: for them it's a real deadline.
+  await set({ directory_downgrade_at: null, directory_subscription_external_id: null, directory_trial_ends_at: inDays(6) });
+  await expect(notice).toContainText('Bride Booking System™ trial · 6 days left');
+  await expect(notice.getByRole('button', { name: 'Start my plan early' })).toBeVisible();
 });

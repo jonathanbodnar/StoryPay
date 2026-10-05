@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { X } from 'lucide-react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
@@ -20,9 +21,15 @@ import OnboardingLauncher from '@/components/onboarding/OnboardingLauncher';
 import SetupGuide from '@/components/setup-guide/SetupGuide';
 import SetupGuidePrompt from '@/components/setup-guide/SetupGuideCard';
 import { trackClient } from '@/lib/analytics-client';
+import { inDays, type PlanNotice } from '@/lib/plan-notice';
+import { usePlanEndingOnce } from '@/lib/plan-notice-client';
 import { isNativeApp, openExternalBrowser } from '@/lib/platform';
 
 const STORAGE_KEY = 'storypay.dashboard.sidebarCollapsed';
+const NO_PLAN_NOTICE: PlanNotice = { kind: 'none' };
+/** A one-line notice above the page: quiet grey, its action on the right. */
+const NOTICE = 'mb-4 flex flex-col gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-800 sm:flex-row sm:items-center sm:justify-between';
+const NOTICE_ACTION = 'self-start whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black sm:self-auto';
 
 interface Venue {
   id: string;
@@ -43,12 +50,7 @@ export default function DashboardShell({
   hasConciergeAddon = false,
   hasBridePortal = false,
   directoryBillingPending = false,
-  trialCountdown = false,
-  trialDaysRemaining = 0,
-  trialEndsAt = null,
-  trialHasCard = false,
-  trialFreePlan = false,
-  planEndsAt = null,
+  planNotice = NO_PLAN_NOTICE,
   children,
 }: {
   venue: Venue;
@@ -67,18 +69,9 @@ export default function DashboardShell({
   hasBridePortal?: boolean;
   /** Directory SaaS: priced plan assigned, payment still required. */
   directoryBillingPending?: boolean;
-  /** True when the venue is on an active (not-yet-expired) Bride Booking System™ trial. */
-  trialCountdown?: boolean;
-  /** Whole days left in the active trial. */
-  trialDaysRemaining?: number;
-  /** ISO trial end date (for the countdown banner copy). */
-  trialEndsAt?: string | null;
-  /** True when a card is already on file — the trial will auto-charge at the end. */
-  trialHasCard?: boolean;
-  /** True when the venue downgraded to Free but is still inside the trial window. */
-  trialFreePlan?: boolean;
-  /** The venue cancelled: its plan stays on until this ISO date, then it moves to Free. */
-  planEndsAt?: string | null;
+  /** What to say about the plan or trial ending, worked out on the server
+   *  (lib/plan-notice.ts): little, until it matters. */
+  planNotice?: PlanNotice;
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -150,11 +143,18 @@ export default function DashboardShell({
     }
   }, [searchParams, router]);
 
-  // Analytics: the trial countdown banner is an upgrade prompt — record a view
+  // The plan or trial ending (lib/plan-notice.ts). A cancelled plan is said
+  // once after cancelling, then it's a chip on the Setup guide bar until its
+  // last days.
+  const planEnding = planNotice.kind === 'plan-ending' ? planNotice : null;
+  const [planEndingJustNow, closePlanEnding] = usePlanEndingOnce(planEnding && !planEnding.final ? planEnding.endsAt : null);
+  const noCardTrial = planNotice.kind === 'trial-no-card';
+
+  // Analytics: the no-card trial countdown is an upgrade prompt — record a view
   // so we can measure prompt → upgrade_started → upgrade conversion.
   useEffect(() => {
-    if (trialCountdown) trackClient('upgrade_prompt_viewed', { label: 'Trial countdown banner' });
-  }, [trialCountdown]);
+    if (noCardTrial) trackClient('upgrade_prompt_viewed', { label: 'Trial countdown banner' });
+  }, [noCardTrial]);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((c) => {
@@ -228,94 +228,113 @@ export default function DashboardShell({
         <MobileDashboardRedirect />
         <main className={`mx-auto flex w-full flex-1 flex-col px-6 pb-28 pt-6 sm:px-8 lg:px-10 lg:pt-[68px] lg:pb-10 ${isFullWidth ? '' : 'max-w-[1024px]'}`}>
           {role !== 'member' && <OnboardingLauncher />}
-          {/* The Setup Guide when closed: its card on the dashboard home, its
-              pill everywhere else, until each step is really set up. */}
-          {role !== 'member' && <SetupGuidePrompt home={pathname === '/dashboard/listing'} />}
-          {planEndsAt ? (
-            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          {/* The Setup Guide when closed: its drawer at the top of the dashboard
+              home (carrying the plan chip), its pill everywhere else, until
+              each step is really set up. */}
+          {role !== 'member' && (
+            <SetupGuidePrompt
+              home={pathname === '/dashboard/listing'}
+              planChip={planEnding && !planEnding.final && !planEndingJustNow ? (
+                <Link
+                  href="/dashboard/directory-billing"
+                  onClick={(e) => routeBillingOut(e, '/dashboard/directory-billing')}
+                  data-testid="plan-chip"
+                  className="hidden shrink-0 whitespace-nowrap rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-600 transition hover:border-gray-300 hover:text-gray-900 sm:inline-flex"
+                >
+                  Plan ends {planEnding.endsOnShort}
+                </Link>
+              ) : null}
+            />
+          )}
+          {planEnding?.final ? (
+            // The last days of a cancelled plan: always said, with the way back.
+            <div data-testid="plan-notice" className={NOTICE}>
               <div className="flex-1">
-                <span className="font-semibold">
-                  Your plan ends {new Date(planEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-                </span>
-                {' '}
+                <span className="font-semibold">Your plan ends {inDays(planEnding.daysLeft)}</span>{' '}
                 <span className="text-gray-500">
-                  After that you&apos;re on the Free plan and won&apos;t be charged again. Your listing, leads and account stay right here.
+                  ({planEnding.endsOn}). After that you&apos;re on the Free plan. Your listing, leads and account stay right here.
                 </span>
               </div>
               <Link
                 href="/dashboard/directory-billing"
                 onClick={(e) => routeBillingOut(e, '/dashboard/directory-billing')}
-                className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
+                className={NOTICE_ACTION}
               >
-                Manage plan
+                {planEnding.canKeep ? 'Keep my plan' : 'See plans'}
               </Link>
             </div>
-          ) : trialCountdown ? (
-            trialFreePlan ? (
-              <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex-1">
-                  <span className="font-semibold">
-                    Bride Booking System™ trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
-                  </span>
-                  {' '}
-                  <span className="text-gray-500">
-                    You&apos;re on the Free plan — you won&apos;t be charged. Upgrade anytime to keep your full Bride Booking System™.
-                  </span>
-                </div>
+          ) : planEnding && planEndingJustNow ? (
+            // Just cancelled: said once, on this visit, and it can be closed.
+            <div data-testid="plan-notice" className={NOTICE}>
+              <div className="flex-1">
+                <span className="font-semibold">Your plan ends {planEnding.endsOn}</span>{' '}
+                <span className="text-gray-500">
+                  After that you&apos;re on the Free plan and won&apos;t be charged again. Your listing, leads and account stay right here.
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 self-start sm:self-auto">
                 <Link
                   href="/dashboard/directory-billing"
                   onClick={(e) => routeBillingOut(e, '/dashboard/directory-billing')}
-                  className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
+                  className={NOTICE_ACTION}
                 >
-                  Upgrade
+                  Manage plan
                 </Link>
-              </div>
-            ) : trialHasCard ? (
-              <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex-1">
-                  <span className="font-semibold">
-                    Bride Booking System™ trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
-                  </span>
-                  {' '}
-                  <span className="text-gray-500">
-                    {trialEndsAt
-                      ? `Your card will be charged $97/mo on ${new Date(trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}. Switch to Free anytime before then.`
-                      : 'Your card will be charged $97/mo when your trial ends. Switch to Free anytime before then.'}
-                  </span>
-                </div>
-                <Link
-                  href="/dashboard/directory-billing"
-                  onClick={(e) => routeBillingOut(e, '/dashboard/directory-billing')}
-                  className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
-                >
-                  Manage subscription
-                </Link>
-              </div>
-            ) : (
-              <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex-1">
-                  <span className="font-semibold">
-                    Bride Booking System™ trial · {trialDaysRemaining} day{trialDaysRemaining === 1 ? '' : 's'} left
-                  </span>
-                  {' '}
-                  <span className="text-gray-500">
-                    {startEarlyError
-                      ? startEarlyError
-                      : trialEndsAt
-                        ? `Add a card to keep full access — you won't be charged until ${new Date(trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
-                        : "Add a card to keep full access when your trial ends."}
-                  </span>
-                </div>
                 <button
                   type="button"
-                  onClick={startTrialEarly}
-                  disabled={startEarlyBusy}
-                  className="self-start sm:self-auto whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black disabled:opacity-60"
+                  onClick={closePlanEnding}
+                  aria-label="Close this notice"
+                  className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-200/70 hover:text-gray-700"
                 >
-                  {startEarlyBusy ? 'Starting…' : 'Start my plan early'}
+                  <X size={16} />
                 </button>
               </div>
-            )
+            </div>
+          ) : planNotice.kind === 'trial-charge-soon' ? (
+            // A card is on file: nothing all trial, then this heads-up in the
+            // last days (the heads-up email and text go out in the same window).
+            <div data-testid="plan-notice" className={NOTICE}>
+              <div className="flex-1">
+                <span className="font-semibold">Your trial ends {inDays(planNotice.daysLeft)}</span>{' '}
+                <span className="text-gray-500">
+                  {planNotice.endsOn
+                    ? `Your card will be charged $97/mo on ${planNotice.endsOn}.`
+                    : 'Your card will be charged $97/mo when it ends.'}
+                </span>
+              </div>
+              <Link
+                href="/dashboard/directory-billing"
+                onClick={(e) => routeBillingOut(e, '/dashboard/directory-billing')}
+                className={NOTICE_ACTION}
+              >
+                Manage subscription
+              </Link>
+            </div>
+          ) : planNotice.kind === 'trial-no-card' ? (
+            // No card yet: a real deadline, and the only prompt to add one.
+            <div data-testid="plan-notice" className={NOTICE}>
+              <div className="flex-1">
+                <span className="font-semibold">
+                  Bride Booking System™ trial · {planNotice.daysLeft} day{planNotice.daysLeft === 1 ? '' : 's'} left
+                </span>
+                {' '}
+                <span className="text-gray-500">
+                  {startEarlyError
+                    ? startEarlyError
+                    : planNotice.endsOn
+                      ? `Add a card to keep full access — you won't be charged until ${planNotice.endsOn}.`
+                      : 'Add a card to keep full access when your trial ends.'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={startTrialEarly}
+                disabled={startEarlyBusy}
+                className={`${NOTICE_ACTION} disabled:opacity-60`}
+              >
+                {startEarlyBusy ? 'Starting…' : 'Start my plan early'}
+              </button>
+            </div>
           ) : null}
 
           {directoryBillingPending ? (

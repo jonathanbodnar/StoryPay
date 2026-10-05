@@ -3,8 +3,12 @@
 /**
  * The Setup Guide when it's closed, at the top of the dashboard:
  *
- *  - the card, on the dashboard home, while there are steps still to tick:
- *    progress, the next step, and every step's cover to jump to it;
+ *  - the drawer, on the dashboard home, while there are steps still to tick.
+ *    It hangs from the top of the page. Open, it shows every step's cover to
+ *    jump to; closed, it's one slim bar: progress, the next step, Continue.
+ *    It starts open and stays how the venue left it, on that device (the
+ *    pop-up already comes back at each sign-in). The plan chip ("Plan ends
+ *    Oct 27") sits on its bar, so the page has one thing at the top, not two.
  *  - the pill, everywhere else, and everywhere once every step is ticked. It
  *    stays until each step is REALLY set up, so a step the venue ticked
  *    without doing keeps its reminder (owner's rule, Oct 4 2026).
@@ -12,17 +16,17 @@
  * Neither is shown to Private Clients, or once everything is set up.
  */
 
-import { useEffect, useRef, type ReactNode, type UIEvent } from 'react';
-import { GraduationCap } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode, type UIEvent } from 'react';
+import { ChevronDown, ChevronRight, GraduationCap, X } from 'lucide-react';
 import { isNativeApp } from '@/lib/platform';
 import { setupLesson } from '@/lib/setup-guide';
 import { openSetupGuide, setupStepLabels, useSetupGuideStatus, type SetupGuideStatus } from '@/lib/setup-guide-client';
 import { LessonThumb, StepTick } from './LessonCover';
 
-export default function SetupGuidePrompt({ home }: { home: boolean }) {
+export default function SetupGuidePrompt({ home, planChip }: { home: boolean; planChip?: ReactNode }) {
   const status = useSetupGuideStatus();
   if (!status?.prompted || isNativeApp()) return null;
-  if (home && !status.checkedAll) return <SetupGuideCard status={status} />;
+  if (home && !status.checkedAll) return <SetupGuideDrawer status={status} planChip={planChip} />;
   if (status.showPill) return <SetupGuidePill left={status.left} />;
   return null;
 }
@@ -48,57 +52,149 @@ function SetupGuidePill({ left }: { left: number }) {
   );
 }
 
-function SetupGuideCard({ status }: { status: SetupGuideStatus }) {
+/**
+ * How the venue left the drawer on this device. Until they've chosen, it's
+ * open on a wide screen; on a phone, where the open drawer is a long list
+ * that would push the dashboard off the screen, it starts as the bar.
+ */
+const DRAWER_KEY = 'storyvenue.setupGuide.drawer';
+function drawerStartsOpen(): boolean {
+  try {
+    const left = window.localStorage.getItem(DRAWER_KEY);
+    if (left === 'closed') return false;
+    if (left === 'open') return true;
+    return window.matchMedia('(min-width: 640px)').matches;
+  } catch {
+    return true;
+  }
+}
+
+function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; planChip?: ReactNode }) {
   const labels = setupStepLabels(status.lessons);
   const nextId = status.lessons.find((l) => !l.optional && !l.checked)?.id;
   const next = nextId ? setupLesson(nextId) : undefined;
   const pct = status.total ? Math.round((status.done / status.total) * 100) : 0;
+  // Only ever rendered in the browser (the guide's status is loaded there), so
+  // reading what they chose last time can't disagree with the server's paint.
+  const [open, setOpen] = useState(drawerStartsOpen);
+  const toggle = () => {
+    const now = !open;
+    setOpen(now);
+    try {
+      window.localStorage.setItem(DRAWER_KEY, now ? 'open' : 'closed');
+    } catch {
+      /* storage blocked: it starts open next time */
+    }
+  };
 
   return (
-    <section data-testid="setup-guide-card" className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="font-heading text-[15px] font-semibold text-gray-900">Finish setting up</h2>
-          <p className="mt-0.5 text-[13px] text-gray-500">
-            {status.done} of {status.total} done{next ? `. Next: ${next.title}` : ''}
-          </p>
-        </div>
+    <section
+      data-testid="setup-guide-card"
+      data-open={open ? 'true' : 'false'}
+      className="mb-5 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:-mt-[68px] lg:rounded-t-none lg:border-t-0"
+    >
+      {/* The bar: all there is when the drawer is closed. */}
+      <div className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-controls="setup-guide-steps"
+          className="flex min-w-0 flex-1 items-center gap-2.5 py-1 text-left"
+        >
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1b1b1b] text-white">
+            <GraduationCap size={15} />
+          </span>
+          <span className="min-w-0 truncate text-[13px] text-gray-500">
+            <span className="mr-2 hidden font-heading text-sm font-semibold text-gray-900 sm:inline">Finish setting up</span>
+            {/* On a phone the count is the label: there's no room for both. */}
+            <span className="font-semibold tabular-nums text-gray-900 sm:font-normal sm:text-gray-500">
+              {status.done} of {status.total} done
+            </span>
+            {next && <span className="hidden md:inline"> · Next: {next.title}</span>}
+          </span>
+        </button>
+        {planChip}
         <button
           type="button"
           onClick={() => openSetupGuide()}
-          className="whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-black"
+          className="whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
         >
           Continue setup
         </button>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-controls="setup-guide-steps"
+          aria-label={open ? 'Close the setup steps' : 'Show the setup steps'}
+          className="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+        >
+          {open ? <X size={16} /> : <ChevronDown size={16} />}
+        </button>
       </div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
-        <div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500" style={{ width: `${pct}%` }} />
+      <div className="h-1 bg-gray-100">
+        <div className="h-full rounded-r-full bg-emerald-500 transition-[width] duration-500" style={{ width: `${pct}%` }} />
       </div>
 
-      <LessonStrip>
-        {status.lessons.map((l) => {
-          const lesson = setupLesson(l.id);
-          if (!lesson) return null;
-          return (
-            <li key={l.id} className="w-[168px] shrink-0">
-              <button type="button" onClick={() => openSetupGuide(l.id)} className="group block w-full text-left">
-                <span className="relative block">
-                  <LessonThumb lesson={lesson} className="transition group-hover:opacity-90" />
-                  {l.checked && (
-                    <span className="absolute right-1.5 top-1.5 rounded-full ring-2 ring-white">
+      {/* The steps: slide down when open. Hidden from keyboard and screen
+          readers too when closed (visibility flips after the slide). */}
+      <div
+        id="setup-guide-steps"
+        className={`grid transition-[grid-template-rows,visibility] duration-300 ease-out ${
+          open ? 'visible grid-rows-[1fr]' : 'invisible grid-rows-[0fr]'
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="px-4 pb-3 pt-4 sm:px-5 sm:pb-4">
+            <LessonStrip>
+              {status.lessons.map((l) => {
+                const lesson = setupLesson(l.id);
+                if (!lesson) return null;
+                return (
+                  <li key={l.id} className="w-[168px] shrink-0">
+                    <button type="button" onClick={() => openSetupGuide(l.id)} className="group block w-full text-left">
+                      <span className="relative block">
+                        <LessonThumb lesson={lesson} className="transition group-hover:opacity-90" />
+                        {l.checked && (
+                          <span className="absolute right-1.5 top-1.5 rounded-full ring-2 ring-white">
+                            <StepTick ticked={l.ticked} verified={l.verified} />
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-2 block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                        {labels.get(l.id)?.short}
+                      </span>
+                      <span className="line-clamp-2 text-[13px] font-medium leading-snug text-gray-900">{lesson.title}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </LessonStrip>
+            {/* A phone has no room for the covers: the steps as a list. */}
+            <ul className="divide-y divide-gray-100 sm:hidden">
+              {status.lessons.map((l) => {
+                const lesson = setupLesson(l.id);
+                if (!lesson) return null;
+                return (
+                  <li key={l.id}>
+                    <button type="button" onClick={() => openSetupGuide(l.id)} className="flex w-full items-center gap-3 py-2.5 text-left">
                       <StepTick ticked={l.ticked} verified={l.verified} />
-                    </span>
-                  )}
-                </span>
-                <span className="mt-2 block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                  {labels.get(l.id)?.short}
-                </span>
-                <span className="line-clamp-2 text-[13px] font-medium leading-snug text-gray-900">{lesson.title}</span>
-              </button>
-            </li>
-          );
-        })}
-      </LessonStrip>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                          {labels.get(l.id)?.short}
+                        </span>
+                        <span className="block truncate text-[13px] font-medium text-gray-900">{lesson.title}</span>
+                      </span>
+                      <ChevronRight size={14} className="shrink-0 text-gray-300" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -130,7 +226,7 @@ function LessonStrip({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="mt-4 hidden sm:block">
+    <div className="hidden sm:block">
       <ul
         data-testid="setup-guide-strip"
         onScroll={onScroll}
