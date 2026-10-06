@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
+import { endVenueSessions } from '@/lib/venue-session';
 import { cancelSubscription } from '@/lib/lunarpay';
 import { requirePlatformLunarPaySecretKey } from '@/lib/platform-directory-billing';
 import { revalidateDirectory } from '@/lib/directory-revalidate';
@@ -165,7 +166,6 @@ export async function POST(request: NextRequest) {
 
   // Clear session cookies
   const response = NextResponse.json({ deleted: true });
-  response.cookies.delete('venue_id');
-  response.cookies.delete('member_id');
+  endVenueSessions(response, await cookies());
   return response;
 }

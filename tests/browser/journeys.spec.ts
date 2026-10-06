@@ -304,19 +304,16 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   // it the time before (owner, Oct 5 2026: "anytime somebody logs in after
   // they've logged out and come back by logging in, show them the full-screen
   // modal popup"). The bar under it is the small bar, as on every page.
-  // Sign out (drop the venue session, keep the test copy's own gate cookie).
-  // Leave the dashboard first, then keep dropping the session until it stays
-  // gone: every answer to a signed-in request renews the session cookie, and
-  // answers still on their way (the page's own, and the ones the app's
-  // service worker carries on with after the page has gone) would sign the
-  // venue back in, as the same sign-in as before.
-  const session = ['venue_id', 'venue_id_sig', 'venue_id_meta', 'member_id', 'member_id_sig', 'member_id_meta'];
-  await page.goto('about:blank');
-  await expect.poll(async () => {
-    for (const name of session) await page.context().clearCookies({ name });
-    await page.waitForTimeout(1000);
-    return (await page.context().cookies()).filter((c) => session.includes(c.name)).length;
-  }, { timeout: 20_000 }).toBe(0);
+  // Sign out the way a venue does, at the worst moment: Logout pressed the
+  // instant a page has opened, while the page's own requests are still out.
+  // Each of their answers renews the session, and until Oct 6 2026 that put
+  // the cookies back after the logout: the sign-in page showed and the browser
+  // was still signed in (every time, pressed this early). It stays ended now.
+  await page.goto('/dashboard/leads');
+  await page.locator('a[href="/api/auth/logout"]:visible').first().click();
+  await page.waitForURL(/\/login/);
+  await page.waitForTimeout(3000); // the late answers have all landed
+  expect((await page.request.get('/api/onboarding/setup-guide')).status(), 'signed out, and still signed out once the late answers are in').toBe(401);
   await signIn();
   await expect(guide).toBeVisible({ timeout: 20_000 });
   await expect(card).toHaveAttribute('data-open', 'false');

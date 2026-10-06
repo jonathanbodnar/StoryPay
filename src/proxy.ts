@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { STAGING_ACCESS_COOKIE, stagingAccessToken, stagingOpenPath, sameSecret } from '@/lib/staging-access';
 import { IMPERSONATION_COOKIE, isAdminImpersonating } from '@/lib/admin-impersonation';
 import { ADMIN_REQUEST_HEADER } from '@/lib/admin-route-tabs';
+import { SESSION_ENDED_COOKIE, sessionIsOver, sessionsEndedAt } from '@/lib/session-ended';
 
 const APP_HOSTS = new Set(['app.storyvenue.com']);
 
@@ -252,6 +253,9 @@ async function sessionProxy(request: NextRequest) {
   const nowSecs = Math.floor(Date.now() / 1000);
   const toStrip = new Set<string>();
   const reissue: Reissue[] = [];
+  // When this browser last signed out, or signed in as someone else. A session
+  // from before then is over, even if a late renewal put its cookies back.
+  const endedAt = sessionsEndedAt(request.cookies.get(SESSION_ENDED_COOKIE)?.value, nowSecs);
   let venuePrincipal = '';
   let venueSuspended = false;
 
@@ -291,6 +295,10 @@ async function sessionProxy(request: NextRequest) {
         strip(); // this session's absolute cap exceeded
         continue;
       }
+      if (sessionIsOver(iat, endedAt)) {
+        strip(); // signed out (or replaced) in this browser after it was issued
+        continue;
+      }
       const row = await sessionRow(table, value);
       if (!row.exists || (row.before && iat < row.before)) {
         strip(); // account gone, or session revoked server-side
@@ -309,6 +317,10 @@ async function sessionProxy(request: NextRequest) {
       // Legacy format (pre-metadata): HMAC(id=value). Verify once, then migrate.
       if (!(await signedByAny(secrets, `${id}=${value}`, providedSig))) {
         strip();
+        continue;
+      }
+      if (sessionIsOver(null, endedAt)) {
+        strip(); // no issue time to set against this browser's sign-out
         continue;
       }
       const row = await sessionRow(table, value);

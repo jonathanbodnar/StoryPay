@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import type { NextResponse } from 'next/server';
+import { issuedAt, SESSION_ENDED_COOKIE, SESSION_ENDED_MAX_AGE_SECONDS, sessionsEndedValue } from '@/lib/session-ended';
 
 /**
  * HMAC-signed, time-bounded session cookies for the multi-tenant boundary.
@@ -158,6 +159,43 @@ export function setSignedCookie(
   res.cookies.set(name, value, opts);
   res.cookies.set(metaCookieName(name), meta, opts);
   res.cookies.set(sigCookieName(name), signSessionValue(name, value, meta), opts);
+  // Starting a session ends whatever this browser was signed in to before:
+  // a late renewal of the older session can't put the browser back in it.
+  markSessionsEnded(res, Math.min(iat, Math.floor(Date.now() / 1000)));
+}
+
+/**
+ * Leave the "sessions before now are over" marker (lib/session-ended.ts) in
+ * this browser. The proxy refuses any venue or member session older than it.
+ * `endedIats`: the issue times of the sessions being ended, when known.
+ */
+export function markSessionsEnded(
+  res: NextResponse,
+  nowSecs: number = Math.floor(Date.now() / 1000),
+  endedIats: ReadonlyArray<number | null> = [],
+): void {
+  res.cookies.set(SESSION_ENDED_COOKIE, sessionsEndedValue(nowSecs, endedIats), {
+    path: '/', httpOnly: true, secure: true, sameSite: 'lax', maxAge: SESSION_ENDED_MAX_AGE_SECONDS,
+  });
+}
+
+/**
+ * Sign this browser out of its venue: clear the venue and team-member
+ * sessions, and mark them over, so a renewal still on its way can't bring
+ * them back (which is what clearing the cookies alone allowed).
+ *
+ * `held` is the request's cookies: the sessions being ended are read from
+ * them, so they are over however recently they were issued.
+ */
+export function endVenueSessions(
+  res: NextResponse,
+  held?: { get(name: string): { value: string } | undefined },
+): void {
+  const opts: CookieOptions = { path: '/', httpOnly: true, secure: true, sameSite: 'lax' };
+  clearSignedCookie(res, 'venue_id', opts);
+  clearSignedCookie(res, 'member_id', opts);
+  const ended = SIGNED_COOKIE_NAMES.map((name) => issuedAt(held?.get(metaCookieName(name))?.value));
+  markSessionsEnded(res, Math.floor(Date.now() / 1000), ended);
 }
 
 /** Clear an id cookie AND its metadata + signature companions. */

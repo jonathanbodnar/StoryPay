@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
-import { Browser, db, env, FLOW_VENUE, runId, signedInOwner, waitForEmail } from './helpers';
+import { Browser, db, env, fetchWithCookies, FLOW_VENUE, runId, signedInOwner, waitForEmail } from './helpers';
 
 // Every way into an account besides email + password: password resets (venue
 // owner, team member, StoryVenue team, couple), the emailed sign-in link, team
@@ -59,12 +59,60 @@ describe('a venue owner who forgot their password, or wants an emailed sign-in l
     expect(reuse.headers.get('location') ?? '').not.toMatch(/\/dashboard$/);
   });
 
-  it('signing out ends the session', async () => {
+  // Oct 5 2026: pressing Logout could leave the browser signed in. Every
+  // answer to a signed-in request renews the session's cookies, and an answer
+  // still on its way when Logout was pressed arrived after it and put them
+  // back. Within a second of a page opening that happened every time. Logout
+  // now also leaves a marker ("sessions before now are over") that the proxy
+  // holds every session against.
+  // A renewal sets the session's own cookies again and nothing else.
+  const sessionOf = (cookies: Record<string, string>) =>
+    Object.fromEntries(Object.entries(cookies).filter(([name]) => /^(venue_id|member_id)(_meta|_sig)?$/.test(name)));
+
+  it('signing out ends the session, and it stays ended when a late answer puts the old cookies back', async () => {
     const b = new Browser();
     await b.signIn(email, newPassword);
     expect((await b.fetch('/api/venues/me')).status).toBe(200);
+    const signedIn = sessionOf(b.cookies());
+    expect(Object.keys(signedIn).sort()).toEqual(['venue_id', 'venue_id_meta', 'venue_id_sig']);
+
     await b.fetch('/api/auth/logout');
     expect((await b.fetch('/api/venues/me')).status).toBe(401);
+    const signedOut = b.cookies();
+    expect(signedOut.venue_id).toBeUndefined();
+    expect(signedOut.sv_sessions_ended).toMatch(/^\d+$/);
+
+    // The late answer: the browser has its old session cookies again.
+    const renewed = await fetchWithCookies('/api/venues/me', { ...signedOut, ...signedIn });
+    expect(renewed.status).toBe(401);
+    // …and nothing renews them a second time.
+    expect(renewed.headers.getSetCookie().join('\n')).not.toMatch(/(^|\n)venue_id=[^;]/);
+    // (Those cookies are a session still within its life: it is this
+    // browser's marker that ends it. Without that they'd be let in, which is
+    // what used to happen.)
+    expect((await fetchWithCookies('/api/venues/me', signedIn)).status).toBe(200);
+
+    // Signing in again, in the same browser, works at once.
+    await b.signIn(email, newPassword);
+    expect((await b.fetch('/api/venues/me')).status).toBe(200);
+  });
+
+  // The mirror of it: signing in while an older session's answers are still
+  // arriving could put the browser back in the OLD account.
+  it('signing in as someone else ends the session that was there, even if its cookies come back', async () => {
+    const b = new Browser();
+    await b.signIn(email, newPassword);
+    const first = sessionOf(b.cookies());
+    // (Signing in can't know which session it is replacing, so it ends every
+    // session more than two seconds old: any that a person had been using.)
+    await new Promise((r) => setTimeout(r, 3500));
+    await b.signIn(FLOW_VENUE.email);
+    expect((await b.fetch('/api/venues/me')).status).toBe(200);
+    // A late renewal of the first session lands over the new one's cookies:
+    // signed out, rather than quietly back in the first account.
+    expect((await fetchWithCookies('/api/venues/me', { ...b.cookies(), ...first })).status).toBe(401);
+    // The browser's own cookies, untouched, are the second account's.
+    expect((await b.fetch('/api/venues/me')).status).toBe(200);
   });
 });
 

@@ -77,10 +77,24 @@ export class Browser {
     return res;
   }
 
+  /** What this browser holds right now. */
+  cookies(): Record<string, string> {
+    return Object.fromEntries(this.jar);
+  }
+
   async signIn(email: string, password = env.password): Promise<void> {
     const res = await this.fetch('/api/auth/sign-in', { method: 'POST', json: { email, password } });
     if (!res.ok) throw new Error(`sign-in failed for ${email}: ${res.status} ${await res.text()}`);
   }
+}
+
+/**
+ * One request carrying exactly these cookies: what a browser sends after its
+ * cookies were changed behind its back (an answer that arrived late).
+ */
+export function fetchWithCookies(path: string, cookies: Record<string, string>): Promise<Response> {
+  const cookie = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; ');
+  return steadyFetch(env.base + path, { headers: { 'x-staging-key': env.stagingKey, cookie }, redirect: 'manual' });
 }
 
 let ownerSession: Promise<Browser> | null = null;

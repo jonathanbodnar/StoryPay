@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyAdminCookie } from '@/lib/admin-auth';
-import { clearSignedCookie } from '@/lib/venue-session';
+import { endVenueSessions } from '@/lib/venue-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,8 +23,8 @@ export async function POST() {
 
   const res = NextResponse.json({ ok: true, redirect: returnUrl });
 
-  clearSignedCookie(res, 'venue_id', { ...COOKIE_BASE, httpOnly: true });
-  clearSignedCookie(res, 'member_id', { ...COOKIE_BASE, httpOnly: true });
+  // The venue view is over in this browser, for good (see lib/session-ended.ts).
+  endVenueSessions(res, cookieStore);
   res.cookies.set('admin_impersonating', '', { ...COOKIE_BASE, httpOnly: true, maxAge: 0 });
   res.cookies.set('impersonate_return', '', { ...COOKIE_BASE, httpOnly: true, maxAge: 0 });
 
