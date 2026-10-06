@@ -38,6 +38,7 @@ describe('release lanes', () => {
       'src/app/api/webhooks/stripe/route.ts', 'src/lib/service-fee.ts',
       'src/lib/ghl.ts', 'src/lib/ai-concierge/send-cron.ts', 'src/lib/marketing-email-worker.ts', 'src/lib/sms-consent.ts',
       'src/proxy.ts', 'src/lib/session.ts', 'src/app/api/auth/sign-in/route.ts', 'src/app/api/admin/login/route.ts',
+      'src/lib/current-password.ts', 'src/app/api/profile/route.ts', 'src/app/api/profile/credentials/route.ts',
     ]) {
       expect(sensitiveFiles([f]), f).toEqual([f]);
     }
@@ -45,6 +46,7 @@ describe('release lanes', () => {
     for (const f of [
       'src/app/page.tsx', 'src/app/venue/[slug]/page.tsx', 'src/app/dashboard/leads/page.tsx',
       'src/components/Sidebar.tsx', 'src/app/couple/signin-link/page.tsx', 'src/lib/venue-seo.ts', 'public/storyvenue-logo.png',
+      'src/app/api/profile/notifications/route.ts',
     ]) {
       expect(sensitiveFiles([f]), f).toEqual([]);
     }

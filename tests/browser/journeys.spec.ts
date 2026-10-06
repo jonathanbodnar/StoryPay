@@ -584,3 +584,51 @@ test('watching the walkthrough ticks its step; a Private Client finds the last s
   // The guide may be mid-reload through the stand-in above: let that go quietly.
   await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
+
+// My Profile, Login & Security. Until Oct 6 2026 this page changed a sign-in
+// email or password for whoever was signed in: a shared computer at a venue was
+// enough to take the account. Both ask for the current password now, and the
+// sign-in email under Personal Information is shown, not typed over.
+test('My Profile asks for the current password before it changes the password', async ({ page }, testInfo) => {
+  const stamp = `${testInfo.project.name}-${Date.now().toString(36)}`;
+  const email = `profile.${stamp}.${runId}@example.com`;
+  const venueId = randomUUID();
+  const { data: plan } = await db.from('directory_plans').select('id').eq('slug', 'bride-booking-system').single();
+  const { error } = await db.from('venues').insert({
+    id: venueId, name: `Profile Journey ${runId}`, slug: `profile-journey-${stamp}`, email,
+    notification_email: email, brand_email: email, password_hash: await bcrypt.hash(env.password, 10),
+    setup_completed: true, onboarding_status: 'registered', onboarding_completed_at: new Date().toISOString(),
+    directory_plan_id: plan?.id ?? null, directory_subscription_status: 'active', email_verified_at: new Date().toISOString(),
+    owner_first_name: 'Pru', owner_last_name: 'Profile', phone: '(212) 555-0177', timezone: 'America/New_York',
+    is_published: true, is_demo: false,
+    // The Setup Guide would open over the page; this journey isn't about it.
+    onboarding_steps_completed: ['guide:prompts-off', 'guide:finished'],
+  });
+  expect(error?.message ?? null).toBeNull();
+
+  await page.goto('/login');
+  await page.getByPlaceholder('you@yourvenue.com').first().fill(email);
+  await page.getByPlaceholder('••••••••').fill(env.password);
+  await page.locator('form').filter({ has: page.getByPlaceholder('••••••••') }).locator('button[type="submit"]').click();
+  await page.waitForURL(/\/dashboard/);
+  await page.goto('/dashboard/profile');
+
+  await expect(page.getByTestId('profile-login-email')).toHaveText(email);
+  await expect(page.getByTestId('email-current-password')).toBeVisible();
+
+  const next = `Journey-${stamp}-Elm-2027!`;
+  const current = page.getByTestId('password-current-password');
+  await current.fill('not-the-password');
+  await page.getByPlaceholder('At least 8 characters').fill(next);
+  await page.getByPlaceholder('Repeat new password').fill(next);
+  await page.getByRole('button', { name: 'Update Password' }).click();
+  await expect(page.getByText('Incorrect password.')).toBeVisible();
+  const before = await db.from('venues').select('password_hash').eq('id', venueId).single();
+  expect(await bcrypt.compare(env.password, before.data!.password_hash), 'a wrong current password changes nothing').toBe(true);
+
+  await current.fill(env.password);
+  await page.getByRole('button', { name: 'Update Password' }).click();
+  await expect(page.getByText('Password updated successfully.')).toBeVisible();
+  const after = await db.from('venues').select('password_hash').eq('id', venueId).single();
+  expect(await bcrypt.compare(next, after.data!.password_hash)).toBe(true);
+});

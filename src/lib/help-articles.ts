@@ -136,7 +136,7 @@ Account owners and admins. Team members don't see it. Which steps you see depend
         id: 'gs-login',
         title: 'Logging in, passwords, and forgot password',
         tags: ['login', 'password', 'access', 'sign in', 'forgot password', 'reset password', 'change password'],
-        body: `StoryVenue uses email and password authentication at app.storyvenue.com/login.
+        body: `You sign in to StoryVenue with your email and password at app.storyvenue.com/login.
 
 To log in:
 1. Go to app.storyvenue.com/login
@@ -150,10 +150,9 @@ Forgot your password:
 4. Click the link and set a new password
 
 Changing your email or password:
-- Click your name or avatar in the sidebar → My Profile
-- Enter your new email address or new password and save
-- No current-password re-entry required
-- If you update your email, use the new address on next login
+- Click your name at the bottom of the sidebar → My Profile → Login & Security
+- Use Change Email or Change Password. Each asks for your current password
+- If you update your email, use the new address the next time you log in
 
 Team members:
 - Team members accept an email invitation and set their own password on first login
@@ -3070,19 +3069,26 @@ Make sure you're using the email address the account was created with. Check spa
         id: 'account-update-profile',
         title: 'Updating your email or password',
         tags: ['update email', 'change email', 'change password', 'update password', 'my profile', 'account settings'],
-        body: `You can update your email address and password at any time from your profile page.
+        body: `You can update your name, phone, sign-in email and password from your profile page.
 
-How to update
-1. Click your name or avatar in the sidebar (bottom-left area)
-2. Click "My Profile"
-3. Update your first name, last name, email address, or password
-4. Click Save
+How to get there
+1. Click your name at the bottom of the sidebar
+2. Open My Profile
 
-Important notes
-- If you change your email address, use the new address the next time you log in
-- A new password works straight away
+Name and phone
+Change them under Personal Information and click Save.
 
-Team members can also update their own profile (name and email) the same way. Changing a team member's email does not affect their role or permissions.`,
+Sign-in email
+Under Login & Security → Change Email, enter the new address and your current password, then click Update Email. Use the new address the next time you sign in.
+
+Password
+Under Login & Security → Change Password, enter your current password, then the new one twice, and click Update Password. The new password works straight away.
+
+Forgot your current password?
+Sign out and use "Forgot your password?" on the sign-in page.
+
+Team members
+Team members update their own name, email and password the same way.`,
       },
       {
         id: 'account-couples-portal',

@@ -31,6 +31,8 @@ type OwnerProfile = {
   venue_name: string;
   owner_id: string | null;
   is_demo?: boolean;
+  /** False for an account that has never set a password: there is none to ask for. */
+  has_password?: boolean;
   role: 'owner';
 };
 
@@ -42,6 +44,7 @@ type MemberProfile = {
   email: string;
   role: string;
   status: string;
+  has_password?: boolean;
 };
 
 type Profile = OwnerProfile | MemberProfile;
@@ -61,13 +64,15 @@ export default function ProfilePage() {
   const [memberForm, setMemberForm] = useState({ first_name: '', last_name: '', email: '' });
 
   // Email change state
-  const [emailForm, setEmailForm]           = useState({ new_email: '' });
+  const [emailForm, setEmailForm]           = useState({ new_email: '', current_password: '' });
   const [emailSaving, setEmailSaving]       = useState(false);
   const [emailSaved, setEmailSaved]         = useState(false);
   const [emailError, setEmailError]         = useState('');
 
   // Password change state
-  const [passForm, setPassForm]             = useState({ new_password: '', confirm_password: '' });
+  const [passForm, setPassForm]             = useState({ current_password: '', new_password: '', confirm_password: '' });
+  // A team member's email is what they sign in with: changing it asks for the password too.
+  const [memberEmailPassword, setMemberEmailPassword] = useState('');
   const [passSaving, setPassSaving]         = useState(false);
   const [passSaved, setPassSaved]           = useState(false);
   const [passError, setPassError]           = useState('');
@@ -104,10 +109,14 @@ export default function ProfilePage() {
     load();
   }, []);
 
+  // Changing what you sign in with asks for the current password, when there is one.
+  const hasPassword = profile?.has_password === true;
+  const memberEmailChanged = profile?.type === 'member'
+    && memberForm.email.trim().toLowerCase() !== (profile.email ?? '').trim().toLowerCase();
+
   async function saveOwner(e: React.FormEvent) {
     e.preventDefault();
     if (!ownerForm.first_name.trim()) { setError('First name is required.'); return; }
-    if (!ownerForm.email.trim())      { setError('Email is required.'); return; }
     if (!ownerForm.phone.trim())      { setError('Phone is required.'); return; }
     setSaving(true); setError('');
     try {
@@ -131,10 +140,12 @@ export default function ProfilePage() {
       const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(memberForm),
+        body: JSON.stringify(memberEmailChanged ? { ...memberForm, current_password: memberEmailPassword } : memberForm),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Failed to save'); return; }
+      setProfile((p) => (p ? { ...p, email: memberForm.email.trim().toLowerCase() } as Profile : p));
+      setMemberEmailPassword('');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch { setError('Network error — please try again'); }
@@ -155,7 +166,7 @@ export default function ProfilePage() {
       // Update local state so the header reflects the new email
       setOwnerForm((f) => ({ ...f, email: data.email ?? f.email }));
       setProfile((p) => p ? { ...p, email: data.email ?? (p as OwnerProfile).email } as Profile : p);
-      setEmailForm({ new_email: '' });
+      setEmailForm({ new_email: '', current_password: '' });
       setEmailSaved(true);
       setTimeout(() => setEmailSaved(false), 4000);
     } catch { setEmailError('Network error — please try again'); }
@@ -173,7 +184,8 @@ export default function ProfilePage() {
       });
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) { setPassError(data.error ?? 'Failed to update password'); return; }
-      setPassForm({ new_password: '', confirm_password: '' });
+      setPassForm({ current_password: '', new_password: '', confirm_password: '' });
+      setProfile((p) => (p ? { ...p, has_password: true } as Profile : p));
       setPassSaved(true);
       setTimeout(() => setPassSaved(false), 4000);
     } catch { setPassError('Network error — please try again'); }
@@ -294,16 +306,10 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={LABEL}>
-                  <span className="flex items-center gap-1"><Mail size={11} /> Login Email <span className="text-red-400">*</span></span>
+                  <span className="flex items-center gap-1"><Mail size={11} /> Login Email</span>
                 </label>
-                <input
-                  type="email"
-                  required
-                  value={ownerForm.email}
-                  onChange={e => setOwnerForm(p => ({ ...p, email: e.target.value }))}
-                  className={INPUT}
-                />
-                <p className="mt-1 text-[11px] text-gray-400">This email is used to sign in</p>
+                <div className={INPUT_READONLY} data-testid="profile-login-email">{ownerForm.email || '—'}</div>
+                <p className="mt-1 text-[11px] text-gray-400">This email is used to sign in. Change it under Login &amp; Security below.</p>
               </div>
               <div>
                 <label className={LABEL}>
@@ -334,7 +340,7 @@ export default function ProfilePage() {
               )}
               <button
                 type="submit"
-                disabled={saving || !ownerForm.first_name.trim() || !ownerForm.email.trim() || !ownerForm.phone.trim()}
+                disabled={saving || !ownerForm.first_name.trim() || !ownerForm.phone.trim()}
                 className="ml-auto flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60 transition-all"
                 style={{ backgroundColor: '#1b1b1b' }}
               >
@@ -373,6 +379,21 @@ export default function ProfilePage() {
                   required
                 />
               </div>
+              {hasPassword && (
+                <div>
+                  <label className={LABEL}>Current Password</label>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={emailForm.current_password}
+                    onChange={(e) => setEmailForm((f) => ({ ...f, current_password: e.target.value }))}
+                    placeholder="Your current password"
+                    className={INPUT}
+                    data-testid="email-current-password"
+                    required
+                  />
+                </div>
+              )}
               {emailError && (
                 <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
                   <AlertCircle size={13} /> {emailError}
@@ -402,6 +423,21 @@ export default function ProfilePage() {
               <h3 className="text-sm font-semibold text-gray-800">Change Password</h3>
             </div>
             <form onSubmit={(e) => void updatePassword(e)} className="space-y-3 max-w-md">
+              {hasPassword && (
+                <div>
+                  <label className={LABEL}>Current Password</label>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={passForm.current_password}
+                    onChange={(e) => setPassForm((f) => ({ ...f, current_password: e.target.value }))}
+                    placeholder="Your current password"
+                    className={INPUT}
+                    data-testid="password-current-password"
+                    required
+                  />
+                </div>
+              )}
               <div>
                 <label className={LABEL}>New Password</label>
                 <div className="relative">
@@ -636,7 +672,23 @@ export default function ProfilePage() {
               onChange={e => setMemberForm(p => ({ ...p, email: e.target.value }))}
               className={INPUT}
             />
+            <p className="mt-1 text-[11px] text-gray-400">This email is used to sign in</p>
           </div>
+          {memberEmailChanged && hasPassword && (
+            <div>
+              <label className={LABEL}>Current Password</label>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={memberEmailPassword}
+                onChange={(e) => setMemberEmailPassword(e.target.value)}
+                placeholder="Needed to change your sign-in email"
+                className={INPUT}
+                data-testid="member-email-current-password"
+                required
+              />
+            </div>
+          )}
           <div>
             <label className={LABEL}>Role</label>
             <div className={INPUT_READONLY}>{roleLabel}</div>
@@ -679,9 +731,26 @@ export default function ProfilePage() {
             <h3 className="text-sm font-semibold text-gray-800">Change Password</h3>
           </div>
           <p className="text-xs text-gray-500 mb-4">
-            Set a personal password for your account. Your initial password was the invite link you received by email.
+            {hasPassword
+              ? 'Enter your current password, then the new one.'
+              : 'Set a personal password for your account. Your initial password was the invite link you received by email.'}
           </p>
           <form onSubmit={(e) => void updatePassword(e)} className="space-y-3">
+            {hasPassword && (
+              <div>
+                <label className={LABEL}>Current Password</label>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={passForm.current_password}
+                  onChange={(e) => setPassForm((f) => ({ ...f, current_password: e.target.value }))}
+                  placeholder="Your current password"
+                  className={INPUT}
+                  data-testid="password-current-password"
+                  required
+                />
+              </div>
+            )}
             <div>
               <label className={LABEL}>New Password</label>
               <div className="relative">
@@ -733,7 +802,7 @@ export default function ProfilePage() {
             )}
             <button
               type="submit"
-              disabled={passSaving || !passForm.new_password || !passForm.confirm_password}
+              disabled={passSaving || !passForm.new_password || !passForm.confirm_password || (hasPassword && !passForm.current_password)}
               className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white hover:opacity-85 transition-opacity disabled:opacity-50"
               style={{ backgroundColor: '#1b1b1b' }}
             >

@@ -418,7 +418,7 @@ Recommended evergreen audiences for most venues: "Active leads, no proposal", "B
 - Venue owners sign up at app.storyvenue.com/signup with business name, email, and password.
 - Team members accept email invites and set their own password on first login.
 - Forgot password: click "Forgot password?" on the login page → enter your email → receive a reset link → set a new password.
-- Venue owners can update their **email address** and **password** at any time from their profile — click the avatar/name in the sidebar → My Profile → update and save. No current password is required.
+- Venue owners can update their **sign-in email** and **password** from their profile: click their name at the bottom of the sidebar → My Profile → Login & Security. Either change asks for the current password. Someone who forgot it signs out and uses "Forgot your password?" on the sign-in page.
 
 ## StoryVenue Legacy messaging
 - Path: Settings → General → StoryVenue Legacy. It is what lets a venue text couples from StoryVenue and bring existing contacts in.
@@ -428,16 +428,15 @@ Recommended evergreen audiences for most venues: "Active leads, no proposal", "B
 - **Do Not Contact**: when a contact replies STOP to a text, they're marked Do Not Contact everywhere.
 
 ## Venue Owner Profile (My Profile)
-- Access: click your name/avatar in the sidebar or bottom-left → My Profile.
-- Update your **first name**, **last name**, **email address**, and **password** from this page.
-- No current-password re-entry required — enter the new value and save.
-- Profile changes take effect immediately. If you update your email, use the new address on next login.
+- Access: click your name at the bottom of the sidebar → My Profile.
+- **Personal Information**: first name, last name and phone → Save Changes. **Login & Security**: Change Email and Change Password, each asking for the current password.
+- Changes take effect straight away. After changing the sign-in email, use the new address at the next sign-in. Team members update their own name, email and password on the same page.
 
-## Couples Portal (Client Accounts)
-- Couples can create their own account on StoryVenue to view their proposals, invoices, and documents.
-- Couple accounts are separate from venue team members — they only see their own records.
-- **Couple signup**: couples sign up with first name, last name, email, and phone. They're signed in automatically after signup.
-- **Couple login**: app.storyvenue.com/couple/login — email + password.
+## Couple accounts
+- A couple's own StoryVenue account is where they use Wedding Planner: guest list and RSVPs, seating, day-of timeline, checklist, budget, vendors, inspiration, their wedding website, and messages with the venue.
+- Couples see only their own wedding. Proposals and invoices need no account: couples sign and pay from the link in the email or text the venue sends.
+- **Couple signup**: app.storyvenue.com/signup → create a couple account (name, email, phone, password). Or the venue invites them from its Wedding Planner page.
+- **Couple login**: app.storyvenue.com/login → "Wedding couple" → email + password.
 - **Forgot password**: enter email → receive reset link → set new password.
 - **Couple profile**: couples can update their name and phone from their profile page after login.
 
@@ -633,7 +632,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - Do I need to set up my own email sending domain to send email? No. Every venue can send email immediately using StoryVenue's verified sending domain — no DNS setup needed. Replies still come back to your venue email address. If you'd like to send from your own domain, contact StoryVenue support.
 - How do I bring my existing contacts in again? Settings → General → StoryVenue Legacy → "Sync from StoryVenue Legacy". It's safe to run as many times as needed and won't create duplicates.
 - After the first sync, where do I manage contacts? In StoryVenue. Changes carry over by themselves.
-- How do I update my email or password? Click your name/avatar in the sidebar → My Profile. Enter your new email or password and save. No current-password re-entry required.
+- How do I update my email or password? Click your name at the bottom of the sidebar → My Profile → Login & Security. Use Change Email or Change Password; each asks for your current password. Name and phone are under Personal Information on the same page.
 - How does client / couple login work? Couples use app.storyvenue.com/couple/login with the email and password they set at signup. They can view their proposals and documents.
 - How do I set up StoryPay™? Payments → Payment settings → Connect with Stripe. Stripe's secure signup takes about 10 minutes (business details and a payout bank account); online payments turn on as soon as Stripe approves.
 - How do I connect Google Calendar for two-way sync? Calendar → Calendar Settings → Connections tab → connect your Google account. Pick which calendar to write new events to, and select any personal/team calendars to use as conflict blockers.

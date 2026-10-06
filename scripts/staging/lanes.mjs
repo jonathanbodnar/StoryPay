@@ -52,6 +52,8 @@ const SENSITIVE = [
   /^src\/lib\/(session|venue-session|auth-helpers|admin-auth|admin-token|admin-identity|admin-impersonation|couple-server|password-policy|crypto-tokens|oauth-state|totp|twofa|staging-access|secure-compare|api-keys|api-v1-auth)/,
   /^src\/lib\/support\/auth\.ts$/,
   /^src\/app\/api\/auth\//, /^src\/app\/api\/admin\/(login|auth|support)\//,
+  // My Profile: the sign-in email and password
+  /^src\/lib\/current-password/, /^src\/app\/api\/profile\/(route\.ts$|credentials\/)/,
 ];
 
 /** The changed files a hot release must refuse (empty = safe to ship hot). */

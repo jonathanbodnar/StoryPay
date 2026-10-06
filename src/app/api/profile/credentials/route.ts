@@ -12,14 +12,25 @@
  *     venue_team_members.password_hash (migration 177). Sign-in then
  *     checks this hash first, falling back to invite_token for members
  *     who haven't set a password yet.
+ *
+ * Either change needs the current password when the account has one
+ * (lib/current-password): a signed-in browser alone can't take an account.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { getSessionMemberId } from '@/lib/auth-helpers';
+import { checkCurrentPassword, type CurrentPasswordCheck } from '@/lib/current-password';
 
 export const dynamic = 'force-dynamic';
+
+function refused(check: Extract<CurrentPasswordCheck, { ok: false }>) {
+  return NextResponse.json(
+    { error: check.error },
+    { status: check.status, headers: check.retryAfterSeconds ? { 'Retry-After': String(check.retryAfterSeconds) } : undefined },
+  );
+}
 
 export async function PATCH(req: NextRequest) {
   const cookieStore = await cookies();
@@ -31,6 +42,7 @@ export async function PATCH(req: NextRequest) {
   if (memberId) {
     const body = await req.json() as {
       action: 'password';
+      current_password?: string;
       new_password?: string;
       confirm_password?: string;
     };
@@ -43,6 +55,16 @@ export async function PATCH(req: NextRequest) {
     if (!newPass)              return NextResponse.json({ error: 'New password is required.' },                    { status: 400 });
     if (newPass.length < 8)   return NextResponse.json({ error: 'Password must be at least 8 characters.' },     { status: 400 });
     if (newPass !== confirmPass) return NextResponse.json({ error: 'Passwords do not match.' },                   { status: 400 });
+
+    const { data: member } = await supabaseAdmin
+      .from('venue_team_members')
+      .select('password_hash')
+      .eq('id', memberId)
+      .eq('venue_id', venueId)
+      .maybeSingle();
+    if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+    const allowed = await checkCurrentPassword(`member:${memberId}`, (member as { password_hash?: string | null }).password_hash, body.current_password);
+    if (!allowed.ok) return refused(allowed);
 
     const newHash = await bcrypt.hash(newPass, 12);
     const { error: updateErr } = await supabaseAdmin
@@ -57,7 +79,7 @@ export async function PATCH(req: NextRequest) {
 
   const { data: venue, error: fetchErr } = await supabaseAdmin
     .from('venues')
-    .select('id, email, owner_id')
+    .select('id, email, owner_id, password_hash')
     .eq('id', venueId)
     .single();
 
@@ -67,10 +89,13 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json() as {
     action: 'email' | 'password';
+    current_password?: string;
     new_email?: string;
     new_password?: string;
     confirm_password?: string;
   };
+
+  const currentHash = (venue as { password_hash?: string | null }).password_hash;
 
   // ── Email update ─────────────────────────────────────────────────────────
   if (body.action === 'email') {
@@ -81,6 +106,11 @@ export async function PATCH(req: NextRequest) {
     if (newEmail === (venue.email as string | null)?.toLowerCase()) {
       return NextResponse.json({ error: 'That is already your current email.' }, { status: 400 });
     }
+
+    // Asked before anything is said about other accounts: only the owner
+    // learns whether an address is taken.
+    const allowed = await checkCurrentPassword(`venue:${venueId}`, currentHash, body.current_password);
+    if (!allowed.ok) return refused(allowed);
 
     // Check email isn't already taken by another venue
     const { data: existing } = await supabaseAdmin
@@ -117,6 +147,9 @@ export async function PATCH(req: NextRequest) {
     if (!newPass) return NextResponse.json({ error: 'New password is required.' }, { status: 400 });
     if (newPass.length < 8) return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 });
     if (newPass !== confirmPass) return NextResponse.json({ error: 'Passwords do not match.' }, { status: 400 });
+
+    const allowed = await checkCurrentPassword(`venue:${venueId}`, currentHash, body.current_password);
+    if (!allowed.ok) return refused(allowed);
 
     const newHash = await bcrypt.hash(newPass, 12);
     const { error: updateErr } = await supabaseAdmin

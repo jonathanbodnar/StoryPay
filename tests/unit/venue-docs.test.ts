@@ -145,3 +145,15 @@ describe('the docs don’t describe pages a venue can’t open', () => {
     expect(assistantDocs).not.toMatch(/Flodesk|TCPA|sub-account/i);
   });
 });
+
+// Oct 6 2026: My Profile asks for the current password before it changes a
+// sign-in email or password. The docs said, in three places, that it didn't.
+describe('changing a sign-in email or password', () => {
+  it('the docs tell a venue to have their current password ready', () => {
+    for (const doc of [help, assistantDocs]) {
+      expect(doc).not.toMatch(/No current[- ]password/i);
+      expect(doc).toMatch(/Change Email/);
+      expect(doc).toMatch(/current password/);
+    }
+  });
+});

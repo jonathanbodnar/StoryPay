@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSessionMemberId } from '@/lib/auth-helpers';
+import { checkCurrentPassword } from '@/lib/current-password';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ export async function GET() {
   if (memberId) {
     const { data: member } = await supabaseAdmin
       .from('venue_team_members')
-      .select('id, first_name, last_name, email, role, status')
+      .select('id, first_name, last_name, email, role, status, password_hash')
       .eq('id', memberId)
       .eq('venue_id', venueId)
       .maybeSingle();
@@ -32,6 +33,7 @@ export async function GET() {
       first_name: member.first_name ?? '',
       last_name:  member.last_name  ?? '',
       email:      member.email      ?? '',
+      has_password: Boolean((member as { password_hash?: string | null }).password_hash),
       role:       member.role       ?? 'member',
       status:     member.status     ?? 'active',
     });
@@ -42,14 +44,14 @@ export async function GET() {
   // (owner_first_name / owner_last_name) hasn't been applied yet.
   let venueResult = await supabaseAdmin
     .from('venues')
-    .select('id, name, email, phone, owner_id, owner_first_name, owner_last_name, is_demo')
+    .select('id, name, email, phone, owner_id, owner_first_name, owner_last_name, is_demo, password_hash')
     .eq('id', venueId)
     .single();
 
   if (venueResult.error && /column.*owner_(first|last)_name.*does not exist/i.test(venueResult.error.message)) {
     venueResult = await supabaseAdmin
       .from('venues')
-      .select('id, name, email, phone, owner_id, is_demo')
+      .select('id, name, email, phone, owner_id, is_demo, password_hash')
       .eq('id', venueId)
       .single();
   }
@@ -87,6 +89,7 @@ export async function GET() {
     venue_name: venue.name    ?? '',
     owner_id:   venue.owner_id ?? null,
     is_demo:    (venue as Record<string, unknown>).is_demo === true,
+    has_password: Boolean((venue as Record<string, unknown>).password_hash),
     role:       'owner',
   });
 }
@@ -114,6 +117,28 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
+    // The email is what they sign in with: changing it takes the current
+    // password, like changing the password itself (lib/current-password).
+    if (patch.email !== undefined) {
+      const { data: current } = await supabaseAdmin
+        .from('venue_team_members')
+        .select('email, password_hash')
+        .eq('id', memberId)
+        .eq('venue_id', venueId)
+        .maybeSingle();
+      if (!current) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+      const stored = current as { email?: string | null; password_hash?: string | null };
+      if (patch.email !== (stored.email ?? '').trim().toLowerCase()) {
+        const allowed = await checkCurrentPassword(`member:${memberId}`, stored.password_hash, body.current_password);
+        if (!allowed.ok) {
+          return NextResponse.json(
+            { error: allowed.error },
+            { status: allowed.status, headers: allowed.retryAfterSeconds ? { 'Retry-After': String(allowed.retryAfterSeconds) } : undefined },
+          );
+        }
+      }
+    }
+
     const { data, error } = await supabaseAdmin
       .from('venue_team_members')
       .update(patch)
@@ -133,8 +158,21 @@ export async function PATCH(request: NextRequest) {
   const firstName = (body.first_name ?? '').trim();
   const lastName  = (body.last_name  ?? '').trim();
   if (!firstName) return NextResponse.json({ error: 'First name is required.' }, { status: 400 });
-  if (!email)     return NextResponse.json({ error: 'Email is required.' },      { status: 400 });
   if (!phone)     return NextResponse.json({ error: 'Phone is required.' },      { status: 400 });
+
+  // The sign-in email is not changed here. Until Oct 6 2026 it was, for anyone
+  // signed in and without a look at whether another account had the address.
+  // It has one door now: Change Email, which asks for the current password
+  // (/api/profile/credentials).
+  if (body.email !== undefined) {
+    const { data: current } = await supabaseAdmin.from('venues').select('email').eq('id', venueId).single();
+    if (email !== ((current as { email?: string | null } | null)?.email ?? '').trim().toLowerCase()) {
+      return NextResponse.json(
+        { error: 'To change your sign-in email, use Change Email under Login & Security.' },
+        { status: 400 },
+      );
+    }
+  }
 
   const fullName = [firstName, lastName].filter(Boolean).join(' ');
 
@@ -142,14 +180,14 @@ export async function PATCH(request: NextRequest) {
   // Also keep profiles.full_name in sync for backward compat where owner_id is set.
   let venueUpdateResult = await supabaseAdmin
     .from('venues')
-    .update({ email, phone, owner_first_name: firstName, owner_last_name: lastName } as Record<string, unknown>)
+    .update({ phone, owner_first_name: firstName, owner_last_name: lastName } as Record<string, unknown>)
     .eq('id', venueId);
 
   // Graceful fallback if migration 070 columns don't exist yet
   if (venueUpdateResult.error && /column.*owner_(first|last)_name.*does not exist/i.test(venueUpdateResult.error.message)) {
     venueUpdateResult = await supabaseAdmin
       .from('venues')
-      .update({ email, phone })
+      .update({ phone })
       .eq('id', venueId);
   }
 
