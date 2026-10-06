@@ -136,6 +136,29 @@ const SEEDED = new Set<string>();
 const SEED_VERSION = 2; // bumped: added AI Concierge state tags
 const _ver = SEED_VERSION; void _ver; // suppress unused-var lint
 
+// The self-healing DDL (migration 085's columns and index) is about the TABLE,
+// not a venue: once per process is enough. It used to run again for every
+// venue the first time each was seen, one after another, each taking a lock on
+// marketing_tags. With a few hundred venues that was most of a minute of the
+// nightly tag sweep (Oct 6 2026: 68 seconds on the test copy).
+let tagColumnsEnsured: Promise<void> | null = null;
+async function ensureTagColumns(): Promise<void> {
+  const { getDbAsync } = await import('@/lib/db');
+  const db = await getDbAsync();
+  await db.unsafe(`
+    ALTER TABLE public.marketing_tags
+      ADD COLUMN IF NOT EXISTS is_system         boolean  NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS system_key        text,
+      ADD COLUMN IF NOT EXISTS category          text,
+      ADD COLUMN IF NOT EXISTS description       text,
+      ADD COLUMN IF NOT EXISTS auto_apply_events text[]   NOT NULL DEFAULT '{}';
+
+    CREATE UNIQUE INDEX IF NOT EXISTS marketing_tags_venue_system_key_uidx
+      ON public.marketing_tags (venue_id, system_key)
+      WHERE system_key IS NOT NULL;
+  `).catch(() => { /* columns may already exist — ignore */ });
+}
+
 /**
  * Idempotent: ensure all system tags exist for a venue.
  * Also runs migration-085 DDL if the columns haven't been added yet so the
@@ -148,21 +171,10 @@ export async function ensureSystemTagsForVenue(venueId: string, force = false): 
   if (SEED_LOCK.has(venueId)) return;          // avoid duplicate concurrent seeds
   SEED_LOCK.add(venueId);
   try {
-    // ── 1. Ensure migration-085 columns exist (self-healing) ─────────────────
-    const { getDbAsync } = await import('@/lib/db');
-    const db = await getDbAsync();
-    await db.unsafe(`
-      ALTER TABLE public.marketing_tags
-        ADD COLUMN IF NOT EXISTS is_system         boolean  NOT NULL DEFAULT false,
-        ADD COLUMN IF NOT EXISTS system_key        text,
-        ADD COLUMN IF NOT EXISTS category          text,
-        ADD COLUMN IF NOT EXISTS description       text,
-        ADD COLUMN IF NOT EXISTS auto_apply_events text[]   NOT NULL DEFAULT '{}';
-
-      CREATE UNIQUE INDEX IF NOT EXISTS marketing_tags_venue_system_key_uidx
-        ON public.marketing_tags (venue_id, system_key)
-        WHERE system_key IS NOT NULL;
-    `).catch(() => { /* columns may already exist — ignore */ });
+    // ── 1. Ensure migration-085 columns exist (self-healing), once ───────────
+    // No database connection is a failure of this call, as before, and is
+    // tried again by the next one.
+    await (tagColumnsEnsured ??= ensureTagColumns().catch((e) => { tagColumnsEnsured = null; throw e; }));
 
     // ── 2. Upsert all system tag definitions ─────────────────────────────────
     const rows = SYSTEM_TAG_DEFS.map((def, i) => ({

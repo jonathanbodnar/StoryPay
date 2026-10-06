@@ -17,7 +17,25 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
+import { inBatches } from '@/lib/in-batches';
 import { applySystemTag, removeSystemTag, ensureSystemTagsForVenue } from '@/lib/system-tags';
+
+/**
+ * How many lookups the sweep makes at a time. It used to make them strictly
+ * one after another: one per venue, one per open proposal, one per recent
+ * reply. That is what made it slow (Oct 6 2026: 68 seconds on the test copy,
+ * past the checks' one-minute limit). What it tags is unchanged.
+ */
+export const SWEEP_AT_ONCE = 8;
+
+/** Do `work` for every item, a few at a time, and wait for all of it. */
+export async function aFewAtATime<T>(items: readonly T[], work: (item: T) => Promise<void>, atOnce = SWEEP_AT_ONCE): Promise<void> {
+  for (const batch of inBatches(items, atOnce)) await Promise.all(batch.map(work));
+}
+
+/** Every venue about to have a lead tagged has its system tags, before any tag is applied. */
+const ensureTagsFor = (venueIds: Iterable<string>): Promise<void> =>
+  aFewAtATime([...new Set(venueIds)], (venueId) => ensureSystemTagsForVenue(venueId).catch(() => {}));
 
 export interface TagSweepCounts {
   within_30_days: number;
@@ -68,13 +86,9 @@ export async function runTagSweep(): Promise<TagSweepCounts> {
       .order('wedding_date', { ascending: true })
       .limit(5000);
 
-    const venuesSeen = new Set<string>();
-    for (const lead of (dateLeads ?? []) as { id: string; venue_id: string; wedding_date: string }[]) {
-      if (!venuesSeen.has(lead.venue_id)) {
-        await ensureSystemTagsForVenue(lead.venue_id).catch(() => {});
-        venuesSeen.add(lead.venue_id);
-      }
-
+    const leads = (dateLeads ?? []) as { id: string; venue_id: string; wedding_date: string }[];
+    await ensureTagsFor(leads.map((l) => l.venue_id));
+    for (const lead of leads) {
       const wDate = lead.wedding_date.slice(0, 10);
 
       if (wDate < todayStr) {
@@ -108,12 +122,9 @@ export async function runTagSweep(): Promise<TagSweepCounts> {
       .lte('wedding_date', annivTo.toISOString().slice(0, 10))
       .limit(2000);
 
-    const venuesSeen = new Set<string>();
-    for (const lead of (anniversaryLeads ?? []) as { id: string; venue_id: string; wedding_date: string }[]) {
-      if (!venuesSeen.has(lead.venue_id)) {
-        await ensureSystemTagsForVenue(lead.venue_id).catch(() => {});
-        venuesSeen.add(lead.venue_id);
-      }
+    const leads = (anniversaryLeads ?? []) as { id: string; venue_id: string; wedding_date: string }[];
+    await ensureTagsFor(leads.map((l) => l.venue_id));
+    for (const lead of leads) {
       applySystemTag(lead.venue_id, lead.id, 'anniversary_year_1').catch(() => {});
       counts.anniversary_year_1++;
     }
@@ -129,16 +140,13 @@ export async function runTagSweep(): Promise<TagSweepCounts> {
       .not('email', 'like', '%@ghl-sms.storypay.placeholder%')
       .limit(5000);
 
-    const venuesSeen = new Set<string>();
-    for (const lead of (inactiveLeads ?? []) as { id: string; venue_id: string; updated_at: string; last_inbound_at: string | null }[]) {
+    const quiet = ((inactiveLeads ?? []) as { id: string; venue_id: string; updated_at: string; last_inbound_at: string | null }[]).filter((lead) => {
       const lastInbound = lead.last_inbound_at ? new Date(lead.last_inbound_at) : null;
       const lastActivity = lastInbound ?? new Date(lead.updated_at);
-      if (lastActivity >= ago45) continue; // activity is recent enough
-
-      if (!venuesSeen.has(lead.venue_id)) {
-        await ensureSystemTagsForVenue(lead.venue_id).catch(() => {});
-        venuesSeen.add(lead.venue_id);
-      }
+      return lastActivity < ago45; // otherwise activity is recent enough
+    });
+    await ensureTagsFor(quiet.map((l) => l.venue_id));
+    for (const lead of quiet) {
       applySystemTag(lead.venue_id, lead.id, 'inactive').catch(() => {});
       counts.inactive++;
     }
@@ -153,16 +161,13 @@ export async function runTagSweep(): Promise<TagSweepCounts> {
       .not('email', 'like', '%@ghl-sms.storypay.placeholder%')
       .limit(5000);
 
-    const venuesSeen = new Set<string>();
-    for (const lead of (coldLeads ?? []) as { id: string; venue_id: string; updated_at: string; last_inbound_at: string | null }[]) {
+    const cold = ((coldLeads ?? []) as { id: string; venue_id: string; updated_at: string; last_inbound_at: string | null }[]).filter((lead) => {
       const lastInbound = lead.last_inbound_at ? new Date(lead.last_inbound_at) : null;
       const lastActivity = lastInbound ?? new Date(lead.updated_at);
-      if (lastActivity >= ago30) continue;
-
-      if (!venuesSeen.has(lead.venue_id)) {
-        await ensureSystemTagsForVenue(lead.venue_id).catch(() => {});
-        venuesSeen.add(lead.venue_id);
-      }
+      return lastActivity < ago30;
+    });
+    await ensureTagsFor(cold.map((l) => l.venue_id));
+    for (const lead of cold) {
       applySystemTag(lead.venue_id, lead.id, 'cold_lead').catch(() => {});
       counts.cold_lead++;
     }
@@ -178,9 +183,9 @@ export async function runTagSweep(): Promise<TagSweepCounts> {
       .gte('last_inbound_at', ago24h.toISOString())
       .limit(2000);
 
-    const venuesSeen = new Set<string>();
-    for (const lead of (recentReplies ?? []) as { id: string; venue_id: string; last_inbound_at: string }[]) {
-      // Only apply re_engaged if they had a cold/inactive tag
+    // Only apply re_engaged if they had a cold/inactive tag
+    const wereCold: { id: string; venue_id: string; last_inbound_at: string }[] = [];
+    await aFewAtATime((recentReplies ?? []) as { id: string; venue_id: string; last_inbound_at: string }[], async (lead) => {
       const { data: tagCheck } = await supabaseAdmin
         .from('lead_tag_assignments')
         .select('tag_id, marketing_tags!inner(system_key)')
@@ -188,13 +193,11 @@ export async function runTagSweep(): Promise<TagSweepCounts> {
         .in('marketing_tags.system_key', ['cold_lead', 'inactive'])
         .limit(1)
         .maybeSingle();
+      if (tagCheck) wereCold.push(lead);
+    });
 
-      if (!tagCheck) continue;
-
-      if (!venuesSeen.has(lead.venue_id)) {
-        await ensureSystemTagsForVenue(lead.venue_id).catch(() => {});
-        venuesSeen.add(lead.venue_id);
-      }
+    await ensureTagsFor(wereCold.map((l) => l.venue_id));
+    for (const lead of wereCold) {
       // Apply re_engaged, remove cold/inactive tags
       applySystemTag(lead.venue_id, lead.id, 're_engaged').catch(() => {});
       removeSystemTag(lead.venue_id, lead.id, 'cold_lead').catch(() => {});
@@ -214,18 +217,13 @@ export async function runTagSweep(): Promise<TagSweepCounts> {
       .not('customer_email', 'is', null)
       .limit(5000);
 
-    const venuesSeen = new Set<string>();
-    for (const p of (openProposals ?? []) as {
+    const withEmail = ((openProposals ?? []) as {
       id: string; venue_id: string; customer_email: string;
       status: string; signed_at: string | null; created_at: string; payment_type: string | null;
-    }[]) {
-      if (!p.customer_email?.includes('@')) continue;
+    }[]).filter((p) => p.customer_email?.includes('@'));
 
-      if (!venuesSeen.has(p.venue_id)) {
-        await ensureSystemTagsForVenue(p.venue_id).catch(() => {});
-        venuesSeen.add(p.venue_id);
-      }
-
+    await ensureTagsFor(withEmail.map((p) => p.venue_id));
+    await aFewAtATime(withEmail, async (p) => {
       // Resolve lead by email
       const { data: lead } = await supabaseAdmin
         .from('leads')
@@ -235,7 +233,7 @@ export async function runTagSweep(): Promise<TagSweepCounts> {
         .limit(1)
         .maybeSingle();
 
-      if (!lead?.id) continue;
+      if (!lead?.id) return;
 
       // balance_due: any open proposal
       applySystemTag(p.venue_id, lead.id as string, 'balance_due').catch(() => {});
@@ -249,7 +247,7 @@ export async function runTagSweep(): Promise<TagSweepCounts> {
           counts.past_due++;
         }
       }
-    }
+    });
   }
 
   console.log('[cron/tag-sweep] complete', counts);
