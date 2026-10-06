@@ -79,7 +79,6 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 - To add it: press Copy code → open the page on your website where the form should go (contact or pricing page) → add a block for custom code (Custom HTML in WordPress, Code in Squarespace, Embed HTML in Wix, Embed in Webflow) → paste, save, publish → fill in the form once as a test and watch the inquiry arrive in your Lead Inbox.
 - A bride who fills it in lands in the Lead Inbox, gets the pricing guide right away and is followed up by the Speed to Lead System, like a bride from the StoryVenue listing. These leads show as Web Form on the Bride Booking System™ dashboard.
 - The form uses the colors from Settings → Branding and updates by itself when they change.
-- A venue that added the form to its website before October 2026 should copy the code again and replace the old one.
 
 ## Lead Finder (directory inquiry emails become leads)
 - Path: Bride Booking System™ → Lead Finder (/dashboard/listing/lead-finder). The same card is also in Settings → Integrations.
@@ -113,6 +112,7 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 
 ## Conversations (inbox) — two-way messaging
 - Each time a couple is moved to another pipeline stage, her conversation shows a line with the stage, the time and who moved her (you, a team member, the AI Concierge, an automation or StoryVenue Support). Only the venue and StoryVenue Support see these lines; the couple never does.
+- Texts the venue's people send a couple from outside StoryVenue (for example from the texting app on the owner's phone) also show up in her conversation, under the sender's name and marked as sent from the texting app. Automated texts from the venue's other tools show too, marked as automated. Older conversations fill in over time.
 - In their own Wedding Planner, a couple sees only the messages between them and the venue's people (owner, team, concierge). Automated texts and emails, AI follow-ups, notes and stage moves stay on the venue's side.
 - Path: /dashboard/conversations — unified inbox showing all message threads by contact.
 - Thread list: each row shows the contact name, last message preview, timestamp, and the contact's current pipeline stage as a colored pill.

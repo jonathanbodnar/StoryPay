@@ -64,6 +64,19 @@ describe('the docs know the product as it is today', () => {
     }
   });
 
+  // Owner's call (Oct 5 2026): the docs don't tell venues to replace the form
+  // code on their website; support does, if someone needs it.
+  it('the Web Form docs don’t send venues back to redo their website', () => {
+    for (const text of [help, assistantDocs]) {
+      expect(text).not.toMatch(/before October 2026|replace the old one|copy the code again/i);
+    }
+  });
+
+  it('texts sent from outside StoryVenue are in the conversation, under the sender’s name', () => {
+    expect(help).toContain('Texts sent from outside StoryVenue');
+    expect(assistantDocs).toMatch(/marked as sent from the texting app/);
+  });
+
   it('when the AI Concierge stops, and what a couple sees', () => {
     for (const text of [help, assistantDocs]) {
       expect(text).toMatch(/Messages you or your team send her (don't|do NOT) stop/);

@@ -860,6 +860,9 @@ Per-message channel — one thread can carry both
 Default sending domain — works out of the box
 - Every venue can send email immediately — no DNS setup required. Your venue email is always set as Reply-To so replies still route back to you. Contact StoryVenue support if you'd like to send from your own domain.
 
+Texts sent from outside StoryVenue
+If you or a teammate text a couple from your texting app instead of from StoryVenue, that text shows up in her conversation too, under the sender's name and marked as sent from your texting app. Automated texts from your other tools appear as well, marked as automated. So the conversation always shows both sides, whoever answered and from wherever. Older conversations fill in over time.
+
 If a reply doesn't show up
 - **Email replies missing**: open Settings → Inbound Email Replies. The status panel shows a green "Configured" or amber "Needs setup" badge for each required item with instructions on how to fix it.
 - **SMS replies missing**: confirm your StoryVenue Legacy integration is connected (Settings → Integrations). Replies arrive in the thread within a few seconds, automatically.`,
@@ -1246,8 +1249,7 @@ If someone else looks after your website, send the code to them.
 Good to know
 - The preview shows the form exactly as brides see it on your website.
 - The form uses your colors from Settings → Branding. Change them there and the form on your website updates by itself.
-- Leads from this form show as Web Form on your Bride Booking System™ dashboard, so you can see how many your website brings in.
-- If you added the form to your website before October 2026, copy the code again and replace the old one.`,
+- Leads from this form show as Web Form on your Bride Booking System™ dashboard, so you can see how many your website brings in.`,
       },
       {
         id: 'listing-lead-link',
