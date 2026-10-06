@@ -108,6 +108,7 @@ export async function loadSetupGuide(
     prompted,
     // An admin viewing as the venue sees its dashboard, not its pop-up.
     autoOpen: prompted && !finished && !viewer.impersonating,
+    teamView: viewer.impersonating,
     showPill: prompted && !finished,
     finished,
     ...progress,

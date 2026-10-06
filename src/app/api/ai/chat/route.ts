@@ -486,7 +486,7 @@ Setup checklist for a speed-to-lead funnel:
 - It opens by itself after each sign-in until every step is ticked; the X closes it. The bar at the top of the page is small until it's pressed, and folds away again once a step is picked or on the next page. Nothing is locked behind it.
 - Once every step is ticked the Setup Guide is finished: it stops opening at sign-in, and the bar and the Setup Guide entry in the sidebar go away. It does not come back, and there is no way to restart it. Everything it pointed to stays under Bride Booking System™ in the sidebar.
 - Steps: 1. Start here: watch the 3-minute walkthrough. 2. Share your listing link. 3. Check your pricing guide. 4. Put your Lead Link in your Instagram bio. 5. Add the inquiry form to your website. 6. Forward your directory leads to Lead Finder. 7. Make your follow-up sound like you. 8. Want us to bring you qualified brides? Setting up proposals and payments with StoryPay™ is on the list too, marked Optional.
-- Each step has a button that goes to the right page. A step turns green when it's really set up; a venue can also tick it with Mark as done, and the guide says so if a ticked step isn't set up yet.
+- Each step has a button that goes to the right page. A step turns green when it's really set up; a venue can also tick it with Mark as done, and the guide says so if a ticked step isn't set up yet. Any done step can be unticked again (open it and press Not done yet, or press its tick in the list), including one that turned green by itself; it then stays unticked until ticked.
 - Owners and admins see it; team members don't. The steps shown depend on the plan.
 
 ## Authentication (Login / Signup)

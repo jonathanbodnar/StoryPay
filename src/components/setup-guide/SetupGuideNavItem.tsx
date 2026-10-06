@@ -23,7 +23,8 @@ export default function SetupGuideNavItem({
   onNavigate?: () => void;
 }) {
   const status = useSetupGuideStatus();
-  if (!status?.eligible || status.finished || isNativeApp()) return null;
+  // (A StoryVenue admin viewing as the venue keeps it, to open a finished guide and untick a step.)
+  if (!status?.eligible || (status.finished && !status.teamView) || isNativeApp()) return null;
   const shown = setupGuideDisplay(status);
 
   return (

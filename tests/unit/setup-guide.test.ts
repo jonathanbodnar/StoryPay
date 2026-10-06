@@ -93,7 +93,7 @@ describe('a Private Client’s guide', () => {
   const grow = (c: SetupContext) => setupLessonsFor(c).find((l) => l.id === 'grow');
 
   it('the strategy-call step is there, already done, without them ticking anything', () => {
-    expect(grow(theirs())).toEqual({ id: 'grow', ticked: true, verified: true, checked: true, optional: false, alreadyTheirs: true });
+    expect(grow(theirs())).toEqual({ id: 'grow', ticked: true, verified: true, checked: true, unticked: false, optional: false, alreadyTheirs: true });
     // Whatever was or wasn't saved for the venue.
     expect(grow(theirs({ stepsCompleted: 'junk' }))).toMatchObject({ verified: true, checked: true, alreadyTheirs: true });
     expect(grow(theirs({ stepsCompleted: tickAll('grow') }))).toMatchObject({ verified: true, checked: true, alreadyTheirs: true });
@@ -111,7 +111,7 @@ describe('a Private Client’s guide', () => {
   });
 
   it('for every other venue the step is an ordinary one, done only once it has been shown', () => {
-    expect(grow(ctx())).toEqual({ id: 'grow', ticked: false, verified: false, checked: false, optional: false, alreadyTheirs: false });
+    expect(grow(ctx())).toEqual({ id: 'grow', ticked: false, verified: false, checked: false, unticked: false, optional: false, alreadyTheirs: false });
     expect(setupLessonsFor(ctx({ facts: EVERYTHING, stepsCompleted: tickAll(...COUNTED) })).filter((l) => l.alreadyTheirs)).toEqual([]);
     // The label comes off: the step goes back to what the venue itself ticked.
     expect(grow(ctx({ privateClient: false, stepsCompleted: tickAll('grow') }))).toMatchObject({ ticked: true, verified: true, alreadyTheirs: false });
@@ -247,7 +247,8 @@ describe('ticked versus really set up', () => {
     const saved = ['guide:listing', GUIDE_PROMPTS_OFF, 'profile_branding'];
     expect(withSetupStep(saved, 'lead_link', true)).toEqual([...saved, 'guide:lead_link']);
     expect(withSetupStep(saved, 'listing', true)).toEqual(['guide:prompts-off', 'profile_branding', 'guide:listing']);
-    expect(withSetupStep(saved, 'listing', false)).toEqual([GUIDE_PROMPTS_OFF, 'profile_branding']);
+    // Unticked is remembered too (see "any step can be unticked" below).
+    expect(withSetupStep(saved, 'listing', false)).toEqual([GUIDE_PROMPTS_OFF, 'profile_branding', 'guide:not:listing']);
     expect(withSetupStep('junk', 'listing', true)).toEqual(['guide:listing']);
   });
 });
@@ -372,7 +373,7 @@ describe('completing the checklist ends the guide, for good', () => {
     expect(setupGuideFinished(withSetupStep(done, 'payments', true))).toBe(true);
     const reopened = withSetupStep(done, 'leadfinder', false);
     expect(setupGuideFinished(reopened)).toBe(false);
-    expect(reopened).toEqual(tickAll(...COUNTED.filter((id) => id !== 'leadfinder')));
+    expect(reopened).toEqual([...tickAll(...COUNTED.filter((id) => id !== 'leadfinder')), 'guide:not:leadfinder']);
   });
 
   it('the server ends all three together: no pop-up and no bar once finished, and it remembers', () => {
@@ -386,7 +387,9 @@ describe('completing the checklist ends the guide, for good', () => {
   });
 
   it('the sidebar entry goes with them', () => {
-    expect(read('src/components/setup-guide/SetupGuideNavItem.tsx')).toMatch(/if \(!status\?\.eligible \|\| status\.finished \|\| isNativeApp\(\)\) return null;/);
+    // (All but a StoryVenue admin viewing as the venue, who keeps it to open a finished guide and untick a step.)
+    expect(read('src/components/setup-guide/SetupGuideNavItem.tsx')).toMatch(/if \(!status\?\.eligible \|\| \(status\.finished && !status\.teamView\) \|\| isNativeApp\(\)\) return null;/);
+    expect(read('src/lib/setup-guide-server.ts')).toMatch(/teamView: viewer\.impersonating,/);
   });
 
   it('General settings has no way to start setup over, and the server no longer re-opens the wizard on request', () => {
@@ -394,6 +397,66 @@ describe('completing the checklist ends the guide, for good', () => {
     expect(settings).not.toMatch(/Restart setup wizard|Re-run guided setup|Start over & re-import|Picked the wrong venue/);
     expect(settings).not.toMatch(/action: '(restart|start_over)'/);
     expect(read('src/app/api/onboarding/state/route.ts')).not.toMatch(/action === 'restart'/);
+  });
+});
+
+// Owner's ask (Oct 6 2026): "We need to be able to uncheck items if we want to
+// uncheck them. Right now, you can only check them, but you can't uncheck
+// them. I found some venues that don't have certain things implemented that
+// are shown as checked, but they're not actually complete." A step the app
+// found set up by itself (a listing that's live, a Lead Link with a name) was
+// locked as Done: only a step ticked by hand could be unticked.
+describe('any step can be unticked, and ticked again', () => {
+  const state = (c: SetupContext, id: string) => setupLessonsFor(c).find((l) => l.id === id)!;
+  const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
+
+  it('a step the app found set up by itself can be unticked: their word outranks what the app can tell', () => {
+    const live = ctx({ facts: { ...NOTHING, published: true } });
+    expect(state(live, 'listing')).toMatchObject({ verified: true, checked: true, unticked: false });
+    const unticked = ctx({ facts: { ...NOTHING, published: true }, stepsCompleted: withSetupStep([], 'listing', false) });
+    expect(state(unticked, 'listing')).toEqual({ id: 'listing', ticked: false, verified: false, checked: false, unticked: true, optional: false, alreadyTheirs: false });
+    // It counts as not done everywhere: the progress, and the next step to do.
+    expect(progress(unticked)).toMatchObject({ done: 0, checkedAll: false });
+  });
+
+  it('it stays unticked until they tick it, and ticking it puts it back as it was', () => {
+    let saved = withSetupStep(tickAll('walkthrough'), 'listing', false);
+    expect(saved).toEqual(['guide:walkthrough', 'guide:not:listing']);
+    // Unticking twice changes nothing.
+    expect(withSetupStep(saved, 'listing', false)).toEqual(saved);
+    saved = withSetupStep(saved, 'listing', true);
+    expect(saved).toEqual(['guide:walkthrough', 'guide:listing']);
+    expect(state(ctx({ facts: { ...NOTHING, published: true }, stepsCompleted: saved }), 'listing')).toMatchObject({ ticked: true, verified: true, checked: true, unticked: false });
+  });
+
+  it('a step ticked by hand unticks the same way, and so does one with nothing to detect', () => {
+    for (const id of ['lead_link', 'follow_up', 'grow', 'payments'] as const) {
+      const saved = withSetupStep(tickAll(id), id, false);
+      expect(state(ctx({ stepsCompleted: saved }), id), id).toMatchObject({ ticked: false, checked: false, unticked: true });
+    }
+  });
+
+  it('unticking one step of a finished guide brings the guide back', () => {
+    const finished = withSetupGuideFinished(tickAll(...COUNTED));
+    const reopened = withSetupStep(finished, 'web_form', false);
+    expect(setupGuideFinished(reopened)).toBe(false);
+    expect(progress(ctx({ stepsCompleted: reopened, facts: EVERYTHING }))).toMatchObject({ done: 7, checkedAll: false });
+  });
+
+  it('a Private Client’s strategy-call step is theirs by the label: it is not one to untick', () => {
+    const theirs = ctx({ privateClient: true, stepsCompleted: withSetupStep([], 'grow', false) });
+    expect(state(theirs, 'grow')).toMatchObject({ checked: true, alreadyTheirs: true, unticked: false });
+  });
+
+  it('the guide offers it: the tick in the list and "Not done yet" work on every done step', () => {
+    const guide = read('src/components/setup-guide/SetupGuide.tsx');
+    // The list's tick is locked only for the Private Client's step, and flips whatever the step shows.
+    expect(guide).toMatch(/disabled=\{l\.alreadyTheirs\}\s*onClick=\{\(\) => void tickSetupStep\(l\.id, !l\.checked\)\}/);
+    expect(guide).not.toMatch(/disabled=\{l\.verified\}/);
+    // "Not done yet" is there for any done step, not only one ticked by hand.
+    expect(guide).toMatch(/\{current\.checked && !current\.alreadyTheirs && \(\s*<button[\s\S]{0,160}tickSetupStep\(lesson\.id, false\)/);
+    // The strategy-call step ticks itself when shown, but not after they unticked it.
+    expect(guide).toMatch(/current\?\.ticked === false && !current\.unticked/);
   });
 });
 

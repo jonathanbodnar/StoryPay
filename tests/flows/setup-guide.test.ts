@@ -16,7 +16,7 @@ describe('the Setup Guide', () => {
   const owner = new Browser();
   let admin: Browser;
 
-  type Lesson = { id: string; ticked: boolean; verified: boolean; checked: boolean; optional: boolean; alreadyTheirs: boolean };
+  type Lesson = { id: string; ticked: boolean; verified: boolean; checked: boolean; unticked: boolean; optional: boolean; alreadyTheirs: boolean };
   type Guide = {
     eligible: boolean; prompted: boolean; autoOpen: boolean; showPill: boolean; checkedAll: boolean; fulfilled: boolean; finished: boolean;
     done: number; total: number; left: number; loginId: string | null; listingUrl: string | null;
@@ -103,7 +103,7 @@ describe('the Setup Guide', () => {
       expect(g.lessons.map((l) => l.id)).toEqual(
         ['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'payments', 'grow'],
       );
-      expect(g.lessons.find((l) => l.id === 'grow')).toEqual({ id: 'grow', ticked: true, verified: true, checked: true, optional: false, alreadyTheirs: true });
+      expect(g.lessons.find((l) => l.id === 'grow')).toEqual({ id: 'grow', ticked: true, verified: true, checked: true, unticked: false, optional: false, alreadyTheirs: true });
       expect(where(g, 'checked')).toEqual(['grow']);
       expect(g).toMatchObject({ done: 1, total: 8, left: 7 });
       // It is worked out from the label, not saved as a tick of theirs.
@@ -194,6 +194,32 @@ describe('the Setup Guide', () => {
     const g = await guide();
     expect(g).toMatchObject({ left: 0, fulfilled: true, finished: true, showPill: false, autoOpen: false, checkedAll: true, eligible: true });
     expect(g.lessons.find((l) => l.id === 'payments')).toMatchObject({ verified: false, optional: true });
+  });
+
+  // Owner's ask (Oct 6 2026): "We need to be able to uncheck items... I found
+  // some venues that don't have certain things implemented that are shown as
+  // checked." Everything here is really set up by now, so every step is one
+  // the app would have locked as Done.
+  it('a step the app found set up can be unticked by the venue, which brings a finished guide back; ticking it ends it again', async () => {
+    const before = await guide();
+    expect(before.lessons.find((l) => l.id === 'web_form')).toMatchObject({ verified: true, checked: true, unticked: false });
+    expect(before).toMatchObject({ finished: true, showPill: false });
+
+    expect((await tick('web_form', false)).status).toBe(200);
+    const after = await guide();
+    expect(after.lessons.find((l) => l.id === 'web_form')).toMatchObject({ ticked: false, verified: false, checked: false, unticked: true });
+    expect(after).toMatchObject({ done: 7, checkedAll: false, finished: false, showPill: true, autoOpen: true });
+    const { data } = await db.from('venues').select('onboarding_steps_completed').eq('id', venueId).single();
+    expect(data!.onboarding_steps_completed).toContain('guide:not:web_form');
+    expect(data!.onboarding_steps_completed).not.toContain('guide:finished');
+
+    // It stays unticked on the next look, though the form is still live.
+    expect((await guide()).lessons.find((l) => l.id === 'web_form')).toMatchObject({ checked: false, unticked: true });
+
+    expect((await tick('web_form')).status).toBe(200);
+    const again = await guide();
+    expect(again.lessons.find((l) => l.id === 'web_form')).toMatchObject({ ticked: true, verified: true, checked: true, unticked: false });
+    expect(again).toMatchObject({ done: 8, finished: true, showPill: false, autoOpen: false });
   });
 
   it('a finished guide stays finished when something it counted is later switched off', async () => {

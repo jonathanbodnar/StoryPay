@@ -119,6 +119,7 @@ How it works
 - Open a step to see what to do. Each one has a button that takes you to the right page.
 - A step turns green when it's really set up (for example, once your listing is live). You can also tick a step off yourself with Mark as done.
 - If you ticked a step but it isn't set up yet, the guide says so.
+- Any done step can be unticked again, including one that turned green by itself: open the step and press Not done yet, or press its tick in the list. It stays unticked until you tick it.
 - The guide opens by itself each time you sign in, until you've ticked every step. Press the X to close it. To bring it back, press Setup Guide in the sidebar, or pick a step from the bar at the top of the page.
 - The bar at the top stays small until you press it, and folds away again once you pick a step or go to another page.
 - Nothing is locked behind the guide. Close it any time and keep working.
@@ -913,7 +914,7 @@ If that doesn't work
 
 Open it from the sidebar → Bride Booking System™ → Venue Listing (the listing editor). Everything on that page mirrors what appears at storyvenue.com/venue/<your-slug> when Publish is on.
 
-A second item under the same flyout — Reviews — is where you collect star ratings and written testimonials. Reviews can be published, pending, or hidden. Only published reviews are included in the public read API and embed for the marketing site.
+A second item under the same flyout — Reviews — is where you collect star ratings and written testimonials. Reviews can be published, pending, or hidden. Only published reviews show on your public listing.
 
 The listing has these sections:
 
@@ -993,10 +994,10 @@ Manage existing images:
 - "Set as cover" promotes a gallery image to the cover slot
 
 Troubleshooting:
-- If uploads silently fail on the first try right after a fresh account, reload the page — the image bucket is auto-provisioned on first use, then works normally afterwards.
+- If uploads silently fail on the first try right after a fresh account, reload the page and try again; it works normally after that.
 - Large files may take 15–30 seconds on slower connections. The status indicator shows "Saving…" while uploads are in flight.
 
-Uploaded photos are public — they're served directly from a CDN so your listing stays fast.`,
+Uploaded photos are public: anyone who opens your listing can see them.`,
       },
       {
         id: 'listing-media-library',
@@ -4286,7 +4287,6 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/settings/notifications':   ['notif-settings', 'email-types', 'email-variables', 'sms-notifications', 'merge-vars-overview'],
   '/dashboard/settings/push':            ['push-settings', 'push-overview', 'push-install-app'],
   '/dashboard/directory-billing':        ['billing-plans-overview', 'billing-trial', 'billing-verified-sponsored', 'gs-overview'],
-  '/dashboard/settings/billing':         ['billing-plans-overview', 'billing-trial', 'billing-verified-sponsored'],
   '/dashboard/listing/directory':        ['billing-verified-sponsored', 'billing-plans-overview', 'billing-trial', 'listing-overview'],
   '/dashboard/listing/pricing-guide':    ['billing-pricing-guide', 'listing-web-form', 'listing-overview', 'listing-photos'],
   '/dashboard/listing/web-form':         ['listing-web-form', 'billing-pricing-guide', 'brand-setup', 'leads-overview'],

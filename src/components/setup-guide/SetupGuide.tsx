@@ -136,7 +136,8 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
   const current = lessons.find((l) => l.id === currentId) ?? null;
 
   // The strategy-call step has nothing to set up: it's done once it's been shown.
-  const tickGrow = open && currentId === 'grow' && current?.ticked === false;
+  // (Unless they unticked it themselves: then it stays unticked until they tick it.)
+  const tickGrow = open && currentId === 'grow' && current?.ticked === false && !current.unticked;
   useEffect(() => {
     if (tickGrow) void tickSetupStep('grow');
   }, [tickGrow]);
@@ -269,7 +270,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                   <p className="mt-1.5 text-[15px] leading-relaxed text-gray-600">{lesson.summary}</p>
                   {current.ticked && !current.verified && (
                     <p className="mt-3 rounded-xl bg-amber-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-amber-900">
-                      You marked this done, but it isn’t set up yet. The reminder stays until it is.
+                      You marked this done, but it isn’t set up yet.
                     </p>
                   )}
                   {current.alreadyTheirs && (
@@ -336,7 +337,9 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                       <Check size={15} /> Mark as done
                     </button>
                   )}
-                  {current.ticked && !current.verified && (
+                  {/* …and theirs to take back: any done step can be unticked, one the
+                      app found set up by itself included (owner, Oct 6 2026). */}
+                  {current.checked && !current.alreadyTheirs && (
                     <button
                       type="button"
                       onClick={() => void tickSetupStep(lesson.id, false)}
@@ -385,12 +388,12 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                         </button>
                         <button
                           type="button"
-                          disabled={l.verified}
-                          onClick={() => void tickSetupStep(l.id, !l.ticked)}
+                          disabled={l.alreadyTheirs}
+                          onClick={() => void tickSetupStep(l.id, !l.checked)}
                           aria-label={
                             l.verified ? `Done: ${item.title}` : l.ticked ? `Marked done, not set up yet: ${item.title}` : `Mark as done: ${item.title}`
                           }
-                          title={l.verified ? 'Done' : l.ticked ? 'Marked done, not set up yet. Click to untick.' : 'Mark as done'}
+                          title={l.alreadyTheirs ? 'Done' : l.verified ? 'Done. Click to untick.' : l.ticked ? 'Marked done, not set up yet. Click to untick.' : 'Mark as done'}
                           className="shrink-0 rounded-full p-2 enabled:hover:bg-gray-200/70"
                         >
                           <StepTick ticked={l.ticked} verified={l.verified} />

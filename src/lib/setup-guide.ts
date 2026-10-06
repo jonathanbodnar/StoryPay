@@ -223,6 +223,13 @@ export interface SetupContext {
 export const GUIDE_STEP_PREFIX = 'guide:';
 /** Support switched this venue's pop-up and pill off (Venue Management). Not a step. */
 export const GUIDE_PROMPTS_OFF = 'guide:prompts-off';
+/**
+ * The venue said a step is NOT done, whatever the app can tell: "guide:not:<id>".
+ * Owner's ask (Oct 6 2026): "We need to be able to uncheck items... I found
+ * some venues that don't have certain things implemented that are shown as
+ * checked." A step the app found set up by itself used to be locked as done.
+ */
+export const GUIDE_NOT_PREFIX = 'guide:not:';
 /** The venue finished the guide: every step was ticked or set up. Kept, so the
  *  guide stays gone if something is later switched off again. Not a step. */
 export const GUIDE_FINISHED = 'guide:finished';
@@ -247,6 +254,9 @@ export interface SetupLessonState {
   verified: boolean;
   /** Ticked or really set up: what the venue sees as done. */
   checked: boolean;
+  /** The venue unticked it by hand: not done, whatever the app can tell
+   *  (ticked, verified and checked are all false while this holds). */
+  unticked: boolean;
   optional: boolean;
   /** Done because the venue already has what the step offers (a Private Client
    *  and the strategy call): green-checked, with nothing to press. */
@@ -269,12 +279,17 @@ export function setupLessonsFor(ctx: SetupContext): SetupLessonState[] {
     if (lesson.navId && ctx.allowedNavIds && !ctx.allowedNavIds.includes(lesson.navId)) continue;
     if (lesson.id === 'leadfinder' && !ctx.leadFinderAvailable) continue;
     if (lesson.id === 'grow' && ctx.privateClient) {
-      out.push({ id: lesson.id, ticked: true, verified: true, checked: true, optional: false, alreadyTheirs: true });
+      out.push({ id: lesson.id, ticked: true, verified: true, checked: true, unticked: false, optional: false, alreadyTheirs: true });
       continue;
     }
     const ticked = saved.has(`${GUIDE_STEP_PREFIX}${lesson.id}`);
+    // Their own "not done" outranks what the app can tell. (A tick is the later word: it removes this.)
+    if (!ticked && saved.has(`${GUIDE_NOT_PREFIX}${lesson.id}`)) {
+      out.push({ id: lesson.id, ticked: false, verified: false, checked: false, unticked: true, optional: lesson.optional === true, alreadyTheirs: false });
+      continue;
+    }
     const verified = lesson.manual ? ticked : ctx.facts[DETECTED[lesson.id as keyof typeof DETECTED]] === true;
-    out.push({ id: lesson.id, ticked, verified, checked: ticked || verified, optional: lesson.optional === true, alreadyTheirs: false });
+    out.push({ id: lesson.id, ticked, verified, checked: ticked || verified, unticked: false, optional: lesson.optional === true, alreadyTheirs: false });
   }
   return out;
 }
@@ -321,6 +336,9 @@ export interface SetupGuideState {
   prompted: boolean;
   /** Open by itself after this sign-in (the dashboard still waits a few seconds). */
   autoOpen: boolean;
+  /** A StoryVenue admin is viewing as this venue. They keep the sidebar entry
+   *  after the guide is finished, so they can open it and untick a step. */
+  teamView: boolean;
   /** The guide's bar is at the top of every dashboard page: there are steps
    *  left. (Named for the dark pill it used to be on inner pages.) */
   showPill: boolean;
@@ -347,9 +365,11 @@ export interface SetupGuideState {
 /** The venue's saved steps with one step ticked or unticked. */
 export function withSetupStep(stored: unknown, id: SetupLessonId, done: boolean): string[] {
   const key = `${GUIDE_STEP_PREFIX}${id}`;
+  const not = `${GUIDE_NOT_PREFIX}${id}`;
   // Unticking a step takes back "finished" with it: the guide is theirs again.
-  const rest = savedSteps(stored).filter((s) => s !== key && (done || s !== GUIDE_FINISHED));
-  return done ? [...rest, key] : rest;
+  const rest = savedSteps(stored).filter((s) => s !== key && s !== not && (done || s !== GUIDE_FINISHED));
+  // Unticked is remembered too, so a step the app finds set up stays unticked until they tick it.
+  return [...rest, done ? key : not];
 }
 
 /** Has this venue finished the guide at some point? */
