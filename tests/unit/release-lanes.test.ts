@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — plain logic module shared with the release gate scripts
@@ -198,10 +200,8 @@ describe('the flow tests the full pass still has to run', () => {
   });
 
   it('both the Checks service and the laptop fallback use this rule for the full pass', () => {
-    const fs = require('node:fs') as typeof import('node:fs');
-    const path = require('node:path') as typeof import('node:path');
     for (const file of ['scripts/checks/runner.mjs', 'scripts/staging/check-deploy.mjs']) {
-      const source = fs.readFileSync(path.join(__dirname, '..', '..', file), 'utf8');
+      const source = readFileSync(join(__dirname, '..', '..', file), 'utf8');
       expect(source, file).toMatch(/restOfFlowFiles\(flowTests\.map\(\(t\) => t\.name\), targeted\)/);
     }
   });
