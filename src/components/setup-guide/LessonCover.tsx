@@ -23,34 +23,27 @@ export function StepTitle({ text }: { text: string }) {
   );
 }
 
-/** The presenter on every video cover: the owner, cut out, in black and white (from the photo he chose, Oct 5 2026). */
-const PRESENTER = '/setup-guide/presenter-v2.webp';
 const VIDEO_COVER_BG = 'linear-gradient(118deg, #ffffff 0%, #f6f6f7 42%, #e2e2e5 100%)';
 const at = (style: CSSProperties): CSSProperties => ({ position: 'absolute', ...style });
 
 /**
  * A video's cover, YouTube style, in the brand's black and white (owner's
  * ask, Oct 5 2026, from a Viktor Academy thumbnail: an "Episode 01" tag, a big
- * title, a brand tag and the presenter cut out on the right). Every step that
- * has a video gets it, with that step's own label and title: the strategy-call
- * step now, the rest as their videos are recorded. The tile carries the Setup
- * Guide's own icon, a rocket. All sizes are in container
- * units, so the same art is the big cover and the small picture in a list.
+ * title, a brand tag and the presenter on the right). Every step that has a
+ * video gets it, with that step's own label and title: the strategy-call step
+ * now, the rest as their videos are recorded. The tile carries the Setup
+ * Guide's own icon, a rocket. All sizes are in container units, so the same
+ * art is the big cover and the small picture in a list.
+ *
+ * The right side is empty on purpose, a placeholder: the owner had his
+ * cut-out photo there, and a circle behind it, and asked for both to come off
+ * "for now" the same evening. The presenter goes back there when he sends
+ * the photo he wants.
  */
 function VideoCoverArt({ lesson, label, play }: { lesson: SetupLesson; label: string; play: boolean }) {
   const step = label.match(/^(Step)\s+(\d+)$/i);
   return (
     <>
-      <span aria-hidden style={at({ right: '-12cqw', top: 0, width: '58cqw', aspectRatio: '1', borderRadius: 9999, background: 'radial-gradient(circle at 50% 46%, #ffffff 0%, #f0f0f2 46%, rgba(226,226,229,0) 70%)' })} />
-      <span aria-hidden style={at({ right: '-4cqw', top: '6cqw', width: '42cqw', aspectRatio: '1', borderRadius: 9999, border: '0.16cqw solid rgba(27,27,27,0.1)' })} />
-      <Image
-        src={PRESENTER}
-        alt=""
-        width={1183}
-        height={900}
-        unoptimized
-        style={at({ right: '-9cqw', bottom: 0, height: '46cqw', width: 'auto', maxWidth: 'none', filter: 'drop-shadow(0 1.2cqw 2.4cqw rgba(0,0,0,0.18))' })}
-      />
       {/* The guide's own mark, tipped like an app icon. */}
       <span
         aria-hidden
