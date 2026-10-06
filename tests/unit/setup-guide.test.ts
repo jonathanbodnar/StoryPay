@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PAGES } from '../flows/routes';
 import {
-  GUIDE_PROMPTS_OFF, SETUP_LESSONS, setupGuideDisplay, setupGuideProgress, setupGuidePrompts,
-  setupGuideVideos, setupLessonsFor, setupPromptsOff, videoEmbedUrl, withSetupPromptsOff, withSetupStep,
+  GUIDE_FINISHED, GUIDE_PROMPTS_OFF, SETUP_LESSONS, setupGuideDisplay, setupGuideFinished, setupGuideProgress, setupGuidePrompts,
+  setupGuideVideos, setupLessonsFor, setupPromptsOff, videoEmbedUrl, withSetupGuideFinished, withSetupPromptsOff, withSetupStep,
   type SetupContext, type SetupFacts,
 } from '@/lib/setup-guide';
 
@@ -103,7 +103,7 @@ describe('a Private Client’s guide', () => {
     expect(checked(theirs())).toEqual(['grow']);
     expect(progress(theirs())).toEqual({ done: 1, total: 8, left: 7, checkedAll: false, fulfilled: false });
     const lessons = setupLessonsFor(theirs());
-    expect(setupGuideDisplay({ lessons, ...setupGuideProgress(lessons) })).toEqual({ done: 1, total: 8, label: '1 of 8 done', nextId: 'walkthrough', settingUp: false });
+    expect(setupGuideDisplay({ lessons, ...setupGuideProgress(lessons) })).toEqual({ done: 1, total: 8, label: '1 of 8 done', nextId: 'walkthrough' });
     // They finish without ever being shown the survey: seven ticks, not eight.
     const rest = COUNTED.filter((id) => id !== 'grow');
     expect(progress(theirs({ stepsCompleted: tickAll(...rest) }))).toMatchObject({ done: 8, checkedAll: true });
@@ -252,13 +252,13 @@ describe('ticked versus really set up', () => {
   });
 });
 
-describe('when the pop-up stops and when the reminder goes', () => {
+describe('when the checklist is complete, and what is really set up', () => {
   it('nothing done: everything is left', () => {
     expect(progress(ctx())).toEqual({ done: 0, total: 8, left: 8, checkedAll: false, fulfilled: false });
   });
 
   it('StoryPay is optional: it counts toward neither, ticked, set up or not', () => {
-    // Every counted step ticked, StoryPay untouched: the pop-up is finished with.
+    // Every counted step ticked, StoryPay untouched: the checklist is complete.
     expect(progress(ctx({ stepsCompleted: tickAll(...COUNTED) })).checkedAll).toBe(true);
     // Only StoryPay done: nothing has moved.
     expect(progress(ctx({ stepsCompleted: tickAll('payments') }))).toMatchObject({ done: 0, total: 8, left: 8 });
@@ -266,7 +266,7 @@ describe('when the pop-up stops and when the reminder goes', () => {
     expect(setupLessonsFor(ctx()).filter((l) => l.optional).map((l) => l.id)).toEqual(['payments']);
   });
 
-  it('every step ticked stops the pop-up, but the reminder stays until each is really set up', () => {
+  it('every step ticked completes it, set up or not; what is really set up is still known, step by step', () => {
     const allTicked = progress(ctx({ stepsCompleted: tickAll(...COUNTED) }));
     // Five need something to exist; the walkthrough, follow-up and the strategy call are set up by being ticked.
     expect(allTicked).toEqual({ done: 8, total: 8, left: 5, checkedAll: true, fulfilled: false });
@@ -291,21 +291,17 @@ describe('what the bar on every page and the sidebar ring say', () => {
   };
 
   it('while steps are still to tick: how many are done, and the next one to do', () => {
-    expect(shown(ctx())).toEqual({ done: 0, total: 8, label: '0 of 8 done', nextId: 'walkthrough', settingUp: false });
+    expect(shown(ctx())).toEqual({ done: 0, total: 8, label: '0 of 8 done', nextId: 'walkthrough' });
     // Done by their own word or for real, it counts the same here.
     const some = ctx({ stepsCompleted: tickAll('walkthrough', 'listing'), facts: { ...NOTHING, guideEnabled: true } });
-    expect(shown(some)).toEqual({ done: 3, total: 8, label: '3 of 8 done', nextId: 'lead_link', settingUp: false });
+    expect(shown(some)).toEqual({ done: 3, total: 8, label: '3 of 8 done', nextId: 'lead_link' });
   });
 
-  it('once every step is ticked: only what is really set up counts, so the reminder is honest', () => {
-    // All eight ticked, nothing built: three are "set up by being ticked", five are owed.
-    expect(shown(ctx({ stepsCompleted: tickAll(...COUNTED) }))).toEqual({ done: 3, total: 8, label: '5 left to set up', nextId: 'listing', settingUp: true });
-    const nearly = ctx({ stepsCompleted: tickAll(...COUNTED), facts: { ...EVERYTHING, leadFinderMail: false } });
-    expect(shown(nearly)).toEqual({ done: 7, total: 8, label: '1 left to set up', nextId: 'leadfinder', settingUp: true });
-  });
-
-  it('everything really set up: a full ring and nothing next', () => {
-    expect(shown(ctx({ stepsCompleted: tickAll(...COUNTED), facts: EVERYTHING }))).toEqual({ done: 8, total: 8, label: 'All set up', nextId: null, settingUp: false });
+  // Until Oct 6 2026 the bar stayed after every step was ticked, counting what
+  // was "left to set up". Now it is gone by then, so it never says that.
+  it('it never counts what is "left to set up": by then neither is shown', () => {
+    expect(shown(ctx({ stepsCompleted: tickAll(...COUNTED) }))).toEqual({ done: 8, total: 8, label: '8 of 8 done', nextId: null });
+    expect(setupGuideDisplay.toString()).not.toMatch(/left to set up|All set up/);
   });
 
   it('StoryPay, being optional, is never the next step and never moves the ring', () => {
@@ -340,6 +336,64 @@ describe('the checklist bar: closed until they drop it down', () => {
     // One place opens the guide, and it closes the bar first.
     expect(bar.match(/openSetupGuide\(/g)).toHaveLength(1);
     expect(bar).toMatch(/setDroppedOn\(null\);\s*openSetupGuide\(lessonId\);/);
+  });
+});
+
+// Owner's rule (Oct 6 2026): "if they complete the steps in the onboarding
+// checklist ... the full screen pop, setup guide menu item, and the checklist
+// preview drawer all disappear. Once they complete the setup guide checklist
+// those big alerts aren't needed any longer." Until then only the pop-up
+// stopped: the bar stayed until every step was REALLY set up (which a venue
+// with no website or no other directories could never reach), and the sidebar
+// entry stayed for good. And: "Remove from the general settings page too the
+// master reset setup button. If they want to start over they will have to
+// delete and start over."
+describe('completing the checklist ends the guide, for good', () => {
+  const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
+
+  it('finishing is remembered, with the venue’s ticks and support’s switch kept', () => {
+    const saved = ['guide:listing', GUIDE_PROMPTS_OFF, 'profile_branding'];
+    expect(setupGuideFinished(saved)).toBe(false);
+    const done = withSetupGuideFinished(saved);
+    expect(done).toEqual([...saved, GUIDE_FINISHED]);
+    expect(setupGuideFinished(done)).toBe(true);
+    // Said twice, it is kept once.
+    expect(withSetupGuideFinished(done)).toEqual(done);
+    for (const junk of ['not a list', null, 7]) expect(setupGuideFinished(junk), String(junk)).toBe(false);
+  });
+
+  it('"finished" is not a step: it ticks nothing, and no lesson can be mistaken for it', () => {
+    expect(checked(ctx({ stepsCompleted: [GUIDE_FINISHED] }))).toEqual([]);
+    expect(SETUP_LESSONS.map((l) => `guide:${l.id}`)).not.toContain(GUIDE_FINISHED);
+  });
+
+  it('ticking more keeps it finished; unticking a step takes "finished" back with it', () => {
+    const done = withSetupGuideFinished(tickAll(...COUNTED));
+    expect(setupGuideFinished(withSetupStep(done, 'payments', true))).toBe(true);
+    const reopened = withSetupStep(done, 'leadfinder', false);
+    expect(setupGuideFinished(reopened)).toBe(false);
+    expect(reopened).toEqual(tickAll(...COUNTED.filter((id) => id !== 'leadfinder')));
+  });
+
+  it('the server ends all three together: no pop-up and no bar once finished, and it remembers', () => {
+    const server = read('src/lib/setup-guide-server.ts');
+    expect(server).toMatch(/const finished = remembered \|\| progress\.checkedAll;/);
+    expect(server).toMatch(/autoOpen: prompted && !finished && !viewer\.impersonating,/);
+    expect(server).toMatch(/showPill: prompted && !finished,/);
+    expect(server).toMatch(/withSetupGuideFinished\(venue\.onboarding_steps_completed\)/);
+    // Being really set up decides nothing any more.
+    expect(server).not.toMatch(/!progress\.fulfilled/);
+  });
+
+  it('the sidebar entry goes with them', () => {
+    expect(read('src/components/setup-guide/SetupGuideNavItem.tsx')).toMatch(/if \(!status\?\.eligible \|\| status\.finished \|\| isNativeApp\(\)\) return null;/);
+  });
+
+  it('General settings has no way to start setup over, and the server no longer re-opens the wizard on request', () => {
+    const settings = read('src/app/dashboard/settings/page.tsx');
+    expect(settings).not.toMatch(/Restart setup wizard|Re-run guided setup|Start over & re-import|Picked the wrong venue/);
+    expect(settings).not.toMatch(/action: '(restart|start_over)'/);
+    expect(read('src/app/api/onboarding/state/route.ts')).not.toMatch(/action === 'restart'/);
   });
 });
 

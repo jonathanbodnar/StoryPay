@@ -226,16 +226,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true });
   }
 
-  if (action === 'restart') {
-    // Re-open the wizard from the top. Leaves the listing published (we don't
-    // un-publish a live page) but clears the completion stamp so it shows again.
-    await supabaseAdmin
-      .from('venues')
-      .update({ onboarding_completed_at: null, onboarding_last_step: 0 })
-      .eq('id', venueId);
-    return NextResponse.json({ ok: true });
-  }
-
   if (action === 'start_over') {
     // Full, production-safe reset so the owner can re-run onboarding from a
     // DIFFERENT Google listing (e.g. they picked the wrong venue). Because the

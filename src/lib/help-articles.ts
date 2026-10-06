@@ -91,7 +91,7 @@ One email address = one venue account. If you already have an account and try to
         id: 'gs-onboarding',
         title: 'The Setup Guide — your steps to your first leads',
         tags: ['setup guide', 'checklist', 'onboarding', 'setup', 'first steps', 'getting started', 'walkthrough', 'rocket'],
-        body: `The Setup Guide is a short list of steps that gets your venue ready to capture every bride and follow up with her. It opens by itself each time you sign in, and a small bar at the top of every page keeps your place until you've finished.
+        body: `The Setup Guide is a short list of steps that gets your venue ready to capture every bride and follow up with her. It opens by itself each time you sign in, and a small bar at the top of every page keeps your place until you've finished. Once every step is ticked, the guide is finished and goes away.
 
 Where to find it
 - Sidebar → Setup Guide (the first item, with the rocket). The ring around it shows how many steps are done.
@@ -111,10 +111,15 @@ Setting up proposals and payments with StoryPay™ is on the list too, marked Op
 How it works
 - Open a step to see what to do. Each one has a button that takes you to the right page.
 - A step turns green when it's really set up (for example, once your listing is live). You can also tick a step off yourself with Mark as done.
-- If you ticked a step but it isn't set up yet, the guide says so, and the reminder stays until it is.
+- If you ticked a step but it isn't set up yet, the guide says so.
 - The guide opens by itself each time you sign in, until you've ticked every step. Press the X to close it. To bring it back, press Setup Guide in the sidebar, or pick a step from the bar at the top of the page.
 - The bar at the top stays small until you press it, and folds away again once you pick a step or go to another page.
 - Nothing is locked behind the guide. Close it any time and keep working.
+
+When you've finished
+- Once every step is ticked, the Setup Guide is finished. It stops opening when you sign in, and the bar at the top of the page and the Setup Guide entry in the sidebar both go away.
+- It doesn't come back, so work through any step you still want help with before you tick the last one.
+- Everything the guide pointed to stays where it is: your listing, pricing guide, Lead Link, Web Form and Lead Finder are all under Bride Booking System™ in the sidebar.
 
 Who sees it
 Account owners and admins. Team members don't see it. Which steps you see depends on what your plan includes.`,

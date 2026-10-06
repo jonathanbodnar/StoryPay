@@ -483,7 +483,8 @@ Setup checklist for a speed-to-lead funnel:
 
 ## Setup Guide
 - The Setup Guide is the short list of steps that gets a venue ready to capture and follow up every bride. Open it from the sidebar (first item, rocket icon), or from the small bar at the top of any page: press Continue setup, or press the bar to drop down the steps, scroll through them and pick one, and the guide opens on that step.
-- It opens by itself after each sign-in until every step is ticked; the X closes it. The bar at the top of the page is small until it's pressed, and folds away again once a step is picked or on the next page. The bar stays until every step is really set up. Nothing is locked behind it.
+- It opens by itself after each sign-in until every step is ticked; the X closes it. The bar at the top of the page is small until it's pressed, and folds away again once a step is picked or on the next page. Nothing is locked behind it.
+- Once every step is ticked the Setup Guide is finished: it stops opening at sign-in, and the bar and the Setup Guide entry in the sidebar go away. It does not come back, and there is no way to restart it. Everything it pointed to stays under Bride Booking System™ in the sidebar.
 - Steps: 1. Start here: watch the 3-minute walkthrough. 2. Share your listing link. 3. Check your pricing guide. 4. Put your Lead Link in your Instagram bio. 5. Add the inquiry form to your website. 6. Forward your directory leads to Lead Finder. 7. Make your follow-up sound like you. 8. Want us to bring you qualified brides? Setting up proposals and payments with StoryPay™ is on the list too, marked Optional.
 - Each step has a button that goes to the right page. A step turns green when it's really set up; a venue can also tick it with Mark as done, and the guide says so if a ticked step isn't set up yet.
 - Owners and admins see it; team members don't. The steps shown depend on the plan.
@@ -691,7 +692,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - The browser tab shows the StoryVenue icon; if it looks outdated after an update, hard-refresh or clear site data (favicons cache aggressively).
 - How do I track where a lead came from? Contact profile → Overview → Referral Source dropdown.
 - Why can't a team member see Settings? Members only see proposals, contacts, and calendar. Admins see most settings. Only owners see General, Team, and Integrations.
-- How do I restart the setup guide? Settings → General → Restart Setup Guide (owners only).
+- How do I restart the Setup Guide or my setup? You can't. The Setup Guide goes away for good once every step is ticked, and Settings → General has no restart or start-over button. To change your listing, pricing guide, Lead Link or anything else, edit it on its own page.
 - What is weighted pipeline on Leads? Each opportunity value is multiplied by the **win probability** of its stage (defaults by stage kind; venues can store 0–100% per stage). Weighted totals appear as **wtd** on columns and cards and in the insights strip.
 - How do I assign a lead to someone? Open the lead drawer → **Owner** → pick an active team member (or Unassigned).
 - Where is the audit trail for a lead? Lead drawer → **Activity & audit** — stage, value, and owner changes; use **Log a call** to record a conversation.

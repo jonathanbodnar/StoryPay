@@ -223,6 +223,9 @@ export interface SetupContext {
 export const GUIDE_STEP_PREFIX = 'guide:';
 /** Support switched this venue's pop-up and pill off (Venue Management). Not a step. */
 export const GUIDE_PROMPTS_OFF = 'guide:prompts-off';
+/** The venue finished the guide: every step was ticked or set up. Kept, so the
+ *  guide stays gone if something is later switched off again. Not a step. */
+export const GUIDE_FINISHED = 'guide:finished';
 
 const DETECTED: Record<Exclude<SetupLessonId, 'walkthrough' | 'follow_up' | 'grow'>, keyof SetupFacts> = {
   listing: 'published',
@@ -278,8 +281,11 @@ export function setupLessonsFor(ctx: SetupContext): SetupLessonState[] {
 
 /**
  * Where the venue stands. Optional steps count toward none of it.
- *  - checkedAll: every step is ticked or set up → the pop-up stops.
- *  - fulfilled:  every step is really set up     → the pill goes too.
+ *  - checkedAll: every step is ticked or set up → the guide is finished: its
+ *    pop-up, its bar and its sidebar entry all go (owner's rule, Oct 6 2026).
+ *  - fulfilled:  every step is really set up. It decides nothing any more
+ *    (until Oct 6 the bar stayed until then); a step's own tick still shows
+ *    whether it is really set up.
  */
 export function setupGuideProgress(lessons: readonly SetupLessonState[]): {
   done: number; total: number; left: number; checkedAll: boolean; fulfilled: boolean;
@@ -291,45 +297,41 @@ export function setupGuideProgress(lessons: readonly SetupLessonState[]): {
 }
 
 /**
- * What the guide's bar (on every dashboard page) and its sidebar entry say.
- * While there are steps still to tick it counts what's been done, by the
- * venue's own word or for real. Once every step is ticked it counts only
- * what's really set up, so a step ticked without doing it still shows as
- * owed (the owner's rule: the reminder stays until each step is fulfilled).
- * `nextId` is the step to send them to.
+ * What the guide's bar (on every dashboard page) and its sidebar entry say
+ * while there are steps left: how many are done, by the venue's own word or
+ * for real, and the step to send them to next. Once every step is done
+ * neither is shown, so there is nothing to say then.
  */
-export function setupGuideDisplay(guide: Pick<SetupGuideState, 'lessons' | 'done' | 'total' | 'left' | 'checkedAll' | 'fulfilled'>): {
-  done: number; total: number; label: string; nextId: SetupLessonId | null; settingUp: boolean;
+export function setupGuideDisplay(guide: Pick<SetupGuideState, 'lessons' | 'done' | 'total'>): {
+  done: number; total: number; label: string; nextId: SetupLessonId | null;
 } {
   const counted = guide.lessons.filter((l) => !l.optional);
-  if (!guide.checkedAll) {
-    return {
-      done: guide.done, total: guide.total, label: `${guide.done} of ${guide.total} done`,
-      nextId: counted.find((l) => !l.checked)?.id ?? null, settingUp: false,
-    };
-  }
-  const real = Math.max(0, guide.total - guide.left);
   return {
-    done: real, total: guide.total,
-    label: guide.fulfilled ? 'All set up' : `${guide.left} left to set up`,
-    nextId: counted.find((l) => !l.verified)?.id ?? null, settingUp: !guide.fulfilled,
+    done: guide.done, total: guide.total, label: `${guide.done} of ${guide.total} done`,
+    nextId: counted.find((l) => !l.checked)?.id ?? null,
   };
 }
 
 /** The guide as the API hands it to the dashboard. */
 export interface SetupGuideState {
-  /** Wizard finished and the viewer runs the venue: the guide is in their sidebar. */
+  /** Wizard finished and the viewer runs the venue: the guide is theirs to
+   *  open, and sits in their sidebar until they finish it. */
   eligible: boolean;
   /** This venue gets the prompts at all (every venue, unless support switched them off). */
   prompted: boolean;
   /** Open by itself after this sign-in (the dashboard still waits a few seconds). */
   autoOpen: boolean;
-  /** The guide's bar stays at the top of every dashboard page: something isn't
-   *  really set up yet. (Named for the dark pill it used to be on inner pages.) */
+  /** The guide's bar is at the top of every dashboard page: there are steps
+   *  left. (Named for the dark pill it used to be on inner pages.) */
   showPill: boolean;
-  /** Every step is ticked or set up (optional ones aside): the pop-up has stopped. */
+  /** Every step is ticked or set up (optional ones aside). */
   checkedAll: boolean;
-  /** Every step is really set up: nothing left to remind them of. */
+  /** The venue has completed the checklist, now or at any time before: the
+   *  pop-up, the bar and the sidebar entry are gone, and stay gone (owner's
+   *  rule, Oct 6 2026: "once they complete the setup guide checklist those
+   *  big alerts aren't needed any longer"). */
+  finished: boolean;
+  /** Every step is really set up. */
   fulfilled: boolean;
   /** Steps ticked or set up, of the steps that count. */
   done: number;
@@ -345,8 +347,18 @@ export interface SetupGuideState {
 /** The venue's saved steps with one step ticked or unticked. */
 export function withSetupStep(stored: unknown, id: SetupLessonId, done: boolean): string[] {
   const key = `${GUIDE_STEP_PREFIX}${id}`;
-  const rest = savedSteps(stored).filter((s) => s !== key);
+  // Unticking a step takes back "finished" with it: the guide is theirs again.
+  const rest = savedSteps(stored).filter((s) => s !== key && (done || s !== GUIDE_FINISHED));
   return done ? [...rest, key] : rest;
+}
+
+/** Has this venue finished the guide at some point? */
+export const setupGuideFinished = (stored: unknown): boolean => savedSteps(stored).includes(GUIDE_FINISHED);
+
+/** The venue's saved steps with the guide marked finished. */
+export function withSetupGuideFinished(stored: unknown): string[] {
+  const steps = savedSteps(stored);
+  return steps.includes(GUIDE_FINISHED) ? steps : [...steps, GUIDE_FINISHED];
 }
 
 export const setupPromptsOff = (stored: unknown): boolean => savedSteps(stored).includes(GUIDE_PROMPTS_OFF);

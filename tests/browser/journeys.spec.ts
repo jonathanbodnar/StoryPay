@@ -150,9 +150,10 @@ test('live updates: a new lead lights up the Lead Inbox badge without a refresh'
 
 // The Setup Guide (owner's rules, Oct 4 2026): it opens by itself a few
 // seconds after a venue signs in, at every sign-in, the X always closes it,
-// the venue can tick steps off itself, and once every step is ticked it stops
-// opening but a small bar stays until each step is really set up. That bar is
-// closed until they press it (Oct 5 2026).
+// and the venue can tick steps off itself. A small bar on every page is the
+// way back to it, closed until they press it (Oct 5 2026). Completing the
+// checklist ends all of it: the pop-up, the bar and the menu's Setup Guide
+// (Oct 6 2026).
 test('the Setup Guide meets a venue after signing in, and steps aside once its steps are ticked', async ({ page }, testInfo) => {
   // Two sign-ins, and three stretches of waiting to see that nothing opens.
   test.setTimeout(120_000);
@@ -322,35 +323,50 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await guide.getByRole('button', { name: 'Close the Setup Guide' }).click();
   await expect(guide).toBeHidden();
 
-  // Every step ticked (none of the rest really set up): the guide no longer
-  // opens by itself, and the bar stays, now counting what's left to really
-  // set up, on every page.
+  // The venue completes the checklist, and the full guide, the bar and the
+  // menu's Setup Guide all go, for good (owner's rule, Oct 6 2026: "once they
+  // complete the setup guide checklist those big alerts aren't needed any
+  // longer"). Until then only the pop-up stopped: the bar stayed, counting
+  // what was "left to set up", and the menu entry never went.
+  // Every step but one is ticked for them here; they tick the last themselves.
   const { error: ticked } = await db.from('venues').update({
-    onboarding_steps_completed: ['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'].map((s) => `guide:${s}`),
+    onboarding_steps_completed: ['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'grow'].map((s) => `guide:${s}`),
   }).eq('id', venueId);
   expect(ticked?.message ?? null).toBeNull();
-  // As at a fresh sign-in: forget that the guide already opened for this one,
-  // so the ticks are the only thing that can be keeping it shut.
+  await page.reload();
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card).toContainText('7 of 8 done');
+  const menuEntry = page.locator('aside nav').filter({ hasText: 'Setup Guide' });
+  await expect(menuEntry).not.toHaveCount(0);
+  await card.getByRole('button', { name: 'Continue setup' }).click();
+  await expect(guide).toBeVisible();
+  await expect(guide.getByRole('heading', { name: 'Make your follow-up sound like you' })).toBeVisible();
+  await guide.getByRole('button', { name: /^Mark as done: Make your follow-up/ }).click();
+  // The guide says it's finished and stays until they close it; behind it the
+  // bar and the menu entry are already gone.
+  await expect(guide.getByText(/every step done/)).toBeVisible();
+  await expect(guide.getByText('8 of 8 done')).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await expect(menuEntry).toHaveCount(0);
+  await guide.getByRole('button', { name: 'Close the Setup Guide' }).click();
+  await expect(guide).toBeHidden();
+
+  // Nothing of it comes back: not on the next page, and not as at a fresh
+  // sign-in (the note that it already opened for this one is forgotten, so
+  // being finished is the only thing that can be keeping it shut).
   await page.evaluate(() => {
     localStorage.removeItem('storyvenue.setupGuide.openedFor');
     sessionStorage.removeItem('storyvenue.setupGuide.openedFor');
   });
-  await page.reload();
-  await expect(card).toBeVisible({ timeout: 20_000 });
-  await expect(card).toContainText(/\d left to set up/);
-  await expect(card).not.toContainText(/of \d done/);
-  await expect(card).toHaveAttribute('data-open', 'false');
+  const state = page.waitForResponse((r) => r.url().includes('/api/onboarding/setup-guide') && r.request().method() === 'GET');
+  await page.goto('/dashboard/leads');
+  expect(((await (await state).json()) as { finished: boolean }).finished).toBe(true);
+  await expect(page.getByRole('link', { name: /Lead Inbox/ }).first()).toBeAttached({ timeout: 20_000 });
   await page.waitForTimeout(5000);
   await expect(guide).toBeHidden();
+  await expect(card).toHaveCount(0);
+  await expect(menuEntry).toHaveCount(0);
   await expect(page.getByTestId('setup-guide-pill')).toHaveCount(0);
-  await page.goto('/dashboard/leads');
-  await expect(card).toBeVisible({ timeout: 20_000 });
-  await expect(card).toContainText(/\d left to set up/);
-
-  // Its button opens the guide again, and it says why the reminder is still there.
-  await card.getByRole('button', { name: 'Continue setup' }).click();
-  await expect(guide).toBeVisible();
-  await expect(guide.getByText(/ticked every step/)).toBeVisible();
 });
 
 // What the dashboard says about a plan or trial ending (owner's rules, Oct 5

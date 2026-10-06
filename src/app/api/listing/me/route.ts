@@ -237,7 +237,7 @@ export async function PATCH(request: NextRequest) {
   // Publish / unpublish on the listing page is a visibility toggle, not a
   // setup restart. Stamp onboarding complete the first time they use that
   // toggle so Finish setup stays gone after they take the listing off the
-  // public directory. Restart setup in General settings is the only clear.
+  // public directory. Nothing a venue can press clears it again.
   if ('is_published' in updates) {
     await supabaseAdmin
       .from('venues')

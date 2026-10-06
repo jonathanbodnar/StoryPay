@@ -64,6 +64,17 @@ describe('the docs know the product as it is today', () => {
     }
   });
 
+  // Owner's rules (Oct 6 2026): a completed checklist ends the Setup Guide
+  // (pop-up, bar and sidebar entry), and nothing lets a venue start setup over.
+  it('a finished Setup Guide goes away, and nothing offers to restart it', () => {
+    expect(help).toContain('Once every step is ticked, the Setup Guide is finished.');
+    expect(assistantDocs).toContain('Once every step is ticked the Setup Guide is finished');
+    expect(assistantDocs).toContain('Settings → General has no restart or start-over button');
+    for (const text of [help, assistantDocs]) {
+      expect(text).not.toMatch(/Restart Setup Guide|Restart setup wizard|Re-run guided setup|the reminder stays until|stays until every step is really set up/);
+    }
+  });
+
   // Owner's call (Oct 5 2026): the docs don't tell venues to replace the form
   // code on their website; support does, if someone needs it.
   it('the Web Form docs don’t send venues back to redo their website', () => {

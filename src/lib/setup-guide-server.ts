@@ -7,8 +7,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { loadDirectoryNavAccess } from '@/lib/directory-plans-venue';
 import { leadFinderEnabledForSlug } from '@/lib/leadfinder/address';
 import {
-  setupGuideProgress, setupGuidePrompts, setupGuideVideos, setupLessonsFor, setupPromptsOff,
-  type SetupGuideState,
+  setupGuideFinished, setupGuideProgress, setupGuidePrompts, setupGuideVideos, setupLessonsFor, setupPromptsOff,
+  withSetupGuideFinished, type SetupGuideState,
 } from '@/lib/setup-guide';
 
 /** Where Admin → Setup Guide keeps its video links ({ lessonId: url }). */
@@ -83,6 +83,18 @@ export async function loadSetupGuide(
   });
 
   const progress = setupGuideProgress(lessons);
+  // Completing the checklist ends the guide for good (owner's rule, Oct 6
+  // 2026), so it is remembered the first time it's seen: the guide doesn't
+  // come back because a listing was later taken down, or a plan gained a step.
+  const remembered = setupGuideFinished(venue.onboarding_steps_completed);
+  const finished = remembered || progress.checkedAll;
+  if (finished && !remembered) {
+    const { error } = await supabaseAdmin
+      .from('venues')
+      .update({ onboarding_steps_completed: withSetupGuideFinished(venue.onboarding_steps_completed) })
+      .eq('id', venueId);
+    if (error) console.error('[setup-guide] remember finished:', error.message);
+  }
   // The wizard still owns the dashboard until the listing is published.
   const wizardDone = Boolean(venue.onboarding_completed_at) || venue.is_published === true;
   const prompted = setupGuidePrompts({
@@ -95,8 +107,9 @@ export async function loadSetupGuide(
     eligible: viewer.canManage && wizardDone,
     prompted,
     // An admin viewing as the venue sees its dashboard, not its pop-up.
-    autoOpen: prompted && !progress.checkedAll && !viewer.impersonating,
-    showPill: prompted && !progress.fulfilled,
+    autoOpen: prompted && !finished && !viewer.impersonating,
+    showPill: prompted && !finished,
+    finished,
     ...progress,
     lessons,
     videos: setupGuideVideos(videoLinks),

@@ -106,8 +106,8 @@ export default function OnboardingWizard({ adminView = false }: { adminView?: bo
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Forced re-open (from the "Restart setup" button) — open immediately,
-      // regardless of completion or the per-session skip flag.
+      // Forced re-open (?onboarding=1: the local-development reset) — open
+      // immediately, regardless of completion or the per-session skip flag.
       let forced = false;
       try {
         const params = new URLSearchParams(window.location.search);

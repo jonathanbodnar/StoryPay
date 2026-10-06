@@ -5,7 +5,8 @@
  * content (inside <main>, under the announcement ribbon) so it lines up exactly
  * with the page. Stays until onboarding is complete; clicking it opens the
  * wizard modal (owned by OnboardingWizard) via a window event. Unpublishing
- * the listing does not bring it back — only Restart setup in General settings.
+ * the listing does not bring it back, and nothing else does either: General
+ * settings had a "Restart setup wizard" button until Oct 6 2026.
  */
 
 import { useEffect, useState } from 'react';
@@ -20,9 +21,8 @@ export default function OnboardingLauncher() {
     let cancelled = false;
     (async () => {
       try {
-        // If the wizard was explicitly restarted (?onboarding=1 in URL), always
-        // show the launcher — the restart action clears `completed` but the venue
-        // may still be published+guide_enabled, which would otherwise hide us.
+        // If the wizard was explicitly reopened (?onboarding=1 in URL: only the
+        // local-development reset does that now), always show the launcher.
         const forced = new URLSearchParams(window.location.search).get('onboarding') === '1';
         if (forced) { setShow(true); return; }
 
@@ -32,8 +32,7 @@ export default function OnboardingLauncher() {
         if (cancelled) return;
         // Hide while the listing is live, or after they've finished setup.
         // Unpublish must not bring this back — listing/me stamps completed
-        // when they toggle off, and Restart setup in General settings is the
-        // only way to clear that stamp.
+        // when they toggle off, and nothing a venue can press clears that stamp.
         const complete = Boolean(s.completed) || Boolean(s.is_published);
         setShow(!complete);
       } catch { /* ignore */ }

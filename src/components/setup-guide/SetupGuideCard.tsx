@@ -17,9 +17,10 @@
  * it. It drops down only when they press it, and folds away again when they
  * pick a step or move to another page. Nothing about it is remembered.
  *
- * It stays until each step is REALLY set up: once every step is ticked it
- * counts what's left to set up, so a step the venue ticked without doing
- * keeps its reminder (owner's rule, Oct 4 2026).
+ * It goes once the venue has completed the checklist, every step ticked or
+ * set up, together with the pop-up and the sidebar entry (owner's rule, Oct 6
+ * 2026). Until then it stayed until each step was REALLY set up, so a venue
+ * with no website or no other directories could never be rid of it.
  *
  * Not shown to team members or in the phone app. (Private Clients see it like
  * every other venue, since Oct 5 2026.)
@@ -37,7 +38,7 @@ import ProgressRing from './ProgressRing';
 export default function SetupGuidePrompt({ planChip }: { planChip?: ReactNode }) {
   const status = useSetupGuideStatus();
   if (!status?.prompted || isNativeApp()) return null;
-  // Until every step is really set up (showPill: the name is from the pill this replaced).
+  // Until the checklist is completed (showPill: the name is from the pill this replaced).
   if (!status.showPill) return null;
   return <SetupGuideDrawer status={status} planChip={planChip} />;
 }

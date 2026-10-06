@@ -15,7 +15,6 @@ import {
  Copy,
  Webhook,
  RotateCcw,
- Sparkles,
  ShieldCheck,
  ShieldAlert,
 } from 'lucide-react';
@@ -76,8 +75,6 @@ export default function SettingsPage() {
  brand_zip: '',
  brand_footer_note: '',
  });
-
- // Onboarding state — only need reset here, checklist lives on dashboard
 
  // GHL contact sync
  interface SyncProgress {
@@ -243,48 +240,10 @@ async function syncGhlContacts() {
    return () => stopSyncPolling();
  }, []);
 
- // Re-run the post-signup setup wizard (Google import → guide → publish).
- const [restarting, setRestarting] = useState(false);
- async function restartOnboarding() {
-   setRestarting(true);
-   try {
-     await fetch('/api/onboarding/state', {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ action: 'restart' }),
-     });
-    try { sessionStorage.removeItem('sv_onboarding_skipped'); } catch { /* ignore */ }
-    // router.push on native / full reload on web — a top-level navigation to
-    // /dashboard/* gets ejected to the system browser by the shipped binary.
-    postAuthNavigate(router, '/dashboard/listing?onboarding=1');
-  } catch {
-    setRestarting(false);
-  }
-}
-
-// Full start-over: wipe the imported guide/media/copy, unpublish, and re-run
-// the wizard from a clean slate so they can pick a DIFFERENT Google listing
-// (e.g. they imported the wrong venue). Production-safe and irreversible, so
-// we confirm first.
-const [startingOver, setStartingOver] = useState(false);
-async function startOverOnboarding() {
-  const ok = window.confirm(
-    'Start over? This permanently removes your imported guide, photos, and copy, and unpublishes your page so you can re-import a different Google listing from scratch. This cannot be undone.',
-  );
-  if (!ok) return;
-  setStartingOver(true);
-  try {
-    await fetch('/api/onboarding/state', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'start_over' }),
-    });
-    try { sessionStorage.removeItem('sv_onboarding_skipped'); } catch { /* ignore */ }
-    postAuthNavigate(router, '/dashboard/listing?onboarding=1');
-  } catch {
-    setStartingOver(false);
-  }
-}
+// There is no way to start setup over from here (owner's rule, Oct 6 2026:
+// "If they want to start over they will have to delete and start over"). The
+// two buttons that re-ran the setup wizard, or wiped it to import again, used
+// to be here.
 
 // DEV-ONLY: wipe the guide + un-publish, then re-run the wizard from scratch.
 // The button is only rendered outside production; the API also hard-guards it.
@@ -447,42 +406,10 @@ try {
 
  <div className="space-y-6">
 
- {/* Setup wizard — re-run the guided onboarding flow */}
- <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
- <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
- <Sparkles size={18} className="text-gray-400" />
- <h2 className="font-heading text-base font-semibold text-gray-900">Setup Wizard</h2>
- </div>
- <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
- <div className="min-w-0">
- <p className="text-sm font-medium text-gray-900">Re-run guided setup</p>
- <p className="mt-0.5 text-sm text-gray-500">Re-import from Google, redraft your guide, and republish. Your live page stays up until you republish.</p>
- </div>
- <button
- onClick={() => void restartOnboarding()}
- disabled={restarting}
- className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
- >
- {restarting ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
- {restarting ? 'Starting…' : 'Restart setup wizard'}
- </button>
- </div>
- <div className="flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 px-6 py-5">
- <div className="min-w-0">
- <p className="text-sm font-medium text-gray-900">Picked the wrong venue? Start over</p>
- <p className="mt-0.5 text-sm text-gray-500">Removes your imported guide, photos, and copy and unpublishes your page, so you can re-import a different Google listing from scratch. This can&apos;t be undone.</p>
- </div>
- <button
- onClick={() => void startOverOnboarding()}
- disabled={startingOver}
- className="shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-red-200 bg-white px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
- >
- {startingOver ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
- {startingOver ? 'Starting over…' : 'Start over & re-import'}
- </button>
- </div>
+ {/* Practising the setup wizard from scratch: local development only. */}
  {isDev && (
- <div className="flex flex-wrap items-center justify-between gap-4 border-t border-dashed border-amber-200 bg-amber-50/40 px-6 py-4">
+ <section className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/40 overflow-hidden">
+ <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
  <div className="min-w-0">
  <p className="text-sm font-medium text-amber-800">Reset &amp; start fresh (dev only)</p>
  <p className="mt-0.5 text-sm text-amber-700/80">Wipes this venue&apos;s pricing guide and un-publishes, then reopens the wizard so you can practice the whole flow from scratch. Disabled in production.</p>
@@ -496,8 +423,8 @@ try {
  {devResetting ? 'Resetting…' : 'Reset onboarding (dev)'}
  </button>
  </div>
- )}
  </section>
+ )}
 
  {/* StoryVenue Legacy (Messaging) Integration */}
  <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">

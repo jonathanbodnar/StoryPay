@@ -5,8 +5,9 @@ import { Browser, db, env, runId, signedInSuperAdmin } from './helpers';
 
 // The Setup Guide: suggested steps to a venue's first leads (owner's rules,
 // Oct 4 2026). Every venue gets it opening after each sign-in; the venue can
-// tick any step off itself and the pop-up stops once all are ticked; a
-// reminder stays until each step is really set up; StoryPay is optional.
+// tick any step off itself; StoryPay is optional. Completing the checklist
+// ends it for good: pop-up, bar and sidebar entry (Oct 6 2026; until then a
+// reminder stayed until each step was really set up).
 // Private Clients get it like everyone else (Oct 5 2026), with the
 // strategy-call step already done for them.
 describe('the Setup Guide', () => {
@@ -17,7 +18,7 @@ describe('the Setup Guide', () => {
 
   type Lesson = { id: string; ticked: boolean; verified: boolean; checked: boolean; optional: boolean; alreadyTheirs: boolean };
   type Guide = {
-    eligible: boolean; prompted: boolean; autoOpen: boolean; showPill: boolean; checkedAll: boolean; fulfilled: boolean;
+    eligible: boolean; prompted: boolean; autoOpen: boolean; showPill: boolean; checkedAll: boolean; fulfilled: boolean; finished: boolean;
     done: number; total: number; left: number; loginId: string | null; listingUrl: string | null;
     lessons: Lesson[]; videos: Record<string, string>;
   };
@@ -69,10 +70,9 @@ describe('the Setup Guide', () => {
     expect((await new Browser().fetch('/api/onboarding/setup-guide', { method: 'POST', json: { step: 'grow' } })).status).toBe(401);
   });
 
-  // The checklist drawer is open at every sign-in and stays closed only until
-  // the next one (owner's rule, Oct 5 2026). The dashboard tells sign-ins
-  // apart by this id: the same for as long as they stay signed in, another the
-  // next time. (What the drawer does with it: tests/unit/setup-guide.test.ts.)
+  // The full guide greets a venue once per sign-in (owner's rule, Oct 5 2026).
+  // The dashboard tells sign-ins apart by this id: the same for as long as
+  // they stay signed in, another the next time.
   it('each sign-in has its own id, and keeps it for as long as it lasts', async () => {
     const first = (await guide()).loginId;
     expect(first).toMatch(/^\d+$/);
@@ -123,7 +123,7 @@ describe('the Setup Guide', () => {
     const off = await admin.fetch(`/api/admin/venues/${venueId}`, { method: 'PATCH', json: { setup_guide_popup_off: true } });
     expect(off.status, await off.clone().text()).toBeLessThan(300);
     const quiet = await guide();
-    expect(quiet).toMatchObject({ eligible: true, prompted: false, autoOpen: false, showPill: false });
+    expect(quiet).toMatchObject({ eligible: true, prompted: false, autoOpen: false, showPill: false, finished: false });
     expect(where(quiet, 'ticked')).toEqual(['listing']);
     // A venue ticking a step doesn't undo support's switch.
     expect((await tick('lead_link')).status).toBe(200);
@@ -139,34 +139,43 @@ describe('the Setup Guide', () => {
     expect(where(await guide(), 'ticked')).toEqual([]);
   });
 
-  it('the venue can tick any step off itself; once all are ticked the pop-up stops, and the reminder stays', async () => {
+  it('the venue can tick any step off itself; once all are ticked the guide is finished: no pop-up, no bar', async () => {
     expect((await tick('not-a-step')).status).toBe(400);
+    const saved = async () => {
+      const { data } = await db.from('venues').select('onboarding_steps_completed').eq('id', venueId).single();
+      return [...(data!.onboarding_steps_completed as string[])].sort();
+    };
 
     // StoryPay is optional: ticking it moves nothing.
     expect((await tick('payments')).status).toBe(200);
-    expect(await guide()).toMatchObject({ done: 0, total: 8, autoOpen: true });
+    expect(await guide()).toMatchObject({ done: 0, total: 8, autoOpen: true, finished: false });
 
     for (const step of COUNTED.slice(0, 7)) expect((await tick(step)).status, step).toBe(200);
-    expect(await guide()).toMatchObject({ done: 7, checkedAll: false, autoOpen: true });
+    expect(await guide()).toMatchObject({ done: 7, checkedAll: false, finished: false, autoOpen: true, showPill: true });
+    expect(await saved()).not.toContain('guide:finished');
     expect((await tick('grow')).status).toBe(200);
     expect((await tick('grow')).status).toBe(200); // ticking twice changes nothing
 
     const g = await guide();
-    // Everything ticked, nothing actually set up: no more pop-up, but the pill
-    // stays for the five steps that need something to exist.
-    expect(g).toMatchObject({ done: 8, total: 8, checkedAll: true, autoOpen: false, fulfilled: false, showPill: true, left: 5 });
+    // Everything ticked, nothing actually set up: that is the checklist
+    // completed (owner's rule, Oct 6 2026). The pop-up and the bar are both
+    // off, and `finished` is what takes the sidebar entry away. It was the
+    // bar that used to stay here, for the five steps that need something to exist.
+    expect(g).toMatchObject({ done: 8, total: 8, checkedAll: true, finished: true, autoOpen: false, showPill: false, fulfilled: false, left: 5, eligible: true });
     // (The walkthrough, follow-up and strategy-call steps have nothing to detect: ticked is done.)
     expect(where(g, 'verified')).toEqual(['walkthrough', 'follow_up', 'grow']);
-    const { data } = await db.from('venues').select('onboarding_steps_completed').eq('id', venueId).single();
-    expect([...(data!.onboarding_steps_completed as string[])].sort()).toEqual(['payments', ...COUNTED].map((s) => `guide:${s}`).sort());
+    // It is remembered, next to their ticks.
+    expect(await saved()).toEqual(['payments', ...COUNTED, 'finished'].map((s) => `guide:${s}`).sort());
 
-    // Unticking one brings the pop-up back.
+    // Unticking one takes "finished" back: the guide is theirs again.
     expect((await tick('leadfinder', false)).status).toBe(200);
-    expect(await guide()).toMatchObject({ done: 7, checkedAll: false, autoOpen: true });
+    expect(await guide()).toMatchObject({ done: 7, checkedAll: false, finished: false, autoOpen: true, showPill: true });
+    expect(await saved()).not.toContain('guide:finished');
     expect((await tick('leadfinder')).status).toBe(200);
+    expect(await guide()).toMatchObject({ finished: true, autoOpen: false, showPill: false });
   });
 
-  it('the reminder goes once every step is really set up', async () => {
+  it('really setting a step up still shows on the step, and changes nothing about a finished guide', async () => {
     // The listing goes live, the Lead Link gets its name, the guide is switched
     // on, the website form brings a lead…
     const venue = await db.from('venues').update({ is_published: true, lead_link_slug: `guide${runId}` }).eq('id', venueId);
@@ -178,13 +187,33 @@ describe('the Setup Guide', () => {
     expect(made.map((r) => r.error?.message ?? null)).toEqual([null, null]);
     const nearly = await guide();
     expect(where(nearly, 'verified')).toEqual(['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'follow_up', 'grow']);
-    expect(nearly).toMatchObject({ left: 1, fulfilled: false, showPill: true, autoOpen: false });
+    expect(nearly).toMatchObject({ left: 1, fulfilled: false, finished: true, showPill: false, autoOpen: false });
 
     // …and mail reaches the Lead Finder address. StoryPay was never connected.
     expect((await db.from('leadfinder_imports').insert({ venue_id: venueId, subject: `Setup Guide check ${runId}` })).error?.message ?? null).toBeNull();
     const g = await guide();
-    expect(g).toMatchObject({ left: 0, fulfilled: true, showPill: false, autoOpen: false, checkedAll: true, eligible: true });
+    expect(g).toMatchObject({ left: 0, fulfilled: true, finished: true, showPill: false, autoOpen: false, checkedAll: true, eligible: true });
     expect(g.lessons.find((l) => l.id === 'payments')).toMatchObject({ verified: false, optional: true });
+  });
+
+  it('a finished guide stays finished when something it counted is later switched off', async () => {
+    // Say the listing step was never ticked by hand: it counted because the
+    // listing was live. Then the venue takes its listing down.
+    const { data } = await db.from('venues').select('onboarding_steps_completed').eq('id', venueId).single();
+    const steps = data!.onboarding_steps_completed as string[];
+    expect(steps).toContain('guide:finished');
+    const down = await db.from('venues').update({ is_published: false, onboarding_steps_completed: steps.filter((s) => s !== 'guide:listing') }).eq('id', venueId);
+    expect(down.error?.message ?? null).toBeNull();
+    try {
+      const g = await guide();
+      // One step is no longer done…
+      expect(g.lessons.find((l) => l.id === 'listing')).toMatchObject({ ticked: false, verified: false, checked: false });
+      expect(g).toMatchObject({ done: 7, checkedAll: false });
+      // …and none of the guide comes back for it.
+      expect(g).toMatchObject({ finished: true, autoOpen: false, showPill: false });
+    } finally {
+      await db.from('venues').update({ is_published: true, onboarding_steps_completed: steps }).eq('id', venueId);
+    }
   });
 
   it('a lesson’s video is a link the team pastes, and only a real video link is taken', async () => {

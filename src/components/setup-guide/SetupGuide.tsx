@@ -10,9 +10,14 @@
  * step is ticked.
  * The X always closes it (nothing is gated behind it), and the venue can tick
  * any step off itself, set up or not. A step that's ticked but isn't really
- * set up says so, and keeps the reminder pill up (SetupGuidePrompt).
- * It also opens from the pill, the dashboard card and the sidebar entry
+ * set up says so.
+ * It also opens from the bar on every page and the sidebar entry
  * (openSetupGuide in lib/setup-guide-client.ts).
+ *
+ * Completing the checklist ends it (owner's rule, Oct 6 2026): the bar and
+ * the sidebar entry go, and it never opens by itself again. If the last step
+ * is ticked while it's open it stays until they close it, saying so; after
+ * that there is no way back in.
  */
 
 import { useEffect, useState } from 'react';
@@ -57,11 +62,11 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
   const [copied, setCopied] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
 
-  // Load on arrival, and again as the venue moves around while something is
-  // still not set up, so a step turns green soon after they've done it.
+  // Load on arrival, and again as the venue moves around while the guide is
+  // unfinished, so a step turns green soon after they've done it.
   useEffect(() => {
     const current = getSetupGuideStatus();
-    if (!current || (current.eligible && !current.fulfilled)) void refreshSetupGuide(15_000);
+    if (!current || (current.eligible && !current.finished)) void refreshSetupGuide(15_000);
   }, [pathname]);
 
   // Open by itself once per sign-in, a few seconds after the dashboard loads.
@@ -144,7 +149,6 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
   const next = lessons[lessons.findIndex((l) => l.id === currentId) + 1] ?? null;
   const video = status.videos[currentId] ?? null;
   const pct = status.total ? Math.round((status.done / status.total) * 100) : 0;
-  const one = status.left === 1;
 
   const pick = (id: SetupLessonId) => {
     setPicked(id);
@@ -199,11 +203,9 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
                 <div className="min-w-0 flex-1">
                   <h2 className="font-heading text-lg font-semibold text-gray-900">Setup Guide</h2>
                   <p className="text-[13px] text-gray-500">
-                    {status.fulfilled
-                      ? 'Everything here is set up. Come back any time to rewatch a lesson.'
-                      : status.checkedAll
-                        ? `You’ve ticked every step. ${status.left} still ${one ? 'isn’t' : 'aren’t'} set up, so the reminder stays until ${one ? 'it is' : 'they are'}.`
-                        : 'Suggested steps to your first leads. Tick each one off as you go.'}
+                    {status.finished
+                      ? 'That’s every step done. When you close this, the Setup Guide is finished: it leaves your menu and won’t pop up again.'
+                      : 'Suggested steps to your first leads. Tick each one off as you go.'}
                   </p>
                 </div>
                 <button
