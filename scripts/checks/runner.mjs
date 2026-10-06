@@ -31,7 +31,7 @@ import { createServer } from 'node:http';
 import { readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import { flowFilesToRerun, laneFor, targetedFlowFiles } from '../staging/lanes.mjs';
+import { flowFilesToRerun, laneFor, restOfFlowFiles, targetedFlowFiles } from '../staging/lanes.mjs';
 import { CHECKS_CURRENT, CHECKS_LAST_GREEN, checksKey, summarize } from './verdict-shape.mjs';
 
 const e = process.env;
@@ -176,6 +176,22 @@ async function flowStage(name, files, label) {
   });
 }
 
+/**
+ * Clear the test copy of what earlier runs left behind (scripts/staging/tidy.mjs),
+ * so every run meets the same small database. Until Oct 6 2026 nothing did,
+ * and whole-database jobs slowed with every run until the checks failed on it.
+ * Never a reason to fail a check: if it can't run, that is said and recorded,
+ * and the tests go ahead.
+ */
+async function tidy() {
+  console.log('\n── tidy up after earlier runs ──');
+  await save({ stage: 'tidy up after earlier runs' });
+  const r = await sh('node scripts/staging/tidy.mjs --apply', 'tidy');
+  record.tidy = { ok: r.ok, said: String(r.tail || '').split('\n').pop()?.slice(0, 300) ?? '' };
+  if (!r.ok) console.log(`The test copy was not tidied (the tests go ahead): ${record.tidy.said}`);
+  await save();
+}
+
 async function run() {
   console.log(`Checks for ${short} against ${appUrl}`);
   // This is now the run: an older one still waiting on its verdict is told it was replaced.
@@ -202,19 +218,26 @@ async function run() {
   if (ok) ok = await stage('smoke test', () => sh('node scripts/staging/smoke.mjs', 'smoke'));
 
   if (ok && lane === 'full') {
+    await tidy();
     // 3. The changed area's flow tests first.
     const flowDir = join(root, 'tests', 'flows');
     const flowTests = readdirSync(flowDir).filter((f) => f.endsWith('.test.ts')).map((name) => ({ name, source: readFileSync(join(flowDir, name), 'utf8') }));
     const targeted = targetedFlowFiles(changed, flowTests);
+    // The files the first stage has already passed aren't run a second time.
+    let rest = null;
     if (targeted.length) {
       ok = await flowStage(`changed-area flow tests (${targeted.join(', ')})`, targeted.map((f) => `tests/flows/${f}`).join(' '), 'changed');
+      if (ok) rest = restOfFlowFiles(flowTests.map((t) => t.name), targeted);
     }
-    // 4. Every flow test and the browser tests, side by side: they are two
-    //    different kinds of visitor to the same test copy. A failed browser
+    // 4. Every other flow test and the browser tests, side by side: they are
+    //    two different kinds of visitor to the same test copy. A failed browser
     //    journey is tried once more by Playwright itself (it calls it flaky).
     if (ok) {
+      if (rest) console.log(`\nAlready passed above, not run again: ${targeted.join(', ')}`);
       const [flows, browser] = await Promise.all([
-        flowStage('flow tests', '', 'flows'),
+        rest && rest.length === 0
+          ? stage('flow tests', async () => ({ ok: true, tail: 'every flow test already ran in the changed-area stage' }))
+          : flowStage('flow tests', rest ? rest.map((f) => `tests/flows/${f}`).join(' ') : '', 'flows'),
         stage('browser tests', () => sh('npx playwright test --reporter=line --retries=1', 'browser')),
       ]);
       ok = flows && browser;

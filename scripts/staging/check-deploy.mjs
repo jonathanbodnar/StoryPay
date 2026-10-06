@@ -45,7 +45,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { flowFilesToRerun, laneFor, sleepsDuring, targetedFlowFiles } from './lanes.mjs';
+import { flowFilesToRerun, laneFor, restOfFlowFiles, sleepsDuring, targetedFlowFiles } from './lanes.mjs';
 import { localRecord } from '../checks/verdict-shape.mjs';
 
 const SERVICE = 'StoryVenue Backend';
@@ -220,8 +220,12 @@ if (lane === 'full') {
   if (targeted.length) {
     suites.push([`changed-area flow tests (${targeted.join(', ')})`, flows(targeted.map((f) => `tests/flows/${f}`).join(' ')), 'flows']);
   }
+  // The files the first stage has already passed aren't run a second time
+  // (the suites stop at the first failing stage, so by then they have passed).
+  const rest = restOfFlowFiles(flowTests.map((t) => t.name), targeted);
+  if (!rest || rest.length) suites.push(['flow tests', flows(rest ? rest.map((f) => `tests/flows/${f}`).join(' ') : ''), 'flows']);
   // A failed browser journey is tried once more by Playwright itself (it reports it as flaky).
-  suites.push(['flow tests', flows(''), 'flows'], ['browser tests', 'npx playwright test --reporter=line --retries=1']);
+  suites.push(['browser tests', 'npx playwright test --reporter=line --retries=1']);
 }
 const onTestCopy = (cmd) => spawnSync('railway', ['run', '--service', SERVICE, '--environment', ENV, '--', 'sh', '-c', `cd '${tree}' && ${cmd}`], { env: railwayEnv, stdio: 'inherit' });
 for (const [name, cmd, kind] of suites) {

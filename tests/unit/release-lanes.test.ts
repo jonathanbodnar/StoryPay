@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — plain logic module shared with the release gate scripts
-import { flowFilesToRerun, laneFor, looksLikeABlip, RERUN_AT_MOST, routeToken, sensitiveFiles, sleepsDuring, targetedFlowFiles, trailingBase } from '../../scripts/staging/lanes.mjs';
+import { flowFilesToRerun, laneFor, looksLikeABlip, RERUN_AT_MOST, restOfFlowFiles, routeToken, sensitiveFiles, sleepsDuring, targetedFlowFiles, trailingBase } from '../../scripts/staging/lanes.mjs';
 
 // The release gate's lanes: a commit that ships nothing runs the smoke lane;
 // anything shipped runs the full suite, with the changed area's flow tests
@@ -163,5 +163,46 @@ describe('release lanes', () => {
     // An awake run, and a computer with no such log, read as no sleep.
     expect(sleepsDuring(log, at('18:00:00'), at('19:00:00'))).toBe(0);
     for (const nothing of ['', null, undefined, 'pmset: command not found']) expect(sleepsDuring(nothing, 0, Date.now())).toBe(0);
+  });
+});
+
+// Oct 6 2026: the full pass ran the changed area's flow tests a second time,
+// minutes after they had passed, against the same commit on the same test
+// copy: up to eleven minutes of a check. They are left out of it now. This
+// decides which tests a release is checked by, so a mistake here would be a
+// check that quietly skips tests.
+describe('the flow tests the full pass still has to run', () => {
+  const all = ['access.test.ts', 'leads.test.ts', 'payments.test.ts', 'setup-guide.test.ts', 'texting.test.ts'];
+
+  it('everything but what the changed-area stage already passed', () => {
+    expect(restOfFlowFiles(all, ['setup-guide.test.ts', 'leads.test.ts'])).toEqual(['access.test.ts', 'payments.test.ts', 'texting.test.ts']);
+  });
+
+  it('nothing ran first: the full pass is every file (told apart from "none left")', () => {
+    expect(restOfFlowFiles(all, [])).toBeNull();
+    expect(restOfFlowFiles(all, null)).toBeNull();
+    expect(restOfFlowFiles(all, all)).toEqual([]);
+  });
+
+  it('between the two stages every file is run exactly once, whatever was picked', () => {
+    for (const first of [['texting.test.ts'], ['access.test.ts', 'texting.test.ts'], all.slice(1)]) {
+      const rest = restOfFlowFiles(all, first) as string[];
+      expect([...first, ...rest].sort()).toEqual(all);
+    }
+  });
+
+  it('a name that is not a flow file skips nothing, and a file listed twice is still run once', () => {
+    expect(restOfFlowFiles(all, ['not-a-file.test.ts'])).toBeNull();
+    expect(restOfFlowFiles(all, ['leads.test.ts', 'tests/flows/payments.test.ts'])).toEqual(all.filter((f) => f !== 'leads.test.ts'));
+    expect(restOfFlowFiles([...all, 'leads.test.ts'], ['access.test.ts'])).toEqual(all.slice(1));
+  });
+
+  it('both the Checks service and the laptop fallback use this rule for the full pass', () => {
+    const fs = require('node:fs') as typeof import('node:fs');
+    const path = require('node:path') as typeof import('node:path');
+    for (const file of ['scripts/checks/runner.mjs', 'scripts/staging/check-deploy.mjs']) {
+      const source = fs.readFileSync(path.join(__dirname, '..', '..', file), 'utf8');
+      expect(source, file).toMatch(/restOfFlowFiles\(flowTests\.map\(\(t\) => t\.name\), targeted\)/);
+    }
   });
 });

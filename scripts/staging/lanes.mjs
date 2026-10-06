@@ -103,6 +103,25 @@ export function targetedFlowFiles(changedFiles, flowTests) {
 }
 
 /**
+ * The flow tests still to run once the changed area's have passed on their
+ * own: every file but those. Until Oct 6 2026 the full pass ran them a second
+ * time, minutes later, against the same commit on the same test copy: up to
+ * eleven minutes of a check for nothing new. Every pair of files is still run
+ * in one order or the other, as in any single pass.
+ *
+ * allFiles / alreadyPassed: file names ("leads.test.ts"). Returns null when
+ * nothing ran first (the full pass is then simply every file), otherwise the
+ * files left, which can be none.
+ */
+export function restOfFlowFiles(allFiles, alreadyPassed) {
+  const every = [...new Set(allFiles ?? [])].sort();
+  // Only a real flow file counts as having run: a name that isn't one skips nothing.
+  const done = new Set((alreadyPassed ?? []).filter((f) => every.includes(f)));
+  if (done.size === 0) return null;
+  return every.filter((f) => !done.has(f));
+}
+
+/**
  * How many times the computer went to sleep between two moments, read from
  * macOS's power log (`pmset -g log`). Lines look like:
  *   2026-10-04 17:28:09 -0400 Sleep   Entering Sleep state due to 'Clamshell Sleep':…
