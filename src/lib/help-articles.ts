@@ -1017,7 +1017,7 @@ What you can upload:
 
 Auto-populated:
 - Anything you upload anywhere in the dashboard automatically lands in your Media library — no extra step needed. That includes:
-  - The brand logo on Settings → Branding (re-uploading the logo refreshes the existing library row instead of creating a duplicate).
+  - The brand logo on Settings → Branding (re-uploading the logo replaces it in the library rather than adding a copy).
   - Cover and gallery photos on the Photos section of Bride Booking System™ → Venue Listing.
   - Any image you upload through the email or form builder using "Choose from media library" → Upload from device, or via the Image / Button (File link) blocks.
 
@@ -1025,23 +1025,23 @@ Page features:
 - Drag and drop files anywhere on the page to upload — or click Upload.
 - Per-file progress bars during upload.
 - Search by filename, filter pills (All / Images / Documents), sort (newest, oldest, name, size), and a grid ↔ list toggle (your view preference saves per browser).
-- A trash icon on every card lets you delete in one click; the "..." menu adds Copy URL, Download, Open in new tab, and Rename. The menu renders as a portal so it never gets cut off by surrounding cards or by the page edge, and closes automatically when you scroll.
+- A trash icon on every card lets you delete in one click; the "..." menu adds Copy URL, Download, Open in new tab, and Rename. The menu closes by itself when you scroll.
 - Rename is display-name only — the public URL doesn't change, so existing links keep working everywhere they're already pasted.
 
 Click any file to preview it
 - Images open full-bleed in the preview modal.
 - PDFs render in the browser's native PDF viewer.
-- Word, Excel, and PowerPoint files render through Microsoft's Office Online embedded viewer (no plugin or download required — it just works).
+- Word, Excel, and PowerPoint files open in a built-in viewer (no plugin or download required).
 - Plain text and CSV files render inline with monospaced formatting.
 - Anything outside those types shows a friendly "preview not available" with the Download / Open in new tab buttons still accessible.
 - The preview modal's toolbar always shows Open in new tab and Download, so you can grab the file regardless of the file type.
 
 Download
-- Click Download from the asset menu (or from the preview modal toolbar) and the file saves directly to your computer with its original name. The download streams through the StoryVenue app domain so browsers always trigger a real save instead of opening the file in a new tab.
+- Click Download from the asset menu (or from the preview modal toolbar) and the file saves directly to your computer with its original name.
 
 Used in indicator:
 - Each file shows where its URL is referenced today: Brand logo (Settings → Branding), Listing cover/gallery (the Photos section of Bride Booking System™ → Venue Listing), Email templates and campaigns, Lead capture forms.
-- The Delete confirm modal lists every place the file is used so you can replace those references first if you don't want them to break. If the file you delete is the brand logo, the listing cover image, or in the gallery, those references on the venue record are also cleared so the dashboard never renders a broken image.
+- The Delete confirm modal lists every place the file is used so you can replace those references first if you don't want them to break. If the file you delete is the brand logo, the listing cover image, or in the gallery, those are cleared too, so you never see a broken image.
 
 Tip: On the Photos section of Bride Booking System™ → Venue Listing and the marketing Email/Form Image blocks, use "Choose from media library" to attach an existing asset without re-uploading.`,
       },
@@ -1090,7 +1090,7 @@ Caution: changing the slug changes your public URL. Any links on your website, I
       {
         id: 'listing-reviews',
         title: 'StoryVenue reviews — testimonials on your public listing',
-        tags: ['reviews', 'testimonials', 'stars', 'storyvenue', 'embed', 'public api', 'published', 'rating'],
+        tags: ['reviews', 'testimonials', 'stars', 'storyvenue', 'embed', 'published', 'rating'],
         body: `Under Bride Booking System™ → Reviews (StoryVenue tab) you manage testimonials that couples and clients leave for your venue.
 
 Each review has:
@@ -1101,7 +1101,7 @@ Each review has:
 - Optional wedding date and email
 
 Statuses:
-- Published — included in the public JSON API and shown on storyvenue.com.
+- Published — shown on storyvenue.com.
 - Pending — held for moderation (useful if you later allow couples to submit reviews directly).
 - Hidden — not shown publicly.
 
@@ -1124,12 +1124,12 @@ How to connect:
 4. In that section, paste any Google Maps URL for your business — a share link (maps.app.goo.gl/...), a full browser URL, or a link from your Google Business Profile. Click Resolve and the system extracts the Place ID automatically.
 
 Service-area businesses (no fixed storefront):
-Google's Places API cannot look up service-area businesses by name search. Use the Google Maps link method above. If that also fails, go to Google's Place ID Finder tool (the link appears in the fallback UI), search for your business there, and paste the Place ID directly.
+Google can't find service-area businesses by a name search. Use the Google Maps link method above. If that also fails, go to Google's Place ID Finder tool (the link appears in the fallback UI), search for your business there, and paste the Place ID directly.
 
 Once connected:
 - A green "Connected to Google Business" banner appears.
-- StoryVenue fetches and caches your Google reviews.
-- Use the refresh icon to force a cache refresh at any time.
+- StoryVenue brings in your Google reviews.
+- Use the refresh icon to bring in the latest at any time.
 - To switch to a different Google Business, click "Change business."
 
 On storyvenue.com:
@@ -1142,7 +1142,7 @@ If Google Business search isn't working, contact StoryVenue support.`,
       {
         id: 'listing-analytics-realtime',
         title: 'Real-time visitor map — see who\'s on your listing right now',
-        tags: ['visitor map', 'real time', 'realtime', 'analytics', 'world map', 'live visitors', 'map', 'location', 'who is visiting', 'leaflet', 'geo'],
+        tags: ['visitor map', 'real time', 'realtime', 'analytics', 'world map', 'live visitors', 'map', 'location', 'who is visiting', 'geo'],
         body: `The Bride Booking System™ → Dashboard page includes an interactive world map that shows visitors currently on your storyvenue.com listing in real time.
 
 How to access:
@@ -1160,12 +1160,11 @@ Navigation:
 - **Pan**: click and drag anywhere on the map.
 - City-level detail is visible when zoomed in.
 
-How it works:
-- Visitors are tracked anonymously via a heartbeat signal on the listing page.
-- Their city, region, country, latitude, and longitude are resolved from their IP address (no personal data is stored — only geographic location).
-- Data refreshes automatically in the background while you have the analytics page open.
+Good to know:
+- Visitors are counted anonymously while they're on your listing.
+- The map refreshes by itself while you have the page open.
 
-Privacy: only approximate location data (city-level) is captured. No names, emails, or device identifiers are linked to map markers.`,
+Privacy: only an approximate location (city level) is kept. No names, emails, or devices are linked to the markers.`,
       },
       {
         id: 'listing-booking-system',
@@ -1190,7 +1189,7 @@ A 7-touch SMS nurture sequence (Day 1, 2, 3, 5, 7, 10, 14) that fires after guid
 - The sequence stops automatically the moment a bride replies to any message.
 - You can see how many leads are currently active in this sequence in the phase subtitle.
 - "Activate AI Concierge" block: hands the lead off to the AI Concierge at that point in the sequence. Once added, the AI takes over follow-up from there.
-- Note: the old separate "Nurture Sequence" phase was removed — venues that want additional educational/nurture content can build that as its own Email Campaign instead, which keeps the Speed to Lead page focused on the core inquiry-to-booking funnel.
+- For extra educational emails beyond this sequence, build an Email Campaign (Marketing → Campaigns).
 
 Phase 3 — Booked Tour → Toured
 Fires the moment a lead is moved to the "Tour Booked" pipeline stage. 3 touches (SMS immediate, email immediate, email +2 days) with everything the bride needs before her visit. Supports {{appointment_date}}, {{appointment_time}}, and {{venue_address}} merge variables (sourced from the calendar event tied to her tour). No AI Concierge handoff.
@@ -1206,7 +1205,7 @@ An AI-powered SMS follow-up system that contacts quiet leads on a 1–2 day cade
 - Once on an eligible plan, enabling Phase 5 embeds the full AI Concierge settings inline — persona name, concierge notification email, and eligibility status.
 
 Stop on reply (all phases)
-The moment a bride replies (email or SMS) during any active sequence, all enrollments stop and the venue is notified. The lead moves to "Conversation Started" in the pipeline.
+The moment a bride replies (email or SMS) during any active sequence, every follow-up to her stops and you are notified. The lead moves to "Conversations Started" in the pipeline.
 
 SMS delivery note
 The Speed to Lead System email delivery does not require a StoryVenue Legacy connection. StoryVenue Legacy is only needed for SMS steps. All email delivery and merge variables are handled natively by StoryVenue — you can use email-only phases even without a Legacy connection.`,
@@ -1215,7 +1214,7 @@ The Speed to Lead System email delivery does not require a StoryVenue Legacy con
         id: 'listing-analytics-retention',
         title: 'Daily views & analytics retention — does StoryVenue save historical traffic?',
         tags: ['analytics', 'history', 'historical', 'retention', 'daily views', 'data retention', 'page views', 'unique visitors', '30 days', '90 days', '365 days', 'archive', 'old data', 'last 30 days'],
-        body: `Yes — every event on your storyvenue.com listing is saved permanently. There is no expiration or auto-deletion. The Analytics dashboard's date-range picker (1 / 7 / 14 / 30 / 60 / 90 days) is a query window, not a retention boundary.
+        body: `Yes — every event on your storyvenue.com listing is saved permanently. There is no expiration or auto-deletion. The date-range picker (1 / 7 / 14 / 30 / 60 / 90 days) only chooses how far back the charts look.
 
 What's tracked
 - Page views (every visit to your public listing)
@@ -1224,7 +1223,7 @@ What's tracked
 - Scroll depth (25% / 50% / 75% / 100%)
 - Photo views, FAQ opens, social clicks
 - Contact form opens & submissions
-- Device type, referrer / UTM source, country / region / city / lat-lng (resolved from IP, never personal data)
+- Device type, where the visitor came from (referrer / UTM source), and approximate location (country, region, city)
 
 How long we keep it
 - Visitor data is stored permanently — there is no expiration or auto-deletion. A 365-day lookback is available today.
@@ -1239,7 +1238,7 @@ Test that tracking is working
 
 If you're convinced data should be there but isn't
 - Verify your listing is published (Bride Booking System™ → Venue Listing → Published toggle). Tracking still records events for unpublished listings, but no real visitors can reach them.
-- Make sure your tracker isn't blocked by an ad-blocker on your test browser (the tracker is first-party so most ad-blockers don't touch it, but some aggressive ones do).
+- Make sure your tracker isn't blocked by an ad-blocker on your test browser (most ad-blockers don't affect it, but some aggressive ones do).
 - Ask AI can help you check your event counts — just describe what you're looking for.`,
       },
       {
@@ -1275,7 +1274,7 @@ Where to find it
 Path: Bride Booking System™ → Lead Link (sidebar).
 
 Your Lead Link address
-Your page lives at your venue's storyvenue.com address ending in /links. Copy it from the Lead Link page and paste it into your social profiles' "link in bio" field.
+Your Lead Link is a short address of your own, like storyvenue.com/v/your-venue. Press Copy on the Lead Link page and paste it into your social profiles' "link in bio" field. Under Customize your link you can change the ending to something short and memorable (letters, numbers, and dashes).
 
 It builds itself from your listing
 Lead Link automatically pulls in:
@@ -1326,7 +1325,7 @@ Leads captured through the "Download Pricing & Availability" form on your Lead L
   },
   {
     id: 'leads',
-    label: 'Leads',
+    label: 'Lead Inbox',
     iconName: 'Inbox',
     color: '#7c3aed',
     articles: [
@@ -1334,12 +1333,12 @@ Leads captured through the "Download Pricing & Availability" form on your Lead L
         id: 'leads-overview',
         title: 'Leads and sales pipeline overview',
         tags: ['leads', 'pipeline', 'kanban', 'sales', 'inbox', 'directory leads', 'form', 'space', 'contact stage'],
-        body: `The Leads page is your sales pipeline. Open it from the sidebar → Lead Inbox.
+        body: `The Lead Inbox is your sales pipeline. Open it from the sidebar → Lead Inbox.
 
 Every contact is always visible in some pipeline stage. When you open Leads, StoryVenue reconciles your leads and contacts so that every contact with a real email shows up in the pipeline, and every lead is snapped to the pipeline + stage stored on its matching contact profile. If you move a contact's stage on the Contacts page, the Leads Kanban reflects it — and vice versa. Leads pointing at a deleted pipeline/stage automatically heal to the default pipeline's first stage instead of disappearing from the board.
 
-Two ways leads arrive:
-- Inquiries submitted through your storyvenue.com directory listing show up automatically.
+How leads arrive:
+- By themselves, from every door you've opened: the inquiry form on your storyvenue.com listing, the Web Form on your own website, your Lead Link, and Lead Finder (inquiry emails from other directories).
 - You can add leads by hand with the "+ Add Lead" button in the top-right. The New Lead modal includes a Space picker and a Pipeline / Stage picker. Choose "None" as the stage to track a contact without placing them in an active pipeline column — they'll appear only on the Contacts page, not the Kanban.
 
 Two views:
@@ -2850,7 +2849,7 @@ How the 14-day sequence works:
 Inbound reply handling:
 - When a lead replies, the system classifies the intent (question, booking request, objection, opt-out)
 - Questions get an AI response; booking requests trigger an owner notification
-- Any inbound reply moves the lead to "Conversation Started" stage in your pipeline
+- Any inbound reply moves the lead to the "Conversations Started" stage in your pipeline
 - The venue owner and all team members are notified immediately
 
 Per-contact controls (Contacts → lead detail):
@@ -3840,14 +3839,14 @@ Upgrading or downgrading:
 
 14-day free trial (new accounts):
 - When you complete onboarding and enter your card, a 14-day free trial of Bride Booking System™ begins automatically
-- A countdown ribbon appears at the top of your dashboard showing days remaining
+- In the last 3 days of the trial, a notice at the top of your dashboard shows the date of your first charge and a link to manage your subscription. An email goes out a few days before, too
 - After 14 days, if you haven't downgraded to Free, your card is charged $97/month — there is NO automatic downgrade
 - You can downgrade to Free at any time from the billing page before the trial ends
 
 Feature gating:
 - Features not in your plan show a lock icon in the sidebar
 - The Bride Booking System™ analytics page is greyed out (blurred) on the Free plan with an upgrade prompt
-- AI Concierge is only available on plans where StoryVenue has enabled the AI Concierge checkbox — the toggle is greyed out on unsupported plans
+- AI Concierge is only available on plans that include it — the toggle is greyed out on the others
 
 Managing your payment method:
 - Update your card at any time from the billing page
@@ -3857,7 +3856,7 @@ Billing descriptor: charges appear on your statement as "StoryVenue."
 
 Cancellation:
 - Cancel from the billing page at any time
-- Access continues until the end of the current billing cycle
+- You keep your plan until the end of the time you've paid for, then your account moves to the Free plan
 
 Legacy plans:
 - If you are on a Legacy Plan, the billing page shows a "Billing managed directly" banner
@@ -3867,22 +3866,22 @@ Legacy plans:
       {
         id: 'billing-verified-sponsored',
         title: 'Verified, Sponsored, and Concierge add-ons',
-        tags: ['verified', 'sponsored', 'concierge', 'badge', 'listing', 'add-on', 'addon', '$19', '$99', '$499', 'promote', 'visibility', 'ai', 'sms', 'automation', 'greyed out', 'demo', 'all-inclusive concierge'],
+        tags: ['verified', 'sponsored', 'concierge', 'badge', 'listing', 'add-on', 'addon', 'promote', 'visibility', 'ai', 'sms', 'automation', 'greyed out', 'demo', 'all-inclusive concierge'],
         body: `StoryVenue offers add-ons that enhance your listing and capabilities.
 
-Verified ($19/month):
+Verified:
 - Displays a verified badge on your storyvenue.com listing
 - Signals to couples your venue is confirmed legitimate
 - Available on all plans (included on some higher plans at no extra cost)
 
-Sponsored ($99/month):
+Sponsored:
 - Promotes your listing more prominently in directory search results
 - Increases discovery by couples browsing storyvenue.com
 - Available on all plans (included on some higher plans)
 
 Venue Concierge (AI Concierge):
 - Enables the AI Concierge system — automated SMS-based lead engagement powered by AI
-- Only available on the All-Inclusive Concierge plan (and any plan where the StoryVenue admin has specifically enabled it)
+- Only available on the All-Inclusive Concierge plan (and any plan the StoryVenue team has added it to)
 - On plans without access, the AI Concierge toggle on the Bride Booking System settings page is greyed out and unclickable
 - Hovering the greyed-out toggle shows a tooltip: "Schedule a demo to learn more about this plan"
 - Clicking it opens a demo scheduling calendar — not an upgrade button
@@ -3898,8 +3897,8 @@ Plan inclusion:
 Managing your add-ons:
 - Go to Settings → Billing
 - Toggle add-ons on or off
-- Pricing and your current status are shown on the page
-- Add-on changes follow the subscription rollover model — changes take effect at your next renewal`,
+- Today's prices and your current status are shown on the page
+- Add-on changes take effect at your next renewal`,
       },
       {
         id: 'billing-trial',
