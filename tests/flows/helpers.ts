@@ -82,9 +82,22 @@ export class Browser {
     return Object.fromEntries(this.jar);
   }
 
+  /**
+   * Sign in. An account may sign in five times a minute, and the test files
+   * share a few accounts: told "too many attempts, try again in N seconds",
+   * this waits that long and tries again, as a person would. (Oct 6 2026: one
+   * busy minute refused the shared owner, the file failed at once, the next
+   * file signed in a second later and was refused too, and 22 files fell in a
+   * row.) A refused attempt isn't counted against the account, so waiting works.
+   */
   async signIn(email: string, password = env.password): Promise<void> {
-    const res = await this.fetch('/api/auth/sign-in', { method: 'POST', json: { email, password } });
-    if (!res.ok) throw new Error(`sign-in failed for ${email}: ${res.status} ${await res.text()}`);
+    for (let attempt = 1; ; attempt++) {
+      const res = await this.fetch('/api/auth/sign-in', { method: 'POST', json: { email, password } });
+      if (res.ok) return;
+      if (res.status !== 429 || attempt >= 8) throw new Error(`sign-in failed for ${email}: ${res.status} ${await res.text()}`);
+      const wait = Math.min(Math.max(Number(res.headers.get('retry-after')) || 1, 1), 60);
+      await new Promise((r) => setTimeout(r, wait * 1000 + 500));
+    }
   }
 }
 

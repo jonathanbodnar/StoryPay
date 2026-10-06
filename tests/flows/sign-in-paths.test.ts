@@ -106,7 +106,16 @@ describe('a venue owner who forgot their password, or wants an emailed sign-in l
     // (Signing in can't know which session it is replacing, so it ends every
     // session more than two seconds old: any that a person had been using.)
     await new Promise((r) => setTimeout(r, 3500));
-    await b.signIn(FLOW_VENUE.email);
+    // The second account is this test's own (the shared owner's sign-ins are for the files that need it).
+    const otherId = randomUUID();
+    const other = `reset-other.${runId}@example.com`;
+    const made = await db.from('venues').insert({
+      id: otherId, name: `Reset Other ${runId}`, slug: `reset-other-${runId}`, email: other, notification_email: other,
+      password_hash: await bcrypt.hash(env.password, 10), setup_completed: true, onboarding_status: 'registered',
+      onboarding_completed_at: new Date().toISOString(), email_verified_at: new Date().toISOString(), timezone: 'America/New_York',
+    });
+    expect(made.error?.message ?? null).toBeNull();
+    await b.signIn(other);
     expect((await b.fetch('/api/venues/me')).status).toBe(200);
     // A late renewal of the first session lands over the new one's cookies:
     // signed out, rather than quietly back in the first account.

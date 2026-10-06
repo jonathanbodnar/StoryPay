@@ -15,8 +15,20 @@ test('the owner signs in and works their leads', async ({ page }) => {
   await expectNoSidewaysScroll(page);
   await page.getByPlaceholder('you@yourvenue.com').first().fill(FLOW_VENUE.email);
   await page.getByPlaceholder('••••••••').fill(env.password);
-  await page.locator('form').filter({ has: page.getByPlaceholder('••••••••') }).locator('button[type="submit"]').click();
-  await page.waitForURL(/\/dashboard/);
+  const submit = page.locator('form').filter({ has: page.getByPlaceholder('••••••••') }).locator('button[type="submit"]');
+  // This account is the one every flow test shares, and an account may sign in
+  // five times a minute: told to wait, wait and press again, as a person would.
+  for (let attempt = 1; ; attempt++) {
+    await submit.click();
+    const tooMany = page.getByText(/Too many sign-in attempts/);
+    const landed = await Promise.race([
+      page.waitForURL(/\/dashboard/, { timeout: 30_000 }).then(() => true),
+      tooMany.waitFor({ timeout: 30_000 }).then(() => false),
+    ]);
+    if (landed) break;
+    expect(attempt, 'still told to wait after a minute').toBeLessThan(6);
+    await page.waitForTimeout(13_000);
+  }
   await expect(page.getByRole('heading', { name: /Bride Booking System/ }).first()).toBeVisible();
   await expect(page.getByText("Let's Build Your Bride Booking System")).toHaveCount(0);
 
