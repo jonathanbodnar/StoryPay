@@ -45,9 +45,16 @@ describe('the Setup Guide lessons', () => {
   // step first, the others as their videos are recorded.
   it('a step with a video wears the video cover, big and small; the others keep their screenshot', () => {
     const root = join(__dirname, '..', '..');
-    expect(existsSync(join(root, 'public', 'setup-guide', 'presenter.webp'))).toBe(true);
+    expect(existsSync(join(root, 'public', 'setup-guide', 'presenter-v2.webp'))).toBe(true);
     expect(existsSync(join(root, 'public', 'storyvenue-light-logo.png'))).toBe(true);
     const cover = readFileSync(join(root, 'src/components/setup-guide/LessonCover.tsx'), 'utf8');
+    expect(cover).toContain("const PRESENTER = '/setup-guide/presenter-v2.webp';");
+    // The Setup Guide's icon is a rocket (owner's pick, Oct 5 2026), on the ring, the header and the cover's tile.
+    for (const file of ['ProgressRing.tsx', 'SetupGuide.tsx', 'LessonCover.tsx']) {
+      const source = readFileSync(join(root, 'src/components/setup-guide', file), 'utf8');
+      expect(source, file).toMatch(/<Rocket /);
+      expect(source, file).not.toMatch(/ListChecks|GraduationCap/);
+    }
     expect(cover).toContain("const art = hasVideo ? <VideoCoverArt lesson={lesson} label={label} play /> : (");
     expect(cover).toContain('<VideoCoverArt lesson={lesson} label={label} play={false} />');
     // The lists tell the small picture which steps have a video.

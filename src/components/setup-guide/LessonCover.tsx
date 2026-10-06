@@ -2,7 +2,7 @@
 
 import { Fragment, type CSSProperties } from 'react';
 import Image from 'next/image';
-import { ListChecks, Play } from 'lucide-react';
+import { Play, Rocket } from 'lucide-react';
 import type { SetupLesson } from '@/lib/setup-guide';
 
 /**
@@ -23,8 +23,8 @@ export function StepTitle({ text }: { text: string }) {
   );
 }
 
-/** The presenter on every video cover: the owner, cut out, in black and white, facing the title. */
-const PRESENTER = '/setup-guide/presenter.webp';
+/** The presenter on every video cover: the owner, cut out, in black and white (from the photo he chose, Oct 5 2026). */
+const PRESENTER = '/setup-guide/presenter-v2.webp';
 const VIDEO_COVER_BG = 'linear-gradient(118deg, #ffffff 0%, #f6f6f7 42%, #e2e2e5 100%)';
 const at = (style: CSSProperties): CSSProperties => ({ position: 'absolute', ...style });
 
@@ -33,7 +33,8 @@ const at = (style: CSSProperties): CSSProperties => ({ position: 'absolute', ...
  * ask, Oct 5 2026, from a Viktor Academy thumbnail: an "Episode 01" tag, a big
  * title, a brand tag and the presenter cut out on the right). Every step that
  * has a video gets it, with that step's own label and title: the strategy-call
- * step now, the rest as their videos are recorded. All sizes are in container
+ * step now, the rest as their videos are recorded. The tile carries the Setup
+ * Guide's own icon, a rocket. All sizes are in container
  * units, so the same art is the big cover and the small picture in a list.
  */
 function VideoCoverArt({ lesson, label, play }: { lesson: SetupLesson; label: string; play: boolean }) {
@@ -45,10 +46,10 @@ function VideoCoverArt({ lesson, label, play }: { lesson: SetupLesson; label: st
       <Image
         src={PRESENTER}
         alt=""
-        width={949}
+        width={1183}
         height={900}
         unoptimized
-        style={at({ right: '-7cqw', bottom: '-2.5cqw', height: '57cqw', width: 'auto', maxWidth: 'none', filter: 'drop-shadow(0 1.2cqw 2.4cqw rgba(0,0,0,0.18))' })}
+        style={at({ right: '-9cqw', bottom: 0, height: '46cqw', width: 'auto', maxWidth: 'none', filter: 'drop-shadow(0 1.2cqw 2.4cqw rgba(0,0,0,0.18))' })}
       />
       {/* The guide's own mark, tipped like an app icon. */}
       <span
@@ -56,7 +57,7 @@ function VideoCoverArt({ lesson, label, play }: { lesson: SetupLesson; label: st
         className="flex items-center justify-center text-white"
         style={at({ left: '36.5cqw', top: '4.2cqw', width: '7.4cqw', height: '7.4cqw', borderRadius: '1.9cqw', background: 'linear-gradient(145deg, #2c2c2c, #0d0d0d)', transform: 'rotate(-11deg)', boxShadow: '0 1.4cqw 2.6cqw -0.8cqw rgba(0,0,0,0.5), inset 0 0.15cqw 0 rgba(255,255,255,0.18)' })}
       >
-        <ListChecks style={{ width: '4cqw', height: '4cqw' }} />
+        <Rocket style={{ width: '4cqw', height: '4cqw' }} />
       </span>
       <span
         className="flex items-center font-semibold text-[#1b1b1b]"

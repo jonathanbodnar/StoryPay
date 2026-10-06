@@ -18,7 +18,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowRight, Check, Copy, ListChecks, Play, Undo2, X } from 'lucide-react';
+import { ArrowRight, Check, Copy, Play, Rocket, Undo2, X } from 'lucide-react';
 import DashboardBookingModal from '@/components/DashboardBookingModal';
 import { trackClient } from '@/lib/analytics-client';
 import { isNativeApp } from '@/lib/platform';
@@ -194,7 +194,7 @@ export default function SetupGuide({ venueId }: { venueId: string }) {
             <div className="shrink-0 border-b border-gray-100 px-5 pb-4 pt-5 sm:px-7">
               <div className="flex items-start gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f3efe8] text-[#8a7448]">
-                  <ListChecks size={20} />
+                  <Rocket size={20} />
                 </span>
                 <div className="min-w-0 flex-1">
                   <h2 className="font-heading text-lg font-semibold text-gray-900">Setup Guide</h2>
