@@ -2,8 +2,8 @@
 
 /**
  * Lead Finder, on a page of its own under the Bride Booking System (owner's
- * ask, Oct 5 2026; it used to be reached only through Settings → Integrations,
- * where the same card still is).
+ * ask, Oct 5 2026). This is the only place it lives: it used to be a card in
+ * Settings → Integrations, and came off there the same day.
  */
 
 import Link from 'next/link';

@@ -3,8 +3,9 @@
 /**
  * The Lead Finder card: the venue's own inbound address, the two ways to send
  * directory inquiries to it, a test, and what has arrived. Shown on its own
- * page under the Bride Booking System (Lead Finder) and, as before, in
- * Settings → Integrations.
+ * page under the Bride Booking System (Lead Finder). It used to sit in
+ * Settings → Integrations too; the owner had it taken off there on Oct 5 2026
+ * ("It doesn't matter anymore. It's on its own page.").
  */
 
 import { useCallback, useEffect, useState } from 'react';

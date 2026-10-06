@@ -181,10 +181,10 @@ export default function LeadFinderReviewPage() {
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <Link
-            href="/dashboard/settings/integrations"
+            href="/dashboard/listing/lead-finder"
             className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 transition-colors hover:text-gray-900"
           >
-            <ArrowLeft size={13} /> Back to Integrations
+            <ArrowLeft size={13} /> Back to Lead Finder
           </Link>
           <h1 className="font-heading text-2xl text-gray-900">Lead Finder review</h1>
           <p className="mt-1 text-sm text-gray-500">

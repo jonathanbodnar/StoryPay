@@ -71,6 +71,34 @@ describe('the Bride Booking System menu', () => {
     for (const alias of DIRECTORY_NAV_PATH_ALIASES) expect(known.has(alias.id), alias.pathPrefix).toBe(true);
   });
 
+  // Owner's call (Oct 5 2026), once Lead Finder had its own page: "hide it
+  // from settings, integrations. It doesn't matter anymore."
+  it('Lead Finder lives on its own page only: the card is off Settings → Integrations, and nothing sends people there for it', () => {
+    expect(read('src/app/dashboard/settings/integrations/page.tsx')).not.toMatch(/LeadFinderCard|Lead Finder/);
+    expect(read('src/app/dashboard/listing/lead-finder/page.tsx')).toContain('<LeadFinderCard />');
+    // The review screen goes back to it, and its emails and test say where it is.
+    const review = read('src/app/dashboard/settings/integrations/leadfinder-review/page.tsx');
+    expect(review).toContain('href="/dashboard/listing/lead-finder"');
+    expect(review).toContain('Back to Lead Finder');
+    for (const file of ['src/lib/leadfinder/mirror.ts', 'src/app/api/venue/leadfinder/test/route.ts', 'src/lib/help-articles.ts', 'src/app/api/ai/chat/route.ts']) {
+      const pointing = read(file).split('\n').filter((line) => /Lead Finder/.test(line) && /Settings → Integrations/.test(line) && !/StoryVenue Legacy|Zapier|Generate API key/.test(line));
+      expect(pointing.map((l) => l.trim().slice(0, 90)), file).toEqual([]);
+    }
+    expect(read('src/lib/leadfinder/mirror.ts')).toContain('Turn this copy off on your Lead Finder page.');
+  });
+
+  // Lead Finder refuses its own emailed copies when they come back, and knows
+  // them by a sentence in their footer. Renaming "LeadFinder" to "Lead Finder"
+  // (Oct 5 2026) reworded that sentence; copies sent before that still carry
+  // the old one, and must still be known.
+  it('Lead Finder still knows a copy it sent before its name became two words', () => {
+    const ingest = read('src/lib/leadfinder/ingest.ts');
+    expect(ingest).toContain('MIRROR_FOOTER_SENTENCES.some((sentence) => arrival.text.includes(sentence))');
+    expect(ingest).toContain("const ONE_WORD = 'Lead' + 'Finder';");
+    expect(ingest).toContain('`Sent by ${ONE_WORD} because a message arrived at your ${ONE_WORD} address`');
+    expect(read('src/lib/leadfinder/mirror.ts')).toContain("'Sent by Lead Finder because a message arrived at your Lead Finder address'");
+  });
+
   it('the Setup Guide and the Lead Finder emails send people to the new pages', () => {
     const byId = Object.fromEntries(SETUP_LESSONS.map((l) => [l.id, l]));
     expect(byId.web_form.cta.href).toBe('/dashboard/listing/web-form');

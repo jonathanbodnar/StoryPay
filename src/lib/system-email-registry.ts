@@ -186,7 +186,7 @@ You have been invited to join {{venue_name}} on StoryVenue. Click below to accep
     description:
       "A faithful copy of every message Lead Finder processes, sent to the venue's OWN inbox (venue.notification_email || venue.email) with a short banner on top saying what Lead Finder did with it — that a lead was updated, or that the message was skipped and why. Not sent for a CREATED lead: that gets the standard new-lead email (with the original email in it), so the owner gets one email per lead. The original subject is kept unchanged and the sender, received time and full body are preserved unedited. Not editable: the copy must stay a verbatim record, so copy lives in src/lib/leadfinder/mirror.ts.",
     trigger:
-      'Fires once per processed Lead Finder arrival that did not create a lead (updated, skipped or failed) — from the inbound-email webhook. A venue switches it off in Settings → Integrations → Lead Finder.',
+      'Fires once per processed Lead Finder arrival that did not create a lead (updated, skipped or failed) — from the inbound-email webhook. A venue switches it off on its Lead Finder page (Bride Booking System™ → Lead Finder).',
     category: 'leads',
     editable: false,
     defaults: {

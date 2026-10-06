@@ -19,7 +19,6 @@ import {
   Send,
   CalendarClock,
 } from 'lucide-react';
-import LeadFinderCard from '@/components/leadfinder/LeadFinderCard';
 
 interface ApiKey {
   id: string;
@@ -1106,9 +1105,6 @@ export default function IntegrationsPage() {
           </p>
         </div>
       </div>
-
-      {/* ── Lead Finder card ─────────────────────────────────────────── */}
-      <LeadFinderCard />
 
       {/* ── Tripleseat card ──────────────────────────────────────────── */}
       <TripleseatCard />

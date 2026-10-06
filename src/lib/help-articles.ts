@@ -3091,7 +3091,7 @@ If replies still don't appear after the panel shows Configured
         body: `Lead Finder gives your venue its own private email address. Any wedding inquiry emailed to it — from The Knot, WeddingWire, Zola, Here Comes The Guide, your website form, or a couple writing to you directly — becomes a lead in StoryVenue automatically, with the same alerts, pricing guide and follow-up as every other lead.
 
 Where to find your address
-Bride Booking System™ → Lead Finder → Copy. (The same card is also in Settings → Integrations.) The address is unique to your venue, so keep it private.
+Bride Booking System™ → Lead Finder → Copy. The address is unique to your venue, so keep it private.
 
 Two ways to connect it
 1. Easiest: paste the address into a directory's lead-notification email field (The Knot, WeddingWire, Zola and so on). One paste per site.
@@ -4268,7 +4268,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/settings/branding':        ['brand-setup', 'brand-colors-saved', 'brand-social-networks', 'listing-media-library', 'me-block-social', 'me-block-address'],
   '/dashboard/settings/email-templates': ['notif-settings', 'email-types', 'email-variables', 'me-overview'],
   '/dashboard/settings/calendar':        ['cal-settings-overview', 'cal-multi-calendar', 'cal-per-calendar-rules', 'cal-notification-overview', 'cal-notification-reminders', 'cal-settings-booking-rules', 'cal-settings-google-sync'],
-  '/dashboard/settings/integrations':    ['int-leadfinder', 'int-legacy', 'int-inbound-email-status', 'int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
+  '/dashboard/settings/integrations':    ['int-legacy', 'int-inbound-email-status', 'int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
   '/dashboard/settings/notifications':   ['notif-settings', 'email-types', 'email-variables', 'sms-notifications', 'merge-vars-overview'],
   '/dashboard/settings/push':            ['push-settings', 'push-overview', 'push-install-app'],

@@ -1,7 +1,7 @@
 /**
  * /api/venue/leadfinder
  *
- * GET  — everything the Settings → Integrations card needs to show a venue their
+ * GET  — everything the Lead Finder page's card needs to show a venue their
  *        Lead Finder address, whether it is working, and whether any source has
  *        started to drift.
  * PATCH — flip the email-mirror toggle, scoped to the authenticated venue.

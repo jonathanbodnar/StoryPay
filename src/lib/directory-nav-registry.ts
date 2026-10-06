@@ -93,7 +93,8 @@ export const DIRECTORY_NAV_REGISTRY: DirectoryNavRegistryEntry[] = [
  * Pages that have no permission of their own: each is let in by the screen
  * it grew out of, so adding it changed no plan. (Oct 5 2026: the Web Form
  * page shows the Pricing Guide's embed code; the Lead Finder page shows the
- * card that lives in Settings → Integrations.)
+ * card that used to be in Settings → Integrations, and still answers to that
+ * permission.)
  */
 export const DIRECTORY_NAV_PATH_ALIASES: ReadonlyArray<{ pathPrefix: string; id: string }> = [
   { pathPrefix: '/dashboard/listing/web-form', id: 'nav_listing_pricing_guide' },

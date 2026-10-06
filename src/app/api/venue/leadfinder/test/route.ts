@@ -87,8 +87,8 @@ export async function POST() {
     ['Message', 'Hi! We love your venue and would like to know about availability and pricing.'],
   ];
   const intro =
-    'This is a test inquiry from the "Send a test inquiry" button on your Lead Finder card in StoryVenue ' +
-    '(Settings → Integrations). It checks that mail sent to your Lead Finder address arrives and is read ' +
+    'This is a test inquiry from the "Send a test inquiry" button on your Lead Finder page in StoryVenue ' +
+    '(Bride Booking System™ → Lead Finder). It checks that mail sent to your Lead Finder address arrives and is read ' +
     'correctly. It will not create a lead.';
 
   const text = [intro, '', ...fields.map(([k, v]) => `${k}: ${v}`), '', `Test reference: ${token}`].join('\n');

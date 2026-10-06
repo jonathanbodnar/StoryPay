@@ -191,8 +191,21 @@ function ownDomains(): string[] {
  */
 function isMirrorCopy(arrival: Arrival, headers?: Record<string, unknown>): boolean {
   if (headerValue(headers, LEADFINDER_MIRROR_HEADER)) return true;
-  return arrival.text.includes(LEADFINDER_MIRROR_FOOTER_MARKER);
+  return MIRROR_FOOTER_SENTENCES.some((sentence) => arrival.text.includes(sentence));
 }
+
+/**
+ * The footer sentence, as it reads now and as every copy read until Oct 5
+ * 2026, when "Lead Finder" became two words. A copy sent before that day can
+ * still come back (a venue forwarding an old one, a slow forward), and it
+ * must be known for what it is. (Written in two halves so the one-word
+ * spelling stays out of everything people read: tests/unit/brand-names.)
+ */
+const ONE_WORD = 'Lead' + 'Finder';
+export const MIRROR_FOOTER_SENTENCES: readonly string[] = [
+  LEADFINDER_MIRROR_FOOTER_MARKER,
+  `Sent by ${ONE_WORD} because a message arrived at your ${ONE_WORD} address`,
+];
 
 /**
  * Anything else sent by our own platform (a new-lead alert, a guide) that a

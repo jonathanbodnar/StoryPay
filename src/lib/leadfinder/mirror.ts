@@ -167,7 +167,7 @@ function buildBanner(outcome: MirrorOutcome): Banner {
       tone: 'ok',
       headline: 'Test received — your Lead Finder address is working',
       detail:
-        'This is the test you sent from Settings → Integrations. ' +
+        'This is the test you sent from your Lead Finder page. ' +
         (readBits.length ? `We read: ${readBits.join(', ')}. ` : '') +
         (outcome.wouldCreateLead
           ? 'A real inquiry like this would have become a lead. Because it was a test, nothing was added to your leads and nobody was emailed.'
@@ -331,7 +331,7 @@ function buildMirrorHtml(ctx: MirrorContext, outcome: MirrorOutcome): string {
     showLinkFallback: !!banner.ctaUrl,
     // The first sentence is the loop-guard marker ingest looks for — keep it verbatim.
     footerHtml:
-      `<p style="margin:0 0 8px;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">${LEADFINDER_MIRROR_FOOTER_MARKER}. Turn this copy off in Settings → Integrations.</p>` +
+      `<p style="margin:0 0 8px;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">${LEADFINDER_MIRROR_FOOTER_MARKER}. Turn this copy off on your Lead Finder page.</p>` +
       `<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.55;text-align:center;">Sent via StoryVenue on behalf of ${escapeHtml(venueName)}</p>`,
   });
 }
@@ -370,7 +370,7 @@ function buildMirrorText(ctx: MirrorContext, outcome: MirrorOutcome): string {
     '',
     ctx.rawText,
     '',
-    `${LEADFINDER_MIRROR_FOOTER_MARKER}. Turn this copy off in Settings → Integrations.`,
+    `${LEADFINDER_MIRROR_FOOTER_MARKER}. Turn this copy off on your Lead Finder page.`,
   ]
     .filter((line) => line !== '')
     .join('\n');

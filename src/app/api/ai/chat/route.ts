@@ -81,7 +81,7 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 - The form uses the colors from Settings → Branding and updates by itself when they change.
 
 ## Lead Finder (directory inquiry emails become leads)
-- Path: Bride Booking System™ → Lead Finder (/dashboard/listing/lead-finder). The same card is also in Settings → Integrations.
+- Path: Bride Booking System™ → Lead Finder (/dashboard/listing/lead-finder).
 - Lead Finder gives the venue its own private email address. Inquiries emailed to it from The Knot, WeddingWire, Zola and other directories become leads in the Lead Inbox, with the same alerts, pricing guide and follow-up as every other lead.
 - To set it up: copy the address → make it the email inquiries are sent to on each directory, or forward those emails to it (the page shows how to do this in Gmail) → press Send a test inquiry and watch it arrive.
 - The couple gets an email with a button to receive the guide. Tapping it also gives permission to text them. Nothing is texted before that.

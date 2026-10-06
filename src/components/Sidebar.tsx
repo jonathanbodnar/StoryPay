@@ -130,7 +130,7 @@ const settingsItems: NavItem[] = [
 const listingItems: NavItem[] = [
   // The owner's order (Oct 5 2026). Web Form and Lead Finder are pages of
   // their own; each shares the permission of the screen it grew out of (the
-  // Pricing Guide's embed code; the Lead Finder card in Integrations), so no
+  // Pricing Guide's embed code; the Lead Finder card that was in Integrations), so no
   // plan had to change to show them (lib/directory-nav-registry.ts).
   { label: 'Dashboard', href: '/dashboard/listing', icon: LayoutDashboard, navId: 'nav_listing_analytics' },
   { label: 'Venue Listing', href: '/dashboard/listing/venue-listing', icon: Store, navId: 'nav_listing_dashboard' },
