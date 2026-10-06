@@ -2200,7 +2200,7 @@ If you don't have any social links saved yet, the Social block in your email sho
         body: `The Marketing flyout in the sidebar groups every email-marketing tool into four pages:
 
 1. Templates (Marketing → Email Templates) — your reusable design library. Build a template once with the drag-and-drop builder, then reuse it for any campaign.
-2. Campaigns (Marketing → Email Campaigns) — one-off broadcasts you send to a segment of your contacts/leads. The campaigns list has a trash icon on every row so you can delete any campaign (with a confirm prompt) directly from the list.
+2. Campaigns (Marketing → Campaigns) — one-off broadcasts you send to a segment of your contacts/leads. The campaigns list has a trash icon on every row so you can delete any campaign (with a confirm prompt) directly from the list.
 3. Automations (Marketing → Email Automations) — multi-step drip sequences triggered by an event (new lead, tag added, date hit, etc.).
 4. Preferences — recipients can self-manage their subscription via a public preference center linked from every email footer.
 
@@ -2488,7 +2488,7 @@ Recipients on the suppression list are skipped automatically by every campaign a
 
 Why this matters
 - CAN-SPAM (US) and CASL (Canada) require a physical address and a one-click unsubscribe in every commercial email. StoryVenue's automatic footer covers both.
-- GDPR-style consent is up to you — collect opt-ins via your lead capture forms (Marketing → Lead Capture Forms include a marketing-opt-in checkbox).
+- GDPR-style consent is up to you — collect opt-ins via your lead capture forms (Marketing → Forms include a marketing-opt-in checkbox).
 
 What you can edit
 You can change the visual styling of the footer (font, padding, background) inside the email builder, but the unsubscribe link, manage link, venue name, and physical address are mandatory and always render.`,
@@ -2505,7 +2505,7 @@ Templates — Marketing → Email Templates
 - When you create a campaign or automation step, you can start from a template and tweak it for that specific send.
 - Edit at any time; existing campaigns/automations that copied a template are not affected by template edits (each copy is independent).
 
-Campaigns — Marketing → Email Campaigns
+Campaigns — Marketing → Campaigns
 - One-off broadcasts to a segment of your contacts/leads (e.g. "Spring tour open house").
 - A campaign has three steps: Design (the email itself), Recipients (who gets it — filtered by stage, tag, marketing opt-in, etc.), Review (final check + schedule or send now).
 - Once sent, a campaign reports opens, clicks, unsubscribes, and bounces in Marketing → Analytics.
@@ -2548,7 +2548,7 @@ How to create an audience
 Important — saved audiences cannot reference other saved audiences. The audience type inside a saved audience is always one of All leads / Tags / Stages, never another audience. (This prevents loops and keeps the count preview honest.)
 
 Using a saved audience in a campaign
-1. Open or create a campaign at Marketing → Emails.
+1. Open or create a campaign at Marketing → Campaigns.
 2. In the Audience section, pick "Use a saved audience" and choose your audience from the dropdown.
 3. You can still layer additional behavior filters on top (e.g. start with "Booked couples 2026" but require a wedding date on file). Those filters compose with — they don't replace — the audience's filters.
 4. Save the campaign. When it sends, StoryVenue re-resolves the audience and delivers to whoever currently matches.
