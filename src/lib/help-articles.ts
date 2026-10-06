@@ -176,23 +176,20 @@ Couples (clients):
     articles: [
       {
         id: 'dash-announcement-ticker',
-        title: 'Announcement ticker — what it is and why you can\'t close it',
+        title: 'The News bar at the top of the page',
         tags: ['announcement', 'ticker', 'news', 'banner', 'top bar', 'broadcast', 'platform updates'],
-        body: `The thin dark scrolling bar at the very top of every page (labelled "News") is the announcement ticker. It surfaces platform-wide messages from the StoryVenue team — things like:
+        body: `The thin dark scrolling bar at the very top of every page (labelled "News") is the announcement ticker. It carries messages from the StoryVenue team to every venue, such as:
 
-- Scheduled maintenance windows and downtime notices
-- New feature launches and big changes to existing tools
-- Compliance / billing / legal updates that need every venue's attention
-- Time-sensitive operational notices (deliverability issues, integrations being retired, etc.)
+- Planned maintenance
+- New features and big changes to existing tools
+- Billing or policy updates every venue should see
+- Time-sensitive notices
 
 Why there's no "X" to close it
-The ticker is intentionally non-dismissible from the venue side. When the StoryVenue team broadcasts something it's because every venue genuinely needs to see it, and a per-venue dismiss would mean important messages get hidden in the moments they matter most. It can't be hidden for just one person: if you see it, everyone at your venue sees it too.
-
-Who can turn it off
-Only the StoryVenue team can deactivate an announcement on their end; the moment they do, it disappears from every venue's ticker on the next page load. Announcements are also rotated and replaced regularly, so the bar will feel fresh rather than static.
+These are messages every venue needs to see, so the bar can't be closed. It goes away when the StoryVenue team takes the announcement down.
 
 Clicking the link in an announcement
-If a message has a link, clicking it opens the destination in a new tab (or the same tab, for in-app routes). Hovering anywhere over the scrolling text pauses the animation so you can read or click without chasing the message.`,
+If a message has a link, clicking it opens it. Hover over the scrolling text to pause it so you can read or click.`,
       },
     ],
   },
@@ -228,13 +225,12 @@ The "Today" button snaps back to the current date. The Prev / Next arrows move f
         tags: ['spaces', 'barn', 'garden', 'ballroom', 'room', 'venue space', 'add space', 'edit space', 'remove space'],
         body: `If your venue has multiple bookable spaces (e.g. Barn, Garden, Ballroom, Vineyard), set them up first so you can track bookings per space, color-code the calendar, and prevent double-bookings.
 
-Two places to manage spaces
+Where to manage spaces
 
-1. Calendar page → "Manage Spaces" (top-right) — the main editor for all your spaces.
-2. Inline from the New Event modal — when adding or editing a calendar event, open the Space dropdown and click Manage to add, rename, recolor, or remove spaces right there without leaving the event form. The same controls are available on the Leads page New Lead modal (Space field → Manage) and the Contacts New Contact modal.
+When adding or editing a calendar event, find the Space field and click Manage to add, rename, recolor, or remove spaces right there without leaving the event form. The same controls are available in the Lead Inbox's New Lead form (Space field → Manage) and the Contacts New Contact form.
 
 To add a space
-1. Open Manage Spaces (Calendar or New Event / New Lead / New Contact modal)
+1. Click Manage next to the Space field (on a new event, a new lead, or a new contact)
 2. Enter a name and pick a color — the color is used for event chips on the calendar
 3. Click Add
 
@@ -248,7 +244,7 @@ To remove a space
         id: 'cal-add-event',
         title: 'Adding, editing, and deleting events',
         tags: ['add event', 'new event', 'book', 'schedule', 'create event', 'edit event', 'update event', 'change event', 'delete event', 'contact search', 'assign team member', 'team member'],
-        body: `To add an event, click the "+ Add Event" button or click directly on any day (or hour slot in Week/Day view) in the calendar grid.
+        body: `To add an event, click the "Create event" button or click directly on any day (or hour slot in Week/Day view) in the calendar grid.
 
 Fill in:
 - Event Title (e.g. "Smith & Johnson Wedding")
@@ -275,7 +271,7 @@ To delete an event: click the event chip, then click Delete Event. If the event 
         body: `Multi-day events are perfect for wedding weekends, festivals, corporate retreats, or any booking that occupies the venue across multiple consecutive dates.
 
 To create a multi-day event:
-1. Click "+ Add Event"
+1. Click "Create event"
 2. Pick the Start Date
 3. Change the End Date to the last day of the event — End Date defaults to match Start Date, so you only adjust this when you want multi-day
 4. Set Start Time (time of day on the first day) and End Time (time of day on the last day)
@@ -298,7 +294,7 @@ To shorten or extend a multi-day event later, click the chip → Edit → change
         body: `Recurring events are great for anything that happens on a schedule: a weekly staff meeting, a monthly maintenance block, a bi-weekly tasting, or an annual venue closure.
 
 To create a recurring event:
-1. Click "+ Add Event"
+1. Click "Create event"
 2. Fill in Title, Start Date, End Date (same as start for a single-day event), times, and other fields as normal
 3. In the Repeats block, pick a frequency: Daily, Weekly, Monthly, or Yearly
 4. Set the interval — "every 1 week" or "every 2 weeks", etc.
@@ -334,38 +330,6 @@ You have two options:
 2. Click "Override & Book Anyway" — this books despite the overlap (useful for back-to-back events with shared setup time, or if a space can handle simultaneous events)
 
 Conflict detection only applies when you select a specific space. Events with no space assigned never trigger conflicts.`,
-      },
-      {
-        id: 'cal-ical',
-        title: 'Syncing with Google Calendar, Outlook, and Apple Calendar',
-        tags: ['ical', 'google calendar', 'outlook', 'apple calendar', 'sync', 'subscribe', 'phone'],
-        body: `StoryVenue provides an iCal subscription feed so your events appear in any calendar app on your phone or computer.
-
-To set it up: go to Settings → Integrations → scroll to the "Google Calendar, Outlook & Apple Calendar" card. Copy your iCal URL.
-
-Google Calendar:
-1. Open Google Calendar on desktop (not mobile)
-2. Click + next to "Other calendars"
-3. Choose "From URL"
-4. Paste your iCal URL
-5. Click Add calendar
-
-Outlook / Microsoft 365:
-1. Open Outlook Calendar
-2. Click Add calendar → Subscribe from web
-3. Paste your iCal URL
-4. Click Import
-
-Apple Calendar (Mac):
-1. Open Calendar app
-2. File → New Calendar Subscription
-3. Paste your iCal URL
-4. Set auto-refresh to Every Hour
-5. Click OK
-
-iPhone: Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste the URL.
-
-Note: This is a one-way sync — StoryVenue events appear in your personal calendar. Events you add in Google/Outlook do NOT flow back into StoryVenue. Updates may take up to 24 hours to appear depending on the calendar app.`,
       },
       {
         id: 'cal-calendly',
@@ -507,22 +471,6 @@ Per-calendar overrides
 Each individual calendar can override any of the rules above. Go to Calendar → Calendar Settings → Calendars tab → click a calendar → expand "Customize Booking Rules". Any field left at "Venue default" inherits the setting from this global Booking Rules tab. This means a 15-minute phone-call calendar and a 60-minute tour calendar can coexist without either compromising the other.`,
       },
       {
-        id: 'cal-availability',
-        title: 'Public availability page',
-        tags: ['availability', 'public', 'share', 'open dates', 'prospects', 'widget'],
-        body: `StoryVenue generates a public availability page for your venue that shows which dates are open or booked — without revealing any customer names or details.
-
-Find your availability URL at Settings → Integrations → Google Calendar / Outlook & Apple Calendar card → Public Availability Page.
-
-Share this link on your venue website, social media, or with prospects so they can check date availability without calling you.
-
-The page shows a month-by-month calendar with:
-- Open dates (green)
-- Booked / unavailable dates (red, labeled Booked or Tour)
-
-Prospects can navigate forward and back through months. No customer information is ever shown on this page.`,
-      },
-      {
         id: 'cal-multi-calendar',
         title: 'Multiple calendars — create up to 5 per venue',
         tags: ['multiple calendars', 'calendars', 'calendar types', 'tour calendar', 'phone call calendar', 'calendar management', 'create calendar', 'delete calendar', 'venue calendars', 'calendar color'],
@@ -574,8 +522,8 @@ Rules you can override per calendar
 How inheritance works
 Any field set to "Venue default" uses the value from Calendar → Calendar Settings → Booking Rules. Override only what differs for that calendar — everything else flows through automatically.
 
-The public slots API respects per-calendar rules
-When a calendar ID is included in the booking widget URL (or Calendly-style booking link), the slots engine applies that calendar's specific rules. If no calendar ID is specified, venue-wide defaults apply.`,
+Online booking follows them too
+A booking link for one calendar offers times by that calendar's rules. A general booking link uses your venue-wide defaults.`,
       },
       {
         id: 'cal-ai-search',
@@ -601,11 +549,11 @@ What you see in the results
 - AI Summary — a plain-language answer from the AI using your actual event data (past 30 days + next 90 days).
 - Matching Events — a list of events whose title, contact email, calendar, space, notes, type, or status matched your keyword. Click any event in the list to open its full detail modal without closing the panel.
 
-How it works
-The AI has access to up to 200 of your events (past 30 days and next 90 days). It knows each event's title, type, status, start date, contact email, calendar name, space name, and notes. It answers based only on what's in your data — it won't make up events that don't exist.
+What it can see
+Your events from the past 30 days and the next 90 days (up to 200 of them): each one's title, type, status, date, contact, calendar, space, and notes. It answers only from what's on your calendar.
 
 If there's no AI answer
-The panel still shows keyword-matched events even if the AI component is unavailable. You can always use the keyword results to find what you need.`,
+The panel still shows keyword-matched events even when the AI answer isn't available. You can always use the keyword results to find what you need.`,
       },
       {
         id: 'cal-event-actions',
@@ -731,7 +679,7 @@ SMS test requirements
 
 If the test fails
 - For email: check that the target email address is valid. If it is and the test still fails, contact StoryVenue support.
-- For SMS: make sure Legacy messaging is connected (Settings → Integrations) and the phone number matches an existing contact.`,
+- For SMS: make sure Legacy messaging is connected (Settings → General) and the phone number matches an existing contact.`,
       },
     ],
   },
@@ -813,7 +761,7 @@ When the Concierge team sends you a message you will see it in your Conversation
 
 Replying
 - Open the thread in Conversations and type your reply in the composer. Your reply routes back to the Concierge team's support inbox automatically.
-- You can also reply directly to the notification email — your reply is routed into the thread via the inbound email system (no need to log in).
+- You can also reply directly to the notification email — your reply lands in the thread (no need to log in).
 
 Collapsible email messages
 - Long email replies in the thread are collapsed by default. You see a short snippet with a "Show full email" link. Click it to expand the full message inline.
@@ -826,10 +774,10 @@ Read / unread status
         id: 'conversations-concierge-inbox',
         title: 'Concierge Inbox — your dedicated Venue Direct thread list',
         tags: ['concierge inbox', 'venue direct', 'inbox', 'unread', 'mark read', 'needs reply', 'concierge messages', 'support', 'filter', 'resolved'],
-        body: `The Concierge Inbox (/dashboard/concierge) is a dedicated page that shows only your Venue Direct threads — messages between your venue and the StoryVenue Concierge team. It is separate from your main Conversations inbox (which shows all contact threads).
+        body: `The Concierge Inbox is a dedicated page that shows only your Venue Direct threads — messages between your venue and the StoryVenue Concierge team. It is separate from your main Conversations inbox (which shows all contact threads).
 
 How to access it
-Sidebar → Concierge (the icon that looks like a headset or support agent). A red dot badge appears on the icon whenever you have unread Venue Direct messages.
+Sidebar → Venue Concierge. A badge appears on it whenever you have unread Venue Direct messages.
 
 What you see
 - A list of all Venue Direct threads sorted by most recent activity
@@ -851,7 +799,7 @@ Replying
 - You can also reply by email — just reply to the notification email you received and it routes back into the thread automatically.
 
 When a new Venue Direct message arrives
-- A badge appears on the Concierge Inbox menu item in the sidebar
+- A badge appears on Venue Concierge in the sidebar
 - You're alerted by email and/or a text nudge, based on your personal notification preferences (Settings → Notifications → "Alerts about your business" → Venue Direct message)`,
       },
       {
@@ -861,8 +809,8 @@ When a new Venue Direct message arrives
         body: `Conversations is two-way. Replies — email or SMS — land back in the same thread within a second or two of arriving. No page refresh, no checking two inboxes.
 
 How fast is "instant"?
-- **Primary**: when a contact replies, the message appears in the thread immediately.
-- **Fallback**: while a thread is open, new messages are checked automatically every few seconds — so even if instant delivery isn't configured, replies still arrive quickly.
+- When a contact replies, the message appears in the thread within a second or two.
+- While a thread is open, it also checks for new messages by itself every few seconds.
 
 Send confirmation badges
 - Every outbound message shows a green "Sent" check once delivery is confirmed, or a red "Failed" badge with an error if the send was rejected.
@@ -871,31 +819,31 @@ Send confirmation badges
 Per-message channel — one thread can carry both
 - The composer has a Send via Email / Send via SMS toggle on each message. A single thread can carry both email and SMS at once without converting or splitting.
 
-Default sending domain — works out of the box
-- Every venue can send email immediately — no DNS setup required. Your venue email is always set as Reply-To so replies still route back to you. Contact StoryVenue support if you'd like to send from your own domain.
+Sending email works out of the box
+- Every venue can send email right away, with nothing to set up. Replies always come back to you. Contact StoryVenue support if you'd like to send from your own domain.
 
 Texts sent from outside StoryVenue
 If you or a teammate text a couple from your texting app instead of from StoryVenue, that text shows up in her conversation too, under the sender's name and marked as sent from your texting app. Automated texts from your other tools appear as well, marked as automated. So the conversation always shows both sides, whoever answered and from wherever. Older conversations fill in over time.
 
 If a reply doesn't show up
-- **Email replies missing**: open Settings → Inbound Email Replies. The status panel shows a green "Configured" or amber "Needs setup" badge for each required item with instructions on how to fix it.
-- **SMS replies missing**: confirm your StoryVenue Legacy integration is connected (Settings → Integrations). Replies arrive in the thread within a few seconds, automatically.`,
+- **Email replies missing**: give it a few seconds and refresh the conversation. If a reply never shows, contact StoryVenue support.
+- **SMS replies missing**: confirm your StoryVenue Legacy integration is connected (Settings → General). Replies arrive in the thread within a few seconds, automatically.`,
       },
       {
         id: 'conversations-sms-troubleshooting',
         title: 'SMS won\'t send — diagnose and fix',
-        tags: ['sms', 'sms not sending', 'missing phone number', 'storyvenue legacy', 'troubleshooting', '422', 'phone number', 'diagnose'],
+        tags: ['sms', 'sms not sending', 'missing phone number', 'storyvenue legacy', 'troubleshooting', 'phone number', 'diagnose'],
         body: `If outbound SMS fails with a "Missing phone number" message — even when you just added the phone — here's how to fix it.
 
 The most common cause
 The phone number in StoryVenue wasn't synced to your connected StoryVenue Legacy account yet.
 
 The fastest fix
-Open the contact profile in StoryVenue → make sure the phone number is entered → click Save. This syncs the phone to your connected sub-account automatically. Then retry the SMS.
+Open the contact profile in StoryVenue → make sure the phone number is entered → click Save. This passes the number on to your Legacy messaging account. Then retry the SMS.
 
 If that doesn't work
-1. Confirm your StoryVenue Legacy integration is connected at Settings → Integrations — look for the green "Connected" badge.
-2. Make sure your StoryVenue Legacy account has an active A2P-approved phone number assigned to it. Without a phone number provisioned in your sub-account, SMS cannot be sent. Open your StoryVenue Legacy account → Settings → Phone Numbers to verify or assign one.
+1. Confirm your StoryVenue Legacy integration is connected at Settings → General — look for the green "Connected" badge.
+2. Make sure your StoryVenue Legacy account has an approved texting number. Without one, texts can't be sent. Open your StoryVenue Legacy account → Settings → Phone Numbers to check or assign one.
 3. If the issue persists, contact StoryVenue support.`,
       },
     ],
@@ -1108,7 +1056,7 @@ Statuses:
 On storyvenue.com, published reviews appear in a single-column list on your venue page. Up to 4 are shown with a "Show all" button to expand the rest.
 
 Showing reviews outside storyvenue.com:
-- Paste the iframe snippet from the Reviews page — it's a ready-to-use embed for your own website. Only published reviews are shown.
+- Paste the code from the Reviews page into your own website — it's ready to use. Only published reviews are shown.
 - Your listing must be published for reviews to appear publicly.`,
       },
       {
@@ -1223,7 +1171,7 @@ What's tracked
 - Scroll depth (25% / 50% / 75% / 100%)
 - Photo views, FAQ opens, social clicks
 - Contact form opens & submissions
-- Device type, where the visitor came from (referrer / UTM source), and approximate location (country, region, city)
+- Device type, where the visitor came from, and approximate location (country, region, city)
 
 How long we keep it
 - Visitor data is stored permanently — there is no expiration or auto-deletion. A 365-day lookback is available today.
@@ -1335,11 +1283,11 @@ Leads captured through the "Download Pricing & Availability" form on your Lead L
         tags: ['leads', 'pipeline', 'kanban', 'sales', 'inbox', 'directory leads', 'form', 'space', 'contact stage'],
         body: `The Lead Inbox is your sales pipeline. Open it from the sidebar → Lead Inbox.
 
-Every contact is always visible in some pipeline stage. When you open Leads, StoryVenue reconciles your leads and contacts so that every contact with a real email shows up in the pipeline, and every lead is snapped to the pipeline + stage stored on its matching contact profile. If you move a contact's stage on the Contacts page, the Leads Kanban reflects it — and vice versa. Leads pointing at a deleted pipeline/stage automatically heal to the default pipeline's first stage instead of disappearing from the board.
+Every contact with an email shows up in the pipeline, and a lead always shows the stage on its contact profile. Move a contact's stage on the Contacts page and the Lead Inbox shows it — and the other way round. A lead whose stage was deleted moves to the first stage of the default pipeline, so nothing drops off the board.
 
 How leads arrive:
 - By themselves, from every door you've opened: the inquiry form on your storyvenue.com listing, the Web Form on your own website, your Lead Link, and Lead Finder (inquiry emails from other directories).
-- You can add leads by hand with the "+ Add Lead" button in the top-right. The New Lead modal includes a Space picker and a Pipeline / Stage picker. Choose "None" as the stage to track a contact without placing them in an active pipeline column — they'll appear only on the Contacts page, not the Kanban.
+- You can add leads by hand with the "Add lead" button in the top-right. The New Lead modal includes a Space picker and a Pipeline / Stage picker. Choose "None" as the stage to track a contact without placing them in an active pipeline column — they'll appear only on the Contacts page, not the Kanban.
 
 Two views:
 - Kanban — your pipeline as columns. Each stage is a column; each lead is a card. Drag a card between columns to change its stage.
@@ -1356,19 +1304,19 @@ Every lead shows:
 
 Click any card (or list row) to open the full lead drawer — edit any field, add timestamped notes, schedule an appointment, create a customer from the lead, or delete it.
 
-The pipeline picker (top-right) lets you switch between multiple pipelines. Everyone starts with a default "Sales Pipeline" with 8 stages: Lead, Conversations Started, Qualified, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can rename, add, remove, and reorder stages — or create a brand-new pipeline — with the Edit button.
+The pipeline picker (top-right) lets you switch between multiple pipelines. Everyone starts with the default Bride Booking System™ pipeline and its 8 stages: Lead, Conversations Started, Qualified, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. That pipeline is locked. To work with stages of your own, create a pipeline with the Edit button.
 
 When a customer profile exists with the same email as a lead, updating the stage on the customer profile or moving the card on the Kanban can keep both in sync (see the customer profile pipeline section).
 
 Pipeline intelligence — Below the page header, an insights strip summarizes open pipeline (sum of opportunity values), weighted pipeline (deal value × each stage's win probability; see next articles), rough booked revenue by referral label vs directory-sourced leads (from paid proposals matched by email), and a simple ROI vs optional listing marketing monthly spend when that budget is stored on your venue. This is directional, not accounting-grade.
 
-Tags & attribution — Leads support marketing tags and trigger links (Marketing) for attribution; the drawer can show personalized trigger URLs for this lead.`,
+Tags — leads can carry tags. Add or remove them in the lead drawer.`,
       },
       {
         id: 'leads-crm-intelligence',
         title: 'Pipeline intelligence, owners, audit trail, and revenue visibility',
         tags: ['weighted', 'forecast', 'roi', 'audit', 'owner', 'assign', 'hide revenue', 'permissions', 'log call', 'insights', 'listing spend'],
-        body: `The Leads page includes tools for forecasting, accountability, and team permissions.
+        body: `The Lead Inbox includes tools for forecasting, accountability, and team permissions.
 
 Weighted pipeline
 - Each stage has a win probability (0–100%). If unset, StoryVenue uses sensible defaults from the stage kind (open vs won vs lost).
@@ -1393,7 +1341,7 @@ Listing spend & ROI
         id: 'leads-kanban',
         title: 'Using the Kanban board',
         tags: ['kanban', 'pipeline', 'drag and drop', 'stages', 'board', 'move leads'],
-        body: `The Kanban view is the default on the Leads page. Each column is a stage in your pipeline.
+        body: `The Kanban view is the default in the Lead Inbox. Each column is a stage in your pipeline.
 
 To move a lead:
 - Grab a card (click-and-hold anywhere on the card)
@@ -1420,11 +1368,11 @@ If a lead has no stage assigned (e.g. a brand-new inquiry from the directory tha
         body: `Every account has a default pipeline (the "Bride Booking System™" pipeline) that comes pre-built with 8 stages: Lead, Conversations Started, Qualified, Tour Booked, Proposal Sent, Wedding Booked, Follow up, Not Interested. You can also create additional custom pipelines for different brands, properties, or sales processes.
 
 Open the editor:
-- Top-right of the Leads page, pipeline dropdown → Edit button
+- Top-right of the Lead Inbox, pipeline dropdown → Edit button
 - A modal opens with your pipelines listed on the left, stages on the right.
 
 Default pipeline — locked (read-only)
-The default pipeline and its stages are locked and cannot be edited or deleted. This protects the platform's built-in automations and CRM setup that depend on the default stages.
+The default pipeline and its stages are locked and cannot be edited or deleted. Your follow-up and your reports rely on these stages.
 - You cannot rename, recolor, reorder, add, or delete stages in the default pipeline.
 - You cannot delete the default pipeline itself.
 - A lock badge appears on locked stage rows. If you try to edit them you'll see a message explaining they are protected.
@@ -1446,13 +1394,10 @@ Creating a new pipeline:
 The "None" stage
 - Both the New Lead and New Contact forms include a "None" option. Choosing None saves the contact without placing them in any pipeline column — they appear on Contacts but not on Kanban.
 
-Making a pipeline the default:
-- The default pipeline is where new leads land. You can make any custom pipeline the default; once you do, the old default pipeline can be deleted.
-
 Deleting a pipeline:
-- You can't delete the default pipeline. Make another pipeline the default first, then delete the original.
+- You can delete a pipeline you created. The default pipeline can't be deleted, and new leads always land in it.
 
-Use "Use this pipeline" to make a pipeline the active view on the Leads page and close the editor in one click.`,
+Use "Use this pipeline" to make a pipeline the active view in the Lead Inbox and close the editor in one click.`,
       },
       {
         id: 'leads-detail-notes',
@@ -1477,7 +1422,7 @@ Editable fields (click to edit, blur or press Enter to save)
 - Referral / partner (free text)
 
 Marketing tags
-- Add or remove tags; create new tags from the lead or manage them under Marketing → Trigger Links & Tags.
+- Add or remove tags, and create new tags right from the lead.
 
 Inquiry message
 - If the lead came from the directory, their original message is shown here as read-only context.
@@ -1518,7 +1463,7 @@ Available actions
 - Calendar — opens the New Event modal with this contact pre-filled so you can book an appointment instantly
 
 Why use card actions?
-When you're scanning the Kanban board and need to take a quick action on several leads in a row, these buttons save you from opening and closing the full drawer for each one. They're designed for speed when you're in a workflow.
+When you're scanning the Kanban board and need to take a quick action on several leads in a row, these buttons save you from opening and closing the full drawer for each one. They're built for speed when you're working through a list.
 
 The full lead drawer (click the card title or name) still gives you access to everything — notes history, audit trail, full edit fields, and linked proposals.`,
       },
@@ -1551,11 +1496,11 @@ To edit the appointment later, open it from the Calendar page.`,
         id: 'leads-filter-search',
         title: 'Searching and filtering leads',
         tags: ['filter', 'search', 'stage filter', 'find lead', 'leads filter'],
-        body: `The Leads page has two tools for finding a specific lead:
+        body: `The Lead Inbox has two tools for finding a specific lead:
 
 Search box (top)
 - Type any part of: first/last name, email, phone number, venue name, venue website URL, inquiry message, or note content
-- Results update as you type (a short debounce prevents flicker)
+- Results update as you type
 - Clear the box to restore the full list
 
 Stage filter (List view only)
@@ -1572,7 +1517,7 @@ If no leads match, you'll see an empty state. That's not an error — just widen
         id: 'leads-ask-ai',
         title: 'Asking AI about your leads',
         tags: ['ai', 'ask ai', 'stats', 'report', 'intelligence'],
-        body: `The Ask AI widget (bottom-right of every page) knows about your leads when you're on the Leads page.
+        body: `The Ask AI widget (bottom-right of every page) knows about your leads when you're in the Lead Inbox.
 
 Things to ask:
 - "How many leads do I have this month?"
@@ -1587,15 +1532,15 @@ Things to ask:
 - "Explain weighted pipeline vs open pipeline"
 - "What's my directory vs referral booked revenue?" (insights strip uses your data; Ask AI also has leads context when you're on this page)
 
-Ask AI uses your live pipeline data when you're on the Leads page (totals, recent leads, notes snippets). It does not change leads for you — use the Kanban board or drawer to make edits. Treat the dashboard as the source of truth for exactly what your role can view.
+Ask AI uses your live pipeline data when you're in the Lead Inbox (totals, recent leads, notes snippets). It does not change leads for you — use the Kanban board or drawer to make edits. Treat the dashboard as the source of truth for exactly what your role can view.
 
-If AI gives a stale answer, refresh the page to reset the context.`,
+If an answer looks out of date, refresh the page and ask again.`,
       },
       {
         id: 'leads-notifications',
         title: 'Lead notification emails',
         tags: ['notification', 'email', 'lead email', 'alert', 'inquiry email', 'not receiving'],
-        body: `Every new lead sends you ONE email, whatever it came from: your StoryVenue listing, your Lead Link, your website form, a form you built (including forms behind Meta ads), Lead Finder, the API, or a lead you add yourself.
+        body: `Every new lead sends you ONE email, whatever it came from: your StoryVenue listing, your Lead Link, your website form, a form you built (including forms behind Meta ads), Lead Finder, a connected tool, or a lead you add yourself.
 
 The email lists where the lead came from first, then everything they gave you: name, email, phone, wedding date, guest count, every form answer and their message. Hit Reply to write back to them, or View Lead to open them in StoryVenue. Lead Finder leads also include the original directory email (unless you've turned Lead Finder's inbox copies off).
 
@@ -1616,7 +1561,7 @@ SMS for high-value leads is not currently on by default; contact support if you 
         id: 'leads-space',
         title: 'Capturing a space on a new lead',
         tags: ['space', 'venue space', 'new lead', 'primary space', 'barn', 'garden', 'ballroom', 'add space', 'edit space'],
-        body: `The + Add Lead modal on the Leads page includes a Space field so you can record which venue space the couple is most interested in at the moment the inquiry comes in — no extra step later.
+        body: `The Add lead form in the Lead Inbox includes a Space field so you can record which venue space the couple is most interested in at the moment the inquiry comes in — no extra step later.
 
 How it works
 - Open the Space dropdown and pick any saved space (Barn, Garden, Ballroom, etc.).
@@ -1634,19 +1579,15 @@ If the Space field isn't saving
         id: 'leads-to-proposal',
         title: 'Turning a lead into a customer and proposal',
         tags: ['convert', 'proposal', 'customer', 'lead to customer', 'book', 'quote'],
-        body: `Leads are the top of your funnel. Once a lead is qualified, here's the recommended path through StoryVenue:
+        body: `Leads are the top of your funnel. Once a lead is worth pursuing, here's the path through StoryVenue:
 
-1. Leads → open the inquiry, review details
-2. Mark contacted once you've replied
-3. Add them to Customers — Sidebar → Customers → + Add Customer — paste in their name, email, phone, and wedding date. Set the pipeline stage to "Tour Scheduled" or "Proposal Sent" as appropriate.
-4. Book their tour on the Calendar — use Type: Tour, link to the customer's email
-5. After the tour, go to Payments → New Proposal → pick them from the customer list → apply a proposal template → send
-6. Back on the Leads page, mark the lead "Proposal sent"
-7. When they sign and pay, mark the lead "Booked" and update the customer's pipeline stage to Booked
+1. Lead Inbox → open the lead and review the details
+2. Reply to her from Conversations, or with the quick actions on her card
+3. Book her tour: open the lead → Schedule appointment (Type: Tour). The lead moves to Tour Booked by itself
+4. After the tour, go to Payments → New → pick her from your contacts → apply a proposal template → send. Move the lead to Proposal Sent
+5. When she signs and pays, move the lead to Wedding Booked
 
-The lead stays in your Leads inbox as a permanent record of where this customer came from, even after they become a paying customer.
-
-Tip: once a lead becomes a paying customer, keep their lead record in your inbox as a permanent record of the original inquiry source — it stays linked to the contact profile so you always have the full history in one place.`,
+The lead stays in your Lead Inbox as a permanent record of where this customer came from, linked to her contact profile, so you always have the full history in one place.`,
       },
     ],
   },
@@ -1667,7 +1608,7 @@ The New Contact form is identical to the New Lead form and includes:
 - Last Name (required)
 - Email (required)
 - Phone
-- Pipeline and Stage (same pipelines used on the Leads page — pick "None" to track without placing them in an active pipeline stage)
+- Pipeline and Stage (same pipelines used in the Lead Inbox — pick "None" to track without placing them in an active pipeline stage)
 - Address, City, State, Zip
 
 Click Save. The contact appears in your list immediately.
@@ -1724,7 +1665,7 @@ Schedule
 - See all upcoming and past appointments linked to this contact's email in one view
 - Click any appointment to open the event detail and edit or cancel it
 
-Below the main header row, the Pipeline section lets you choose which sales pipeline applies (same pipelines you manage under Leads — e.g. default "Sales Pipeline") and shows stage pills for that pipeline. Click a pill to move the contact to that stage; the selection saves to the server and the UI updates right away. If a lead exists with the same email, you may see a note that the profile is linked to a lead and stages can stay in sync both ways.
+Below the main header row, the Pipeline section lets you choose which sales pipeline applies (the same pipelines as the Lead Inbox) and shows stage pills for that pipeline. Click a pill to move the contact to that stage; it saves right away. If a lead exists with the same email, you may see a note that the profile is linked to a lead and stages can stay in sync both ways.
 
 The header also shows a stage badge, referral source when set, and KPIs: proposals count, total paid, pending amount, open tasks.
 
@@ -1734,13 +1675,13 @@ On the Contacts list page itself, each row also has "Create Proposal" and "Creat
         id: 'cust-pipeline',
         title: 'Sales pipeline, stages, and referral source',
         tags: ['pipeline', 'stage', 'lead', 'referral', 'source', 'funnel', 'crm', 'kanban', 'sales pipeline'],
-        body: `Customer profiles use the same configurable sales pipelines as the Leads page (Kanban). Your venue can have one or more pipelines; each pipeline has ordered stages with names and colors (the default template often includes stages like Lead, Conversations Started, Qualified, Tour Booked, Proposal Sent, Wedding Booked, Follow up, and Not Interested — you can rename, add, remove, or reorder them from Leads).
+        body: `Contact profiles use the same sales pipelines as the Lead Inbox. Your venue can have one or more pipelines; each has ordered stages with names and colors. The default Bride Booking System™ pipeline has Lead, Conversations Started, Qualified, Tour Booked, Proposal Sent, Wedding Booked, Follow up, and Not Interested, and is locked; pipelines you create can have any stages you like.
 
-On the customer profile:
-1. Choose the Pipeline from the dropdown (e.g. "Sales Pipeline").
-2. Click a stage pill to move the customer to that stage. The UI updates immediately and the change is saved.
+On the contact profile:
+1. Choose the Pipeline from the dropdown.
+2. Click a stage pill to move the contact to that stage. It saves right away.
 
-If a lead in your inbox shares the same email as this customer, the profile may show that it is linked to a lead — stage can sync both ways between Leads and the customer record.
+If a lead in your Lead Inbox has the same email as this contact, the profile shows that it is linked to a lead, and the stage stays the same in both places.
 
 Referral source (how the couple found you) is separate from pipeline: Instagram, Google, Wedding Wire, The Knot, Referral, Venue Website, Facebook, or Other. Set it from the Overview tab / contact area.
 
@@ -1748,12 +1689,12 @@ If pipeline or stage changes aren't saving, contact StoryVenue support.`,
       },
       {
         id: 'cust-tasks',
-        title: 'Customer tasks — create, edit, reopen',
+        title: 'Contact tasks — create, edit, reopen',
         tags: ['tasks', 'todo', 'checklist', 'follow up', 'reminder', 'edit task', 'reopen task', 'uncheck task', 'update task'],
-        body: `The Tasks tab on a customer profile lets you create action items specific to that customer.
+        body: `The Tasks tab on a contact profile lets you create action items for that contact.
 
 To add a task:
-1. Open the customer profile → Tasks tab
+1. Open the contact profile → Tasks tab
 2. Type the task title in the input box
 3. Optionally set a due date
 4. Press Enter or click the + button
@@ -1768,16 +1709,16 @@ To edit a task after it has been created: hover the task row and click the penci
 
 To permanently delete a task: open a completed task row and click the trash icon.
 
-Tasks are visible only to your team — they are not shared with the customer.`,
+Tasks are visible only to your team — they are not shared with the contact.`,
       },
       {
         id: 'cust-documents',
-        title: 'Customer documents and files',
+        title: 'Contact documents and files',
         tags: ['documents', 'files', 'upload', 'contract', 'floor plan', 'insurance', 'attachment'],
-        body: `The Documents tab lets you attach files to a customer profile: signed contracts, floor plans, vendor agreements, insurance certificates, photos, and more.
+        body: `The Documents tab lets you attach files to a contact profile: signed contracts, floor plans, vendor agreements, insurance certificates, photos, and more.
 
 To upload a file:
-1. Open the customer profile → Documents tab
+1. Open the contact profile → Documents tab
 2. Select the file type from the dropdown (Contract, Floor Plan, Vendor Agreement, Insurance, Photo, Other)
 3. Click "Upload File" and select the file from your device
 4. Accepted formats: PDF, Word, Excel, images (PNG, JPG) — max 10MB
@@ -1810,18 +1751,16 @@ For accounts connected to StoryVenue Legacy messaging, you can control DND per c
 - Inbound Calls & SMS — blocks inbound notifications as well
 
 Enabling any DND channel
-Toggle the switch on for the channel you want to block. The change is saved locally and synced to your StoryVenue Legacy sub-account automatically. If the sync fails (e.g. due to a temporary connection issue), a warning appears and the setting retries on the next contact refresh.
+Toggle the switch on for the channel you want to block. The change saves and is passed on to your Legacy messaging account. If that can't be reached at that moment, a warning appears and it is tried again later.
 
 Compliance enforcement
-This is a critical compliance feature. When SMS DND is enabled for a contact, StoryVenue will block all outbound SMS to that number — even if a notification template or workflow would otherwise send one. The contact will not receive the message. This applies to calendar reminder SMS, confirmation SMS, and any workflow SMS steps.
+This is a critical compliance feature. When SMS DND is enabled for a contact, StoryVenue will block all outbound SMS to that number, automatic ones included. The contact will not receive the message. This applies to calendar reminder texts, confirmation texts, and your automated follow-up.
 
-Legacy messaging vs. SaaS-only accounts
-DND is currently available for venues using StoryVenue Legacy messaging. Venues on the native SaaS-only plan will have their own DND solution in a future release.
+Who has it
+DND is available for venues using StoryVenue Legacy messaging.
 
-System tags auto-applied on DND changes
-When you enable SMS DND: the "sms_opted_out" tag is added to the contact.
-When you enable DND All: the "do_not_contact" and "legacy_dnd_active" tags are added.
-These tags can be used in workflows to trigger follow-up sequences or remove the contact from campaigns.`,
+Tags added when DND changes
+When you enable SMS DND, the contact is tagged as opted out of texts. When you enable DND All, the contact is tagged do-not-contact. You can use these tags to build audiences, or to leave the contact out of a campaign.`,
       },
     ],
   },
@@ -1835,9 +1774,9 @@ These tags can be used in workflows to trigger follow-up sequences or remove the
         id: 'offerings-overview',
         title: 'Packages & Items (Offerings catalog)',
         tags: ['offerings', 'packages', 'items', 'products', 'bundles', 'catalog', 'line items', 'price list', 'venue packages', 'venue products', 'contract template link', 'season', 'inventory', 'portal'],
-        body: `Path: Payments → Packages (or sidebar → Offerings) at /dashboard/offerings.
+        body: `Path: Payments → Packages.
 
-The Offerings page is your product and package catalog — everything you sell. It has two types:
+The Packages page is your product and package catalog — everything you sell. It has two types:
 
 Items
 Individual products or services you sell (e.g. "Rehearsal Dinner Add-on," "Upgraded Florals," "Videography Package").
@@ -1907,12 +1846,12 @@ To use a template: when creating a new proposal, choose the template from the dr
 
 To edit an existing template: Payments → Proposal Templates → click Edit on any template card.
 
-Linking a template to a package: go to Offerings → edit a bundle/package → "Default contract template" dropdown. Now when a venue owner picks that package while building a proposal, it auto-fills both the line items AND the contract body in one step — no manual template selection needed.`,
+Linking a template to a package: go to Payments → Packages → edit a package → "Default contract template" dropdown. Now when you pick that package while building a proposal, it auto-fills both the line items AND the contract body in one step — no manual template selection needed.`,
       },
       {
         id: 'pay-status',
         title: 'Proposal statuses explained',
-        tags: ['status', 'draft', 'sent', 'signed', 'paid', 'partially paid', 'cancelled', 'refunded', 'partial_refund', 'expired', 'declined', 'opened'],
+        tags: ['status', 'draft', 'sent', 'signed', 'paid', 'partially paid', 'cancelled', 'refunded', 'partial refund', 'expired', 'declined', 'opened'],
         body: `Each proposal moves through these statuses:
 
 - Draft — saved but not yet sent to the customer
@@ -1935,7 +1874,7 @@ Refund tracking: when a proposal is refunded (full or partial), the refund date 
         id: 'pay-numbers',
         title: 'Proposal and invoice numbers',
         tags: ['invoice number', 'proposal number', '#1042', 'sequential', 'number', 'search by number', 'reference'],
-        body: `Every proposal and invoice gets an auto-incrementing sequential number (like #1042) so owners and couples can reference a specific booking without using an ID or token.
+        body: `Every proposal and invoice gets an auto-incrementing sequential number (like #1042) so you and your couples can refer to a specific booking easily.
 
 Where numbers appear:
 - Proposals list — displayed under each client name
@@ -1943,11 +1882,11 @@ Where numbers appear:
 - Client-facing proposal page — shown as "Proposal #1042" or "Invoice #1042"
 - Invoice & receipt page — shown in the header and in the PDF
 - Receipt emails — included in the subject line and body
-- Transactions page — used as the invoice number instead of a random token slice
+- Transactions page — shown as the invoice number
 
 Searching by number: on the Proposals list, type a number (e.g. "1042" or "#1042") in the search box to jump to that booking instantly.
 
-Numbers are sequential starting from 1001 and are assigned in the order proposals are created. Existing proposals were backfilled with numbers in creation order when the feature was activated.`,
+Numbers start at 1001 and go up in the order proposals are created.`,
       },
       {
         id: 'pay-manual',
@@ -1977,9 +1916,9 @@ To delete a mistaken payment: open the Record Payment modal and click the trash 
         id: 'pay-detail',
         title: 'Proposal detail page (booking overview)',
         tags: ['detail page', 'booking', 'timeline', 'ledger', 'payment history', 'proposal overview', 'all actions'],
-        body: `Every proposal and invoice has a dedicated detail page at /dashboard/proposals/[id].
+        body: `Every proposal and invoice has its own detail page.
 
-To open it: click any client name in the Payments → Proposals list. (The pencil/edit icon still goes to the edit form.)
+To open it: click any client name in the Payments → Proposals & invoices list. (The pencil/edit icon still goes to the edit form.)
 
 What the detail page shows:
 - Header: client name, sequential #number (e.g. #1042), status badge
@@ -1995,7 +1934,7 @@ The timeline gives you a bird's-eye view of where in the process a couple is. In
         id: 'pay-pdf',
         title: 'Downloading a branded invoice or receipt PDF',
         tags: ['PDF', 'download', 'invoice PDF', 'receipt PDF', 'print', 'branded', 'parents', 'forward'],
-        body: `Every proposal and invoice has a public receipt page at /invoice/[proposalId]. The "Invoice & receipt" button on the proposal detail page and the link in receipt emails both point here.
+        body: `Every proposal and invoice has a receipt page your client can open without signing in. The "Invoice & receipt" button on the proposal detail page and the link in receipt emails both point here.
 
 What the page shows:
 - Venue logo, brand color, and contact info
@@ -2007,10 +1946,10 @@ What the page shows:
 - Full payment ledger — every payment with its number, method, and date
 
 Downloading the PDF:
-Click the "Download PDF" button at the top of the page. The PDF is generated instantly in the browser using your venue's brand color and includes the full payment ledger and balance summary.
+Click the "Download PDF" button at the top of the page. The PDF uses your venue's brand color and includes the full payment ledger and balance summary.
 
 Printing:
-Click the "Print" button to use the browser's native print dialog. The page is print-optimized (white background, no navigation chrome).
+Click the "Print" button to use the browser's native print dialog. The printed page is clean: white background, just the invoice.
 
 This page is public and shareable — couples can forward the link to parents or anyone helping pay. No login is required to view it.`,
       },
@@ -2048,7 +1987,7 @@ See "Payment plans" for how to set one up and manage it from Payments → Paymen
         id: 'pay-transactions',
         title: 'Viewing transactions and issuing refunds',
         tags: ['transactions', 'charges', 'refund', 'history', 'partial refund', 'payment plan'],
-        body: `Go to Payments → Transactions (or click Transactions in the sidebar).
+        body: `Go to Payments → Transactions.
 
 Transactions lists every payment received, one line each: every payment of a payment plan, and cash or check payments you recorded. Each shows the method, amount, date, any amount refunded, and a link to the booking.
 
@@ -2117,18 +2056,18 @@ Downloads happen instantly in your browser — no email required. For large date
         body: `Go to Settings → Branding. The page is ordered top-to-bottom in the natural setup flow:
 
 1. Contact Information — business name, email, phone, website, address, and a footer note. These appear on every invoice, proposal, and email footer.
-2. Brand Settings — upload your logo (PNG, JPG, or SVG, max 5MB). You can also pick from your media library (Media in the sidebar — JPEG, PNG, WebP, AVIF, GIF; no video). Your logo shows in a white header with a colored strip underneath in every email.
+2. Brand Settings — upload your logo (PNG, JPG, or SVG, max 5MB). You can also pick from your media library (Marketing → Media — JPEG, PNG, WebP, AVIF, GIF; no video). Your logo shows in a white header with a colored strip underneath in every email.
 3. Color Presets — click any preset (Default, Ivory & Gold, Sage & Stone, Blush & Cream, Coastal Blue, Black & Champagne, Warm Earth) to set the Primary/Button, Background, and Button Text colors all at once. Saves automatically when clicked.
 4. Social Networks — paste your social profile URLs once. Every marketing-email Social block reads from this list automatically.
 5. Time zone — used for scheduling, calendar, and appointment times.
 
 The live Preview panel on the right updates in real time as you change colors and contact info.
 
-Where did "Custom Colors" and the dedicated "Brand Colors" palette go?
-- Custom hex inputs for the three brand colors were removed — Color Presets cover the common combinations, and you can fine-tune individual colors anywhere a color picker appears (email blocks, forms, etc.).
-- The brand-color palette no longer has its own card on this page either. Save / remove brand colors directly from any color picker — they sync across every other picker in the app automatically.
+Fine-tuning colors
+- Color Presets cover the common combinations. You can fine-tune individual colors anywhere a color picker appears (email blocks, forms, etc.).
+- Save or remove brand colors from any color picker — they show up in every other picker in the app.
 
-Changes save automatically as you edit (presets, social URLs, timezone) or after a brief debounce (text fields). The "Save Branding Settings" button at the top forces an immediate save.
+Changes save by themselves as you edit. The "Save Branding Settings" button at the top saves at once.
 
 Note: Branding settings are visible to owners and admins only.`,
       },
@@ -2136,7 +2075,7 @@ Note: Branding settings are visible to owners and admins only.`,
         id: 'brand-colors-saved',
         title: 'Saving brand colors — palette across the app',
         tags: ['brand colors', 'palette', 'saved colors', 'color picker', 'hex', 'venue colors', 'reusable colors'],
-        body: `Your venue keeps a per-venue palette of saved brand colors. There is no dedicated "Brand Colors" page in settings — the palette lives inside every color picker, so you save and reuse colors right where you're working (email builder, form builder, etc.). Once a color is in the palette it appears in every other color picker across the app.
+        body: `Your venue keeps a palette of saved brand colors. The palette lives inside every color picker, so you save and reuse colors right where you're working (email builder, form builder, etc.). Once a color is in the palette it appears in every other color picker across the app.
 
 Adding a color
 - Open any color picker (email block inspector, form field, etc.).
@@ -2149,7 +2088,7 @@ Limits
 - Up to 50 colors per venue.
 
 Where it shows up
-- Flodesk-style color picker inside every email block inspector — your saved colors appear at the bottom of the picker so you can apply them in one click.
+- The color picker in every email block — your saved colors appear at the bottom of the picker so you can apply them in one click.
 - Lead capture / form builder color pickers.
 - Anywhere the app shows a color picker.`,
       },
@@ -2175,15 +2114,12 @@ Limits
 - Up to 8 social links total per venue (one per supported platform — most venues use 3–5).
 
 Where it's used
-- Marketing email Social block — every campaign, template, and automation that includes a Social block automatically renders icons + links from this list. This is the single source of truth for which platforms exist and what URLs they point to.
-- Per-block show / hide — inside the email builder, the Social block's Links tab has an eye toggle next to every platform. Hiding a platform there suppresses it for that one email only; the branding registry is unchanged. Use it when a particular campaign should only spotlight a subset of your social networks.
+- Marketing email Social block — every campaign that includes a Social block shows icons and links from this list.
+- Per-block show / hide — inside the email builder, the Social block's Links tab has an eye toggle next to every platform. Hiding a platform there hides it for that one email only; your saved links are unchanged. Use it when a particular campaign should only spotlight a subset of your social networks.
 - The email builder Social inspector links straight to this section for one-click management.
 
-Anchor / deep link
-Settings → Branding → Social Networks is anchored at #social-networks, so the email builder's "Manage in branding" CTA jumps you directly to that card on the Branding page.
-
 Empty state
-If you don't have any social links saved yet, the Social block in your email shows a hint in the editor pointing you back to Branding. In the actual sent email the Social block renders nothing — it does not ship a placeholder to your recipients.`,
+If you don't have any social links saved yet, the Social block in your email shows a hint in the editor pointing you back to Branding. In the email that's sent, the Social block shows nothing to your recipients.`,
       },
     ],
   },
@@ -2195,30 +2131,31 @@ If you don't have any social links saved yet, the Social block in your email sho
     articles: [
       {
         id: 'me-overview',
-        title: 'Marketing email overview — Templates, Campaigns, Automations',
-        tags: ['marketing email', 'campaigns', 'broadcast', 'newsletter', 'flodesk', 'templates', 'automations', 'preferences', 'overview'],
-        body: `The Marketing flyout in the sidebar groups every email-marketing tool into four pages:
+        title: 'Marketing overview — Campaigns, Audiences, Forms',
+        tags: ['marketing email', 'campaigns', 'broadcast', 'newsletter', 'audiences', 'forms', 'preferences', 'overview'],
+        body: `Marketing in the sidebar holds your email-marketing tools:
 
-1. Templates (Marketing → Email Templates) — your reusable design library. Build a template once with the drag-and-drop builder, then reuse it for any campaign.
-2. Campaigns (Marketing → Campaigns) — one-off broadcasts you send to a segment of your contacts/leads. The campaigns list has a trash icon on every row so you can delete any campaign (with a confirm prompt) directly from the list.
-3. Automations (Marketing → Email Automations) — multi-step drip sequences triggered by an event (new lead, tag added, date hit, etc.).
-4. Preferences — recipients can self-manage their subscription via a public preference center linked from every email footer.
+1. Analytics (Marketing → Analytics) — opens, clicks, unsubscribes, and bounces for what you've sent.
+2. Campaigns (Marketing → Campaigns) — emails you send to a group of your contacts and leads. The campaigns list has a trash icon on every row so you can delete any campaign (with a confirm prompt) directly from the list.
+3. Audiences (Marketing → Audiences) — reusable groups of contacts to send to.
+4. Forms (Marketing → Forms) — lead capture forms.
+5. Media (Marketing → Media) — the images and files you reuse across emails, forms, your listing, and branding.
 
-All four use the same Flodesk-style block editor so the experience is identical no matter where you are. Templates open at /dashboard/marketing/email/templates, campaigns at /dashboard/marketing/email/campaigns, automations at /dashboard/marketing/email/automations.
+Recipients can manage their own subscription on the preferences page linked from every email's footer.
 
-Marketing emails always pull your venue branding automatically — logo, brand colors, brand fonts, address, and social network links — so every send stays on-brand without touching settings.
+Campaign emails are built in a drag-and-drop block editor, and they always pull in your venue branding — logo, brand colors, brand fonts, address, and social network links — so every send stays on-brand without touching settings.
 
 Where things live:
 - Brand colors saved palette → save and reuse colors directly from any color picker (email block inspector, form builder, etc.); the palette is shared across every picker in the app.
 - Social network links → Settings → Branding → Social Networks. Power the Social block and footer.
 - Address used in the Address block → Settings → Branding (Contact Information) or the venue's primary location.
-- Compliance footer (unsubscribe + manage preferences) is appended automatically; recipients land on a public Preferences page hosted on app.storyvenue.com.`,
+- The footer with unsubscribe and manage-preferences links is added automatically.`,
       },
       {
         id: 'me-builder',
-        title: 'Using the email builder (Flodesk-style)',
+        title: 'Using the email builder',
         tags: ['email builder', 'editor', 'drag and drop', 'canvas', 'blocks', 'palette', 'inspector', 'preview', 'undo', 'redo'],
-        body: `Open any template, campaign, or automation step and you land in the email builder — a three-pane Flodesk-style editor:
+        body: `Open any campaign and you land in the email builder — an editor with three panes:
 
 Left: a thin sidebar with view toggles (Desktop / Mobile preview) and undo/redo.
 Center: the live canvas showing exactly how the email will render. Click any block to select it and edit inline (text blocks let you type directly on the canvas; buttons let you edit the label live).
@@ -2230,26 +2167,25 @@ Adding blocks
 
 Editing blocks
 - Single-click a block to select it; the right panel becomes that block's inspector.
-- Hover any block to see a side toolbar with Move up / Move down / Duplicate / Delete buttons. The "save as template" heart was removed — saving the entire email is what you want, not individual blocks.
+- Hover any block to see a side toolbar with Move up / Move down / Duplicate / Delete buttons.
 - Drag a selected block to a new position by its drag handle.
-- The drop indicator and selection border use a #1b1b1b / blue accent so it's clear what's about to move.
 
 Right-panel inspector tabs
 Every block has a Block tab with shared settings — background color, top/bottom padding, side gutters. Block-specific tabs (Font, Icons, Links, Address, etc.) appear before the Block tab.
 
 Header bar
-- Back arrow returns you to the Templates / Campaigns / Automations list (the label says "Back" rather than the form name to keep it tidy).
-- The step nav (Design / Recipients / Review) is centered over the canvas, offset for the right panel so it stays visually balanced.
-- The preview button (eye icon, labelled "Preview") and Send pin to the far right.
+- The Back arrow returns you to the campaigns list.
+- The steps (Design / Recipients / Review) sit above the canvas.
+- Preview (the eye icon) and Send are at the far right.
 
 Live preview & send-test
-Click the eye icon to open the preview modal. It renders inside an iframe so links and embedded videos actually work — exactly what your recipient will see in their inbox. There's a Send-test form right inside the modal: enter any email address and click Send Test to fire a real email through your normal pipeline. The preview header and backdrop use #1b1b1b for a neutral, distraction-free preview.
+Click the eye icon to open the preview. Links and videos work in it, so it's exactly what your recipient will see in their inbox. There's a Send-test form right there: enter any email address and click Send Test to get a real email.
 
 Undo / Redo
 The left sidebar has an undo/redo bar. Every edit (block add, delete, move, style change, text edit) is captured.
 
 Saving
-Templates and campaigns autosave as you edit. The header shows the save state.`,
+Campaigns save by themselves as you edit. The header shows the save state.`,
       },
       {
         id: 'me-blocks',
@@ -2258,22 +2194,22 @@ Templates and campaigns autosave as you edit. The header shows the save state.`,
         body: `The block palette in the right panel offers every supported block. Drag any tile onto the canvas to add it.
 
 Available blocks:
-- Heading (H1 / H2 / H3) — large headline text. Buttons in the format toolbar set both the level and the matching font size so it always takes visual effect.
+- Heading (H1 / H2 / H3) — large headline text. Buttons in the format toolbar set the level and its font size.
 - Text — paragraph copy with full rich-text formatting (bold, italic, underline, lists, links, alignment, font, color). The format toolbar includes an AI refine button (pencil icon) that rewrites your selection.
-- Button — call-to-action button. Full Flodesk-style tabbed inspector with presets, saved styles, fonts, colors, padding, border radius, and a link pill that supports either a URL or a file from your media library (see the Button block article).
+- Button — call-to-action button. A tabbed inspector with presets, saved styles, fonts, colors, padding, border radius, and a link pill that supports either a URL or a file from your media library (see the Button block article).
 - Image — single image with media-library picker. Supports alignment, padding, link wrapping, and alt text.
 - Image grid (multi-image) — 2-, 3-, or 4-column image rows with even gutters between rows and columns.
 - Video — 16:9 YouTube-style player. Paste any YouTube, Vimeo, or Loom URL. The thumbnail + play button render on the canvas, and the actual video plays in preview and sent emails (see the Video block article).
-- Divider — horizontal rule. Flodesk-style settings: thickness, style (solid/dashed/dotted), color, width %, alignment, top/bottom padding, background color.
+- Divider — horizontal rule. Settings: thickness, style (solid/dashed/dotted), color, width %, alignment, top/bottom padding, background color.
 - Spacer — vertical empty space. Two settings: Background color and Height (drag the slider).
-- Social — row of social network icons. Pulls links from your branding settings; styling controlled by a 3-tab inspector (Icons / Links / Block). The Links tab has an eye toggle next to every platform so you can show or hide a specific platform from this email without touching your branding registry. See the Social block article.
+- Social — row of social network icons. Pulls links from your branding settings; styling controlled by a 3-tab inspector (Icons / Links / Block). The Links tab has an eye toggle next to every platform so you can show or hide a specific platform in this email without changing your saved links. See the Social block article.
 - Address — your venue address block. 3-tab inspector (Font / Address / Block). Pulls address from your branding settings; the "Manage my address" button jumps to Settings → Branding.
 - Columns — split a row into 2 or 3 columns and drop other blocks inside.
-- HTML — raw HTML for power users.
+- HTML — your own HTML, for advanced users.
 
-Per-block settings — every block's right-panel inspector ends with a "Block" tab containing the shared settings: top padding, bottom padding, side gutters, and background color. This keeps spacing consistent across blocks and blocks the canvas from drifting visually.
+Per-block settings — every block's right-panel inspector ends with a "Block" tab containing the shared settings: top padding, bottom padding, side gutters, and background color. This keeps spacing consistent across blocks.
 
-Aligning content — every block that supports alignment (heading, text, button, image, video, social, address) uses the same Flodesk-style alignment selector: four icon buttons (Left, Center, Right, and Full) with a rounded pill highlight on the active option.`,
+Aligning content — every block that supports alignment (heading, text, button, image, video, social, address) uses the same alignment selector: four icon buttons (Left, Center, Right, and Full) with a rounded pill highlight on the active option.`,
       },
       {
         id: 'me-block-button',
@@ -2287,9 +2223,8 @@ Style — Presets, Saved styles, and full custom controls.
 - Custom controls: font family (any Google Font), weight, size, letter spacing, text color, background color, border color, border width, border radius, vertical padding, horizontal padding.
 
 Link — the link pill supports two link types:
-- URL — paste any URL. Toggle "Open in new tab" if you want target=_blank.
-- File — pick a file (PDF, image, etc.) from your venue Media library. The button then links straight to that file's public URL.
-The link pill is compact and matches the Flodesk reference.
+- URL — paste any URL. Toggle "Open in new tab" if you want it to open in a new tab.
+- File — pick a file (PDF, image, etc.) from your venue Media library. The button then links straight to that file.
 
 Block — shared block settings (alignment, top/bottom padding, side gutters, background color).
 
@@ -2300,7 +2235,7 @@ Click the button on the canvas and you can edit the label inline — no need to 
         id: 'me-block-image',
         title: 'Image block — media library + multi-image grid',
         tags: ['image', 'photo', 'media library', 'image grid', 'multi-image', 'columns', 'gutters', 'alignment'],
-        body: `The Image block is unified across the entire builder around the shared VenueMediaPickerModal — the same picker used in branding, listing photos, and lead capture forms. Click "Choose from media library" to pick an image you already uploaded, or upload a new one in-place.
+        body: `The Image block uses the same media picker as branding, listing photos, and lead capture forms. Click "Choose from media library" to pick an image you already uploaded, or upload a new one in-place.
 
 Single image
 - Replace image — opens the media picker.
@@ -2330,10 +2265,10 @@ Supported formats: JPEG, PNG, WebP, AVIF, GIF (no video). Max 10MB per image. Fi
 
 What renders where:
 - Live canvas — the thumbnail with a play button overlay. Clicking the block on the live canvas SELECTS it for editing; it does NOT open the video. This stops accidental navigation while you're laying out the email.
-- Preview modal — the video plays inline because the preview is a real iframe.
+- Preview — the video plays right in the preview.
 - Sent emails — the thumbnail links out to the original video URL, so recipients click through and watch in their browser.
 
-Empty state — when no URL is set, the canvas shows a small hint reading "Add a YouTube, Vimeo or Loom URL". The hint is positioned so the play button overlay never obscures it.
+Empty state — when no URL is set, the canvas shows a small hint reading "Add a YouTube, Vimeo or Loom URL".
 
 Settings:
 - Video URL.
@@ -2345,27 +2280,24 @@ Settings:
         id: 'me-block-social',
         title: 'Social block — venue-managed social network links',
         tags: ['social', 'social links', 'social block', 'icons', 'instagram', 'facebook', 'tiktok', 'linkedin', 'youtube', 'website', 'branding', 'hide platform', 'show hide social'],
-        body: `The Social block renders a row of social network icons in your email — pulled automatically from your venue Branding settings, so you set them once and every campaign stays in sync.
+        body: `The Social block shows a row of social network icons in your email. The links come from your Branding settings, so you set them once and every campaign uses them.
 
-Where you register links — Settings → Branding → Social Networks. From the Social inspector inside the builder, click "Manage in branding" on the Links tab to deep-link straight there. The branding registry is the single source of truth for which platforms exist; the Social block can NOT add new platforms or change a URL — that's by design so newsletters never go out with stale URLs.
+Where the links come from
+Settings → Branding → Social Networks. From the block's Links tab, click "Manage in branding" to go straight there. You add or change a link there, not inside the email.
 
-Per-block show / hide
-The Links tab shows every platform you have registered, with an eye toggle next to each row. Click the eye to hide that platform from THIS email only — your branding registry stays untouched, and other emails / blocks continue to show it. Useful when one campaign should only highlight, say, Instagram and TikTok while a different newsletter shows everything. The header counter ("X of Y visible") reflects the current state at a glance, and a "Show all" link reappears any rows you've hidden. Hidden = greyed + struck-through in the inspector, dropped from the live canvas, dropped from the preview iframe, and dropped from the actual sent email.
+Show or hide per email
+The Links tab lists every platform you've saved, with an eye toggle next to each. Click the eye to hide that platform in THIS email only — your saved links stay as they are, and other emails still show it. Useful when one campaign should only highlight, say, Instagram and TikTok. The counter ("X of Y visible") shows where you stand, and "Show all" brings back anything you've hidden.
 
-Inspector tabs
-- Icons — choose the look: outline (no chip), filled circle, or solid circle. Pick a color from the Flodesk color picker, a size (S / M / L), an alignment (Left / Center / Right / Full), and adjust spacing between icons. The size and style swatches are visual-only (no text labels) and are all rendered at the same dimensions for consistency.
-- Links — list of your configured platforms (Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter/X, Pinterest, Website) with a "Manage in branding" CTA at the top and per-row eye toggles to hide/unhide each platform from this block.
+Tabs
+- Icons — choose the look: outline, filled circle, or solid circle. Pick a color, a size (S / M / L), an alignment (Left / Center / Right / Full), and the spacing between icons.
+- Links — your saved platforms (Instagram, Facebook, TikTok, LinkedIn, YouTube, Twitter/X, Pinterest, Website), with "Manage in branding" at the top and the eye toggles.
 - Block — shared block settings (background, padding).
 
-Visual style — minimalist Flodesk glyphs (by design)
-The social icons are intentionally drawn in a clean Flodesk-style minimalist set rather than each platform's full brand mark. Letter glyphs render as solid letterforms — Facebook is a lowercase "f", LinkedIn is a lowercase "in", Pinterest is a stylized "P" with a see-through eye, TikTok is a "d" with a small flag, Twitter/X is a thick angular "X". Shape glyphs use clean stroked outlines — Instagram is a camera silhouette, Globe (Website) is a circle with equator + meridian, YouTube is a rounded rectangle with a small filled play triangle. This gives every email a consistent editorial look that matches modern newsletter design conventions; if you wanted full multi-color brand logos they would clash with most email aesthetics and recipients still recognize the simplified marks.
+The icons are simple, clean versions of each platform's mark, so every email has a consistent look.
 
-Rendering parity
-Editor canvas, preview iframe, and the actual delivered email all use the exact same SVG paths, chip dimensions, and stroke widths. Filled-circle icons use a glyph color that automatically flips between black and white based on the chip color so they always read clearly. Outline-only icons use a slightly thicker stroke at small sizes for better visibility.
-
-Empty state
-- In the editor canvas, when no social links are configured the block shows a hint pointing the user to Branding so they know what to do.
-- In the actual sent email, if Branding has no social links the entire Social block renders nothing — no placeholder text ever ships to a recipient.`,
+If you have no social links saved
+- In the editor, the block shows a hint pointing you to Branding.
+- In the email that's sent, the block shows nothing.`,
       },
       {
         id: 'me-block-address',
@@ -2373,12 +2305,12 @@ Empty state
         tags: ['address', 'physical address', 'location', 'mailing address', 'compliance', 'branding'],
         body: `The Address block displays your venue's physical address inside an email — useful for compliance with anti-spam laws (CAN-SPAM, CASL) which require a physical mailing address in every commercial email.
 
-Source of truth
-The address is pulled from your venue Branding settings (Settings → Branding → Contact Information). The Address block is read-only inside the builder; click "Manage my address" on the Address inspector tab to jump straight to the Branding page and update it once for every campaign.
+Where the address comes from
+Your venue Branding settings (Settings → Branding → Contact Information). You can't edit the address inside the builder; click "Manage my address" on the Address inspector tab to jump straight to the Branding page and update it once for every campaign.
 
 3-tab inspector
 - Font — typography for the address text: font family, size, weight, color, letter spacing.
-- Address — the address preview with a single "Manage my address" button (background #1b1b1b for a clean neutral look). Copy renders compactly — typically two short lines instead of four.
+- Address — the address preview with a "Manage my address" button.
 - Block — shared block settings (alignment, top/bottom padding, side gutters, background color).
 
 Compliance
@@ -2390,7 +2322,7 @@ You should keep an Address block in every marketing email. The same applies to t
         tags: ['divider', 'spacer', 'separator', 'horizontal rule', 'whitespace', 'gap'],
         body: `Two utility blocks for breaking up content in your email.
 
-Divider — a horizontal rule. Flodesk-style settings:
+Divider — a horizontal rule. Settings:
 - Style — Solid, Dashed, or Dotted.
 - Thickness — slider in pixels.
 - Color — full color picker.
@@ -2408,19 +2340,17 @@ Both blocks live in the right-panel palette and drop in like any other block.`,
       {
         id: 'me-brand-colors',
         title: 'Brand colors — saved palette across the app',
-        tags: ['brand colors', 'palette', 'color picker', 'flodesk', 'saved colors', 'eyedropper', 'hex'],
-        body: `Brand colors are a per-venue palette that lives inside every color picker. There's no dedicated palette-management page — you save and remove colors right where you're using them. Once a color is in your palette it appears in every color picker across the app: email builder (text, button, background, divider, social icons, etc.), form builder, anywhere a color is picked.
+        tags: ['brand colors', 'palette', 'color picker', 'saved colors', 'eyedropper', 'hex'],
+        body: `Brand colors are your venue's saved palette, and it lives inside every color picker. You save and remove colors right where you're using them. Once a color is in your palette it appears in every color picker across the app: the email builder (text, button, background, divider, social icons, etc.), the form builder, anywhere a color is picked.
 
 Adding a color
-- From any color picker, configure a color (hex / picker / eyedropper) and click the bookmark/save icon next to the swatch. It's added to your palette instantly and shows up in every other picker right away.
+- From any color picker, choose a color (hex code, picker, or eyedropper) and click the bookmark/save icon next to the swatch. It's added to your palette and shows up in every other picker right away.
 
 Removing a color
 - Hover any saved swatch in a picker's palette row and click the small × that appears. Removing a color doesn't change any email, form, or proposal that already uses it.
 
-The Flodesk-style color picker
-- Anchored to the viewport so it never opens off-screen on small panels.
-- Includes a hex input, a HSL/RGB visualizer, an eyedropper (where the browser supports it), and a row of your saved brand colors at the bottom.
-- The "Default" preset always includes a sensible fallback (#1b1b1b near-black for text, #ffffff for backgrounds).
+The color picker
+- Has a hex field, a color square, an eyedropper (where the browser supports it), and a row of your saved brand colors at the bottom.
 
 Limits — you can save up to 50 brand colors per venue.`,
       },
@@ -2428,7 +2358,7 @@ Limits — you can save up to 50 brand colors per venue.`,
         id: 'me-fonts',
         title: 'Fonts in the email builder',
         tags: ['fonts', 'google fonts', 'typography', 'font family', 'weight', 'font selector'],
-        body: `Every text-bearing block (heading, text, button, address) exposes a Google Fonts selector in its inspector. Pick from a curated list of email-safe Google fonts; the chosen font loads automatically in both the editor and the rendered email.
+        body: `Every block with text (heading, text, button, address) has a font selector. Pick from a list of Google fonts that work well in email; the font you choose shows in both the editor and the sent email.
 
 For inline emphasis (bold / italic / underline / strikethrough) use the format toolbar that appears when you select text inside a Heading or Text block.
 
@@ -2439,32 +2369,25 @@ Per-block overrides
 - Letter spacing — fine-tune tracking.
 - Line height — set per text/heading block.
 
-H1 / H2 / H3 buttons in the format toolbar set both the heading level and the matching font size, so the visual change is always immediate (no half-applied changes).`,
+H1 / H2 / H3 buttons in the format toolbar set both the heading level and the matching font size, so the change shows right away.`,
       },
       {
         id: 'me-preview-test',
-        title: 'Live preview, send-test emails, and the preview modal',
-        tags: ['preview', 'send test', 'test email', 'iframe', 'preview modal'],
-        body: `Click the eye icon (top-right of the editor, labelled "Preview") to open the preview modal.
+        title: 'Previewing an email and sending a test',
+        tags: ['preview', 'send test', 'test email', 'mobile preview'],
+        body: `Click the eye icon (top-right of the editor, labelled "Preview") to open the preview.
 
 What you get:
-- A real iframe rendering the email exactly as it will arrive — links work, embedded videos play, images load.
-- A Send-test form: enter any email address, click Send Test, and a real email is fired through your normal sending pipeline (so you also test deliverability, footer rendering, and your branding/social pulls).
-- Header and backdrop are #1b1b1b for a calm, neutral preview.
-- Close the modal to drop straight back into the editor with everything where you left it.
+- The email exactly as it will arrive — links work, videos play, images load.
+- A Send-test form: enter any email address, click Send Test, and you get a real email, with your real branding, footer, and social links.
+- Close the preview to drop straight back into the editor with everything where you left it.
 
 Tips
 - Always send a test to yourself before scheduling a campaign.
-- Test on a phone too — switch the preview modal to Mobile (top toggle) or use the canvas Mobile toggle. Either matches the responsive layout your contacts will actually see on iPhone Mail, Gmail mobile, Outlook for iOS, etc.
-- Test renders use real branding (logo, colors, social, address) so what you see is what your contacts get.
+- Check it on a phone too — switch the preview to Mobile (top toggle) or use the canvas Mobile toggle. Either shows the layout your contacts will see in their phone's mail app.
 
-Mobile responsiveness — what changes automatically
-Every email we render is mobile-optimized at the HTML level (no work for you):
-- Block side padding shrinks from 24px to 16px on screens ≤480px wide so headings, addresses, and button labels have more room to breathe.
-- The email card goes edge-to-edge on phones (no rounded corners or side gutter) — matches how Apple Mail and Gmail render emails natively.
-- The Social Links row uses inline-block chips that wrap to a second line if a venue has many social links — so an 8-platform row on a 600px desktop becomes a clean 2-row stack on a 375px phone instead of getting clipped at the right edge.
-- Images use width:100% so they always scale down with the viewport.
-Desktop email clients (Outlook, full-screen Gmail web, etc.) get the full 600px-wide layout with the original padding and rounded card.`,
+On phones
+Your emails adjust to small screens by themselves: less side padding, an edge-to-edge layout, social icons that wrap onto a second line instead of being cut off, and images that scale down. Desktop mail apps get the full-width layout.`,
       },
       {
         id: 'me-compliance',
@@ -2483,41 +2406,30 @@ Both links lead to a public preference page hosted on app.storyvenue.com (no log
 - Unsubscribe from all marketing emails (they will never receive marketing emails from your venue again unless they opt back in).
 - Manage their preferences (opt back in if they've previously unsubscribed).
 
-Suppression
-Recipients on the suppression list are skipped automatically by every campaign and automation. They still receive transactional emails (proposals, invoices, payment confirmations) — those are exempt from CAN-SPAM and never use marketing-email infrastructure.
+People who unsubscribe
+They are skipped by every campaign automatically. They still receive emails about their own booking (proposals, invoices, payment confirmations).
 
 Why this matters
 - CAN-SPAM (US) and CASL (Canada) require a physical address and a one-click unsubscribe in every commercial email. StoryVenue's automatic footer covers both.
 - GDPR-style consent is up to you — collect opt-ins via your lead capture forms (Marketing → Forms include a marketing-opt-in checkbox).
 
 What you can edit
-You can change the visual styling of the footer (font, padding, background) inside the email builder, but the unsubscribe link, manage link, venue name, and physical address are mandatory and always render.`,
+You can change the visual styling of the footer (font, padding, background) inside the email builder, but the unsubscribe link, manage link, venue name, and physical address are required and always included.`,
       },
       {
-        id: 'me-templates-vs-campaigns',
-        title: 'Templates vs Campaigns vs Automations',
-        tags: ['template', 'campaign', 'automation', 'difference', 'broadcast', 'drip', 'sequence', 'workflow'],
-        body: `Three places in the Marketing flyout use the same builder but serve different purposes.
+        id: 'me-campaigns',
+        title: 'Campaigns — how a send works',
+        tags: ['campaign', 'broadcast', 'newsletter', 'send', 'recipients', 'schedule', 'email'],
+        body: `A campaign is an email you send once to a group of your contacts and leads (for example, "Spring tour open house"). Find them at Marketing → Campaigns.
 
-Templates — Marketing → Email Templates
-- A reusable design library. Build once, use many times.
-- Templates are not sent — they're starting points.
-- When you create a campaign or automation step, you can start from a template and tweak it for that specific send.
-- Edit at any time; existing campaigns/automations that copied a template are not affected by template edits (each copy is independent).
+A campaign has three steps:
+1. Design — the email itself, built in the drag-and-drop editor.
+2. Recipients — who gets it: pick a saved audience, or filter by stage, tag, marketing opt-in, and more.
+3. Review — a final check, then schedule it or send now.
 
-Campaigns — Marketing → Campaigns
-- One-off broadcasts to a segment of your contacts/leads (e.g. "Spring tour open house").
-- A campaign has three steps: Design (the email itself), Recipients (who gets it — filtered by stage, tag, marketing opt-in, etc.), Review (final check + schedule or send now).
-- Once sent, a campaign reports opens, clicks, unsubscribes, and bounces in Marketing → Analytics.
-- The campaigns list page uses the same brand-aligned layout as Forms and Audiences: centered content, consistent row style, and a trash icon on each row to delete any campaign (with a confirm prompt) without opening it.
+After it's sent, Marketing → Analytics shows its opens, clicks, unsubscribes, and bounces.
 
-Automations — Marketing → Email Automations
-- Multi-step drip sequences triggered by an event (new lead via lead capture form, tag added, contact added, anniversary date hit, etc.).
-- Each step is its own email with its own delay (immediate, 1 day later, 7 days later, etc.).
-- Edit each step in the same builder you'd use for a campaign.
-- Pause / resume an automation at any time without deleting it.
-
-Tip — keep a small stable of well-tested templates (Inquiry follow-up, Tour reminder, Post-tour thank-you, Booking anniversary) and use them as the spine of every campaign and automation. Edits to a template don't propagate, so you control rollout.`,
+To delete a campaign, press the trash icon on its row in the campaigns list and confirm. You don't need to open it first.`,
       },
       {
         id: 'me-segments',
@@ -2545,21 +2457,20 @@ How to create an audience
 5. Watch the live recipient-count chip update as you tweak the filters — that's exactly how many people would receive a campaign sent to this audience right now.
 6. Save. The audience is immediately available in every campaign's Audience step.
 
-Important — saved audiences cannot reference other saved audiences. The audience type inside a saved audience is always one of All leads / Tags / Stages, never another audience. (This prevents loops and keeps the count preview honest.)
+Important — saved audiences cannot reference other saved audiences. The audience type inside a saved audience is always one of All leads / Tags / Stages, never another audience.
 
 Using a saved audience in a campaign
 1. Open or create a campaign at Marketing → Campaigns.
 2. In the Audience section, pick "Use a saved audience" and choose your audience from the dropdown.
-3. You can still layer additional behavior filters on top (e.g. start with "Booked couples 2026" but require a wedding date on file). Those filters compose with — they don't replace — the audience's filters.
-4. Save the campaign. When it sends, StoryVenue re-resolves the audience and delivers to whoever currently matches.
+3. You can still layer additional behavior filters on top (e.g. start with "Booked couples 2026" but require a wedding date on file). Those filters are added to the audience's own.
+4. Save the campaign. When it sends, it goes to whoever matches the audience at that moment.
 
 Editing an audience
 - Edits show up automatically on the next send for any draft or scheduled campaigns using the audience.
 - Recipient counts in the Audiences list and inside the campaign picker refresh whenever you reload the page.
 
 Deleting an audience
-- If any draft or scheduled campaigns are using the audience, deleting it detaches those campaigns and falls them back to "All leads" so they stay valid.
-- The campaign owner can re-pick a different audience afterwards. We never silently drop a recipient list — we always make the fallback explicit.
+- If any draft or scheduled campaigns are using the audience, they switch to "All leads" when you delete it. Pick a different audience for them afterwards if you want.
 
 Where to find audiences
 - Marketing → Audiences (left sidebar) — manage them here.
@@ -2575,28 +2486,28 @@ Tip — start with 3-4 evergreen audiences ("Active leads, no proposal", "Booked
         id: 'me-form-builder',
         title: 'Lead capture forms — drag-and-drop builder',
         tags: ['form', 'forms', 'form builder', 'lead capture', 'inquiry form', 'embed', 'submit', 'fields', 'first name', 'last name', 'email', 'phone', 'address'],
-        body: `Marketing → Forms (path /dashboard/marketing/form-builder) is your lead capture form builder. The list page shows every form for the venue with an inline pencil (edit) and a trash icon (delete with confirm). Click "New form" to create one.
+        body: `Marketing → Forms is your lead capture form builder. The list shows every form, each with a pencil (edit) and a trash icon (delete, with a confirm). Click "New form" to create one.
 
-The form editor mirrors the marketing email builder so the two surfaces feel identical:
+The form editor works like the email builder:
 - Three-pane layout: thin left sidebar with Desktop / Mobile preview toggle and undo/redo, the live canvas in the middle, the right inspector panel.
-- Top bar: Back arrow, the form's internal name (used in your dashboard only — it does not render to the public form), and Settings / Embed / Live preview buttons on the right.
+- Top bar: Back arrow, the form's internal name (only you see it), and Settings / Embed / Live preview buttons on the right.
 - The right panel shows the Block Palette when nothing is selected (drag any tile onto the canvas) and switches to the selected block's tabbed inspector when you click a module.
 - Click the canvas background to deselect — the right panel returns to the block palette so you can drop in new modules.
-- A high-contrast drop indicator (#1b1b1b) shows exactly where a new block will land. You can drop at any position, including the very last slot.
+- A line shows exactly where a new block will land. You can drop at any position, including the very last slot.
 
-Block-level styling: every block's inspector exposes a shared Block tab with top padding, bottom padding, side gutters, and background color (same primitives the email builder uses). Per-block style controls live on their own tab — typography for Heading, the rich-text format toolbar for Text, presets for Button, and so on.
+Block styling: every block has a Block tab with top padding, bottom padding, side gutters, and background color (the same as the email builder). Per-block style controls live on their own tab — typography for Heading, the rich-text format toolbar for Text, presets for Button, and so on.
 
-Default new-form blocks: every newly created form is seeded with First name + Last name as a half-width pair, Phone, Email, and a Submit button. That's the most common contact-capture form out of the box; remove or rearrange whatever you don't need.
+A new form starts with First name and Last name side by side, Phone, Email, and a Submit button. Remove or rearrange whatever you don't need.
 
 Available blocks:
 - Heading and Text (with rich-text format toolbar — bold/italic/underline, lists, links).
 - Single-line text and paragraph text inputs.
 - Email, Phone, Number, Date, and Time pickers.
-- Address — split into individual labelled inputs (Street, City, State, ZIP code) so contact records land cleanly in your CRM. (The previous freeform single-line address was replaced.)
+- Address — split into individual labelled inputs (Street, City, State, ZIP code) so each part is saved in its own field.
 - Dropdown, Radio, Checkbox group, Yes/No toggle.
 - File upload (files land in your Media library).
-- Image — same uploader as the email builder. Drag and drop from your computer, click Upload, or "Choose from media library" (shared picker). Supports alignment, width, padding, link wrap, and alt text. Anything uploaded here auto-registers in your Media library.
-- Button — full Flodesk-style tabbed inspector. Style tab gives you presets (Solid, Outline, Pill, Underlined link, etc.), a saved-styles modal (save/apply/delete styles), and full custom controls — Google font + weight + size + letter spacing, text color, background color, border color/width/radius, padding, full-width toggle. Default fill is the signature #1b1b1b so freshly placed buttons look right immediately. Older saved forms automatically map their previous button style onto the new presets.
+- Image — same uploader as the email builder. Drag and drop from your computer, click Upload, or "Choose from media library" (shared picker). Supports alignment, width, padding, link wrap, and alt text. Anything uploaded here is added to your Media library.
+- Button — a tabbed inspector. The Style tab gives you presets (Solid, Outline, Pill, Underlined link, etc.), saved styles (save, apply, delete), and full custom controls: font, weight, size, letter spacing, text color, background color, border, padding, and a full-width toggle.
 - Submit, Divider, and Spacer — same controls as the email builder.
 
 Form Settings modal (top-right gear): every form-level option lives here so the canvas stays focused on layout.
@@ -2606,153 +2517,19 @@ Form Settings modal (top-right gear): every form-level option lives here so the 
 - Embed CSS class.
 - Delete form — removes the form (also available next to the pencil on the Forms list page).
 
-Embed modal: copy-paste a script + div snippet that drops the form into any external website. The embed inherits the form's theme automatically.
+Embed: copy the code and paste it into any website. The form keeps its look there.
 
-Live preview: opens the public-facing form inside a real iframe with real validation and real post-submit configuration (thank-you screen or redirect URL). Submissions don't write a lead and don't fire notification emails — it's a clean dry run so you can verify the experience end-to-end. The header centers the Desktop / Mobile toggle so you can verify both sizes.
+Live preview: opens the form as visitors will see it, with its real checks and your thank-you screen or redirect. Nothing you submit there creates a lead or sends an email. Switch between Desktop and Mobile at the top.
 
 Forms you've already added to other websites keep working.`,
       },
       {
-        id: 'me-workflows',
-        title: 'Workflows — visual automation builder with 60+ smart triggers and 60+ merge variables',
-        tags: ['workflow', 'workflows', 'automation', 'speed to lead', 'follow up', 'sequence', 'drip', 'funnel', 'auto-reply', 'reply halt', 'form submitted', 'trigger', 'smart triggers', 'merge variables', 'notify owner', 'notify venue owner', 'system tags'],
-        body: `Marketing → Workflows is the visual builder for fully automated, multi-step contact journeys. It powers everything from the first auto-reply to long-term anniversary touches — and as of the May 2026 update, it has tight, two-way integration with the platform's 65 sitewide system tags and 60+ canonical merge variables.
-
-What you can build today
-
-Smart Triggers (60+ across 10 categories)
-The trigger picker lets you start a workflow on virtually any contact event. Triggers are organized into categories:
-- Lead Lifecycle: New lead, Inquiry received, Lead qualified / unqualified, In negotiation, Closed won / lost, Follow-up needed.
-- Booking: Appointment booked, Tour scheduled / completed / no-show / cancelled, Phone call scheduled / completed, Appointment confirmed / cancelled / rescheduled.
-- Proposal: Proposal sent / viewed / signed / expired, Contract signed.
-- Payments: Invoice sent / viewed, Deposit paid, Paid in full, Payment plan active, Payment failed, Refunded, Past due.
-- Marketing: Email opened, Link clicked, Campaign enrolled / completed / unsubscribed, SMS opted in / out, Re-engaged.
-- Communication: Contact replied, Hot lead, Cold lead, Do-not-contact set, VIP flagged.
-- Forms: Any form submitted, Intake completed, Questionnaire completed.
-- Event / Wedding: After wedding date (with day-offset), Date confirmed, Date held, Within 30 days of event, Within 7 days of event, Event passed, Year-1 anniversary.
-- Integration: Legacy contact synced, Legacy DND active.
-- Other / Native: Custom tag added, Pipeline stage changed, Trigger link clicked, Proposal paid.
-
-Most smart triggers resolve under the hood to a "tag added" trigger pre-configured with the matching system tag — so picking "When deposit is paid" just listens for the deposit_paid system tag, which the platform applies automatically the moment a deposit clears. You can mix multiple triggers on the same workflow (OR-style) by clicking the "+" on the trigger row.
-
-Steps (drag-and-drop palette, four categories)
-- Timing: Wait (minutes / hours / days)
-- Communication: Send Email (saved templates), Send SMS (with merge variable picker, character / segment counter, and trigger-link inserter)
-- Contact Actions: Add Tag, Remove Tag, Change Pipeline Stage, Open Conversation thread
-- Internal Alerts: Notify Venue Owner — sends an email and/or SMS to the venue's primary email and notification phone (uses StoryVenue Legacy messaging for SMS). The body and subject support the full merge-variable system, so you can do things like: subject = "[Hot Lead] {{contact.name}} just signed the proposal", body = "Phone: {{contact.phone}}, wedding date: {{lead.wedding_date}}".
-
-Merge Variables (60+, used everywhere)
-Every step that takes free-form text — Send Email, Send SMS, Notify Venue Owner — has a "Variables" button next to the editor. Click it to open a categorized, searchable popover with all 60+ canonical variables ({{contact.first_name}}, {{contact.notes}}, {{contact.referral_source}}, {{venue.name}}, {{venue.description}}, {{appointment.start_time}}, {{appointment.type}}, {{appointment.notes}}, {{appointment.space_name}}, {{lead.wedding_date}}, {{lead.created_at}}, {{lead.time_since_inquiry}}, {{marketing.unsubscribe_url}}, {{system.workflow_name}}, etc.) grouped by Contact / Venue / Lead / Appointment / Proposal / Invoice / Subscription / Marketing / AI / System. Click any variable to insert it at the cursor.
-
-Status: Draft (does nothing), Active (enrolls and runs), Paused (existing enrollments freeze, no new ones).
-
-Every workflow has its own canvas. The trigger card sits at the top, then each step is its own card connected by dashed "+" buttons that let you insert any step at any position. Categorized side palette (Timing / Communication / Contact / Internal Alerts) lists every available step with hover-themed colors.
-
-Building a "form-to-funnel" sequence (the most common use case)
-1. Marketing → Forms → make sure your inquiry form is published and configured to route into a pipeline stage. The form must include an Email field — the email is what enrolls the lead in the workflow.
-2. Marketing → Workflows → New workflow → trigger picker → search "form" or pick the Forms category → "Any form submitted". Pick the form(s) to listen to (or leave empty to enroll on any form).
-3. On the canvas, click "+" to add steps. Example: Send email (welcome) → Wait 2 days → Send SMS "Hi {{contact.first_name}}, just checking in!" → Wait 3 days → Notify Venue Owner "Lead {{contact.name}} hasn't responded — time to reach out" → Send email (testimonials).
-4. Set the workflow Status to Active and click Save.
-5. Submit the form yourself to test. The contact is enrolled in the sequence and the first step fires within a short time.
-
-Reply detection — the drip stops when the contact replies
-- When a contact replies to any drip email through the platform's reply routing, the platform automatically halts every active marketing automation enrollment for that contact.
-- You receive an email notification with a preview of the reply and how many sequences were stopped. The notification goes to the email address in Settings → Notifications.
-- Halted enrollments don't auto-restart. The contact stays in the conversation thread; the team picks it up from there.
-
-Suppression — sequences respect every existing opt-out
-- Marketing email opt-out (the unsubscribe footer in every drip email).
-- Hard-bounced or suppressed addresses.
-- SMS DND, when SMS steps go live.
-- A workflow with status = Paused freezes all of its existing enrollments and refuses to enroll new ones.
-
-Editing a workflow that's already running
-- Step changes apply on each enrollment's NEXT step — leads currently waiting in step 3 won't replay step 1.
-- Trigger configuration changes (e.g. which forms are watched) only affect future enrollments.
-- Workflow trigger TYPE itself is fixed after creation — duplicate the workflow and pick a different trigger if you need to change it.
-- Status changes are instant.
-
-Where to delete
-- Workflows list page → ... → Delete (or open the workflow → Settings tab → Delete workflow).
-- Deleting a workflow also removes all active enrollments for that workflow.
-
-Tip — keep your first sequence short and useful (3-5 emails over 14 days), make sure the first email arrives within minutes of the form submission, and trust the reply-halt to do its job. The fastest follow-up wins.`,
-      },
-      {
-        id: 'mkt-trigger-tags-vars',
-        title: 'Trigger Links, Tags & Variables — page overview',
-        tags: ['trigger links', 'tags', 'variables', 'merge variables', 'system tags', 'marketing automation', 'triggers and tags', 'tag page', 'variable page'],
-        body: `Marketing → Trigger Links, Tags & Variables is the central hub for three powerful automation tools: trigger links, lead tags, and merge variables.
-
-The page has three accordion sections — each can be expanded or collapsed independently:
-
-1. Trigger Links
-Create trackable links that fire a workflow, add a tag, or change a lead stage when clicked. Each trigger link generates a unique URL you can embed in emails or SMS messages. When a recipient clicks it, the configured action fires instantly.
-
-2. Lead Tags (accordion)
-Click "Lead Tags" to expand the tags panel. You'll see two groups:
-- System tags — 65 predefined non-deletable tags that are auto-applied by the platform (e.g. "Appointment Booked", "Invoice Sent", "Deposit Paid"). These have a lock icon and cannot be deleted. Many are applied automatically as contacts move through workflows.
-- Custom tags — tags you've created yourself. These can be edited and deleted. Click "+ New Tag" to create one.
-
-Use the search bar at the top of the tags panel to filter by name. Filter buttons let you narrow by category (Lifecycle, Payments, Marketing, Calendar, etc.).
-
-3. Merge Variables (accordion)
-Click "Merge Variables" to expand the variables panel. All 60+ system merge variables are listed here, organized by category. These are read-only — you cannot create or delete variables, only use them in your templates.
-
-Use the search bar to find a variable by name or key. Category filter buttons let you browse by Contact, Venue, Appointment, Proposal, System, and more.`,
-      },
-      {
-        id: 'mkt-system-tags',
-        title: 'System default tags — auto-applied and non-deletable',
-        tags: ['system tags', 'default tags', 'auto-apply', 'non-deletable', 'lock icon', 'tags', 'lifecycle tags', 'appointment tags', 'payment tags', 'marketing tags', 'workflow tags'],
-        body: `StoryVenue includes 65 system default tags that are pre-seeded for every venue. These tags power automation, segmentation, and workflow triggers throughout the platform.
-
-What makes system tags special
-- Non-deletable — system tags have a lock icon and cannot be removed. They will always exist in your venue.
-- Auto-applied — many system tags are applied automatically when certain events happen (e.g. "appointment_booked" is added when a calendar event is created; "deposit_paid" is added when a deposit payment is received). You don't have to do anything.
-- Searchable — find them in the Tags accordion on Marketing → Trigger Links, Tags & Variables.
-
-Tag categories and examples
-Lifecycle (lead journey):
-- new_lead, inquiry_received, form_submitted, contacted, tour_scheduled, proposal_sent, closed_won, closed_lost, not_interested
-
-Calendar & Appointments:
-- appointment_booked, appointment_confirmed, appointment_cancelled, appointment_rescheduled, tour_complete, call_scheduled
-
-Payments & Proposals:
-- deposit_paid, paid_in_full, invoice_sent, payment_overdue, payment_failed, refund_issued
-
-Marketing & Engagement:
-- email_opened, email_clicked, link_clicked, campaign_unsubscribed, sms_opted_out, do_not_contact
-
-Communications:
-- contacted_by_email, contacted_by_sms, reply_received, sequence_completed, sequence_halted
-
-Follow-up & Nurture:
-- follow_up_needed, follow_up_sent, no_response_7d, no_response_14d, no_response_30d
-
-Qualification:
-- high_value_lead, warm_lead, cold_lead, budget_confirmed, date_confirmed
-
-Legacy Integration:
-- legacy_synced, legacy_dnd_active
-
-Using tags in workflows
-In Marketing → Workflows, you can use "Tag added" as a workflow trigger — so when "deposit_paid" is auto-applied, a thank-you email workflow can fire automatically.
-
-Custom tags
-You can still create custom tags for venue-specific needs (e.g. "VIP Client", "Referred by Smith Wedding"). Custom tags appear below system tags in the panel and can be edited or deleted.`,
-      },
-      {
         id: 'mkt-system-vars',
-        title: 'System merge variables — canonical variables reference',
-        tags: ['merge variables', 'system variables', 'canonical variables', 'placeholders', 'template variables', 'contact variables', 'venue variables', 'appointment variables', 'proposal variables', 'dynamic content'],
-        body: `StoryVenue has 60+ canonical system merge variables that work consistently across every template type — email templates, calendar notifications, marketing emails, SMS messages, and workflows. All variables use dot-notation (e.g. {{contact.name}}).
+        title: 'Merge variables — the full list',
+        tags: ['merge variables', 'system variables', 'placeholders', 'template variables', 'contact variables', 'venue variables', 'appointment variables', 'proposal variables', 'dynamic content'],
+        body: `StoryVenue has 60+ merge variables that work the same way everywhere you write a message: email templates, calendar notifications, marketing emails, and texts. Type one into a message and it is replaced with the real value when the message is sent. They are written with a dot (e.g. {{contact.name}}).
 
-Where to find them
-Marketing → Trigger Links, Tags & Variables → expand the "Merge Variables" accordion. Search by name or filter by category.
-
-Contact variables (available in marketing emails, SMS, and workflows)
+Contact variables (available in marketing emails and texts)
 {{contact.name}} — full name
 {{contact.first_name}} — first name only
 {{contact.last_name}} — last name only
@@ -2765,8 +2542,8 @@ Lead / event variables (available in marketing)
 {{lead.wedding_date}} — wedding date (formatted, e.g. "October 15, 2027")
 {{lead.wedding_month}} — wedding month name only (e.g. "October")
 {{lead.guest_count}} — estimated guest count
-{{lead.created_at}} — date the lead first inquired (e.g. "April 16, 2026"). Flat alias: {{initial_inquiry_date}}
-{{lead.time_since_inquiry}} — humanized time since inquiry (e.g. "14 days ago"). Flat alias: {{time_since_initial_inquiry}}
+{{lead.created_at}} — date the lead first inquired (e.g. "April 16, 2026"). Short name: {{initial_inquiry_date}}
+{{lead.time_since_inquiry}} — time since she inquired (e.g. "14 days ago"). Short name: {{time_since_initial_inquiry}}
 
 Venue variables
 {{venue.name}} — your venue / business name
@@ -2778,8 +2555,8 @@ Venue variables
 {{venue.website}} — venue website URL
 {{venue.owner_name}} — venue owner's full name
 {{venue.owner_first_name}} — owner's first name only
-{{venue.description}} — short venue style description (used in AI Concierge prompts)
-{{venue.pricing_guide_url}} — link to branded Pricing & Availability Guide preview page (always latest version). Short alias: {{pricing_guide_url}}. Use this in Booking System email and SMS templates.
+{{venue.description}} — short venue style description
+{{venue.pricing_guide_url}} — link to your Pricing & Availability Guide (always the latest version). Short name: {{pricing_guide_url}}. Use it in your Speed to Lead emails and texts.
 
 Appointment variables (calendar notifications only)
 {{appointment.title}} — event title
@@ -2796,7 +2573,7 @@ Appointment variables (calendar notifications only)
 {{appointment.space_name}} — venue space assigned to this appointment
 {{appointment.status}} — status (confirmed / cancelled)
 
-Payment & invoice variables (transactional emails only)
+Payment & invoice variables (payment emails only)
 {{payment.amount}} — payment amount
 {{payment.method}} — payment method (e.g. Visa ••••4242)
 {{payment.date}} — payment date
@@ -2808,30 +2585,29 @@ Payment & invoice variables (transactional emails only)
 {{proposal.title}} — proposal title
 {{proposal.amount}} — proposal total
 
-System variables (auto-injected at send time)
+System variables (filled in when the message is sent)
 {{system.date}} — today's date (formatted, e.g. "April 30, 2026")
 {{system.year}} — current year (e.g. 2026)
-{{system.workflow_name}} — name of the automation workflow (notify_owner steps only)
-{{marketing.unsubscribe_url}} — one-click unsubscribe link (auto-added to marketing emails). Short alias: {{unsubscribe_url}}
+{{marketing.unsubscribe_url}} — one-click unsubscribe link (added to marketing emails for you). Short name: {{unsubscribe_url}}
 {{marketing.resubscribe_url}} — re-subscribe link
 {{marketing.preferences_url}} — manage email preferences link
 
-Backwards compatibility
-Older variable names like {{first_name}}, {{customer_name}}, {{organization}}, {{venue_name}}, {{wedding_date}}, {{initial_inquiry_date}}, etc. still work everywhere — they are automatically mapped to the canonical equivalents. You do not need to update existing templates unless you want to migrate to the new naming convention.`,
+Older names still work
+Shorter names like {{first_name}}, {{customer_name}}, {{organization}}, {{venue_name}}, {{wedding_date}}, and {{initial_inquiry_date}} still work everywhere. You don't need to change templates that use them.`,
       },
       {
         id: 'mkt-ai-concierge',
-        title: 'AI Concierge — automated SMS lead engagement',
+        title: 'AI Concierge — text follow-up with your leads',
         tags: ['ai concierge', 'concierge', 'sms', 'automation', 'leads', 'ai', 'text messages', 'outreach', 'handoff', 'a2p', 'spend cap'],
-        body: `The AI Concierge is an automated SMS-based lead engagement system. It automatically contacts new leads with personalized text messages, handles inbound replies, and escalates to humans when needed — so no lead falls through the cracks.
+        body: `The AI Concierge follows up with your leads by text for you. It keeps in touch until she replies, then hands her to you — so no lead falls through the cracks.
 
 Path: Bride Booking System™ → Speed to Lead System → the AI Concierge card.
 
-Requirements (eligibility):
-- All-Inclusive Concierge plan (or a plan with AI Concierge specifically enabled by StoryVenue)
-- A2P 10-digit SMS verification completed (required for TCPA compliance)
-- Connected StoryVenue Legacy sub-account for SMS delivery
-If any requirement is missing, the settings page shows exactly what's needed.
+What you need:
+- A plan that includes the AI Concierge (All-Inclusive Concierge, or a plan StoryVenue has added it to)
+- An approved texting number
+- StoryVenue Legacy messaging connected (Settings → General)
+If anything is missing, the AI Concierge card tells you what.
 
 Getting started:
 1. Go to Bride Booking System™ → Speed to Lead System and open the AI Concierge card
@@ -2854,9 +2630,9 @@ Each lead shows an AI status pill with contextual actions:
 - Green "AI Active" pill — Pause AI button
 - Amber "Paused" pill — Re-enable AI button
 - Red "Needs Human" pill — the AI has handed her to you (she asked for something a person should answer); Re-enable button
-- Gray "Opted Out" pill — Re-enable button (red + locked if TCPA opt-out from STOP keyword)
-- Orange "Exhausted" pill — Re-enable button (locked if past 60 days without re-enable)
-- Info-only display for leads where AI hasn't started yet
+- Gray "Opted Out" pill — Re-enable button (locked if she replied STOP)
+- Orange "Exhausted" pill — the AI finished its follow-up without a reply; Re-enable button (locked once 60 days have passed)
+- No buttons for a lead the AI hasn't started on yet
 
 Monthly texting limit:
 Each venue has a monthly limit on AI texts. If it's reached, the AI pauses until the next month. StoryVenue support can tell you where you stand.
@@ -2867,10 +2643,10 @@ When it stops
 - To stop it yourself for one couple, press Pause AI on her conversation or contact.
 
 Troubleshooting:
-- "Eligibility blockers" on the settings page tell you exactly what's needed (add-on purchase, A2P verification, StoryVenue Legacy connection)
-- A2P verification issues: the settings page shows where your verification stands
-- Lead not getting messages: check that the lead's state is "AI Active" and the venue toggle is enabled
-- Messages not sending: verify StoryVenue Legacy connection and A2P status on the settings page`,
+- The AI Concierge card tells you what's missing (your plan, an approved texting number, or the StoryVenue Legacy connection)
+- Texting number not approved yet: the card shows where it stands
+- Lead not getting messages: check that her pill says "AI Active" and that the Enable switch is on
+- Messages not sending: check the StoryVenue Legacy connection (Settings → General) and your texting number`,
       },
     ],
   },
@@ -2884,7 +2660,7 @@ Troubleshooting:
         id: 'email-types',
         title: 'Email template types',
         tags: ['email', 'templates', 'automated', 'notification', 'test email', 'preview'],
-        body: `StoryVenue sends automated transactional emails on your behalf. Customize the ones your customers receive at Settings → Notifications, under "Emails to your customers."
+        body: `StoryVenue emails your customers for you (invoices, proposals, receipts). Customize those emails at Settings → Notifications, under "Emails to your customers."
 
 The 6 customer-facing template types:
 1. Invoice — sent to the customer when you send them an invoice
@@ -2918,9 +2694,9 @@ Looking for your own alerts (new lead, payment received, a bride needs you, etc.
         tags: ['variables', 'merge', 'dynamic', 'placeholders', 'template', 'first name', 'contact name', 'canonical', 'dot notation'],
         body: `Each email template supports merge variables — placeholders that get replaced with real data when the email sends.
 
-StoryVenue uses canonical dot-notation variables ({{category.field}}) that work across all email templates, calendar notifications, marketing emails, and workflows. Legacy flat-style variables still work as aliases.
+They are written with a dot, like {{contact.first_name}}, and work the same way in your customer emails, calendar notifications, marketing emails, and texts.
 
-Common variables (transactional email templates):
+Common variables for customer emails:
 - {{contact.first_name}} — the recipient's first name
 - {{contact.full_name}} — the recipient's full name
 - {{venue.name}} — your venue name
@@ -2936,14 +2712,14 @@ Common variables (transactional email templates):
 - {{system.date}} — today's date at send time
 - {{system.year}} — current year
 
-Legacy aliases still work: {{customer_name}}, {{organization}}, {{amount}}, {{invoice_number}}, {{due_date}}, {{payment_method}}.
+Older short names still work: {{customer_name}}, {{organization}}, {{amount}}, {{invoice_number}}, {{due_date}}, {{payment_method}}.
 
-The variable list is shown on the right side of each template editor. Click a variable pill to copy it, then paste it anywhere in the subject, heading, or body.
+The variable list is shown with each email's editor. Click a variable to copy it, then paste it anywhere in the subject, heading, or body.
 
-Preview your template using the Preview button — it shows a sample email with dummy data filled in.
+Use the Preview button to see a sample email with example details filled in.
 
-Full variable reference
-See Marketing → Trigger Links, Tags & Variables → Merge Variables accordion for the full list of all 60+ canonical variables, or visit the Merge Variables help category.`,
+Full list
+See the article "Merge variables — the full list".`,
       },
     ],
   },
@@ -2972,7 +2748,7 @@ Triggers (something happens in StoryVenue, and Zapier acts on it):
 Actions (Zapier does something in StoryVenue):
 - Create or Update Contact (matched by email)
 - Create Lead
-- Add Tag to Contact — this starts any Workflow that begins with that tag, so a Zap can drop someone into an automation
+- Add Tag to Contact
 - Send SMS
 - Send Email
 - Find Contact by Email
@@ -2980,7 +2756,7 @@ Actions (Zapier does something in StoryVenue):
 Connecting Zapier
 1. In StoryVenue: Settings → Integrations → click Generate API key
 2. Copy the key. It is shown only once, so paste it somewhere safe.
-3. Click the "Connect with Zapier" button on the same page
+3. Click Open Zapier on the same page
 4. Sign into Zapier (if needed) and accept the StoryVenue app. It now appears in your Zap editor.
 5. When Zapier asks for an API key, paste the key you copied
 6. Pick a trigger and connect it to any other app
@@ -3008,42 +2784,11 @@ To connect:
 
 After connecting:
 - New Calendly bookings appear on your calendar automatically in real time
-- A customer profile is auto-created for the invitee's email
+- A contact is created for the person who booked, and a matching lead moves to "Booked Tours"
 - Cancellations in Calendly mark the event cancelled in StoryVenue
 - Use Sync Now to import all upcoming Calendly events at any time
 
 To disconnect: click Disconnect on the Calendly card.`,
-      },
-      {
-        id: 'int-google-cal',
-        title: 'Google Calendar, Outlook & Apple Calendar sync (iCal)',
-        tags: ['google calendar', 'outlook', 'apple calendar', 'ical', 'sync', 'subscribe', 'phone calendar'],
-        body: `There are two ways to sync StoryVenue with Google Calendar. The iCal method (described here) is a one-way read-only feed for any calendar app. For full two-way Google Calendar sync (including seeing your Google events inside StoryVenue and blocking availability), see Calendar → Calendar Settings → Connections — that is a separate, more powerful integration.
-
-iCal subscription feed (one-way, works with Google, Outlook, and Apple Calendar)
-Find your iCal URL: Settings → Integrations → Google Calendar / Outlook & Apple Calendar card.
-
-This is one-way: StoryVenue events appear in your calendar app. Events added in Google/Outlook do not flow back into StoryVenue.
-
-Google Calendar:
-1. Open Google Calendar on desktop
-2. Click + next to "Other calendars" → From URL
-3. Paste your iCal URL → Add calendar
-
-Outlook / Microsoft 365:
-1. Calendar → Add calendar → Subscribe from web
-2. Paste your iCal URL → Import
-
-Apple Calendar (Mac):
-1. File → New Calendar Subscription
-2. Paste your iCal URL → set refresh to Every Hour → OK
-
-iPhone: Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar.
-
-Updates may take up to 24 hours depending on the calendar app.
-
-For two-way sync (Google Calendar only)
-If you want StoryVenue events written to Google Calendar AND Google events visible inside StoryVenue, go to Calendar → Calendar Settings → Connections and connect your Google account there. See the "Connecting Google Calendar for two-way sync" article for details.`,
       },
       {
         id: 'int-legacy',
@@ -3052,7 +2797,7 @@ If you want StoryVenue events written to Google Calendar AND Google events visib
         body: `StoryVenue Legacy messaging is what lets you text couples from StoryVenue and bring your existing contacts in. Once it's connected, StoryVenue is where you manage your contacts day to day.
 
 Connect it
-1. Open Settings → Integrations → StoryVenue Legacy.
+1. Open Settings → General → StoryVenue Legacy.
 2. Paste your Location ID.
 3. Paste your Private Integration Token.
 4. Save. A green "Connected" badge appears.
@@ -3069,27 +2814,12 @@ After that
 - When a couple replies STOP to a text, they're marked Do Not Contact everywhere. You don't have to manage it in two places.
 
 Texts won't send?
-- Check for the green "Connected" badge on Settings → Integrations.
+- Check for the green "Connected" badge on Settings → General.
 - Open the contact, make sure the phone number is right, and click Save. Then try again.
 - Your account needs an approved texting number. If you're not sure you have one, contact StoryVenue support.
 
 Disconnecting
 Clear the fields and Save. The "Connected" badge turns gray and texting stops. The contacts already in StoryVenue stay.`,
-      },
-      {
-        id: 'int-inbound-email-status',
-        title: 'Inbound Email Replies — status and troubleshooting',
-        tags: ['inbound email', 'email reply', 'reply not appearing', 'troubleshoot email', 'settings panel'],
-        body: `When a contact replies to a Conversations email, the reply appears in your Conversations thread automatically. StoryVenue shows a live status panel in Settings so you can see if everything is properly configured.
-
-Where to find it
-Settings → scroll past Integrations → "Inbound Email Replies" card.
-- Green "Configured" badge: everything is in place and email replies will land in your threads.
-- Amber "Needs setup" badge: at least one required item is missing. Each item shows a description and what to do.
-
-If replies still don't appear after the panel shows Configured
-- Replies can take a few seconds to appear. Give it a moment and refresh the conversation.
-- If replies are completely missing, contact StoryVenue support. This typically requires a configuration step that our team handles.`,
       },
       {
         id: 'int-leadfinder',
@@ -3114,7 +2844,7 @@ On the card, click Send a test inquiry. We email a sample inquiry to your Lead F
 What happens when an inquiry arrives
 - A lead is created with the couple's name, email, phone, wedding date, guest count and message — whatever the email includes. If the couple is already a lead, that record is updated instead: only empty fields are filled, so your own edits are never overwritten.
 - You're alerted exactly as for any new lead (email, text or push, per your notification settings). The alert shows which directory it came from and everything the couple sent.
-- The couple gets an email from you with one button: Send me my guide. Tapping it confirms their mobile number and email, sends your guide by text and email, and counts as their permission to text — so they join your full Bride Booking System (guide, 14-day follow-up, then AI outreach if you have it on), exactly like a couple who filled in your listing form.
+- The couple gets an email from you with one button: Send me my guide. Tapping it confirms their mobile number and email, sends your guide by text and email, and counts as their permission to text — so they join your full Bride Booking System™ (guide, 14-day follow-up, then AI outreach if you have it on), exactly like a couple who filled in your listing form.
 - A phone number read from a directory email isn't permission to text, so nothing is texted until they tap. If they haven't tapped within an hour, the guide goes to them by email anyway and your follow-up starts without texts; tapping the button later still turns texts on. Replying by email doesn't count as permission to text.
 - Venues without texting get the guide by email straight away, as before.
 - For a new lead you get one email: the standard new-lead email, with the original directory email included. For anything else Lead Finder handles (an update to a couple you already have, or a message it skipped) you get a copy in your inbox with a short note on what it did. Times are in your venue's local time, based on your venue's ZIP code. Turn the copies off on the card.
@@ -3131,31 +2861,6 @@ Not seeing leads?
 - Skipped messages show the reason — for example an account notice, an automatic reply, or no email address for the couple.`,
       },
       {
-        id: 'int-quickbooks',
-        title: 'Connecting QuickBooks Online',
-        tags: ['quickbooks', 'accounting', 'integration', 'sync', 'qbo'],
-        body: `Go to Settings → Integrations. Click Connect on the QuickBooks Online card.
-
-You'll be redirected to Intuit to authorise the connection. After approving, you're returned to StoryVenue and the integration shows as Connected.
-
-Once connected:
-- Invoices and payments sync automatically to QuickBooks
-- Click Sync Now to force an immediate sync
-- The Sync History table shows the last 10 sync events with status and timestamp
-
-To disconnect: click Disconnect. Your existing QuickBooks data is not deleted.`,
-      },
-      {
-        id: 'int-freshbooks',
-        title: 'Connecting FreshBooks',
-        tags: ['freshbooks', 'accounting', 'integration', 'sync'],
-        body: `Go to Settings → Integrations. Click Connect on the FreshBooks card.
-
-You'll be redirected to FreshBooks to authorise access. After approving, the card shows Connected.
-
-Invoices and charges sync to FreshBooks automatically. Use Sync Now for a manual sync. Disconnect at any time from the same page.`,
-      },
-      {
         id: 'int-tripleseat',
         title: 'Connecting Tripleseat',
         tags: ['tripleseat', 'crm', 'venue crm', 'lead', 'integration', 'sync', 'connect', 'catering', 'events'],
@@ -3163,7 +2868,7 @@ Invoices and charges sync to FreshBooks automatically. Use Sync Now for a manual
 
 To connect
 1. Go to Settings → Integrations → Tripleseat card → Connect.
-2. In Tripleseat, find your public API key (Tripleseat: Settings → API → Public Key).
+2. In Tripleseat, find your Public Key (Tripleseat: Settings → API).
 3. Paste the key into StoryVenue and click Connect.
 4. If your Tripleseat account has more than one location, choose which location new leads should be created under.
 
@@ -3172,7 +2877,7 @@ When a new lead comes in (from your listing form, Lead Link, directory, or a mar
 - First and last name, email, and phone
 - Wedding/event date and guest count (when provided)
 - The bride's message
-- Where the lead came from (UTM attribution)
+- Where the lead came from
 
 Every lead is labeled with the source "StoryVenue - Bride Booking System™" so it's easy to spot and report on inside Tripleseat.
 
@@ -3190,24 +2895,24 @@ Test and manage
 To connect
 1. Go to Settings → Integrations → Event Temple card → Connect.
 2. In Event Temple, get your API key (Settings → Developers → API) and your API-ORG identifier (Settings → Overview).
-3. Paste both into StoryVenue and click Connect. StoryVenue checks the credentials before saving.
+3. Paste both into StoryVenue and click Connect. StoryVenue checks them before saving.
 
 What gets sent
 When a new lead comes in, StoryVenue creates in Event Temple:
 - A contact with the bride's name, email, and phone
 - A booking marked as a lead, with the wedding/event date
 
-The bride's message, guest count, booking timeline, what matters most to her, and where the lead came from (UTM attribution) are added as a clean, bulleted note on that booking.
+The bride's message, guest count, booking timeline, what matters most to her, and where the lead came from are added as a note on that booking.
 
 Choose which pipeline leads land in
 On the Event Temple card you can pick a Pipeline (and a starting Stage within it) for new lead bookings. Leads are created on that stage so they land at the top of the pipeline you choose. Leave it on "Event Temple default" to let Event Temple decide.
 
-Referral source and booking type (auto-filled)
-StoryVenue also fills two native Event Temple fields on every booking so they don't just live in the note:
+Referral source and booking type
+StoryVenue also fills two Event Temple fields on every booking:
 - Referral Source — we automatically use a source named "StoryVenue - Bride Booking System" when it exists in your account. Create that referral source once in Event Temple (Settings) and it fills in going forward. You can also pick a different source on the card.
 - Booking Type — we automatically use "Wedding" when it exists. You can pick a different type on the card.
 
-Event Temple's API can't create referral sources or booking types, so the names above must already exist in Event Temple for us to select them — otherwise the field is left blank and the info stays in the note. Once the referral source, booking type, pipeline, or stage is set, you can build Event Temple Workflows that route or act on those StoryVenue leads automatically.
+These names have to exist in Event Temple already for us to pick them. If they don't, the field is left blank and the details stay in the note. Once they're set, you can build automations in Event Temple that act on your StoryVenue leads.
 
 Test and manage
 - Click Send test lead to push a sample lead and confirm the connection.
@@ -3218,14 +2923,14 @@ Test and manage
         id: 'int-honeybook',
         title: 'Connecting HoneyBook (via Zapier)',
         tags: ['honeybook', 'zapier', 'crm', 'lead', 'integration', 'connect', 'automation'],
-        body: `Send new StoryVenue leads straight into HoneyBook using Zapier — StoryVenue's official integration. No coding required.
+        body: `Send new StoryVenue leads straight into HoneyBook using Zapier. No coding required.
 
 Why Zapier rather than a direct connection
-HoneyBook only gives direct API access to partners it has approved, rather than offering self-serve access. So the quickest way to connect the two is Zapier, and there is nothing for you to apply for or wait on.
+HoneyBook doesn't offer a direct connection you can set up yourself, so Zapier is the quickest way to link the two. There is nothing to apply for or wait on.
 
 How to connect
 1. In StoryVenue, go to Settings → Integrations → Zapier section and generate an API key (copy it — it's shown only once).
-2. In Zapier, create a new Zap using the StoryVenue app (our official integration) and choose the "New Lead" trigger.
+2. In Zapier, create a new Zap using the StoryVenue app and choose the "New Lead" trigger.
 3. Add a HoneyBook action — "Create Client" or "Create Project".
 4. Map the lead's name, email, and phone into the HoneyBook fields, then turn the Zap on.
 
@@ -3250,8 +2955,6 @@ Good to know
         tags: ['wedding planner', 'wedding hub', 'bride portal', 'couple portal', 'portal', 'shared', 'connect couple', 'booked couple', 'planning', 'invite couple', 'link couple'],
         body: `Wedding Planner is one shared place for you and each booked couple to plan the wedding together — guest list, RSVPs, seating, meal selections, and messaging, all in one spot. The couple sees the same "Wedding Planner" inside their own StoryVenue login, so both sides always know where to go.
 
-Tagline: Wedding Planner — one shared place for you and your venue.
-
 Where to find it
 Sidebar → Wedding Planner (heart icon). It's a top-level menu item, right after Venue Concierge.
 
@@ -3275,7 +2978,7 @@ You decide what's shared
 On the Wedding Planner page you can toggle which wedding details the couple sees — wedding date, guest count, space / room, and coordinator.
 
 Availability
-Wedding Planner is included on private-client (Legacy / All-Inclusive) plans. On the $97 and Free plans it's an add-on — if it's locked, you'll see a short overview and a "Schedule a demo" button. It's a great way to add value to (or upsell into) your wedding packages.`,
+Wedding Planner is included on private-client plans. On other plans, if it's locked you'll see a short overview and a "Schedule a demo" button.`,
       },
       {
         id: 'wedding-planner-guests-seating',
@@ -3286,7 +2989,7 @@ Wedding Planner is included on private-client (Legacy / All-Inclusive) plans. On
 Guest list & RSVPs (couple-owned)
 The couple builds their own guest list — names, party size, meal choice, dietary notes, and groups — and can email self-service RSVP links to their guests. Guests RSVP on a simple mobile page and pick their meal.
 
-What you see (no contact PII)
+What you see
 On your Wedding Planner, expand a connected couple to see a live rollup: attending / declined / awaiting counts, total headcount, and a meal-by-meal tally for your catering and BEO. You do not see guest emails, phone numbers, or addresses — those stay with the couple.
 
 Seating chart
@@ -3309,7 +3012,7 @@ You choose which wedding details the couple sees (wedding date, guest count, spa
         id: 'wedding-planner-website',
         title: 'Wedding Planner — the free couple wedding website',
         tags: ['wedding website', 'wedding site', 'minisite', 'link in bio', 'linktree', 'couple website', 'rsvp online', 'guestbook', 'countdown', 'registry link', 'share with guests', 'the knot', 'zola'],
-        body: `Every couple in Wedding Planner can build a free, mobile-first wedding website right inside their StoryVenue login — no separate Knot or Zola account needed. It lives at storyvenue.com/their-custom-link, so they have one link to share on invitations, texts, and social profiles. It's a simple, linktree-style page dressed up as a wedding website — quick to set up, beautiful on a phone.
+        body: `Every couple in Wedding Planner can build a free, mobile-first wedding website right inside their StoryVenue login — no separate account anywhere else. It lives at storyvenue.com/their-custom-link, so they have one link to share on invitations, texts, and social profiles. It's a simple one-page site: quick to set up, beautiful on a phone.
 
 Why it matters for you
 It keeps your booked couples inside StoryVenue instead of scattering across other tools, and — when they turn on the "Our Venue" card — their wedding website links straight back to your public venue listing. That's extra exposure to every guest who visits their page. It's a genuine differentiator you can mention in tours and packages: "book with us and you get a free wedding website."
@@ -3325,12 +3028,12 @@ What the couple can add
 - A guestbook where guests can leave well-wishes (the couple can approve posts before they show)
 
 How a couple sets it up
-1. They log in at app.storyvenue.com and open Website in the top navigation
+1. They log in at app.storyvenue.com and open Wedding website in their menu
 2. They pick their link, add a photo and a few details, and choose which sections to show
 3. They click Publish — and can copy the link or download a QR code for save-the-dates and table cards
 
 How to point a couple to it
-Once you're connected in Wedding Planner, just tell them to log in and open the Website tab. If they RSVP through Wedding Planner's guest list, those responses flow into the same live rollup you already see (attending / declined / headcount / meal tallies) — no extra work for you.`,
+Once you're connected in Wedding Planner, just tell them to log in and open Wedding website. If they RSVP through Wedding Planner's guest list, those responses flow into the same live rollup you already see (attending / declined / headcount / meal tallies) — no extra work for you.`,
       },
     ],
   },
@@ -3344,7 +3047,7 @@ Once you're connected in Wedding Planner, just tell them to log in and open the 
         id: 'account-login',
         title: 'Logging in and resetting your password',
         tags: ['login', 'sign in', 'password', 'forgot password', 'reset', 'email password', 'authentication'],
-        body: `StoryVenue uses email and password to sign in. There are no magic links or one-time codes.
+        body: `You sign in to StoryVenue with your email and password.
 
 Logging in
 Go to app.storyvenue.com/login. Enter your email address and password, then click Sign In.
@@ -3355,10 +3058,10 @@ Forgot your password?
 3. Check your inbox for a password reset link
 4. Click the link and set a new password
 
-The reset link expires after a short period. If it has expired, go through the forgot-password flow again.
+The reset link works for a short time. If it has expired, ask for a new one the same way.
 
 First-time team member login
-If you received an invitation email, click Accept Invitation in the email. You'll be prompted to set your password on first login.
+If you received an invitation email, click Accept Invitation in the email and follow the steps.
 
 If you're locked out
 Make sure you're using the email address the account was created with. Check spam/junk for the reset email. If you still can't access the account, contact StoryVenue support.`,
@@ -3376,44 +3079,38 @@ How to update
 4. Click Save
 
 Important notes
-- No current password re-entry is required — just enter the new value and save
 - If you change your email address, use the new address the next time you log in
-- Password changes take effect immediately — you stay logged in on your current device
+- A new password works straight away
 
 Team members can also update their own profile (name and email) the same way. Changing a team member's email does not affect their role or permissions.`,
       },
       {
         id: 'account-couples-portal',
-        title: 'Couples portal — client account access',
+        title: 'Couple accounts — what your couples sign in to',
         tags: ['couples', 'client login', 'couple account', 'couple portal', 'client portal', 'client access', 'couple signup'],
-        body: `Couples (your clients) can create their own StoryVenue account to view their proposals, invoices, and documents — no need to forward emails or log in as a team member.
+        body: `Your couples can have their own StoryVenue account. It's where they use Wedding Planner: their guest list and RSVPs, seating, day-of timeline, checklist, budget, vendors, inspiration, their wedding website, and messages with you.
 
-Couple signup
-Couples sign up at app.storyvenue.com/couple/signup with:
-- First name and last name
-- Email address
-- Phone number
-- Password
+Creating an account
+- Couples sign up at app.storyvenue.com/signup and choose to create a couple account. They enter their name, email, phone and a password.
+- Or invite them from your Wedding Planner page. The invitation email takes them straight there.
 
-After signing up they are logged in automatically — no "check your email" step.
-
-Couple login
-app.storyvenue.com/couple/login — email and password.
-
-Forgot password
-Same as venue owners: click "Forgot password?" → receive a reset email → set a new password.
+Signing in
+At app.storyvenue.com/login they choose "Wedding couple" and enter their email and password. "Forgot your password?" on the same page sends a reset email.
 
 What couples can see
-After logging in, couples see only their own records — the proposals and documents sent to them from your venue. They cannot see other contacts, your full calendar, or any internal data.
+Only their own wedding. They can't see your other contacts, your calendar, or anything else in your account.
 
-Updating couple profile
-Couples can update their first name, last name, and phone by clicking their name in the header after logging in.`,
+Proposals and invoices
+Couples don't need an account to sign or pay. They open the link in the email or text you send them.
+
+Their own help
+Couples have a Help & how-to section inside their login, so you can point them there for questions about their side.`,
       },
       {
         id: 'account-2fa',
         title: 'Two-factor authentication (2FA)',
         tags: ['2fa', 'two-factor', 'totp', 'security', 'authenticator', 'login security', 'mfa'],
-        body: `StoryVenue supports TOTP-based two-factor authentication for an extra layer of login security.
+        body: `Two-factor authentication adds a second step when you sign in, for extra protection.
 
 What is 2FA?
 Two-factor authentication requires a second verification step (a 6-digit code from an authenticator app) in addition to your password when logging in.
@@ -3430,14 +3127,14 @@ Logging in with 2FA
 After entering your email and password, you'll be prompted for the 6-digit code from your authenticator app. Open your app, read the current code, and enter it.
 
 Disabling 2FA
-Go to your Profile → Two-Factor Authentication → Disable. You'll need to confirm with a code from your authenticator app.
+Go to your Profile → Two-Factor Authentication → Disable 2FA. You'll confirm with your password and a code from your authenticator app.
 
 Lost your authenticator app?
-Use one of the backup codes you saved during setup. If you've lost those too, contact StoryVenue support for manual recovery.
+Use one of the backup codes you saved during setup. If you've lost those too, contact StoryVenue support.
 
 Note: 2FA is per-user — each team member can enable it independently on their own profile. It does not affect other team members or couples.
 
-Availability note: Two-factor authentication is currently in limited rollout. If you do not see the Two-Factor Authentication section on your Profile page yet, it will appear automatically once it is enabled for your account — no action needed on your end.`,
+If you don't see the Two-Factor Authentication section on your Profile page, it isn't switched on for your account yet. Contact StoryVenue support.`,
       },
     ],
   },
@@ -3542,7 +3239,7 @@ Common questions
         id: 'team-invite',
         title: 'Inviting team members',
         tags: ['team', 'invite', 'add member', 'staff', 'user', 'email invite'],
-        body: `Go to Settings → Team. Click "+ Add Team Member".
+        body: `Go to Settings → Team. Click "Add Team Member".
 
 Fill in:
 - First Name (required)
@@ -3550,9 +3247,7 @@ Fill in:
 - Email (required)
 - Role: Owner, Admin, or Member
 
-Click Add Member. The team member immediately receives a branded invitation email at the address you entered. The email includes an Accept Invitation button that logs them into your account.
-
-Once they click the link they are taken straight to the dashboard with the correct access level for their role.
+Click Add Member. The team member is emailed an invitation at the address you entered, with an Accept Invitation button. Once they accept, they land in the dashboard with the access their role allows.
 
 To manage a team member: click the three-dot (...) menu on their row to:
 - Edit — update their name, email, or role
@@ -3563,38 +3258,31 @@ Team members can update their own name and email at any time by clicking their n
 
 Note: Only owners and admins can manage team members.
 
-Hide pipeline dollars (CRM) — When you are logged in as the venue owner (not as an invited team member), each active team member who is not assigned the Owner role may show a Hide $ checkbox on their row. Turning it on hides opportunity amounts, weighted totals, and related money lines for that person in Leads.`,
+Hide dollar amounts — As the venue owner, you'll see a Hide $ checkbox next to each team member who isn't an Owner. Turning it on hides dollar amounts in the Lead Inbox for that person.`,
       },
       {
         id: 'team-roles',
         title: 'Team roles and permissions',
         tags: ['roles', 'permissions', 'owner', 'admin', 'member', 'access', 'what can they see'],
-        body: `There are three roles:
+        body: `There are three roles.
 
 Owner
 - Full access to everything
-- Sees all sidebar items including Calendar, Reports, What's New, and all Settings
-- Can manage branding, email templates, team, integrations, general settings
-- Sees the Get Started onboarding checklist and can restart it
-- Can manage billing and payment processing
+- The only role that can open Settings → General, Team, Integrations and Billing
 
 Admin
-- Access to proposals, customers, calendar, invoices, payments, and most settings
-- Can manage branding and email templates
-- Cannot access General settings, Team management, or Integrations
-- Does not see the onboarding checklist
+- Sees everything an Owner sees in the menu, except Settings → General, Team, Integrations and Billing
+- That includes Marketing, Reports, and the other Settings pages (Email settings, Notifications, Branding)
 
 Member
-- Can only view and manage proposals and customers
-- Sees Home, Customers, Calendar, Payments, Help Center, and Ask AI
-- Cannot access Settings, Reports, or What's New
-- Does not see the onboarding checklist
+- Day-to-day work: Lead Inbox, Conversations, Contacts, Calendar, Payments, Bride Booking System™ and the Help Center
+- Doesn't see Marketing, Settings, or Reports
 
-To change a member's role: click the three-dot menu (...) on their row → Edit Member → change the Role field.
+To change someone's role: click the three-dot menu (...) on their row → Edit → change the Role field.
 
-Team members can update their own profile (name, email) by clicking their name in the sidebar footer.
+Everyone can update their own name and email from My Profile at the bottom of the sidebar.
 
-Pipeline revenue visibility — The venue owner can enable Hide $ for individual team members (Settings → Team) so those users see masked amounts (•••) on Leads instead of dollar figures. Owners always see full amounts.`,
+Hide dollar amounts — The venue owner can turn on Hide $ for individual team members (Settings → Team) so they see masked amounts (•••) in the Lead Inbox instead of dollar figures. Owners always see full amounts.`,
       },
     ],
   },
@@ -3616,19 +3304,17 @@ This is personal: every person on your team (you, and each teammate) sets their 
 Alert types:
 - New lead — someone enquires about your venue
 - Contact replied — a contact sends a reply to an ongoing conversation
-- AI Concierge handoff — the AI Concierge escalates a conversation and needs you to take over
 - Venue Direct message — our concierge team sends you a direct message about a specific bride
 - Payment received — any successful payment comes in
 - Payment failed — a charge attempt fails
 - Proposal signed — a customer signs a proposal
 - Document opened — a customer opens a proposal or invoice you sent
 - Refund issued — a refund is processed
-- New subscription — a recurring payment plan starts
 
-Each row has an Email toggle and a Text toggle. The Text toggle is locked with a small lock icon until your StoryVenue Legacy (SMS) integration is connected under Settings → Integrations — connect it to unlock text alerts.
+Each row has an Email toggle and a Text toggle. The Text toggle is locked with a small lock icon until your StoryVenue Legacy (SMS) integration is connected under Settings → General — connect it to unlock text alerts.
 
 Section 2 — Emails to your customers
-This is account-wide (not per-person) — it's where you edit the actual content of the transactional emails your customers receive: Invoice, Proposal, Payment Confirmation, Subscription Confirmation, Payment Failed, and Payment Reminder. See the "Email template types" article for the full list and how to edit them.
+This is for the whole account (not per person). It's where you edit the emails your customers receive: Invoice, Proposal, Payment Confirmation, Subscription Confirmation, Payment Failed, and Payment Reminder. See the "Email template types" article for the full list and how to edit them.
 
 Editing a customer email template:
 1. Click the template name in the left list to open it
@@ -3637,41 +3323,35 @@ Editing a customer email template:
 
 Toggling a customer email on/off:
 - Use the toggle switch next to the template name in the left list
-- Off = that email will not send for any future event
-- The toggle persists after page reload
+- Off = that email is no longer sent
 
 Variable pills:
 - Below the editor, click any variable pill (e.g. {{contact.first_name}}, {{payment.amount}}) to copy it
 - Paste it anywhere in the Subject or Body
-- Both flat-style tags ({{customer_name}}) and canonical dot-notation ({{contact.full_name}}) resolve correctly
+- Older short names like {{customer_name}} still work
 
 Payment Reminder — overdue schedule:
 - Select the Payment Reminder template to see the Reminder schedule panel
-- Configure up to 3 send-times: each one is a number of days/hours AFTER the due date (overdue, not advance)
+- Set up to 3 reminders: each one goes out a number of days or hours AFTER the due date
 - Default: 1 day after, 3 days after, 7 days after
 - Remove an offset by clicking X; add one with "Add reminder"
 
 Test any customer email template:
 - Click the Preview button to see the rendered email
-- Click Send Test to fire a real email to any address with sample values filled in`,
+- Click Send Test to send a real email to any address, with example details filled in`,
       },
       {
         id: 'sms-notifications',
         title: 'SMS notifications for customers',
         tags: ['sms', 'text message', 'phone', 'messaging', 'notification'],
-        body: `When you send a proposal or invoice to a customer with a phone number on file, StoryVenue automatically sends them an SMS with a link.
+        body: `When you send a proposal or invoice to a customer who has a phone number on file, StoryVenue also texts them a link to it.
 
-For SMS to work:
-1. The customer must have a phone number entered when creating the proposal or invoice.
-2. Phone numbers are automatically formatted to US E.164 format (+1XXXXXXXXXX). Enter numbers in any format — StoryVenue handles the rest.
-3. Your StoryVenue Legacy messaging account must be connected. SMS routes through your A2P-approved phone number.
+For the text to go out
+1. The customer needs a US phone number on the proposal or invoice. Type it in any format.
+2. StoryVenue Legacy messaging must be connected (Settings → General → StoryVenue Legacy shows "Connected").
+3. Your account needs an approved texting number.
 
-If SMS is not sending, check:
-- Is the customer's phone number entered?
-- Is the phone number a valid US number?
-- Is messaging connected? (Settings → General → Messaging should show "Connected")
-
-Note: SMS uses your StoryVenue Legacy account's verified A2P phone number automatically — no manual configuration needed once messaging is connected.`,
+If a text didn't arrive, check those three things. If it still doesn't send, contact StoryVenue support.`,
       },
       {
         id: 'notif-calendar-templates',
@@ -3709,7 +3389,7 @@ Resetting a template
 Click "Reset to default" at the bottom of any channel editor to restore the built-in default template for that channel. This does not affect other channels.
 
 SMS character count
-SMS editors show a character counter (e.g. "114 / 160 chars"). Standard SMS segments are 160 characters. Messages over 160 chars are still sent but may count as 2 segments in your Legacy messaging account.`,
+SMS editors show a character counter (e.g. "114 / 160 chars"). Standard SMS segments are 160 characters. Messages over 160 characters are still sent, but may count as two texts.`,
       },
       {
         id: 'notif-calendar-troubleshoot',
@@ -3724,10 +3404,10 @@ Email not arriving
 4. Check spam/junk folders — our emails can land there for first-time recipients.
 
 SMS not arriving
-1. Is Legacy messaging connected? Settings → Integrations → Messaging should show "Connected".
+1. Is Legacy messaging connected? Settings → General → StoryVenue Legacy should show "Connected".
 2. Does the contact have a valid US phone number in your contacts?
 3. Is the SMS channel toggled On for that scenario?
-4. Is your A2P number approved? A2P rejection blocks all outgoing SMS.
+4. Is your texting number approved? Texts can't go out until it is.
 
 Reminder not arriving
 1. Was the event created after you saved your reminder settings? Reminders are scheduled when an event is saved. Events booked before you set up reminders won't have any: re-save the event to schedule them.
@@ -3737,71 +3417,11 @@ Reminder not arriving
 Follow-up not arriving
 - Follow-up timing is fully configurable: Calendar → Calendar Settings → Notifications → Follow-Up → any channel → "When to send" (choose minutes, hours, or days after the event ends).
 - If the event has no end time, no follow-up is sent.
-- Make sure the follow_up scenario channels are toggled On.
+- Make sure the Follow-Up channels are toggled On.
 - Follow-ups are scheduled when an event is saved. If you change the timing, re-save the event to reschedule it.
 
 Test before going live
 Use the "Send test email" / "Send test SMS" button inside each channel editor to verify delivery before relying on automatic dispatch.`,
-      },
-    ],
-  },
-  {
-    id: 'updates',
-    label: "What's New",
-    iconName: 'Bell',
-    color: '#f97316',
-    articles: [
-      {
-        id: 'updates-overview',
-        title: "What's New — release notes and unread badge",
-        tags: ["what's new", 'whats new', 'updates', 'release notes', 'changelog', 'red dot', 'unread', 'notifications'],
-        body: `What's New (sidebar → What's New) is your running changelog for StoryVenue. Every time we ship a new feature, improvement, or fix, it lands here as an entry with a short outcome-focused headline and description so you can see at a glance what changed and why it matters to your venue.
-
-The page has two tabs: What's New (changelog) and Feature Requests.
-
-Unread indicator
-- The sidebar shows a small red dot on the What's New menu item whenever there are updates you haven't reviewed yet. The dot carries a count of unread entries (1+).
-- Click What's New to open the page. Visiting the page marks every entry as read — the red dot and count disappear automatically for your user. Each teammate has their own unread state.
-- Entries stay on the page forever; the badge just tracks what's new to you since your last visit.
-
-What you'll see on each changelog entry
-- Category pill: New Feature, Improvement, or Fix (color-coded).
-- Outcome-based description — written to explain the impact on you, not just the technical change.
-- Date released.
-
-If the red dot sticks around after you visit the page, refresh once. If it still persists, sign out and back in so the read timestamp is re-synced.`,
-      },
-      {
-        id: 'updates-feature-requests',
-        title: 'Submitting a feature request',
-        tags: ['feature request', 'suggest', 'feedback', 'idea', 'roadmap', 'vote', "what's new"],
-        body: `You can ask for new features directly inside StoryVenue — no external form.
-
-How to submit
-1. Open What's New (sidebar) and switch to the Feature Requests tab.
-2. Click Submit Request.
-3. Enter a short title and a description (explain the problem, how you'd use the feature, and the outcome you want).
-4. Click Submit.
-
-Voting
-- Every venue account can vote once per request using the Vote button on each card.
-- The vote count is shown as individual thumbs-up chips — one chip per venue that voted. Your own vote chip is filled black; others are outlined grey. When 3 venues have voted, you see 3 thumbs-up chips. Up to 8 are shown; beyond that a "+N more" badge appears.
-- Click Vote again to remove your vote.
-- Requests are sorted by most votes so the most popular ideas rise to the top.
-
-What happens next
-- A StoryVenue admin reviews every request and can approve, edit, or remove it.
-- Approved: the request becomes a new What's New entry with an auto-generated outcome-based headline and description. It disappears from the active list because the feature is now live and tracked in the changelog.
-- Removed: if the request is a duplicate, out of scope, or won't be built, it's removed. No action needed from you.
-
-Completed section
-- At the bottom of the Feature Requests tab is a collapsible Completed requests section.
-- It shows any request you submitted or voted on that has since been approved and shipped. Each card shows a "Your request" or "You voted" tag plus the date it shipped.
-
-Editing or deleting your own request
-- You can edit the title/description or delete a request you submitted, as long as it hasn't been approved or removed by an admin yet.
-
-Tip: write the description as an outcome — "I want to be able to X so that Y" — so the admin team can capture the right headline when the feature ships.`,
       },
     ],
   },
@@ -3815,84 +3435,62 @@ Tip: write the description as an outcome — "I want to be able to X so that Y" 
         id: 'billing-plans-overview',
         title: 'Understanding your subscription plans',
         tags: ['plans', 'billing', 'subscription', 'upgrade', 'downgrade', 'free', 'paid', 'directory billing', 'pricing', 'trial', '14 day', '$97', 'bride booking system', 'all-inclusive', 'self-serve', 'payment method', 'card', 'cancel', 'refund', 'settings billing'],
-        body: `Your StoryVenue subscription is managed at Settings → Billing (/dashboard/directory-billing).
+        body: `Your StoryVenue plan is managed at Settings → Billing.
 
-The four plans (shown in this order):
-1. Bride Booking System™ Free — free forever. Includes: Venue Listing, Reviews, Pricing Guide, Speed to Lead System, Lead Inbox, Conversations, Booking Calendar, Proposals & Payments, Contact Management. Does NOT include Analytics.
-2. Bride Booking System™ — $97/month. Everything in Free plus the Analytics dashboard.
-3. All-Inclusive — higher tier with additional features. Price is only shown during a demo call (no price listed on the page).
-4. All-Inclusive Concierge — includes AI Concierge. Price shown on demo call only.
+The four plans (shown in this order)
+1. Bride Booking System™ Free — free forever
+2. Bride Booking System™ — $97/month
+3. All-Inclusive — price shared on a demo call
+4. All-Inclusive Concierge — includes the AI Concierge; price shared on a demo call
 
-Your active plan is identified with an "Active plan" badge.
+Each plan card on the page lists what it includes, and your current plan has an "Active plan" badge.
 
-The Bride Booking System™ features are grouped together in a bordered box on the billing page so you can clearly see what the core product covers.
+Changing plans
+- Between Bride Booking System™ and Free: use the upgrade or downgrade button on the billing page
+- All-Inclusive and All-Inclusive Concierge: click the button to schedule a demo call with the StoryVenue team
 
-Upgrading or downgrading:
-- Bride Booking System™ ↔ Free: self-serve — use the upgrade/downgrade button on the billing page
-- All-Inclusive and All-Inclusive Concierge: click the button to schedule a demo call — these plans require speaking with the StoryVenue team first
-
-14-day free trial (new accounts):
-- When you complete onboarding and enter your card, a 14-day free trial of Bride Booking System™ begins automatically
+14-day free trial (new accounts)
+- When you finish setup and enter your card, a 14-day free trial of Bride Booking System™ begins
 - In the last 3 days of the trial, a notice at the top of your dashboard shows the date of your first charge and a link to manage your subscription. An email goes out a few days before, too
-- After 14 days, if you haven't downgraded to Free, your card is charged $97/month — there is NO automatic downgrade
-- You can downgrade to Free at any time from the billing page before the trial ends
+- After 14 days, if you haven't moved to Free, your card is charged $97/month. The trial doesn't switch you to Free by itself
+- You can move to Free at any time from the billing page before the trial ends
 
-Feature gating:
-- Features not in your plan show a lock icon in the sidebar
-- The Bride Booking System™ analytics page is greyed out (blurred) on the Free plan with an upgrade prompt
-- AI Concierge is only available on plans that include it — the toggle is greyed out on the others
+What's locked
+- Features that aren't in your plan show a lock icon in the sidebar
+- The AI Concierge is only available on plans that include it. Its switch is greyed out on the others
 
-Managing your payment method:
-- Update your card at any time from the billing page
-- When swapping payment methods, existing trial periods and renewal dates are preserved
+Your card
+- Update your card at any time from the billing page. Your trial and renewal dates don't change when you do
+- Charges appear on your statement as "StoryVenue"
 
-Billing descriptor: charges appear on your statement as "StoryVenue."
-
-Cancellation:
+Cancelling
 - Cancel from the billing page at any time
 - You keep your plan until the end of the time you've paid for, then your account moves to the Free plan
 
-Legacy plans:
-- If you are on a Legacy Plan, the billing page shows a "Billing managed directly" banner
-- Legacy plans include all add-ons at no extra charge and are fully managed by the StoryVenue team
-- Contact your account manager for any changes to a legacy plan`,
+Plans managed by StoryVenue
+- If your billing page says "Billing managed directly", your plan is looked after by the StoryVenue team. Contact them for any changes`,
       },
       {
         id: 'billing-verified-sponsored',
-        title: 'Verified, Sponsored, and Concierge add-ons',
+        title: 'Verified, Sponsored, and AI Concierge',
         tags: ['verified', 'sponsored', 'concierge', 'badge', 'listing', 'add-on', 'addon', 'promote', 'visibility', 'ai', 'sms', 'automation', 'greyed out', 'demo', 'all-inclusive concierge'],
-        body: `StoryVenue offers add-ons that enhance your listing and capabilities.
+        body: `StoryVenue has extras that lift your listing and your follow-up.
 
-Verified:
-- Displays a verified badge on your storyvenue.com listing
-- Signals to couples your venue is confirmed legitimate
-- Available on all plans (included on some higher plans at no extra cost)
+Verified
+- Shows a verified badge on your storyvenue.com listing
+- Tells couples your venue is confirmed as real
 
-Sponsored:
-- Promotes your listing more prominently in directory search results
-- Increases discovery by couples browsing storyvenue.com
-- Available on all plans (included on some higher plans)
+Sponsored
+- Shows your listing more prominently in directory search results
+- Helps more couples browsing storyvenue.com find you
 
-Venue Concierge (AI Concierge):
-- Enables the AI Concierge system — automated SMS-based lead engagement powered by AI
-- Only available on the All-Inclusive Concierge plan (and any plan the StoryVenue team has added it to)
-- On plans without access, the AI Concierge toggle on the Bride Booking System settings page is greyed out and unclickable
-- Hovering the greyed-out toggle shows a tooltip: "Schedule a demo to learn more about this plan"
-- Clicking it opens a demo scheduling calendar — not an upgrade button
-- See the AI Concierge article for full system details
+AI Concierge
+- Follows up with your leads by text for you (see the AI Concierge article)
+- Included with the All-Inclusive Concierge plan, and any plan the StoryVenue team has added it to
+- On other plans its switch is greyed out. Pressing it lets you schedule a demo
 
-Plan inclusion:
-- All-Inclusive Concierge: Verified, Sponsored, and AI Concierge are all included
-- All-Inclusive: Verified and Sponsored included; AI Concierge not included
-- Bride Booking System™: Verified available as add-on; Sponsored as add-on; AI Concierge not available
-- Bride Booking System™ Free: both available as add-ons; AI Concierge not available
-- Legacy plans: all add-ons included automatically at no extra charge
-
-Managing your add-ons:
-- Go to Settings → Billing
-- Toggle add-ons on or off
-- Today's prices and your current status are shown on the page
-- Add-on changes take effect at your next renewal`,
+What your plan includes
+Settings → Billing shows which of these are part of your plan, which you can add, and today's prices. Changes to add-ons take effect at your next renewal.`,
       },
       {
         id: 'billing-trial',
@@ -3917,7 +3515,7 @@ After you add your card
 To stay on the Free plan
 - Go to Settings → Billing before the trial ends
 - Click the downgrade button on the Bride Booking System™ Free plan
-- Your listing and payments stay active; automations switch off
+- The Free plan card on that page shows what you keep
 
 Good to know
 - The trial doesn't switch you to Free by itself. Choose Free before it ends if that's what you want.
@@ -3932,8 +3530,7 @@ Good to know
 
 Availability:
 - Only available on plans that include the Pricing Guide feature
-- If your plan doesn't include it, the sidebar menu item shows a lock icon with an upgrade prompt
-- When the feature is off, the guide's lead-capture form is also hidden from your public listing automatically — no broken links or placeholders appear
+- If your plan doesn't include it, the sidebar menu item shows a lock icon, and the guide's form is left off your public listing
 
 Creating your guide:
 1. Go to Bride Booking System™ → Pricing Guide
@@ -3960,7 +3557,7 @@ Preview:
       {
         id: 'merge-vars-overview',
         title: 'Using merge variables (merge tags)',
-        tags: ['merge variables', 'merge tags', 'variables', 'personalization', 'first name', 'contact name', 'canonical', 'dot notation', 'workflow variables', 'email variables'],
+        tags: ['merge variables', 'merge tags', 'variables', 'personalization', 'first name', 'contact name', 'email variables'],
         body: `Merge variables let you personalize your emails, SMS messages, and notifications with real data — contact name, payment amount, appointment time, venue name, and more.
 
 How to use them:
@@ -3968,12 +3565,12 @@ How to use them:
 2. The tag is copied to your clipboard — paste it into your subject line or message body
 3. At send time, the tag is replaced with the real value for that specific recipient or event
 
-Naming convention:
-StoryVenue uses dot-notation canonical tags: {{category.field}}
+How they're written:
+With a dot, like {{category.field}}
 - {{contact.first_name}} — the contact's first name
 - {{venue.name}} — your venue / business name
 - {{payment.amount}} — the payment amount
-Legacy flat tags (like {{customer_name}}, {{organization}}, {{amount}}) still work as aliases.
+Older short names (like {{customer_name}}, {{organization}}, {{amount}}) still work.
 
 Contact variables:
 - {{contact.first_name}} / {{contact.last_name}} / {{contact.full_name}} / {{contact.name}}
@@ -3986,7 +3583,7 @@ Venue variables:
 - {{venue.address}} / {{venue.city}} / {{venue.state}} / {{venue.website}}
 - {{venue.owner_name}} / {{venue.owner_first_name}}
 
-Payment variables (transactional emails):
+Payment variables (payment emails):
 - {{payment.amount}} — total payment amount
 - {{payment.net_amount}} — after fees
 - {{payment.fee}} — processing fee
@@ -4010,7 +3607,7 @@ Lead / event variables:
 Subscription variables:
 - {{subscription.amount}} / {{subscription.frequency}} / {{subscription.next_payment_date}}
 
-Marketing-only variables (campaign / workflow emails):
+Marketing-only variables (campaign emails):
 - {{marketing.unsubscribe_url}} / {{marketing.resubscribe_url}} / {{marketing.preferences_url}}
 
 System variables:
@@ -4018,9 +3615,7 @@ System variables:
 - {{system.year}} — current year
 
 Where to find variable pickers:
-- Trigger Links & Tags page: full searchable reference with all 50+ variables grouped by category (click to copy)
-- Workflow builder: {…} button on every email/SMS step — categorized, searchable, 50+ variables
-- Email/campaign builder: sidebar variable panel — grouped by category, click to copy
+- Campaign builder: the variable panel — grouped by category, click to copy
 - Notifications page: variable pills below the template editor — click any pill to copy
 - Calendar settings → Notifications: merge tag reference in each channel editor`,
       },
@@ -4036,39 +3631,39 @@ Where to find variable pickers:
         id: 'push-overview',
         title: 'Push notifications overview',
         tags: ['push notifications', 'push alerts', 'browser notifications', 'real-time alerts', 'pwa', 'native app'],
-        body: `Push notifications (an instant alert banner on your phone or desktop) are a native-app-only feature right now. On the web dashboard, Settings → Push Notifications is hidden, and alerts about your business go out by email and text instead — see Settings → Notifications.
+        body: `Push notifications (an instant alert banner on your phone) come from the StoryVenue app for iPhone and Android.
 
-Why push moved to the native app
-The StoryVenue iOS/Android app has its own push notifications built in, so there's no need for browser push on the web anymore. Once you've installed the native app from the App Store or Play Store and logged in, open Settings → Push Notifications inside the app to choose which events (new lead, new message, AI Concierge handoff, etc.) send you a push alert.
+In the app
+Install the StoryVenue app from the App Store or Play Store and sign in. Then open Settings → Push Notifications inside the app and choose which events (a new lead, a new message, and so on) send you an alert.
 
 On the web
-Use Settings → Notifications instead. Under "Alerts about your business" you and every teammate independently choose, per alert type, whether you get an email, a text, both, or neither. Nothing is missed — it just arrives by email/SMS on web instead of a push banner.`,
+The web dashboard doesn't send push alerts. Use Settings → Notifications instead: under "Alerts about your business", you and each teammate choose, per alert, whether to get an email, a text, both, or neither.`,
       },
       {
         id: 'push-settings',
-        title: 'Configuring push notification preferences (native app)',
+        title: 'Choosing your push alerts (in the app)',
         tags: ['push settings', 'notification settings', 'toggle', 'enable push', 'disable push', 'test push', 'native app', 'mobile app'],
-        body: `Push notification toggles live inside the native StoryVenue iOS/Android app only — Settings → Push Notifications on the web dashboard now redirects to Settings → Notifications (email + SMS).
+        body: `Push alerts are set inside the StoryVenue app for iPhone and Android.
 
-Inside the native app:
+In the app
 1. Open Settings → Push Notifications.
-2. Turn on the master push toggle if you haven't already — your device will ask for notification permission.
-3. Toggle individual event types (new lead, new message, AI Concierge handoff, etc.) on or off.
+2. Turn on push. Your phone asks for permission the first time.
+3. Switch individual alerts (a new lead, a new message, and so on) on or off.
 
-If you're not on the native app yet, or you're on the web dashboard, manage your alerts at Settings → Notifications instead — choose email and/or text for each alert type, independently for you and every teammate.`,
+On the web dashboard, manage your alerts at Settings → Notifications instead: choose email and/or text for each alert, separately for you and every teammate.`,
       },
       {
         id: 'push-install-app',
-        title: 'Installing StoryVenue as an app (PWA)',
+        title: 'Installing StoryVenue on your phone or computer',
         tags: ['install app', 'pwa', 'progressive web app', 'add to home screen', 'mobile app', 'desktop app', 'app install'],
-        body: `StoryVenue's web dashboard is a Progressive Web App (PWA) — you can install it on your phone, tablet, or desktop so it looks and feels like an app, separate from your browser.
+        body: `You can install StoryVenue's web dashboard on your phone, tablet, or computer so it opens like an app, separate from your browser.
 
 What you get when you install:
 - A home screen / desktop icon for one-tap access
 - Full-screen mode without browser address bar
 - Faster load times after the first visit
 
-Note: the installed web app does not send push notifications — that's a native-app-only feature right now (see the Push Notifications articles). On the installed web app, alerts about your business arrive by email and text instead, configured at Settings → Notifications. For push alerts, install the dedicated StoryVenue app from the App Store or Play Store.
+Note: installed this way, StoryVenue doesn't send push alerts. Alerts about your business arrive by email and text (Settings → Notifications). For push alerts, install the StoryVenue app from the App Store or Play Store.
 
 How to install on iPhone / iPad (Safari):
 1. Open app.storyvenue.com in Safari
@@ -4103,22 +3698,21 @@ Offline: if you lose internet connection, StoryVenue shows a friendly offline pa
         id: 'support-contact',
         title: 'Contacting StoryVenue support',
         tags: ['support', 'help', 'contact', 'ticket', 'email support', 'issue', 'bug', 'problem'],
-        body: `Need help that goes beyond the Help Center and Ask AI? Contact the StoryVenue support team directly.
+        body: `Need help beyond the Help Center and Ask AI? Contact the StoryVenue support team.
 
-From the dashboard:
-1. Go to Support in the sidebar (or click Ask AI → Contact Support)
-2. Fill in the subject, category, and describe your issue
-3. Click Send — your message goes directly to the support team
+From the dashboard
+1. Open Ask AI (the sparkle button, bottom-right of any page)
+2. Choose Contact support
+3. Describe what you need and send it
 
-You'll get a follow-up by email. Support tickets include your full Ask AI conversation history so the team has full context.
+You'll get a reply by email. What you asked Ask AI is included, so you don't have to repeat yourself.
 
-Direct email:
+By email
 You can also email clients@storyvenuemarketing.com at any time.
 
-Before contacting support:
-- Ask the floating sparkle button (bottom-right) — Ask AI can answer most how-to questions instantly
-- Check the Help Center (sidebar → Help Center) for searchable documentation
-- Search the What's New page (sidebar) to see if a recent update changed the feature you're asking about`,
+Before you write
+- Ask AI can answer most how-to questions straight away
+- The Help Center (sidebar → Help Center) is searchable`,
       },
     ],
   },
@@ -4132,9 +3726,9 @@ Before contacting support:
         id: 'ai-overview',
         title: 'What is Ask AI?',
         tags: ['ask ai', 'ai', 'chat', 'assistant', 'help'],
-        body: `Ask AI is your built-in assistant, powered by your live account data and an internal summary of the StoryVenue product — navigation, CRM, Conversations inbox (SMS / Email / Team tabs, two-way replies), Venue listing (directory, Media library, photos, analytics, reviews), Leads pipelines and intelligence, calendar, payments, marketing tools, team permissions, settings, What's New / changelog, feature requests, and Help Center guidance. It knows your current revenue, recent proposals, and — when you're on the Leads page — a detailed snapshot of leads, stages, and notes.
+        body: `Ask AI is your built-in assistant. It knows how to use StoryVenue and can see your own account: your revenue, recent proposals, and — when you're in the Lead Inbox — your leads, stages, and notes.
 
-Open it by clicking the sparkle button (bottom-right corner of any page) or by clicking Ask AI in the sidebar.
+Open it by clicking the sparkle button (bottom-right corner of any page), or choose Ask AI in the Help Center.
 
 You can ask questions like:
 - "How much revenue did I make last month?"
@@ -4146,13 +3740,12 @@ You can ask questions like:
 - "How do listing reviews show on storyvenue.com?"
 - "What's the difference between SMS, Email, and Team only in Conversations?"
 - "How do I delete a contact or lead?"
-- "What is the None stage on leads?"
-- On Leads: "What's my total pipeline value?", "Which leads have wedding dates in June?", "Explain weighted vs open pipeline"
+- In the Lead Inbox: "What's my total pipeline value?", "Which leads have wedding dates in June?", "Explain weighted vs open pipeline"
 - "What is the Media library?" or "How do I reuse photos in my emails and forms?"
-- "What system tags are available?" or "How do merge variables work?"
+- "How do merge variables work?"
 - On the Calendar page: use the "Search & Ask AI" button (sparkle icon) for calendar-specific AI search — ask "What tours do I have next week?" or "Any cancellations this month?"
 
-Ask AI answers in plain language. It uses your real account data to give accurate, personalised answers. If AI gives a stale answer, refresh the page to reset the context.`,
+Ask AI answers in plain language. It uses your real account data to give accurate, personalised answers. If an answer looks out of date, refresh the page and ask again.`,
       },
       {
         id: 'ai-screenshot',
@@ -4204,7 +3797,7 @@ export function getArticleById(id: string) {
 
 export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   // Home
-  '/dashboard': ['dash-kpis', 'dash-chart', 'gs-onboarding', 'gs-sidebar-chrome'],
+  '/dashboard': ['gs-onboarding', 'gs-overview', 'gs-sidebar-chrome', 'dash-announcement-ticker'],
 
   // Contacts
   '/dashboard/contacts': ['cust-add', 'cust-search', 'cust-profile', 'cust-pipeline', 'cust-tasks', 'cust-documents', 'cust-dnd'],
@@ -4231,16 +3824,12 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
 
   // Marketing — native email
   '/dashboard/marketing/analytics': ['me-overview', 'me-compliance', 'leads-overview', 'gs-overview'],
-  '/dashboard/marketing/email/campaigns':  ['me-builder', 'me-blocks', 'me-preview-test', 'me-segments', 'me-templates-vs-campaigns', 'me-compliance', 'brand-social-networks', 'brand-colors-saved'],
-  '/dashboard/marketing/email/audiences':  ['me-segments', 'me-templates-vs-campaigns', 'me-overview', 'me-compliance'],
-  '/dashboard/marketing/email/templates':  ['me-builder', 'me-blocks', 'me-templates-vs-campaigns', 'me-block-button', 'me-block-image', 'me-block-video', 'me-block-social', 'me-block-address', 'me-brand-colors'],
-  '/dashboard/marketing/email/automations':['me-workflows', 'me-templates-vs-campaigns', 'me-builder', 'me-blocks', 'me-compliance', 'me-preview-test'],
+  '/dashboard/marketing/email/campaigns':  ['me-builder', 'me-blocks', 'me-preview-test', 'me-segments', 'me-campaigns', 'me-compliance', 'brand-social-networks', 'brand-colors-saved'],
+  '/dashboard/marketing/email/audiences':  ['me-segments', 'me-campaigns', 'me-overview', 'me-compliance'],
   '/dashboard/marketing/email/preferences':['me-compliance', 'me-overview'],
-  '/dashboard/marketing/email':            ['me-overview', 'me-builder', 'me-blocks', 'me-segments', 'me-templates-vs-campaigns', 'me-compliance'],
-  '/dashboard/marketing/trigger-links':    ['mkt-trigger-tags-vars', 'mkt-system-tags', 'mkt-system-vars', 'merge-vars-overview', 'me-workflows', 'me-overview'],
-  '/dashboard/marketing/form-builder':     ['me-form-builder', 'me-workflows', 'listing-media-library', 'leads-overview', 'gs-overview'],
-  '/dashboard/marketing/workflows':        ['me-workflows', 'me-form-builder', 'me-templates-vs-campaigns', 'me-compliance', 'me-overview'],
-  '/dashboard/marketing/ai-concierge':    ['mkt-ai-concierge', 'mkt-system-vars', 'me-workflows', 'conversations-overview'],
+  '/dashboard/marketing/email':            ['me-overview', 'me-builder', 'me-blocks', 'me-segments', 'me-campaigns', 'me-compliance'],
+  '/dashboard/marketing/form-builder':     ['me-form-builder', 'listing-media-library', 'leads-overview', 'gs-overview'],
+  '/dashboard/marketing/ai-concierge':    ['mkt-ai-concierge', 'mkt-system-vars', 'conversations-overview'],
 
   // Offerings / Packages catalog
   '/dashboard/offerings': ['offerings-overview', 'pay-templates', 'pay-new'],
@@ -4275,7 +3864,7 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/settings/branding':        ['brand-setup', 'brand-colors-saved', 'brand-social-networks', 'listing-media-library', 'me-block-social', 'me-block-address'],
   '/dashboard/settings/email-templates': ['notif-settings', 'email-types', 'email-variables', 'me-overview'],
   '/dashboard/settings/calendar':        ['cal-settings-overview', 'cal-multi-calendar', 'cal-per-calendar-rules', 'cal-notification-overview', 'cal-notification-reminders', 'cal-settings-booking-rules', 'cal-settings-google-sync'],
-  '/dashboard/settings/integrations':    ['int-legacy', 'int-inbound-email-status', 'int-calendly', 'int-google-cal', 'int-quickbooks', 'int-freshbooks'],
+  '/dashboard/settings/integrations':    ['int-zapier', 'int-calendly', 'int-tripleseat', 'int-eventtemple', 'int-honeybook'],
   '/dashboard/settings/team':            ['team-invite', 'team-roles'],
   '/dashboard/settings/notifications':   ['notif-settings', 'email-types', 'email-variables', 'sms-notifications', 'merge-vars-overview'],
   '/dashboard/settings/push':            ['push-settings', 'push-overview', 'push-install-app'],
@@ -4284,16 +3873,13 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/listing/pricing-guide':    ['billing-pricing-guide', 'listing-web-form', 'listing-overview', 'listing-photos'],
   '/dashboard/listing/web-form':         ['listing-web-form', 'billing-pricing-guide', 'brand-setup', 'leads-overview'],
   '/dashboard/listing/lead-finder':      ['int-leadfinder', 'leads-overview', 'listing-booking-system'],
-  '/dashboard/settings':                 ['gs-overview', 'gs-onboarding', 'int-legacy', 'int-inbound-email-status'],
+  '/dashboard/settings':                 ['gs-overview', 'gs-onboarding', 'int-legacy'],
 
   // Support
   '/dashboard/support': ['support-contact', 'ai-overview', 'ai-escalate'],
 
   // Profile / 2FA
   '/dashboard/profile': ['account-update-profile', 'account-2fa', 'account-login'],
-
-  // What's New / Updates
-  '/dashboard/updates': ['updates-overview', 'updates-feature-requests', 'ai-overview', 'gs-overview'],
 
   // AI
   '/dashboard/ai':   ['ai-overview', 'listing-media-library', 'ai-screenshot', 'ai-voice', 'ai-escalate'],

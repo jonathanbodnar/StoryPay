@@ -95,3 +95,47 @@ describe('the docs know the product as it is today', () => {
     }
   });
 });
+
+// Owner, Oct 6 2026: articles for pages that are no longer in the menu come
+// out ("Yes remove"). The same read found articles for things the app no longer
+// has at all: the calendar feed (retired), QuickBooks and FreshBooks cards, and
+// the availability link's card.
+describe('the docs don’t describe pages a venue can’t open', () => {
+  const GONE = [
+    /What['’]s New/, /Feature Requests/, /Workflow builder/, /Marketing → Workflows/,
+    /Trigger Links(,| &) Tags/, /Email Automations/, /Marketing → Email Templates/,
+    /\biCal\b/, /QuickBooks/, /FreshBooks/, /Public Availability Page/i,
+  ];
+
+  it('the Help Center', () => {
+    for (const pattern of GONE) expect(help, String(pattern)).not.toMatch(pattern);
+  });
+
+  it('what the assistant is told', () => {
+    for (const pattern of GONE) expect(assistantDocs, String(pattern)).not.toMatch(pattern);
+  });
+
+  it('the removed articles are gone, and every page still points at articles that exist', () => {
+    const ids = new Set([...help.matchAll(/^        id: '([^']+)',$/gm)].map((m) => m[1]));
+    for (const gone of ['me-workflows', 'mkt-trigger-tags-vars', 'mkt-system-tags', 'updates-overview', 'updates-feature-requests', 'int-inbound-email-status', 'cal-ical', 'cal-availability', 'int-google-cal', 'int-quickbooks', 'int-freshbooks']) {
+      expect(ids.has(gone), gone).toBe(false);
+    }
+    const map = help.slice(help.indexOf('export const PAGE_ARTICLE_MAP'), help.indexOf('// Returns the best-matching'));
+    const pointedAt = [...map.matchAll(/'([a-z0-9]+(?:-[a-z0-9]+)+)'/g)].map((m) => m[1]);
+    expect(pointedAt.length).toBeGreaterThan(100);
+    expect(pointedAt.filter((id) => !ids.has(id))).toEqual([]);
+  });
+
+  it('texting is connected under Settings → General, and the alert list is today’s', () => {
+    expect(help).not.toMatch(/"Connected" badge on Settings → Integrations/);
+    expect(help).not.toMatch(/AI Concierge handoff — the AI Concierge escalates/);
+    expect(assistantDocs).not.toMatch(/SMS\/A2P integration/);
+  });
+
+  it('the wording a venue owner doesn’t need', () => {
+    for (const pattern of [/Flodesk/i, /TCPA/, /canonical/i, /sub-account/i, /UTM attribution/, /TOTP-based/, /Progressive Web App/]) {
+      expect(help.replace(/tags: \[[^\]]*\]/g, ''), String(pattern)).not.toMatch(pattern);
+    }
+    expect(assistantDocs).not.toMatch(/Flodesk|TCPA|sub-account/i);
+  });
+});

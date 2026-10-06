@@ -18,6 +18,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { bookingTimelineLabel } from '@/lib/booking-timeline';
+import { normalizeEventTempleName } from '@/lib/eventtemple-names';
 
 const EVENTTEMPLE_API = 'https://api.eventtemple.com/v2';
 const JSON_API = 'application/vnd.api+json';
@@ -31,10 +32,8 @@ const SOURCE_LABEL = 'StoryVenue - Bride Booking System™';
 const AUTO_REFERRAL_SOURCE_NAME = SOURCE_LABEL;
 const AUTO_BOOKING_TYPE_NAME = 'Wedding';
 
-/** Case/whitespace-insensitive name match used for auto-mapping. */
-function normalizeName(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, ' ');
-}
+/** Name match used for auto-mapping: see eventtemple-names. */
+const normalizeName = normalizeEventTempleName;
 
 function etHeaders(apiKey: string, orgId: string): Record<string, string> {
   return {
