@@ -445,7 +445,7 @@ Disconnecting
 Click Disconnect in the Connections tab. StoryVenue events already written to Google Calendar are not automatically deleted.
 
 If the connection stops working
-Google OAuth tokens expire. Return to Calendar → Calendar Settings → Connections and reconnect. This is usually required after a Google account password change or permission revocation.`,
+Google's permission can expire. Return to Calendar → Calendar Settings → Connections and reconnect. This is usually required after a Google account password change or permission revocation.`,
       },
       {
         id: 'cal-settings-availability',
@@ -2166,7 +2166,7 @@ Adding a link
 1. Settings → Branding → Social Networks.
 2. Pick a platform.
 3. Paste the URL. If you forget the https:// prefix, the system adds it automatically.
-4. The save is debounced — your changes auto-save after a brief pause.
+4. Your changes save by themselves after a brief pause.
 
 Each row shows an "Open link" button (opens the URL in a new tab to verify) and a "Remove" button.
 
@@ -2594,7 +2594,7 @@ Available blocks:
 - Email, Phone, Number, Date, and Time pickers.
 - Address — split into individual labelled inputs (Street, City, State, ZIP code) so contact records land cleanly in your CRM. (The previous freeform single-line address was replaced.)
 - Dropdown, Radio, Checkbox group, Yes/No toggle.
-- File upload (uses the same Media-library bucket).
+- File upload (files land in your Media library).
 - Image — same uploader as the email builder. Drag and drop from your computer, click Upload, or "Choose from media library" (shared picker). Supports alignment, width, padding, link wrap, and alt text. Anything uploaded here auto-registers in your Media library.
 - Button — full Flodesk-style tabbed inspector. Style tab gives you presets (Solid, Outline, Pill, Underlined link, etc.), a saved-styles modal (save/apply/delete styles), and full custom controls — Google font + weight + size + letter spacing, text color, background color, border color/width/radius, padding, full-width toggle. Default fill is the signature #1b1b1b so freshly placed buttons look right immediately. Older saved forms automatically map their previous button style onto the new presets.
 - Submit, Divider, and Spacer — same controls as the email builder.
