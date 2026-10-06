@@ -137,10 +137,10 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 - Public availability page: shareable link showing open/booked dates with no customer info exposed — find it in Settings → Integrations.
 - **Google Calendar events display**: when Google Calendar is connected in Calendar Settings → Connections, events from your Google Calendar appear directly on the StoryVenue calendar as read-only chips, so you can see everything in one place. They do not create StoryVenue records — they're a visual overlay.
 - **Conflict blocking**: in Calendar Settings → Connections, you can select which Google Calendars block your available booking slots. When a conflict calendar has an event, that time window becomes unavailable on your public booking page.
-- Calendar Settings: go to Settings → Calendar for full configuration across 5 tabs (General, Connections, Availability, Booking Rules, Notifications). See the Calendar Settings section below for details.
+- Calendar Settings: go to Calendar → Calendar Settings for full configuration across 5 tabs (General, Connections, Availability, Booking Rules, Notifications). See the Calendar Settings section below for details.
 - Automatic notifications fire when events are created (confirmation), cancelled, rescheduled, or nearing start (reminder) and after completion (follow-up). See the Calendar Notification System section for full details.
 
-## Calendar Settings (Settings → Calendar)
+## Calendar Settings (Calendar → Calendar Settings)
 Five tabs covering every aspect of how your calendar works:
 
 ### General tab
@@ -600,7 +600,7 @@ Every scenario has four independent channels — each can be toggled on or off w
 - **SMS → Contact**
 
 ### Editing Templates
-Go to Settings → Calendar → Notifications tab.
+Go to Calendar → Calendar Settings → Notifications tab.
 - Click a scenario (e.g. "Reminder") to expand it.
 - Click any channel row (e.g. "Email → Contact") to expand the editor — the chevron on the left opens/closes; the toggle on the right enables/disables that channel independently.
 - Edit the Subject (email only) and message body.
@@ -665,7 +665,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - How do I manage my email notification templates? Settings → Notifications. Each template has an on/off toggle and a full editor. Payment Reminder lets you configure overdue reminder timing (days after the due date, not before).
 - How do I turn off a specific email notification? Settings → Notifications → click the template in the left list → toggle the switch off. Saved immediately.
 - How do I set up payment overdue reminders? Settings → Notifications → click "Payment Reminder" → configure up to 3 offsets (e.g. 1 day after due, 3 days after, 7 days after) in the Reminder schedule panel.
-- What are Verified and Sponsored listings? Add-ons you can enable for your storyvenue.com listing. Verified ($19/month) adds a trust badge; Sponsored ($99/month) boosts prominence in search results. Manage at Sidebar → Verified & Sponsored (or /dashboard/listing/directory).
+- What are Verified and Sponsored listings? Add-ons you can enable for your storyvenue.com listing. Verified adds a trust badge; Sponsored boosts prominence in search results. Manage them, and see today's prices, at Settings → Billing (or /dashboard/listing/directory).
 - What plans include Verified or Sponsored? Highest paid plan: both included. Second-highest: Verified included. Free and first paid plan: available as add-ons.
 - How do I see my subscription plan and upgrade? Go to Settings → Billing (/dashboard/directory-billing). Plans show as cards with full feature breakdowns. Bride Booking System Free and Bride Booking System™ have self-serve upgrade/downgrade buttons. All-Inclusive and All-Inclusive Concierge require scheduling a demo call.
 - What is the 14-day free trial? New accounts that enter a credit card during onboarding get 14 days free on Bride Booking System™. If you don't downgrade to Free before the trial ends, you're automatically charged $97/month. You can downgrade at any time from Settings → Billing.
@@ -716,11 +716,11 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - How do I update my email or password? Click your name/avatar in the sidebar → My Profile. Enter your new email or password and save. No current-password re-entry required.
 - How does client / couple login work? Couples use app.storyvenue.com/couple/login with the email and password they set at signup. They can view their proposals and documents.
 - How do I set up StoryPay™? Payments → Payment settings → Connect with Stripe. Stripe's secure signup takes about 10 minutes (business details and a payout bank account); online payments turn on as soon as Stripe approves.
-- How do I connect Google Calendar for two-way sync? Settings → Calendar → Connections tab → connect your Google account. Pick which calendar to write new events to, and select any personal/team calendars to use as conflict blockers.
-- How do I set my available hours for bookings? Settings → Calendar → Availability tab. Toggle each weekday on/off and set start/end times. Add date-specific overrides for holidays or special days.
-- How do I set minimum notice for bookings? Settings → Calendar → Booking Rules → Minimum Scheduling Notice. Set to 0 for same-day, up to 72 hours.
-- How do I add a time buffer between appointments? Settings → Calendar → Booking Rules → Pre-buffer and Post-buffer. These block the calendar before/after each booking so you have prep or debrief time.
-- Why do I see Google Calendar events on my StoryVenue calendar? If you've connected Google Calendar (Settings → Calendar → Connections), your Google events display as read-only chips on the StoryVenue calendar for full-schedule visibility.
+- How do I connect Google Calendar for two-way sync? Calendar → Calendar Settings → Connections tab → connect your Google account. Pick which calendar to write new events to, and select any personal/team calendars to use as conflict blockers.
+- How do I set my available hours for bookings? Calendar → Calendar Settings → Availability tab. Toggle each weekday on/off and set start/end times. Add date-specific overrides for holidays or special days.
+- How do I set minimum notice for bookings? Calendar → Calendar Settings → Booking Rules → Minimum Scheduling Notice. Set to 0 for same-day, up to 72 hours.
+- How do I add a time buffer between appointments? Calendar → Calendar Settings → Booking Rules → Pre-buffer and Post-buffer. These block the calendar before/after each booking so you have prep or debrief time.
+- Why do I see Google Calendar events on my StoryVenue calendar? If you've connected Google Calendar (Calendar → Calendar Settings → Connections), your Google events display as read-only chips on the StoryVenue calendar for full-schedule visibility.
 - How do I call or text a lead without opening their full profile? From the Kanban board, hover the lead card — action buttons (Call, SMS, Email, Notes, Calendar) appear at the bottom of the card for quick access.
 - How do I book an appointment from a lead card? Hover the lead card on the Kanban board → click the Calendar icon → the New Event modal opens pre-filled with the contact's info.
 - How do I schedule an appointment from inside a conversation thread? Open the conversation thread → click the Profile button to open the contact's slide-over profile → go to the Schedule tab → book the appointment there.
@@ -792,8 +792,8 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 
 ## Verified & Sponsored Listings
 - Path: /dashboard/listing/directory — manage your Verified and Sponsored listing status.
-- Verified listing ($19/month): displays a verified badge on your storyvenue.com listing, signaling to couples that your venue is confirmed legitimate. Price may change; current price is shown on the page.
-- Sponsored listing ($99/month): promotes your listing more prominently in directory search results, increasing visibility. Price may change; current price is shown on the page.
+- Verified listing: displays a verified badge on your storyvenue.com listing, signaling to couples that your venue is confirmed legitimate. Price may change; current price is shown on the page.
+- Sponsored listing: promotes your listing more prominently in directory search results, increasing visibility. Price may change; current price is shown on the page.
 - Plan inclusion:
   - Highest paid plan: Verified AND Sponsored are both included automatically at no extra cost.
   - Second-highest paid plan: Verified is included; Sponsored is available as an optional add-on.
@@ -802,7 +802,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - Prices are displayed on the /dashboard/listing/directory page and on the plans accordion at /dashboard/directory-billing.
 
 ## AI Concierge (Automated SMS Lead Engagement)
-- Path: Marketing → AI Concierge (sidebar flyout).
+- Path: Bride Booking System™ → Speed to Lead System → the AI Concierge card.
 - AI Concierge is an automated, outbound-only SMS follow-up system. It sends personalized messages to leads on your behalf and notifies your team the moment a lead replies — so you can step in for a personal conversation.
 - **Plan gating**: AI Concierge is only available on the All-Inclusive Concierge plan (and any plan where StoryVenue has specifically enabled it). On all other plans, the AI Concierge toggle is greyed out. Hovering shows a tooltip to schedule a demo. Clicking the greyed-out toggle opens the demo scheduling calendar.
 - **Eligibility** (once your plan includes it): requires (1) A2P 10-digit SMS verification completed and (2) a connected StoryVenue Legacy sub-account for SMS delivery. The settings page shows what's missing if either requirement hasn't been met.
@@ -810,7 +810,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 - **Outbound schedule**: once active for a lead, the AI sends personalized SMS messages on a spaced cadence. Outreach stops automatically after 60 days if no booking occurs.
 - **Stop on reply**: the moment a lead replies, the AI stops texting her, she moves to the Conversations Started stage, and your team is notified with what she wrote. Messages you or your team send her do NOT stop the AI: only her reply does, or pressing Pause AI on her conversation or contact.
 - **Handoff rules**: configurable rules define when the AI should hand off to a human (e.g., the lead asks for pricing details or wants to book a tour). When a handoff fires, you are notified immediately.
-- **Venue controls** (Marketing → AI Concierge):
+- **Venue controls** (Bride Booking System™ → Speed to Lead System → AI Concierge card):
   - Enable/disable AI Concierge for your venue
   - Set a persona name (how the AI identifies itself in messages)
   - Configure notification email addresses for your team
@@ -862,7 +862,7 @@ When an event is created or updated, StoryVenue automatically schedules reminder
 ## Venue Concierge Add-on
 - The Venue Concierge add-on enables the AI Concierge system — an automated SMS-based lead engagement tool.
 - Only available on plans that support it. Pricing is communicated during a demo call.
-- When included on your plan, it unlocks Marketing → AI Concierge where you configure the automated outreach system.
+- When included on your plan, it unlocks the AI Concierge card on Bride Booking System™ → Speed to Lead System, where you configure the automated outreach.
 - Without this add-on, AI Concierge features are locked and clicking the greyed-out toggle opens the demo scheduling calendar.
 - See the "AI Concierge" section above for full details.
 

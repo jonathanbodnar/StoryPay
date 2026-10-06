@@ -28,23 +28,24 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         id: 'gs-overview',
         title: 'Platform overview',
         tags: ['overview', 'intro', 'dashboard', 'what is', 'storypay', 'storyvenue'],
-        body: `StoryVenue (at app.storyvenue.com) is the all-in-one command center for wedding venues. From one dashboard you manage your public directory listing on storyvenue.com, the leads it generates, customer profiles, proposals, invoices, payments, a booking calendar, branding, email templates, and your team.
+        body: `StoryVenue (at app.storyvenue.com) is the all-in-one command center for wedding venues. From one dashboard you manage your public listing on storyvenue.com, the leads it brings in, your conversations with couples, contacts, proposals, invoices, payments, a booking calendar, branding, and your team.
 
-After logging in on desktop, you land on your Venue listing's Bride Booking System™ Analytics — the live visitor map, booking funnel, and traffic insights for your storyvenue.com listing. On the native mobile app, you land on a "Today" screen showing unread conversations and today's schedule instead.
+After logging in on desktop, you land on the Bride Booking System™ Dashboard: the live visitor map, the booking funnel, and where your leads come from. On the native mobile app, you land on a "Today" screen showing unread conversations and today's schedule instead.
 
-Navigation lives in the left sidebar (or the hamburger menu on mobile). Top-level items include Home, Ask AI, Contacts, Conversations, Calendar, Leads, Reports, What's New, and Help Center. Venue listing (directory Dashboard, Media library, Photos, Analytics, Reviews), Payments, Marketing (analytics, lead capture forms, email tools, trigger links & tags), and Settings open as flyout submenus. On desktop you can collapse the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
+Navigation lives in the left sidebar (or the hamburger menu on mobile). From top to bottom: Setup Guide (until you've finished it), Bride Booking System™, Lead Inbox, Conversations, Venue Concierge, Wedding Planner, Contacts, Calendar, Payments, Marketing, Settings, Reports, and Help Center. Bride Booking System™, Payments, Marketing, and Settings open to show the pages inside them. An item with a small lock isn't part of your plan. On desktop you can collapse the sidebar with the chevron next to the logo — it becomes a narrow icon rail with a compact mark; your choice is remembered in the browser.
 
 The main areas:
-- Contacts — CRM profiles with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a pipeline + stage control in the header (same sales pipelines as Leads)
-- Conversations — unified inbox per contact: Team only notes vs Email contact messages
+- Bride Booking System™ — everything that brings brides in and follows up with them: Dashboard (your numbers), Venue Listing (how you appear on storyvenue.com), Pricing Guide, Reviews, Speed to Lead System (your follow-up), Web Form (the inquiry form for your own website), Lead Link (one link for your Instagram bio), Lead Finder (turns directory inquiry emails into leads), and Ad Tracking
+- Lead Inbox — your pipeline of inquiries, as a board or a list, with stages you can edit
+- Conversations — one inbox per contact: texts and emails with the couple, plus team-only notes
+- Venue Concierge and Wedding Planner — messages with the StoryVenue concierge team, and the planning tools your booked couples use
+- Contacts — a profile for every lead and customer, with tabs (Overview, Notes, Activity, Payments, Tasks, Documents) and a pipeline + stage control in the header
 - Calendar — tours, weddings, and events
-- Venue listing — Dashboard for how you appear on storyvenue.com (description, publish); Media library for shared images you reuse across listing, emails, forms, and branding; Photos for cover and gallery on the directory page; Analytics for GA4 measurement ID and a real-time world map of live visitors to your listing; Reviews for StoryVenue testimonials (star ratings, published/pending/hidden statuses) and Google reviews (connect your Google Business Profile so your Google reviews appear on your storyvenue.com listing)
-- Leads — Kanban/list pipeline for inquiries; editable stages and pipelines
+- Payments — New (a proposal or invoice), Packages, Coupons, Proposals & invoices, Proposal Templates, Payment plans, Transactions, and Payment settings
+- Marketing — Analytics, Campaigns, Audiences, Forms, and Media (the images you reuse across your listing, emails, and forms)
+- Settings — General, Email settings, Notifications, Branding, Integrations, Team, and Billing
 - Reports — financial exports (owners and admins)
-- Payments flyout — new proposal/invoice, proposals list, templates, installments, subscriptions, transactions
-- Marketing flyout — analytics, lead capture forms, email tools, Workflows (visual automation builder with 60+ smart triggers, 60+ canonical merge variables, 8 step types incl. Notify Venue Owner), Trigger Links, Tags & Variables (system tags + canonical merge variables + trigger links)
-- Help Center — searchable docs and Ask AI–style help
-- Settings flyout — general, branding, email templates, integrations, team, notifications
+- Help Center — searchable guides, with Ask AI for questions about your own account
 
 What you see depends on your role. Owners see everything. Admins see most areas. Members have a narrower set (e.g. proposals, customers, calendar, leads, listing — no Reports or most Settings).
 
@@ -52,7 +53,7 @@ How the two sites fit together:
 - storyvenue.com is the public-facing directory browsed by couples looking for a venue
 - app.storyvenue.com is the private admin dashboard where you run your business
 
-Couples browse your listing on storyvenue.com → submit an inquiry → the lead lands in your Leads inbox here → you reply, book a tour, send a proposal, and collect payment — all without leaving StoryVenue.
+Couples browse your listing on storyvenue.com → submit an inquiry → the lead lands in your Lead Inbox here → you reply, book a tour, send a proposal, and collect payment — all without leaving StoryVenue.
 
 The floating sparkle button (bottom-right) opens Ask AI, which can answer questions about your account in real time.
 
@@ -70,18 +71,24 @@ The browser tab uses the StoryVenue icon (favicon), not the full logo. Hosting p
         id: 'gs-signup',
         title: 'Signing up for a new venue account',
         tags: ['signup', 'register', 'create account', 'new venue', 'join', 'sign up', 'plan', 'add-ons', 'onboarding'],
-        body: `New venues create an account themselves at storyvenue.com/signup (or app.storyvenue.com/signup).
+        body: `New venues create an account themselves at app.storyvenue.com/signup.
 
-The signup is a 3-step flow:
-1. Plan picker — choose a directory plan (Free, Pro, Premium, All-Inclusive, etc.). Plan cards display all features with green checkmarks for items included in each plan. Only public plans are shown. Highlight badges appear on plans that have them configured.
-2. Upgrades — select optional upgrades like Verified ($19/mo), Sponsored ($99/mo), or Venue Concierge ($499/mo). Each upgrade shows its value proposition. Free plans can skip paid upgrades. On the All-Inclusive plan, Venue Concierge is already included — it shows as "Included" and is not an additional charge. Venue Concierge is unavailable on plans that don't support it.
-3. Payment — enter your card or bank details in the secure inline payment form embedded directly on the page. You never leave the signup page to pay. Free plans skip this step entirely. If a trial period is configured for your plan, the card is validated but the first charge is deferred until the trial ends.
+Signing up takes three steps:
+1. Pick a plan. Each plan card lists what's included.
+2. Choose any add-ons you want. You can skip this step.
+3. Add a card. Free plans skip this step.
 
-After completing signup (or selecting a free plan), you are logged straight into a brand-new dashboard with a blank directory listing ready to fill in.
+After signing up you land in your dashboard, where a short 4-step setup gets your listing live:
+1. Connect — find your venue on Google, and its details and photos are brought in for you.
+2. Details — check your listing.
+3. Go live — publish it. A test inquiry is sent so you can see a lead arrive. It's labelled "test" and doesn't count in your numbers.
+4. Access — add a card to start your 14-day free trial of the Bride Booking System™.
+A Back button on every step lets you change earlier answers.
 
-First things to do after signing up:
-- Go to Bride Booking System™ → Venue Listing in the sidebar and fill in your venue name, description, location, capacity, pricing, amenities, and photos
-- Toggle the Publish switch on when you're ready for couples to find you on storyvenue.com
+Once setup is finished, the Setup Guide takes over with your next steps (see "The Setup Guide — your steps to your first leads").
+
+Good things to do next:
+- Go to Bride Booking System™ → Venue Listing in the sidebar and check your description, location, capacity, pricing, amenities, and photos
 - Head to Settings → Branding to upload your logo and brand colors (these appear on proposals and outgoing emails)
 - Invite team members at Settings → Team
 
@@ -383,7 +390,7 @@ To disconnect, click Disconnect on the Calendly card. Your existing calendar eve
         id: 'cal-settings-overview',
         title: 'Calendar Settings — overview of all tabs',
         tags: ['calendar settings', 'settings', 'availability', 'booking rules', 'google calendar', 'connections', 'notifications', 'timezone'],
-        body: `Settings → Calendar opens a five-tab configuration hub for everything related to how your calendar works and what happens when appointments are booked.
+        body: `Calendar → Calendar Settings opens a five-tab configuration hub for everything related to how your calendar works and what happens when appointments are booked.
 
 General tab
 Set your calendar timezone (used for all slot display and availability hours) and a privacy option to hide client names from synced calendar events.
@@ -415,10 +422,10 @@ Manage email and SMS notification templates for all appointment lifecycle events
         id: 'cal-settings-google-sync',
         title: 'Connecting Google Calendar for two-way sync',
         tags: ['google calendar', 'two way sync', 'connections', 'conflict calendar', 'block availability', 'google events', 'google account'],
-        body: `Settings → Calendar → Connections lets you connect your Google account for a two-way sync between StoryVenue and Google Calendar.
+        body: `Calendar → Calendar Settings → Connections lets you connect your Google account for a two-way sync between StoryVenue and Google Calendar.
 
 Connecting your Google account
-1. Go to Settings → Calendar → Connections tab
+1. Go to Calendar → Calendar Settings → Connections tab
 2. Click "Connect Google Calendar"
 3. Sign in with your Google account and grant the requested permissions
 4. Once connected, your Google Calendars appear in a dropdown — pick the one where new StoryVenue events should be written (Linked Calendar)
@@ -437,13 +444,13 @@ Disconnecting
 Click Disconnect in the Connections tab. StoryVenue events already written to Google Calendar are not automatically deleted.
 
 If the connection stops working
-Google OAuth tokens expire. Return to Settings → Calendar → Connections and reconnect. This is usually required after a Google account password change or permission revocation.`,
+Google OAuth tokens expire. Return to Calendar → Calendar Settings → Connections and reconnect. This is usually required after a Google account password change or permission revocation.`,
       },
       {
         id: 'cal-settings-availability',
         title: 'Setting your weekly availability and date overrides',
         tags: ['availability', 'working hours', 'schedule', 'days off', 'hours', 'holiday', 'override', 'blocked date'],
-        body: `Settings → Calendar → Availability controls which days and hours appear as bookable on your public scheduling page.
+        body: `Calendar → Calendar Settings → Availability controls which days and hours appear as bookable on your public scheduling page.
 
 Weekly working hours
 - Toggle each day of the week on or off
@@ -472,7 +479,7 @@ Changes take effect immediately for all future booking requests.`,
         id: 'cal-settings-booking-rules',
         title: 'Booking rules — duration, notice, buffers, and limits',
         tags: ['booking rules', 'meeting duration', 'notice', 'buffer', 'min notice', 'max bookings', 'slot interval', 'date range'],
-        body: `Settings → Calendar → Booking Rules defines how appointment slots are structured and constrained for online bookings.
+        body: `Calendar → Calendar Settings → Booking Rules defines how appointment slots are structured and constrained for online bookings.
 
 Meeting Duration
 The default length of a bookable appointment. Options: 15, 30, 45, 60, 90, 120, 180, or 240 minutes. This is the block of time reserved when someone books.
@@ -496,7 +503,7 @@ Max Bookings per Day / per Slot
 Caps on how many bookings are accepted. "Per slot" caps simultaneous bookings at the same time; "per day" caps the total for a calendar day. Leave at 0 for no limit.
 
 Per-calendar overrides
-Each individual calendar can override any of the rules above. Go to Settings → Calendar → Calendars tab → click a calendar → expand "Customize Booking Rules". Any field left at "Venue default" inherits the setting from this global Booking Rules tab. This means a 15-minute phone-call calendar and a 60-minute tour calendar can coexist without either compromising the other.`,
+Each individual calendar can override any of the rules above. Go to Calendar → Calendar Settings → Calendars tab → click a calendar → expand "Customize Booking Rules". Any field left at "Venue default" inherits the setting from this global Booking Rules tab. This means a 15-minute phone-call calendar and a 60-minute tour calendar can coexist without either compromising the other.`,
       },
       {
         id: 'cal-availability',
@@ -521,7 +528,7 @@ Prospects can navigate forward and back through months. No customer information 
         body: `StoryVenue supports up to 5 named calendars per venue — for example, a "Tour Calendar", "Phone Call Calendar", and "Consultation Calendar". All calendars display together in the single unified calendar view; each one is color-coded so events are visually distinct at a glance.
 
 Where to manage calendars
-Settings → Calendar → Calendars tab.
+Calendar → Calendar Settings → Calendars tab.
 
 Creating a calendar
 1. Click "+ Add Calendar" (disabled once you've reached the 5-calendar limit).
@@ -538,7 +545,7 @@ The default calendar
 Every venue has one default calendar created automatically. It cannot be deleted. You can rename it and change its color.
 
 Deleting a calendar
-Click the trash icon on a calendar row in Settings → Calendar → Calendars. The default calendar has no delete option. Deleting a calendar removes its notification settings; existing events on that calendar are not deleted.
+Click the trash icon on a calendar row in Calendar → Calendar Settings → Calendars. The default calendar has no delete option. Deleting a calendar removes its notification settings; existing events on that calendar are not deleted.
 
 On the calendar page
 Events show with a colored left border matching their calendar. If you create multiple calendars, the event creation modal lets you pick which calendar the event belongs to.`,
@@ -547,10 +554,10 @@ Events show with a colored left border matching their calendar. If you create mu
         id: 'cal-per-calendar-rules',
         title: 'Per-calendar booking rules — overrides per calendar type',
         tags: ['per calendar booking rules', 'booking rules override', 'calendar duration', 'calendar interval', 'custom booking', 'tour duration', 'phone call duration', 'calendar settings', 'override venue defaults'],
-        body: `Every calendar can have its own booking rules that override the venue-wide defaults set in Settings → Calendar → Booking Rules. This means a phone-call calendar can use 15-minute slots while a tour calendar uses 60-minute slots — with no conflict.
+        body: `Every calendar can have its own booking rules that override the venue-wide defaults set in Calendar → Calendar Settings → Booking Rules. This means a phone-call calendar can use 15-minute slots while a tour calendar uses 60-minute slots — with no conflict.
 
 How to set per-calendar rules
-1. Go to Settings → Calendar → Calendars tab.
+1. Go to Calendar → Calendar Settings → Calendars tab.
 2. Click the pencil (edit) icon on a calendar row.
 3. Expand the "Customize Booking Rules" section.
 4. For each rule, choose a specific value OR leave it at "Venue default" to inherit from the global Booking Rules tab.
@@ -564,7 +571,7 @@ Rules you can override per calendar
 - Post-buffer — blocked time after each appointment
 
 How inheritance works
-Any field set to "Venue default" uses the value from Settings → Calendar → Booking Rules. Override only what differs for that calendar — everything else flows through automatically.
+Any field set to "Venue default" uses the value from Calendar → Calendar Settings → Booking Rules. Override only what differs for that calendar — everything else flows through automatically.
 
 The public slots API respects per-calendar rules
 When a calendar ID is included in the booking widget URL (or Calendly-style booking link), the slots engine applies that calendar's specific rules. If no calendar ID is specified, venue-wide defaults apply.`,
@@ -621,7 +628,7 @@ The "Confirm" and "Cancel" buttons
 In the event modal footer, quick action buttons let you confirm or cancel in one click without navigating through the status dropdown — useful for rapid triage of a busy calendar.
 
 Follow-up timing
-The Follow-Up notification fires a configurable time after the event ends. Set the delay in Settings → Calendar → Notifications → Follow-Up → expand a channel → "When to send" — choose minutes, hours, or days. Each of the four channels (Email → Owner, Email → Contact, SMS → Owner, SMS → Contact) can have a different follow-up delay.
+The Follow-Up notification fires a configurable time after the event ends. Set the delay in Calendar → Calendar Settings → Notifications → Follow-Up → expand a channel → "When to send" — choose minutes, hours, or days. Each of the four channels (Email → Owner, Email → Contact, SMS → Owner, SMS → Contact) can have a different follow-up delay.
 
 Notifications fired per action
 - Confirmed (new event): Appointment Booked (Confirmed) fires.
@@ -637,14 +644,14 @@ Notifications fired per action
         tags: ['calendar', 'notifications', 'email', 'sms', 'appointment', 'confirmation', 'reminder', 'cancellation', 'reschedule', 'follow up', 'automatic', 'templates'],
         body: `StoryVenue automatically sends email and SMS notifications when appointments are created, changed, or approaching. Every scenario and every channel is independently configurable.
 
-Go to Settings → Calendar → Notifications tab to manage everything.
+Go to Calendar → Calendar Settings → Notifications tab to manage everything.
 
 The five notification scenarios
 1. Appointment Booked (Confirmed) — fires immediately when you create a confirmed calendar event.
 2. Cancellation — fires when you change an event's status to Cancelled.
 3. Reschedule — fires when you change an event's start or end time.
 4. Reminder — fires before the appointment starts. Timing is fully configurable per channel.
-5. Follow-Up — fires after the event ends. The timing is fully customizable: go to Settings → Calendar → Notifications → Follow-Up → any channel and set the delay in minutes, hours, or days after the event ends.
+5. Follow-Up — fires after the event ends. The timing is fully customizable: go to Calendar → Calendar Settings → Notifications → Follow-Up → any channel and set the delay in minutes, hours, or days after the event ends.
 
 Multi-calendar support
 If you have multiple calendars (see the Multiple Calendars article), each calendar can have its own independent set of notification templates. Select a calendar from the dropdown at the top of the Notifications tab to switch between calendar-specific settings and the venue-wide defaults.
@@ -680,7 +687,7 @@ After editing, click Save Changes at the bottom. All templates and reminder timi
         body: `Reminders are the only notification scenario where you control when each message is sent — and you can set completely different timing for each of the four channels.
 
 Where to find it
-Settings → Calendar → Notifications tab → click "Reminder" to expand → click any channel row (e.g. "SMS → Contact") → the "When to send" section appears at the top of the editor.
+Calendar → Calendar Settings → Notifications tab → click "Reminder" to expand → click any channel row (e.g. "SMS → Contact") → the "When to send" section appears at the top of the editor.
 
 How timing works
 - Each channel can have up to 3 send times.
@@ -706,7 +713,7 @@ Important: reminders are scheduled when an event is saved. If you change timing 
         body: `Every channel editor has a built-in test sender so you can verify your template looks right before it reaches a real contact.
 
 How to send a test
-1. Settings → Calendar → Notifications tab → expand a scenario → expand a channel.
+1. Calendar → Calendar Settings → Notifications tab → expand a scenario → expand a channel.
 2. At the bottom of the editor you'll see a recipient field and a "Send test email" or "Send test SMS" button.
 3. For email channels: type any email address and click Send test email. The button is disabled until an "@" is entered.
 4. For SMS channels: type a 10-digit US phone number — the +1 country code is locked in and cannot be removed. Click Send test SMS. The button is disabled until 10 digits are entered.
@@ -995,7 +1002,7 @@ Uploaded photos are public — they're served directly from a CDN so your listin
         id: 'listing-media-library',
         title: 'Media — shared images and files for listing, email, forms, and branding',
         tags: ['media', 'media library', 'images', 'files', 'assets', 'upload', 'reuse', 'photos', 'cdn', 'logo', 'pdf', 'documents'],
-        body: `Media is your venue-wide folder for everything you reuse across the product. Open it from the sidebar → Media (path: /dashboard/media). The old /dashboard/listing/media URL still works and redirects here.
+        body: `Media is your venue-wide folder for everything you reuse across the product. Open it from the sidebar → Marketing → Media (path: /dashboard/media). The old /dashboard/listing/media URL still works and redirects here.
 
 What it is for:
 - Upload an image or file once, then reuse it wherever StoryVenue needs an asset URL — directory Photos, marketing email templates (Image block, Button → File link), lead capture forms (Image block), and Settings → Branding (logo).
@@ -1326,7 +1333,7 @@ Leads captured through the "Download Pricing & Availability" form on your Lead L
         id: 'leads-overview',
         title: 'Leads and sales pipeline overview',
         tags: ['leads', 'pipeline', 'kanban', 'sales', 'inbox', 'directory leads', 'form', 'space', 'contact stage'],
-        body: `The Leads page is your sales pipeline. Open it from the sidebar → Leads.
+        body: `The Leads page is your sales pipeline. Open it from the sidebar → Lead Inbox.
 
 Every contact is always visible in some pipeline stage. When you open Leads, StoryVenue reconciles your leads and contacts so that every contact with a real email shows up in the pipeline, and every lead is snapped to the pipeline + stage stored on its matching contact profile. If you move a contact's stage on the Contacts page, the Leads Kanban reflects it — and vice versa. Leads pointing at a deleted pipeline/stage automatically heal to the default pipeline's first stage instead of disappearing from the board.
 
@@ -1953,7 +1960,7 @@ How the client experience works:
 - Instead it shows a message that the venue will collect payment directly.
 
 Recording a payment:
-1. Go to Payments → Proposals and find the booking.
+1. Go to Payments → Proposals & invoices and find the booking.
 2. Click "Record payment" (visible on manual proposals in the Actions column, or at the top of the proposal detail page).
 3. Enter the amount, choose Cash / Check / Other, optionally enter a check number and a note.
 4. Click Save.
@@ -2818,7 +2825,7 @@ Older variable names like {{first_name}}, {{customer_name}}, {{organization}}, {
         tags: ['ai concierge', 'concierge', 'sms', 'automation', 'leads', 'ai', 'text messages', 'outreach', 'handoff', 'a2p', 'spend cap'],
         body: `The AI Concierge is an automated SMS-based lead engagement system. It automatically contacts new leads with personalized text messages, handles inbound replies, and escalates to humans when needed — so no lead falls through the cracks.
 
-Path: Marketing → AI Concierge (sidebar flyout).
+Path: Bride Booking System™ → Speed to Lead System → the AI Concierge card.
 
 Requirements (eligibility):
 - All-Inclusive Concierge plan (or a plan with AI Concierge specifically enabled by StoryVenue)
@@ -2827,7 +2834,7 @@ Requirements (eligibility):
 If any requirement is missing, the settings page shows exactly what's needed.
 
 Getting started:
-1. Go to Marketing → AI Concierge
+1. Go to Bride Booking System™ → Speed to Lead System and open the AI Concierge card
 2. Set a persona name (how the AI identifies itself in messages, e.g. "Sarah from The Grand Ballroom")
 3. Add concierge notification email addresses (who gets notified when leads reply)
 4. Toggle the master Enable switch
@@ -3017,7 +3024,7 @@ To disconnect: click Disconnect on the Calendly card.`,
         id: 'int-google-cal',
         title: 'Google Calendar, Outlook & Apple Calendar sync (iCal)',
         tags: ['google calendar', 'outlook', 'apple calendar', 'ical', 'sync', 'subscribe', 'phone calendar'],
-        body: `There are two ways to sync StoryVenue with Google Calendar. The iCal method (described here) is a one-way read-only feed for any calendar app. For full two-way Google Calendar sync (including seeing your Google events inside StoryVenue and blocking availability), see Settings → Calendar → Connections — that is a separate, more powerful integration.
+        body: `There are two ways to sync StoryVenue with Google Calendar. The iCal method (described here) is a one-way read-only feed for any calendar app. For full two-way Google Calendar sync (including seeing your Google events inside StoryVenue and blocking availability), see Calendar → Calendar Settings → Connections — that is a separate, more powerful integration.
 
 iCal subscription feed (one-way, works with Google, Outlook, and Apple Calendar)
 Find your iCal URL: Settings → Integrations → Google Calendar / Outlook & Apple Calendar card.
@@ -3042,7 +3049,7 @@ iPhone: Settings → Calendar → Accounts → Add Account → Other → Add Sub
 Updates may take up to 24 hours depending on the calendar app.
 
 For two-way sync (Google Calendar only)
-If you want StoryVenue events written to Google Calendar AND Google events visible inside StoryVenue, go to Settings → Calendar → Connections and connect your Google account there. See the "Connecting Google Calendar for two-way sync" article for details.`,
+If you want StoryVenue events written to Google Calendar AND Google events visible inside StoryVenue, go to Calendar → Calendar Settings → Connections and connect your Google account there. See the "Connecting Google Calendar for two-way sync" article for details.`,
       },
       {
         id: 'int-legacy',
@@ -3468,7 +3475,7 @@ The service fee (clients help cover the cost)
 Every new invoice and proposal includes a "Service fee" line, 3.5% by default, so your clients help cover processing. On paid plans, 3.5% covers nearly all of the card fee and more than covers bank transfers. You can change the % on any invoice to split the cost, or remove it. Clients pay the service fee however they pay (card, bank transfer or check), and it's always shown as its own line before they pay.
 
 Payouts
-Stripe sends your money to your bank automatically, usually within 2 business days. Open Payments → Payouts, or your Stripe dashboard, to see every payout.
+Stripe sends your money to your bank automatically, usually within 2 business days. Your Stripe dashboard lists every payout.
 
 Refunds
 Issue refunds from Transactions. The client gets their money back on the card or bank account they used. StoryVenue's share of the fee is refunded too; Stripe keeps its processing fee.
@@ -3676,7 +3683,7 @@ Note: SMS uses your StoryVenue Legacy account's verified A2P phone number automa
         id: 'notif-calendar-templates',
         title: 'Calendar appointment email & SMS templates',
         tags: ['calendar', 'appointment', 'notification', 'template', 'email template', 'sms template', 'merge tags', 'confirmation', 'reminder', 'cancellation', 'reschedule', 'follow up', 'venue owner', 'contact'],
-        body: `Every calendar notification has four independently editable templates — one per channel. Manage them at Settings → Calendar → Notifications.
+        body: `Every calendar notification has four independently editable templates — one per channel. Manage them at Calendar → Calendar Settings → Notifications.
 
 The four channels
 - Email → Venue Owner: email sent to your venue's registered email address
@@ -3687,7 +3694,7 @@ The four channels
 Each channel can be toggled on or off independently. Turning a channel off removes it from automatic dispatch without deleting your template.
 
 Editing a template
-1. Go to Settings → Calendar → Notifications.
+1. Go to Calendar → Calendar Settings → Notifications.
 2. Click a scenario (e.g. "Appointment Booked (Confirmed)") to expand it.
 3. Click the channel row (e.g. "Email → Contact") — the chevron expands the editor.
 4. Edit the Subject (email channels only) and message body.
@@ -3717,7 +3724,7 @@ SMS editors show a character counter (e.g. "114 / 160 chars"). Standard SMS segm
         body: `If a calendar notification or reminder isn't arriving, work through these checks.
 
 Email not arriving
-1. Is the channel toggled On? Settings → Calendar → Notifications → expand the scenario → check the toggle on that channel row.
+1. Is the channel toggled On? Calendar → Calendar Settings → Notifications → expand the scenario → check the toggle on that channel row.
 2. Does the event have a contact with an email address? Email → Contact only fires if the event is linked to a contact that has an email on file.
 3. Is the venue email configured? Email → Owner needs a valid email in your venue profile (Settings → General).
 4. Check spam/junk folders — our emails can land there for first-time recipients.
@@ -3734,7 +3741,7 @@ Reminder not arriving
 3. Is the reminder channel enabled? Each of the four reminder channels (Email→Owner, Email→Contact, SMS→Owner, SMS→Contact) can be on or off independently.
 
 Follow-up not arriving
-- Follow-up timing is fully configurable: Settings → Calendar → Notifications → Follow-Up → any channel → "When to send" (choose minutes, hours, or days after the event ends).
+- Follow-up timing is fully configurable: Calendar → Calendar Settings → Notifications → Follow-Up → any channel → "When to send" (choose minutes, hours, or days after the event ends).
 - If the event has no end time, no follow-up is sent.
 - Make sure the follow_up scenario channels are toggled On.
 - Follow-ups are scheduled when an event is saved. If you change the timing, re-save the event to reschedule it.
@@ -3888,7 +3895,7 @@ Plan inclusion:
 - Legacy plans: all add-ons included automatically at no extra charge
 
 Managing your add-ons:
-- Go to sidebar → Verified & Sponsored (or /dashboard/listing/directory)
+- Go to Settings → Billing
 - Toggle add-ons on or off
 - Pricing and your current status are shown on the page
 - Add-on changes follow the subscription rollover model — changes take effect at your next renewal`,
