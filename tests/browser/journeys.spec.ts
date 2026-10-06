@@ -149,9 +149,10 @@ test('live updates: a new lead lights up the Lead Inbox badge without a refresh'
 });
 
 // The Setup Guide (owner's rules, Oct 4 2026): it opens by itself a few
-// seconds after a venue signs in, the X always closes it, the venue can tick
-// steps off itself, and once every step is ticked it stops opening but a
-// closed pill stays until each step is really set up.
+// seconds after a venue signs in, at every sign-in, the X always closes it,
+// the venue can tick steps off itself, and once every step is ticked it stops
+// opening but a small bar stays until each step is really set up. That bar is
+// closed until they press it (Oct 5 2026).
 test('the Setup Guide meets a venue after signing in, and steps aside once its steps are ticked', async ({ page }, testInfo) => {
   const stamp = `${testInfo.project.name}-${Date.now().toString(36)}`;
   const email = `guide.${stamp}.${runId}@example.com`;
@@ -208,49 +209,19 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await page.waitForTimeout(5000);
   await expect(guide).toBeHidden();
 
-  // The Setup Guide is the first thing in the menu, above the Bride Booking System™.
+  // The Setup Guide is the first thing in the menu, above the Bride Booking
+  // System™, and its entry carries the green progress ring.
   await expect(page.locator('aside:visible nav > :first-child')).toContainText('Setup Guide');
-  // On a wide screen the card shows every step's cover in a row that scrolls
-  // sideways. It has no scrollbar of its own (it was a thick grey bar under
-  // the covers): a thin marker appears while scrolling and fades once it stops.
-  if (testInfo.project.name === 'desktop') {
-    const strip = card.getByTestId('setup-guide-strip');
-    const marker = card.getByTestId('setup-guide-strip-marker');
-    const box = await strip.evaluate((el) => ({
-      scrolls: el.scrollWidth > el.clientWidth, bar: (el as HTMLElement).offsetHeight - el.clientHeight, style: getComputedStyle(el).scrollbarWidth,
-    }));
-    expect(box).toEqual({ scrolls: true, bar: 0, style: 'none' });
-    await expect(marker).toHaveCSS('opacity', '0');
-    await strip.evaluate((el) => { el.scrollLeft = 240; });
-    await expect(marker).toHaveCSS('opacity', '1');
-    await expect(marker).toHaveCSS('opacity', '0', { timeout: 5000 });
-    await expectNoSidewaysScroll(page);
-  }
-
-  // The same drawer is on every page, so wherever they go they see there's
-  // setup left (owner's call, Oct 5 2026; it replaced a dark pill on inner
-  // pages). It is OPEN after signing in, on every page and on a phone too,
-  // until they close it themselves (owner's rule, later the same day: "open
-  // when logging in, closed only if they manually close it once logged in").
-  await page.goto('/dashboard/leads');
-  await expect(card).toBeVisible({ timeout: 20_000 });
-  await expect(card).toHaveAttribute('data-open', 'true');
-  await expect(card).toContainText(/\d of \d done/);
-  await expect(page.getByTestId('setup-guide-pill')).toHaveCount(0);
-  // The sidebar's entry carries the same green progress ring.
   await expect(page.locator('aside:visible nav > :first-child').getByTestId('setup-guide-progress')).toHaveAttribute('data-progress', /^\d\/\d$/);
-  await expectNoSidewaysScroll(page);
-  await page.goto('/dashboard/listing');
-  await expect(card).toBeVisible({ timeout: 20_000 });
 
-  // The card is a drawer hanging from the top of the page: open, and one slim
-  // bar once they close it (progress, Continue). Closed by hand it stays
-  // closed, on every page, until they sign in again; the bar opens it again.
+  // The bar at the top of every page is CLOSED until they press it (owner's
+  // rule, Oct 5 2026, their last word that day: "let's leave that closed by
+  // default. If they click it to drop down, let them scroll right and left,
+  // but only if they drop it down"). Earlier that day it was open at every
+  // sign-in. The full guide is what greets a venue; the bar is the small way
+  // back to it (it replaced a dark pill on inner pages).
+  const desktop = testInfo.project.name === 'desktop';
   const steps = page.locator('#setup-guide-steps');
-  await expect(card).toHaveAttribute('data-open', 'true');
-  await expect(steps).toBeVisible();
-  const openHeight = (await card.boundingBox())!.height;
-  await card.getByRole('button', { name: 'Close the setup steps' }).click();
   await expect(card).toHaveAttribute('data-open', 'false');
   await expect(steps).toBeHidden();
   await expect(card).toContainText(/\d of \d done/);
@@ -261,28 +232,75 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   await expect(card).toHaveCSS('box-shadow', 'none');
   await expect(card).toHaveCSS('border-bottom-width', '1px');
   await expect(card.getByTestId('setup-guide-progress')).toHaveAttribute('data-progress', /^\d\/\d$/);
-  expect(openHeight).toBeGreaterThan(120);
-  await page.reload();
-  await expect(card).toHaveAttribute('data-open', 'false');
-  await expect(steps).toBeHidden();
-  await page.goto('/dashboard/leads');
-  await expect(card).toBeVisible({ timeout: 20_000 });
-  await expect(card).toHaveAttribute('data-open', 'false');
-  await card.getByRole('button', { name: 'Show the setup steps' }).click();
-  await expect(steps).toBeVisible();
+  await expect(page.getByTestId('setup-guide-pill')).toHaveCount(0);
   await expectNoSidewaysScroll(page);
 
-  // The bar brings the guide itself back.
+  // Pressed, it drops down and shows every step.
+  await card.getByRole('button', { name: 'Show the setup steps' }).click();
+  await expect(card).toHaveAttribute('data-open', 'true');
+  await expect(steps).toBeVisible();
+  await expect.poll(async () => (await card.boundingBox())!.height).toBeGreaterThan(120);
+  // On a wide screen that's every step's cover in a row that scrolls
+  // sideways. It has no scrollbar of its own (it was a thick grey bar under
+  // the covers): a thin marker appears while scrolling and fades once it stops.
+  if (desktop) {
+    const strip = card.getByTestId('setup-guide-strip');
+    const marker = card.getByTestId('setup-guide-strip-marker');
+    const box = await strip.evaluate((el) => ({
+      scrolls: el.scrollWidth > el.clientWidth, bar: (el as HTMLElement).offsetHeight - el.clientHeight, style: getComputedStyle(el).scrollbarWidth,
+    }));
+    expect(box).toEqual({ scrolls: true, bar: 0, style: 'none' });
+    await expect(marker).toHaveCSS('opacity', '0');
+    await strip.evaluate((el) => { el.scrollLeft = 240; });
+    await expect(marker).toHaveCSS('opacity', '1');
+    await expect(marker).toHaveCSS('opacity', '0', { timeout: 5000 });
+  }
+  await expectNoSidewaysScroll(page);
+
+  // Picking a step there opens the full guide on that step, and the bar folds
+  // away behind it.
+  await steps.getByRole('button', { name: /Share your listing link/ }).click();
+  await expect(guide).toBeVisible();
+  await expect(guide.getByRole('heading', { name: 'Share your listing link' })).toBeVisible();
+  await guide.getByRole('button', { name: 'Close the Setup Guide' }).click();
+  await expect(guide).toBeHidden();
+  await expect(card).toHaveAttribute('data-open', 'false');
+  await expect(steps).toBeHidden();
+
+  // It is dropped down only where they pressed it: on the next page it's the
+  // small bar again (through the menu on a wide screen, where no page loads).
+  await card.getByRole('button', { name: 'Show the setup steps' }).click();
+  await expect(card).toHaveAttribute('data-open', 'true');
+  if (desktop) {
+    await page.locator('aside:visible').getByRole('link', { name: /Lead Inbox/ }).first().click();
+    await page.waitForURL(/\/dashboard\/leads/);
+  } else {
+    await page.goto('/dashboard/leads');
+  }
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card).toHaveAttribute('data-open', 'false');
+  await expect(steps).toBeHidden();
+  await expect(card).toContainText(/\d of \d done/);
+  await expect(page.getByTestId('setup-guide-pill')).toHaveCount(0);
+  await expectNoSidewaysScroll(page);
+
+  // The bar's button brings the guide itself back, and so does Setup Guide in
+  // the menu.
   await card.getByRole('button', { name: 'Continue setup' }).click();
   await expect(guide).toBeVisible();
+  await guide.getByRole('button', { name: 'Close the Setup Guide' }).click();
+  await expect(guide).toBeHidden();
+  if (desktop) {
+    await page.locator('aside:visible nav').getByRole('button', { name: /Setup Guide/ }).first().click();
+    await expect(guide).toBeVisible();
+    await guide.getByRole('button', { name: 'Close the Setup Guide' }).click();
+    await expect(guide).toBeHidden();
+  }
 
-  // Every step ticked (none of the rest really set up): at the next sign-in
-  // the guide doesn't open by itself, and the bar stays, now counting what's
-  // left to really set up, on every page.
-  const { error: ticked } = await db.from('venues').update({
-    onboarding_steps_completed: ['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'].map((s) => `guide:${s}`),
-  }).eq('id', venueId);
-  expect(ticked?.message ?? null).toBeNull();
+  // Signing in again brings the full guide back by itself, though they closed
+  // it the time before (owner, Oct 5 2026: "anytime somebody logs in after
+  // they've logged out and come back by logging in, show them the full-screen
+  // modal popup"). The bar under it is the small bar, as on every page.
   // Sign out (drop the venue session, keep the test copy's own gate cookie).
   // Leave the dashboard first: every answer to a signed-in request renews the
   // session cookie, so one still on its way would sign the venue back in.
@@ -291,11 +309,28 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
     await page.context().clearCookies({ name });
   }
   await signIn();
+  await expect(guide).toBeVisible({ timeout: 20_000 });
+  await expect(card).toHaveAttribute('data-open', 'false');
+  await guide.getByRole('button', { name: 'Close the Setup Guide' }).click();
+  await expect(guide).toBeHidden();
+
+  // Every step ticked (none of the rest really set up): the guide no longer
+  // opens by itself, and the bar stays, now counting what's left to really
+  // set up, on every page.
+  const { error: ticked } = await db.from('venues').update({
+    onboarding_steps_completed: ['walkthrough', 'listing', 'pricing_guide', 'lead_link', 'web_form', 'leadfinder', 'follow_up', 'grow'].map((s) => `guide:${s}`),
+  }).eq('id', venueId);
+  expect(ticked?.message ?? null).toBeNull();
+  // As at a fresh sign-in: forget that the guide already opened for this one,
+  // so the ticks are the only thing that can be keeping it shut.
+  await page.evaluate(() => {
+    localStorage.removeItem('storyvenue.setupGuide.openedFor');
+    sessionStorage.removeItem('storyvenue.setupGuide.openedFor');
+  });
+  await page.reload();
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card).toContainText(/\d left to set up/);
   await expect(card).not.toContainText(/of \d done/);
-  // Every step ticked: it rests as the bar. (It was left open by hand before
-  // signing out; that was the last sign-in's choice, not this one's.)
   await expect(card).toHaveAttribute('data-open', 'false');
   await page.waitForTimeout(5000);
   await expect(guide).toBeHidden();
@@ -496,7 +531,6 @@ test('watching the walkthrough ticks its step; a Private Client finds the last s
   if (testInfo.project.name === 'desktop') {
     await expect(page.locator('aside:visible nav > :first-child').getByTestId('setup-guide-progress')).toHaveAttribute('data-progress', '1/8');
   }
-  if ((await card.getAttribute('data-open')) === 'true') await card.getByRole('button', { name: 'Close the setup steps' }).click();
   await card.getByRole('button', { name: 'Continue setup' }).click();
   await expect(guide).toBeVisible();
   await expect(guide.getByText(/1 of 8 done/)).toBeVisible();

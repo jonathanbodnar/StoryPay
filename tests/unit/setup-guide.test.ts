@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PAGES } from '../flows/routes';
 import {
-  GUIDE_PROMPTS_OFF, SETUP_LESSONS, setupDrawerChoice, setupDrawerOpen, setupGuideDisplay, setupGuideProgress, setupGuidePrompts,
+  GUIDE_PROMPTS_OFF, SETUP_LESSONS, setupGuideDisplay, setupGuideProgress, setupGuidePrompts,
   setupGuideVideos, setupLessonsFor, setupPromptsOff, videoEmbedUrl, withSetupPromptsOff, withSetupStep,
   type SetupContext, type SetupFacts,
 } from '@/lib/setup-guide';
@@ -47,7 +47,7 @@ describe('the Setup Guide lessons', () => {
     const root = join(__dirname, '..', '..');
     expect(existsSync(join(root, 'public', 'storyvenue-light-logo.png'))).toBe(true);
     const cover = readFileSync(join(root, 'src/components/setup-guide/LessonCover.tsx'), 'utf8');
-    // The owner's photo and the circle behind it came off the cover "for now" (his ask, the
+    // The owner's photo and the circle behind it came off the cover "for now" (their ask, the
     // same evening): the right side stays an empty placeholder, and no photo of him is served.
     expect(cover).not.toMatch(/PRESENTER|presenter-v\d|radial-gradient\(circle/);
     expect(existsSync(join(root, 'public', 'setup-guide', 'presenter-v2.webp'))).toBe(false);
@@ -314,47 +314,32 @@ describe('what the bar on every page and the sidebar ring say', () => {
   });
 });
 
-// Owner's rule (Oct 5 2026): "open when logging in, closed only if they
-// manually close it once logged in." Until then the drawer stayed however it
-// was left on that device, for good: a venue that closed it once never saw it
-// open again, sign-in after sign-in. (It also started as the bar on every page
-// but the dashboard home, and on every phone.)
-describe('the checklist drawer: open at every sign-in, closed only by hand until the next one', () => {
-  const MONDAY = '1791230000';
-  const TUESDAY = '1791316400';
-  const open = (saved: string | null, signIn: string | null = MONDAY, stepsToTick = true) => setupDrawerOpen({ saved, signIn, stepsToTick });
+// Owner's rule (Oct 5 2026, their last word that day): "The smaller checklist
+// modal: let's leave that closed by default. If they click it to drop down,
+// let them scroll right and left, but only if they drop it down." Earlier the
+// same day it was open at every sign-in until closed by hand, and before that
+// it stayed however it was left on that device. The full Setup Guide is what
+// greets a venue at sign-in now; the bar is the small way back to it. What it
+// does on screen is held by the Guide journey in tests/browser.
+describe('the checklist bar: closed until they drop it down', () => {
+  const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
+  const bar = read('src/components/setup-guide/SetupGuideCard.tsx');
 
-  it('after signing in it is open, with nothing chosen yet', () => {
-    expect(open(null)).toBe(true);
-    expect(open('')).toBe(true);
+  it('starts closed, whoever the venue is and whichever page or sign-in this is', () => {
+    // Open only on the page where it was pressed, and nothing has been pressed yet.
+    expect(bar).toMatch(/const \[droppedOn, setDroppedOn\] = useState<string \| null>\(null\);/);
+    expect(bar).toMatch(/const open = droppedOn === pathname;/);
   });
 
-  it('closed by hand, it stays closed for the rest of that sign-in', () => {
-    const closed = setupDrawerChoice(MONDAY, false);
-    expect(open(closed, MONDAY)).toBe(false);
-    // Opened again by hand: open.
-    expect(open(setupDrawerChoice(MONDAY, true), MONDAY)).toBe(true);
+  it('remembers nothing: no opening or closing is kept from one visit, page or sign-in to the next', () => {
+    expect(bar).not.toMatch(/localStorage|sessionStorage|document\.cookie/);
+    expect(read('src/lib/setup-guide.ts')).not.toMatch(/setupDrawerOpen|setupDrawerChoice/);
   });
 
-  it('signing in again opens it again, whatever was chosen the time before', () => {
-    expect(open(setupDrawerChoice(MONDAY, false), TUESDAY)).toBe(true);
-    // And a choice kept from before this rule ("closed", no sign-in) no longer holds it shut.
-    expect(open('closed', TUESDAY)).toBe(true);
-    expect(open('open', TUESDAY)).toBe(true);
-    expect(open('nonsense|maybe', TUESDAY)).toBe(true);
-  });
-
-  it('once every step is ticked it rests as the bar, at each sign-in, and still opens by hand', () => {
-    expect(open(null, TUESDAY, false)).toBe(false);
-    // Left open the time before: that was another sign-in.
-    expect(open(setupDrawerChoice(MONDAY, true), TUESDAY, false)).toBe(false);
-    expect(open(setupDrawerChoice(TUESDAY, true), TUESDAY, false)).toBe(true);
-  });
-
-  it('with no sign-in time to go by, a choice still holds (for as long as the browser keeps it)', () => {
-    expect(open(setupDrawerChoice(null, false), null)).toBe(false);
-    // …and is never mistaken for a real sign-in's.
-    expect(open(setupDrawerChoice(null, false), MONDAY)).toBe(true);
+  it('every way into the full guide from the bar folds the bar away', () => {
+    // One place opens the guide, and it closes the bar first.
+    expect(bar.match(/openSetupGuide\(/g)).toHaveLength(1);
+    expect(bar).toMatch(/setDroppedOn\(null\);\s*openSetupGuide\(lessonId\);/);
   });
 });
 

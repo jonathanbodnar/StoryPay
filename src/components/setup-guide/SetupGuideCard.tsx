@@ -7,11 +7,15 @@
  * dashboard home plus a dark pill on the other pages).
  *
  * Closed, it's one slim bar: progress as a ring, the next step, Continue.
- * Open, it also shows every step's cover to jump to. It is open after every
- * sign-in while there are steps still to tick; closing it by hand makes it
- * the bar until they sign in again (owner's rule, Oct 5 2026; the rule itself
- * is setupDrawerOpen in lib/setup-guide.ts). The plan chip ("Plan ends
- * Oct 27") sits on it.
+ * Dropped down, it also shows every step's cover: scroll through them and
+ * pick one, and the full guide opens on that step. The plan chip ("Plan ends
+ * Oct 27") sits on the bar.
+ *
+ * It is CLOSED by default, always (owner's rule, Oct 5 2026, their last word
+ * that day after trying it open at every sign-in): the full Setup Guide is
+ * what greets a venue when it signs in, and this bar is the small way back to
+ * it. It drops down only when they press it, and folds away again when they
+ * pick a step or move to another page. Nothing about it is remembered.
  *
  * It stays until each step is REALLY set up: once every step is ticked it
  * counts what's left to set up, so a step the venue ticked without doing
@@ -22,9 +26,10 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode, type UIEvent } from 'react';
+import { usePathname } from 'next/navigation';
 import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import { isNativeApp } from '@/lib/platform';
-import { setupDrawerChoice, setupDrawerOpen, setupGuideDisplay, setupLesson } from '@/lib/setup-guide';
+import { setupGuideDisplay, setupLesson, type SetupLessonId } from '@/lib/setup-guide';
 import { openSetupGuide, setupStepLabels, useSetupGuideStatus, type SetupGuideStatus } from '@/lib/setup-guide-client';
 import { LessonThumb, StepTick, StepTitle } from './LessonCover';
 import ProgressRing from './ProgressRing';
@@ -37,42 +42,20 @@ export default function SetupGuidePrompt({ planChip }: { planChip?: ReactNode })
   return <SetupGuideDrawer status={status} planChip={planChip} />;
 }
 
-/**
- * Where the browser keeps the venue's own opening or closing of the drawer,
- * with the sign-in it was made in: it lasts until they sign in again. (With
- * no sign-in time to go by, as when run locally, it lasts for the tab.)
- */
-const DRAWER_KEY = 'storyvenue.setupGuide.drawer';
-const drawerStore = (signIn: string | null): Storage => (signIn ? window.localStorage : window.sessionStorage);
-function savedDrawerChoice(signIn: string | null): string | null {
-  try {
-    return drawerStore(signIn).getItem(DRAWER_KEY);
-  } catch {
-    return null;
-  }
-}
-
 function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; planChip?: ReactNode }) {
   const labels = setupStepLabels(status.lessons);
   const shown = setupGuideDisplay(status);
   const next = shown.nextId ? setupLesson(shown.nextId) : undefined;
-  const signIn = status.loginId;
-  // What they chose by hand since this page loaded; before that, what the
-  // browser kept. Open or closed is worked out from the guide as it is NOW,
-  // every time: decided once at first paint, an out-of-date first answer (the
-  // sign-in before, steps not yet ticked) left it open after a sign-in with
-  // every step ticked. Only ever rendered in the browser, so reading the
-  // browser's storage here can't disagree with the server's paint.
-  const [byHand, setByHand] = useState<string | null>(null);
-  const open = setupDrawerOpen({ saved: byHand ?? savedDrawerChoice(signIn), signIn, stepsToTick: !status.checkedAll });
-  const toggle = () => {
-    const choice = setupDrawerChoice(signIn, !open);
-    setByHand(choice);
-    try {
-      drawerStore(signIn).setItem(DRAWER_KEY, choice);
-    } catch {
-      /* storage blocked: the choice lasts until the page is loaded again */
-    }
+  // Closed until they press it. It is dropped down only on the page where
+  // they pressed, so moving on (or picking a step) folds it away by itself.
+  const pathname = usePathname();
+  const [droppedOn, setDroppedOn] = useState<string | null>(null);
+  const open = droppedOn === pathname;
+  const toggle = () => setDroppedOn(open ? null : pathname);
+  // Picking a step (or Continue) opens the full guide and folds this away.
+  const openGuide = (lessonId?: SetupLessonId) => {
+    setDroppedOn(null);
+    openSetupGuide(lessonId);
   };
 
   return (
@@ -104,7 +87,7 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
         {planChip}
         <button
           type="button"
-          onClick={() => openSetupGuide(shown.nextId ?? undefined)}
+          onClick={() => openGuide(shown.nextId ?? undefined)}
           className="whitespace-nowrap rounded-lg bg-[#1b1b1b] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-black"
         >
           Continue setup
@@ -138,7 +121,7 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
                 if (!lesson) return null;
                 return (
                   <li key={l.id} className="w-[168px] shrink-0">
-                    <button type="button" onClick={() => openSetupGuide(l.id)} className="group block w-full text-left">
+                    <button type="button" onClick={() => openGuide(l.id)} className="group block w-full text-left">
                       <span className="relative block">
                         <LessonThumb lesson={lesson} className="transition group-hover:opacity-90" label={labels.get(l.id)?.short ?? ''} hasVideo={Boolean(status.videos[l.id])} />
                         {l.checked && (
@@ -163,7 +146,7 @@ function SetupGuideDrawer({ status, planChip }: { status: SetupGuideStatus; plan
                 if (!lesson) return null;
                 return (
                   <li key={l.id}>
-                    <button type="button" onClick={() => openSetupGuide(l.id)} className="flex w-full items-center gap-3 py-2.5 text-left">
+                    <button type="button" onClick={() => openGuide(l.id)} className="flex w-full items-center gap-3 py-2.5 text-left">
                       <StepTick ticked={l.ticked} verified={l.verified} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[10px] font-semibold uppercase tracking-wider text-gray-400">

@@ -91,11 +91,11 @@ One email address = one venue account. If you already have an account and try to
         id: 'gs-onboarding',
         title: 'The Setup Guide — your steps to your first leads',
         tags: ['setup guide', 'checklist', 'onboarding', 'setup', 'first steps', 'getting started', 'walkthrough', 'rocket'],
-        body: `The Setup Guide is a short list of steps that gets your venue ready to capture every bride and follow up with her. It opens by itself after you sign in, and a list of the steps sits at the top of every page until you've finished.
+        body: `The Setup Guide is a short list of steps that gets your venue ready to capture every bride and follow up with her. It opens by itself each time you sign in, and a small bar at the top of every page keeps your place until you've finished.
 
 Where to find it
 - Sidebar → Setup Guide (the first item, with the rocket). The ring around it shows how many steps are done.
-- The list at the top of every page. Press Continue setup to pick up where you left off.
+- The small bar at the top of every page. Press Continue setup to pick up where you left off. Or press the bar itself to drop down every step, scroll through them, and pick the one you want: the guide opens on that step.
 
 The steps
 1. Start here: watch the 3-minute walkthrough
@@ -112,7 +112,8 @@ How it works
 - Open a step to see what to do. Each one has a button that takes you to the right page.
 - A step turns green when it's really set up (for example, once your listing is live). You can also tick a step off yourself with Mark as done.
 - If you ticked a step but it isn't set up yet, the guide says so, and the reminder stays until it is.
-- The list at the top of the page opens each time you sign in. Press the X to shrink it to a small bar. It stays small until you sign in again.
+- The guide opens by itself each time you sign in, until you've ticked every step. Press the X to close it. To bring it back, press Setup Guide in the sidebar, or pick a step from the bar at the top of the page.
+- The bar at the top stays small until you press it, and folds away again once you pick a step or go to another page.
 - Nothing is locked behind the guide. Close it any time and keep working.
 
 Who sees it
