@@ -18,11 +18,23 @@
  * Only reads. A dropped connection here costs nothing: it asks again.
  */
 
+import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { CHECKS_CURRENT, checksKey, replacedBy, summarize, verdictOf } from './verdict-shape.mjs';
 
 const e = process.env;
+
+/** Is `other` a commit from before the one being waited on? (Unknown here, or anything else: no.) */
+function isEarlierCommit(other) {
+  if (!/^[0-9a-f]{40}$/.test(String(other))) return false;
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', other, sha], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
 const args = process.argv.slice(2);
 const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
 const sha = args.find((a) => /^[0-9a-f]{40}$/.test(a));
@@ -91,7 +103,7 @@ for (;;) {
   }
   if (verdict !== 'pass' && verdict !== 'fail' && !unreachable) {
     const current = await db.from('admin_kv_cache').select('value').eq('key', CHECKS_CURRENT).maybeSingle();
-    const newer = current.error ? null : replacedBy(fresh ? row : null, current.data, sha, began);
+    const newer = current.error ? null : replacedBy(fresh ? row : null, current.data, sha, began, isEarlierCommit);
     // (A run asked for again keeps waiting for its own fresh record.)
     if (newer && !after) {
       console.log(`A newer push (${newer.slice(0, 8)}) replaced the run of ${short}. Its check covers this commit too: wait on that one.`);

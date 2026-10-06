@@ -19,10 +19,18 @@ export const CHECKS_CURRENT = 'checks:current';
  * push the service is still on the commit BEFORE it: that is not a
  * replacement, the new run just hasn't started. Oct 5 2026: mistaking the two
  * sent a whole gate back to the laptop.)
+ *
+ * `isOlder(other)`: is that other commit an EARLIER one than this? Two pushes
+ * a minute apart start two runs, and the earlier push's can start second, for
+ * a moment, before the service drops it. That is not a replacement either
+ * (Oct 6 2026: the waiter gave up on the newest commit because of it).
+ *
+ * @param {(other: string) => boolean} [isOlder]
  */
-export function replacedBy(row, current, sha, waitingSince = 0) {
+export function replacedBy(row, current, sha, waitingSince = 0, isOlder) {
   const other = current?.value?.sha;
   if (!other || other === sha) return null;
+  if (isOlder?.(other)) return null;
   const status = row?.value?.status;
   if (status === 'pass' || status === 'fail') return null;
   const otherBegan = Date.parse(current?.value?.at ?? '');

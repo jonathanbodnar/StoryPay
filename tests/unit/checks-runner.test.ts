@@ -46,6 +46,16 @@ describe('reading the Checks service’s verdict', () => {
     expect(replacedBy(row(passed), movedOn, SHA)).toBeNull();
     expect(replacedBy(row({ ...passed, status: 'fail' }), movedOn, SHA)).toBeNull();
     expect(replacedBy(running, null, SHA)).toBeNull();
+    // Oct 6 2026: two pushes a minute apart. The earlier push's run started
+    // second, for a moment, and the waiter on the newest commit took that for
+    // a replacement and gave up. An EARLIER commit never replaces a later one.
+    const earlier = 'a1'.repeat(20);
+    const startedLate = { value: { sha: earlier, at: new Date(NOW - 30_000).toISOString() } };
+    expect(replacedBy(null, startedLate, SHA, NOW - 2 * 60_000)).toBe(earlier); // (what it used to conclude)
+    expect(replacedBy(null, startedLate, SHA, NOW - 2 * 60_000, (other: string) => other === earlier)).toBeNull();
+    expect(replacedBy(running, startedLate, SHA, 0, () => true)).toBeNull();
+    // A later commit still replaces it.
+    expect(replacedBy(null, movedOn, SHA, NOW - 2 * 60_000, (other: string) => other === earlier)).toBe(newer);
     expect(CHECKS_CURRENT).not.toBe(CHECKS_LAST_GREEN);
   });
 
