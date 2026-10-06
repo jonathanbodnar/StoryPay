@@ -52,8 +52,9 @@ export const SHOTS = [
   // public/setup-guide by scripts/shots/export-guide-covers.mjs).
   { name: 'guide-pricing', path: '/dashboard/listing/pricing-guide', who: 'owner', devices: ['desktop'], settleMs: 4000 },
   { name: 'guide-lead-link', path: '/dashboard/listing/lead-link', who: 'owner', devices: ['desktop'], settleMs: 4000 },
-  { name: 'guide-web-form', path: '/dashboard/listing/pricing-guide', who: 'owner', devices: ['desktop'], settleMs: 4000, click: 'text=Get Embed Code' },
-  { name: 'guide-leadfinder', path: '/dashboard/settings/integrations', who: 'owner', devices: ['desktop'], settleMs: 4500, scrollTo: 'text=Your LeadFinder address' },
+  // Web Form and Lead Finder have pages of their own since Oct 5 2026.
+  { name: 'guide-web-form', path: '/dashboard/listing/web-form', who: 'owner', devices: ['desktop'], settleMs: 5000 },
+  { name: 'guide-leadfinder', path: '/dashboard/listing/lead-finder', who: 'owner', devices: ['desktop'], settleMs: 4500 },
   { name: 'guide-follow-up', path: '/dashboard/listing/booking-system', who: 'owner', devices: ['desktop'], settleMs: 4000 },
   { name: 'guide-payments', path: '/dashboard/payments/settings', who: 'owner', devices: ['desktop'], settleMs: 4000 },
   // The couple's Wedding Planner (Emma & Ryan, seeded by seed-showcase.mjs).

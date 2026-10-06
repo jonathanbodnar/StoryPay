@@ -16,13 +16,16 @@ import sharp from 'sharp';
 /** lesson id (src/lib/setup-guide.ts) → capture and the region to keep. */
 const COVERS = {
   // The dashboard's booking funnel: the whole system on one screen.
-  walkthrough: ['home__desktop.png', { left: 560, top: 0, width: 2560 }],
+  // (Narrow enough to stop above the live-visitor map, which is blank on the test copy.)
+  walkthrough: ['home__desktop.png', { left: 560, top: 0, width: 2100 }],
   listing: ['listing__desktop.png', { left: 320, top: 0, width: 2560 }],
   pricing_guide: ['guide-pricing__desktop.png', { left: 540, top: 150, width: 2560 }],
   // Without the phone preview: it frames the live directory, which has never heard of the test venue.
   lead_link: ['guide-lead-link__desktop.png', { left: 560, top: 200, width: 1840 }],
-  web_form: ['guide-web-form__desktop.png', { left: 640, top: 290, width: 1920 }],
-  leadfinder: ['guide-leadfinder__desktop.png', { left: 880, top: 0, width: 1960 }],
+  // The Web Form page: the code to copy, how to add it, and the form itself.
+  web_form: ['guide-web-form__desktop.png', { left: 600, top: 420, width: 2520 }],
+  // The Lead Finder page's card: the address to hand out and how to connect it.
+  leadfinder: ['guide-leadfinder__desktop.png', { left: 600, top: 440, width: 2480 }],
   follow_up: ['guide-follow-up__desktop.png', { left: 900, top: 150, width: 1920 }],
   payments: ['guide-payments__desktop.png', { left: 540, top: 110, width: 2560 }],
   grow: ['calendar__desktop.png', { left: 540, top: 110, width: 2560 }],

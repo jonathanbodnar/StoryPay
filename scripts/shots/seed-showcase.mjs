@@ -216,7 +216,11 @@ async function main() {
        brand_logo_url = excluded.brand_logo_url, logo_url = excluded.logo_url, description = excluded.description,
        features = excluded.features, cover_image_url = excluded.cover_image_url, gallery_images = excluded.gallery_images,
        directory_plan_id = excluded.directory_plan_id, directory_subscription_status = excluded.directory_subscription_status,
-       monthly_booking_goal = excluded.monthly_booking_goal, is_published = true`,
+       monthly_booking_goal = excluded.monthly_booking_goal, is_published = true,
+       -- A venue that has finished its Setup Guide: no pop-up and no bar across
+       -- the top of every product picture (Oct 6 2026: the guide opened itself
+       -- over a screen as it was being shot).
+       onboarding_steps_completed = array['guide:prompts-off', 'guide:finished']`,
     [V, SHOWCASE.name, SHOWCASE.slug, SHOWCASE.ownerEmail, await bcrypt.hash(password, 10), plan.id, logoUrl,
       'A restored 1920s estate on forty acres of gardens, willows and mountain light, twenty minutes from downtown Asheville. ' +
       'Exchange vows beneath the willow arbor, dine under the Grand Hall’s original beams, and dance until the sparkler send-off. ' +
