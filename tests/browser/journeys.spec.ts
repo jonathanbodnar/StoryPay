@@ -154,6 +154,8 @@ test('live updates: a new lead lights up the Lead Inbox badge without a refresh'
 // opening but a small bar stays until each step is really set up. That bar is
 // closed until they press it (Oct 5 2026).
 test('the Setup Guide meets a venue after signing in, and steps aside once its steps are ticked', async ({ page }, testInfo) => {
+  // Two sign-ins, and three stretches of waiting to see that nothing opens.
+  test.setTimeout(120_000);
   const stamp = `${testInfo.project.name}-${Date.now().toString(36)}`;
   const email = `guide.${stamp}.${runId}@example.com`;
   const venueId = randomUUID();
@@ -302,12 +304,18 @@ test('the Setup Guide meets a venue after signing in, and steps aside once its s
   // they've logged out and come back by logging in, show them the full-screen
   // modal popup"). The bar under it is the small bar, as on every page.
   // Sign out (drop the venue session, keep the test copy's own gate cookie).
-  // Leave the dashboard first: every answer to a signed-in request renews the
-  // session cookie, so one still on its way would sign the venue back in.
+  // Leave the dashboard first, then keep dropping the session until it stays
+  // gone: every answer to a signed-in request renews the session cookie, and
+  // answers still on their way (the page's own, and the ones the app's
+  // service worker carries on with after the page has gone) would sign the
+  // venue back in, as the same sign-in as before.
+  const session = ['venue_id', 'venue_id_sig', 'venue_id_meta', 'member_id', 'member_id_sig', 'member_id_meta'];
   await page.goto('about:blank');
-  for (const name of ['venue_id', 'venue_id_sig', 'venue_id_meta', 'member_id', 'member_id_sig', 'member_id_meta']) {
-    await page.context().clearCookies({ name });
-  }
+  await expect.poll(async () => {
+    for (const name of session) await page.context().clearCookies({ name });
+    await page.waitForTimeout(1000);
+    return (await page.context().cookies()).filter((c) => session.includes(c.name)).length;
+  }, { timeout: 20_000 }).toBe(0);
   await signIn();
   await expect(guide).toBeVisible({ timeout: 20_000 });
   await expect(card).toHaveAttribute('data-open', 'false');
