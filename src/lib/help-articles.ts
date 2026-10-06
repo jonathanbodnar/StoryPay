@@ -80,7 +80,7 @@ The signup is a 3-step flow:
 After completing signup (or selecting a free plan), you are logged straight into a brand-new dashboard with a blank directory listing ready to fill in.
 
 First things to do after signing up:
-- Go to Venue listing → Dashboard in the sidebar and fill in your venue name, description, location, capacity, pricing, amenities, and photos
+- Go to Bride Booking System™ → Venue Listing in the sidebar and fill in your venue name, description, location, capacity, pricing, amenities, and photos
 - Toggle the Publish switch on when you're ready for couples to find you on storyvenue.com
 - Head to Settings → Branding to upload your logo and brand colors (these appear on proposals and outgoing emails)
 - Invite team members at Settings → Team
@@ -89,25 +89,34 @@ One email address = one venue account. If you already have an account and try to
       },
       {
         id: 'gs-onboarding',
-        title: 'Get Started checklist',
-        tags: ['checklist', 'onboarding', 'setup', 'first steps', 'restart'],
-        body: `When you first access your dashboard as an owner you'll see a "Get Started" bubble near the top of the page.
+        title: 'The Setup Guide — your steps to your first leads',
+        tags: ['setup guide', 'checklist', 'onboarding', 'setup', 'first steps', 'getting started', 'walkthrough', 'rocket'],
+        body: `The Setup Guide is a short list of steps that gets your venue ready to capture every bride and follow up with her. It opens by itself after you sign in, and a list of the steps sits at the top of every page until you've finished.
 
-Click the bubble to open the setup checklist. It tracks the core setup steps:
+Where to find it
+- Sidebar → Setup Guide (the first item, with the rocket). The ring around it shows how many steps are done.
+- The list at the top of every page. Press Continue setup to pick up where you left off.
 
-1. Publish your listing — fill in your venue details and flip Publish on (Sidebar → Venue listing → Dashboard)
-2. Create Your Profile and Branding — upload your logo and set brand colors (Settings → Branding)
-3. Customize Email Templates — personalize the emails sent to clients (Settings → Notifications)
-4. Create Your First Proposal Template — build a reusable contract template (Payments → Proposal Templates)
-5. Create Your First Proposal — use a template to create a proposal for a client
-6. Send Your First Proposal — send it to a client so they can sign and pay
-7. Invite a Team Member — add staff to your account (Settings → Team)
+The steps
+1. Start here: watch the 3-minute walkthrough
+2. Share your listing link
+3. Check your pricing guide
+4. Put your Lead Link in your Instagram bio
+5. Add the inquiry form to your website
+6. Forward your directory leads to Lead Finder
+7. Make your follow-up sound like you
+8. Want us to bring you qualified brides?
+Setting up proposals and payments with StoryPay™ is on the list too, marked Optional.
 
-Check off each step manually as you complete it. When all steps are checked, click "I'm Ready — Start Using StoryVenue" to dismiss the bubble permanently. You can also skip the wizard at any time and come straight to the dashboard — payment processing setup is optional and can be completed later.
+How it works
+- Open a step to see what to do. Each one has a button that takes you to the right page.
+- A step turns green when it's really set up (for example, once your listing is live). You can also tick a step off yourself with Mark as done.
+- If you ticked a step but it isn't set up yet, the guide says so, and the reminder stays until it is.
+- The list at the top of the page opens each time you sign in. Press the X to shrink it to a small bar. It stays small until you sign in again.
+- Nothing is locked behind the guide. Close it any time and keep working.
 
-To restart the checklist at any time, go to Settings → General → Restart Setup Guide. This only clears the checkmarks — it does not delete any data.
-
-Note: The Setup Guide is only visible to account owners. Admins and Members do not see it.`,
+Who sees it
+Account owners and admins. Team members don't see it. Which steps you see depends on what your plan includes.`,
       },
       {
         id: 'gs-login',
@@ -163,7 +172,7 @@ Couples (clients):
 - Time-sensitive operational notices (deliverability issues, integrations being retired, etc.)
 
 Why there's no "X" to close it
-The ticker is intentionally non-dismissible from the venue side. When the StoryVenue team broadcasts something it's because every venue genuinely needs to see it, and a per-venue dismiss would mean important messages get hidden in the moments they matter most. There's no per-user "snooze" cookie — if you see it, every other user on your venue sees it too.
+The ticker is intentionally non-dismissible from the venue side. When the StoryVenue team broadcasts something it's because every venue genuinely needs to see it, and a per-venue dismiss would mean important messages get hidden in the moments they matter most. It can't be hidden for just one person: if you see it, everyone at your venue sees it too.
 
 Who can turn it off
 Only the StoryVenue team can deactivate an announcement on their end; the moment they do, it disappears from every venue's ticker on the next page load. Announcements are also rotated and replaced regularly, so the bar will feel fresh rather than static.
@@ -300,7 +309,7 @@ To edit or stop a series: click any occurrence → Edit → change the Repeats o
         id: 'cal-conflicts',
         title: 'Double-booking protection',
         tags: ['conflict', 'double booking', 'overlap', 'same date', 'protection'],
-        body: `StoryVenue checks for booking conflicts at the database level, not just in the UI. If you try to add an event to a space that already has another event during that time window, you will see a conflict warning.
+        body: `StoryVenue checks for booking conflicts every time an event is saved. If you try to add an event to a space that already has another event during that time window, you will see a conflict warning.
 
 The warning shows:
 - The conflicting event name
@@ -356,7 +365,7 @@ To connect:
 3. Copy the token and paste it into StoryVenue → click Connect
 
 Once connected:
-- New Calendly bookings appear on your StoryVenue calendar instantly (real-time via webhook)
+- New Calendly bookings appear on your StoryVenue calendar instantly (in real time)
 - A customer profile is created automatically for each booking
 - Cancellations in Calendly automatically mark the event cancelled in StoryVenue
 
@@ -613,7 +622,7 @@ Notifications fired per action
 - Status → Confirmed: Appointment Confirmed notification fires.
 - Status → Cancelled or event deleted: Cancellation notification fires.
 - Start/end time changed: Reschedule notification fires.
-- Reminder timing reached: Reminder fires (queued at event creation).
+- Reminder timing reached: Reminder fires (it is scheduled when the event is saved).
 - After event ends: Follow-Up fires.`,
       },
       {
@@ -671,7 +680,7 @@ How timing works
 - Each channel can have up to 3 send times.
 - Enter a number and choose Minutes, Hours, or Days before the appointment starts.
 - Example: Email → Contact could have 1 Day, 1 Hour, and 10 Minutes; SMS → Owner could have just 1 Hour.
-- The send button stays disabled until the channel is added to the queue when the event is created or updated.
+- The send button stays disabled until that channel has been scheduled for the event, which happens when the event is created or updated.
 
 Default timing (applied automatically until you change it)
 - Email → Owner: 1 day + 1 hour + 10 minutes before
@@ -682,7 +691,7 @@ Default timing (applied automatically until you change it)
 To add a send time: click "+ Add time" below the existing rows (up to 3 per channel).
 To remove a send time: click the trash icon on that row (at least 1 row must remain).
 
-Important: reminder rows are queued when an event is saved. If you change timing after an event is already booked, the existing queue rows are updated automatically for any upcoming (unsent) reminders.`,
+Important: reminders are scheduled when an event is saved. If you change timing after an event is already booked, upcoming (unsent) reminders are updated automatically.`,
       },
       {
         id: 'cal-notification-test',
@@ -703,12 +712,11 @@ What the test sends
 - Email tests go to the address you type. SMS tests go to the Legacy contact whose phone number matches what you entered.
 
 SMS test requirements
-- The phone number you enter must belong to a contact that exists in the SaaS or Legacy messaging.
-- StoryVenue looks up the contact in your database first (by the last 10 digits of the number), then falls back to a Legacy messaging search by phone, then by your venue email.
+- The phone number you enter must belong to one of your contacts.
 - If no matching contact is found, a red error message appears below the input explaining what to check.
 
 If the test fails
-- For email: check that your venue has a "From" domain configured via Resend and that the target email address is valid.
+- For email: check that the target email address is valid. If it is and the test still fails, contact StoryVenue support.
 - For SMS: make sure Legacy messaging is connected (Settings → Integrations) and the phone number matches an existing contact.`,
       },
     ],
@@ -757,7 +765,10 @@ The stage badge shows where the contact currently sits in your sales pipeline wi
 Why it matters
 When you're working through your inbox, you can immediately spot which threads belong to hot leads (e.g. "Proposal Sent") vs. earlier-stage inquiries — and prioritize who to follow up with first.
 
-Clicking the thread still opens the conversation normally. To change the stage, open the contact profile (Profile button in the thread) → Overview tab → click a stage pill.`,
+Clicking the thread still opens the conversation normally. To change the stage, open the contact profile (Profile button in the thread) → Overview tab → click a stage pill.
+
+Stage moves in the conversation
+Each time a couple is moved to another stage, the conversation shows a line saying which stage, when, and who moved her: you, a team member, the AI Concierge, an automation, or StoryVenue Support. Only your venue and StoryVenue Support see these lines. The couple never does.`,
       },
       {
         id: 'conversations-overview',
@@ -832,7 +843,7 @@ When a new Venue Direct message arrives
       {
         id: 'conversations-inbound',
         title: 'iMessage-style two-way replies — email & SMS land in the thread instantly',
-        tags: ['inbound', 'reply', 'email reply', 'sms reply', 'resend', 'ghl', 'webhook', 'two way', 'threading', 'realtime', 'imessage', 'instant', 'sent badge'],
+        tags: ['inbound', 'reply', 'email reply', 'sms reply', 'two way', 'threading', 'realtime', 'imessage', 'instant', 'sent badge'],
         body: `Conversations is two-way. Replies — email or SMS — land back in the same thread within a second or two of arriving. No page refresh, no checking two inboxes.
 
 How fast is "instant"?
@@ -851,23 +862,23 @@ Default sending domain — works out of the box
 
 If a reply doesn't show up
 - **Email replies missing**: open Settings → Inbound Email Replies. The status panel shows a green "Configured" or amber "Needs setup" badge for each required item with instructions on how to fix it.
-- **SMS replies missing**: confirm your StoryVenue Legacy integration is connected (Settings → Integrations). The Integrations page shows a webhook URL you can optionally paste into your GHL sub-account for true instant delivery — without this, replies still arrive within a few seconds automatically.`,
+- **SMS replies missing**: confirm your StoryVenue Legacy integration is connected (Settings → Integrations). Replies arrive in the thread within a few seconds, automatically.`,
       },
       {
         id: 'conversations-sms-troubleshooting',
         title: 'SMS won\'t send — diagnose and fix',
-        tags: ['sms', 'sms not sending', 'missing phone number', 'ghl', 'storyvenue legacy', 'troubleshooting', '422', 'phone number', 'diagnose'],
-        body: `If outbound SMS fails with "Missing phone number" or "GHL has no phone on file" — even when you just added the phone — here's how to fix it.
+        tags: ['sms', 'sms not sending', 'missing phone number', 'storyvenue legacy', 'troubleshooting', '422', 'phone number', 'diagnose'],
+        body: `If outbound SMS fails with a "Missing phone number" message — even when you just added the phone — here's how to fix it.
 
 The most common cause
-The phone number in StoryVenue wasn't synced to your connected GHL sub-account yet.
+The phone number in StoryVenue wasn't synced to your connected StoryVenue Legacy account yet.
 
 The fastest fix
 Open the contact profile in StoryVenue → make sure the phone number is entered → click Save. This syncs the phone to your connected sub-account automatically. Then retry the SMS.
 
 If that doesn't work
-1. Confirm your StoryVenue Legacy (GHL) integration is connected at Settings → Integrations — look for the green "Connected" badge.
-2. Make sure your GHL sub-account has an active A2P-approved phone number assigned to it. Without a phone number provisioned in your sub-account, SMS cannot be sent. Open your GHL sub-account → Settings → Phone Numbers to verify or assign one.
+1. Confirm your StoryVenue Legacy integration is connected at Settings → Integrations — look for the green "Connected" badge.
+2. Make sure your StoryVenue Legacy account has an active A2P-approved phone number assigned to it. Without a phone number provisioned in your sub-account, SMS cannot be sent. Open your StoryVenue Legacy account → Settings → Phone Numbers to verify or assign one.
 3. If the issue persists, contact StoryVenue support.`,
       },
     ],
@@ -884,7 +895,7 @@ If that doesn't work
         tags: ['directory', 'listing', 'public page', 'storyvenue', 'venue page', 'seo'],
         body: `Your public listing is your venue profile on storyvenue.com. It's what couples see when they browse the directory or land on your page from a Google search.
 
-Open it from the sidebar → Venue listing → Dashboard (the listing editor). Everything on that page mirrors what appears at storyvenue.com/venue/<your-slug> when Publish is on.
+Open it from the sidebar → Bride Booking System™ → Venue Listing (the listing editor). Everything on that page mirrors what appears at storyvenue.com/venue/<your-slug> when Publish is on.
 
 A second item under the same flyout — Reviews — is where you collect star ratings and written testimonials. Reviews can be published, pending, or hidden. Only published reviews are included in the public read API and embed for the marketing site.
 
@@ -925,7 +936,7 @@ Publish toggle — at the top of the page. Off = not visible to the public. On =
         id: 'listing-autosave',
         title: 'Autosave and how changes are saved',
         tags: ['save', 'autosave', 'draft', 'saving', 'unsaved'],
-        body: `The Venue listing → Dashboard page saves automatically as you edit — there is no "lose your work if you forget to click Save" moment.
+        body: `The Bride Booking System™ → Venue Listing page saves automatically as you edit — there is no "lose your work if you forget to click Save" moment.
 
 How it works:
 - Every change you make (typing, toggling a feature, uploading a photo) queues up an autosave
@@ -947,11 +958,11 @@ Tip: this makes it safe to start the description, switch tabs to upload photos t
         body: `Your listing supports one cover photo (the hero at the top of the page) and an unlimited gallery below.
 
 Two ways to add images:
-1. Venue listing → Photos (/dashboard/listing/images) — upload files from your computer, or click From media library to pick an image you already uploaded under Venue listing → Media library.
-2. Venue listing → Dashboard — the Photos section links to the same photo tools; you can also open Media library from the listing overview.
+1. the Photos section of Bride Booking System™ → Venue Listing (/dashboard/listing/images) — upload files from your computer, or click From media library to pick an image you already uploaded under Media in the sidebar.
+2. Bride Booking System™ → Venue Listing — the Photos section links to the same photo tools; you can also open Media library from the listing overview.
 
 Direct upload from Photos:
-1. Go to Venue listing → Photos (or Dashboard → Photos section → Manage photos)
+1. Go to the Photos section of Bride Booking System™ → Venue Listing (or Dashboard → Photos section → Manage photos)
 2. Click Upload photos and choose files, or From media library to reuse a shared image
 3. Images upload to secure cloud storage and appear on your listing immediately
 
@@ -990,7 +1001,7 @@ What you can upload:
 Auto-populated:
 - Anything you upload anywhere in the dashboard automatically lands in your Media library — no extra step needed. That includes:
   - The brand logo on Settings → Branding (re-uploading the logo refreshes the existing library row instead of creating a duplicate).
-  - Cover and gallery photos on Venue listing → Photos.
+  - Cover and gallery photos on the Photos section of Bride Booking System™ → Venue Listing.
   - Any image you upload through the email or form builder using "Choose from media library" → Upload from device, or via the Image / Button (File link) blocks.
 
 Page features:
@@ -1012,16 +1023,16 @@ Download
 - Click Download from the asset menu (or from the preview modal toolbar) and the file saves directly to your computer with its original name. The download streams through the StoryVenue app domain so browsers always trigger a real save instead of opening the file in a new tab.
 
 Used in indicator:
-- Each file shows where its URL is referenced today: Brand logo (Settings → Branding), Listing cover/gallery (Venue listing → Photos), Email templates and campaigns, Lead capture forms.
+- Each file shows where its URL is referenced today: Brand logo (Settings → Branding), Listing cover/gallery (the Photos section of Bride Booking System™ → Venue Listing), Email templates and campaigns, Lead capture forms.
 - The Delete confirm modal lists every place the file is used so you can replace those references first if you don't want them to break. If the file you delete is the brand logo, the listing cover image, or in the gallery, those references on the venue record are also cleared so the dashboard never renders a broken image.
 
-Tip: On Venue listing → Photos and the marketing Email/Form Image blocks, use "Choose from media library" to attach an existing asset without re-uploading.`,
+Tip: On the Photos section of Bride Booking System™ → Venue Listing and the marketing Email/Form Image blocks, use "Choose from media library" to attach an existing asset without re-uploading.`,
       },
       {
         id: 'listing-publish',
         title: 'Publishing and unpublishing your listing',
         tags: ['publish', 'unpublish', 'live', 'visible', 'hidden', 'public'],
-        body: `The Publish toggle (top of the Venue listing → Dashboard page) controls whether couples can find your venue on storyvenue.com.
+        body: `The Publish toggle (top of the Bride Booking System™ → Venue Listing page) controls whether couples can find your venue on storyvenue.com.
 
 Off (default for new accounts)
 - Your listing page returns "not found" to the public
@@ -1036,7 +1047,7 @@ On
 If your page doesn't appear after publishing:
 - Confirm the Publish toggle is actually on (the status pill next to it reads "Live")
 - Hard-refresh storyvenue.com
-- Check the URL uses your exact slug (Venue listing → Dashboard → URL slug field)
+- Check the URL uses your exact slug (Bride Booking System™ → Venue Listing → URL slug field)
 - If you recently changed the slug, the old URL now 404s — update any links you've shared
 
 Unpublishing is immediate — flip the toggle off and your public page returns 404. Leads already in your inbox are unaffected.`,
@@ -1063,7 +1074,7 @@ Caution: changing the slug changes your public URL. Any links on your website, I
         id: 'listing-reviews',
         title: 'StoryVenue reviews — testimonials on your public listing',
         tags: ['reviews', 'testimonials', 'stars', 'storyvenue', 'embed', 'public api', 'published', 'rating'],
-        body: `Under Venue listing → Reviews (StoryVenue tab) you manage testimonials that couples and clients leave for your venue.
+        body: `Under Bride Booking System™ → Reviews (StoryVenue tab) you manage testimonials that couples and clients leave for your venue.
 
 Each review has:
 - Star rating (1–5 stars)
@@ -1087,10 +1098,10 @@ Showing reviews outside storyvenue.com:
         id: 'listing-google-reviews',
         title: 'Connecting your Google Business Profile for Google reviews',
         tags: ['google reviews', 'google business profile', 'place id', 'gbp', 'google maps', 'connect google', 'google rating', 'service area business'],
-        body: `The Google tab under Venue listing → Reviews lets you connect your Google Business Profile so your Google reviews display on your storyvenue.com listing page.
+        body: `The Google tab under Bride Booking System™ → Reviews lets you connect your Google Business Profile so your Google reviews display on your storyvenue.com listing page.
 
 How to connect:
-1. Go to Venue listing → Reviews → Google tab.
+1. Go to Bride Booking System™ → Reviews → Google tab.
 2. The tab automatically searches Google for your business using your venue name and location. If your business appears, click "Yes, that's us." That's it — your Google reviews will start showing on your listing.
 3. If the auto-search doesn't find your business (common for service-area businesses with no physical address), expand "Can't find it? Paste a Google Maps link instead."
 4. In that section, paste any Google Maps URL for your business — a share link (maps.app.goo.gl/...), a full browser URL, or a link from your Google Business Profile. Click Resolve and the system extracts the Place ID automatically.
@@ -1115,10 +1126,10 @@ If Google Business search isn't working, contact StoryVenue support.`,
         id: 'listing-analytics-realtime',
         title: 'Real-time visitor map — see who\'s on your listing right now',
         tags: ['visitor map', 'real time', 'realtime', 'analytics', 'world map', 'live visitors', 'map', 'location', 'who is visiting', 'leaflet', 'geo'],
-        body: `The Venue listing → Analytics page includes an interactive world map that shows visitors currently on your storyvenue.com listing in real time.
+        body: `The Bride Booking System™ → Dashboard page includes an interactive world map that shows visitors currently on your storyvenue.com listing in real time.
 
 How to access:
-1. Go to Venue listing → Analytics (path: /dashboard/listing).
+1. Go to Bride Booking System™ → Dashboard.
 2. Scroll down to the "Live visitor map" section.
 
 What you see on the map:
@@ -1143,9 +1154,9 @@ Privacy: only approximate location data (city-level) is captured. No names, emai
         id: 'listing-booking-system',
         title: 'Speed to Lead System — 5-phase automated follow-up',
         tags: ['booking system', 'speed to lead', 'guide delivery', 'pricing guide', 'pdf', 'sms guide', 'email guide', '14-day sequence', 'booked tour', 'booked wedding', 'automation', 'bride', 'lead form', 'public listing', 'pricing_guide_url', 'merge variable', 'ai concierge trigger', 'phase', 'appointment_date', 'appointment_time', 'venue_address', 'owner_name'],
-        body: `The Speed to Lead System (Venue listing → Speed to Lead System) automates everything from the moment a bride submits your listing inquiry form to when she books her wedding.
+        body: `The Speed to Lead System (Bride Booking System™ → Speed to Lead System) automates everything from the moment a bride submits your listing inquiry form to when she books her wedding.
 
-Path: Venue listing → Speed to Lead System (sidebar)
+Path: Bride Booking System™ → Speed to Lead System (sidebar)
 
 The system has 5 phases, each with its own toggle so you can enable only what you need. By default, only Phase 1 (Guide Delivery) and Phase 2 (14-Day Sequence) are on — Phases 3 and 4 (Booked Tour, Booked Wedding) start off so venues can review/customize the pre-filled copy before turning them on.
 
@@ -1181,7 +1192,7 @@ Stop on reply (all phases)
 The moment a bride replies (email or SMS) during any active sequence, all enrollments stop and the venue is notified. The lead moves to "Conversation Started" in the pipeline.
 
 SMS delivery note
-The Speed to Lead System email delivery does not require a StoryVenue Legacy (GHL) connection. GHL is only needed for SMS steps. All email delivery and merge variables are handled natively by StoryVenue — you can use email-only phases even without a Legacy connection.`,
+The Speed to Lead System email delivery does not require a StoryVenue Legacy connection. StoryVenue Legacy is only needed for SMS steps. All email delivery and merge variables are handled natively by StoryVenue — you can use email-only phases even without a Legacy connection.`,
       },
       {
         id: 'listing-analytics-retention',
@@ -1210,9 +1221,33 @@ Test that tracking is working
 - The "Live visitor map" updates within ~10 seconds and is the fastest way to confirm the tracker is recording your visit.
 
 If you're convinced data should be there but isn't
-- Verify your listing is published (Venue listing → Dashboard → Published toggle). Tracking still records events for unpublished listings, but no real visitors can reach them.
+- Verify your listing is published (Bride Booking System™ → Venue Listing → Published toggle). Tracking still records events for unpublished listings, but no real visitors can reach them.
 - Make sure your tracker isn't blocked by an ad-blocker on your test browser (the tracker is first-party so most ad-blockers don't touch it, but some aggressive ones do).
 - Ask AI can help you check your event counts — just describe what you're looking for.`,
+      },
+      {
+        id: 'listing-web-form',
+        title: 'Web Form — put your inquiry form on your own website',
+        tags: ['web form', 'website form', 'embed', 'embed code', 'inquiry form', 'contact form', 'wordpress', 'squarespace', 'wix', 'webflow', 'website leads', 'form code'],
+        body: `Web Form gives you your inquiry form as a small piece of code to paste into your own website. A bride who fills it in lands in your Lead Inbox, gets your pricing guide right away, and is followed up by your Speed to Lead System, exactly like a bride who inquires from your StoryVenue listing.
+
+Where to find it
+Bride Booking System™ → Web Form. The code is on the left and a preview of your form is on the right. (The same code is also on the Pricing Guide page: Get Embed Code.)
+
+Add the form to your website
+1. Press Copy code.
+2. Open the page on your website where the form should go. Your contact page or your pricing page works best.
+3. Add a block for custom code. It's called Custom HTML in WordPress, Code in Squarespace, Embed HTML in Wix and Embed in Webflow.
+4. Paste the code, save, and publish the page.
+5. Fill in the form on your website once as a test. Your inquiry shows up in your Lead Inbox.
+
+If someone else looks after your website, send the code to them.
+
+Good to know
+- The preview shows the form exactly as brides see it on your website.
+- The form uses your colors from Settings → Branding. Change them there and the form on your website updates by itself.
+- Leads from this form show as Web Form on your Bride Booking System™ dashboard, so you can see how many your website brings in.
+- If you added the form to your website before October 2026, copy the code again and replace the old one.`,
       },
       {
         id: 'listing-lead-link',
@@ -1221,7 +1256,7 @@ If you're convinced data should be there but isn't
         body: `Lead Link is a ready-made "link in bio" landing page that turns your social media followers into leads. Instead of posting your website in your Instagram, TikTok, or Facebook bio, you post one Lead Link — a clean landing page that guides brides straight to booking.
 
 Where to find it
-Path: Venue listing → Lead Link (sidebar).
+Path: Bride Booking System™ → Lead Link (sidebar).
 
 Your Lead Link address
 Your page lives at your venue's storyvenue.com address ending in /links. Copy it from the Lead Link page and paste it into your social profiles' "link in bio" field.
@@ -2067,7 +2102,7 @@ Downloads happen instantly in your browser — no email required. For large date
         body: `Go to Settings → Branding. The page is ordered top-to-bottom in the natural setup flow:
 
 1. Contact Information — business name, email, phone, website, address, and a footer note. These appear on every invoice, proposal, and email footer.
-2. Brand Settings — upload your logo (PNG, JPG, or SVG, max 5MB). You can also pick from your media library (Venue listing → Media library — JPEG, PNG, WebP, AVIF, GIF; no video). Your logo shows in a white header with a colored strip underneath in every email.
+2. Brand Settings — upload your logo (PNG, JPG, or SVG, max 5MB). You can also pick from your media library (Media in the sidebar — JPEG, PNG, WebP, AVIF, GIF; no video). Your logo shows in a white header with a colored strip underneath in every email.
 3. Color Presets — click any preset (Default, Ivory & Gold, Sage & Stone, Blush & Cream, Coastal Blue, Black & Champagne, Warm Earth) to set the Primary/Button, Background, and Button Text colors all at once. Saves automatically when clicked.
 4. Social Networks — paste your social profile URLs once. Every marketing-email Social block reads from this list automatically.
 5. Time zone — used for scheduling, calendar, and appointment times.
@@ -2426,11 +2461,11 @@ Desktop email clients (Outlook, full-screen Gmail web, etc.) get the full 600px-
 - An unsubscribe link.
 - A "manage your preferences" link.
 
-The unsubscribe and manage links use a signed token unique to each recipient and venue, so each link is single-purpose and can't be guessed or reused.
+The unsubscribe and manage links are unique to each recipient.
 
 Public preference center
 Both links lead to a public preference page hosted on app.storyvenue.com (no login required) where the recipient can:
-- Unsubscribe from all marketing emails (adds them to the marketing_email_suppressions list — they will never receive marketing emails from your venue again unless they opt back in).
+- Unsubscribe from all marketing emails (they will never receive marketing emails from your venue again unless they opt back in).
 - Manage their preferences (opt back in if they've previously unsubscribed).
 
 Suppression
@@ -2560,7 +2595,7 @@ Embed modal: copy-paste a script + div snippet that drops the form into any exte
 
 Live preview: opens the public-facing form inside a real iframe with real validation and real post-submit configuration (thank-you screen or redirect URL). Submissions don't write a lead and don't fire notification emails — it's a clean dry run so you can verify the experience end-to-end. The header centers the Desktop / Mobile toggle so you can verify both sizes.
 
-The public submission endpoint and the existing embed code are unchanged — the rebuild was visual + UX only, so any embed snippets you've already pasted on external sites continue to work.`,
+Forms you've already added to other websites keep working.`,
       },
       {
         id: 'me-workflows',
@@ -2606,7 +2641,7 @@ Building a "form-to-funnel" sequence (the most common use case)
 5. Submit the form yourself to test. The contact is enrolled in the sequence and the first step fires within a short time.
 
 Reply detection — the drip stops when the contact replies
-- When a contact replies to any drip email through the platform's reply routing, the platform automatically halts every active marketing automation enrollment for that contact (status → halted_by_reply, completed_at stamped).
+- When a contact replies to any drip email through the platform's reply routing, the platform automatically halts every active marketing automation enrollment for that contact.
 - You receive an email notification with a preview of the reply and how many sequences were stopped. The notification goes to the email address in Settings → Notifications.
 - Halted enrollments don't auto-restart. The contact stays in the conversation thread; the team picks it up from there.
 
@@ -2817,11 +2852,16 @@ The AI automatically hands off to a human when certain conditions are met (e.g.,
 Spend caps:
 Per-venue monthly SMS spend limits prevent runaway costs. When the cap is reached, the AI pauses all sequences until the next billing cycle. Spend caps are managed by StoryVenue support.
 
+When it stops
+- The AI keeps following up until the bride replies. Her reply is what stops it: she moves to Conversations Started and you're notified, so a person can take it from there.
+- Messages you or your team send her don't stop it. You and the AI are working the same lead.
+- To stop it yourself for one couple, press Pause AI on her conversation or contact.
+
 Troubleshooting:
-- "Eligibility blockers" on the settings page tell you exactly what's needed (add-on purchase, A2P verification, GHL connection)
+- "Eligibility blockers" on the settings page tell you exactly what's needed (add-on purchase, A2P verification, StoryVenue Legacy connection)
 - A2P verification issues: the system can auto-submit verification and diagnose status
 - Lead not getting messages: check that the lead's state is "AI Active" and the venue toggle is enabled
-- Messages not sending: verify GHL connection and A2P status on the settings page`,
+- Messages not sending: verify StoryVenue Legacy connection and A2P status on the settings page`,
       },
     ],
   },
@@ -2906,66 +2946,44 @@ See Marketing → Trigger Links, Tags & Variables → Merge Variables accordion 
     articles: [
       {
         id: 'int-zapier',
-        title: 'Connecting Zapier (and other apps via the public API)',
-        tags: ['zapier', 'api', 'integration', 'webhook', 'rest hooks', 'automation', 'connect'],
-        body: `StoryVenue ships with an official Zapier integration plus a public REST API at /api/v1. Use Zapier to connect to 6,000+ apps without writing code, or hit the API directly from your own backend.
+        title: 'Connecting Zapier',
+        tags: ['zapier', 'api key', 'integration', 'automation', 'connect', 'apps'],
+        body: `StoryVenue has an official Zapier integration. Use it to connect StoryVenue to thousands of other apps without writing code.
 
 What you can do with Zapier
-Triggers (Zapier listens — instant via webhooks, with polling fallback):
-- New Lead — fires the moment a lead arrives (form, directory, manual, API)
-- New Contact — fires when a contact is added or upserted
-- Tag Added to Contact — fires whenever a tag is applied (manual or automatic)
-- Proposal Signed — fires when a customer e-signs
-- Payment Received — fires when a deposit, full payment, or installment is captured
-- Appointment Booked — fires when a tour, call, or other event is scheduled
-- Appointment Cancelled — fires when an event is cancelled or deleted
+Triggers (something happens in StoryVenue, and Zapier acts on it):
+- New Lead — a lead arrives (form, directory, added by hand)
+- New Contact — a contact is added
+- Tag Added to Contact — a tag is applied (by you or automatically)
+- Proposal Signed — a customer e-signs
+- Payment Received — a deposit, full payment, or installment is paid
+- Appointment Booked — a tour, call, or other event is scheduled
+- Appointment Cancelled — an event is cancelled or deleted
 
-Actions (Zapier writes into StoryVenue):
+Actions (Zapier does something in StoryVenue):
 - Create or Update Contact (matched by email)
 - Create Lead
-- Add Tag to Contact — IMPORTANT: this fires any Workflow triggered by tag_added, so you can use a Zap to drop someone into an automation
-- Send SMS (via your messaging integration)
-- Send Email (transactional, via Resend)
-- Find Contact by Email (search/upsert pattern)
+- Add Tag to Contact — this starts any Workflow that begins with that tag, so a Zap can drop someone into an automation
+- Send SMS
+- Send Email
+- Find Contact by Email
 
 Connecting Zapier
 1. In StoryVenue: Settings → Integrations → click Generate API key
-2. Copy the secret (it's shown only once — looks like sv_live_…)
-3. Click the "Connect with Zapier" button on the same page (or open the StoryVenue invite link directly: https://zapier.com/developer/public-invite/241169/4cb250d00c7d98a07f4e8d9a2a6adc8c/)
-4. Sign into Zapier (if needed) and accept the StoryVenue private app — it now appears in your Zap editor permanently
-5. When Zapier asks for an API key, paste the sv_live_… value you copied
+2. Copy the key. It is shown only once, so paste it somewhere safe.
+3. Click the "Connect with Zapier" button on the same page
+4. Sign into Zapier (if needed) and accept the StoryVenue app. It now appears in your Zap editor.
+5. When Zapier asks for an API key, paste the key you copied
 6. Pick a trigger and connect it to any other app
 
-Important — public marketplace vs private invite
-StoryVenue's Zapier integration is currently distributed as a private app. That means it does not yet appear in Zapier's public app directory (zapier.com/apps). The only way to use it is via the invite link above (or via an admin-issued invite to your specific email). The integration is fully production-grade — every trigger, action, and search works exactly the same as a public app.
-
 Managing API keys
-- Settings → Integrations lists every active key with its prefix, creation date, and last-used time
-- Revoke a key any time — anything using it stops working immediately (returns 401)
-- You can have multiple active keys (one per integration is recommended)
+- Settings → Integrations lists every active key with its creation date and when it was last used
+- Revoke a key any time. Anything using it stops working right away.
+- You can have more than one key. One per connected app is a good habit.
+- Treat a key like a password: don't share it or post it anywhere.
 
-Using the API directly
-Send Authorization: Bearer sv_live_… on every request to https://app.storyvenue.com/api/v1.
-
-Quick tour:
-- GET /api/v1/me — auth test, returns the venue
-- GET /api/v1/contacts?limit=50 — list contacts (also supports ?email=)
-- POST /api/v1/contacts — create or upsert a contact
-- POST /api/v1/leads — create a new lead
-- POST /api/v1/tags/apply { email, tag_name } — apply a tag (creates the tag if needed; fires Workflows)
-- POST /api/v1/sms/send { to, message } — send a text
-- POST /api/v1/email/send { to, subject, body_html } — send an email
-- GET  /api/v1/leads/recent — polling source for "New Lead"
-- GET  /api/v1/proposals/recent?status=signed — polling source for "Proposal Signed"
-- GET  /api/v1/payments/recent — polling source for "Payment Received"
-- POST /api/v1/webhooks { event, target_url } — subscribe to instant events
-- DELETE /api/v1/webhooks/:id — unsubscribe
-
-Security
-- API keys are never stored in plain text — only the prefix is visible after creation, so keep your copy safe when it's first generated
-- Webhook subscriptions auto-disable after 5 consecutive delivery failures
-- All traffic is HTTPS only
-- Each key is venue-scoped — there is no cross-tenant access`,
+Building your own connection
+If a developer is connecting another system for you, contact StoryVenue support and we'll point them to what they need.`,
       },
       {
         id: 'int-calendly',
@@ -3020,49 +3038,39 @@ If you want StoryVenue events written to Google Calendar AND Google events visib
       },
       {
         id: 'int-legacy',
-        title: 'StoryVenue Legacy messaging (GHL) — connect, sync, and use the SaaS as your source of truth',
-        tags: ['legacy', 'ghl', 'gohighlevel', 'storyvenue legacy', 'connect', 'sub-account', 'location id', 'private integration token', 'pit', 'api key', 'sms', 'contact sync', 'webhook', 'inbound webhook', 'integrations', 'resync', 'duplicate', 'two-way sync'],
-        body: `StoryVenue Legacy messaging is the integration that powers two-way SMS and the bulk contact import from your GoHighLevel sub-account. Once connected, **StoryVenue becomes the system of record for your contacts** — you don't need to keep using GHL day-to-day.
+        title: 'StoryVenue Legacy messaging — connect it and sync your contacts',
+        tags: ['legacy', 'storyvenue legacy', 'connect', 'location id', 'private integration token', 'sms', 'texting', 'contact sync', 'integrations', 'resync', 'two-way sync'],
+        body: `StoryVenue Legacy messaging is what lets you text couples from StoryVenue and bring your existing contacts in. Once it's connected, StoryVenue is where you manage your contacts day to day.
 
-Connect your sub-account
+Connect it
 1. Open Settings → Integrations → StoryVenue Legacy.
-2. Paste your **Sub-account Location ID** (the GHL location ID for your venue's sub-account).
-3. Paste your **Private Integration Token** or **Location API Key**. The form detects the type automatically.
+2. Paste your Location ID.
+3. Paste your Private Integration Token.
 4. Save. A green "Connected" badge appears.
 
-If SMS or contact sync still fails after step 4, you may also need to paste your sub-account's **Legacy API Key** in the API Key field that appears below the token field. GHL stopped exposing sub-account API keys via its agency endpoint, so some venues need to supply it manually. To find it: in GHL go to Settings → Business Profile → scroll to the API Keys section → copy the Location API Key value and paste it into the StoryVenue Legacy API Key field → Save.
+If texting or contact sync still doesn't work after that, the page may ask for one more key. If you're not sure where to find any of these, contact StoryVenue support and we'll set it up with you.
 
-Initial contact sync
-- Click "Sync from StoryVenue Legacy". A progress bar shows fetched vs total contacts.
-- The sync runs in the background even for large contact lists. It's safe to run multiple times — it won't create duplicates.
-- Run it again any time you've added contacts directly in GHL and want them to appear in StoryVenue.
+Bring your contacts in
+- Click "Sync from StoryVenue Legacy". A progress bar shows how far along it is.
+- It's safe to run more than once. It won't create duplicates.
 
-After the initial sync — StoryVenue is the source of truth
-- Edit a contact in StoryVenue → the change syncs back to GHL automatically in the background.
-- Create a new contact in StoryVenue → it's created in GHL too.
-- Send an SMS from StoryVenue → the contact's current info is synced to GHL right before sending, so even a phone number you just added will work immediately.
+After that
+- Edit a contact in StoryVenue and the change carries over by itself.
+- Add a new contact in StoryVenue and it's added there too.
+- When a couple replies STOP to a text, they're marked Do Not Contact everywhere. You don't have to manage it in two places.
 
-Duplicate phone numbers
-If two contacts in your account share the same phone number, SMS still works. StoryVenue handles this automatically.
-
-Inbound webhook URL — for instant (truly real-time) replies
-- Settings → Integrations → StoryVenue Legacy shows an **Inbound Webhook (optional)** card with the URL to paste into GHL.
-- In GHL: Settings → Integrations → Webhooks → paste the webhook URL → subscribe to **InboundMessage**, **ContactCreate**, **ContactUpdate**, **ContactDndUpdate**.
-- Without the webhook, replies still land in your thread within a few seconds automatically. The webhook just makes it instant.
-
-Do Not Contact (DNC) sync
-- When a contact opts out of SMS (replies STOP), the opt-out is automatically synced between StoryVenue and GHL. You don't need to manage DNC status in two places.
-
-SMS troubleshooting
-- "SMS won't send" is almost always one of two causes: (1) no phone number provisioned in your GHL sub-account — go to your GHL sub-account → Settings → Phone Numbers and assign one. (2) The contact's phone is out of sync — open the contact in StoryVenue and click Save to re-sync it.
+Texts won't send?
+- Check for the green "Connected" badge on Settings → Integrations.
+- Open the contact, make sure the phone number is right, and click Save. Then try again.
+- Your account needs an approved texting number. If you're not sure you have one, contact StoryVenue support.
 
 Disconnecting
-To disconnect, clear the Sub-account ID and access token fields and Save. The "Connected" badge turns gray. SMS sending stops; contacts already synced into StoryVenue remain.`,
+Clear the fields and Save. The "Connected" badge turns gray and texting stops. The contacts already in StoryVenue stay.`,
       },
       {
         id: 'int-inbound-email-status',
         title: 'Inbound Email Replies — status and troubleshooting',
-        tags: ['inbound email', 'email reply', 'inbound webhook', 'reply not appearing', 'troubleshoot email', 'settings panel'],
+        tags: ['inbound email', 'email reply', 'reply not appearing', 'troubleshoot email', 'settings panel'],
         body: `When a contact replies to a Conversations email, the reply appears in your Conversations thread automatically. StoryVenue shows a live status panel in Settings so you can see if everything is properly configured.
 
 Where to find it
@@ -3071,17 +3079,17 @@ Settings → scroll past Integrations → "Inbound Email Replies" card.
 - Amber "Needs setup" badge: at least one required item is missing. Each item shows a description and what to do.
 
 If replies still don't appear after the panel shows Configured
-- Replies also arrive automatically within a few seconds via polling — so even if instant delivery isn't working, you'll still see the reply shortly.
+- Replies can take a few seconds to appear. Give it a moment and refresh the conversation.
 - If replies are completely missing, contact StoryVenue support. This typically requires a configuration step that our team handles.`,
       },
       {
         id: 'int-leadfinder',
         title: 'Lead Finder — turn directory emails into leads',
-        tags: ['leadfinder', 'lead finder', 'the knot', 'weddingwire', 'zola', 'directory', 'marketplace', 'inquiry email', 'email leads', 'forward', 'forwarding', 'gmail filter', 'gmail confirmation code', 'capture leads', 'review queue', 'relay address'],
+        tags: ['leadfinder', 'lead finder', 'the knot', 'weddingwire', 'zola', 'directory', 'marketplace', 'inquiry email', 'email leads', 'forward', 'forwarding', 'gmail filter', 'gmail confirmation code', 'capture leads', 'review queue'],
         body: `Lead Finder gives your venue its own private email address. Any wedding inquiry emailed to it — from The Knot, WeddingWire, Zola, Here Comes The Guide, your website form, or a couple writing to you directly — becomes a lead in StoryVenue automatically, with the same alerts, pricing guide and follow-up as every other lead.
 
 Where to find your address
-Settings → Integrations → Lead Finder card → Copy. The address is unique to your venue, so keep it private.
+Bride Booking System™ → Lead Finder → Copy. (The same card is also in Settings → Integrations.) The address is unique to your venue, so keep it private.
 
 Two ways to connect it
 1. Easiest: paste the address into a directory's lead-notification email field (The Knot, WeddingWire, Zola and so on). One paste per site.
@@ -3103,7 +3111,7 @@ What happens when an inquiry arrives
 - For a new lead you get one email: the standard new-lead email, with the original directory email included. For anything else Lead Finder handles (an update to a couple you already have, or a message it skipped) you get a copy in your inbox with a short note on what it did. Times are in your venue's local time, based on your venue's ZIP code. Turn the copies off on the card.
 
 The review queue
-When we can't read an inquiry confidently — or the only address is a directory's relay, which routes replies through the directory's own inbox — the lead is still created and you're still alerted, but the automatic guide is held. The card shows how many arrivals need review. Open Review, compare what we read with the original email, correct anything we got wrong, then Confirm & send guide. If it isn't a real inquiry, choose Dismiss to keep the lead, or Dismiss & delete lead to remove the junk lead (and the contact Lead Finder created for it).
+When we can't read an inquiry confidently, or it doesn't include the couple's own email address, the lead is still created and you're still alerted, but the automatic guide is held. The card shows how many arrivals need review. Open Review, compare what we read with the original email, correct anything we got wrong, then Confirm & send guide. If it isn't a real inquiry, choose Dismiss to keep the lead, or Dismiss & delete lead to remove the junk lead (and the contact Lead Finder created for it).
 
 Activity and sources
 The card lists recent messages and whether each became a lead or was skipped, and why. Sources compares each directory with its own previous 30 days, so you'll notice if a directory changes its email format.
@@ -3250,6 +3258,9 @@ What you get once connected
 
 Your couples get their own guidance
 Each couple has a Help & how-to section inside their own login (account menu on desktop, the More tab on a phone). If a couple asks how to add guests, send RSVP links, or build their seating plan, point them there rather than walking them through it.
+
+What the couple sees in Messages
+In their own Wedding Planner, a couple sees only the messages between you: what they wrote, and what you, your team or your concierge wrote back. Automated texts and emails, AI follow-ups, your notes and stage moves stay on your side.
 
 You decide what's shared
 On the Wedding Planner page you can toggle which wedding details the couple sees — wedding date, guest count, space / room, and coordinator.
@@ -3638,7 +3649,7 @@ Test any customer email template:
       {
         id: 'sms-notifications',
         title: 'SMS notifications for customers',
-        tags: ['sms', 'text message', 'phone', 'messaging', 'ghl', 'notification'],
+        tags: ['sms', 'text message', 'phone', 'messaging', 'notification'],
         body: `When you send a proposal or invoice to a customer with a phone number on file, StoryVenue automatically sends them an SMS with a link.
 
 For SMS to work:
@@ -3701,24 +3712,24 @@ Email not arriving
 1. Is the channel toggled On? Settings → Calendar → Notifications → expand the scenario → check the toggle on that channel row.
 2. Does the event have a contact with an email address? Email → Contact only fires if the event is linked to a contact that has an email on file.
 3. Is the venue email configured? Email → Owner needs a valid email in your venue profile (Settings → General).
-4. Check spam/junk folders — transactional emails from Resend can land there for first-time recipients.
+4. Check spam/junk folders — our emails can land there for first-time recipients.
 
 SMS not arriving
 1. Is Legacy messaging connected? Settings → Integrations → Messaging should show "Connected".
-2. Does the contact have a valid US phone number in the SaaS database?
+2. Does the contact have a valid US phone number in your contacts?
 3. Is the SMS channel toggled On for that scenario?
 4. Is your A2P number approved? A2P rejection blocks all outgoing SMS.
 
 Reminder not arriving
-1. Was the event created after you saved your reminder settings? Reminder queue rows are created at event save time. Events booked before you set up reminders won't have queue rows — re-save the event to regenerate them.
+1. Was the event created after you saved your reminder settings? Reminders are scheduled when an event is saved. Events booked before you set up reminders won't have any: re-save the event to schedule them.
 2. Is the reminder offset in the future? A reminder set for "10 minutes before" that has already passed won't fire.
 3. Is the reminder channel enabled? Each of the four reminder channels (Email→Owner, Email→Contact, SMS→Owner, SMS→Contact) can be on or off independently.
 
 Follow-up not arriving
 - Follow-up timing is fully configurable: Settings → Calendar → Notifications → Follow-Up → any channel → "When to send" (choose minutes, hours, or days after the event ends).
-- If the event has no end time, no follow-up is queued.
+- If the event has no end time, no follow-up is sent.
 - Make sure the follow_up scenario channels are toggled On.
-- Follow-up queue rows are created when an event is saved. If you change the timing, re-save the event to regenerate the queue row.
+- Follow-ups are scheduled when an event is saved. If you change the timing, re-save the event to reschedule it.
 
 Test before going live
 Use the "Send test email" / "Send test SMS" button inside each channel editor to verify delivery before relying on automatic dispatch.`,
@@ -3858,7 +3869,7 @@ Venue Concierge (AI Concierge):
 - Only available on the All-Inclusive Concierge plan (and any plan where the StoryVenue admin has specifically enabled it)
 - On plans without access, the AI Concierge toggle on the Bride Booking System settings page is greyed out and unclickable
 - Hovering the greyed-out toggle shows a tooltip: "Schedule a demo to learn more about this plan"
-- Clicking it opens a demo scheduling calendar (GHL calendar embed) — not an upgrade button
+- Clicking it opens a demo scheduling calendar — not an upgrade button
 - See the AI Concierge article for full system details
 
 Plan inclusion:
@@ -3876,34 +3887,33 @@ Managing your add-ons:
       },
       {
         id: 'billing-trial',
-        title: '14-day free trial and credit card requirement',
-        tags: ['trial', '14 day', 'credit card', 'cc gate', 'hard gate', 'onboarding', 'go live', 'access', '$97', 'auto charge', 'downgrade', 'cancel trial', 'ribbon'],
-        body: `All new StoryVenue accounts (signed up after June 25, 2026) must complete a 4-step onboarding to go live.
+        title: '14-day free trial and adding your card',
+        tags: ['trial', '14 day', 'credit card', 'card', 'onboarding', 'go live', 'access', '$97', 'first charge', 'downgrade', 'cancel trial', 'free plan'],
+        body: `New StoryVenue accounts finish a short 4-step setup to go live.
 
-The 4 onboarding steps:
+The 4 steps
 1. Connect — find and import your venue from Google
 2. Details — fill in your listing information
 3. Go live — publish your listing (a test lead is sent to your inbox so you can see how it works)
-4. Access — enter your credit card to start your 14-day free trial of Bride Booking System™
+4. Access — add your card to start your 14-day free trial of the Bride Booking System™
 
-The credit card is required to proceed. There is no way to skip or close the modal until the card step is complete.
+A card is needed to finish setup and open the full dashboard.
 
-After entering your card:
-- Your 14-day free trial begins immediately
-- A countdown ribbon appears at the top of your dashboard
-- You have full access to Bride Booking System™ features during the trial
-- If you take no action, your card is automatically charged $97/month when the trial ends
+After you add your card
+- Your 14-day free trial begins right away, with full access to the Bride Booking System™
+- If you do nothing, your card is charged $97/month when the trial ends
+- You'll get an email a few days before the first charge. In the last 3 days of your trial, a notice at the top of your dashboard shows the charge date and a link to manage your subscription.
+- Billing notices come by email, never by text
 
-To stay on the free plan:
+To stay on the Free plan
 - Go to Settings → Billing before the trial ends
 - Click the downgrade button on the Bride Booking System™ Free plan
 - Your listing and payments stay active; automations switch off
 
-Important:
-- There is NO automatic downgrade at trial end — you must actively choose to downgrade
-- Existing accounts (signed up before June 25, 2026) are NOT subject to the CC gate — they can use the onboarding checklist at their own pace
-- Legacy Plan accounts are fully exempt from the trial and CC gate
-- Billing statements read as "StoryVenue"`,
+Good to know
+- The trial doesn't switch you to Free by itself. Choose Free before it ends if that's what you want.
+- If your billing page says "Billing managed directly", your plan is looked after by StoryVenue and none of this applies to you.
+- Charges appear on your statement as "StoryVenue"`,
       },
       {
         id: 'billing-pricing-guide',
@@ -3917,14 +3927,14 @@ Availability:
 - When the feature is off, the guide's lead-capture form is also hidden from your public listing automatically — no broken links or placeholders appear
 
 Creating your guide:
-1. Go to Venue listing → Pricing Guide
+1. Go to Bride Booking System™ → Pricing Guide
 2. Fill in your packages, pricing ranges, and availability windows
 3. Click "Generate with AI" to have Ask AI draft compelling, outcome-focused copy for each section based on your venue info and listing details
 4. Each section can be individually regenerated for variations
 
 Images:
 - Your listing cover photo and gallery images are automatically pre-populated in the guide so it looks polished immediately
-- Update photos under Venue listing → Photos to refresh the guide
+- Update photos under the Photos section of Bride Booking System™ → Venue Listing to refresh the guide
 
 Preview:
 - A preview modal shows exactly what couples will see before you publish
@@ -4263,7 +4273,9 @@ export const PAGE_ARTICLE_MAP: Record<string, string[]> = {
   '/dashboard/directory-billing':        ['billing-plans-overview', 'billing-trial', 'billing-verified-sponsored', 'gs-overview'],
   '/dashboard/settings/billing':         ['billing-plans-overview', 'billing-trial', 'billing-verified-sponsored'],
   '/dashboard/listing/directory':        ['billing-verified-sponsored', 'billing-plans-overview', 'billing-trial', 'listing-overview'],
-  '/dashboard/listing/pricing-guide':    ['billing-pricing-guide', 'listing-overview', 'listing-photos'],
+  '/dashboard/listing/pricing-guide':    ['billing-pricing-guide', 'listing-web-form', 'listing-overview', 'listing-photos'],
+  '/dashboard/listing/web-form':         ['listing-web-form', 'billing-pricing-guide', 'brand-setup', 'leads-overview'],
+  '/dashboard/listing/lead-finder':      ['int-leadfinder', 'leads-overview', 'listing-booking-system'],
   '/dashboard/settings':                 ['gs-overview', 'gs-onboarding', 'int-legacy', 'int-inbound-email-status'],
 
   // Support
