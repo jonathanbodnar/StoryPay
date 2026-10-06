@@ -2838,34 +2838,28 @@ Getting started:
 2. Set a persona name (how the AI identifies itself in messages, e.g. "Sarah from The Grand Ballroom")
 3. Add concierge notification email addresses (who gets notified when leads reply)
 4. Toggle the master Enable switch
-The system automatically scans for eligible leads and begins the 14-day outreach sequence.
+The AI Concierge starts on a lead when she reaches the "Activate AI Concierge" step in your 14-day sequence (on the same page). Put that step where you want the AI to take over; without it, the AI doesn't start on anyone.
 
-How the 14-day sequence works:
-- The AI sends personalized SMS messages on a configurable schedule over 14 days
-- Messages reference your venue's packages, pricing, and availability using merge variables
-- Each message is generated using a configurable prompt template personalized to your venue
-- Messages are only sent during business hours (quiet hours enforcement for TCPA compliance)
+How it follows up:
+- Once it has started on a lead, it texts her every day or two until she replies, for up to 60 days
+- Messages are written for your venue: they use your venue's name, packages, pricing, and availability
+- Texts only go out during daytime hours
 
-Inbound reply handling:
-- When a lead replies, the system classifies the intent (question, booking request, objection, opt-out)
-- Questions get an AI response; booking requests trigger an owner notification
-- Any inbound reply moves the lead to the "Conversations Started" stage in your pipeline
-- The venue owner and all team members are notified immediately
+When she replies:
+- Her reply stops the AI for her. She moves to the "Conversations Started" stage in your pipeline, and you and your team are notified straight away so a person can take it from there
+- If she replies STOP, she is opted out and gets no more texts
 
 Per-contact controls (Contacts → lead detail):
 Each lead shows an AI status pill with contextual actions:
 - Green "AI Active" pill — Pause AI button
 - Amber "Paused" pill — Re-enable AI button
-- Red "Needs Human" pill — Re-enable button (AI handed off based on handoff rules)
+- Red "Needs Human" pill — the AI has handed her to you (she asked for something a person should answer); Re-enable button
 - Gray "Opted Out" pill — Re-enable button (red + locked if TCPA opt-out from STOP keyword)
 - Orange "Exhausted" pill — Re-enable button (locked if past 60 days without re-enable)
 - Info-only display for leads where AI hasn't started yet
 
-Handoff rules:
-The AI automatically hands off to a human when certain conditions are met (e.g., lead asks for pricing details, wants to book a tour, requests specific dates). When a handoff rule fires, the lead moves to "Needs Human" state and you are notified immediately. Handoff rules are configured by StoryVenue support.
-
-Spend caps:
-Per-venue monthly SMS spend limits prevent runaway costs. When the cap is reached, the AI pauses all sequences until the next billing cycle. Spend caps are managed by StoryVenue support.
+Monthly texting limit:
+Each venue has a monthly limit on AI texts. If it's reached, the AI pauses until the next month. StoryVenue support can tell you where you stand.
 
 When it stops
 - The AI keeps following up until the bride replies. Her reply is what stops it: she moves to Conversations Started and you're notified, so a person can take it from there.
@@ -2874,7 +2868,7 @@ When it stops
 
 Troubleshooting:
 - "Eligibility blockers" on the settings page tell you exactly what's needed (add-on purchase, A2P verification, StoryVenue Legacy connection)
-- A2P verification issues: the system can auto-submit verification and diagnose status
+- A2P verification issues: the settings page shows where your verification stands
 - Lead not getting messages: check that the lead's state is "AI Active" and the venue toggle is enabled
 - Messages not sending: verify StoryVenue Legacy connection and A2P status on the settings page`,
       },
