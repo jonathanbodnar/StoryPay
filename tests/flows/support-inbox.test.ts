@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Browser, db, env, runId, signedInSuperAdmin } from './helpers';
 
 // Whose bride replies the support team sees (Support Inbox → Bride replies).
@@ -148,5 +148,70 @@ describe('bride replies reach the Support Inbox', () => {
     expect(await inbox()).toEqual([]);
     expect(await answered()).toEqual([threadId]);
     expect(await badge()).toBe(before - 1);
+  });
+});
+
+// Oct 6 2026: the list of bride replies answered 500 on the test copy. The
+// latest replies came from more conversations than fit in one request to the
+// database (about 430), and it asked about all of them at once. The live inbox
+// was heading for the same wall. Here 450 brides have just written in.
+describe('the Support Inbox loads however many brides are waiting', () => {
+  const venueId = randomUUID();
+  const MANY = 450;
+  let admin: Browser;
+
+  beforeAll(async () => {
+    admin = await signedInSuperAdmin();
+    const email = `busy.${runId}@example.com`;
+    const made = await db.from('venues').insert({
+      id: venueId, name: `Busy Barn ${runId}`, slug: `busy-barn-${runId}`, email,
+      notification_email: email, brand_email: email, password_hash: await bcrypt.hash(env.password, 10),
+      setup_completed: true, onboarding_status: 'registered', onboarding_completed_at: new Date().toISOString(),
+      email_verified_at: new Date().toISOString(), timezone: 'America/New_York', is_published: true, is_demo: false,
+      // Our concierges answer this venue's brides, so they belong in the inbox.
+      is_private_client: true, venue_concierge: true,
+    });
+    if (made.error) throw new Error(`venue: ${made.error.message}`);
+    const now = Date.now();
+    const brides = Array.from({ length: MANY }, (_, i) => ({ customer: randomUUID(), thread: randomUUID(), at: new Date(now - i * 1000).toISOString(), n: i }));
+    const customers = await db.from('venue_customers').insert(brides.map((b) => ({
+      id: b.customer, venue_id: venueId, customer_email: `busy.${b.n}.${runId}@example.com`, first_name: 'Busy', last_name: `Bride ${b.n}`,
+    })));
+    if (customers.error) throw new Error(`customers: ${customers.error.message}`);
+    const threads = await db.from('conversation_threads').insert(brides.map((b) => ({
+      id: b.thread, venue_id: venueId, venue_customer_id: b.customer, subject: 'Your pricing guide', external_reply_channel: 'sms',
+      last_message_at: b.at, last_message_preview: 'Is June open?', last_message_visibility: 'external',
+    })));
+    if (threads.error) throw new Error(`threads: ${threads.error.message}`);
+    const messages = await db.from('conversation_messages').insert(brides.map((b) => ({
+      thread_id: b.thread, visibility: 'external', channel: 'sms', body: 'Is June open?', sender_kind: 'contact', contact_from_name: `Busy Bride ${b.n}`, created_at: b.at,
+    })));
+    if (messages.error) throw new Error(`messages: ${messages.error.message}`);
+  }, 120_000);
+
+  afterAll(async () => {
+    // Leave nothing behind: 450 conversations would slow every later run.
+    await db.from('conversation_threads').delete().eq('venue_id', venueId);
+    await db.from('venue_customers').delete().eq('venue_id', venueId);
+    await db.from('venues').delete().eq('id', venueId);
+  }, 120_000);
+
+  it.each(['open', 'closed', 'all'])('the "%s" list loads', async (filter) => {
+    const res = await admin.fetch(`/api/admin/support/bride-inbox?filter=${filter}&limit=100&venue_id=${venueId}`);
+    expect(res.status, (await res.clone().text()).slice(0, 300)).toBe(200);
+    const { threads } = (await res.json()) as { threads: Array<{ venue_id: string }> };
+    // Nobody has answered them: they are all waiting, none replied to.
+    if (filter === 'closed') expect(threads).toEqual([]);
+    else {
+      expect(threads.length).toBeGreaterThanOrEqual(50);
+      expect(new Set(threads.map((t) => t.venue_id))).toEqual(new Set([venueId]));
+    }
+  });
+
+  it('and the badge counts them instead of quietly reading zero', async () => {
+    const res = await admin.fetch('/api/admin/support/inbox-count');
+    expect(res.status).toBe(200);
+    // The badge looks at the latest 400 messages, and these are the latest 450.
+    expect(((await res.json()) as { brideReplies: number }).brideReplies).toBeGreaterThanOrEqual(300);
   });
 });

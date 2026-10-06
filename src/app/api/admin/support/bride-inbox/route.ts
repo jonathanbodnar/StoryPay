@@ -26,6 +26,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { filterConciergeManagedVenueIds } from '@/lib/plan-features';
 import { capitalizeName } from '@/lib/format-name';
 import { lastSpeakerByThread } from '@/lib/venue-side-texts';
+import { askInBatches } from '@/lib/in-batches';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -145,22 +146,24 @@ export async function GET(req: NextRequest) {
         { data: vcAllRows },
         { data: countAllRows },
       ] = await Promise.all([
-        supabaseAdmin
+        // (Each list of ids is asked about in batches: a long one doesn't fit
+        // in a single request, and the whole list used to fail. lib/in-batches.ts)
+        askInBatches(threadIds, (ids) => supabaseAdmin
           .from('conversation_messages')
           .select('thread_id, sender_kind, body, channel, created_at')
           .eq('visibility', 'external')
-          .in('thread_id', threadIds)
-          .order('created_at', { ascending: false }),
-        supabaseAdmin
+          .in('thread_id', ids)
+          .order('created_at', { ascending: false })),
+        askInBatches(threadIds, (ids) => supabaseAdmin
           .from('conversation_messages')
           .select('thread_id, sender_kind, body, channel, created_at')
           .eq('visibility', 'external')
           .eq('sender_kind', 'contact')
-          .in('thread_id', threadIds)
-          .order('created_at', { ascending: false }),
-        supabaseAdmin.from('venues').select('id, name').in('id', venueIds),
-        supabaseAdmin.from('venue_customers').select('id, first_name, last_name, customer_email, phone').in('id', venueCustomerIds),
-        supabaseAdmin.from('conversation_messages').select('thread_id').in('thread_id', threadIds),
+          .in('thread_id', ids)
+          .order('created_at', { ascending: false })),
+        askInBatches(venueIds, (ids) => supabaseAdmin.from('venues').select('id, name').in('id', ids)),
+        askInBatches(venueCustomerIds, (ids) => supabaseAdmin.from('venue_customers').select('id, first_name, last_name, customer_email, phone').in('id', ids)),
+        askInBatches(threadIds, (ids) => supabaseAdmin.from('conversation_messages').select('thread_id').in('thread_id', ids)),
       ]);
 
       // The CHANNEL displayed on the contact card should reflect the medium
@@ -239,12 +242,16 @@ export async function GET(req: NextRequest) {
       // text brought in from the venue's own CRM is nobody speaking: it answers
       // no bride, so it can't take her reply out of this inbox
       // (lastSpeakerByThread, lib/venue-side-texts.ts).
-      const loadLatestExternal = (columns: string) => supabaseAdmin
+      // (Asked in batches: with a few hundred conversations to ask about, the
+      // one request was too long to send and the whole inbox failed to load.
+      // Oct 6 2026, on the test copy; the live inbox was heading for it.)
+      const askedAbout = candidateThreadIds;
+      const loadLatestExternal = (columns: string) => askInBatches(askedAbout, (ids) => supabaseAdmin
         .from('conversation_messages')
         .select(columns)
         .eq('visibility', 'external')
-        .in('thread_id', candidateThreadIds)
-        .order('created_at', { ascending: false });
+        .in('thread_id', ids)
+        .order('created_at', { ascending: false }));
       // (sent_via comes with migration 280; a database without it has no such texts.)
       let { data: latestExternalRows, error: latestExtErr } = await loadLatestExternal('thread_id, sender_kind, created_at, sent_via');
       if (latestExtErr) ({ data: latestExternalRows, error: latestExtErr } = await loadLatestExternal('thread_id, sender_kind, created_at'));
@@ -266,20 +273,22 @@ export async function GET(req: NextRequest) {
       }
       if (candidateThreadIds.length === 0) return NextResponse.json({ threads: [], nextCursor: null });
 
-      let threadQuery = supabaseAdmin
-        .from('conversation_threads')
-        .select('id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview, status')
-        .in('id', candidateThreadIds);
-      if (venueId)          threadQuery = threadQuery.eq('venue_id', venueId);
-      // Exclude manually-closed threads from the "open" view. If the status
-      // column doesn't exist yet (migration pending) PostgREST ignores this.
-      // IMPORTANT: PostgreSQL's != operator does NOT match NULLs, so threads
-      // with status=NULL (newly created, never explicitly set) would be
-      // excluded by a plain .neq(). We must also include IS NULL so
-      // brand-new threads from guide delivery or GHL webhook show up here.
-      if (filter === 'open') threadQuery = (threadQuery as typeof threadQuery).or('status.neq.closed,status.is.null');
-
-      const { data: threadRows, error: threadErr } = await threadQuery;
+      const openThreadIds = candidateThreadIds;
+      const { data: threadRows, error: threadErr } = await askInBatches(openThreadIds, (ids) => {
+        let threadQuery = supabaseAdmin
+          .from('conversation_threads')
+          .select('id, venue_id, venue_customer_id, subject, last_message_at, last_message_preview, status')
+          .in('id', ids);
+        if (venueId) threadQuery = threadQuery.eq('venue_id', venueId);
+        // Exclude manually-closed threads from the "open" view. If the status
+        // column doesn't exist yet (migration pending) PostgREST ignores this.
+        // IMPORTANT: PostgreSQL's != operator does NOT match NULLs, so threads
+        // with status=NULL (newly created, never explicitly set) would be
+        // excluded by a plain .neq(). We must also include IS NULL so
+        // brand-new threads from guide delivery or GHL webhook show up here.
+        if (filter === 'open') threadQuery = (threadQuery as typeof threadQuery).or('status.neq.closed,status.is.null');
+        return threadQuery;
+      });
       if (threadErr) throw new Error(`threads query: ${threadErr.message}`);
       const threads = ((threadRows ?? []) as ThreadRow[]);
       if (threads.length === 0) return NextResponse.json({ threads: [], nextCursor: null });
@@ -293,17 +302,17 @@ export async function GET(req: NextRequest) {
         { data: countRows },
         { data: latestExtAnyRows },
       ] = await Promise.all([
-        supabaseAdmin.from('venues').select('id, name').in('id', venueIds),
-        supabaseAdmin.from('venue_customers').select('id, first_name, last_name, customer_email, phone').in('id', venueCustomerIds),
-        supabaseAdmin.from('conversation_messages').select('thread_id').in('thread_id', candidateThreadIds),
+        askInBatches(venueIds, (ids) => supabaseAdmin.from('venues').select('id, name').in('id', ids)),
+        askInBatches(venueCustomerIds, (ids) => supabaseAdmin.from('venue_customers').select('id, first_name, last_name, customer_email, phone').in('id', ids)),
+        askInBatches(openThreadIds, (ids) => supabaseAdmin.from('conversation_messages').select('thread_id').in('thread_id', ids)),
         // Latest external message of ANY sender per thread — drives the
         // channel pill so an outbound SMS isn't labelled EMAIL.
-        supabaseAdmin
+        askInBatches(openThreadIds, (ids) => supabaseAdmin
           .from('conversation_messages')
           .select('thread_id, sender_kind, body, channel, created_at')
           .eq('visibility', 'external')
-          .in('thread_id', candidateThreadIds)
-          .order('created_at', { ascending: false }),
+          .in('thread_id', ids)
+          .order('created_at', { ascending: false })),
       ]);
 
       const venueById = new Map<string, VenueRow>();

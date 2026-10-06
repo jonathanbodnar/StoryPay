@@ -20,6 +20,7 @@ import { verifyAdminCookie } from '@/lib/admin-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { filterConciergeManagedVenueIds } from '@/lib/plan-features';
 import { lastSpeakerByThread } from '@/lib/venue-side-texts';
+import { askInBatches } from '@/lib/in-batches';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -58,11 +59,13 @@ export async function GET() {
     if (brideReplyThreadIds.length > 0) {
       // Subtract closed threads (the column may not exist on older DBs;
       // PostgREST returns 42703 in that case, which we treat as no rows).
-      const { data: closedRows } = await supabaseAdmin
+      // (Asked in batches, like the lists below: a few hundred ids don't fit
+      // in one request, and when it failed the badge quietly read zero.)
+      const { data: closedRows } = await askInBatches(brideReplyThreadIds, (ids) => supabaseAdmin
         .from('conversation_threads')
         .select('id')
-        .in('id', brideReplyThreadIds)
-        .eq('status', 'closed');
+        .in('id', ids)
+        .eq('status', 'closed'));
       const closedSet = new Set(((closedRows ?? []) as Array<{ id: string }>).map(r => r.id));
       const openBrideThreadIds = brideReplyThreadIds.filter(id => !closedSet.has(id));
 
@@ -70,10 +73,10 @@ export async function GET() {
       // Concierge active. Others manage their own replies and don't hit the
       // super-admin badge.
       if (openBrideThreadIds.length > 0) {
-        const { data: threadVenues } = await supabaseAdmin
+        const { data: threadVenues } = await askInBatches(openBrideThreadIds, (ids) => supabaseAdmin
           .from('conversation_threads')
           .select('id, venue_id')
-          .in('id', openBrideThreadIds);
+          .in('id', ids));
         const rows = (threadVenues ?? []) as Array<{ id: string; venue_id: string }>;
         const conciergeVenues = await filterConciergeManagedVenueIds(rows.map(r => r.venue_id));
         brideReplies = rows.filter(r => conciergeVenues.has(r.venue_id)).length;
@@ -106,11 +109,11 @@ export async function GET() {
 
     let venueReplies = 0;
     if (awaitingVdThreadIds.length > 0) {
-      const { data: ackRows } = await supabaseAdmin
+      const { data: ackRows } = await askInBatches(awaitingVdThreadIds, (ids) => supabaseAdmin
         .from('conversation_thread_reads')
         .select('thread_id, last_read_at')
-        .in('thread_id', awaitingVdThreadIds)
-        .eq('reader_ref', 'vd:concierge');
+        .in('thread_id', ids)
+        .eq('reader_ref', 'vd:concierge'));
       const ackByThread = new Map<string, string>();
       for (const r of (ackRows ?? []) as Array<{ thread_id: string; last_read_at: string }>) {
         ackByThread.set(r.thread_id, r.last_read_at);
