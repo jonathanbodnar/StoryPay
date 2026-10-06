@@ -132,6 +132,12 @@ describe('the docs don’t describe pages a venue can’t open', () => {
     expect(assistantDocs).not.toMatch(/SMS\/A2P integration/);
   });
 
+  it('the assistant isn’t given the removed pages as places to send a venue', () => {
+    for (const path of ['/dashboard/updates', '/dashboard/marketing/workflows', '/dashboard/marketing/trigger-links', '/dashboard/marketing/email/templates', '/dashboard/marketing/email/automations']) {
+      expect(route, path).not.toContain(path);
+    }
+  });
+
   it('the wording a venue owner doesn’t need', () => {
     for (const pattern of [/Flodesk/i, /TCPA/, /canonical/i, /sub-account/i, /UTM attribution/, /TOTP-based/, /Progressive Web App/]) {
       expect(help.replace(/tags: \[[^\]]*\]/g, ''), String(pattern)).not.toMatch(pattern);
