@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { venueForBrowser } from '@/lib/venue-for-browser';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { normalizeReminderOffsets, refreshAppointmentRemindersForVenue } from '@/lib/appointment-reminders';
@@ -70,29 +71,11 @@ export async function GET() {
     ? sanitizeBrandSocialsOnRead((venue as { brand_socials?: unknown }).brand_socials)
     : undefined;
 
-  // Mask the GHL access token: the client only needs to know whether one is
-  // stored (to render "token on file" UI). Returning the raw token would
-  // leak it to anyone with DevTools / a session cookie.
-  const rawToken = (venue as { ghl_access_token?: string | null }).ghl_access_token;
-  const ghl_access_token = rawToken && typeof rawToken === 'string'
-    ? `••••${rawToken.slice(-4)}`
-    : null;
-  // Same treatment for refresh token if present
-  const rawRefresh = (venue as { ghl_refresh_token?: string | null }).ghl_refresh_token;
-  const ghl_refresh_token = rawRefresh && typeof rawRefresh === 'string' ? '••••' : null;
-
-  // Mask the Meta Conversions API access token the same way as the GHL token.
-  const rawMetaToken = (venue as { meta_capi_access_token?: string | null }).meta_capi_access_token;
-  const meta_capi_access_token = rawMetaToken && typeof rawMetaToken === 'string'
-    ? `••••${rawMetaToken.slice(-4)}`
-    : null;
-
+  // The record without what signs anyone in or what a third party's key can
+  // do; a connection's key shows as dots and its last four (lib/venue-for-browser).
   return NextResponse.json({
-    ...venue,
+    ...venueForBrowser(venue as Record<string, unknown>),
     ...(brand_socials !== undefined ? { brand_socials } : {}),
-    ghl_access_token,
-    ghl_refresh_token,
-    meta_capi_access_token,
     directory_plans,
   });
 }
@@ -278,5 +261,6 @@ export async function PATCH(request: Request) {
     void refreshPaymentRemindersForVenue(venueId);
   }
 
-  return NextResponse.json(venue);
+  // Saving a setting answers with the record as a browser may have it, never the whole row.
+  return NextResponse.json(venue ? venueForBrowser(venue as Record<string, unknown>) : venue);
 }

@@ -55,7 +55,7 @@ const SENSITIVE = [
   // My Profile: the sign-in email and password
   /^src\/lib\/current-password/, /^src\/app\/api\/profile\/(route\.ts$|credentials\/)/,
   // The team list and its sign-ins
-  /^src\/lib\/(team-member-shape|sign-in-email)/, /^src\/app\/api\/team\//,
+  /^src\/lib\/(team-member-shape|sign-in-email|venue-for-browser)/, /^src\/app\/api\/team\//, /^src\/app\/api\/venues\/me\/route\.ts$/,
 ];
 
 /** The changed files a hot release must refuse (empty = safe to ship hot). */

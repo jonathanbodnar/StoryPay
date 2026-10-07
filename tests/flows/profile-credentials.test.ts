@@ -255,6 +255,45 @@ describe('the team list, and the owner’s row in it', () => {
     expect(await stored()).toMatchObject({ email: ownerEmail, owner_first_name: 'Olivia', password_hash: before.password_hash });
   });
 
+  // The venue's own record goes to every signed-in session of the venue. It
+  // carried the whole row: the owner's password hash, the tokens that sign in
+  // as the owner, and the keys to the venue's texting and payment accounts.
+  it('a team member’s browser is never sent what signs in as the owner, or a connection’s key', async () => {
+    const secrets = {
+      login_token: randomUUID(), admin_login_token: randomUUID(), email_verification_token: randomUUID(),
+      lunarpay_secret_key: `sk-flow-${runId}-9f2c`, lunarpay_org_token: `org-flow-${runId}-77aa`,
+      ghl_access_token: `pit-flow-${runId}-AB12`, ghl_location_token: `loc-flow-${runId}-CD34`,
+      calendly_access_token: `cal-flow-${runId}-EF56`, calendly_webhook_signing_key: `whk-flow-${runId}-0b0b`,
+      eventtemple_api_key: `et-flow-${runId}-GH78`,
+    };
+    const set = await db.from('venues').update(secrets).eq('id', teamVenueId);
+    expect(set.error?.message ?? null).toBeNull();
+    const { data: row } = await db.from('venues').select('password_hash').eq('id', teamVenueId).single();
+
+    const check = (text: string, who: string) => {
+      for (const [column, value] of Object.entries(secrets)) expect(text, `${who}: ${column}`).not.toContain(value);
+      expect(text, `${who}: the owner's password`).not.toContain(row!.password_hash);
+      const told = JSON.parse(text) as Record<string, unknown>;
+      for (const gone of ['password_hash', 'login_token', 'admin_login_token', 'email_verification_token', 'lunarpay_secret_key', 'lunarpay_org_token', 'calendly_webhook_signing_key', 'session_invalidated_before']) {
+        expect(told, `${who}: ${gone}`).not.toHaveProperty(gone);
+      }
+      // A connection's key shows as on file: dots and its last four.
+      expect(told).toMatchObject({ ghl_access_token: '••••AB12', ghl_location_token: '••••CD34', calendly_access_token: '••••EF56', eventtemple_api_key: '••••GH78' });
+      // The record itself is still there for the screens that read it.
+      expect(told).toMatchObject({ id: teamVenueId, name: `Team Venue ${runId}`, email: expect.any(String) });
+    };
+
+    const asMember = await mo.fetch('/api/venues/me');
+    expect(asMember.status).toBe(200);
+    check(await asMember.text(), 'a member reading');
+    const asOwner = await owner.fetch('/api/venues/me');
+    check(await asOwner.text(), 'the owner reading');
+    // Saving a setting answered with the whole row, nothing masked.
+    const saved = await owner.fetch('/api/venues/me', { method: 'PATCH', json: { brand_tagline: 'Where it begins' } });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    check(await saved.text(), 'saving a setting');
+  });
+
   it('nobody moves to an address another account signs in with', async () => {
     const me = { first_name: 'Mo', last_name: 'Member', current_password: moPassword };
     // A teammate's address, and the owner's.

@@ -40,6 +40,7 @@ describe('release lanes', () => {
       'src/proxy.ts', 'src/lib/session.ts', 'src/app/api/auth/sign-in/route.ts', 'src/app/api/admin/login/route.ts',
       'src/lib/current-password.ts', 'src/app/api/profile/route.ts', 'src/app/api/profile/credentials/route.ts',
       'src/app/api/team/route.ts', 'src/app/api/team/[id]/route.ts', 'src/lib/team-member-shape.ts', 'src/lib/sign-in-email.ts', 'src/lib/marketing-email-audience.ts',
+      'src/lib/venue-for-browser.ts', 'src/app/api/venues/me/route.ts',
     ]) {
       expect(sensitiveFiles([f]), f).toEqual([f]);
     }
