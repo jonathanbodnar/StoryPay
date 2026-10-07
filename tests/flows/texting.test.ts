@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { coupleTexts, db, ensureFlowVenue, FLOW_VENUE, runId, runJob, submitListingLead, texts, waitForText } from './helpers';
+import { coupleReacts, coupleTexts, db, ensureFlowVenue, FLOW_VENUE, runId, runJob, submitListingLead, texts, waitForText } from './helpers';
 
 // Texting end to end, against the test copy's stand-in texting service
 // (lib/staging-ghl): the guide by text, the follow-ups, a couple texting back,
@@ -7,6 +7,7 @@ import { coupleTexts, db, ensureFlowVenue, FLOW_VENUE, runId, runJob, submitList
 const n = (parseInt(runId.slice(-5), 36) % 9000) + 1000;
 const phoneA = `(646) 555-${n}`;
 const phoneB = `(646) 556-${n}`;
+const phoneC = `(646) 571-${n}`;
 
 const textsTo = async (phone: string, since: string) => (await texts(phone, since)).filter((t) => t.direction === 'outbound');
 
@@ -79,6 +80,41 @@ describe('texting a couple', () => {
     const { data: ens } = await db.from('marketing_automation_enrollments').select('last_error').eq('lead_id', leadB);
     expect(ens!.some((e) => e.last_error === 'stopped_on_reply')).toBe(true);
     expect(await repliesInConversation(`cameron.${runId}@example.com`)).toContain('We already booked a tour with you!');
+  });
+
+  // Owner, Oct 7 2026: "if the bride likes something, we should show it, but
+  // it should not stop any of the follow-ups." Until then a reaction was
+  // dropped on its way in, or (where texts are pushed to us) kept as her reply.
+  it('a couple’s “Liked” shows in the conversation, and their follow-ups carry on', async () => {
+    const email = `jordan.${runId}@example.com`;
+    const leadC = await newLead('jordan', phoneC);
+    await waitForText(phoneC, since, (b) => /guide/i.test(b));
+    await nextStepDue(leadC); // the 1-day wait
+
+    const liked = 'Liked “Hi Jordan! Here is your pricing guide”';
+    await coupleReacts(phoneC, liked);
+    // The follow-up comes due before any sync ran: looking for an unseen reply
+    // finds her reaction, which is not one, and the text goes out.
+    const before = new Date().toISOString();
+    await nextStepDue(leadC); // Day 1
+    await waitForText(phoneC, before, (b) => /just making sure/i.test(b));
+    expect((await runJob('ghl-inbound-sync')).status).toBe(200);
+
+    // It is in the thread once, as a reaction beside her name: not as her text.
+    const { data: vc } = await db.from('venue_customers').select('id').eq('venue_id', FLOW_VENUE.id).ilike('customer_email', email).single();
+    const { data: threads } = await db.from('conversation_threads').select('id').eq('venue_customer_id', vc!.id);
+    const { data: rows } = await db.from('conversation_messages').select('body, sender_kind, sent_via, visibility, channel')
+      .in('thread_id', (threads ?? []).map((t) => t.id));
+    const hers = (rows ?? []).filter((m) => m.body === liked);
+    expect(hers).toHaveLength(1);
+    expect(hers[0]).toMatchObject({ sender_kind: 'system', sent_via: 'reaction', visibility: 'external', channel: 'sms' });
+    expect((rows ?? []).filter((m) => m.sender_kind === 'contact')).toHaveLength(0);
+
+    // Nothing says she wrote, and nothing stopped.
+    const { data: lead } = await db.from('leads').select('last_inbound_at').eq('id', leadC).single();
+    expect(lead!.last_inbound_at).toBeNull();
+    const { data: ens } = await db.from('marketing_automation_enrollments').select('last_error').eq('lead_id', leadC);
+    expect(ens!.some((e) => e.last_error === 'stopped_on_reply')).toBe(false);
   });
 
   it('STOP turns their texts off', async () => {

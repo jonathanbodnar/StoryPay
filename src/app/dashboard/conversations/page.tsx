@@ -2899,12 +2899,15 @@ export default function ConversationsPage() {
                       }
 
                       const isInternal = m.visibility === 'internal';
-                      const fromContact = m.sender_kind === 'contact';
+                      // The couple's reaction to a text ("Liked …"): theirs, so it sits
+                      // on their side, though it is stored as nobody's reply.
+                      const isReaction = m.sent_via === 'reaction';
+                      const fromContact = m.sender_kind === 'contact' || isReaction;
                       const fromSupport =
                         m.sender_kind === 'concierge' || Boolean(m.sent_on_behalf_of_venue);
                       const fromAi = m.sender_kind === 'ai';
                       // 'system' = automated outbound message (guide delivery, sequences, etc.)
-                      const fromSystem = m.sender_kind === 'system';
+                      const fromSystem = m.sender_kind === 'system' && !isReaction;
                       const fromUs =
                         m.sender_kind === 'owner' ||
                         m.sender_kind === 'team' ||
@@ -3137,7 +3140,9 @@ export default function ConversationsPage() {
                                     <span
                                       data-testid="sent-outside"
                                       className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[9px] font-semibold text-gray-600"
-                                      title="This text wasn't sent from StoryVenue. It was brought in from your texting account so the conversation is complete."
+                                      title={isReaction
+                                        ? 'The couple reacted to a text. It isn\'t counted as a reply, so their follow-ups carry on.'
+                                        : 'This text wasn\'t sent from StoryVenue. It was brought in from your texting account so the conversation is complete.'}
                                     >
                                       {sentViaLabel(m.sent_via, m.sent_by_name, 'venue')}
                                     </span>

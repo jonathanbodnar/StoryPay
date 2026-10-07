@@ -2633,7 +2633,10 @@ function MessageBubble({
   /** True for the most recent message — defaults email bodies to expanded. */
   isLatest: boolean;
 }) {
-  const isInbound = msg.sender_kind === 'contact';
+  // The couple's reaction to a text ("Liked …") is theirs, so it sits on their
+  // side, though it is stored as nobody's reply (lib/venue-side-texts).
+  const isReaction = msg.sent_via === 'reaction';
+  const isInbound = msg.sender_kind === 'contact' || isReaction;
   const isInternal = msg.visibility === 'internal';
   const isAi = msg.sender_kind === 'ai';
   const isConcierge = msg.sender_kind === 'concierge' || msg.sent_on_behalf_of_venue;
@@ -2740,6 +2743,7 @@ function MessageBubble({
   // sent it when the texting account names them.
   const sentOutside = sentViaLabel(msg.sent_via, msg.sent_by_name, 'support');
   if (sentOutside && !isInbound) label = sentOutside;
+  if (isReaction) label = `${label} · reaction`;
 
   // Emails render as the shared full-width Gmail-style card (single source of
   // truth SaaS-wide) instead of a chat bubble. Sender/direction lives in the

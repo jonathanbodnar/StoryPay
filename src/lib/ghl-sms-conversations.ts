@@ -10,7 +10,7 @@ import {
 import { notifyOwnerNewMessage } from '@/lib/owner-notifications';
 import { isFreshInboundForAlert } from '@/lib/inbound-notification-gate';
 import { logError } from '@/lib/error-log';
-import { countsAsSpeaking, isNewsToTheThread, ownRecordOf, venueSideTextOrigin, wasNotDelivered, type StoredText } from '@/lib/venue-side-texts';
+import { countsAsSpeaking, isNewsToTheThread, isReaction, ownRecordOf, REACTION, venueSideTextOrigin, wasNotDelivered, type StoredText } from '@/lib/venue-side-texts';
 
 const PLACEHOLDER_EMAIL_DOMAIN = 'ghl-sms.storypay.placeholder';
 
@@ -92,6 +92,10 @@ export function isGhlInboundMessageWebhookPayload(payload: Record<string, unknow
 }
 
 function isGhlSmsChannel(root: Record<string, unknown>): boolean {
+  // A reaction ("Liked …") is not a text. Its type says SMS too, so until
+  // Oct 7 2026 one pushed to us here was stored as the couple's reply, which
+  // stopped their follow-ups. The text sync brings it in as what it is.
+  if (isReaction(root)) return false;
   const mt = pickStr(root, ['messageType', 'channel']).toUpperCase();
   if (mt === 'SMS' || mt === 'TEXT') return true;
   const mts = pickStr(root, ['messageTypeString', 'message_type_string']).toUpperCase();
@@ -732,6 +736,7 @@ export async function syncInboundSmsFromGhlForThread(params: {
     const seenTypes: Record<string, number> = {};
     let firstNonInboundSample: Record<string, unknown> | null = null;
     const venueSideTexts: Record<string, unknown>[] = [];
+    const coupleReactions: Record<string, unknown>[] = [];
     for (const ghlConversationId of convIds.slice(0, maxConv)) {
       let rawList: unknown;
       try {
@@ -760,6 +765,12 @@ export async function syncInboundSmsFromGhlForThread(params: {
         const dir = String(msg.direction ?? '').toLowerCase();
         const t = String(msg.type ?? msg.messageType ?? msg.channel ?? '').toUpperCase();
         seenTypes[t] = (seenTypes[t] ?? 0) + 1;
+        // The couple reacted to a text ("Liked …"). Shown in the thread; never
+        // her reply, so it goes nowhere near the reply handling below.
+        if (dir !== 'outbound' && isReaction(msg)) {
+          coupleReactions.push(msg);
+          continue;
+        }
         if (dir === 'outbound') {
           outboundCount++;
           // The venue side's own texts. Ones StoryVenue didn't send (a person
@@ -820,6 +831,14 @@ export async function syncInboundSmsFromGhlForThread(params: {
             error: r.error,
           });
         }
+      }
+    }
+
+    if (coupleReactions.length) {
+      try {
+        await importCoupleReactions({ venueId, threadId, venueCustomerId, reactions: coupleReactions, contactName: contactName ?? null });
+      } catch (e) {
+        console.warn('[ghl-sms sync] reactions not imported', { threadId, error: e instanceof Error ? e.message : String(e) });
       }
     }
 
@@ -1032,6 +1051,115 @@ async function importVenueSideTexts(params: {
 }
 
 /**
+ * A couple's reactions ("Liked “See you Saturday at 2!”") into their thread.
+ *
+ * Owner, Oct 7 2026: "if the bride likes something, we should show it, but it
+ * should not stop any of the follow-ups." So a reaction is stored as a row
+ * that is nobody's reply: sender_kind 'system', sent_via 'reaction', her name
+ * beside it. Everything that looks for a reply looks for sender_kind
+ * 'contact', and the database's own "she last wrote / the venue last wrote"
+ * leaves a reaction alone (migration 281). Nothing is sent, nobody is alerted,
+ * and the AI and the follow-ups are not told.
+ */
+async function importCoupleReactions(params: {
+  venueId: string;
+  threadId: string;
+  venueCustomerId: string;
+  reactions: Record<string, unknown>[];
+  contactName: string | null;
+}): Promise<number> {
+  const { venueId, threadId, venueCustomerId, reactions, contactName } = params;
+  const ids = [...new Set(reactions.map((m) => ghlApiMessageId(m)).filter((id): id is string => Boolean(id)))];
+  if (!ids.length) return 0;
+  // Already in a thread of this couple's? (the id is unique across threads)
+  const { data: have, error } = await supabaseAdmin.from('conversation_messages').select('ghl_message_id').in('ghl_message_id', ids);
+  if (error) return 0;
+  const known = new Set(((have ?? []) as Array<{ ghl_message_id: string | null }>).map((r) => r.ghl_message_id).filter(Boolean) as string[]);
+
+  let newestInThread: string | null | undefined;
+  const newestMessageAt = async (): Promise<string | null> => {
+    if (newestInThread === undefined) {
+      const { data } = await supabaseAdmin
+        .from('conversation_messages')
+        .select('created_at')
+        .eq('thread_id', threadId)
+        .eq('support_only', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      newestInThread = (data as { created_at?: string } | null)?.created_at ?? null;
+    }
+    return newestInThread;
+  };
+
+  let imported = 0;
+  let filledInHistory = false;
+  const oldestFirst = [...reactions].sort((a, b) => String(a.dateAdded ?? '').localeCompare(String(b.dateAdded ?? '')));
+  for (const msg of oldestFirst) {
+    const ghlMessageId = ghlApiMessageId(msg);
+    if (!ghlMessageId || known.has(ghlMessageId)) continue;
+    const body = bodyFromGhlApiMessage(msg).trim();
+    if (!body) continue;
+    known.add(ghlMessageId);
+    const sentAt = (msg.dateAdded as string | undefined) || (msg.createdAt as string | undefined) || null;
+
+    const row: Record<string, unknown> = {
+      thread_id: threadId,
+      visibility: 'external',
+      channel: 'sms',
+      body,
+      sender_kind: 'system',
+      ghl_message_id: ghlMessageId,
+      sent_via: REACTION,
+      contact_from_name: contactName?.trim() || null,
+    };
+    if (sentAt && String(sentAt).trim()) row.created_at = String(sentAt).trim();
+    const news = isNewsToTheThread(row.created_at as string | undefined, await newestMessageAt());
+    const { data: inserted, error: insErr } = await supabaseAdmin.from('conversation_messages').insert(row).select('id, created_at').single();
+    if (insErr) {
+      if (insErr.code === '23505') continue; // another run stored it first
+      // 'reaction' is allowed from migration 281 on. Until it's applied the
+      // database refuses the row and nothing is stored, as before.
+      if (insErr.code === '23514' || insErr.code === '42703' || insErr.code === 'PGRST204') return imported;
+      console.warn('[ghl-sms sync] reaction not stored', { threadId, error: insErr.message });
+      continue;
+    }
+    imported++;
+    const createdAt = (inserted as { created_at?: string }).created_at || new Date().toISOString();
+    if (!news) {
+      // An old reaction being filled in: open inboxes aren't told.
+      filledInHistory = true;
+      continue;
+    }
+    newestInThread = createdAt;
+    // Just made: open inboxes show it at once, as something that answers nobody.
+    void (async () => {
+      try {
+        const { broadcastBrideMessage } = await import('@/lib/realtime/broadcast');
+        await broadcastBrideMessage({
+          inbound: false,
+          threadId,
+          venueId,
+          venueCustomerId,
+          messageId: (inserted as { id: string }).id,
+          body,
+          channel: 'sms',
+          senderKind: 'system',
+          sentByVenueSupport: false,
+          supportAgentId: null,
+          createdAt,
+          notAReply: true,
+        });
+      } catch (e) {
+        console.warn('[ghl-sms] reaction broadcast failed', e);
+      }
+    })();
+  }
+  if (filledInHistory) await settleAfterFillingInHistory(venueId, threadId, venueCustomerId);
+  return imported;
+}
+
+/**
  * After older texts are brought into a thread, put back what the database
  * moved. It sets a thread's "last message" (time, preview) and a lead's "last
  * outbound" from whatever was stored LAST, so storing a text sent days ago
@@ -1077,6 +1205,8 @@ async function settleAfterFillingInHistory(venueId: string, threadId: string, ve
       .select('created_at')
       .in('thread_id', threadIds)
       .in('sender_kind', ['owner', 'team', 'system', 'ai', 'concierge'])
+      // (A couple's reaction is stored as a 'system' row; the venue didn't write it.)
+      .or(`sent_via.is.null,sent_via.neq.${REACTION}`)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();

@@ -33,7 +33,7 @@ if (!all && !email) {
   process.exit(1);
 }
 
-type Stored = { id: string; created_at: string; sender_kind: string; channel: string; visibility: string; body: string; ghl_message_id: string | null };
+type Stored = { id: string; created_at: string; sender_kind: string; channel: string; visibility: string; body: string; ghl_message_id: string | null; sent_via?: string | null };
 type Ghl = Record<string, unknown>;
 
 const clip = (s: unknown, n = 28) => JSON.stringify(String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n));
@@ -79,7 +79,7 @@ function findStored(m: Ghl, stored: Stored[]): { row: Stored; by: 'id' | 'text' 
 
 async function compare(threadId: string, venue: Record<string, unknown>, contactId: string, print: boolean) {
   const { data } = await supabaseAdmin.from('conversation_messages')
-    .select('id, created_at, sender_kind, channel, visibility, body, ghl_message_id')
+    .select('id, created_at, sender_kind, channel, visibility, body, ghl_message_id, sent_via')
     .eq('thread_id', threadId).order('created_at', { ascending: true }).limit(400);
   const stored = ((data ?? []) as Stored[]).filter((s) => s.channel === 'sms');
   const texts = await ghlTexts(venue, contactId);
@@ -102,7 +102,9 @@ async function compare(threadId: string, venue: Record<string, unknown>, contact
     const hit = findStored(m, stored);
     const source = String(m.source ?? '(none)');
     const sentBy = m.userId ? 'a person' : source;
-    let note = hit ? `in StoryVenue as ${hit.row.sender_kind} (matched by ${hit.by})` : 'NOT in StoryVenue';
+    // A couple's reaction ("Liked …") is kept as a reaction, not as their text: that is where it belongs.
+    const asReaction = hit?.row.sent_via === 'reaction';
+    let note = hit ? `in StoryVenue as ${asReaction ? 'a reaction' : hit.row.sender_kind} (matched by ${hit.by})` : 'NOT in StoryVenue';
     if (!hit) {
       if (direction === 'outbound') {
         const words = String(bodyFromGhlApiMessage(m) ?? '').trim();
@@ -131,7 +133,7 @@ async function compare(threadId: string, venue: Record<string, unknown>, contact
           `same words stored at another time=${sameWordsAnyTime ? 'yes' : 'no'}  thread's texts in StoryVenue=${stored.length}`,
         );
       }
-    } else if ((direction === 'outbound') === (hit.row.sender_kind === 'contact')) {
+    } else if (!asReaction && (direction === 'outbound') === (hit.row.sender_kind === 'contact')) {
       tally.wrongSender += 1;
       note += '  ← WRONG SENDER';
     }

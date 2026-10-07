@@ -249,6 +249,14 @@ export async function coupleTexts(from: string, body: string): Promise<void> {
   if (!res.ok) throw new Error(`coupleTexts: ${res.status} ${await res.text()}`);
 }
 
+/** A couple reacts to a text from their phone ("Liked “…”"): it waits in the stand-in texting service like a text. */
+export async function coupleReacts(from: string, body: string): Promise<void> {
+  const res = await fetch(`${env.base}/api/staging/sms`, {
+    method: 'POST', headers: { 'x-staging-key': env.stagingKey, 'content-type': 'application/json' }, body: JSON.stringify({ from, body, reaction: true }),
+  });
+  if (!res.ok) throw new Error(`coupleReacts: ${res.status} ${await res.text()}`);
+}
+
 /**
  * The VENUE side texts a couple from outside StoryVenue (it waits in the
  * stand-in texting service until the app's text sync finds it): a named

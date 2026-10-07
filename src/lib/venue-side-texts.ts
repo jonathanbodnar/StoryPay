@@ -39,8 +39,30 @@ export function venueSideTextOrigin(msg: Record<string, unknown>): TextOrigin {
   return { sentVia: 'crm_api', senderKind: 'system', userId: null };
 }
 
-/** Texts the venue's CRM sent by itself: a workflow, or another app going through it. */
-const AUTOMATED_VIA: ReadonlySet<string> = new Set<SentVia>(['crm_workflow', 'crm_api']);
+/**
+ * A couple's reaction to a text ("Liked “See you Saturday at 2!”"): it is
+ * shown in the thread and is nobody's reply (conversation_messages.sent_via).
+ * Owner, Oct 7 2026: "if the bride likes something, we should show it, but it
+ * should not stop any of the follow-ups."
+ */
+export const REACTION = 'reaction';
+
+/**
+ * Is this message from the texting account a reaction, not a text? The
+ * account says so in the message's type (TYPE_SMS_REACTION). It has to be
+ * asked BEFORE "is this a text from the couple": a reaction taken for her
+ * text reads as her reply, and a reply is what stops her follow-ups.
+ */
+export function isReaction(msg: Record<string, unknown>): boolean {
+  return [msg.messageType, msg.type, msg.messageTypeString, msg.message_type_string]
+    .some((t) => typeof t === 'string' && t.toUpperCase().includes('REACTION'));
+}
+
+/**
+ * Rows that answer nobody: a text the venue's CRM sent by itself (a workflow,
+ * or another app going through it), and a couple's reaction.
+ */
+const AUTOMATED_VIA: ReadonlySet<string> = new Set<string>(['crm_workflow', 'crm_api', REACTION]);
 
 /**
  * Does this message count when working out who spoke last in a thread (is
@@ -48,7 +70,9 @@ const AUTOMATED_VIA: ReadonlySet<string> = new Set<SentVia>(['crm_workflow', 'cr
  * the venue's CRM doesn't: nobody answered her by it. Before these texts were
  * brought in they couldn't take a bride's reply out of the Support Inbox's
  * "Bride replies", and they still can't. A person's text from the CRM app
- * does count: the venue answered.
+ * does count: the venue answered. A couple's reaction doesn't either, in both
+ * directions: it isn't the bride writing (nobody owes her an answer for it),
+ * and it isn't the venue answering her.
  */
 export function countsAsSpeaking(m: { sent_via?: string | null }): boolean {
   return !AUTOMATED_VIA.has(String(m.sent_via ?? ''));
@@ -146,6 +170,7 @@ export function ownRecordOf(body: string, sentAt: string | null | undefined, can
 export function sentViaLabel(sentVia: string | null | undefined, sentByName?: string | null, reader: 'support' | 'venue' = 'support'): string | null {
   const name = (sentByName ?? '').trim();
   const venue = reader === 'venue';
+  if (sentVia === REACTION) return 'Reaction';
   if (sentVia === 'crm_user') {
     if (name) return `${name} · from ${venue ? 'your' : 'the venue’s'} texting app`;
     return venue ? 'Sent from your texting app' : 'Venue · from their texting app';

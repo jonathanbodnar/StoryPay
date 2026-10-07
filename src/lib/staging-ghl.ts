@@ -32,6 +32,8 @@ interface FakeMessage {
   source?: string;
   /** Set when a person sent it from the CRM's app. */
   userId?: string;
+  /** A reaction to a text ("Liked …"), which GHL types apart from a text. */
+  reaction?: boolean;
 }
 
 interface FakeGhl {
@@ -71,7 +73,9 @@ function apiContact(c: FakeContact) {
 function apiMessage(m: FakeMessage) {
   return {
     id: m.id, conversationId: m.conversationId, contactId: m.contactId, locationId: m.locationId,
-    direction: m.direction, type: 2, messageType: 'TYPE_SMS', body: m.body, dateAdded: m.dateAdded,
+    // (A reaction keeps the text's number here: the app must go by the type's
+    // name, or a reaction would be taken for the couple's reply.)
+    direction: m.direction, type: 2, messageType: m.reaction ? 'TYPE_SMS_REACTION' : 'TYPE_SMS', body: m.body, dateAdded: m.dateAdded,
     status: 'delivered',
     ...(m.direction === 'outbound' ? { source: m.source ?? 'app' } : {}),
     ...(m.userId ? { userId: m.userId } : {}),
@@ -110,7 +114,7 @@ function conversationFor(contact: FakeContact) {
   return conv;
 }
 
-function addMessage(contact: FakeContact, direction: FakeMessage['direction'], body: string, sent: { source?: string; userId?: string } = {}): FakeMessage {
+function addMessage(contact: FakeContact, direction: FakeMessage['direction'], body: string, sent: { source?: string; userId?: string; reaction?: boolean } = {}): FakeMessage {
   const conv = conversationFor(contact);
   const m: FakeMessage = {
     id: newId('ms'), conversationId: conv.id, contactId: contact.id, locationId: contact.locationId,
@@ -237,10 +241,10 @@ export function readFakeTexts(filter: { phone?: string; since?: string } = {}): 
 }
 
 /** A couple texts the venue: the reply waits in the fake service, as in GHL, for the app to pick up. */
-export function receiveFakeText(fromPhone: string, body: string): { contactId: string; conversationId: string } | null {
+export function receiveFakeText(fromPhone: string, body: string, as: { reaction?: boolean } = {}): { contactId: string; conversationId: string } | null {
   const c = findContact(null, { phone: fromPhone });
   if (!c) return null;
-  const m = addMessage(c, 'inbound', body);
+  const m = addMessage(c, 'inbound', body, as.reaction ? { reaction: true } : {});
   return { contactId: c.id, conversationId: m.conversationId };
 }
 

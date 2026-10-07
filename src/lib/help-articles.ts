@@ -824,6 +824,9 @@ Sending email works out of the box
 Texts sent from outside StoryVenue
 If you or a teammate text a couple from your texting app instead of from StoryVenue, that text shows up in her conversation too, under the sender's name and marked as sent from your texting app. Automated texts from your other tools appear as well, marked as automated. So the conversation always shows both sides, whoever answered and from wherever. Older conversations fill in over time.
 
+Reactions
+When a couple reacts to one of your texts from their phone (for example "Liked …"), the reaction shows in her conversation on her side, marked Reaction. A reaction isn't counted as a reply: her follow-ups carry on, and you aren't alerted.
+
 If a reply doesn't show up
 - **Email replies missing**: give it a few seconds and refresh the conversation. If a reply never shows, contact StoryVenue support.
 - **SMS replies missing**: confirm your StoryVenue Legacy integration is connected (Settings → General). Replies arrive in the thread within a few seconds, automatically.`,

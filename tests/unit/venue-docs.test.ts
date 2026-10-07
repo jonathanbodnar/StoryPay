@@ -157,3 +157,13 @@ describe('changing a sign-in email or password', () => {
     }
   });
 });
+
+// Owner, Oct 7 2026: a couple's "Liked …" shows in the thread and doesn't stop follow-ups.
+describe('a couple’s reaction to a text', () => {
+  it('the docs say it shows, and that it isn’t a reply', () => {
+    for (const doc of [help, assistantDocs]) {
+      expect(doc).toMatch(/marked Reaction/);
+      expect(doc).toMatch(/follow-ups carry on/);
+    }
+  });
+});

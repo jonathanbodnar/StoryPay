@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  countsAsSpeaking, isNewsToTheThread, lastSpeakerByThread, ownRecordOf, SAME_TEXT_WITHIN_MS, sentViaLabel, venueSideTextOrigin,
+  countsAsSpeaking, isNewsToTheThread, isReaction, lastSpeakerByThread, ownRecordOf, REACTION, SAME_TEXT_WITHIN_MS, sentViaLabel, venueSideTextOrigin,
   wasNotDelivered, type StoredText,
 } from '@/lib/venue-side-texts';
 
@@ -194,5 +194,65 @@ describe('the import and the inboxes keep to those rules', () => {
     for (const screen of ['src/components/admin/SupportInboxPanel.tsx', 'src/app/dashboard/conversations/page.tsx']) {
       expect(read(screen), screen).toMatch(/visibility !== 'internal'[^\n]*countsAsSpeaking\(m\)/);
     }
+  });
+});
+
+// Owner, Oct 7 2026: "if the bride likes something, we should show it, but it
+// should not stop any of the follow-ups." A reaction ("Liked “…”") used to be
+// dropped on its way in, or, where the texting account pushes messages to us,
+// kept as the bride's reply, which stopped her follow-ups.
+describe('a couple’s reaction to a text', () => {
+  it('is told from a text by the type the texting account gives it', () => {
+    expect(isReaction({ direction: 'inbound', type: 2, messageType: 'TYPE_SMS_REACTION' })).toBe(true);
+    expect(isReaction({ direction: 'inbound', messageTypeString: 'TYPE_SMS_REACTION' })).toBe(true);
+    expect(isReaction({ direction: 'inbound', type: 'type_sms_reaction' })).toBe(true);
+    // An ordinary text is not one, whatever it says.
+    expect(isReaction({ direction: 'inbound', type: 2, messageType: 'TYPE_SMS', body: 'Liked “See you Saturday”' })).toBe(false);
+    expect(isReaction({ direction: 'inbound', messageType: 'SMS' })).toBe(false);
+    expect(isReaction({})).toBe(false);
+  });
+
+  it('answers nobody: it is not the bride writing, and not the venue answering her', () => {
+    expect(countsAsSpeaking({ sent_via: REACTION })).toBe(false);
+    // She wrote at 10:00 and nobody has answered. Her "Liked" at 10:05 changes nothing:
+    // she is still the last one who spoke, and still waiting.
+    const rows = [
+      { thread_id: 'a', created_at: '2026-10-07T10:00:00Z', sender_kind: 'contact', sent_via: null },
+      { thread_id: 'a', created_at: '2026-10-07T10:05:00Z', sender_kind: 'system', sent_via: REACTION },
+    ];
+    expect(lastSpeakerByThread(rows).get('a')?.sender_kind).toBe('contact');
+    // The venue answered at 9:00 and she "liked" it at 9:01: the venue is still the last who spoke.
+    const answered = [
+      { thread_id: 'b', created_at: '2026-10-07T09:00:00Z', sender_kind: 'owner', sent_via: null },
+      { thread_id: 'b', created_at: '2026-10-07T09:01:00Z', sender_kind: 'system', sent_via: REACTION },
+    ];
+    expect(lastSpeakerByThread(answered).get('b')?.sender_kind).toBe('owner');
+  });
+
+  it('is marked as a reaction in the thread, for the venue and for support', () => {
+    expect(sentViaLabel(REACTION, null, 'venue')).toBe('Reaction');
+    expect(sentViaLabel(REACTION, 'Summer')).toBe('Reaction');
+  });
+
+  it('is set aside before anything asks "is this her text?", in the sync and where texts are pushed to us', () => {
+    const sync = readFileSync(join(__dirname, '..', '..', 'src/lib/ghl-sms-conversations.ts'), 'utf8');
+    // In the sync's loop the reaction check comes before the reply handling.
+    const loop = sync.slice(sync.indexOf('for (const msg of list)'));
+    expect(loop.indexOf('isReaction(msg)')).toBeGreaterThan(-1);
+    expect(loop.indexOf('isReaction(msg)')).toBeLessThan(loop.indexOf('insertInboundGhlSms({'));
+    // The pushed-message path asks "is this a text?" of a reaction and is told no.
+    expect(sync).toMatch(/function isGhlSmsChannel\(root[^)]*\)[^{]*\{\s*(\/\/[^\n]*\n\s*)*if \(isReaction\(root\)\) return false;/);
+    // It is stored as nobody's reply, and the AI doesn't read it as part of the conversation.
+    expect(sync).toMatch(/sender_kind: 'system',\s*ghl_message_id: ghlMessageId,\s*sent_via: REACTION/);
+    const ai = readFileSync(join(__dirname, '..', '..', 'src/lib/ai-concierge/conversation-helpers.ts'), 'utf8');
+    expect(ai).toMatch(/sent_via\.neq\.reaction/);
+  });
+
+  it('the database lets it be stored, and leaves "she last wrote" alone for it (migration 281)', () => {
+    const sql = readFileSync(join(__dirname, '..', '..', 'migrations/281_couple_reactions.sql'), 'utf8');
+    expect(sql).toMatch(/'crm_user', 'crm_workflow', 'crm_api', 'reaction'/);
+    expect(sql).toMatch(/IF NEW\.sent_via = 'reaction' THEN\s+RETURN NEW;/);
+    // Replacing the function must not drop the fixed search_path it has.
+    expect(sql).toMatch(/SET search_path = public/);
   });
 });

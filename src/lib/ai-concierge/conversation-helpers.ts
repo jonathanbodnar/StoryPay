@@ -200,10 +200,14 @@ export async function fetchLeadConversationHistory(
   const threadId = await findOrCreateAiThreadForLead(venueId, leadId);
   if (!threadId) return [];
 
+  // A couple's reaction ("Liked …") is shown in the thread and is nobody's
+  // message: the AI reads the conversation as it did before reactions were
+  // brought in.
   const { data } = await supabaseAdmin
     .from('conversation_messages')
     .select('sender_kind, channel, body, created_at')
     .eq('thread_id', threadId)
+    .or('sent_via.is.null,sent_via.neq.reaction')
     .order('created_at', { ascending: false })
     .limit(limit);
 

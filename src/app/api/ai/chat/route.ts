@@ -112,6 +112,7 @@ StoryVenue is an all-in-one platform for wedding venues to manage proposals, inv
 ## Conversations (inbox) — two-way messaging
 - Each time a couple is moved to another pipeline stage, her conversation shows a line with the stage, the time and who moved her (you, a team member, the AI Concierge, an automation or StoryVenue Support). Only the venue and StoryVenue Support see these lines; the couple never does.
 - Texts the venue's people send a couple from outside StoryVenue (for example from the texting app on the owner's phone) also show up in her conversation, under the sender's name and marked as sent from the texting app. Automated texts from the venue's other tools show too, marked as automated. Older conversations fill in over time.
+- **Reactions**: when a couple reacts to a text from their phone (for example "Liked …"), the reaction shows in her conversation on her side, marked Reaction. It is not counted as a reply: her follow-ups carry on and the venue is not alerted.
 - In their own Wedding Planner, a couple sees only the messages between them and the venue's people (owner, team, concierge). Automated texts and emails, AI follow-ups, notes and stage moves stay on the venue's side.
 - Path: /dashboard/conversations — unified inbox showing all message threads by contact.
 - Thread list: each row shows the contact name, last message preview, timestamp, and the contact's current pipeline stage as a colored pill.
