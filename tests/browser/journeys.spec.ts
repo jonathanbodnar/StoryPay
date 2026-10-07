@@ -9,7 +9,23 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
   expect(overflow, 'page is wider than the screen').toBeLessThanOrEqual(1);
 }
 
-test('the owner signs in and works their leads', async ({ page }) => {
+test('the owner signs in and works their leads', async ({ page }, testInfo) => {
+  // The journey brings its own lead. It used to look for "Ava Flow", which the
+  // leads flow test leaves behind: there while full checks ran minutes apart,
+  // gone once the test copy was tidied of anything two hours old (Oct 6 2026).
+  // The first full check after a quiet night found no such lead and went red.
+  const last = `Journey${testInfo.project.name}${Date.now().toString(36)}`;
+  const { data: stages } = await db.from('lead_pipeline_stages')
+    .select('id, pipeline_id, position, lead_pipelines!inner(is_default)')
+    .eq('venue_id', FLOW_VENUE.id).eq('lead_pipelines.is_default', true).order('position', { ascending: true }).limit(1);
+  const firstStage = (stages ?? [])[0] as { id: string; pipeline_id: string } | undefined;
+  const seeded = await db.from('leads').insert({
+    venue_id: FLOW_VENUE.id, name: `Juno ${last}`, first_name: 'Juno', last_name: last,
+    email: `juno.${last.toLowerCase()}.${runId}@example.com`, source: 'directory', guest_count: 80,
+    ...(firstStage ? { pipeline_id: firstStage.pipeline_id, stage_id: firstStage.id } : {}),
+  });
+  expect(seeded.error?.message ?? null).toBeNull();
+
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Sign in to your venue' })).toBeVisible();
   await expectNoSidewaysScroll(page);
@@ -33,7 +49,7 @@ test('the owner signs in and works their leads', async ({ page }) => {
   await expect(page.getByText("Let's Build Your Bride Booking System")).toHaveCount(0);
 
   await page.goto('/dashboard/leads');
-  await expect(page.getByText('Ava Flow').first()).toBeVisible();
+  await expect(page.getByText(`Juno ${last}`).first()).toBeVisible();
   await expectNoSidewaysScroll(page);
 });
 
