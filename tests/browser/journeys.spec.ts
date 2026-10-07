@@ -632,3 +632,75 @@ test('My Profile asks for the current password before it changes the password', 
   const after = await db.from('venues').select('password_hash').eq('id', venueId).single();
   expect(await bcrypt.compare(next, after.data!.password_hash)).toBe(true);
 });
+
+// Support Inbox, "Load more". An admin loads older leads, opens one to read
+// it, and until Oct 7 2026 was put back at the newest fifty: opening a row
+// reloaded the newest page and replaced everything "Load more" had brought in
+// (the 20-second refresh and coming back to the browser tab did the same).
+test.describe('the Support Inbox keeps the older leads an admin loaded', () => {
+  test.use({ storageState: 'tests/browser/.auth/admin.json' });
+
+  test('opening an older lead after "Load more" leaves the list where it was', async ({ page }, testInfo) => {
+    // The StoryVenue admin is a desktop tool.
+    test.skip(testInfo.project.name === 'phone', 'the admin inbox is used on a desktop');
+    const stamp = `${testInfo.project.name}-${Date.now().toString(36)}`;
+    const venueId = randomUUID();
+    const email = `loadmore.${stamp}.${runId}@example.com`;
+    const made = await db.from('venues').insert({
+      id: venueId, name: `Loadmore Journey ${runId}`, slug: `loadmore-journey-${stamp}`, email,
+      notification_email: email, brand_email: email, password_hash: await bcrypt.hash(env.password, 10),
+      setup_completed: true, onboarding_status: 'registered', onboarding_completed_at: new Date().toISOString(),
+      email_verified_at: new Date().toISOString(), timezone: 'America/New_York', is_published: true, is_demo: false,
+      is_private_client: true, venue_concierge: true,
+    });
+    expect(made.error?.message ?? null).toBeNull();
+    // Sixty brides, the newest conversations there are: fifty fill the first
+    // page, and the last ten only come with "Load more".
+    const now = Date.now();
+    const brides = Array.from({ length: 60 }, (_, i) => ({ customer: randomUUID(), thread: randomUUID(), at: new Date(now - i * 1000).toISOString(), n: i }));
+    const customers = await db.from('venue_customers').insert(brides.map((b) => ({
+      id: b.customer, venue_id: venueId, customer_email: `loadmore.${b.n}.${stamp}.${runId}@example.com`, first_name: 'Lottie', last_name: `Older${b.n}`,
+    })));
+    expect(customers.error?.message ?? null).toBeNull();
+    const threads = await db.from('conversation_threads').insert(brides.map((b) => ({
+      id: b.thread, venue_id: venueId, venue_customer_id: b.customer, subject: 'Your pricing guide', external_reply_channel: 'sms',
+      last_message_at: b.at, last_message_preview: 'Is June open?', last_message_visibility: 'external',
+    })));
+    expect(threads.error?.message ?? null).toBeNull();
+    const messages = await db.from('conversation_messages').insert(brides.map((b) => ({
+      thread_id: b.thread, visibility: 'external', channel: 'sms', body: 'Is June open?', sender_kind: 'contact', contact_from_name: `Lottie Older${b.n}`, created_at: b.at,
+    })));
+    expect(messages.error?.message ?? null).toBeNull();
+
+    try {
+      await page.goto('/admin/support');
+      await page.getByRole('button', { name: 'Needs Reply' }).locator('..').getByRole('button', { name: 'All', exact: true }).click();
+      const row = (n: number) => page.getByRole('button').filter({ hasText: `Lottie Older${n}` });
+      await expect(row(0)).toBeVisible({ timeout: 20_000 });
+      // Bride 57 is past the first fifty.
+      await expect(row(57)).toHaveCount(0);
+      await page.getByRole('button', { name: 'Load more' }).click();
+      await expect(row(57)).toBeVisible({ timeout: 20_000 });
+
+      // Open her. The conversation shows, and she is still in the list.
+      await row(57).click();
+      await expect(page.getByText('Is June open?').last()).toBeVisible({ timeout: 20_000 });
+      await page.waitForTimeout(2500); // the reload that used to follow has had its time
+      await expect(row(57)).toBeVisible();
+      await expect(row(59)).toBeVisible();
+
+      // Coming back to the browser tab refreshes the newest page; the older rows stay.
+      const refreshed = page.waitForResponse((r) => r.url().includes('/api/admin/support/bride-inbox') && !r.url().includes('cursor='));
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      await refreshed;
+      await page.waitForTimeout(500);
+      await expect(row(57)).toBeVisible();
+      await expect(row(0)).toHaveCount(1);
+    } finally {
+      // Leave nothing behind for the next run's inbox.
+      await db.from('conversation_threads').delete().eq('venue_id', venueId);
+      await db.from('venue_customers').delete().eq('venue_id', venueId);
+      await db.from('venues').delete().eq('id', venueId);
+    }
+  });
+});

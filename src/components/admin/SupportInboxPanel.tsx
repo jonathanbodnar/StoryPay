@@ -14,6 +14,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import StageMoveLine, { stageMovesAmong } from '@/components/conversations/StageMoveLine';
+import { refreshedList, withNextPage } from '@/lib/support-inbox-list';
 import type { StageMove } from '@/lib/lead-stage-log';
 import { countsAsSpeaking, sentViaLabel } from '@/lib/venue-side-texts';
 import { capitalizeName } from '@/lib/format-name';
@@ -310,7 +311,31 @@ export function SupportInboxPanel() {
     });
   }, [threads]);
 
+  // Which list is on screen (a filter or a search starts a new one), so an
+  // answer that arrives for the list before it isn't laid over this one.
+  const listEpochRef = useRef(0);
+  // Has "Load more" added older rows to this list? Then a reload of the newest
+  // page keeps them, and keeps the place "Load more" carries on from.
+  const loadedOlderRef = useRef(false);
+  const startNewList = useCallback(() => {
+    listEpochRef.current += 1;
+    loadedOlderRef.current = false;
+    setThreads([]);
+    setNextCursor(null);
+  }, []);
+
+  /** The newest page, laid over what's loaded (lib/support-inbox-list). */
+  const showNewestPage = useCallback((page: BrideInboxRow[], cursorAfterPage: string | null) => {
+    setThreads(prev => refreshedList(prev, page, Boolean(cursorAfterPage)));
+    if (!cursorAfterPage) loadedOlderRef.current = false;
+    if (!loadedOlderRef.current) setNextCursor(cursorAfterPage);
+  }, []);
+
+  // Opening a row must not reload the list: this used to depend on which row
+  // was open, so every click fetched the newest page again and replaced
+  // everything "Load more" had brought in.
   const fetchInbox = useCallback(async (opts: { append?: boolean; cursor?: string | null } = {}) => {
+    const epoch = listEpochRef.current;
     setListLoading(true);
     setListError(null);
     try {
@@ -325,17 +350,21 @@ export function SupportInboxPanel() {
         throw new Error(d.error || `Failed (${r.status})`);
       }
       const d = (await r.json()) as { threads: BrideInboxRow[]; nextCursor: string | null };
-      setNextCursor(d.nextCursor);
-      setThreads(prev => (opts.append ? [...prev, ...d.threads] : d.threads));
-      if (!opts.append && d.threads.length > 0 && !activeThreadId) {
-        setActiveThreadId(d.threads[0].thread_id);
+      if (epoch !== listEpochRef.current) return;
+      if (opts.append) {
+        loadedOlderRef.current = true;
+        setThreads(prev => withNextPage(prev, d.threads));
+        setNextCursor(d.nextCursor);
+        return;
       }
+      showNewestPage(d.threads, d.nextCursor);
+      if (d.threads.length > 0) setActiveThreadId(current => current ?? d.threads[0].thread_id);
     } catch (e) {
-      setListError(e instanceof Error ? e.message : 'Failed to load inbox');
+      if (epoch === listEpochRef.current) setListError(e instanceof Error ? e.message : 'Failed to load inbox');
     } finally {
-      setListLoading(false);
+      if (epoch === listEpochRef.current) setListLoading(false);
     }
-  }, [committedSearch, activeThreadId, brideStatusFilter]);
+  }, [committedSearch, brideStatusFilter, showNewestPage]);
 
   useEffect(() => {
     if (subTab === 'bride-replies') fetchInbox();
@@ -345,6 +374,7 @@ export function SupportInboxPanel() {
   // a single broadcast is ever dropped (network blip) this self-heals the list
   // + badge within 20s WITHOUT a loading flicker. Does not auto-select threads.
   const silentRefreshInbox = useCallback(async () => {
+    const epoch = listEpochRef.current;
     try {
       const params = new URLSearchParams();
       if (committedSearch) params.set('search', committedSearch);
@@ -352,10 +382,11 @@ export function SupportInboxPanel() {
       params.set('limit', '50');
       const r = await fetch(`/api/admin/support/bride-inbox?${params.toString()}`, { cache: 'no-store' });
       if (!r.ok) return;
-      const d = (await r.json()) as { threads: BrideInboxRow[] };
-      if (Array.isArray(d.threads)) setThreads(d.threads);
+      const d = (await r.json()) as { threads: BrideInboxRow[]; nextCursor?: string | null };
+      if (epoch !== listEpochRef.current || !Array.isArray(d.threads)) return;
+      showNewestPage(d.threads, d.nextCursor ?? null);
     } catch { /* non-critical */ }
-  }, [committedSearch, brideStatusFilter]);
+  }, [committedSearch, brideStatusFilter, showNewestPage]);
 
   useEffect(() => {
     if (subTab !== 'bride-replies') return;
@@ -529,8 +560,7 @@ export function SupportInboxPanel() {
   function submitSearch() {
     setCommittedSearch(search.trim());
     setActiveThreadId(null);
-    setThreads([]);
-    setNextCursor(null);
+    startNewList();
   }
 
   // ── Active thread state ────────────────────────────────────────────────────
@@ -1214,8 +1244,7 @@ export function SupportInboxPanel() {
                       onClick={() => {
                         setBrideStatusFilter(opt);
                         setActiveThreadId(null);
-                        setThreads([]);
-                        setNextCursor(null);
+                        startNewList();
                       }}
                       className={`px-2.5 py-1 font-medium transition-colors ${brideStatusFilter === opt ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
@@ -3138,6 +3167,10 @@ function TicketsView({
   initialTicketId?: string | null;
 }) {
   const [tickets, setTickets] = useState<TicketListRow[]>([]);
+  // The list as it is now, for "Load more" to add to (the fetch below is not
+  // rebuilt each time the list changes).
+  const ticketsRef = useRef<TicketListRow[]>([]);
+  useEffect(() => { ticketsRef.current = tickets; }, [tickets]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -3165,11 +3198,13 @@ function TicketsView({
         throw new Error(d.error || `Failed (${r.status})`);
       }
       const d = (await r.json()) as { tickets: TicketListRow[]; nextCursor: string | null };
-      const merged = opts.append ? [...tickets, ...d.tickets] : d.tickets;
+      const loaded = ticketsRef.current;
+      const have = new Set(loaded.map(t => t.id));
+      const merged = opts.append ? [...loaded, ...d.tickets.filter(t => !have.has(t.id))] : d.tickets;
       setTickets(merged);
       setNextCursor(d.nextCursor);
-      if (!opts.append && d.tickets.length > 0 && !activeTicketId) {
-        setActiveTicketId(d.tickets[0].id);
+      if (!opts.append && d.tickets.length > 0) {
+        setActiveTicketId(current => current ?? d.tickets[0].id);
       }
       // Count open+pending across all loaded tickets for the tab dot indicator.
       // When viewing the open filter this equals merged.length; when viewing
@@ -3190,8 +3225,10 @@ function TicketsView({
     } finally {
       setListLoading(false);
     }
+  // Not which ticket is open: opening one must not reload the list (it put an
+  // admin who had pressed "Load more" back at the newest fifty).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, committedSearch, activeTicketId]);
+  }, [statusFilter, committedSearch]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
 
