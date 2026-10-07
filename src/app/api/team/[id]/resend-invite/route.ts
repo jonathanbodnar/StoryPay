@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { teamMemberForBrowser } from '@/lib/team-member-shape';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
@@ -100,5 +101,5 @@ export async function POST(
   }
 
   console.log('[team-resend-invite] invite resent to', member.email);
-  return NextResponse.json({ ...member, emailSent: true });
+  return NextResponse.json({ ...teamMemberForBrowser(member as Record<string, unknown>), emailSent: true });
 }

@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { teamMemberForBrowser } from '@/lib/team-member-shape';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
@@ -100,7 +101,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json(members);
+  // Names, roles and contact details only: never a row's login secrets.
+  return NextResponse.json(members.map(teamMemberForBrowser));
 }
 
 export async function POST(request: NextRequest) {
@@ -196,5 +198,6 @@ export async function POST(request: NextRequest) {
     // Still return success — the member was created; invite can be resent
   }
 
-  return NextResponse.json({ ...member, invite_url: inviteUrl }, { status: 201 });
+  // The invitation link signs its member in: it goes to them by email, not back to whoever invited them.
+  return NextResponse.json(teamMemberForBrowser(member as Record<string, unknown>), { status: 201 });
 }

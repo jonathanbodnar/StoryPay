@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { teamMemberForBrowser } from '@/lib/team-member-shape';
 import { NextRequest, NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { supabaseAdmin } from '@/lib/supabase';
@@ -126,7 +127,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Could not save those changes' }, { status: 500 });
     }
     if (!data) return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
-    return NextResponse.json(data);
+    return NextResponse.json(teamMemberForBrowser(data as Record<string, unknown>));
   }
 
   // ── Venue owner fallback ───────────────────────────────────────────────────
@@ -157,12 +158,22 @@ export async function PATCH(
     );
   }
 
+  // The owner's sign-in email and password are not changed here. Until Oct 7
+  // 2026 they were, for anyone signed in as an owner and with nothing else
+  // asked: the gap My Profile closed the day before, still open by this door.
+  // They have one door: My Profile, which asks for the current password.
+  const sameEmail = String(updates.email ?? '').trim().toLowerCase() === String(venue.email ?? '').trim().toLowerCase();
+  if ((updates.email !== undefined && !sameEmail) || updates.password_hash !== undefined) {
+    return NextResponse.json(
+      { error: 'Change the owner’s sign-in email or password in My Profile, under Login & Security.' },
+      { status: 400 },
+    );
+  }
+
   const ownerUpdates: Record<string, string | null> = {};
   if (updates.first_name !== undefined) ownerUpdates.owner_first_name = (updates.first_name as string) || null;
   if (updates.last_name  !== undefined) ownerUpdates.owner_last_name  = (updates.last_name  as string) || null;
-  if (updates.email      !== undefined) ownerUpdates.email            = String(updates.email).trim().toLowerCase();
   if (updates.phone      !== undefined) ownerUpdates.phone            = updates.phone as string | null;
-  if (updates.password_hash !== undefined) ownerUpdates.password_hash = updates.password_hash as string;
   // `hide_revenue` and `status` are team-member concepts and have no venues
   // column, so they are intentionally ignored for the owner.
 

@@ -44,7 +44,7 @@ const SENSITIVE = [
   /^src\/app\/api\/proposals\/public\//, // couples pay and sign here
   /^src\/app\/api\/cron\/(installments|payment-reminders)\//,
   // Texting and automated messages to real people
-  /^src\/lib\/(ghl|sms|texting-hours|concierge-sms|marketing-email-worker|reengagement-drip|appointment-reminders|guide-invite)/,
+  /^src\/lib\/(ghl|sms|texting-hours|concierge-sms|marketing-email-worker|marketing-email-audience|reengagement-drip|appointment-reminders|guide-invite)/,
   /^src\/lib\/ai-concierge\//,
   /^src\/app\/api\/webhooks\/(ghl|ghl-workflow-inbound|inbound-email|calendly)\//,
   // Sign-in and sessions
@@ -54,6 +54,8 @@ const SENSITIVE = [
   /^src\/app\/api\/auth\//, /^src\/app\/api\/admin\/(login|auth|support)\//,
   // My Profile: the sign-in email and password
   /^src\/lib\/current-password/, /^src\/app\/api\/profile\/(route\.ts$|credentials\/)/,
+  // The team list and its sign-ins
+  /^src\/lib\/(team-member-shape|sign-in-email)/, /^src\/app\/api\/team\//,
 ];
 
 /** The changed files a hot release must refuse (empty = safe to ship hot). */

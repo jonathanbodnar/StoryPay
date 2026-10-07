@@ -39,6 +39,7 @@ describe('release lanes', () => {
       'src/lib/ghl.ts', 'src/lib/ai-concierge/send-cron.ts', 'src/lib/marketing-email-worker.ts', 'src/lib/sms-consent.ts',
       'src/proxy.ts', 'src/lib/session.ts', 'src/app/api/auth/sign-in/route.ts', 'src/app/api/admin/login/route.ts',
       'src/lib/current-password.ts', 'src/app/api/profile/route.ts', 'src/app/api/profile/credentials/route.ts',
+      'src/app/api/team/route.ts', 'src/app/api/team/[id]/route.ts', 'src/lib/team-member-shape.ts', 'src/lib/sign-in-email.ts', 'src/lib/marketing-email-audience.ts',
     ]) {
       expect(sensitiveFiles([f]), f).toEqual([f]);
     }

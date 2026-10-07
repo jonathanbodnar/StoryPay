@@ -22,6 +22,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { getSessionMemberId } from '@/lib/auth-helpers';
 import { checkCurrentPassword, type CurrentPasswordCheck } from '@/lib/current-password';
+import { signInEmailTaken } from '@/lib/sign-in-email';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,14 +113,8 @@ export async function PATCH(req: NextRequest) {
     const allowed = await checkCurrentPassword(`venue:${venueId}`, currentHash, body.current_password);
     if (!allowed.ok) return refused(allowed);
 
-    // Check email isn't already taken by another venue
-    const { data: existing } = await supabaseAdmin
-      .from('venues')
-      .select('id')
-      .ilike('email', newEmail)
-      .neq('id', venueId)
-      .maybeSingle();
-    if (existing) {
+    // Another account, an owner's or a team member's, must not sign in with it already.
+    if (await signInEmailTaken(newEmail, { venueId })) {
       return NextResponse.json({ error: 'That email is already in use by another account.' }, { status: 409 });
     }
 

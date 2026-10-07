@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Browser, db, env, FLOW_VENUE, runId } from './helpers';
 
 // My Profile: what a person signs in with. Until Oct 6 2026 a signed-in browser
@@ -161,5 +161,118 @@ describe('a team member changes what they sign in with', () => {
     // From here on it is asked for like anyone's.
     const again = await linkOnly.fetch('/api/profile/credentials', { method: 'PATCH', json: { action: 'password', new_password: `${first}x`, confirm_password: `${first}x` } });
     expect(again.status).toBe(400);
+  });
+});
+
+// The team list is read by every signed-in team member's screens (calendar,
+// Lead Inbox, Conversations). Until Oct 7 2026 it carried each teammate's whole
+// row: the invite token that signs them in (their emailed link, and their
+// password until they set one) and their password hash. A Member could have
+// signed in as an Admin. The same day: the owner's own row in that list could
+// have its sign-in email and password changed with nothing asked, and a
+// person could move to an address another account signs in with.
+describe('the team list, and the owner’s row in it', () => {
+  const teamVenueId = randomUUID();
+  const ownerEmail = `team-owner.${runId}@example.com`;
+  const adaEmail = `team-ada.${runId}@example.com`;
+  const adaToken = randomUUID(); // an admin who came in from her invitation: this token is her way in
+  const moEmail = `team-mo.${runId}@example.com`;
+  const moPassword = `Mo-${runId}-Fern-2027!`;
+  let ownerId = '';
+  let adaId = '';
+  let owner: Browser;
+  let mo: Browser;
+
+  const noSecrets = (text: string) => {
+    expect(text).not.toContain(adaToken);
+    expect(text).not.toMatch(/invite_token|password_hash|invite_url|\$2[aby]\$/);
+  };
+
+  beforeAll(async () => {
+    // The owner's row in the list is the venue's owner_id, which is a sign-in of its own.
+    const made = await db.auth.admin.createUser({ email: ownerEmail, password: env.password, email_confirm: true });
+    if (made.error || !made.data.user) throw new Error(`owner: ${made.error?.message}`);
+    ownerId = made.data.user.id;
+    const venue = await db.from('venues').insert({
+      id: teamVenueId, name: `Team Venue ${runId}`, slug: `team-venue-${runId}`, email: ownerEmail, notification_email: ownerEmail, owner_id: ownerId,
+      owner_first_name: 'Olive', owner_last_name: 'Owner', phone: '(212) 555-0143',
+      password_hash: await bcrypt.hash(env.password, 10), setup_completed: true, onboarding_status: 'registered',
+      onboarding_completed_at: new Date().toISOString(), email_verified_at: new Date().toISOString(), timezone: 'America/New_York',
+    });
+    if (venue.error) throw new Error(`venue: ${venue.error.message}`);
+    const base = { venue_id: teamVenueId, status: 'active', invited_at: new Date().toISOString() };
+    const members = await db.from('venue_team_members').insert([
+      { ...base, first_name: 'Ada', last_name: 'Admin', name: 'Ada Admin', email: adaEmail, role: 'admin', invite_token: adaToken },
+      { ...base, first_name: 'Mo', last_name: 'Member', name: 'Mo Member', email: moEmail, role: 'member', invite_token: randomUUID(), password_hash: await bcrypt.hash(moPassword, 10) },
+    ]).select('id, email');
+    if (members.error) throw new Error(`members: ${members.error.message}`);
+    adaId = members.data!.find((m) => m.email === adaEmail)!.id;
+    owner = new Browser();
+    await owner.signIn(ownerEmail);
+    mo = new Browser();
+    await mo.signIn(moEmail, moPassword);
+  });
+
+  afterAll(async () => {
+    await db.from('venue_team_members').delete().eq('venue_id', teamVenueId);
+    await db.from('venues').delete().eq('id', teamVenueId);
+    if (ownerId) await db.auth.admin.deleteUser(ownerId);
+  });
+
+  it('a team member sees who is on the team, and nothing that signs anyone in', async () => {
+    const res = await mo.fetch('/api/team');
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    noSecrets(text);
+    const rows = JSON.parse(text) as Array<{ email: string; role: string; first_name: string }>;
+    expect(rows.map((r) => r.email).sort()).toEqual([adaEmail, moEmail, ownerEmail].sort());
+    expect(rows.find((r) => r.email === adaEmail)).toMatchObject({ role: 'admin', first_name: 'Ada' });
+    expect(rows.find((r) => r.email === ownerEmail)).toMatchObject({ role: 'owner' });
+  });
+
+  it('editing a member answers without their secrets either', async () => {
+    const res = await owner.fetch(`/api/team/${adaId}`, { method: 'PATCH', json: { first_name: 'Adah' } });
+    expect(res.status, await res.clone().text()).toBe(200);
+    const text = await res.text();
+    noSecrets(text);
+    expect(JSON.parse(text)).toMatchObject({ id: adaId, first_name: 'Adah', role: 'admin' });
+  });
+
+  it('the owner’s sign-in email and password are not changed from the team list', async () => {
+    const stored = async () => (await db.from('venues').select('email, password_hash, owner_first_name').eq('id', teamVenueId).single()).data!;
+    const before = await stored();
+
+    const moved = await owner.fetch(`/api/team/${ownerId}`, { method: 'PATCH', json: { email: `team-elsewhere.${runId}@example.com` } });
+    expect(moved.status, await moved.clone().text()).toBe(400);
+    expect((await moved.json()).error).toMatch(/My Profile/);
+    const repassworded = await owner.fetch(`/api/team/${ownerId}`, { method: 'PATCH', json: { password: `Team-${runId}-Oak-2027!` } });
+    expect(repassworded.status).toBe(400);
+    expect(await stored()).toMatchObject({ email: ownerEmail, password_hash: before.password_hash });
+
+    // Their name still saves there (the form sends the email back as it was).
+    const named = await owner.fetch(`/api/team/${ownerId}`, { method: 'PATCH', json: { first_name: 'Olivia', last_name: 'Owner', email: ownerEmail } });
+    expect(named.status, await named.clone().text()).toBe(200);
+    expect(await stored()).toMatchObject({ email: ownerEmail, owner_first_name: 'Olivia', password_hash: before.password_hash });
+  });
+
+  it('nobody moves to an address another account signs in with', async () => {
+    const me = { first_name: 'Mo', last_name: 'Member', current_password: moPassword };
+    // A teammate's address, and the owner's.
+    for (const taken of [adaEmail, ownerEmail]) {
+      const res = await mo.fetch('/api/profile', { method: 'PATCH', json: { ...me, email: taken } });
+      expect(res.status, `${taken}: ${await res.clone().text()}`).toBe(409);
+    }
+    // Without the password they aren't told whether it's taken.
+    const unasked = await mo.fetch('/api/profile', { method: 'PATCH', json: { first_name: 'Mo', last_name: 'Member', email: adaEmail } });
+    expect(unasked.status).toBe(400);
+    const { data: still } = await db.from('venue_team_members').select('email').eq('venue_id', teamVenueId).eq('first_name', 'Mo').single();
+    expect(still!.email).toBe(moEmail);
+
+    // An owner can't take a team member's address either.
+    const res = await owner.fetch('/api/profile/credentials', { method: 'PATCH', json: { action: 'email', new_email: moEmail, current_password: env.password } });
+    expect(res.status, await res.clone().text()).toBe(409);
+    // A free address is fine.
+    const free = await mo.fetch('/api/profile', { method: 'PATCH', json: { ...me, email: `team-mo-new.${runId}@example.com` } });
+    expect(free.status, await free.clone().text()).toBe(200);
   });
 });

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSessionMemberId } from '@/lib/auth-helpers';
 import { checkCurrentPassword } from '@/lib/current-password';
+import { signInEmailTaken } from '@/lib/sign-in-email';
 
 export const dynamic = 'force-dynamic';
 
@@ -135,6 +136,10 @@ export async function PATCH(request: NextRequest) {
             { error: allowed.error },
             { status: allowed.status, headers: allowed.retryAfterSeconds ? { 'Retry-After': String(allowed.retryAfterSeconds) } : undefined },
           );
+        }
+        // Asked after the password, so only its owner learns whether an address is taken.
+        if (await signInEmailTaken(patch.email, { memberId })) {
+          return NextResponse.json({ error: 'That email is already in use by another account.' }, { status: 409 });
         }
       }
     }

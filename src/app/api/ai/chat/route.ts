@@ -432,6 +432,7 @@ Recommended evergreen audiences for most venues: "Active leads, no proposal", "B
 - Access: click your name at the bottom of the sidebar → My Profile.
 - **Personal Information**: first name, last name and phone → Save Changes. **Login & Security**: Change Email and Change Password, each asking for the current password.
 - Changes take effect straight away. After changing the sign-in email, use the new address at the next sign-in. Team members update their own name, email and password on the same page.
+- The owner's own sign-in email and password are not changed from Settings → Team; the owner changes them in My Profile → Login & Security. On Settings → Team the owner can still edit a team member's details and set a team member's password.
 
 ## Couple accounts
 - A couple's own StoryVenue account is where they use Wedding Planner: guest list and RSVPs, seating, day-of timeline, checklist, budget, vendors, inspiration, their wedding website, and messages with the venue.

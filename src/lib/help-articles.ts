@@ -3265,6 +3265,8 @@ To manage a team member: click the three-dot (...) menu on their row to:
 
 Team members can update their own name and email at any time by clicking their name in the sidebar footer → My Profile.
 
+The owner's own sign-in email and password aren't changed from the team list. The owner changes them in My Profile, under Login & Security.
+
 Note: Only owners and admins can manage team members.
 
 Hide dollar amounts — As the venue owner, you'll see a Hide $ checkbox next to each team member who isn't an Owner. Turning it on hides dollar amounts in the Lead Inbox for that person.`,

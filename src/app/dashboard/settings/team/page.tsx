@@ -448,8 +448,12 @@ export default function TeamPage() {
  required
  value={editForm.email}
  onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))}
- className={INPUT}
+ readOnly={editingIsOwner}
+ className={`${INPUT} ${editingIsOwner ? 'opacity-60 cursor-not-allowed' : ''}`}
  />
+ {editingIsOwner && (
+  <p className="text-[11px] text-gray-400 mt-1">The owner&apos;s sign-in email and password are changed in My Profile, under Login &amp; Security.</p>
+ )}
  </div>
  <div>
  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
@@ -481,7 +485,7 @@ export default function TeamPage() {
   <p className="text-[11px] text-gray-400 mt-1">The venue owner&apos;s role can&apos;t be changed here.</p>
  )}
  </div>
-    <div>
+    <div className={editingIsOwner ? 'hidden' : undefined}>
     <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Set New Password</label>
     <div className="space-y-2">
      <input
