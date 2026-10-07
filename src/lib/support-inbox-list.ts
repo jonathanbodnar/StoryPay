@@ -12,21 +12,31 @@
  * taken as it is, and the older rows already loaded stay where they were.
  */
 
+/** How a list is ordered: latest first by a time, then by id (the server's own order). */
+export interface ListOrder<T> {
+  id: (row: T) => string;
+  at: (row: T) => string;
+}
+
 export interface InboxListRow {
   thread_id: string;
   /** The list's order: latest first (then thread id), as the server sorts it. */
   last_inbound_created_at: string;
 }
 
-const at = (row: InboxListRow) => {
-  const t = Date.parse(row.last_inbound_created_at);
+const BRIDES: ListOrder<InboxListRow> = { id: (r) => r.thread_id, at: (r) => r.last_inbound_created_at };
+
+const time = (iso: string) => {
+  const t = Date.parse(iso);
   return Number.isFinite(t) ? t : 0;
 };
 
 /** Does `row` come after `other` in the list (is it older)? */
-function comesAfter(row: InboxListRow, other: InboxListRow): boolean {
-  if (at(row) !== at(other)) return at(row) < at(other);
-  return row.thread_id < other.thread_id;
+function comesAfter<T>(order: ListOrder<T>, row: T, other: T): boolean {
+  const a = time(order.at(row));
+  const b = time(order.at(other));
+  if (a !== b) return a < b;
+  return order.id(row) < order.id(other);
 }
 
 /**
@@ -40,18 +50,27 @@ function comesAfter(row: InboxListRow, other: InboxListRow): boolean {
  *
  * When the page is the whole list (nothing after it), the page is the list.
  */
-export function refreshedList<T extends InboxListRow>(loaded: readonly T[], newestPage: readonly T[], moreAfterPage: boolean): T[] {
+export function refreshedListBy<T>(order: ListOrder<T>, loaded: readonly T[], newestPage: readonly T[], moreAfterPage: boolean): T[] {
   if (!moreAfterPage || newestPage.length === 0) return [...newestPage];
-  const onPage = new Set(newestPage.map((r) => r.thread_id));
+  const onPage = new Set(newestPage.map(order.id));
   const last = newestPage[newestPage.length - 1];
-  return [...newestPage, ...loaded.filter((r) => !onPage.has(r.thread_id) && comesAfter(r, last))];
+  return [...newestPage, ...loaded.filter((r) => !onPage.has(order.id(r)) && comesAfter(order, r, last))];
 }
 
 /**
  * The list with a further page added below. A row that is already loaded (it
  * moved while the admin was reading) isn't shown a second time.
  */
+export function withNextPageBy<T>(order: ListOrder<T>, loaded: readonly T[], page: readonly T[]): T[] {
+  const have = new Set(loaded.map(order.id));
+  return [...loaded, ...page.filter((r) => !have.has(order.id(r)))];
+}
+
+/** The brides' list (Support Inbox → Bride replies). */
+export function refreshedList<T extends InboxListRow>(loaded: readonly T[], newestPage: readonly T[], moreAfterPage: boolean): T[] {
+  return refreshedListBy<T>(BRIDES, loaded, newestPage, moreAfterPage);
+}
+
 export function withNextPage<T extends InboxListRow>(loaded: readonly T[], page: readonly T[]): T[] {
-  const have = new Set(loaded.map((r) => r.thread_id));
-  return [...loaded, ...page.filter((r) => !have.has(r.thread_id))];
+  return withNextPageBy<T>(BRIDES, loaded, page);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { refreshedList, withNextPage } from '@/lib/support-inbox-list';
+import { refreshedList, refreshedListBy, withNextPage, withNextPageBy, type ListOrder } from '@/lib/support-inbox-list';
 
 // Support Inbox, "Load more". An admin loads older leads and opens one; the
 // list used to be put back to the newest fifty (and again every 20 seconds),
@@ -56,5 +56,21 @@ describe('"Load more" adds a page below', () => {
   it('adds the page, and a row already loaded is not shown a second time', () => {
     const loaded = [row(1), row(2), row(3)];
     expect(ids(withNextPage(loaded, [row(3), row(4), row(5)]))).toEqual(['t001', 't002', 't003', 't004', 't005']);
+  });
+});
+
+// The tickets list is ordered the same way by other names (latest message, then id).
+describe('the same rule for the tickets list', () => {
+  const ORDER: ListOrder<{ id: string; last_message_at: string }> = { id: (t) => t.id, at: (t) => t.last_message_at };
+  const ticket = (n: number, minutesAgo = n) => ({ id: `k${n}`, last_message_at: new Date(Date.UTC(2026, 9, 7, 12, 0, 0) - minutesAgo * 60_000).toISOString() });
+
+  it('a brand-new ticket reloads the newest page, and the older tickets loaded stay', () => {
+    const loaded = [ticket(1), ticket(2), ticket(3), ticket(4)];
+    const fresh = [ticket(0), ticket(1)];
+    expect(refreshedListBy(ORDER, loaded, fresh, true).map((t) => t.id)).toEqual(['k0', 'k1', 'k2', 'k3', 'k4']);
+  });
+
+  it('"Load more" adds to the list as it is now, once each', () => {
+    expect(withNextPageBy(ORDER, [ticket(1), ticket(2)], [ticket(2), ticket(3)]).map((t) => t.id)).toEqual(['k1', 'k2', 'k3']);
   });
 });

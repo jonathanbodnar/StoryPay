@@ -14,7 +14,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import StageMoveLine, { stageMovesAmong } from '@/components/conversations/StageMoveLine';
-import { refreshedList, withNextPage } from '@/lib/support-inbox-list';
+import { refreshedList, refreshedListBy, withNextPage, withNextPageBy, type ListOrder } from '@/lib/support-inbox-list';
 import type { StageMove } from '@/lib/lead-stage-log';
 import { countsAsSpeaking, sentViaLabel } from '@/lib/venue-side-texts';
 import { capitalizeName } from '@/lib/format-name';
@@ -2853,6 +2853,9 @@ function MessageBubble({
 
 // ─── Venue support tickets ──────────────────────────────────────────────────
 
+/** The tickets list's order, as the server sorts it: latest message first, then id. */
+const TICKET_ORDER: ListOrder<{ id: string; last_message_at: string }> = { id: (t) => t.id, at: (t) => t.last_message_at };
+
 interface TicketListRow {
   id:                       string;
   venue_id:                 string | null;
@@ -3175,6 +3178,18 @@ function TicketsView({
   // rebuilt each time the list changes).
   const ticketsRef = useRef<TicketListRow[]>([]);
   useEffect(() => { ticketsRef.current = tickets; }, [tickets]);
+  // As for the brides' list above: which list is on screen, and whether "Load
+  // more" has added older tickets to it (a reload of the newest page, which a
+  // brand-new ticket causes, then keeps them).
+  const ticketsEpochRef = useRef(0);
+  const loadedOlderTicketsRef = useRef(false);
+  const startNewTicketList = useCallback(() => {
+    ticketsEpochRef.current += 1;
+    loadedOlderTicketsRef.current = false;
+    ticketsRef.current = [];
+    setTickets([]);
+    setNextCursor(null);
+  }, []);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -3185,6 +3200,7 @@ function TicketsView({
   const [soundMuted] = useInboxSoundMuted();
 
   const fetchTickets = useCallback(async (opts: { append?: boolean; cursor?: string | null } = {}) => {
+    const epoch = ticketsEpochRef.current;
     setListLoading(true);
     setListError(null);
     try {
@@ -3202,11 +3218,21 @@ function TicketsView({
         throw new Error(d.error || `Failed (${r.status})`);
       }
       const d = (await r.json()) as { tickets: TicketListRow[]; nextCursor: string | null };
+      if (epoch !== ticketsEpochRef.current) return;
       const loaded = ticketsRef.current;
-      const have = new Set(loaded.map(t => t.id));
-      const merged = opts.append ? [...loaded, ...d.tickets.filter(t => !have.has(t.id))] : d.tickets;
+      let merged: TicketListRow[];
+      if (opts.append) {
+        loadedOlderTicketsRef.current = true;
+        merged = withNextPageBy(TICKET_ORDER, loaded, d.tickets);
+        setNextCursor(d.nextCursor);
+      } else {
+        // The newest page laid over what's loaded (lib/support-inbox-list).
+        merged = refreshedListBy(TICKET_ORDER, loaded, d.tickets, Boolean(d.nextCursor));
+        if (!d.nextCursor) loadedOlderTicketsRef.current = false;
+        if (!loadedOlderTicketsRef.current) setNextCursor(d.nextCursor);
+      }
+      ticketsRef.current = merged;
       setTickets(merged);
-      setNextCursor(d.nextCursor);
       if (!opts.append && d.tickets.length > 0) {
         setActiveTicketId(current => current ?? d.tickets[0].id);
       }
@@ -3238,9 +3264,8 @@ function TicketsView({
 
   function submitSearch() {
     setCommittedSearch(search.trim());
-    setTickets([]);
     setActiveTicketId(null);
-    setNextCursor(null);
+    startNewTicketList();
   }
 
   // Active ticket detail
@@ -3483,7 +3508,7 @@ function TicketsView({
                 <button
                   key={opt}
                   type="button"
-                  onClick={() => { setStatusFilter(opt); setActiveTicketId(null); setTickets([]); setNextCursor(null); }}
+                  onClick={() => { setStatusFilter(opt); setActiveTicketId(null); startNewTicketList(); }}
                   className={`px-2.5 py-1 font-medium transition-colors ${statusFilter === opt ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
                 >
                   {opt === 'open' ? 'Open + Pending' : opt === 'all' ? 'All' : 'Closed'}
