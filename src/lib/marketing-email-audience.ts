@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { askInBatches, everyRow } from '@/lib/in-batches';
 import {
   parseSavedSegmentDefinition,
   type CampaignSegment,
@@ -12,14 +13,16 @@ export interface LeadRecipient {
 
 async function leadIdsWhoClickedLinks(venueId: string, linkIds: string[]): Promise<Set<string>> {
   if (linkIds.length === 0) return new Set();
-  const { data: rows } = await supabaseAdmin
+  const { data: rows } = await everyRow<{ lead_id: string | null }>((from, to) => supabaseAdmin
     .from('lead_marketing_events')
     .select('lead_id')
     .eq('venue_id', venueId)
     .eq('event_type', 'trigger_link_click')
-    .in('trigger_link_id', linkIds);
+    .in('trigger_link_id', linkIds)
+    .order('id', { ascending: true })
+    .range(from, to));
   const s = new Set<string>();
-  for (const r of rows ?? []) {
+  for (const r of rows) {
     const id = (r as { lead_id: string | null }).lead_id;
     if (id) s.add(id);
   }
@@ -108,6 +111,20 @@ function dedupe<T>(arr: T[]): T[] | undefined {
   return Array.from(new Set(arr));
 }
 
+/**
+ * Who a campaign goes to.
+ *
+ * Every list here is read to its end (lib/in-batches). Until Oct 7 2026 each
+ * was one request: the database answers with 1,000 rows at most, so "all
+ * leads" at a venue with more reached the first thousand and said nothing;
+ * and a list of ids past about 430 was too long to send at all, so a tag
+ * held by more leads than that gave an audience of nobody.
+ *
+ * A list that can't be read gives an audience of nobody, never a partial
+ * one: sending to some of the people chosen, or past an unsubscribe list
+ * that didn't load, is worse than not sending. (Each email is checked
+ * against the unsubscribe list again as it is sent.)
+ */
 export async function resolveCampaignRecipients(
   venueId: string,
   segment: CampaignSegment,
@@ -116,11 +133,14 @@ export async function resolveCampaignRecipients(
   if (!effective) return [];
 
   const suppressed = new Set<string>();
-  const { data: sup } = await supabaseAdmin
+  const { data: sup, error: supErr } = await everyRow<{ lead_id: string }>((from, to) => supabaseAdmin
     .from('marketing_email_suppressions')
     .select('lead_id')
-    .eq('venue_id', venueId);
-  for (const r of sup ?? []) suppressed.add((r as { lead_id: string }).lead_id);
+    .eq('venue_id', venueId)
+    .order('lead_id', { ascending: true })
+    .range(from, to));
+  if (supErr) return [];
+  for (const r of sup) suppressed.add(r.lead_id);
 
   const clk = effective.clicked_trigger_link_ids?.filter(Boolean) ?? [];
   const clickedSet =
@@ -131,12 +151,12 @@ export async function resolveCampaignRecipients(
   if (effective.type === 'specific_contacts') {
     const emails = (effective.contact_emails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean);
     if (emails.length === 0) return [];
-    const { data: leads, error } = await supabaseAdmin
+    const { data: leads, error } = await askInBatches<Record<string, unknown>>(emails, (batch) => supabaseAdmin
       .from('leads')
       .select(selectCols)
       .eq('venue_id', venueId)
-      .in('email', emails);
-    if (error || !leads) return [];
+      .in('email', batch), 50);
+    if (error) return [];
     return applyBehaviorFilters(
       leads as Array<{ id: string; email: string | null; stage_id: string | null; wedding_date: string | null; marketing_email_opt_in: boolean | null }>,
       effective,
@@ -146,19 +166,22 @@ export async function resolveCampaignRecipients(
   }
 
   if (effective.type === 'tags_any' && (effective.tag_ids?.length ?? 0) > 0) {
-    const { data: rows, error } = await supabaseAdmin
+    const { data: rows, error } = await everyRow<{ lead_id: string }>((from, to) => supabaseAdmin
       .from('lead_tag_assignments')
       .select('lead_id')
       .eq('venue_id', venueId)
-      .in('tag_id', effective.tag_ids!);
-    if (error || !rows?.length) return [];
-    const ids = [...new Set(rows.map((r: { lead_id: string }) => r.lead_id))];
-    const { data: leads, error: le } = await supabaseAdmin
+      .in('tag_id', effective.tag_ids!)
+      .order('lead_id', { ascending: true })
+      .order('tag_id', { ascending: true })
+      .range(from, to));
+    if (error || !rows.length) return [];
+    const ids = [...new Set(rows.map((r) => r.lead_id))];
+    const { data: leads, error: le } = await askInBatches<Record<string, unknown>>(ids, (batch) => supabaseAdmin
       .from('leads')
       .select(selectCols)
       .eq('venue_id', venueId)
-      .in('id', ids);
-    if (le || !leads) return [];
+      .in('id', batch));
+    if (le) return [];
     return applyBehaviorFilters(
       leads as Array<{ id: string; email: string | null; stage_id: string | null; wedding_date: string | null }>,
       effective,
@@ -168,12 +191,14 @@ export async function resolveCampaignRecipients(
   }
 
   if (effective.type === 'stages' && (effective.stage_ids?.length ?? 0) > 0) {
-    const { data: leads, error } = await supabaseAdmin
+    const { data: leads, error } = await everyRow<Record<string, unknown>>((from, to) => supabaseAdmin
       .from('leads')
       .select(selectCols)
       .eq('venue_id', venueId)
-      .in('stage_id', effective.stage_ids!);
-    if (error || !leads) return [];
+      .in('stage_id', effective.stage_ids!)
+      .order('id', { ascending: true })
+      .range(from, to));
+    if (error) return [];
     return applyBehaviorFilters(
       leads as Array<{ id: string; email: string | null; stage_id: string | null; wedding_date: string | null }>,
       effective,
@@ -182,8 +207,13 @@ export async function resolveCampaignRecipients(
     );
   }
 
-  const { data: leads, error } = await supabaseAdmin.from('leads').select(selectCols).eq('venue_id', venueId);
-  if (error || !leads) return [];
+  const { data: leads, error } = await everyRow<Record<string, unknown>>((from, to) => supabaseAdmin
+    .from('leads')
+    .select(selectCols)
+    .eq('venue_id', venueId)
+    .order('id', { ascending: true })
+    .range(from, to));
+  if (error) return [];
   return applyBehaviorFilters(
     leads as Array<{ id: string; email: string | null; stage_id: string | null; wedding_date: string | null }>,
     effective,

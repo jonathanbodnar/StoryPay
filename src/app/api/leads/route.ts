@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { askInBatches } from '@/lib/in-batches';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { ensureDefaultPipeline, legacyStatusForStageName } from '@/lib/pipelines';
@@ -283,8 +284,10 @@ export async function GET(request: NextRequest) {
 
   let noteCounts: Record<string, number> = {};
   if (leadIds.length > 0) {
+    // A batch of leads at a time: past about 430 leads the one request was
+    // too long to send, and every lead's note count came back as none.
     const [{ data: notes }, venueData] = await Promise.all([
-      supabaseAdmin.from('lead_notes').select('lead_id').in('lead_id', leadIds),
+      askInBatches<{ lead_id: string }>(leadIds, (batch) => supabaseAdmin.from('lead_notes').select('lead_id').in('lead_id', batch)),
       venuePromise,
     ]);
     if (notes) {

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { askInBatches } from '@/lib/in-batches';
 import { isSystemTagVisible } from '@/lib/system-tag-visibility';
 
 export interface LeadTagRow {
@@ -17,13 +18,22 @@ export async function fetchTagsForLeadIds(
   for (const lid of leadIds) map.set(lid, []);
   if (leadIds.length === 0) return map;
 
-  const { data: rows, error } = await supabaseAdmin
-    .from('lead_tag_assignments')
-    .select('lead_id, marketing_tags ( id, name, icon, color, is_system, system_key )')
-    .eq('venue_id', venueId)
-    .in('lead_id', leadIds);
+  // A batch of leads at a time (lib/in-batches): asked about all of a busy
+  // venue's leads in one request, the request was too long to send, the
+  // answer was an error, and the Lead Inbox showed every lead without its
+  // tags. That began at about 430 leads. (Fifty, not a hundred: a lead can
+  // carry a dozen tags, and one answer holds 1,000 rows.)
+  const { data: rows, error } = await askInBatches<{ lead_id: string; marketing_tags: unknown }>(
+    leadIds,
+    (batch) => supabaseAdmin
+      .from('lead_tag_assignments')
+      .select('lead_id, marketing_tags ( id, name, icon, color, is_system, system_key )')
+      .eq('venue_id', venueId)
+      .in('lead_id', batch),
+    50,
+  );
 
-  if (error || !rows) return map;
+  if (error && rows.length === 0) return map;
 
   type MtRow = LeadTagRow & { is_system?: boolean | null; system_key?: string | null };
   for (const row of rows as Array<{

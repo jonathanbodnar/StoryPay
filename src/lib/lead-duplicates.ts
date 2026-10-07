@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { askInBatches } from '@/lib/in-batches';
 
 export type DuplicateReason = 'same_email' | 'same_phone' | 'same_email_and_phone';
 
@@ -117,20 +118,19 @@ export async function fetchOpenDuplicateMatchesForLeads(
   const out = new Map<string, DuplicateMatchBrief[]>();
   if (leadIds.length === 0) return out;
 
-  const [{ data: rowsA }, { data: rowsB }] = await Promise.all([
-    supabaseAdmin
+  // A batch of leads at a time (lib/in-batches): past about 430 leads the one
+  // request was too long to send, and no lead showed its duplicate warning.
+  type Candidate = { id: string; lead_id: string; matches_lead_id: string; reason: string };
+  const candidates = (column: 'lead_id' | 'matches_lead_id') => askInBatches<Candidate>(
+    leadIds,
+    (batch) => supabaseAdmin
       .from('lead_duplicate_candidates')
       .select('id, lead_id, matches_lead_id, reason')
       .eq('venue_id', venueId)
       .eq('status', 'open')
-      .in('lead_id', leadIds),
-    supabaseAdmin
-      .from('lead_duplicate_candidates')
-      .select('id, lead_id, matches_lead_id, reason')
-      .eq('venue_id', venueId)
-      .eq('status', 'open')
-      .in('matches_lead_id', leadIds),
-  ]);
+      .in(column, batch),
+  );
+  const [{ data: rowsA }, { data: rowsB }] = await Promise.all([candidates('lead_id'), candidates('matches_lead_id')]);
 
   const seen = new Set<string>();
   const rows: Array<{ lead_id: string; matches_lead_id: string; reason: string }> = [];

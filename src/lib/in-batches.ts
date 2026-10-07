@@ -40,3 +40,34 @@ export async function askInBatches<Row>(
   }
   return { data, error: null };
 }
+
+/** The most rows the database hands back in one answer. */
+export const ROWS_PER_ANSWER = 1000;
+
+/**
+ * Every row of a query that may hold more than one answer's worth, asked for a
+ * page at a time. `page` is given the first and last row to fetch and returns
+ * the query for them; the query must put its rows in a fixed order, or pages
+ * overlap and miss rows.
+ *
+ * Without this a long list is cut at 1,000 rows and nothing says so: Oct 7
+ * 2026, a campaign to "all leads" at a venue with more than a thousand would
+ * have reached the first thousand only. The first failure stops it and is
+ * returned, with whatever was read before it.
+ */
+export async function everyRow<Row>(
+  page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+  perPage: number = ROWS_PER_ANSWER,
+  atMost = 200_000,
+): Promise<{ data: Row[]; error: { message: string } | null }> {
+  const per = Math.max(1, Math.floor(perPage));
+  const data: Row[] = [];
+  for (let from = 0; from < atMost; from += per) {
+    const res = await page(from, from + per - 1);
+    if (res.error) return { data, error: res.error };
+    const rows = Array.isArray(res.data) ? (res.data as Row[]) : [];
+    data.push(...rows);
+    if (rows.length < per) break;
+  }
+  return { data, error: null };
+}
